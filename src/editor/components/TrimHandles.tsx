@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { xToTime } from "@/src/editor/model/timeline";
@@ -22,13 +23,13 @@ export function trimFromDrag(clip: Clip, edge: "start" | "end", startValue: numb
 function Handle({ clip, edge }: { clip: Clip; edge: "start" | "end" }) {
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const store = useEditorStore.getState();
-  let startValue = edge === "start" ? clip.trimStart : clip.trimEnd;
+  const startRef = useRef(edge === "start" ? clip.trimStart : clip.trimEnd);
   const pan = Gesture.Pan().activeOffsetX([-4, 4])
-    .onBegin(() => { const c = useEditorStore.getState().project?.clips.find((x) => x.id === clip.id); startValue = edge === "start" ? (c?.trimStart ?? 0) : (c?.trimEnd ?? 0); store.beginTransaction(); })
+    .onStart(() => { const c = useEditorStore.getState().project?.clips.find((x) => x.id === clip.id); startRef.current = edge === "start" ? (c?.trimStart ?? 0) : (c?.trimEnd ?? 0); store.beginTransaction(); })
     .onUpdate((e) => {
       const c = useEditorStore.getState().project?.clips.find((x) => x.id === clip.id);
       if (!c) return;
-      const { trimStart, trimEnd } = trimFromDrag(c, edge, startValue, e.translationX, pps);
+      const { trimStart, trimEnd } = trimFromDrag(c, edge, startRef.current, e.translationX, pps);
       store.applyTransient((p) => trimClip(p, clip.id, trimStart, trimEnd));
     })
     .runOnJS(true);

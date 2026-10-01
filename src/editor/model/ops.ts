@@ -30,7 +30,7 @@ export function trimClip(p: Project, clipId: string, trimStart: number, trimEnd:
   const c = p.clips[i];
   const start = Math.max(0, Math.min(trimStart, c.sourceDuration));
   const end = Math.max(0, Math.min(trimEnd, c.sourceDuration));
-  if (end - start < MIN_CLIP_SECONDS) return p;
+  if (end - start < MIN_CLIP_SECONDS - 1e-9) return p;
   if (start === c.trimStart && end === c.trimEnd) return p;
   const clips = p.clips.slice();
   clips[i] = { ...c, trimStart: start, trimEnd: end };

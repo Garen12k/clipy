@@ -40,6 +40,12 @@ test("trimClip clamps to the source and enforces the minimum length", () => {
   expect(trimClip(p, "a", 2, 5)).toBe(p);             // no change
 });
 
+test("trimClip tolerates floating-point error at the minimum length", () => {
+  const next = trimClip(p, "a", 4.9, 5);
+  expect(next).not.toBe(p);
+  expect(next.clips[0]).toMatchObject({ trimStart: 4.9, trimEnd: 5 });
+});
+
 test("moveClip reorders and ignores no-ops", () => {
   expect(moveClip(p, "b", 0).clips.map((x) => x.id)).toEqual(["b", "a"]);
   expect(moveClip(p, "a", 5).clips.map((x) => x.id)).toEqual(["b", "a"]); // clamped
