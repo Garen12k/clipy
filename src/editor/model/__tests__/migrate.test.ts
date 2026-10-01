@@ -1,5 +1,5 @@
 import { migrateProject } from "../migrate";
-import { FILTER_IDS, makeClip, makeProject, SCHEMA_VERSION } from "../types";
+import { FILTER_IDS, makeClip, makeProject, makeSticker, SCHEMA_VERSION } from "../types";
 
 const v1 = {
   id: "p1", name: "Old", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
@@ -36,6 +36,31 @@ test("v2 → v3 normalises effect fields; v1 → v3 chains", () => {
   expect(fromV1.clips[0]).toMatchObject({ muted: false, speed: 1, filter: null });
   expect(FILTER_IDS).toContain("none");
 });
+test("a corrupted v3 file loads safely (unknown ids normalised, bad stickers fixed or dropped) and the pass is idempotent", () => {
+  const good = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], overlays: [makeSticker({ id: "ok", emoji: null, shape: "heart" })] });
+  const bad = {
+    ...good,
+    clips: [
+      { ...makeClip({ id: "a", sourceDuration: 4 }), filter: "sepia", speed: 9, transitionOut: { type: "spin", duration: 0.5 } },
+      { ...makeClip({ id: "b", sourceDuration: 0.4 }), transitionOut: { type: "fade", duration: 0.5 } },        // last clip → cleared
+    ],
+    overlays: [
+      ...good.overlays,
+      { ...makeSticker({ id: "blob-emoji", emoji: "🔥" }), shape: "blob" },                                       // falls back to the emoji
+      { ...makeSticker({ id: "blob-only", emoji: null }), shape: "blob" },                                       // nothing to draw → dropped
+    ],
+  };
+  const p = migrateProject(bad);
+  expect(p.schemaVersion).toBe(3);
+  expect(p.clips[0]).toMatchObject({ filter: null, speed: 1, transitionOut: { type: "none", duration: 0 } });
+  expect(p.clips[1].transitionOut).toEqual({ type: "none", duration: 0 });
+  expect(p.overlays.map((o) => o.id)).toEqual(["ok", "blob-emoji"]);
+  expect(p.overlays[1]).toMatchObject({ kind: "sticker", emoji: "🔥", shape: null });
+  expect(migrateProject(p)).toEqual(p);
+  const capped = migrateProject({ ...good, clips: [makeClip({ id: "x", sourceDuration: 0.8, transitionOut: { type: "fade", duration: 1 } }), makeClip({ id: "y", sourceDuration: 4 })] });
+  expect(capped.clips[0].transitionOut).toEqual({ type: "fade", duration: 0.4 });  // re-capped to half the shorter clip
+});
+
 test("v3 overlays keep kind; a text overlay without kind gets kind text", () => {
   const v3 = { ...v1, schemaVersion: 2, audioTracks: [], clips: [{ ...v1.clips[0], muted: false }], overlays: [{ id: "o", text: "x", fontId: "bangers", fontScale: 0.07, color: "#fff", background: null, outline: true, align: "center", x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 1 }] };
   expect(migrateProject(v3).overlays[0]).toMatchObject({ kind: "text" });
