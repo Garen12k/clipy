@@ -8,8 +8,11 @@ export const MIN_THUMB_INTERVAL = 0.5;
 
 export const stripWidth = (c: Clip, pps: number): number => timeToX(clipDuration(c), pps);
 
+/** Seconds between thumbnails at this zoom: one thumb per `thumbWidth` px, never closer than `MIN_THUMB_INTERVAL`. */
+export const thumbInterval = (pps: number, thumbWidth = THUMB_WIDTH): number => Math.max(MIN_THUMB_INTERVAL, thumbWidth / pps);
+
 export function thumbTimes(c: Clip, pps: number, thumbWidth = THUMB_WIDTH): number[] {
-  const interval = Math.max(MIN_THUMB_INTERVAL, thumbWidth / pps);
+  const interval = thumbInterval(pps, thumbWidth);
   const out: number[] = [];
   for (let t = c.trimStart; t < c.trimEnd - 1e-9 && out.length < 500; t += interval) out.push(Number(t.toFixed(3)));
   return out.length ? out : [c.trimStart];

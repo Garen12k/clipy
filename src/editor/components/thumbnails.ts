@@ -2,7 +2,7 @@ import * as VideoThumbnails from "expo-video-thumbnails";
 
 const cache = new Map<string, Promise<string>>();
 
-/** Thumbnail URI for a source time, memoized to the nearest half second. */
+/** Thumbnail URI for a source time, memoized to the time floored to the half second. */
 export function getThumb(uri: string, timeSec: number): Promise<string> {
   const bucket = Math.floor(timeSec * 2) / 2;
   const key = `${uri}|${bucket}`;

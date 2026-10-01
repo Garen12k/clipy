@@ -1,10 +1,16 @@
 import { makeClip } from "@/src/editor/model/types";
-import { indexFromDrop, stripWidth, thumbTimes } from "../timelineLayout";
+import { indexFromDrop, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
 
 const c = makeClip({ id: "a", sourceDuration: 10, trimStart: 2, trimEnd: 6 }); // 4 s
 
 test("stripWidth scales with zoom", () => {
   expect(stripWidth(c, 50)).toBe(200);
+});
+
+test("thumbInterval is one thumb per 64px, floored at 0.5s", () => {
+  expect(thumbInterval(64)).toBe(1);       // 64px / 64pps = 1s
+  expect(thumbInterval(640)).toBe(0.5);    // 64px / 640pps = 0.1s, capped at 0.5
+  expect(thumbInterval(8)).toBe(8);        // 64px / 8pps = 8s
 });
 
 test("thumbTimes samples the trimmed range at one thumb per 64px, min 0.5 s apart, always ≥ 1", () => {

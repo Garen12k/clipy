@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ScrollView, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { clipStartTimes, timeToX, xToTime } from "@/src/editor/model/timeline";
@@ -12,7 +12,6 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
   const { width: screenW } = useWindowDimensions();
   const project = useEditorStore((s) => s.project);
   const playhead = useEditorStore((s) => s.playhead);
-  const isPlaying = useEditorStore((s) => s.isPlaying);
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const missing = useEditorStore((s) => s.missingClipIds);
@@ -20,7 +19,7 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
 
   const scrollRef = useRef<ScrollView>(null);
   const userScrolling = useRef(false);
-  const [basePps, setBasePps] = useState(pps);
+  const basePps = useRef(pps);
   const pad = screenW / 2;
 
   // Follow the playhead while playing or when it is changed programmatically.
@@ -34,10 +33,14 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
     seek(xToTime(e.nativeEvent.contentOffset.x, pps));
   };
 
-  const pinch = Gesture.Pinch()
-    .onBegin(() => { setBasePps(useEditorStore.getState().pixelsPerSecond); })
-    .onUpdate((e) => { setZoom(basePps * e.scale); })
-    .runOnJS(true);
+  const pinch = useMemo(
+    () =>
+      Gesture.Pinch()
+        .onBegin(() => { basePps.current = useEditorStore.getState().pixelsPerSecond; })
+        .onUpdate((e) => { setZoom(basePps.current * e.scale); })
+        .runOnJS(true),
+    [],
+  );
 
   if (!project) return null;
   const starts = clipStartTimes(project);
@@ -47,10 +50,17 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
       <View style={{ height: TIMELINE_HEIGHT, justifyContent: "center" }}>
         <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} scrollEventThrottle={16}
           onScrollBeginDrag={() => { userScrolling.current = true; setPlaying(false); }}
-          onMomentumScrollEnd={() => { userScrolling.current = false; }}
-          onScrollEndDrag={(e) => { if (e.nativeEvent.velocity?.x === 0) userScrolling.current = false; }}
+          onMomentumScrollBegin={() => { userScrolling.current = true; }}
+          onMomentumScrollEnd={() => {
+            userScrolling.current = false;
+            scrollRef.current?.scrollTo({ x: timeToX(useEditorStore.getState().playhead, pps), animated: false });
+          }}
+          onScrollEndDrag={() => {
+            userScrolling.current = false;
+            scrollRef.current?.scrollTo({ x: timeToX(useEditorStore.getState().playhead, pps), animated: false });
+          }}
           onScroll={onScroll}
-          contentContainerStyle={{ paddingHorizontal: pad, alignItems: "center", gap: 4, height: TIMELINE_HEIGHT }}>
+          contentContainerStyle={{ paddingHorizontal: pad, alignItems: "center", height: TIMELINE_HEIGHT }}>
           {project.clips.map((clip, i) => (
             <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={clip.id === selectedId} missing={missing.includes(clip.id)}
               onPress={() => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
