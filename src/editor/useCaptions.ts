@@ -6,7 +6,11 @@ import { clipStartTimes } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { newId } from "@/src/lib/id";
 
-export type CaptionsState = { status: "idle" | "unavailable" | "running" | "done" | "error"; clipIndex: number; clipCount: number; message?: string; skipped: string[] };
+export type CaptionsState = { status: "idle" | "unavailable" | "running" | "done" | "error"; clipIndex: number; clipCount: number; message?: string; code?: string; skipped: string[] };
+
+export const SPEECH_DENIED_MESSAGE = "Clipy needs Speech Recognition permission to transcribe your clips. Turn it on in Settings, then try again.";
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 
 export function useCaptions() {
   const [state, setState] = useState<CaptionsState>({ status: isNativeAvailable() ? "idle" : "unavailable", clipIndex: 0, clipCount: 0, skipped: [] });
@@ -35,7 +39,11 @@ export function useCaptions() {
       useEditorStore.getState().apply((proj) => replaceCaptions(proj, linesToCaptions(lines, newId)));
       setState({ status: "done", clipIndex: clips.length, clipCount: clips.length, skipped });
     } catch (e) {
-      setState({ status: "error", clipIndex: 0, clipCount: clips.length, message: e instanceof Error ? e.message : String(e), skipped });
+      // Cancel makes the native side reject (E_SPEECH_CANCELLED): that's a return to idle, not an error.
+      if (cancelled.current) { setState((st) => ({ ...st, status: "idle" })); return; }
+      const code = isObj(e) && typeof e.code === "string" ? e.code : undefined;
+      const message = code === "E_SPEECH_DENIED" ? SPEECH_DENIED_MESSAGE : e instanceof Error ? e.message : String(e);
+      setState({ status: "error", clipIndex: 0, clipCount: clips.length, message, code, skipped });
     }
   }, []);
 
