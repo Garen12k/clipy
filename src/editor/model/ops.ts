@@ -262,3 +262,19 @@ export function setTransition(p: Project, clipId: string, t: { type: TransitionT
   const clips = p.clips.slice(); clips[i] = { ...clips[i], transitionOut: next };
   return touch(p, { clips });
 }
+
+export function replaceCaptions(p: Project, captions: TextOverlay[]): Project {
+  const kept = p.overlays.filter((o) => o.kind !== "caption");
+  if (kept.length === p.overlays.length && captions.length === 0) return p;
+  return touch(p, { overlays: [...kept, ...captions.map((c) => normaliseOverlay(p, c))] });
+}
+export function setCaptionStyleForAll(p: Project, style: Partial<Pick<TextOverlay, "fontId" | "fontScale" | "color" | "background" | "outline" | "align" | "x" | "y">>): Project {
+  let changed = false;
+  const overlays = p.overlays.map((o) => {
+    if (o.kind !== "caption") return o;
+    const next = normaliseOverlay(p, { ...o, ...style });
+    if (JSON.stringify(next) !== JSON.stringify(o)) { changed = true; return next; }
+    return o;
+  });
+  return changed ? touch(p, { overlays }) : p;
+}
