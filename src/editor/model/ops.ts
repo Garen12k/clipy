@@ -1,7 +1,7 @@
 import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration, outputToSource } from "./timeline";
-import { MIN_CLIP_SECONDS, type AspectRatio, type Clip, type Project } from "./types";
+import { MIN_CLIP_SECONDS, SPEED_LIMITS, TRANSITION_LIMITS, type AspectRatio, type Clip, type FilterId, type Project, type TransitionType } from "./types";
 import { totalDuration } from "./timeline";
 import { AUDIO_LIMITS, CLIP_VOLUME, isTextOverlay, OVERLAY_LIMITS, type AudioTrack, type Overlay, type TextOverlay } from "./types";
 
@@ -21,7 +21,7 @@ export function splitClipAt(p: Project, outputTime: number): Project {
   const d = clipDuration(clip);
   if (offsetInClip < MIN_CLIP_SECONDS || d - offsetInClip < MIN_CLIP_SECONDS) return p;
   const cut = outputToSource(clip, offsetInClip);
-  const left: Clip = { ...clip, trimEnd: cut };
+  const left: Clip = { ...clip, trimEnd: cut, transitionOut: NO_TRANSITION };
   const right: Clip = { ...clip, id: newId(), trimStart: cut };
   return touch(p, { clips: [...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)] });
 }
@@ -32,11 +32,11 @@ export function trimClip(p: Project, clipId: string, trimStart: number, trimEnd:
   const c = p.clips[i];
   const start = Math.max(0, Math.min(trimStart, c.sourceDuration));
   const end = Math.max(0, Math.min(trimEnd, c.sourceDuration));
-  if (end - start < MIN_CLIP_SECONDS - 1e-9) return p;
+  if (end - start < MIN_CLIP_SECONDS * c.speed - 1e-9) return p;
   if (start === c.trimStart && end === c.trimEnd) return p;
   const clips = p.clips.slice();
   clips[i] = { ...c, trimStart: start, trimEnd: end };
-  return touch(p, { clips });
+  return touch(p, { clips: normaliseTransitions(clips) });
 }
 
 export function moveClip(p: Project, clipId: string, toIndex: number): Project {
@@ -47,18 +47,18 @@ export function moveClip(p: Project, clipId: string, toIndex: number): Project {
   const clips = p.clips.slice();
   const [c] = clips.splice(from, 1);
   clips.splice(to, 0, c);
-  return touch(p, { clips });
+  return touch(p, { clips: normaliseTransitions(clips) });
 }
 
 export function deleteClip(p: Project, clipId: string): Project {
   if (!p.clips.some((c) => c.id === clipId)) return p;
-  return touch(p, { clips: p.clips.filter((c) => c.id !== clipId) });
+  return touch(p, { clips: normaliseTransitions(p.clips.filter((c) => c.id !== clipId)) });
 }
 
 export function duplicateClip(p: Project, clipId: string): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
   if (i < 0) return p;
-  const copy: Clip = { ...p.clips[i], id: newId() };
+  const copy: Clip = { ...p.clips[i], id: newId(), transitionOut: NO_TRANSITION };
   return touch(p, { clips: [...p.clips.slice(0, i + 1), copy, ...p.clips.slice(i + 1)] });
 }
 
@@ -169,5 +169,77 @@ export function setClipMuted(p: Project, clipId: string, muted: boolean): Projec
   const i = p.clips.findIndex((c) => c.id === clipId);
   if (i < 0 || p.clips[i].muted === muted) return p;
   const clips = p.clips.slice(); clips[i] = { ...clips[i], muted };
+  return touch(p, { clips });
+}
+
+const NO_TRANSITION = { type: "none" as const, duration: 0 };
+const r2 = (v: number) => Math.round(v * 100) / 100;
+
+/** Max transition duration for the cut after clip index `i` within `clips`; 0 when there's no next clip. */
+function capFor(clips: Clip[], i: number): number {
+  const a = clips[i], b = clips[i + 1];
+  if (!a || !b) return 0;
+  return Math.min(TRANSITION_LIMITS.max, r2(0.5 * Math.min(clipDuration(a), clipDuration(b))));
+}
+
+/** Max transition duration for the cut after clip `index`; 0 for the last clip. */
+export function transitionCap(p: Project, index: number): number {
+  return capFor(p.clips, index);
+}
+
+/** Clears the last clip's transition and re-caps every other one against its neighbour; returns the same array if nothing changes. */
+export function normaliseTransitions(clips: Clip[]): Clip[] {
+  let changed = false;
+  const out = clips.map((c, i) => {
+    const cap = capFor(clips, i);
+    let t = c.transitionOut;
+    if (t.type !== "none" && (i === clips.length - 1 || cap < TRANSITION_LIMITS.min)) t = NO_TRANSITION;
+    else if (t.type !== "none" && t.duration > cap) t = { type: t.type, duration: cap };
+    if (t !== c.transitionOut) { changed = true; return { ...c, transitionOut: t }; }
+    return c;
+  });
+  return changed ? out : clips;
+}
+
+export function setClipSpeed(p: Project, clipId: string, speed: number): Project {
+  const i = p.clips.findIndex((c) => c.id === clipId);
+  if (i < 0) return p;
+  const c = p.clips[i];
+  let s = clamp(speed, SPEED_LIMITS);
+  const maxForMin = (c.trimEnd - c.trimStart) / MIN_CLIP_SECONDS;   // speed at which output hits 0.1 s
+  s = r2(Math.min(s, maxForMin));
+  if (s === c.speed) return p;
+  const clips = p.clips.slice(); clips[i] = { ...c, speed: s };
+  return touch(p, { clips: normaliseTransitions(clips) });
+}
+
+export function setClipFilter(p: Project, clipId: string, filter: FilterId | null): Project {
+  const i = p.clips.findIndex((c) => c.id === clipId);
+  if (i < 0) return p;
+  const f = filter === "none" ? null : filter;
+  if (f === p.clips[i].filter) return p;
+  const clips = p.clips.slice(); clips[i] = { ...clips[i], filter: f };
+  return touch(p, { clips });
+}
+
+export function setFilterForAllClips(p: Project, filter: FilterId | null): Project {
+  const f = filter === "none" ? null : filter;
+  if (p.clips.every((c) => c.filter === f)) return p;
+  return touch(p, { clips: p.clips.map((c) => (c.filter === f ? c : { ...c, filter: f })) });
+}
+
+export function setTransition(p: Project, clipId: string, t: { type: TransitionType; duration: number }): Project {
+  const i = p.clips.findIndex((c) => c.id === clipId);
+  if (i < 0 || i === p.clips.length - 1) return p;
+  let next: Clip["transitionOut"];
+  if (t.type === "none") next = NO_TRANSITION;
+  else {
+    const cap = transitionCap(p, i);
+    if (cap < TRANSITION_LIMITS.min) return p;
+    next = { type: t.type, duration: r2(clamp(t.duration, [TRANSITION_LIMITS.min, cap])) };
+  }
+  const cur = p.clips[i].transitionOut;
+  if (cur.type === next.type && cur.duration === next.duration) return p;
+  const clips = p.clips.slice(); clips[i] = { ...clips[i], transitionOut: next };
   return touch(p, { clips });
 }

@@ -14,10 +14,10 @@ export function trimFromDrag(clip: Clip, edge: "start" | "end", startValue: numb
   // SANCTIONED: translationX→xToTime is an output-seconds delta; clip.speed scales it to a source-seconds delta directly.
   const raw = snap(startValue + xToTime(translationX, pps) * clip.speed);
   if (edge === "start") {
-    const trimStart = Math.max(0, Math.min(raw, snap(clip.trimEnd - MIN_CLIP_SECONDS)));
+    const trimStart = Math.max(0, Math.min(raw, snap(clip.trimEnd - MIN_CLIP_SECONDS * clip.speed)));
     return { trimStart, trimEnd: clip.trimEnd };
   }
-  const trimEnd = Math.min(clip.sourceDuration, Math.max(raw, snap(clip.trimStart + MIN_CLIP_SECONDS)));
+  const trimEnd = Math.min(clip.sourceDuration, Math.max(raw, snap(clip.trimStart + MIN_CLIP_SECONDS * clip.speed)));
   return { trimStart: clip.trimStart, trimEnd };
 }
 
