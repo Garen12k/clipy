@@ -1,12 +1,12 @@
 import { useMemo, useRef } from "react";
 import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { updateOverlay } from "@/src/editor/model/ops";
-import type { TextOverlay } from "@/src/editor/model/types";
+import { updateOverlayShared } from "@/src/editor/model/ops";
+import type { Overlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 
-type Props = { overlay: TextOverlay; frameW: number; frameH: number; onDoubleTap: () => void };
+type Props = { overlay: Overlay; frameW: number; frameH: number; onDoubleTap: () => void };
 
 const snapAngle = (deg: number) => { const m = ((deg % 360) + 360) % 360; for (const s of [0, 90, 180, 270, 360]) if (Math.abs(m - s) <= 3) return s % 360; return deg; };
 
@@ -30,15 +30,15 @@ export function SelectionFrame({ overlay, frameW, frameH, onDoubleTap }: Props) 
 
   const gesture = useMemo(() => {
     const pan = Gesture.Pan().minDistance(2).onStart(() => begin(["x", "y"]))
-      .onUpdate((e) => store.applyTransient((p) => updateOverlay(p, id, { x: startRef.current.x + e.translationX / frameW, y: startRef.current.y + e.translationY / frameH })))
+      .onUpdate((e) => store.applyTransient((p) => updateOverlayShared(p, id, { x: startRef.current.x + e.translationX / frameW, y: startRef.current.y + e.translationY / frameH })))
       .onFinalize(end)
       .runOnJS(true);
     const pinch = Gesture.Pinch().onStart(() => begin(["scale"]))
-      .onUpdate((e) => store.applyTransient((p) => updateOverlay(p, id, { scale: startRef.current.scale * e.scale })))
+      .onUpdate((e) => store.applyTransient((p) => updateOverlayShared(p, id, { scale: startRef.current.scale * e.scale })))
       .onFinalize(end)
       .runOnJS(true);
     const rotate = Gesture.Rotation().onStart(() => begin(["rotation"]))
-      .onUpdate((e) => store.applyTransient((p) => updateOverlay(p, id, { rotation: snapAngle(startRef.current.rotation + (e.rotation * 180) / Math.PI) })))
+      .onUpdate((e) => store.applyTransient((p) => updateOverlayShared(p, id, { rotation: snapAngle(startRef.current.rotation + (e.rotation * 180) / Math.PI) })))
       .onFinalize(end)
       .runOnJS(true);
     const dbl = Gesture.Tap().numberOfTaps(2).onEnd(() => onDoubleTap()).runOnJS(true);

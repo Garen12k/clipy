@@ -1,7 +1,7 @@
 import Slider from "@react-native-community/slider";
 import { useState } from "react";
 import { Pressable, ScrollView, Switch, TextInput, View } from "react-native";
-import { deleteOverlay, duplicateOverlay, updateOverlay } from "@/src/editor/model/ops";
+import { deleteOverlay, duplicateOverlay, updateOverlay, updateOverlayShared } from "@/src/editor/model/ops";
 import { isTextOverlay, OVERLAY_LIMITS, type Align } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
@@ -24,6 +24,7 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
   const overlay = found;
   const id = overlay.id;
   const patch = (p: Parameters<typeof updateOverlay>[2]) => apply((x) => updateOverlay(x, id, p));
+  const patchShared = (p: Parameters<typeof updateOverlayShared>[2]) => apply((x) => updateOverlayShared(x, id, p));
   const slider = (key: "fontScale" | "opacity") => ({
     onSlidingStart: () => beginTransaction(),
     onValueChange: (v: number) => applyTransient((x) => updateOverlay(x, id, key === "fontScale" ? { fontScale: v } : { background: { color: overlay.background?.color ?? "#000000", opacity: v } })),
@@ -60,12 +61,12 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
         </Pressable>
         {fine && (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.md }}>
-            <NumField label="X %" value={Math.round(overlay.x * 100)} onCommit={(v) => patch({ x: v / 100 })} />
-            <NumField label="Y %" value={Math.round(overlay.y * 100)} onCommit={(v) => patch({ y: v / 100 })} />
-            <NumField label="Scale" value={Number(overlay.scale.toFixed(2))} step={0.01} onCommit={(v) => patch({ scale: v })} />
-            <NumField label="Rotation °" value={Math.round(overlay.rotation)} onCommit={(v) => patch({ rotation: v })} />
-            <NumField label="Start s" value={Number(overlay.start.toFixed(1))} step={0.1} onCommit={(v) => patch({ start: v })} />
-            <NumField label="End s" value={Number(overlay.end.toFixed(1))} step={0.1} onCommit={(v) => patch({ end: v })} />
+            <NumField label="X %" value={Math.round(overlay.x * 100)} onCommit={(v) => patchShared({ x: v / 100 })} />
+            <NumField label="Y %" value={Math.round(overlay.y * 100)} onCommit={(v) => patchShared({ y: v / 100 })} />
+            <NumField label="Scale" value={Number(overlay.scale.toFixed(2))} step={0.01} onCommit={(v) => patchShared({ scale: v })} />
+            <NumField label="Rotation °" value={Math.round(overlay.rotation)} onCommit={(v) => patchShared({ rotation: v })} />
+            <NumField label="Start s" value={Number(overlay.start.toFixed(1))} step={0.1} onCommit={(v) => patchShared({ start: v })} />
+            <NumField label="End s" value={Number(overlay.end.toFixed(1))} step={0.1} onCommit={(v) => patchShared({ end: v })} />
           </View>
         )}
         <View style={{ flexDirection: "row", gap: theme.space.md }}>

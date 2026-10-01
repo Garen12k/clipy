@@ -3,7 +3,7 @@ import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration, outputToSource } from "./timeline";
 import { MIN_CLIP_SECONDS, SPEED_LIMITS, TRANSITION_LIMITS, type AspectRatio, type Clip, type FilterId, type Project, type TransitionType } from "./types";
 import { totalDuration } from "./timeline";
-import { AUDIO_LIMITS, CLIP_VOLUME, isTextOverlay, OVERLAY_LIMITS, type AudioTrack, type Overlay, type TextOverlay } from "./types";
+import { AUDIO_LIMITS, CLIP_VOLUME, isSticker, isTextOverlay, OVERLAY_LIMITS, type AudioTrack, type Overlay, type StickerOverlay, type TextOverlay } from "./types";
 
 function touch(p: Project, patch: Partial<Project>): Project {
   return { ...p, ...patch, updatedAt: nowIso() };
@@ -87,6 +87,8 @@ export function addTextOverlay(p: Project, o: TextOverlay): Project {
   return touch(p, { overlays: [...p.overlays, o] });
 }
 
+type SharedPatch = Partial<Pick<Overlay, "x" | "y" | "scale" | "rotation" | "start" | "end">>;
+
 function normaliseOverlay<O extends Overlay>(p: Project, o: O): O {
   const total = totalDuration(p);
   let end = Math.min(o.end, total);
@@ -95,21 +97,38 @@ function normaliseOverlay<O extends Overlay>(p: Project, o: O): O {
     if (start + OVERLAY_LIMITS.minDuration <= total) end = start + OVERLAY_LIMITS.minDuration;
     else { end = total; start = Math.max(0, total - OVERLAY_LIMITS.minDuration); }
   }
-  const next: O = { ...o, x: clamp(o.x, [0, 1]), y: clamp(o.y, [0, 1]), scale: clamp(o.scale, OVERLAY_LIMITS.scale),
-    start: r3(start), end: r3(end) };
-  if (isTextOverlay(next)) (next as TextOverlay).fontScale = clamp(next.fontScale, OVERLAY_LIMITS.fontScale);
-  return next;
+  const shared = { x: clamp(o.x, [0, 1]), y: clamp(o.y, [0, 1]), scale: clamp(o.scale, OVERLAY_LIMITS.scale), start: r3(start), end: r3(end) };
+  return isTextOverlay(o) ? { ...o, ...shared, fontScale: clamp(o.fontScale, OVERLAY_LIMITS.fontScale) } : { ...o, ...shared };
+}
+
+function replaceOverlay(p: Project, i: number, next: Overlay): Project {
+  if (JSON.stringify(next) === JSON.stringify(p.overlays[i])) return p;
+  const overlays = p.overlays.slice(); overlays[i] = next;
+  return touch(p, { overlays });
 }
 
 export function updateOverlay(p: Project, id: string, patch: Partial<Omit<TextOverlay, "id" | "kind">>): Project {
   const i = p.overlays.findIndex((o) => o.id === id);
   if (i < 0) return p;
-  const target = p.overlays[i];
-  if (!isTextOverlay(target)) return p;
-  const next = normaliseOverlay(p, { ...target, ...patch });
-  if (JSON.stringify(next) === JSON.stringify(target)) return p;
-  const overlays = p.overlays.slice(); overlays[i] = next;
-  return touch(p, { overlays });
+  const cur = p.overlays[i];
+  if (!isTextOverlay(cur)) return p;
+  return replaceOverlay(p, i, normaliseOverlay(p, { ...cur, ...patch }));
+}
+
+export function updateOverlayShared(p: Project, id: string, patch: SharedPatch): Project {
+  const i = p.overlays.findIndex((o) => o.id === id);
+  if (i < 0) return p;
+  return replaceOverlay(p, i, normaliseOverlay(p, { ...p.overlays[i], ...patch } as Overlay));
+}
+
+export function addSticker(p: Project, s: StickerOverlay): Project { return touch(p, { overlays: [...p.overlays, s] }); }
+
+export function updateSticker(p: Project, id: string, patch: Partial<Omit<StickerOverlay, "id" | "kind">>): Project {
+  const i = p.overlays.findIndex((o) => o.id === id);
+  if (i < 0) return p;
+  const cur = p.overlays[i];
+  if (!isSticker(cur)) return p;
+  return replaceOverlay(p, i, normaliseOverlay(p, { ...cur, ...patch }));
 }
 
 export function moveOverlay(p: Project, id: string, newStart: number): Project {
@@ -117,7 +136,7 @@ export function moveOverlay(p: Project, id: string, newStart: number): Project {
   if (!o) return p;
   const d = o.end - o.start;
   const start = Math.max(0, Math.min(newStart, totalDuration(p) - d));
-  return updateOverlay(p, id, { start, end: start + d });
+  return updateOverlayShared(p, id, { start, end: start + d });
 }
 
 export function deleteOverlay(p: Project, id: string): Project {
@@ -129,7 +148,7 @@ export function duplicateOverlay(p: Project, id: string): Project {
   const i = p.overlays.findIndex((o) => o.id === id);
   if (i < 0) return p;
   const src = p.overlays[i];
-  const copy = normaliseOverlay(p, { ...src, id: newId(), x: src.x + 0.03, y: src.y + 0.03 });
+  const copy = normaliseOverlay(p, { ...src, id: newId(), x: src.x + 0.03, y: src.y + 0.03 } as Overlay);
   return touch(p, { overlays: [...p.overlays.slice(0, i + 1), copy, ...p.overlays.slice(i + 1)] });
 }
 
