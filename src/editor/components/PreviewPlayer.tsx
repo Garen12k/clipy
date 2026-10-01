@@ -25,7 +25,7 @@ export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayI
   // Source-time to seek to once the pending `replaceAsync` reports `readyToPlay`; null when no seek is pending.
   const pendingSeek = useRef<number | null>(null);
 
-  const player = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = false; });
+  const player = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = false; p.audioMixingMode = "mixWithOthers"; });
 
   // Load the right source and seek while paused.
   useEffect(() => {
