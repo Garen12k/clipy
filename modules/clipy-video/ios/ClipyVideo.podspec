@@ -17,5 +17,10 @@ Pod::Spec.new do |s|
     'SWIFT_COMPILATION_MODE' => 'wholemodule',
   }
 
-  s.source_files = "**/*.{h,m,mm,swift}"
+  s.source_files = "*.{h,m,mm,swift}"
+
+  s.test_spec 'Tests' do |test_spec|
+    test_spec.source_files = 'Tests/**/*.swift'
+    test_spec.dependency 'ExpoModulesTestCore'
+  end
 end
