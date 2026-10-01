@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View } from "react-native";
+import { Linking, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { useEditorStore } from "@/src/editor/store";
 import { useCaptions } from "@/src/editor/useCaptions";
@@ -19,7 +19,8 @@ export function CaptionsSheet({ visible, onClose }: Props) {
   const clipCount = clipIds.length;
   const [styling, setStyling] = useState(false);
 
-  const close = () => { reset(); onClose(); };
+  // Closing mid-run cancels it, so captions never land after the sheet is gone.
+  const close = () => { if (state.status === "running") cancel(); reset(); onClose(); };
 
   return (
     <Sheet visible={visible} onClose={close} title="Captions">
@@ -36,6 +37,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
             <Body>Replace existing captions?</Body>
             <View style={{ flexDirection: "row", gap: theme.space.md }}>
               <PrimaryButton title="Replace" onPress={run} />
+              <Chip label="Style captions" selected={false} onPress={() => setStyling(true)} />
               <Chip label="Cancel" selected={false} onPress={close} />
             </View>
           </View>
@@ -74,7 +76,9 @@ export function CaptionsSheet({ visible, onClose }: Props) {
         {state.status === "error" && (
           <View style={{ gap: theme.space.md }}>
             <Body>{state.message}</Body>
-            <PrimaryButton title="Try again" onPress={run} />
+            {state.code === "E_SPEECH_DENIED"
+              ? <PrimaryButton title="Open Settings" onPress={() => { Linking.openSettings(); }} />
+              : <PrimaryButton title="Try again" onPress={run} />}
           </View>
         )}
       </View>
