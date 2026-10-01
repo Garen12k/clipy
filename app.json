@@ -23,7 +23,24 @@
           "resizeMode": "contain",
           "backgroundColor": "#000000"
         }
-      ]
+      ],
+      "expo-video",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Clipy needs access to your videos to import clips."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Clipy saves exported videos to your Photos.",
+          "savePhotosPermission": "Clipy saves exported videos to your Photos.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "expo-font"
     ]
   }
 }
