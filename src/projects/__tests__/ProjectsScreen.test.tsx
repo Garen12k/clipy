@@ -16,8 +16,10 @@ import ProjectsScreen from "@/app/index";
 const list = storage.listProjects as jest.Mock;
 const mockPush = router.push as jest.Mock;
 
+beforeEach(() => jest.clearAllMocks());
+
 test("shows the empty state, then creates a project from picked videos and opens the editor", async () => {
-  list.mockResolvedValueOnce([]);
+  list.mockResolvedValue([]);
   (pickVideos as jest.Mock).mockResolvedValueOnce([{ uri: "file:///a.mov", durationSec: 3, width: 1080, height: 1920 }]);
   (storage.createProject as jest.Mock).mockResolvedValueOnce({ project: { id: "p9" }, failed: 0 });
   await render(<ProjectsScreen />);

@@ -9,14 +9,19 @@ export function useProjects() {
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
-    try { setProjects((await storage.listProjects()) ?? []); } finally { setLoading(false); }
+    try { setProjects(await storage.listProjects()); } finally { setLoading(false); }
   }, []);
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
   async function create(): Promise<string | null> {
     const assets = await pickVideos();
     if (!assets || assets.length === 0) return null;
-    const name = `Project ${projects.filter((p) => !p.broken).length + 1}`;
+    const used = projects
+      .map((p) => /^Project (\d+)$/.exec(p.name)?.[1])
+      .filter((n): n is string => n !== undefined)
+      .map(Number);
+    const nextNumber = used.length > 0 ? Math.max(...used) + 1 : 1;
+    const name = `Project ${nextNumber}`;
     const { project, failed } = await storage.createProject(name, assets);
     if (failed > 0) useToast.getState().show(`${assets.length - failed} of ${assets.length} clips added; ${failed} couldn't be read`);
     await reload();
