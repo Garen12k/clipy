@@ -9,7 +9,10 @@ jest.mock("@/modules/clipy-video", () => ({
 jest.mock("@/src/projects/expoFs", () => ({
   expoFs: { cacheDir: "file:///cache/", freeBytes: async () => 1e12, mkdir: async () => {} },
 }));
+jest.mock("@/src/lib/id", () => ({ newId: () => "split-right" }));
+jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { exportTimeline } from "@/modules/clipy-video";
+import { setTransition, splitClipAt } from "@/src/editor/model/ops";
 import { makeAudioTrack, makeClip, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useExport } from "../useExport";
 
@@ -60,6 +63,23 @@ test("drops the audio track when its source file is missing", async () => {
   await act(() => result.current.start(1080));
   expect(exportTimeline).toHaveBeenCalledTimes(1);
   expect((exportTimeline as jest.Mock).mock.calls[0][0].audio).toBeNull();
+});
+
+test("a split, sped-up clip with transitions and a shape sticker maps into one export request", async () => {
+  const fast = makeClip({ id: "f", sourceDuration: 8, speed: 2, transitionOut: { type: "slide", duration: 0.6 } });   // 4 s output
+  const tail = makeClip({ id: "t", sourceDuration: 4 });
+  let p = makeProject({ id: "p2", clips: [fast, tail], overlays: [makeSticker({ id: "st", emoji: null, shape: "star", color: "#FF2D7A", start: 1, end: 3 })] });
+  p = splitClipAt(p, 2);                                                       // output 2 s → source 4 s
+  p = setTransition(p, "f", { type: "dissolve", duration: 0.5 });
+  const { result } = await renderHook(() => useExport(p, []));
+  await act(() => result.current.start(1080));
+  const req = (exportTimeline as jest.Mock).mock.calls[0][0];
+  expect(req.clips).toEqual([
+    expect.objectContaining({ sourceUri: fast.sourceUri, trimStart: 0, trimEnd: 4, speed: 2, transition: { type: "dissolve", duration: 0.5 } }),
+    expect.objectContaining({ sourceUri: fast.sourceUri, trimStart: 4, trimEnd: 8, speed: 2, transition: { type: "slide", duration: 0.6 } }),
+    expect.objectContaining({ sourceUri: tail.sourceUri, speed: 1, transition: { type: "none", duration: 0 } }),
+  ]);
+  expect(req.overlays).toEqual([expect.objectContaining({ kind: "sticker", emoji: null, shape: "star", color: "#FF2D7A", start: 1, end: 3 })]);
 });
 
 test("clears the last exported clip's transition when a trailing clip's source is missing", async () => {
