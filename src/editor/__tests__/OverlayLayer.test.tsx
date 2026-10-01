@@ -26,3 +26,18 @@ test("shows the selection frame only for the selected overlay", async () => {
   await render(<OverlayLayer frameW={200} frameH={400} onOpenPanel={() => {}} />);
   expect(screen.getByTestId("selection-frame-o1")).toBeTruthy();
 });
+
+test("the selection frame claims the touch responder so a tap does not bubble to the preview and deselect it", async () => {
+  // On device, RNGH's native gesture recognizer needs the frame to be a candidate responder
+  // (deepest-view-wins in RN's responder negotiation) so PreviewPlayer's outer Pressable never
+  // starts its own press and deselects the overlay before a second tap can land.
+  // @testing-library/react-native's `fireEvent.press` does not model that deepest-view-wins
+  // negotiation (verified: a nested `onStartShouldSetResponder={() => true}` view still lets an
+  // ancestor Pressable's onPress fire via its own event handlers), so this asserts the responder
+  // claim directly rather than through a simulated bubbling press.
+  useEditorStore.getState().seek(1);
+  useEditorStore.getState().selectOverlay("o1");
+  await render(<OverlayLayer frameW={200} frameH={400} onOpenPanel={() => {}} />);
+  const frame = screen.getByTestId("selection-frame-o1");
+  expect(frame.props.onStartShouldSetResponder?.()).toBe(true);
+});
