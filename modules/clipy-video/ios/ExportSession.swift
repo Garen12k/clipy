@@ -4,15 +4,26 @@ import ExpoModulesCore
 import QuartzCore
 import UIKit
 
+struct ExportTransition: Record {
+  @Field var type: String = "none"                // none | fade | dissolve | slide | zoom (unknown → dissolve)
+  @Field var duration: Double = 0                  // seconds, centred on the cut after this clip
+}
+
 struct ExportClip: Record {
   @Field var sourceUri: String = ""
   @Field var trimStart: Double = 0
   @Field var trimEnd: Double = 0
   @Field var volume: Double = 1
   @Field var muted: Bool = false
+  @Field var speed: Double = 1                     // output duration = (trimEnd − trimStart) / speed
+  @Field var filter: String?                       // JS `null` → nil (no filter)
+  @Field var transition: ExportTransition = ExportTransition()   // into the NEXT clip
 }
 
 struct ExportOverlay: Record {
+  @Field var kind: String = "text"                 // text | caption | sticker
+  @Field var emoji: String?                        // sticker: emoji character(s)
+  @Field var shape: String?                        // sticker: Effects.shapePaths id (wins over emoji, like StickerView)
   @Field var text: String = ""
   @Field var fontPostScriptName: String = "Helvetica"
   @Field var fontScale: Double = 0.07
@@ -74,9 +85,32 @@ func contrastFor(hex: String) -> String {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? "#000000" : "#FFFFFF"
 }
 
+/// A clip after its asset has been loaded and its trim clamped to the source.
+private struct LoadedClip {
+  let clip: ExportClip
+  let srcVideo: AVAssetTrack
+  let srcAudio: AVAssetTrack?
+  let audioRange: CMTimeRange?                     // the source audio track's own range
+  let transform: CGAffineTransform                 // Core Image aspect-fill transform
+  let start: Double                                // clamped trimStart (source seconds)
+  let end: Double                                  // clamped trimEnd (source seconds)
+  let sourceEnd: CMTime                            // last source time that can be read (handle limit)
+  let speed: Double
+  let outDur: CMTime                               // (end − start) / speed — what the clip adds to the timeline
+}
+
+/// Where one clip ended up on the composition timeline (output seconds).
+private struct PlacedClip {
+  let trackID: CMPersistentTrackID
+  let bodyStart: CMTime                            // = cursor before this clip
+  let bodyEnd: CMTime                              // = bodyStart + outDur
+}
+
 /// One export job. Builds an AVMutableComposition from trimmed clips, aspect-fills each into the render size, and writes an .mp4.
 /// Phase 2: per-clip volume/mute and an optional music track (audio mix, 1 s fade-out at the end), plus text overlays
 /// rendered with Core Animation (`AVVideoCompositionCoreAnimationTool`).
+/// Phase 3: per-clip speed (`scaleTimeRange`), Core Image filters and transitions through `ClipyCompositor`, with clips
+/// alternating between two video tracks (A/B) so a transition's two clips overlap; emoji/shape stickers as layers.
 /// Events go through `onEvent`: `progress` (repeating), then exactly one of `done` / `cancelled` / `error`.
 /// Errors thrown from `start` are NOT emitted here — the caller (the module) turns them into an `error` event.
 final class ExportSession {
@@ -123,6 +157,19 @@ final class ExportSession {
     let ty = (renderSize.height - h * scale) / 2
     return t.concatenating(normalise).concatenating(CGAffineTransform(scaleX: scale, y: scale)).concatenating(CGAffineTransform(translationX: tx, y: ty))
   }
+
+  /// `fillTransform` for the Core Image compositor. AVFoundation transforms are y-down (top-left origin) while a
+  /// CIImage made from a pixel buffer is y-up, so: flip the source into y-down, apply the fill, flip back into y-up
+  /// render space. Pure scales/centring are unchanged by this; rotations (portrait iPhone video) need it.
+  static func ciFillTransform(preferredTransform t: CGAffineTransform, naturalSize: CGSize, renderSize: CGSize) -> CGAffineTransform {
+    let fill = fillTransform(preferredTransform: t, naturalSize: naturalSize, renderSize: renderSize)
+    let flipSource = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: naturalSize.height)
+    let flipRender = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: renderSize.height)
+    return flipSource.concatenating(fill).concatenating(flipRender)
+  }
+
+  /// Seconds → CMTime at the timescale every Phase 1–3 computation uses.
+  static func time(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: 600) }
 
   /// CoreText paragraph style (alignment + fixed line height) for the CATextLayer, which draws with CoreText.
   static func ctParagraphStyle(alignment: CTTextAlignment, lineHeight: CGFloat) -> CTParagraphStyle {
@@ -201,18 +248,81 @@ final class ExportSession {
     container.addSublayer(textLayer)
 
     container.transform = CATransform3DMakeRotation(-l.rotation * .pi / 180, 0, 0, 1)
+    addVisibility(container, start: o.start, end: o.end)
+    return container
+  }
 
-    // Hidden by default; the animation (opacity 1) only runs during [start, end) and is removed afterwards.
-    container.opacity = 0
+  /// Hidden by default; the animation (opacity 1) only runs during [start, end) and is removed afterwards.
+  static func addVisibility(_ layer: CALayer, start: Double, end: Double) {
+    layer.opacity = 0
     let anim = CABasicAnimation(keyPath: "opacity")
     anim.fromValue = 1.0
     anim.toValue = 1.0
-    anim.beginTime = max(o.start, AVCoreAnimationBeginTimeAtZero)   // 0 would mean "now", not the video's start
-    anim.duration = o.end - o.start
+    anim.beginTime = max(start, AVCoreAnimationBeginTimeAtZero)   // 0 would mean "now", not the video's start
+    anim.duration = end - start
     anim.fillMode = .removed
     anim.isRemovedOnCompletion = true
-    container.add(anim, forKey: "visible")
+    layer.add(anim, forKey: "visible")
+  }
+
+  /// One sticker centred on (x·W, y·H), rotated about its centre, visible during [start, end) — like a text
+  /// container. A known `shape` wins over `emoji` (as in StickerView.tsx). Nil when there is nothing to draw.
+  static func stickerLayer(_ o: ExportOverlay, renderSize: CGSize) -> CALayer? {
+    let container = CALayer()
+    if let shape = o.shape, let svg = Effects.shapePaths[shape], let path = SVGPath.cgPath(from: svg) {
+      let box = Effects.stickerShapeScale * renderSize.height * CGFloat(o.scale)
+      guard box > 0 else { return nil }
+      // Scale the 100×100 SVG box to `box` and flip it vertically: SVG is y-down, the export's layer space is y-up.
+      var flip = CGAffineTransform(a: box / 100, b: 0, c: 0, d: -box / 100, tx: 0, ty: box)
+      guard let placed = path.copy(using: &flip) else { return nil }
+      container.bounds = CGRect(x: 0, y: 0, width: box, height: box)
+      let shapeLayer = CAShapeLayer()
+      shapeLayer.frame = container.bounds
+      shapeLayer.path = placed
+      shapeLayer.fillColor = UIColor(hex: o.color).cgColor
+      shapeLayer.strokeColor = nil
+      shapeLayer.contentsScale = 1                    // render size is already in pixels
+      container.addSublayer(shapeLayer)
+    } else if let emoji = o.emoji, !emoji.isEmpty {
+      let size = Effects.stickerEmojiScale * renderSize.height * CGFloat(o.scale)
+      guard size > 0 else { return nil }
+      // Apple Color Emoji by name (CoreText falls back per glyph for anything it lacks); CoreText keys only, so
+      // CATextLayer draws and CTFramesetter measures with the same engine (same approach as the text path).
+      let font = CTFontCreateWithName("AppleColorEmoji" as CFString, size, nil)
+      func key(_ k: CFString) -> NSAttributedString.Key { NSAttributedString.Key(rawValue: k as String) }
+      var attrs: [NSAttributedString.Key: Any] = [:]
+      attrs[key(kCTFontAttributeName)] = font
+      attrs[key(kCTForegroundColorAttributeName)] = UIColor.white.cgColor
+      let string = NSAttributedString(string: emoji, attributes: attrs)
+      let framesetter = CTFramesetterCreateWithAttributedString(string as CFAttributedString)
+      let suggested = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(location: 0, length: 0), nil, CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude), nil)
+      let w = max(1, ceil(suggested.width))
+      let h = max(1, ceil(suggested.height))
+      container.bounds = CGRect(x: 0, y: 0, width: w, height: h)
+      let textLayer = CATextLayer()
+      textLayer.string = string
+      textLayer.alignmentMode = .center
+      textLayer.isWrapped = false
+      textLayer.truncationMode = .none
+      textLayer.contentsScale = 1                     // render size is already in pixels
+      textLayer.frame = container.bounds
+      container.addSublayer(textLayer)
+    } else {
+      return nil
+    }
+    container.position = CGPoint(x: CGFloat(o.x) * renderSize.width, y: renderSize.height - CGFloat(o.y) * renderSize.height)
+    container.transform = CATransform3DMakeRotation(-CGFloat(o.rotation) * .pi / 180, 0, 0, 1)
+    addVisibility(container, start: o.start, end: o.end)
     return container
+  }
+
+  /// Text and captions use the Phase 2 text path unchanged; stickers use `stickerLayer`. Empty ones are skipped.
+  static func overlayLayers(_ overlays: [ExportOverlay], renderSize: CGSize) -> [CALayer] {
+    overlays.compactMap { o -> CALayer? in
+      guard o.end > o.start else { return nil }
+      if o.kind == "sticker" { return stickerLayer(o, renderSize: renderSize) }
+      return o.text.isEmpty ? nil : overlayLayer(o, renderSize: renderSize)
+    }
   }
 
   private var cancelledFlag: Bool {
@@ -223,51 +333,132 @@ final class ExportSession {
   func start(_ request: ExportRequest) async throws {
     guard let outputURL = Self.fileURL(from: request.outputPath) else { throw ExportError.badOutputPath }
     guard !request.clips.isEmpty else { throw ExportError.sessionFailed("Nothing to export") }
-    let composition = AVMutableComposition()
-    guard let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { throw ExportError.sessionFailed("Cannot create video track") }
-    let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-    var hasAudio = false
-    var clipAudioRanges: [(range: CMTimeRange, volume: Float)] = []
     let renderSize = Self.renderSize(aspect: request.aspectRatio, resolution: request.resolution)
-    var cursor = CMTime.zero
-    var instructions: [AVMutableVideoCompositionInstruction] = []
 
+    // 1. Load every clip first: a transition window is clamped against the NEXT clip's output duration.
+    var loaded: [LoadedClip] = []
     for clip in request.clips {
       if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
       guard let url = URL(string: clip.sourceUri) else { throw ExportError.noVideoTrack(clip.sourceUri) }
       let asset = AVURLAsset(url: url)
       guard let srcVideo = try await asset.loadTracks(withMediaType: .video).first else { throw ExportError.noVideoTrack(clip.sourceUri) }
-      let (preferredTransform, naturalSize) = try await srcVideo.load(.preferredTransform, .naturalSize)
+      let (preferredTransform, naturalSize, videoRange) = try await srcVideo.load(.preferredTransform, .naturalSize, .timeRange)
       // Clamp the trim range to the source so insertTimeRange never reads past the end.
       let duration = try await asset.load(.duration)
       let end = min(clip.trimEnd, duration.seconds)
       let start = max(0, min(clip.trimStart, end))
       guard end - start > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(clip.sourceUri)") }
-      let range = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600), end: CMTime(seconds: end, preferredTimescale: 600))
-      try videoTrack.insertTimeRange(range, of: srcVideo, at: cursor)
-      if let srcAudio = try await asset.loadTracks(withMediaType: .audio).first, let audioTrack {
-        if (try? audioTrack.insertTimeRange(range, of: srcAudio, at: cursor)) != nil {
-          hasAudio = true
-          clipAudioRanges.append((range: CMTimeRange(start: cursor, duration: range.duration), volume: clip.muted ? 0 : Float(max(0, clip.volume))))
+      let speed = clip.speed.isFinite && clip.speed > 0 ? clip.speed : 1
+      let outDur = Self.time((end - start) / speed)
+      guard CMTimeCompare(outDur, .zero) > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(clip.sourceUri)") }
+      let srcAudio = try await asset.loadTracks(withMediaType: .audio).first
+      var audioRange: CMTimeRange? = nil
+      if let srcAudio { audioRange = try? await srcAudio.load(.timeRange) }
+      loaded.append(LoadedClip(
+        clip: clip, srcVideo: srcVideo, srcAudio: srcAudio, audioRange: audioRange,
+        transform: Self.ciFillTransform(preferredTransform: preferredTransform, naturalSize: naturalSize, renderSize: renderSize),
+        start: start, end: end, sourceEnd: CMTimeMinimum(duration, videoRange.end),
+        speed: speed, outDur: outDur))
+    }
+    let n = loaded.count
+
+    // 2. Half-width of the transition window at each cut (window = [cut − half, cut + half]), clamped in CMTime so
+    //    the two windows inside one clip never overlap (half[i−1] + half[i] ≤ outDur[i]) and a window never takes
+    //    more than half of the next clip. Clip i and clip i+2 share a track, so their placements cannot overlap.
+    var halves = [CMTime](repeating: .zero, count: n)
+    for i in 0..<(n - 1) {
+      let tr = loaded[i].clip.transition
+      guard tr.type != "none", tr.duration.isFinite, tr.duration > 0 else { continue }
+      let previous = i > 0 ? halves[i - 1] : CMTime.zero
+      let next = loaded[i + 1].outDur
+      let halfOfNext = CMTime(value: next.value / 2, timescale: next.timescale)
+      halves[i] = CMTimeMaximum(.zero, CMTimeMinimum(Self.time(tr.duration / 2), CMTimeMinimum(loaded[i].outDur - previous, halfOfNext)))
+    }
+
+    // 3. Two video and two audio tracks; clip i goes on track i % 2 so the clips around a cut can overlap.
+    let composition = AVMutableComposition()
+    guard let videoA = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+          let videoB = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
+    else { throw ExportError.sessionFailed("Cannot create video track") }
+    let videoTracks = [videoA, videoB]
+    let audioTracks: [AVMutableCompositionTrack?] = [
+      composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid),
+      composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid),
+    ]
+    var videoEnd: [CMTime] = [.zero, .zero]
+    var audioEnd: [CMTime] = [.zero, .zero]
+    var audioVolumes: [[(at: CMTime, volume: Float)]] = [[], []]
+    var placed: [PlacedClip] = []
+    var cursor = CMTime.zero
+    let holdFrame = CMTime(value: 1, timescale: 30)
+
+    /// Appends `source` at `a` and retimes it to end exactly at `b` (speed). Every insert lands at or after the
+    /// track's current end, so nothing already on the track shifts. False when there is nothing to insert.
+    func insertScaled(_ track: AVMutableCompositionTrack, _ source: CMTimeRange, of srcTrack: AVAssetTrack, from a: CMTime, to b: CMTime) throws -> Bool {
+      guard CMTimeCompare(b, a) > 0, CMTimeCompare(source.duration, .zero) > 0 else { return false }
+      try track.insertTimeRange(source, of: srcTrack, at: a)
+      let target = b - a
+      if CMTimeCompare(source.duration, target) != 0 {
+        track.scaleTimeRange(CMTimeRange(start: a, duration: source.duration), toDuration: target)
+      }
+      return true
+    }
+
+    for (i, c) in loaded.enumerated() {
+      let k = i % 2
+      let track = videoTracks[k]
+      let halfIn = i > 0 ? halves[i - 1] : CMTime.zero
+      let halfOut = halves[i]
+      let bodyStart = cursor
+      let bodyEnd = cursor + c.outDur
+      // The incoming clip starts at cursor − d/2 on its own track (never before that track's previous clip ends).
+      let clipStart = CMTimeMaximum(bodyStart - halfIn, videoEnd[k])
+      let clipEnd = bodyEnd + halfOut
+      // Handles in source seconds: d/2 × speed before trimStart / after trimEnd, clamped to the source.
+      let head = max(0, min(halfIn.seconds * c.speed, c.start))
+      let tail = max(0, min(halfOut.seconds * c.speed, c.sourceEnd.seconds - c.end))
+      let source = CMTimeRange(start: Self.time(c.start - head), end: CMTimeMinimum(Self.time(c.end + tail), c.sourceEnd))
+      guard CMTimeCompare(source.duration, .zero) > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(c.clip.sourceUri)") }
+      // Real material covers [mainStart, mainEnd); handles map at 1/speed.
+      let mainStart = CMTimeMaximum(clipStart, bodyStart - CMTimeMinimum(Self.time(head / c.speed), halfIn))
+      let mainEnd = CMTimeMinimum(clipEnd, bodyEnd + CMTimeMinimum(Self.time(tail / c.speed), halfOut))
+      // Where a handle was clamped short, hold the edge frame: one frame's worth of source at that edge, stretched
+      // over the gap. Approximate — the held picture is whichever source sample covers that 1/30 s edge range.
+      let edge = CMTimeMinimum(holdFrame, source.duration)
+      _ = try insertScaled(track, CMTimeRange(start: source.start, duration: edge), of: c.srcVideo, from: clipStart, to: mainStart)
+      _ = try insertScaled(track, source, of: c.srcVideo, from: mainStart, to: mainEnd)
+      _ = try insertScaled(track, CMTimeRange(start: source.end - edge, duration: edge), of: c.srcVideo, from: mainEnd, to: clipEnd)
+      videoEnd[k] = clipEnd
+
+      // Clip audio (handles included, so the two clips' sound overlaps across a transition), retimed like the video.
+      if let srcAudio = c.srcAudio, let audioRange = c.audioRange, let audioTrack = audioTracks[k] {
+        let shared = CMTimeRangeGetIntersection(source, otherRange: audioRange)
+        if CMTimeCompare(shared.duration, .zero) > 0 {
+          let outPerSource = (mainEnd - mainStart).seconds / source.duration.seconds
+          let aStart = CMTimeMaximum(mainStart + Self.time((shared.start - source.start).seconds * outPerSource), audioEnd[k])
+          let aEnd = CMTimeMinimum(mainStart + Self.time((shared.end - source.start).seconds * outPerSource), mainEnd)
+          if (try? insertScaled(audioTrack, shared, of: srcAudio, from: aStart, to: aEnd)) == true {
+            audioEnd[k] = aEnd
+            // Volume / mute takes effect at the clip's scaled start on its audio track.
+            audioVolumes[k].append((at: aStart, volume: c.clip.muted ? 0 : Float(max(0, c.clip.volume))))
+          }
         }
       }
-      let instruction = AVMutableVideoCompositionInstruction()
-      instruction.timeRange = CMTimeRange(start: cursor, duration: range.duration)
-      let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-      layer.setTransform(Self.fillTransform(preferredTransform: preferredTransform, naturalSize: naturalSize, renderSize: renderSize), at: cursor)
-      instruction.layerInstructions = [layer]
-      instructions.append(instruction)
-      cursor = cursor + range.duration
-    }
-    // An empty audio track (all sources silent) can make the export fail; drop it.
-    if !hasAudio, let audioTrack { composition.removeTrack(audioTrack) }
-    let total = cursor
 
-    // Per-clip volume / mute on the clip audio track.
+      placed.append(PlacedClip(trackID: track.trackID, bodyStart: bodyStart, bodyEnd: bodyEnd))
+      cursor = bodyEnd                              // advance by outDur only — never by a handle
+    }
+    let total = cursor                              // Σ outDur
+
+    // A single clip never uses track B; an empty audio track (all sources silent) can make the export fail.
+    if n < 2 { composition.removeTrack(videoB) }
     var mixParams: [AVAudioMixInputParameters] = []
-    if hasAudio, let audioTrack {
+    for k in 0..<2 {
+      guard let audioTrack = audioTracks[k] else { continue }
+      if audioVolumes[k].isEmpty { composition.removeTrack(audioTrack); continue }
+      // Per-clip volume / mute on the clip audio tracks.
       let params = AVMutableAudioMixInputParameters(track: audioTrack)
-      for entry in clipAudioRanges { params.setVolume(entry.volume, at: entry.range.start) }
+      for entry in audioVolumes[k] { params.setVolume(entry.volume, at: entry.at) }
       mixParams.append(params)
     }
 
@@ -298,25 +489,50 @@ final class ExportSession {
       }
     }
 
+    // 4. Compositor instructions, contiguous over [0, total]: clip i alone on [bodyStart + halfIn, bodyEnd − halfOut),
+    //    then the window around cut i, [bodyEnd − half, bodyEnd + half), with the outgoing and incoming layers.
+    func spec(_ i: Int) -> LayerSpec {
+      LayerSpec(trackID: placed[i].trackID, transform: loaded[i].transform, filter: loaded[i].clip.filter)
+    }
+    var instructions: [AVVideoCompositionInstructionProtocol] = []
+    for i in 0..<n {
+      let soloStart = placed[i].bodyStart + (i > 0 ? halves[i - 1] : CMTime.zero)
+      let soloEnd = placed[i].bodyEnd - halves[i]
+      if CMTimeCompare(soloEnd, soloStart) > 0 {
+        instructions.append(ClipyInstruction(timeRange: CMTimeRange(start: soloStart, end: soloEnd), layers: [spec(i)], transition: nil))
+      }
+      if i < n - 1, CMTimeCompare(halves[i], .zero) > 0 {
+        let window = CMTimeRange(start: placed[i].bodyEnd - halves[i], end: placed[i].bodyEnd + halves[i])
+        instructions.append(ClipyInstruction(
+          timeRange: window, layers: [spec(i), spec(i + 1)],
+          transition: (type: loaded[i].clip.transition.type, start: window.start, duration: window.duration)))
+      }
+    }
+
     let videoComposition = AVMutableVideoComposition()
+    videoComposition.customVideoCompositorClass = ClipyCompositor.self
     videoComposition.renderSize = renderSize
     videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
     videoComposition.instructions = instructions
 
-    // Text overlays, composited on top of the video by Core Animation.
-    let overlays = request.overlays.filter { $0.end > $0.start && !$0.text.isEmpty }
-    if !overlays.isEmpty {
-      CATransaction.begin()
-      CATransaction.setDisableActions(true)
+    // Text, caption and sticker overlays, composited on top of the video by Core Animation.
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    let overlayLayers = Self.overlayLayers(request.overlays, renderSize: renderSize)
+    var layerTree: (parent: CALayer, video: CALayer)? = nil
+    if !overlayLayers.isEmpty {
       let bounds = CGRect(origin: .zero, size: renderSize)
       let parentLayer = CALayer()
       parentLayer.frame = bounds
       let videoLayer = CALayer()
       videoLayer.frame = bounds
       parentLayer.addSublayer(videoLayer)
-      for overlay in overlays { parentLayer.addSublayer(Self.overlayLayer(overlay, renderSize: renderSize)) }
-      CATransaction.commit()
-      videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: videoLayer, in: parentLayer)
+      for layer in overlayLayers { parentLayer.addSublayer(layer) }
+      layerTree = (parent: parentLayer, video: videoLayer)
+    }
+    CATransaction.commit()
+    if let tree = layerTree {
+      videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: tree.video, in: tree.parent)
     }
 
     // The render size already fixes the output dimensions (portrait or landscape); HighestQuality honours

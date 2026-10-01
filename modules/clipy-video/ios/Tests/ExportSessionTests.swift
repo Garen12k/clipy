@@ -161,4 +161,57 @@ final class ExportSessionTests: XCTestCase {
     let size = try await track.load(.naturalSize)
     XCTAssertEqual(size.width, 720, accuracy: 2); XCTAssertEqual(size.height, 1280, accuracy: 2)
   }
+
+  func testSVGPathParsesShapes() throws {
+    for (id, d) in Effects.shapePaths {
+      XCTAssertNotNil(SVGPath.cgPath(from: d), "shape \(id) should parse")
+    }
+    let square = try XCTUnwrap(SVGPath.cgPath(from: try XCTUnwrap(Effects.shapePaths["square"])))
+    var points = 0
+    square.applyWithBlock { element in
+      switch element.pointee.type {
+      case .moveToPoint, .addLineToPoint: points += 1
+      default: break
+      }
+    }
+    XCTAssertEqual(points, 4)
+    XCTAssertNil(SVGPath.cgPath(from: "M0 0 A10 10 0 0 1 20 20"), "unsupported commands are rejected")
+  }
+
+  /// Clip 1 (2 s at speed 2 → 1 s, warm, dissolve 0.5 s into clip 2) + clip 2 (2 s): 3 s total; neither source has
+  /// handle material, so both edges of the transition are holds. Overlays: text, emoji sticker, heart shape.
+  func testExportsWithEffects() async throws {
+    let a = try await makeClip(seconds: 2, color: .red)
+    let b = try await makeClip(seconds: 2, color: .blue)
+    let out = FileManager.default.temporaryDirectory.appendingPathComponent("out-\(UUID().uuidString).mp4")
+    var request = ExportRequest()
+    request.clips = [ExportClip(), ExportClip()]
+    request.clips[0].sourceUri = a.absoluteString; request.clips[0].trimStart = 0; request.clips[0].trimEnd = 2
+    request.clips[0].speed = 2; request.clips[0].filter = "warm"
+    var dissolve = ExportTransition()
+    dissolve.type = "dissolve"; dissolve.duration = 0.5
+    request.clips[0].transition = dissolve
+    request.clips[1].sourceUri = b.absoluteString; request.clips[1].trimStart = 0; request.clips[1].trimEnd = 2
+
+    var text = ExportOverlay()
+    text.text = "Hi"; text.start = 0; text.end = 3
+    var emoji = ExportOverlay()
+    emoji.kind = "sticker"; emoji.emoji = "🔥"; emoji.x = 0.3; emoji.y = 0.3; emoji.start = 0; emoji.end = 2
+    var heart = ExportOverlay()
+    heart.kind = "sticker"; heart.shape = "heart"; heart.color = "#FF2D7A"; heart.x = 0.7; heart.y = 0.7; heart.rotation = 15
+    heart.start = 1; heart.end = 3
+    request.overlays = [text, emoji, heart]
+    request.aspectRatio = "9:16"; request.resolution = 720; request.outputPath = out.absoluteString
+
+    let finished = expectation(description: "export")
+    var result: [String: Any] = [:]
+    let session = ExportSession { payload in if (payload["type"] as? String) != "progress" { result = payload; finished.fulfill() } }
+    try await session.start(request)
+    await fulfillment(of: [finished], timeout: 60)
+
+    XCTAssertEqual(result["type"] as? String, "done", "\(result)")
+    let asset = AVURLAsset(url: out)
+    let duration = try await asset.load(.duration).seconds
+    XCTAssertEqual(duration, 3, accuracy: 0.2)
+  }
 }
