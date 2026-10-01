@@ -1,6 +1,6 @@
 import { makeClip, makeProject } from "@/src/editor/model/types";
 import { clipAt } from "@/src/editor/model/timeline";
-import { nextPlayheadFromPlayer } from "../usePreviewSync";
+import { nextPlayheadFromPlayer, nextPresentClipIndex } from "../usePreviewSync";
 
 const a = makeClip({ id: "a", sourceDuration: 10, trimStart: 2, trimEnd: 5 }); // 3 s
 const b = makeClip({ id: "b", sourceDuration: 8, trimStart: 1, trimEnd: 3 }); // 2 s
@@ -25,4 +25,23 @@ test("skips missing clips", () => {
 test("ends at the end of the last clip", () => {
   const hit = clipAt(p, 6)!; // in c
   expect(nextPlayheadFromPlayer(p, hit, 8.1, [])).toEqual({ playhead: 13, ended: true });
+});
+
+test("holds at the clip start when the player hasn't seeked into the trim window yet", () => {
+  const hit = clipAt(p, 1)!; // in a, trimStart 2
+  expect(nextPlayheadFromPlayer(p, hit, 0, [])).toEqual({ playhead: 0, ended: false });
+});
+
+describe("nextPresentClipIndex", () => {
+  test("returns the next clip index when nothing is missing", () => {
+    expect(nextPresentClipIndex(p, 0, [])).toBe(1);
+  });
+
+  test("skips missing clips to find the next present one", () => {
+    expect(nextPresentClipIndex(p, 0, ["b"])).toBe(2);
+  });
+
+  test("returns null when there is no present clip left", () => {
+    expect(nextPresentClipIndex(p, 1, ["c"])).toBeNull();
+  });
 });

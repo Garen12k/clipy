@@ -1,10 +1,10 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
-import { clipAt, totalDuration } from "@/src/editor/model/timeline";
+import { clipAt, clipStartTimes, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { nextPlayheadFromPlayer } from "@/src/editor/usePreviewSync";
+import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
 import { formatDurationPrecise } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,28 +18,52 @@ export function PreviewPlayer() {
 
   const hit = useMemo(() => (project ? clipAt(project, playhead) : null), [project, playhead]);
   const loadedClipId = useRef<string | null>(null);
+  // Source-time to seek to once the pending `replaceAsync` reports `readyToPlay`; null when no seek is pending.
+  const pendingSeek = useRef<number | null>(null);
 
   const player = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = false; });
 
   // Load the right source and seek while paused.
   useEffect(() => {
-    if (!hit || missing.includes(hit.clip.id)) return;
+    if (!hit || !project) return;
+    if (missing.includes(hit.clip.id)) {
+      // The clip under the playhead is missing its source file: don't play it.
+      player.pause();
+      if (isPlaying) {
+        const next = nextPresentClipIndex(project, hit.index, missing);
+        if (next !== null) seek(clipStartTimes(project)[next]);
+        else { seek(totalDuration(project)); setPlaying(false); }
+      }
+      return;
+    }
     const sourceTime = hit.clip.trimStart + hit.offsetInClip;
     if (loadedClipId.current !== hit.clip.id) {
       loadedClipId.current = hit.clip.id;
-      player.replace({ uri: hit.clip.sourceUri });
-      player.currentTime = sourceTime;
-      if (isPlaying) player.play();
+      pendingSeek.current = sourceTime;
+      player.replaceAsync({ uri: hit.clip.sourceUri });
       return;
     }
     if (!isPlaying) player.currentTime = sourceTime;
-  }, [hit?.clip.id, hit?.clip.sourceUri, playhead, isPlaying, missing, player]);
+  }, [hit?.clip.id, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, playhead, isPlaying, missing, project, player, seek, setPlaying]);
 
   useEffect(() => { if (isPlaying) player.play(); else player.pause(); }, [isPlaying, player]);
+
+  // Apply the pending seek once the newly replaced source is ready, then resume playback if needed.
+  useEffect(() => {
+    const sub = player.addListener("statusChange", ({ status }) => {
+      if (status === "readyToPlay" && pendingSeek.current !== null) {
+        player.currentTime = pendingSeek.current;
+        pendingSeek.current = null;
+        if (useEditorStore.getState().isPlaying) player.play();
+      }
+    });
+    return () => sub.remove();
+  }, [player]);
 
   // Drive the playhead from the player while playing.
   useEffect(() => {
     const sub = player.addListener("timeUpdate", ({ currentTime }) => {
+      if (pendingSeek.current !== null) return; // the source hasn't been seeked into place yet
       const s = useEditorStore.getState();
       if (!s.isPlaying || !s.project) return;
       const h = clipAt(s.project, s.playhead);
@@ -58,7 +82,13 @@ export function PreviewPlayer() {
 
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.md }}>
-      <Pressable onPress={() => !empty && setPlaying(!isPlaying)} accessibilityLabel={isPlaying ? "Pause" : "Play"}
+      <Pressable
+        onPress={() => {
+          if (empty) return;
+          if (!isPlaying && playhead >= total) seek(0);
+          setPlaying(!isPlaying);
+        }}
+        accessibilityLabel={isPlaying ? "Pause" : "Play"}
         style={{ aspectRatio: ratio, maxWidth: "100%", maxHeight: "100%", flex: 1, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, overflow: "hidden" }}>
         {!empty && <VideoView player={player} style={{ width: "100%", height: "100%" }} contentFit="cover" nativeControls={false} />}
         {!isPlaying && !empty && (
