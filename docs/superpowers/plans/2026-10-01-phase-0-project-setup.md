@@ -428,6 +428,8 @@ Expected: typecheck clean, `1 passed`. The Swift file cannot be compiled on Wind
 
 ### Task 4: EAS development build on the iPhone
 
+> **Amended 2026-10-01:** the user chose not to pay for an Apple Developer account yet. Steps 1 and 4 are done (commit `7d76ff9`). Steps 2–3 and 5–10 are **deferred** until an account exists; Phase 0 is instead verified in Expo Go (see Task 4b). Nothing below Step 4 is executed now.
+
 **Files:**
 - Create: `eas.json`
 - Modify: `app.json` (EAS project id added by `eas init`)
@@ -567,6 +569,28 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
+### Task 4b: Verify in Expo Go (replaces the EAS acceptance check for now)
+
+**Files:** none.
+
+- [ ] **Step 1 (USER): Install Expo Go** from the App Store on the iPhone (free, no account needed).
+
+- [ ] **Step 2: Start the dev server in Expo Go mode**
+
+Because `expo-dev-client` is installed, `npx expo start` defaults to dev-client mode. Force Expo Go:
+
+```powershell
+npx expo start --go
+```
+
+Add `--tunnel` if the phone cannot reach the PC over Wi-Fi.
+
+- [ ] **Step 3 (USER): Open the app** — scan the QR code with the iPhone Camera app; it opens in Expo Go.
+
+- [ ] **Step 4 (USER): Verify** — the screen shows the title **Clipy** and, in green, `Native module unavailable: ClipyVideo native module is not linked. Use a development build (eas build --profile development), not Expo Go.` That text proves the TypeScript↔native boundary degrades gracefully, which is the Expo Go contract for all later phases. Edit the title in `app/index.tsx`, save, confirm hot reload, revert.
+
+---
+
 ### Task 5: README with the run instructions
 
 **Files:**
@@ -590,29 +614,30 @@ Design spec: `docs/superpowers/specs/2026-10-01-clip-editor-app-design.md`
 ## Prerequisites
 
 - Node.js LTS and npm
-- `npm install -g eas-cli`, then `eas login` (free Expo account)
-- Apple Developer account (for installing builds on your iPhone)
-- iPhone registered with `eas device:create`
+- The free **Expo Go** app on your iPhone (App Store)
 
-## Daily development (no rebuild needed)
+## Daily development (Expo Go, free)
 
 ```powershell
 npm install
-npx expo start --dev-client
+npx expo start --go
 ```
 
-Open the **Clipy** dev build on the iPhone and pick the server (same Wi-Fi), or add `--tunnel`.
+Scan the QR code with the iPhone Camera app; add `--tunnel` if the phone can't reach the PC.
+In Expo Go the Swift video engine is not available: the app shows a "native module is not
+linked" message where native features would run. All TypeScript features work.
 
-## When a native rebuild is required
+## Running the real native engine (needs an Apple Developer account, $99/year)
 
-Rebuild whenever anything under `modules/clipy-video/ios/`, `app.json` plugins, or native
-dependencies change:
+One-time: `npm install -g eas-cli`, `eas login`, `eas init`, `eas device:create`.
+Then build in the cloud and install from the link EAS prints:
 
 ```powershell
 eas build --profile development --platform ios
 ```
 
-Install the new build from the link EAS prints.
+Afterwards use `npx expo start --dev-client` instead of `--go`. Rebuild whenever anything
+under `modules/clipy-video/ios/`, `app.json` plugins, or native dependencies change.
 
 ## Checks
 
@@ -642,6 +667,6 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ## Phase 0 Done When
 
 - [ ] `npm run typecheck` and `npm test` pass on Windows.
-- [ ] The Clipy development build is installed on the iPhone.
-- [ ] The home screen shows the greeting returned by the Swift `hello()` function.
+- [ ] The app opens in Expo Go on the iPhone and shows the "not linked" fallback text.
 - [ ] Saving a TS file hot-reloads on the phone.
+- [ ] (Deferred until an Apple Developer account exists) EAS development build installs and the home screen shows the Swift `hello()` greeting.
