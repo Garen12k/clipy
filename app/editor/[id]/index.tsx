@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { AudioPreview } from "@/src/editor/components/AudioPreview";
 import { EditorToolbar } from "@/src/editor/components/EditorToolbar";
 import { EditorTopBar } from "@/src/editor/components/EditorTopBar";
 import { PreviewPlayer } from "@/src/editor/components/PreviewPlayer";
@@ -37,6 +38,7 @@ export default function EditorScreen() {
       <EditorTopBar onExport={() => { useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />
       <View testID="slot-preview" style={{ flex: 1 }}>
         <PreviewPlayer onOpenTextPanel={setTextPanelFor} />
+        <AudioPreview />
       </View>
       <View testID="slot-timeline">
         <Timeline

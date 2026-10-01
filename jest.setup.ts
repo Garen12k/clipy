@@ -7,7 +7,7 @@ jest.mock("expo-font", () => ({ useFonts: () => [true, null], isLoaded: () => tr
 // renders MusicSheet) don't need to know about them. MusicSheet.test.tsx overrides these
 // per-module with jest.mock calls of its own, which take precedence over these.
 jest.mock("expo-audio", () => ({
-  useAudioPlayer: () => ({ play: () => {}, pause: () => {}, playing: false, replace: () => {} }),
+  useAudioPlayer: () => ({ play: () => {}, pause: () => {}, playing: false, replace: () => {}, seekTo: () => {}, currentTime: 0, volume: 1 }),
   createAudioPlayer: () => ({ addListener: () => ({ remove: () => {} }), release: () => {} }),
 }));
 jest.mock("expo-document-picker", () => ({ getDocumentAsync: async () => ({ canceled: true }) }));
