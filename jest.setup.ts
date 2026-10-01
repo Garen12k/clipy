@@ -11,13 +11,14 @@ jest.mock("react-native-gesture-handler", () => {
     GestureDetector: ({ children }: { children: unknown }) => children,
     Gesture: {
       Pan: () => chain(), Pinch: () => chain(), LongPress: () => chain(), Native: () => chain(),
-      Simultaneous: () => chain(), Race: () => chain(),
+      Simultaneous: () => chain(), Race: () => chain(), Rotation: () => chain(), Tap: () => chain(),
     },
   };
   function chain(): Record<string, () => unknown> {
     const g: Record<string, () => unknown> = {};
     for (const k of ["onBegin", "onStart", "onUpdate", "onEnd", "onFinalize", "activeOffsetX", "minDistance",
-      "activateAfterLongPress", "simultaneousWithExternalGesture", "blocksExternalGesture", "enabled", "hitSlop", "runOnJS"]) {
+      "activateAfterLongPress", "simultaneousWithExternalGesture", "blocksExternalGesture", "enabled", "hitSlop", "runOnJS",
+      "numberOfTaps"]) {
       g[k] = () => g;
     }
     return g;

@@ -1,5 +1,5 @@
 import { useVideoPlayer, VideoView } from "expo-video";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { clipAt, clipStartTimes, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue } from "@/src/editor/model/types";
@@ -8,13 +8,15 @@ import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePr
 import { formatDurationPrecise } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { OverlayLayer } from "./OverlayLayer";
 
-export function PreviewPlayer() {
+export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayId: string) => void }) {
   const project = useEditorStore((s) => s.project);
   const playhead = useEditorStore((s) => s.playhead);
   const isPlaying = useEditorStore((s) => s.isPlaying);
   const missing = useEditorStore((s) => s.missingSourceUris);
-  const { seek, setPlaying } = useEditorStore.getState();
+  const { seek, setPlaying, selectOverlay } = useEditorStore.getState();
+  const [frame, setFrame] = useState({ w: 0, h: 0 });
 
   const hit = useMemo(() => (project ? clipAt(project, playhead) : null), [project, playhead]);
   const loadedClipId = useRef<string | null>(null);
@@ -38,6 +40,9 @@ export function PreviewPlayer() {
       }
       return;
     }
+    // expo-video caps player.volume at 1; values above 1 are only honoured in the export.
+    player.volume = hit.clip.muted ? 0 : Math.min(1, hit.clip.volume);
+    player.muted = hit.clip.muted;
     const sourceTime = hit.clip.trimStart + hit.offsetInClip;
     if (loadedClipId.current !== hit.clip.id) {
       loadedClipId.current = hit.clip.id;
@@ -58,7 +63,7 @@ export function PreviewPlayer() {
       if (pendingSeek.current !== null) pendingSeek.current = sourceTime; // land the pending seek where the user scrubbed to
       else player.currentTime = sourceTime;
     }
-  }, [hit?.clip.id, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, playhead, isPlaying, missing, project, player, seek, setPlaying]);
+  }, [hit?.clip.id, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, playhead, isPlaying, missing, project, player, seek, setPlaying]);
 
   useEffect(() => { if (isPlaying) player.play(); else player.pause(); }, [isPlaying, player]);
 
@@ -102,13 +107,16 @@ export function PreviewPlayer() {
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.md }}>
       <Pressable
         onPress={() => {
+          if (useEditorStore.getState().selectedOverlayId) { selectOverlay(null); return; }
           if (empty) return;
           if (!isPlaying && playhead >= total) seek(0);
           setPlaying(!isPlaying);
         }}
+        onLayout={(e) => setFrame({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
         accessibilityLabel={isPlaying ? "Pause" : "Play"}
         style={{ aspectRatio: ratio, maxWidth: "100%", maxHeight: "100%", flex: 1, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, overflow: "hidden" }}>
         {!empty && <VideoView player={player} style={{ width: "100%", height: "100%" }} contentFit="cover" nativeControls={false} />}
+        {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenTextPanel?.(id)} />}
         {!isPlaying && !empty && (
           <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="play" size={48} color={theme.colors.text} />
