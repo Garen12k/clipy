@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { FONTS } from "@/src/editor/fonts";
-import type { Align, AspectRatio, TextOverlay } from "@/src/editor/model/types";
+import { isSticker, type Align, type AspectRatio, type Overlay } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -10,24 +10,38 @@ export type ExportEvent = { jobId: string } & (
   | { type: "cancelled" });
 
 export interface ExportOverlay {
+  kind: "text" | "caption" | "sticker";
   text: string; fontPostScriptName: string; fontScale: number; color: string;
   backgroundColor: string | null; backgroundOpacity: number; outline: boolean; align: Align;
+  emoji: string | null; shape: string | null;
   x: number; y: number; scale: number; rotation: number; start: number; end: number;
 }
 export interface ExportAudio { sourceUri: string; start: number; trimStart: number; trimEnd: number; volume: number }
+export interface ExportClip {
+  sourceUri: string; trimStart: number; trimEnd: number; volume: number; muted: boolean;
+  speed: number; filter: string | null; transition: { type: string; duration: number };
+}
 export interface ExportRequest {
-  clips: { sourceUri: string; trimStart: number; trimEnd: number; volume: number; muted: boolean }[];
+  clips: ExportClip[];
   overlays: ExportOverlay[];
   audio: ExportAudio | null;
   aspectRatio: AspectRatio;
   resolution: Resolution;
   outputPath: string;
 }
-export function toExportOverlay(o: TextOverlay): ExportOverlay {
+export function toExportOverlay(o: Overlay): ExportOverlay {
+  const shared = { x: o.x, y: o.y, scale: o.scale, rotation: o.rotation, start: o.start, end: o.end };
+  if (isSticker(o)) {
+    return {
+      kind: "sticker", text: "", fontPostScriptName: "", fontScale: 0, color: o.color,
+      backgroundColor: null, backgroundOpacity: 0, outline: false, align: "center",
+      emoji: o.emoji, shape: o.shape, ...shared,
+    };
+  }
   return {
-    text: o.text, fontPostScriptName: FONTS[o.fontId].postScriptName, fontScale: o.fontScale, color: o.color,
+    kind: o.kind, text: o.text, fontPostScriptName: FONTS[o.fontId].postScriptName, fontScale: o.fontScale, color: o.color,
     backgroundColor: o.background?.color ?? null, backgroundOpacity: o.background?.opacity ?? 0, outline: o.outline, align: o.align,
-    x: o.x, y: o.y, scale: o.scale, rotation: o.rotation, start: o.start, end: o.end,
+    emoji: null, shape: null, ...shared,
   };
 }
 

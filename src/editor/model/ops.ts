@@ -208,6 +208,10 @@ export function transitionCap(p: Project, index: number): number {
 
 /** Clears the last clip's transition and re-caps every other one against its neighbour; returns the same array if nothing changes. */
 export function normaliseTransitions(clips: Clip[]): Clip[] {
+  return normaliseTransitionsForClips(clips);
+}
+
+export function normaliseTransitionsForClips(clips: Clip[]): Clip[] {
   let changed = false;
   const out = clips.map((c, i) => {
     const cap = capFor(clips, i);

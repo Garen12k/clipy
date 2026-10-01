@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { normaliseTransitionsForClips } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
-import { isTextOverlay, type Project } from "@/src/editor/model/types";
+import type { Project } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportOverlay } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
 import { estimateBytes, exportableAudio, exportableClips, type Resolution } from "./estimate";
@@ -29,8 +30,9 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
   const start = useCallback(async (resolution: Resolution) => {
     jobId.current = null;
     if (!project || !isNativeAvailable()) return;
-    const clips = exportableClips(project, missingSourceUris);
-    if (clips.length === 0) { setState({ status: "error", progress: 0, message: "Add at least one clip first." }); return; }
+    const filtered = exportableClips(project, missingSourceUris);
+    if (filtered.length === 0) { setState({ status: "error", progress: 0, message: "Add at least one clip first." }); return; }
+    const clips = normaliseTransitionsForClips(filtered);
     setState({ status: "exporting", progress: 0 });
     try {
       const need = estimateBytes(clips.reduce((s, c) => s + clipDuration(c), 0), resolution) * 2;
@@ -39,8 +41,11 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
       const outputPath = `${expoFs.cacheDir}exports/${project.id}-${Date.now()}.mp4`;
       const audioTrack = exportableAudio(project, missingSourceUris);
       jobId.current = await exportTimeline({
-        clips: clips.map((c) => ({ sourceUri: c.sourceUri, trimStart: c.trimStart, trimEnd: c.trimEnd, volume: c.volume, muted: c.muted })),
-        overlays: project.overlays.filter(isTextOverlay).filter((o) => o.end > o.start).map(toExportOverlay),
+        clips: clips.map((c) => ({
+          sourceUri: c.sourceUri, trimStart: c.trimStart, trimEnd: c.trimEnd, volume: c.volume, muted: c.muted,
+          speed: c.speed, filter: c.filter, transition: c.transitionOut,
+        })),
+        overlays: project.overlays.filter((o) => o.end > o.start).map(toExportOverlay),
         audio: audioTrack ? { sourceUri: audioTrack.sourceUri, start: audioTrack.start, trimStart: audioTrack.trimStart, trimEnd: audioTrack.trimEnd, volume: audioTrack.volume } : null,
         aspectRatio: project.aspectRatio, resolution, outputPath,
       });

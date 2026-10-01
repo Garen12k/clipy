@@ -37,7 +37,15 @@ describe("export API", () => {
       .mockReturnValueOnce(native as never)
       .mockReturnValueOnce(native as never)
       .mockReturnValueOnce(native as never);
-    const req = { clips: [{ sourceUri: "file:///a.mov", trimStart: 0, trimEnd: 2, volume: 1, muted: false }], overlays: [], audio: null, aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4" };
+    const req = {
+      clips: [{ sourceUri: "file:///a.mov", trimStart: 0, trimEnd: 2, volume: 1, muted: false, speed: 1, filter: null, transition: { type: "none", duration: 0 } }],
+      overlays: [{
+        kind: "text" as const, text: "Hi", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#fff",
+        backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center" as const, emoji: null, shape: null,
+        x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 2,
+      }],
+      audio: null, aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4",
+    };
     await expect(exportTimeline(req)).resolves.toBe("job1");
     expect(native.exportTimeline).toHaveBeenCalledWith(req);
     const cb = jest.fn();
