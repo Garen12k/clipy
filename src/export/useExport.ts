@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { normaliseTransitionsForClips } from "@/src/editor/model/ops";
+import { normaliseTransitions } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportOverlay } from "@/modules/clipy-video";
@@ -32,7 +32,7 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
     if (!project || !isNativeAvailable()) return;
     const filtered = exportableClips(project, missingSourceUris);
     if (filtered.length === 0) { setState({ status: "error", progress: 0, message: "Add at least one clip first." }); return; }
-    const clips = normaliseTransitionsForClips(filtered);
+    const clips = normaliseTransitions(filtered);
     setState({ status: "exporting", progress: 0 });
     try {
       const need = estimateBytes(clips.reduce((s, c) => s + clipDuration(c), 0), resolution) * 2;

@@ -208,10 +208,6 @@ export function transitionCap(p: Project, index: number): number {
 
 /** Clears the last clip's transition and re-caps every other one against its neighbour; returns the same array if nothing changes. */
 export function normaliseTransitions(clips: Clip[]): Clip[] {
-  return normaliseTransitionsForClips(clips);
-}
-
-export function normaliseTransitionsForClips(clips: Clip[]): Clip[] {
   let changed = false;
   const out = clips.map((c, i) => {
     const cap = capFor(clips, i);
@@ -230,7 +226,8 @@ export function setClipSpeed(p: Project, clipId: string, speed: number): Project
   const c = p.clips[i];
   let s = clamp(speed, SPEED_LIMITS);
   const maxForMin = (c.trimEnd - c.trimStart) / MIN_CLIP_SECONDS;   // speed at which output hits 0.1 s
-  s = r2(Math.min(s, maxForMin));
+  // Round the cap DOWN so rounding never pushes output under 0.1 s; the 1e-9 absorbs float noise (0.3 / 0.1 = 2.9999…).
+  s = Math.min(r2(s), Math.floor(maxForMin * 100 + 1e-9) / 100);
   if (s === c.speed) return p;
   const clips = p.clips.slice(); clips[i] = { ...c, speed: s };
   return touch(p, { clips: normaliseTransitions(clips) });

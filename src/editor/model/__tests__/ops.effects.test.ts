@@ -1,6 +1,7 @@
 jest.mock("@/src/lib/id", () => ({ newId: jest.fn(() => "new-id") }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { makeClip, makeProject } from "../types";
+import { makeClip, makeProject, MIN_CLIP_SECONDS } from "../types";
+import { clipDuration } from "../timeline";
 import { deleteClip, duplicateClip, moveClip, setClipFilter, setClipSpeed, setFilterForAllClips, setTransition, splitClipAt, transitionCap, trimClip } from "../ops";
 
 const a = makeClip({ id: "a", sourceDuration: 4 });   // 4 s
@@ -14,6 +15,10 @@ test("setClipSpeed clamps and keeps output ≥ 0.1 s", () => {
   expect(setClipSpeed(p, "a", 1)).toBe(p);
   const tiny = makeProject({ clips: [makeClip({ id: "t", sourceDuration: 0.3 })] });
   expect(setClipSpeed(tiny, "t", 4).clips[0].speed).toBe(3);   // 0.3 / 3 = 0.1
+  const odd = makeProject({ clips: [makeClip({ id: "o", sourceDuration: 0.3337 })] });
+  const sped = setClipSpeed(odd, "o", 4).clips[0];
+  expect(sped.speed).toBe(3.33);                                // not r2(3.337) = 3.34 → 0.0999 s
+  expect(clipDuration(sped)).toBeGreaterThanOrEqual(MIN_CLIP_SECONDS);
 });
 
 test("filters", () => {
