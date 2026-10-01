@@ -11,7 +11,9 @@
       "bundleIdentifier": "com.clipy.app",
       "supportsTablet": false,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSpeechRecognitionUsageDescription": "Clipy turns speech in your clips into captions.",
+        "NSMicrophoneUsageDescription": "Required by iOS speech recognition; Clipy never records audio."
       }
     },
     "plugins": [
