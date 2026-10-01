@@ -1,12 +1,12 @@
 import { Pressable, Text } from "react-native";
 import { theme } from "@/src/theme/theme";
 
-type Props = { label: string; selected: boolean; onPress: () => void; disabled?: boolean };
+type Props = { label: string; selected: boolean; onPress: () => void; disabled?: boolean; accessibilityLabel?: string };
 
-export function Chip({ label, selected, onPress, disabled }: Props) {
+export function Chip({ label, selected, onPress, disabled, accessibilityLabel }: Props) {
   return (
     <Pressable
-      accessibilityRole="button" accessibilityLabel={label}
+      accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected, disabled: !!disabled }}
       disabled={disabled} onPress={onPress}
       style={{

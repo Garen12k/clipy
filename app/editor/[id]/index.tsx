@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { EditorToolbar } from "@/src/editor/components/EditorToolbar";
 import { EditorTopBar } from "@/src/editor/components/EditorTopBar";
@@ -24,6 +24,7 @@ export default function EditorScreen() {
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
   const project = useEditorStore((s) => s.project);
   const clipById = (clipId: string) => project?.clips.find((c) => c.id === clipId);
+  const [textPanelFor, setTextPanelFor] = useState<string | null>(null);
 
   if (load.status === "loading") return <View style={{ flex: 1, backgroundColor: theme.colors.bg, justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></View>;
   if (load.status === "error") return (
@@ -35,7 +36,7 @@ export default function EditorScreen() {
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <EditorTopBar onExport={() => { useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />
       <View testID="slot-preview" style={{ flex: 1 }}>
-        <PreviewPlayer />
+        <PreviewPlayer onOpenTextPanel={setTextPanelFor} />
       </View>
       <View testID="slot-timeline">
         <Timeline
@@ -52,7 +53,7 @@ export default function EditorScreen() {
           }}
         />
       </View>
-      <EditorToolbar />
+      <EditorToolbar textPanelFor={textPanelFor} onTextPanelChange={setTextPanelFor} />
       <ToastHost />
     </View>
   );

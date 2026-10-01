@@ -11,13 +11,21 @@ beforeEach(() => {
 });
 
 test("clip tools are disabled without a selection; Ratio is always enabled", async () => {
-  await render(<EditorToolbar />);
+  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
   for (const l of ["Split", "Trim", "Duplicate", "Delete"]) expect(screen.getByRole("button", { name: l })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Ratio" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Text" })).toBeEnabled();
+});
+
+test("Text is disabled for an empty project", async () => {
+  useEditorStore.getState().reset();
+  useEditorStore.getState().setProject(makeProject());
+  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
+  expect(screen.getByRole("button", { name: "Text" })).toBeDisabled();
 });
 
 test("Split cuts at the playhead; Duplicate and Delete act on the selection", async () => {
-  await render(<EditorToolbar />);
+  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
   await act(() => { useEditorStore.getState().select("a"); useEditorStore.getState().seek(1.5); });
   await fireEvent.press(screen.getByRole("button", { name: "Split" }));
   expect(useEditorStore.getState().project?.clips).toHaveLength(3);
@@ -26,4 +34,14 @@ test("Split cuts at the playhead; Duplicate and Delete act on the selection", as
   await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
   expect(useEditorStore.getState().project?.clips).toHaveLength(3);
   expect(useEditorStore.getState().selectedClipId).toBeNull();
+});
+
+test("Text adds an overlay at the playhead and selects it", async () => {
+  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
+  useEditorStore.getState().seek(2);
+  await fireEvent.press(screen.getByRole("button", { name: "Text" }));
+  const ovs = useEditorStore.getState().project!.overlays;
+  expect(ovs).toHaveLength(1);
+  expect(ovs[0]).toMatchObject({ start: 2, end: 5, text: "Your text" });
+  expect(useEditorStore.getState().selectedOverlayId).toBe(ovs[0].id);
 });
