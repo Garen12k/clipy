@@ -1,5 +1,20 @@
-import { CAPTION_STYLE, FILTERS, SHAPES, TRANSITIONS } from "../effects";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { CAPTION_STYLE, FILTERS, SHAPES, STICKER_EMOJI_SCALE, STICKER_SHAPE_SCALE, TRANSITIONS } from "../effects";
 import { FILTER_IDS, SHAPE_IDS, TRANSITION_TYPES } from "../model/types";
+
+const swift = readFileSync(join(__dirname, "../../../modules/clipy-video/ios/Effects.swift"), "utf8");
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const swiftStringArray = (name: string): string[] => {
+  const m = swift.match(new RegExp(`static let ${name} = \\[([^\\]]*)\\]`));
+  if (!m) throw new Error(`Effects.swift: ${name} not found`);
+  return [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]);
+};
+const swiftNumber = (name: string): number => {
+  const m = swift.match(new RegExp(`static let ${name}(?::\\s*\\w+)?\\s*=\\s*([0-9.]+)`));
+  if (!m) throw new Error(`Effects.swift: ${name} not found`);
+  return Number(m[1]);
+};
 
 test("registry covers every id with sane preview params", () => {
   expect(FILTER_IDS).toHaveLength(8);
@@ -24,6 +39,18 @@ test("shape paths use only absolute M/L/C/Q/Z commands in a 100×100 box", () =>
     expect(path).toMatch(/^[MLCQZ0-9 .-]+$/);
     for (const n of path.match(/-?\d+(\.\d+)?/g) ?? []) { expect(Number(n)).toBeGreaterThanOrEqual(0); expect(Number(n)).toBeLessThanOrEqual(100); }
   }
+});
+
+test("Effects.swift mirrors the TS registry (shape paths verbatim, ids, sticker scales)", () => {
+  for (const id of SHAPE_IDS) {
+    expect(swift).toMatch(new RegExp(`"${id}":\\s*"${escapeRe(SHAPES[id].path)}"`));
+  }
+  const swiftShapeIds = [...(swift.match(/static let shapePaths[^=]*= \[[^\]]*\]/)?.[0] ?? "").matchAll(/"(\w+)":/g)].map((x) => x[1]);
+  expect([...swiftShapeIds].sort()).toEqual([...SHAPE_IDS].sort());
+  expect(swiftStringArray("filterIds")).toEqual([...FILTER_IDS]);
+  expect(swiftStringArray("transitionTypes")).toEqual([...TRANSITION_TYPES]);
+  expect(swiftNumber("stickerEmojiScale")).toBe(STICKER_EMOJI_SCALE);
+  expect(swiftNumber("stickerShapeScale")).toBe(STICKER_SHAPE_SCALE);
 });
 
 test("caption style default", () => {
