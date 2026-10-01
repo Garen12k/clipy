@@ -6,6 +6,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
 import { ToolButton } from "@/src/ui/ToolButton";
+import { MusicSheet } from "./MusicSheet";
 import { RatioSheet } from "./RatioSheet";
 import { TextPanel } from "./TextPanel";
 import { TrimSheet } from "./TrimSheet";
@@ -16,7 +17,7 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange }: Props) {
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "music" | null>(null);
   const noSel = !selectedId;
 
   const addText = () => {
@@ -44,11 +45,13 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange }: Props) {
         <ToolButton label="Trim" icon="crop" disabled={noSel} onPress={() => setSheet("trim")} />
         <ToolButton label="Ratio" icon="phone-portrait" onPress={() => setSheet("ratio")} />
         <ToolButton label="Text" icon="text" disabled={!hasClips} onPress={addText} />
+        <ToolButton label="Music" icon="musical-notes" onPress={() => setSheet("music")} />
         <ToolButton label="Duplicate" icon="copy" disabled={noSel} onPress={() => selectedId && apply((p) => duplicateClip(p, selectedId))} />
         <ToolButton label="Delete" icon="trash" disabled={noSel} onPress={() => selectedId && apply((p) => deleteClip(p, selectedId))} />
       </ScrollView>
       <RatioSheet visible={sheet === "ratio"} onClose={() => setSheet(null)} />
       <TrimSheet clipId={selectedId} visible={sheet === "trim"} onClose={() => setSheet(null)} />
+      <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />
       <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} />
     </View>
   );

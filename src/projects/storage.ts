@@ -1,6 +1,6 @@
 import { totalDuration } from "@/src/editor/model/timeline";
 import { migrateProject } from "@/src/editor/model/migrate";
-import { SCHEMA_VERSION, type Clip, type Project } from "@/src/editor/model/types";
+import { SCHEMA_VERSION, type AudioTrack, type Clip, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
 
 export interface PickedAsset { uri: string; durationSec: number; width: number; height: number; fileName?: string }
@@ -85,10 +85,25 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       await fs.copy(c.sourceUri, dest);
       clips.push({ ...c, sourceUri: dest });
     }
-    const copy: Project = { ...project, id: copyId, name: `${project.name} copy`, clips, createdAt: deps.nowIso(), updatedAt: deps.nowIso() };
+    const audioTracks: AudioTrack[] = [];
+    for (const a of project.audioTracks) {
+      const dest = a.sourceUri.replace(projectDir(id), projectDir(copyId));
+      await fs.copy(a.sourceUri, dest);
+      audioTracks.push({ ...a, sourceUri: dest });
+    }
+    const copy: Project = { ...project, id: copyId, name: `${project.name} copy`, clips, audioTracks, createdAt: deps.nowIso(), updatedAt: deps.nowIso() };
     await saveProject(copy);
     if (await fs.exists(thumbPath(id))) await fs.copy(thumbPath(id), thumbPath(copyId));
     return copy;
+  }
+
+  async function importAudio(projectId: string, a: { uri: string; title: string; durationSec: number }): Promise<AudioTrack> {
+    const id = deps.newId();
+    const m = /\.([A-Za-z0-9]+)$/.exec(a.title) ?? /\.([A-Za-z0-9]+)$/.exec(a.uri);
+    const dest = `${projectDir(projectId)}/media/${id}.${(m?.[1] ?? "m4a").toLowerCase()}`;
+    await fs.mkdir(`${projectDir(projectId)}/media`);
+    await fs.copy(a.uri, dest);
+    return { id, sourceUri: dest, title: a.title, sourceDuration: a.durationSec, start: 0, trimStart: 0, trimEnd: a.durationSec, volume: 1 };
   }
 
   async function renameProject(id: string, name: string): Promise<void> {
@@ -99,7 +114,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   return {
     projectDir, createProject, listProjects, loadProject, saveProject,
     deleteProject: async (id: string) => { await fs.remove(projectDir(id)); },
-    duplicateProject, renameProject,
+    duplicateProject, renameProject, importAudio,
   };
 }
 
