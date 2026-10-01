@@ -27,14 +27,22 @@ export function clipAt(p: Project, time: number): ClipHit | null {
   return { clip: p.clips[0], index: 0, offsetInClip: 0 };
 }
 
+/** The transition window the playhead is inside (if any): which cut, and progress 0→1 across it, centred on the cut. */
+export function transitionProgress(p: Project, playhead: number): { index: number; progress: number } | null {
+  const starts = clipStartTimes(p);
+  for (let i = 0; i < p.clips.length - 1; i++) {
+    const t = p.clips[i].transitionOut;
+    if (t.type === "none") continue;
+    const cut = starts[i] + clipDuration(p.clips[i]);
+    const a = cut - t.duration / 2;
+    if (playhead >= a && playhead <= cut + t.duration / 2) return { index: i, progress: Math.round(((playhead - a) / t.duration) * 1000) / 1000 };
+  }
+  return null;
+}
+
 /** True when the playhead is inside the window of any transition (centred on its cut). */
 export function isInTransitionWindow(p: Project, playhead: number): boolean {
-  const starts = clipStartTimes(p);
-  return p.clips.some((c, i) => {
-    if (i === p.clips.length - 1 || c.transitionOut.type === "none") return false;
-    const cut = starts[i] + clipDuration(c);
-    return Math.abs(playhead - cut) <= c.transitionOut.duration / 2;
-  });
+  return transitionProgress(p, playhead) !== null;
 }
 
 export const timeToX = (t: number, pixelsPerSecond: number): number => t * pixelsPerSecond;

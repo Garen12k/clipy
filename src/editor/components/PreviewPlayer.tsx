@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { FilterLayer } from "./FilterLayer";
 import { OverlayLayer } from "./OverlayLayer";
 import { PreviewTag } from "./PreviewTag";
+import { TransitionLayer } from "./TransitionLayer";
 
 export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayId: string) => void }) {
   const project = useEditorStore((s) => s.project);
@@ -121,6 +122,7 @@ export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayI
         style={{ aspectRatio: ratio, maxWidth: "100%", maxHeight: "100%", flex: 1, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, overflow: "hidden" }}>
         {!empty && <VideoView player={player} style={{ width: "100%", height: "100%" }} contentFit="cover" nativeControls={false} />}
         <FilterLayer filter={hit?.clip.filter ?? null} />
+        <TransitionLayer />
         {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenTextPanel?.(id)} />}
         <PreviewTag visible={!!hit?.clip.filter || isInTransitionWindow(project, playhead)} />
         {!isPlaying && !empty && (
