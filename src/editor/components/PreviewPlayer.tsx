@@ -46,7 +46,10 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     // expo-video caps player.volume at 1; values above 1 are only honoured in the export.
     player.volume = hit.clip.muted ? 0 : Math.min(1, hit.clip.volume);
     player.muted = hit.clip.muted;
-    player.playbackRate = hit.clip.speed;
+    // expo-video's playbackRate setter assigns AVPlayer.rate, and a non-zero rate starts playback: only
+    // assign it when it changes, and re-assert the paused state so a paused scrub never starts the player.
+    if (player.playbackRate !== hit.clip.speed) player.playbackRate = hit.clip.speed;
+    if (!isPlaying) player.pause();
     player.preservesPitch = true;
     const sourceTime = outputToSource(hit.clip, hit.offsetInClip);
     if (loadedClipId.current !== hit.clip.id) {
