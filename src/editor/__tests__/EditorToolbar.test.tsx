@@ -12,7 +12,7 @@ beforeEach(() => {
 
 test("clip tools are disabled without a selection; Ratio is always enabled", async () => {
   await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
-  for (const l of ["Split", "Trim", "Duplicate", "Delete"]) expect(screen.getByRole("button", { name: l })).toBeDisabled();
+  for (const l of ["Split", "Trim", "Duplicate", "Delete", "Volume"]) expect(screen.getByRole("button", { name: l })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Ratio" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Text" })).toBeEnabled();
 });
@@ -44,4 +44,11 @@ test("Text adds an overlay at the playhead and selects it", async () => {
   expect(ovs).toHaveLength(1);
   expect(ovs[0]).toMatchObject({ start: 2, end: 5, text: "Your text" });
   expect(useEditorStore.getState().selectedOverlayId).toBe(ovs[0].id);
+});
+
+test("Volume is enabled after selecting a clip", async () => {
+  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
+  expect(screen.getByRole("button", { name: "Volume" })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByRole("button", { name: "Volume" })).toBeEnabled();
 });

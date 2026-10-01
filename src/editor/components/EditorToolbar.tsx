@@ -10,6 +10,7 @@ import { MusicSheet } from "./MusicSheet";
 import { RatioSheet } from "./RatioSheet";
 import { TextPanel } from "./TextPanel";
 import { TrimSheet } from "./TrimSheet";
+import { VolumeSheet } from "./VolumeSheet";
 
 type Props = { textPanelFor: string | null; onTextPanelChange: (id: string | null) => void };
 
@@ -17,7 +18,7 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange }: Props) {
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "music" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "music" | "volume" | null>(null);
   const noSel = !selectedId;
 
   const addText = () => {
@@ -46,12 +47,14 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange }: Props) {
         <ToolButton label="Ratio" icon="phone-portrait" onPress={() => setSheet("ratio")} />
         <ToolButton label="Text" icon="text" disabled={!hasClips} onPress={addText} />
         <ToolButton label="Music" icon="musical-notes" onPress={() => setSheet("music")} />
+        <ToolButton label="Volume" icon="volume-high" disabled={noSel} onPress={() => setSheet("volume")} />
         <ToolButton label="Duplicate" icon="copy" disabled={noSel} onPress={() => selectedId && apply((p) => duplicateClip(p, selectedId))} />
         <ToolButton label="Delete" icon="trash" disabled={noSel} onPress={() => selectedId && apply((p) => deleteClip(p, selectedId))} />
       </ScrollView>
       <RatioSheet visible={sheet === "ratio"} onClose={() => setSheet(null)} />
       <TrimSheet clipId={selectedId} visible={sheet === "trim"} onClose={() => setSheet(null)} />
       <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />
+      <VolumeSheet clipId={selectedId} visible={sheet === "volume"} onClose={() => setSheet(null)} />
       <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} />
     </View>
   );
