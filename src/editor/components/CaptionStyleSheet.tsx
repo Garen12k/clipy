@@ -14,10 +14,14 @@ import { FontStrip } from "./FontStrip";
 type Props = { visible: boolean; onClose: () => void };
 
 export function CaptionStyleSheet({ visible, onClose }: Props) {
-  const apply = useEditorStore((s) => s.apply);
+  const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const caption = useEditorStore((s) => s.project?.overlays.find((o): o is TextOverlay => o.kind === "caption"));
   const style = caption ?? CAPTION_STYLE;
-  const patch = (p: Parameters<typeof setCaptionStyleForAll>[1]) => apply((x) => setCaptionStyleForAll(x, p));
+  type StylePatch = Parameters<typeof setCaptionStyleForAll>[1];
+  const patch = (p: StylePatch) => apply((x) => setCaptionStyleForAll(x, p));
+  // Slider drags: one undo step per drag (beginTransaction on start, transient updates while sliding).
+  const patchTransient = (p: StylePatch) => applyTransient((x) => setCaptionStyleForAll(x, p));
+  const opacityPatch = (v: number) => ({ background: { color: style.background?.color ?? "#000000", opacity: v } });
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Caption style">
@@ -26,7 +30,8 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
         <View>
           <Body muted>Size {Math.round(style.fontScale * 100)}%</Body>
           <Slider testID="caption-size-slider" minimumValue={0.02} maximumValue={0.1} value={style.fontScale}
-            onValueChange={(v) => patch({ fontScale: v })} minimumTrackTintColor={theme.colors.accent} />
+            onSlidingStart={beginTransaction} onValueChange={(v) => patchTransient({ fontScale: v })}
+            onSlidingComplete={(v) => patchTransient({ fontScale: v })} minimumTrackTintColor={theme.colors.accent} />
         </View>
         <ColorRow value={style.color} onChange={(color) => patch({ color })} />
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -38,7 +43,8 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
         {style.background && (<>
           <ColorRow value={style.background.color} onChange={(color) => patch({ background: { color, opacity: style.background!.opacity } })} />
           <Slider testID="caption-opacity-slider" minimumValue={0.2} maximumValue={1} value={style.background.opacity}
-            onValueChange={(v) => patch({ background: { color: style.background!.color, opacity: v } })} minimumTrackTintColor={theme.colors.accent} />
+            onSlidingStart={beginTransaction} onValueChange={(v) => patchTransient(opacityPatch(v))}
+            onSlidingComplete={(v) => patchTransient(opacityPatch(v))} minimumTrackTintColor={theme.colors.accent} />
         </>)}
         <NumField label="Y %" value={Math.round(style.y * 100)} onCommit={(v) => patch({ y: v / 100 })} />
       </View>
