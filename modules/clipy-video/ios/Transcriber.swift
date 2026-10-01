@@ -33,8 +33,27 @@ final class Transcriber: @unchecked Sendable {
     }
   }
 
+  static let errorDomain = "Clipy"
+  static let cancelledCode = 3
+
   static func cancellationError() -> NSError {
-    NSError(domain: "Clipy", code: 3, userInfo: [NSLocalizedDescriptionKey: "Transcription cancelled"])
+    NSError(domain: errorDomain, code: cancelledCode, userInfo: [NSLocalizedDescriptionKey: "Transcription cancelled"])
+  }
+
+  /// True when `error` is this Transcriber's own cancellation error (see `cancellationError()`).
+  static func isCancellation(_ error: Error) -> Bool {
+    let ns = error as NSError
+    return ns.domain == errorDomain && ns.code == cancelledCode
+  }
+
+  /// Speech reports "No speech detected" as an error (kAFAssistantErrorDomain 1110 on older systems,
+  /// kLSRErrorDomain with that message on newer ones).
+  private static func isNoSpeechError(_ error: Error) -> Bool {
+    let ns = error as NSError
+    let message = ns.localizedDescription
+    return (ns.domain == "kAFAssistantErrorDomain" && ns.code == 1110)
+      || (ns.domain == "kLSRErrorDomain" && message.localizedCaseInsensitiveContains("no speech"))
+      || message.localizedCaseInsensitiveContains("no speech detected")
   }
 
   func transcribe(url: URL, trimStart: Double, trimEnd: Double) async throws -> [[String: Any]] {
@@ -60,6 +79,12 @@ final class Transcriber: @unchecked Sendable {
       let newTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
         guard let self else { return }
         if let error {
+          // A clip with no speech is not a failure: resolve [] so the captions flow can skip it.
+          // Speech's own cancellation codes (kLSRErrorDomain 301, kAFAssistantErrorDomain 216) are NOT matched here.
+          if Self.isNoSpeechError(error) {
+            self.finish(.success([]))
+            return
+          }
           self.finish(.failure(error))
           return
         }

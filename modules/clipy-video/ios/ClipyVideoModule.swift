@@ -99,7 +99,7 @@ public class ClipyVideoModule: Module {
           let segments = try await t.transcribe(url: url, trimStart: trimStart, trimEnd: trimEnd)
           promise.resolve(segments)
         } catch {
-          promise.reject("E_SPEECH", error.localizedDescription)
+          promise.reject(Transcriber.isCancellation(error) ? "E_SPEECH_CANCELLED" : "E_SPEECH", error.localizedDescription)
         }
       }
     }
