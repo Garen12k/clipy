@@ -4,8 +4,8 @@ import { frameSize, layoutOverlay } from "../overlayLayout";
 const o = makeOverlay({ id: "o", x: 0.25, y: 0.75, fontScale: 0.1, scale: 1.5, rotation: 30, background: { color: "#000000", opacity: 0.5 } });
 
 test("layoutOverlay scales with the frame (pinned numbers — the Swift mirror must match)", () => {
-  expect(layoutOverlay(o, 300, 533)).toEqual({ centerX: 75, centerY: 399.75, fontSize: 79.95, maxWidth: 270, padding: 19.9875, outlineWidth: 2, rotation: 30, lineHeight: 95.94 });
-  expect(layoutOverlay(o, 1080, 1920)).toEqual({ centerX: 270, centerY: 1440, fontSize: 288, maxWidth: 972, padding: 72, outlineWidth: 2, rotation: 30, lineHeight: 345.6 });
+  expect(layoutOverlay(o, 300, 533)).toEqual({ centerX: 75, centerY: 399.75, fontSize: 79.95, maxWidth: 270, padding: 19.9875, outlineWidth: 2.3689, rotation: 30, lineHeight: 95.94 });
+  expect(layoutOverlay(o, 1080, 1920)).toEqual({ centerX: 270, centerY: 1440, fontSize: 288, maxWidth: 972, padding: 72, outlineWidth: 8.5333, rotation: 30, lineHeight: 345.6 });
   expect(layoutOverlay({ ...o, background: null }, 1080, 1080).padding).toBe(0);
 });
 

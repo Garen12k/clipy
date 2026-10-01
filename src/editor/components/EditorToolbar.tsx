@@ -55,7 +55,7 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange }: Props) {
       <TrimSheet clipId={selectedId} visible={sheet === "trim"} onClose={() => setSheet(null)} />
       <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />
       <VolumeSheet clipId={selectedId} visible={sheet === "volume"} onClose={() => setSheet(null)} />
-      <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} />
+      <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} onRetarget={onTextPanelChange} />
     </View>
   );
 }

@@ -30,26 +30,30 @@ export function MusicSheet({ visible, onClose }: { visible: boolean; onClose: ()
   const preview = useAudioPlayer(null);
   const track = project?.audioTracks[0] ?? null;
 
-  async function use(uri: string, title: string, durationSec: number) {
+  /** Runs the whole resolve (download / measure) + import under the busy state; any failure is a toast. */
+  async function use(resolve: () => Promise<{ uri: string; title: string; durationSec: number }>) {
     if (!project) return;
     setBusy(true);
     try {
-      const t = await storage.importAudio(project.id, { uri, title, durationSec });
+      const a = await resolve();
+      const t = await storage.importAudio(project.id, a);
       apply((p) => setAudioTrack(p, t));
       preview.pause();
     } catch (e) { useToast.getState().show("Couldn't add that audio file"); console.warn(e); }
     finally { setBusy(false); }
   }
-  async function useBundled(t: BundledTrack) {
-    const asset = Asset.fromModule(t.file);
-    await asset.downloadAsync();
-    await use(asset.localUri ?? asset.uri, t.title, t.durationSec);
+  function useBundled(t: BundledTrack) {
+    return use(async () => {
+      const asset = Asset.fromModule(t.file);
+      await asset.downloadAsync();
+      return { uri: asset.localUri ?? asset.uri, title: t.title, durationSec: t.durationSec };
+    });
   }
   async function pickFile() {
     const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: false });
     if (res.canceled || !res.assets[0]) return;
     const a = res.assets[0];
-    const go = async () => { try { await use(a.uri, a.name, await audioDuration(a.uri)); } catch { useToast.getState().show("Couldn't add that audio file"); } };
+    const go = () => use(async () => ({ uri: a.uri, title: a.name, durationSec: await audioDuration(a.uri) }));
     if ((a.size ?? 0) > MAX_BYTES) Alert.alert("Large file", "This file is over 50 MB. Add it anyway?", [{ text: "Cancel", style: "cancel" }, { text: "Add", onPress: go }]);
     else await go();
   }

@@ -13,10 +13,10 @@ import { Body } from "@/src/ui/Text";
 import { ColorRow } from "./ColorRow";
 import { FontStrip } from "./FontStrip";
 
-type Props = { overlayId: string | null; visible: boolean; onClose: () => void };
+type Props = { overlayId: string | null; visible: boolean; onClose: () => void; onRetarget?: (id: string) => void };
 const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, borderRadius: theme.radius.chip, padding: 10, fontSize: 16, minWidth: 72 } as const;
 
-export function TextPanel({ overlayId, visible, onClose }: Props) {
+export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
   const overlay = useEditorStore((s) => s.project?.overlays.find((o) => o.id === overlayId) ?? null);
   const { apply, beginTransaction, applyTransient, selectOverlay } = useEditorStore.getState();
   const [fine, setFine] = useState(false);
@@ -31,7 +31,8 @@ export function TextPanel({ overlayId, visible, onClose }: Props) {
   return (
     <Sheet visible={visible} onClose={onClose} title="Text" height="55%">
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: theme.space.lg, paddingBottom: theme.space.xl }}>
-        <TextInput accessibilityLabel="Overlay text" multiline autoFocus value={overlay.text} onChangeText={(t) => patch({ text: t })}
+        <TextInput accessibilityLabel="Overlay text" multiline autoFocus value={overlay.text}
+          onFocus={() => beginTransaction()} onChangeText={(t) => applyTransient((x) => updateOverlay(x, id, { text: t }))}
           style={{ ...field, minHeight: 64, textAlignVertical: "top" }} placeholder="Your text" placeholderTextColor={theme.colors.textMuted} />
         <FontStrip value={overlay.fontId} onChange={(fontId) => patch({ fontId })} />
         <View><Body muted>Size {Math.round(overlay.fontScale * 100)}%</Body>
@@ -71,7 +72,7 @@ export function TextPanel({ overlayId, visible, onClose }: Props) {
             apply((x) => duplicateOverlay(x, id));
             const overlays = useEditorStore.getState().project?.overlays ?? [];
             const dup = overlays[overlays.findIndex((o) => o.id === id) + 1];
-            if (dup) selectOverlay(dup.id);
+            if (dup) { selectOverlay(dup.id); onRetarget?.(dup.id); }
           }} />
           <Chip label="Delete" selected={false} onPress={() => { apply((x) => deleteOverlay(x, id)); onClose(); }} />
         </View>

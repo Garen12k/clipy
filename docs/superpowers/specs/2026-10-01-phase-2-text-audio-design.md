@@ -23,7 +23,7 @@ Add text overlays with a full style editor and direct manipulation on the previe
 ## 3. Screens & Interactions
 
 ### 3.1 Editor toolbar
-`Split · Trim · Ratio · Text · Music · Volume · Duplicate · Delete`. Split/Trim/Duplicate/Delete/Volume need a selected clip; Text and Music are always enabled.
+`Split · Trim · Ratio · Text · Music · Volume · Duplicate · Delete`. Split/Trim/Duplicate/Delete/Volume need a selected clip; Music is always enabled; Text is enabled once the project has at least one clip.
 
 ### 3.2 Timeline lanes
 Below the clip strip, two 28 px lanes sharing the clip strip's time scale (`pixelsPerSecond`) and scroll offset:

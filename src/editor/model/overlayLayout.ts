@@ -2,7 +2,8 @@ import { aspectRatioValue, type AspectRatio, type TextOverlay } from "./types";
 
 export interface OverlayLayout { centerX: number; centerY: number; fontSize: number; maxWidth: number; padding: number; outlineWidth: number; rotation: number; lineHeight: number }
 
-export const OUTLINE_PX = 2;
+/** Outline width as a fraction of frame height (2 at a 450-tall preview frame), so preview and export match proportionally. */
+export const OUTLINE_FACTOR = 2 / 450;
 export const LINE_HEIGHT_FACTOR = 1.2;
 export const BACKGROUND_PAD_FACTOR = 0.25;
 export const MAX_WIDTH_FACTOR = 0.9;
@@ -19,7 +20,7 @@ export function layoutOverlay(o: TextOverlay, frameW: number, frameH: number): O
     centerX: r(o.x * frameW), centerY: r(o.y * frameH), fontSize,
     maxWidth: r(MAX_WIDTH_FACTOR * frameW),
     padding: o.background ? r(BACKGROUND_PAD_FACTOR * fontSize) : 0,
-    outlineWidth: OUTLINE_PX, rotation: o.rotation, lineHeight: r(LINE_HEIGHT_FACTOR * fontSize),
+    outlineWidth: r(OUTLINE_FACTOR * frameH), rotation: o.rotation, lineHeight: r(LINE_HEIGHT_FACTOR * fontSize),
   };
 }
 
