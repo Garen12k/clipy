@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { EditorTopBar } from "@/src/editor/components/EditorTopBar";
+import { PreviewPlayer } from "@/src/editor/components/PreviewPlayer";
 import type { Project } from "@/src/editor/model/types";
 import { useAutosave } from "@/src/editor/useAutosave";
 import { useLoadProject } from "@/src/editor/useLoadProject";
@@ -25,7 +26,9 @@ export default function EditorScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <EditorTopBar onExport={() => router.push(`/editor/${id}/export`)} />
-      <View testID="slot-preview" style={{ flex: 1 }} />
+      <View testID="slot-preview" style={{ flex: 1 }}>
+        <PreviewPlayer />
+      </View>
       <View testID="slot-timeline" style={{ height: 120 }} />
       <View testID="slot-toolbar" style={{ height: 88 }} />
       <ToastHost />
