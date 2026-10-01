@@ -13,7 +13,9 @@ export default function RootLayout() {
   if (!loaded) return null;
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bg } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bg } }}>
+        <Stack.Screen name="editor/[id]/export" options={{ presentation: "modal" }} />
+      </Stack>
     </GestureHandlerRootView>
   );
 }
