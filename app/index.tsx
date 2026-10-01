@@ -1,28 +1,56 @@
-import { StyleSheet, Text, View } from "react-native";
-import { hello } from "../modules/clipy-video";
+import { router } from "expo-router";
+import { ActivityIndicator, Alert, FlatList, Image, View } from "react-native";
+import { ProjectCard } from "@/src/projects/ProjectCard";
+import { useProjects } from "@/src/projects/useProjects";
+import type { ProjectSummary } from "@/src/projects";
+import { Mark } from "@/src/theme/Mark";
+import { theme } from "@/src/theme/theme";
+import { PrimaryButton } from "@/src/ui/PrimaryButton";
+import { Body, Heading } from "@/src/ui/Text";
+import { ToastHost } from "@/src/ui/Toast";
 
-function nativeGreeting(): string {
-  try {
-    return hello();
-  } catch (e) {
-    return `Native module unavailable: ${e instanceof Error ? e.message : String(e)}`;
+export default function ProjectsScreen() {
+  const { projects, loading, create, rename, duplicate, remove } = useProjects();
+
+  function onLongPress(p: ProjectSummary) {
+    if (p.broken) {
+      Alert.alert("Can't open this project", "Its file is damaged.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => remove(p.id) }]);
+      return;
+    }
+    Alert.alert(p.name, undefined, [
+      { text: "Rename", onPress: () => Alert.prompt("Rename project", undefined, (name) => name && rename(p.id, name), "plain-text", p.name) },
+      { text: "Duplicate", onPress: () => duplicate(p.id) },
+      { text: "Delete", style: "destructive", onPress: () => Alert.alert("Delete project?", "This can't be undone.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => remove(p.id) }]) },
+      { text: "Cancel", style: "cancel" },
+    ]);
   }
-}
 
-export default function HomeScreen() {
-  const greeting = nativeGreeting();
+  async function onNew() {
+    const id = await create();
+    if (id) router.push(`/editor/${id}`);
+  }
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Clipy</Text>
-      <Text style={styles.greeting} testID="native-greeting">
-        {greeting}
-      </Text>
+    <View style={{ flex: 1, backgroundColor: theme.colors.bg, paddingTop: 60 }}>
+      {theme.projectsWallpaper ? <Image source={theme.projectsWallpaper} style={{ position: "absolute", width: "100%", height: "100%", opacity: 0.3 }} resizeMode="cover" /> : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.lg, marginBottom: theme.space.md }}>
+        <Mark size={28} />
+        <Heading style={{ fontSize: 36 }}>Clipy</Heading>
+      </View>
+      {loading ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 40 }} /> : projects.length === 0 ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: theme.space.md, padding: theme.space.xxl }}>
+          <Mark size={56} />
+          <Heading>No projects yet</Heading>
+          <Body muted>Tap New Project to start</Body>
+        </View>
+      ) : (
+        <FlatList data={projects} numColumns={2} keyExtractor={(p) => p.id} contentContainerStyle={{ padding: theme.space.sm, paddingBottom: 120 }}
+          renderItem={({ item }) => <ProjectCard summary={item} onPress={() => (item.broken ? onLongPress(item) : router.push(`/editor/${item.id}`))} onLongPress={() => onLongPress(item)} />} />
+      )}
+      <View style={{ position: "absolute", left: theme.space.lg, right: theme.space.lg, bottom: theme.space.xxl }}>
+        <PrimaryButton title="New Project" onPress={onNew} />
+      </View>
+      <ToastHost />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  title: { color: "#fff", fontSize: 32, fontWeight: "700", marginBottom: 16 },
-  greeting: { color: "#9f9", fontSize: 16, textAlign: "center" },
-});
