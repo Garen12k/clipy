@@ -1,4 +1,4 @@
-import { clipDuration, clipStartTimes, sourceToOutput, totalDuration, type ClipHit } from "@/src/editor/model/timeline";
+import { clipStartTimes, sourceToOutput, totalDuration, type ClipHit } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
 
 export const EPSILON = 0.02;
@@ -22,5 +22,3 @@ export function nextPresentClipIndex(p: Project, afterIndex: number, missingSour
   while (i < p.clips.length && missingSourceUris.includes(p.clips[i].sourceUri)) i++;
   return i < p.clips.length ? i : null;
 }
-
-export { clipDuration };
