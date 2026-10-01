@@ -1,6 +1,11 @@
 import type { Clip, Project } from "./types";
 
-export const clipDuration = (c: Clip): number => c.trimEnd - c.trimStart;
+/** Output seconds this clip occupies on the timeline. The ONLY place speed scales durations. */
+export const clipDuration = (c: Clip): number => (c.trimEnd - c.trimStart) / c.speed;
+/** Source-file seconds for an offset (output seconds) into the clip. */
+export const outputToSource = (c: Clip, offsetInClip: number): number => c.trimStart + offsetInClip * c.speed;
+/** Output offset (seconds into the clip) for a source-file time. */
+export const sourceToOutput = (c: Clip, sourceTime: number): number => (sourceTime - c.trimStart) / c.speed;
 export const totalDuration = (p: Project): number => p.clips.reduce((s, c) => s + clipDuration(c), 0);
 
 export function clipStartTimes(p: Project): number[] {

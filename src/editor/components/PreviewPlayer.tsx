@@ -1,7 +1,7 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { clipAt, clipStartTimes, totalDuration } from "@/src/editor/model/timeline";
+import { clipAt, clipStartTimes, outputToSource, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
@@ -43,7 +43,9 @@ export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayI
     // expo-video caps player.volume at 1; values above 1 are only honoured in the export.
     player.volume = hit.clip.muted ? 0 : Math.min(1, hit.clip.volume);
     player.muted = hit.clip.muted;
-    const sourceTime = hit.clip.trimStart + hit.offsetInClip;
+    player.playbackRate = hit.clip.speed;
+    player.preservesPitch = true;
+    const sourceTime = outputToSource(hit.clip, hit.offsetInClip);
     if (loadedClipId.current !== hit.clip.id) {
       loadedClipId.current = hit.clip.id;
       if (hit.clip.sourceUri === loadedSourceUri.current) {
@@ -63,7 +65,7 @@ export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayI
       if (pendingSeek.current !== null) pendingSeek.current = sourceTime; // land the pending seek where the user scrubbed to
       else player.currentTime = sourceTime;
     }
-  }, [hit?.clip.id, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, playhead, isPlaying, missing, project, player, seek, setPlaying]);
+  }, [hit?.clip.id, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, hit?.clip.speed, playhead, isPlaying, missing, project, player, seek, setPlaying]);
 
   useEffect(() => { if (isPlaying) player.play(); else player.pause(); }, [isPlaying, player]);
 

@@ -1,4 +1,4 @@
-import { clipDuration, clipStartTimes, totalDuration, type ClipHit } from "@/src/editor/model/timeline";
+import { clipDuration, clipStartTimes, sourceToOutput, totalDuration, type ClipHit } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
 
 export const EPSILON = 0.02;
@@ -9,7 +9,7 @@ export function nextPlayheadFromPlayer(p: Project, hit: ClipHit, playerTime: num
   // The player hasn't been seeked to this clip's trim window yet (e.g. a fresh `replaceAsync` whose
   // `currentTime` assignment hasn't landed) — hold at the clip's start instead of mapping a bogus time.
   if (playerTime < hit.clip.trimStart - EPSILON) return { playhead: starts[hit.index], ended: false };
-  if (playerTime < hit.clip.trimEnd) return { playhead: starts[hit.index] + (playerTime - hit.clip.trimStart), ended: false };
+  if (playerTime < hit.clip.trimEnd) return { playhead: starts[hit.index] + sourceToOutput(hit.clip, playerTime), ended: false };
   let next = hit.index + 1;
   while (next < p.clips.length && missingSourceUris.includes(p.clips[next].sourceUri)) next++;
   if (next >= p.clips.length) return { playhead: totalDuration(p), ended: true };
