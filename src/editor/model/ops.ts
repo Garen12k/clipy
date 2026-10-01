@@ -3,7 +3,8 @@ import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration, outputToSource } from "./timeline";
 import { MIN_CLIP_SECONDS, SPEED_LIMITS, TRANSITION_LIMITS, type AspectRatio, type Clip, type FilterId, type Project, type TransitionType } from "./types";
 import { totalDuration } from "./timeline";
-import { AUDIO_LIMITS, CLIP_VOLUME, isSticker, isTextOverlay, OVERLAY_LIMITS, type AudioTrack, type Overlay, type StickerOverlay, type TextOverlay } from "./types";
+import { AUDIO_LIMITS, CLIP_VOLUME, isSticker, isTextOverlay, makeOverlay, makeSticker, OVERLAY_LIMITS, type AudioTrack, type Overlay, type StickerOverlay, type TextOverlay } from "./types";
+import type { Template } from "../templates";
 
 function touch(p: Project, patch: Partial<Project>): Project {
   return { ...p, ...patch, updatedAt: nowIso() };
@@ -269,6 +270,31 @@ export function replaceCaptions(p: Project, captions: TextOverlay[]): Project {
   if (kept.length === p.overlays.length && captions.length === 0) return p;
   return touch(p, { overlays: [...kept, ...captions.map((c) => normaliseOverlay(p, c))] });
 }
+/**
+ * One-tap look: speed + filter (+ transition on every cut but the last) for one clip or every clip, then a title and a sticker
+ * over the first 3 s. Project scope also restyles captions and existing text overlays. Built only from the ops above.
+ */
+export function applyTemplate(p: Project, t: Template, scope: "clip" | "project", clipId: string | null): Project {
+  if (p.clips.length === 0) return p;
+  let next = p;
+  if (scope === "clip") {
+    if (!clipId || !p.clips.some((c) => c.id === clipId)) return p;
+    next = setClipFilter(setClipSpeed(next, clipId, t.speed), clipId, t.filter);
+    next = setTransition(next, clipId, t.transition);   // no-op on the last clip
+  } else {
+    for (const c of p.clips) next = setClipFilter(setClipSpeed(next, c.id, t.speed), c.id, t.filter);
+    for (const c of next.clips.slice(0, -1)) next = setTransition(next, c.id, t.transition);
+    const clips = normaliseTransitions(next.clips);
+    if (clips !== next.clips) next = touch(next, { clips });
+    next = setCaptionStyleForAll(next, t.caption);
+    for (const o of next.overlays) if (o.kind === "text") next = updateOverlay(next, o.id, t.text);
+  }
+  const end = Math.min(3, totalDuration(next));   // unrounded: r3 could land a hair past a sped-up total
+  if (end <= 0) return next;
+  next = addTextOverlay(next, makeOverlay({ id: newId(), text: t.title.text, ...t.text, fontScale: t.title.fontScale, x: 0.5, y: t.title.y, start: 0, end }));
+  return addSticker(next, makeSticker({ id: newId(), ...t.sticker, start: 0, end }));
+}
+
 export function setCaptionStyleForAll(p: Project, style: Partial<Pick<TextOverlay, "fontId" | "fontScale" | "color" | "background" | "outline" | "align" | "x" | "y">>): Project {
   let changed = false;
   const overlays = p.overlays.map((o) => {
