@@ -2,13 +2,17 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
 jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, onValueChange }: { testID?: string; onValueChange?: (v: number) => void }) => <View testID={testID} onTouchEnd={() => onValueChange?.(0.12)} />; });
-import { makeClip, makeOverlay, makeProject } from "@/src/editor/model/types";
+import { isTextOverlay, makeClip, makeOverlay, makeProject, type TextOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { TextPanel } from "../components/TextPanel";
 
 const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [makeOverlay({ id: "o1", text: "Hi", start: 1, end: 4 })] });
 beforeEach(() => { useEditorStore.getState().reset(); useEditorStore.getState().setProject(p); useEditorStore.getState().selectOverlay("o1"); });
-const ov = () => useEditorStore.getState().project!.overlays.find((o) => o.id === "o1")!;
+const ov = (): TextOverlay => {
+  const o = useEditorStore.getState().project!.overlays.find((o) => o.id === "o1")!;
+  if (!isTextOverlay(o)) throw new Error("expected a text overlay");
+  return o;
+};
 
 test("edits text, font, color, alignment, outline, background through the store", async () => {
   await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);

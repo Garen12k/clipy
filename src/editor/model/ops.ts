@@ -3,7 +3,7 @@ import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration } from "./timeline";
 import { MIN_CLIP_SECONDS, type AspectRatio, type Clip, type Project } from "./types";
 import { totalDuration } from "./timeline";
-import { AUDIO_LIMITS, CLIP_VOLUME, OVERLAY_LIMITS, type AudioTrack, type TextOverlay } from "./types";
+import { AUDIO_LIMITS, CLIP_VOLUME, isTextOverlay, OVERLAY_LIMITS, type AudioTrack, type Overlay, type TextOverlay } from "./types";
 
 function touch(p: Project, patch: Partial<Project>): Project {
   return { ...p, ...patch, updatedAt: nowIso() };
@@ -87,7 +87,7 @@ export function addTextOverlay(p: Project, o: TextOverlay): Project {
   return touch(p, { overlays: [...p.overlays, o] });
 }
 
-function normaliseOverlay(p: Project, o: TextOverlay): TextOverlay {
+function normaliseOverlay<O extends Overlay>(p: Project, o: O): O {
   const total = totalDuration(p);
   let end = Math.min(o.end, total);
   let start = Math.max(0, Math.min(o.start, end));
@@ -95,15 +95,19 @@ function normaliseOverlay(p: Project, o: TextOverlay): TextOverlay {
     if (start + OVERLAY_LIMITS.minDuration <= total) end = start + OVERLAY_LIMITS.minDuration;
     else { end = total; start = Math.max(0, total - OVERLAY_LIMITS.minDuration); }
   }
-  return { ...o, x: clamp(o.x, [0, 1]), y: clamp(o.y, [0, 1]), scale: clamp(o.scale, OVERLAY_LIMITS.scale),
-    fontScale: clamp(o.fontScale, OVERLAY_LIMITS.fontScale), start: r3(start), end: r3(end) };
+  const next: O = { ...o, x: clamp(o.x, [0, 1]), y: clamp(o.y, [0, 1]), scale: clamp(o.scale, OVERLAY_LIMITS.scale),
+    start: r3(start), end: r3(end) };
+  if (isTextOverlay(next)) (next as TextOverlay).fontScale = clamp(next.fontScale, OVERLAY_LIMITS.fontScale);
+  return next;
 }
 
 export function updateOverlay(p: Project, id: string, patch: Partial<Omit<TextOverlay, "id" | "kind">>): Project {
   const i = p.overlays.findIndex((o) => o.id === id);
   if (i < 0) return p;
-  const next = normaliseOverlay(p, { ...p.overlays[i], ...patch });
-  if (JSON.stringify(next) === JSON.stringify(p.overlays[i])) return p;
+  const target = p.overlays[i];
+  if (!isTextOverlay(target)) return p;
+  const next = normaliseOverlay(p, { ...target, ...patch });
+  if (JSON.stringify(next) === JSON.stringify(target)) return p;
   const overlays = p.overlays.slice(); overlays[i] = next;
   return touch(p, { overlays });
 }

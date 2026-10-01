@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clipDuration } from "@/src/editor/model/timeline";
-import type { Project } from "@/src/editor/model/types";
+import { isTextOverlay, type Project } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportOverlay } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
 import { estimateBytes, exportableAudio, exportableClips, type Resolution } from "./estimate";
@@ -40,7 +40,7 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
       const audioTrack = exportableAudio(project, missingSourceUris);
       jobId.current = await exportTimeline({
         clips: clips.map((c) => ({ sourceUri: c.sourceUri, trimStart: c.trimStart, trimEnd: c.trimEnd, volume: c.volume, muted: c.muted })),
-        overlays: project.overlays.filter((o) => o.end > o.start).map(toExportOverlay),
+        overlays: project.overlays.filter(isTextOverlay).filter((o) => o.end > o.start).map(toExportOverlay),
         audio: audioTrack ? { sourceUri: audioTrack.sourceUri, start: audioTrack.start, trimStart: audioTrack.trimStart, trimEnd: audioTrack.trimEnd, volume: audioTrack.volume } : null,
         aspectRatio: project.aspectRatio, resolution, outputPath,
       });

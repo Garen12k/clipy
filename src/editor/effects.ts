@@ -1,0 +1,36 @@
+import type { FilterId, ShapeId, TextOverlay, TransitionType } from "./model/types";
+
+export interface FilterPreview { tint: string; tintOpacity: number; saturation: number; brightness: number }
+/** Preview approximations only. The real Core Image recipes live in modules/clipy-video/ios/Effects.swift, keyed by the same ids. */
+export const FILTERS: Record<FilterId, { label: string; preview: FilterPreview }> = {
+  none:    { label: "None",    preview: { tint: "#000000", tintOpacity: 0,    saturation: 1,   brightness: 0 } },
+  warm:    { label: "Warm",    preview: { tint: "#FF9A3C", tintOpacity: 0.14, saturation: 1.1, brightness: 0.02 } },
+  cool:    { label: "Cool",    preview: { tint: "#3C8CFF", tintOpacity: 0.14, saturation: 1.0, brightness: 0 } },
+  vivid:   { label: "Vivid",   preview: { tint: "#FF2D7A", tintOpacity: 0.06, saturation: 1.4, brightness: 0.03 } },
+  faded:   { label: "Faded",   preview: { tint: "#FFFFFF", tintOpacity: 0.12, saturation: 0.7, brightness: 0.08 } },
+  mono:    { label: "Mono",    preview: { tint: "#000000", tintOpacity: 0,    saturation: 0,   brightness: 0 } },
+  noir:    { label: "Noir",    preview: { tint: "#000000", tintOpacity: 0.18, saturation: 0,   brightness: -0.08 } },
+  vintage: { label: "Vintage", preview: { tint: "#C8A05A", tintOpacity: 0.22, saturation: 0.6, brightness: -0.03 } },
+};
+
+export const TRANSITIONS: Record<TransitionType, { label: string }> = {
+  none: { label: "None" }, fade: { label: "Fade" }, dissolve: { label: "Dissolve" }, slide: { label: "Slide" }, zoom: { label: "Zoom" },
+};
+
+/** 100×100 box, absolute M/L/C/Q/Z only — copied verbatim into Effects.swift. */
+export const SHAPES: Record<ShapeId, { label: string; path: string }> = {
+  circle:       { label: "Circle",  path: "M50 0 C77.6 0 100 22.4 100 50 C100 77.6 77.6 100 50 100 C22.4 100 0 77.6 0 50 C0 22.4 22.4 0 50 0 Z" },
+  square:       { label: "Square",  path: "M0 0 L100 0 L100 100 L0 100 Z" },
+  roundedBox:   { label: "Box",     path: "M20 0 L80 0 C91 0 100 9 100 20 L100 80 C100 91 91 100 80 100 L20 100 C9 100 0 91 0 80 L0 20 C0 9 9 0 20 0 Z" },
+  arrow:        { label: "Arrow",   path: "M0 35 L60 35 L60 10 L100 50 L60 90 L60 65 L0 65 Z" },
+  star:         { label: "Star",    path: "M50 0 L61 35 L98 35 L68 57 L79 91 L50 70 L21 91 L32 57 L2 35 L39 35 Z" },
+  speechBubble: { label: "Bubble",  path: "M10 0 L90 0 C95.5 0 100 4.5 100 10 L100 60 C100 65.5 95.5 70 90 70 L40 70 L20 90 L25 70 L10 70 C4.5 70 0 65.5 0 60 L0 10 C0 4.5 4.5 0 10 0 Z" },
+  heart:        { label: "Heart",   path: "M50 90 C20 65 0 50 0 30 C0 13 13 0 28 0 C38 0 46 6 50 14 C54 6 62 0 72 0 C87 0 100 13 100 30 C100 50 80 65 50 90 Z" },
+};
+
+export const CAPTION_STYLE: Pick<TextOverlay, "fontId" | "fontScale" | "color" | "background" | "outline" | "align" | "x" | "y"> = {
+  fontId: "montserrat", fontScale: 0.045, color: "#FFFFFF", background: { color: "#000000", opacity: 0.6 }, outline: false, align: "center", x: 0.5, y: 0.86,
+};
+
+export const STICKER_EMOJI_SCALE = 0.12;   // emoji font size = STICKER_EMOJI_SCALE × frameH × scale
+export const STICKER_SHAPE_SCALE = 0.2;    // shape box      = STICKER_SHAPE_SCALE × frameH × scale

@@ -1,5 +1,5 @@
 import { migrateProject } from "../migrate";
-import { makeClip, makeProject, SCHEMA_VERSION } from "../types";
+import { FILTER_IDS, makeClip, makeProject, SCHEMA_VERSION } from "../types";
 
 const v1 = {
   id: "p1", name: "Old", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
@@ -15,13 +15,28 @@ test("v1 → v2 adds muted, empty overlays/audioTracks and bumps the version", (
   expect(p.audioTracks).toEqual([]);
 });
 
-test("v2 passes through unchanged (idempotent)", () => {
+test("v3 passes through unchanged (idempotent)", () => {
   const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] });
   expect(migrateProject(p)).toEqual(p);
 });
 
 test("rejects newer versions and malformed files with readable errors", () => {
-  expect(() => migrateProject({ ...v1, schemaVersion: 3 })).toThrow(/newer version of Clipy/);
+  expect(() => migrateProject({ ...v1, schemaVersion: 4 })).toThrow(/newer version of Clipy/);
   expect(() => migrateProject({ schemaVersion: 1 })).toThrow(/missing required fields/);
   expect(() => migrateProject("nope")).toThrow(/missing required fields/);
+});
+
+test("v2 → v3 normalises effect fields; v1 → v3 chains", () => {
+  const v2 = { ...v1, schemaVersion: 2, overlays: [], audioTracks: [], clips: [{ ...v1.clips[0], muted: false, speed: 7, filter: "sepia", transitionOut: { type: "wipe", duration: 2 } }] };
+  const p = migrateProject(v2);
+  expect(p.schemaVersion).toBe(3);
+  expect(p.clips[0]).toMatchObject({ speed: 1, filter: null, transitionOut: { type: "none", duration: 0 } });
+  const fromV1 = migrateProject(v1);
+  expect(fromV1.schemaVersion).toBe(3);
+  expect(fromV1.clips[0]).toMatchObject({ muted: false, speed: 1, filter: null });
+  expect(FILTER_IDS).toContain("none");
+});
+test("v3 overlays keep kind; a text overlay without kind gets kind text", () => {
+  const v3 = { ...v1, schemaVersion: 2, audioTracks: [], clips: [{ ...v1.clips[0], muted: false }], overlays: [{ id: "o", text: "x", fontId: "bangers", fontScale: 0.07, color: "#fff", background: null, outline: true, align: "center", x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 1 }] };
+  expect(migrateProject(v3).overlays[0]).toMatchObject({ kind: "text" });
 });

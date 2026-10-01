@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { addTextOverlay, defaultOverlayRange, deleteClip, deleteOverlay, duplicateClip, splitClipAt } from "@/src/editor/model/ops";
-import { makeOverlay } from "@/src/editor/model/types";
+import { isTextOverlay, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
@@ -34,7 +34,7 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange }: Props) {
   const closeText = () => {
     if (textPanelFor) {
       const overlay = useEditorStore.getState().project?.overlays.find((o) => o.id === textPanelFor);
-      if (overlay && overlay.text.trim().length === 0) apply((x) => deleteOverlay(x, textPanelFor));
+      if (overlay && isTextOverlay(overlay) && overlay.text.trim().length === 0) apply((x) => deleteOverlay(x, textPanelFor));
     }
     onTextPanelChange(null);
   };
