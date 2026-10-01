@@ -37,6 +37,8 @@ export function AudioPreview() {
     if (!player.playing) player.play();
   }, [track, playhead, isPlaying, player]);
 
-  useEffect(() => () => player.pause(), [player]);
+  // useAudioPlayer releases the native player in its own unmount cleanup, which runs before
+  // this one; pausing a released player throws, so swallow it (release already stopped audio).
+  useEffect(() => () => { try { player.pause(); } catch {} }, [player]);
   return null;
 }
