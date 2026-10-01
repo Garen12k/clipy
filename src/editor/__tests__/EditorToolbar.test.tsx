@@ -22,6 +22,14 @@ test("Text is disabled for an empty project", async () => {
   useEditorStore.getState().setProject(makeProject());
   await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
   expect(screen.getByRole("button", { name: "Text" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Templates" })).toBeDisabled();
+});
+
+test("Templates is enabled without a selection when the project has clips and opens the sheet", async () => {
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
+  expect(screen.getByRole("button", { name: "Templates" })).toBeEnabled();
+  await fireEvent.press(screen.getByRole("button", { name: "Templates" }));
+  expect(screen.getByRole("button", { name: "Random template" })).toBeTruthy();
 });
 
 test("Split cuts at the playhead; Duplicate and Delete act on the selection", async () => {

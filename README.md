@@ -107,6 +107,9 @@ npm test
 - Auto-captions via Apple's on-device speech recognition (`SFSpeechRecognizer`,
   on-device only). This needs the native build; in Expo Go the Captions button shows a
   "needs the native build" card.
+- Templates: 8 one-tap looks (filter, speed, transition, text style, title and sticker) plus a
+  Random tile, applied to the selected clip or the whole project as one undo step
+  (`src/editor/templates.ts`, data only — no native changes).
 - Project schema moved to `schemaVersion: 3`; v1 and v2 projects migrate automatically on open.
 - The Swift export is further extended with a custom Core Image compositor (filters, transitions),
   speed (`scaleTimeRange`), sticker rendering, and a `Transcriber`. This native code only compiles
