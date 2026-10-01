@@ -6,6 +6,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
 import { ToolButton } from "@/src/ui/ToolButton";
+import { CaptionsSheet } from "./CaptionsSheet";
 import { MusicSheet } from "./MusicSheet";
 import { RatioSheet } from "./RatioSheet";
 import { SpeedSheet } from "./SpeedSheet";
@@ -26,7 +27,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | null>(null);
   const noSel = !selectedId;
 
   const addText = () => {
@@ -61,6 +62,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
         <ToolButton label="Ratio" icon="phone-portrait" onPress={() => setSheet("ratio")} />
         <ToolButton label="Text" icon="text" disabled={!hasClips} onPress={addText} />
         <ToolButton label="Sticker" icon="happy" disabled={!hasClips} onPress={() => setSheet("sticker")} />
+        <ToolButton label="Captions" icon="chatbox-ellipses" disabled={!hasClips} onPress={() => setSheet("captions")} />
         <ToolButton label="Music" icon="musical-notes" onPress={() => setSheet("music")} />
         <ToolButton label="Volume" icon="volume-high" disabled={noSel} onPress={() => setSheet("volume")} />
         <ToolButton label="Duplicate" icon="copy" disabled={noSel} onPress={() => selectedId && apply((p) => duplicateClip(p, selectedId))} />
@@ -73,6 +75,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />
       <VolumeSheet clipId={selectedId} visible={sheet === "volume"} onClose={() => setSheet(null)} />
       <StickerSheet visible={sheet === "sticker"} onClose={() => setSheet(null)} onAdded={() => {}} />
+      <CaptionsSheet visible={sheet === "captions"} onClose={() => setSheet(null)} />
       <TransitionSheet clipIndex={transitionFor ?? 0} visible={transitionFor !== null} onClose={() => onTransitionChange(null)} />
       <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} onRetarget={(id) => onPanelChange({ id, kind: "text" })} />
       <StickerPanel overlayId={stickerPanelFor} visible={!!stickerPanelFor} onClose={() => onPanelChange(null)} onRetarget={(id) => onPanelChange({ id, kind: "sticker" })} />

@@ -34,11 +34,15 @@ export function toExportOverlay(o: TextOverlay): ExportOverlay {
 // `NativeModule<TEventsMap>` from `expo-modules-core` resolves to the class's constructor
 // type (not its instance type) in this SDK 57 build, so `addListener` is missing from it.
 // Declaring `addListener` ourselves avoids relying on that broken generic.
+export interface TranscriptSegment { text: string; start: number; end: number }
+
 type ClipyVideoNative = {
   hello(): string;
   exportTimeline(req: ExportRequest): Promise<string>;
   cancelExport(jobId: string): void;
   addListener(eventName: "onExportEvent", listener: (e: ExportEvent) => void): EventSubscription;
+  transcribe(uri: string, trimStart: number, trimEnd: number): Promise<TranscriptSegment[]>;
+  cancelTranscribe(): void;
 };
 
 const NOT_LINKED = "ClipyVideo native module is not linked. Use a development build (eas build --profile development), not Expo Go.";
@@ -52,3 +56,5 @@ export function hello(): string { return native().hello(); }
 export function exportTimeline(req: ExportRequest): Promise<string> { return native().exportTimeline(req); }
 export function cancelExport(jobId: string): void { native().cancelExport(jobId); }
 export function addExportListener(cb: (e: ExportEvent) => void): EventSubscription { return native().addListener("onExportEvent", cb); }
+export function transcribe(uri: string, trimStart: number, trimEnd: number): Promise<TranscriptSegment[]> { return native().transcribe(uri, trimStart, trimEnd); }
+export function cancelTranscribe(): void { native().cancelTranscribe(); }

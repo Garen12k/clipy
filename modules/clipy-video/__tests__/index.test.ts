@@ -1,17 +1,17 @@
 jest.mock("expo-modules-core", () => {
   const actual = jest.requireActual("expo-modules-core");
+  const native = {
+    hello: () => "mock hello", exportTimeline: jest.fn(), cancelExport: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })),
+    transcribe: jest.fn(async () => [{ text: "hi", start: 0, end: 1 }]), cancelTranscribe: jest.fn(),
+  };
   return {
     ...actual,
-    requireOptionalNativeModule: jest.fn((name: string) =>
-      name === "ClipyVideo"
-        ? { hello: () => "mock hello", exportTimeline: jest.fn(), cancelExport: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })) }
-        : actual.requireOptionalNativeModule(name),
-    ),
+    requireOptionalNativeModule: jest.fn((name: string) => (name === "ClipyVideo" ? native : actual.requireOptionalNativeModule(name))),
   };
 });
 
 import { requireOptionalNativeModule } from "expo-modules-core";
-import { addExportListener, cancelExport, exportTimeline, hello, isNativeAvailable } from "../index";
+import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -46,5 +46,15 @@ describe("export API", () => {
     expect(cb).toHaveBeenCalledWith({ jobId: "job1", type: "progress", progress: 0.5 });
     cancelExport("job1");
     expect(native.cancelExport).toHaveBeenCalledWith("job1");
+  });
+});
+
+describe("transcribe API", () => {
+  it("transcribe forwards the trim range and returns segments", async () => {
+    const native = jest.mocked(requireOptionalNativeModule)("ClipyVideo") as unknown as { transcribe: jest.Mock; cancelTranscribe: jest.Mock };
+    await expect(transcribe("file:///a.mov", 1, 3)).resolves.toEqual([{ text: "hi", start: 0, end: 1 }]);
+    expect(native.transcribe).toHaveBeenCalledWith("file:///a.mov", 1, 3);
+    cancelTranscribe();
+    expect(native.cancelTranscribe).toHaveBeenCalled();
   });
 });
