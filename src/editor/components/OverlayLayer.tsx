@@ -1,8 +1,9 @@
 import { Pressable, View } from "react-native";
-import { isTextOverlay } from "@/src/editor/model/types";
+import { isSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { OverlayText } from "./OverlayText";
 import { SelectionFrame } from "./SelectionFrame";
+import { StickerView } from "./StickerView";
 
 type Props = { frameW: number; frameH: number; onOpenPanel: (overlayId: string) => void };
 
@@ -12,15 +13,22 @@ export function OverlayLayer({ frameW, frameH, onOpenPanel }: Props) {
   const playhead = useEditorStore((s) => s.playhead);
   const selectedId = useEditorStore((s) => s.selectedOverlayId);
   const { selectOverlay } = useEditorStore.getState();
-  const visible = allOverlays.filter(isTextOverlay).filter((o) => playhead >= o.start && playhead < o.end);
+  const visible = allOverlays.filter((o) => playhead >= o.start && playhead < o.end);
   return (
     <View pointerEvents="box-none" style={{ position: "absolute", left: 0, top: 0, width: frameW, height: frameH }}>
-      {visible.map((o) => (
-        <OverlayText key={o.id} overlay={o} frameW={frameW} frameH={frameH}>
-          <Pressable style={{ position: "absolute", inset: 0 }} onPress={() => selectOverlay(o.id)} accessibilityLabel={`Overlay ${o.text}`} />
-          {o.id === selectedId && <SelectionFrame overlay={o} frameW={frameW} frameH={frameH} onDoubleTap={() => onOpenPanel(o.id)} />}
-        </OverlayText>
-      ))}
+      {visible.map((o) =>
+        isSticker(o) ? (
+          <StickerView key={o.id} sticker={o} frameW={frameW} frameH={frameH}>
+            <Pressable style={{ position: "absolute", inset: 0 }} onPress={() => selectOverlay(o.id)} accessibilityLabel={`Sticker ${o.emoji ?? o.shape}`} />
+            {o.id === selectedId && <SelectionFrame overlay={o} frameW={frameW} frameH={frameH} onDoubleTap={() => onOpenPanel(o.id)} />}
+          </StickerView>
+        ) : (
+          <OverlayText key={o.id} overlay={o} frameW={frameW} frameH={frameH}>
+            <Pressable style={{ position: "absolute", inset: 0 }} onPress={() => selectOverlay(o.id)} accessibilityLabel={`Overlay ${o.text}`} />
+            {o.id === selectedId && <SelectionFrame overlay={o} frameW={frameW} frameH={frameH} onDoubleTap={() => onOpenPanel(o.id)} />}
+          </OverlayText>
+        ),
+      )}
     </View>
   );
 }

@@ -3,8 +3,9 @@ import { Pressable, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { moveOverlay, updateOverlayShared } from "@/src/editor/model/ops";
 import { timeToX, xToTime } from "@/src/editor/model/timeline";
-import { isTextOverlay, type Overlay } from "@/src/editor/model/types";
+import { isSticker, isTextOverlay, type Overlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { SHAPES } from "@/src/editor/effects";
 import { theme } from "@/src/theme/theme";
 import { LANE_HEIGHT } from "../timelineLayout";
 
@@ -27,11 +28,11 @@ export function OverlayPill({ overlay: o, selected, onPress }: { overlay: Overla
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o.id, pps]);
 
-  const label = isTextOverlay(o) ? o.text : "";
+  const label = isSticker(o) ? (o.emoji ?? SHAPES[o.shape!].label) : isTextOverlay(o) ? o.text : "";
   const leftPx = timeToX(o.start, pps), width = Math.max(HANDLE_W * 2 + 4, timeToX(o.end - o.start, pps));
   return (
     <GestureDetector gesture={gestures.move}>
-      <Pressable testID={`overlay-pill-${o.id}`} onPress={onPress} accessibilityLabel={`Text ${label}`}
+      <Pressable testID={`overlay-pill-${o.id}`} onPress={onPress} accessibilityLabel={`${isSticker(o) ? "Sticker" : "Text"} ${label}`}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: theme.colors.surfaceAlt,
           borderWidth: 2, borderColor: selected ? theme.colors.highlight : theme.colors.straw, justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
         <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 12 }}>{label}</Text>

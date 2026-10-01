@@ -18,6 +18,17 @@ jest.mock("@react-native-community/slider", () => {
   return View;
 });
 jest.mock("react-native-reanimated", () => require("react-native-reanimated/mock"));
+// react-native-svg's real <Path> parses `fill` into a processColor object (like Mark.tsx's <Line
+// stroke=.../> does, see Mark.test.tsx), but StickerView's test reads `props.fill` back as the
+// literal hex string it passed in. Keep every other export (Svg, Line, …) real and only stub Path
+// with a passthrough host view that keeps its props (fill, d, testID, …) exactly as given.
+jest.mock("react-native-svg", () => {
+  const real = jest.requireActual("react-native-svg");
+  const { createElement } = require("react");
+  const { View } = require("react-native");
+  const PathPassthrough = (props: unknown) => createElement(View, props as object);
+  return Object.assign({}, real, { Path: PathPassthrough, __esModule: true });
+});
 jest.mock("react-native-gesture-handler", () => {
   const View = require("react-native").View;
   return {

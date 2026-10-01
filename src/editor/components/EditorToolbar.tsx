@@ -10,20 +10,21 @@ import { MusicSheet } from "./MusicSheet";
 import { RatioSheet } from "./RatioSheet";
 import { SpeedSheet } from "./SpeedSheet";
 import { FilterSheet } from "./FilterSheet";
+import { StickerSheet } from "./StickerSheet";
 import { TextPanel } from "./TextPanel";
 import { TransitionSheet } from "./TransitionSheet";
 import { TrimSheet } from "./TrimSheet";
 import { VolumeSheet } from "./VolumeSheet";
 
-type Props = { textPanelFor: string | null; onTextPanelChange: (id: string | null) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void };
+type Props = { textPanelFor: string | null; onTextPanelChange: (id: string | null) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void; onStickerPanelChange?: (id: string) => void };
 
-export function EditorToolbar({ textPanelFor, onTextPanelChange, transitionFor, onTransitionChange }: Props) {
+export function EditorToolbar({ textPanelFor, onTextPanelChange, transitionFor, onTransitionChange, onStickerPanelChange }: Props) {
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const selectedIndex = useEditorStore((s) => s.project?.clips.findIndex((c) => c.id === s.selectedClipId) ?? -1);
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | null>(null);
   const noSel = !selectedId;
 
   const addText = () => {
@@ -54,6 +55,7 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange, transitionFor, 
         <ToolButton label="Transition" icon="swap-horizontal" disabled={noSel || selectedIndex === clipCount - 1} onPress={() => onTransitionChange(selectedIndex)} />
         <ToolButton label="Ratio" icon="phone-portrait" onPress={() => setSheet("ratio")} />
         <ToolButton label="Text" icon="text" disabled={!hasClips} onPress={addText} />
+        <ToolButton label="Sticker" icon="happy" disabled={!hasClips} onPress={() => setSheet("sticker")} />
         <ToolButton label="Music" icon="musical-notes" onPress={() => setSheet("music")} />
         <ToolButton label="Volume" icon="volume-high" disabled={noSel} onPress={() => setSheet("volume")} />
         <ToolButton label="Duplicate" icon="copy" disabled={noSel} onPress={() => selectedId && apply((p) => duplicateClip(p, selectedId))} />
@@ -65,6 +67,7 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange, transitionFor, 
       <FilterSheet clipId={selectedId} visible={sheet === "filter"} onClose={() => setSheet(null)} />
       <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />
       <VolumeSheet clipId={selectedId} visible={sheet === "volume"} onClose={() => setSheet(null)} />
+      <StickerSheet visible={sheet === "sticker"} onClose={() => setSheet(null)} onAdded={(id) => onStickerPanelChange?.(id)} />
       <TransitionSheet clipIndex={transitionFor ?? 0} visible={transitionFor !== null} onClose={() => onTransitionChange(null)} />
       <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} onRetarget={onTextPanelChange} />
     </View>
