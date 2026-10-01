@@ -145,43 +145,43 @@ final class ExportSession {
   /// (the preview rotates clockwise in a y-down space).
   static func overlayLayer(_ o: ExportOverlay, renderSize: CGSize) -> CALayer {
     let l = OverlayLayout.layout(o, frame: renderSize)
-    let font = UIFont(name: o.fontPostScriptName, size: l.fontSize) ?? UIFont.systemFont(ofSize: l.fontSize)
+    // CTFontCreateWithName never fails (it silently substitutes), so check availability through UIFont first.
+    let fontName = UIFont(name: o.fontPostScriptName, size: l.fontSize) != nil ? o.fontPostScriptName : "Helvetica"
+    let font = CTFontCreateWithName(fontName as CFString, l.fontSize, nil)
 
-    let nsAlign: NSTextAlignment, ctAlign: CTTextAlignment, mode: CATextLayerAlignmentMode
+    let ctAlign: CTTextAlignment, mode: CATextLayerAlignmentMode
     switch o.align {
-    case "left":  nsAlign = .left;  ctAlign = .left;  mode = .left
-    case "right": nsAlign = .right; ctAlign = .right; mode = .right
-    default:      nsAlign = .center; ctAlign = .center; mode = .center
+    case "left":  ctAlign = .left;   mode = .left
+    case "right": ctAlign = .right;  mode = .right
+    default:      ctAlign = .center; mode = .center
     }
-    let paragraph = NSMutableParagraphStyle()
-    paragraph.alignment = nsAlign
-    paragraph.minimumLineHeight = l.lineHeight
-    paragraph.maximumLineHeight = l.lineHeight
 
-    // One attributed string serves both measuring (UIKit keys: font, paragraph style) and drawing (CATextLayer →
-    // CoreText keys with CGColor values). `.font` ("NSFont") is the same key as kCTFontAttributeName, and a UIFont is a CTFont.
-    var attrs: [NSAttributedString.Key: Any] = [
-      .font: font,
-      .paragraphStyle: paragraph,
-      NSAttributedString.Key(rawValue: kCTForegroundColorAttributeName as String): UIColor(hex: o.color).cgColor,
-      NSAttributedString.Key(rawValue: kCTParagraphStyleAttributeName as String): ctParagraphStyle(alignment: ctAlign, lineHeight: l.lineHeight),
-    ]
+    // One attributed string with CoreText keys ONLY: CATextLayer draws it and CTFramesetter measures it, so the
+    // measured size and the drawn layout come from the same engine. Built by subscript assignment (never a
+    // dictionary literal) so two constants sharing a raw value can't trap on a duplicate key.
+    func key(_ k: CFString) -> NSAttributedString.Key { NSAttributedString.Key(rawValue: k as String) }
+    var attrs: [NSAttributedString.Key: Any] = [:]
+    attrs[key(kCTFontAttributeName)] = font
+    attrs[key(kCTForegroundColorAttributeName)] = UIColor(hex: o.color).cgColor
+    attrs[key(kCTParagraphStyleAttributeName)] = ctParagraphStyle(alignment: ctAlign, lineHeight: l.lineHeight)
+    // React Native centres the glyphs inside the lineHeight box; shift the baseline to match.
+    let glyphHeight = CTFontGetAscent(font) + CTFontGetDescent(font) + CTFontGetLeading(font)
+    attrs[key(kCTBaselineOffsetAttributeName)] = NSNumber(value: Double((l.lineHeight - glyphHeight) / 2))
     if o.outline, l.fontSize > 0 {
       // Negative stroke width (percent of the font size) = stroke AND fill, so a single layer draws outlined text.
-      attrs[NSAttributedString.Key(rawValue: kCTStrokeWidthAttributeName as String)] = NSNumber(value: Double(-(l.outlineWidth / l.fontSize * 100)))
-      attrs[NSAttributedString.Key(rawValue: kCTStrokeColorAttributeName as String)] = UIColor(hex: contrastFor(hex: o.color)).cgColor
+      attrs[key(kCTStrokeWidthAttributeName)] = NSNumber(value: Double(-(l.outlineWidth / l.fontSize * 100)))
+      attrs[key(kCTStrokeColorAttributeName)] = UIColor(hex: contrastFor(hex: o.color)).cgColor
     }
     let string = NSAttributedString(string: o.text, attributes: attrs)
 
     // The preview's box is `maxWidth` including its padding (React Native boxes are border-box), so text wraps at
     // maxWidth − 2·padding.
     let pad = l.padding
-    let textMaxWidth = max(1, l.maxWidth - 2 * pad)
-    let measured = string.boundingRect(with: CGSize(width: textMaxWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], context: nil)
-    // A little slack so CoreText (drawing) never wraps or clips where TextKit (measuring) did not; also room for the stroke.
-    let slack = ceil(l.outlineWidth) + 2
-    let w = ceil(measured.width) + slack
-    let h = ceil(measured.height) + slack
+    let wrapWidth = max(1, l.maxWidth - 2 * pad)
+    let framesetter = CTFramesetterCreateWithAttributedString(string as CFAttributedString)
+    let suggested = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(location: 0, length: 0), nil, CGSize(width: wrapWidth, height: .greatestFiniteMagnitude), nil)
+    let w = ceil(suggested.width)
+    let h = ceil(suggested.height)
 
     let container = CALayer()
     container.bounds = CGRect(x: 0, y: 0, width: w + 2 * pad, height: h + 2 * pad)

@@ -107,6 +107,35 @@ final class ExportSessionTests: XCTestCase {
     XCTAssertFalse(audioTracks.isEmpty, "music should produce an audio track")
   }
 
+  /// Music starting at 3 s in a 4 s video: clamped to the video end (1 s of music) and faded out over that second.
+  func testExportsMusicClampedToVideoEndWithFade() async throws {
+    let a = try await makeClip(seconds: 2, color: .red)
+    let b = try await makeClip(seconds: 2, color: .blue)
+    let tone = try await makeTone(seconds: 2)
+    let out = FileManager.default.temporaryDirectory.appendingPathComponent("out-\(UUID().uuidString).mp4")
+    var request = ExportRequest()
+    request.clips = [ExportClip(), ExportClip()]
+    request.clips[0].sourceUri = a.absoluteString; request.clips[0].trimStart = 0; request.clips[0].trimEnd = 2
+    request.clips[1].sourceUri = b.absoluteString; request.clips[1].trimStart = 0; request.clips[1].trimEnd = 2
+    var audio = ExportAudio()
+    audio.sourceUri = tone.absoluteString; audio.start = 3; audio.trimStart = 0; audio.trimEnd = 2; audio.volume = 1
+    request.audio = audio
+    request.aspectRatio = "9:16"; request.resolution = 720; request.outputPath = out.absoluteString
+
+    let finished = expectation(description: "export")
+    var result: [String: Any] = [:]
+    let session = ExportSession { payload in if (payload["type"] as? String) != "progress" { result = payload; finished.fulfill() } }
+    try await session.start(request)
+    await fulfillment(of: [finished], timeout: 60)
+
+    XCTAssertEqual(result["type"] as? String, "done", "\(result)")
+    let asset = AVURLAsset(url: out)
+    let duration = try await asset.load(.duration).seconds
+    XCTAssertEqual(duration, 4, accuracy: 0.2)
+    let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+    XCTAssertFalse(audioTracks.isEmpty, "clamped music should still produce an audio track")
+  }
+
   func testExportsTwoClipsAt720pPortrait() async throws {
     let a = try await makeClip(seconds: 2, color: .red)
     let b = try await makeClip(seconds: 2, color: .blue)
