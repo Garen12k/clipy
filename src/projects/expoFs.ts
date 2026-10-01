@@ -17,16 +17,8 @@ export const expoFs: FsAdapter = {
     if (!f.exists) f.create({ intermediates: true, overwrite: true });
     f.write(text);
   },
-  async copy(from, to) {
-    const dst = new File(to);
-    if (dst.exists) dst.delete();
-    await new File(from).copy(dst);
-  },
-  async move(from, to) {
-    const dst = new File(to);
-    if (dst.exists) dst.delete();
-    await new File(from).move(dst);
-  },
+  async copy(from, to) { await new File(from).copy(new File(to), { overwrite: true }); },
+  async move(from, to) { await new File(from).move(new File(to), { overwrite: true }); },
   async remove(p) {
     const d = new Directory(p);
     if (d.exists) { d.delete(); return; }
