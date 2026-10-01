@@ -23,7 +23,7 @@ export function splitClipAt(p: Project, outputTime: number): Project {
   const cut = outputToSource(clip, offsetInClip);
   const left: Clip = { ...clip, trimEnd: cut, transitionOut: NO_TRANSITION };
   const right: Clip = { ...clip, id: newId(), trimStart: cut };
-  return touch(p, { clips: [...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)] });
+  return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
 }
 
 export function trimClip(p: Project, clipId: string, trimStart: number, trimEnd: number): Project {

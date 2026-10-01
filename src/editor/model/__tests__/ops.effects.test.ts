@@ -54,6 +54,19 @@ test("split and duplicate", () => {
   expect(duplicateClip(withT, "a").clips[1].transitionOut).toEqual({ type: "none", duration: 0 });
 });
 
+test("split re-caps transitions on both sides of the shortened halves", () => {
+  const long = makeClip({ id: "l", sourceDuration: 4 });
+  const withT = setTransition(makeProject({ clips: [long, c] }), "l", { type: "fade", duration: 0.4 });
+  const nearEnd = splitClipAt(withT, 3.7);                 // right half 0.3 s → cap 0.15 < 0.3 → cleared
+  expect(nearEnd.clips[1]).toMatchObject({ trimStart: 3.7 });
+  expect(nearEnd.clips[1].transitionOut).toEqual({ type: "none", duration: 0 });
+  const capped = splitClipAt(withT, 3.3);                  // right half 0.7 s → cap 0.35 → 0.4 capped to 0.35
+  expect(capped.clips[1].transitionOut).toEqual({ type: "fade", duration: 0.35 });
+  const prevT = setTransition(makeProject({ clips: [a, long, c] }), "a", { type: "dissolve", duration: 0.5 });
+  const leftShort = splitClipAt(prevT, 4.7);               // l's left half is 0.7 s → a's transition into it capped to 0.35
+  expect(leftShort.clips[0].transitionOut).toEqual({ type: "dissolve", duration: 0.35 });
+});
+
 test("trimClip minimum enforces 0.1 s OUTPUT, scaled by speed", () => {
   const fast = makeClip({ id: "f", sourceDuration: 4, trimStart: 0, trimEnd: 4, speed: 4 });
   const fastP = makeProject({ clips: [fast] });
