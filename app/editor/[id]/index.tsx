@@ -3,8 +3,11 @@ import { useCallback } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { EditorTopBar } from "@/src/editor/components/EditorTopBar";
 import { PreviewPlayer } from "@/src/editor/components/PreviewPlayer";
+import { ReorderHandle } from "@/src/editor/components/ReorderHandle";
 import { Timeline } from "@/src/editor/components/Timeline";
+import { TrimHandles } from "@/src/editor/components/TrimHandles";
 import type { Project } from "@/src/editor/model/types";
+import { useEditorStore } from "@/src/editor/store";
 import { useAutosave } from "@/src/editor/useAutosave";
 import { useLoadProject } from "@/src/editor/useLoadProject";
 import { storage } from "@/src/projects";
@@ -17,6 +20,9 @@ export default function EditorScreen() {
   const load = useLoadProject(id);
   const save = useCallback((p: Project) => storage.saveProject(p), []);
   useAutosave(save);
+  const selectedClipId = useEditorStore((s) => s.selectedClipId);
+  const project = useEditorStore((s) => s.project);
+  const clipById = (clipId: string) => project?.clips.find((c) => c.id === clipId);
 
   if (load.status === "loading") return <View style={{ flex: 1, backgroundColor: theme.colors.bg, justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></View>;
   if (load.status === "error") return (
@@ -31,7 +37,19 @@ export default function EditorScreen() {
         <PreviewPlayer />
       </View>
       <View testID="slot-timeline">
-        <Timeline />
+        <Timeline
+          renderStripExtras={(clipId, index) => {
+            if (clipId !== selectedClipId) return null;
+            const clip = clipById(clipId);
+            if (!clip) return null;
+            return (
+              <>
+                <TrimHandles clip={clip} />
+                <ReorderHandle clipId={clipId} index={index} />
+              </>
+            );
+          }}
+        />
       </View>
       <View testID="slot-toolbar" style={{ height: 88 }} />
       <ToastHost />

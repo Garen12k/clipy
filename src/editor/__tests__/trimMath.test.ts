@@ -1,0 +1,16 @@
+import { makeClip } from "@/src/editor/model/types";
+import { trimFromDrag } from "../components/TrimHandles";
+
+const c = makeClip({ id: "a", sourceDuration: 10, trimStart: 2, trimEnd: 6 });
+
+test("dragging the start handle right moves trimStart later, snapped to 0.1 s", () => {
+  expect(trimFromDrag(c, "start", 2, 57, 100)).toEqual({ trimStart: 2.6, trimEnd: 6 });
+});
+test("dragging the end handle left moves trimEnd earlier", () => {
+  expect(trimFromDrag(c, "end", 6, -120, 100)).toEqual({ trimStart: 2, trimEnd: 4.8 });
+});
+test("handles cannot cross or leave the source", () => {
+  expect(trimFromDrag(c, "start", 2, 10000, 100)).toEqual({ trimStart: 5.9, trimEnd: 6 });
+  expect(trimFromDrag(c, "end", 6, 10000, 100)).toEqual({ trimStart: 2, trimEnd: 10 });
+  expect(trimFromDrag(c, "start", 2, -10000, 100)).toEqual({ trimStart: 0, trimEnd: 6 });
+});
