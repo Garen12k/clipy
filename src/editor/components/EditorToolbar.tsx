@@ -8,6 +8,7 @@ import { theme } from "@/src/theme/theme";
 import { ToolButton } from "@/src/ui/ToolButton";
 import { MusicSheet } from "./MusicSheet";
 import { RatioSheet } from "./RatioSheet";
+import { SpeedSheet } from "./SpeedSheet";
 import { TextPanel } from "./TextPanel";
 import { TrimSheet } from "./TrimSheet";
 import { VolumeSheet } from "./VolumeSheet";
@@ -18,7 +19,7 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange }: Props) {
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "music" | "volume" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | null>(null);
   const noSel = !selectedId;
 
   const addText = () => {
@@ -44,6 +45,7 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange }: Props) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 8 }}>
         <ToolButton label="Split" icon="cut" disabled={noSel} onPress={() => apply((p) => splitClipAt(p, useEditorStore.getState().playhead))} />
         <ToolButton label="Trim" icon="crop" disabled={noSel} onPress={() => setSheet("trim")} />
+        <ToolButton label="Speed" icon="speedometer" disabled={noSel} onPress={() => setSheet("speed")} />
         <ToolButton label="Ratio" icon="phone-portrait" onPress={() => setSheet("ratio")} />
         <ToolButton label="Text" icon="text" disabled={!hasClips} onPress={addText} />
         <ToolButton label="Music" icon="musical-notes" onPress={() => setSheet("music")} />
@@ -53,6 +55,7 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange }: Props) {
       </ScrollView>
       <RatioSheet visible={sheet === "ratio"} onClose={() => setSheet(null)} />
       <TrimSheet clipId={selectedId} visible={sheet === "trim"} onClose={() => setSheet(null)} />
+      <SpeedSheet clipId={selectedId} visible={sheet === "speed"} onClose={() => setSheet(null)} />
       <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />
       <VolumeSheet clipId={selectedId} visible={sheet === "volume"} onClose={() => setSheet(null)} />
       <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} onRetarget={onTextPanelChange} />

@@ -52,3 +52,10 @@ test("Volume is enabled after selecting a clip", async () => {
   await act(() => { useEditorStore.getState().select("a"); });
   expect(screen.getByRole("button", { name: "Volume" })).toBeEnabled();
 });
+
+test("Speed is disabled without a selection and enabled after selecting a clip", async () => {
+  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
+  expect(screen.getByRole("button", { name: "Speed" })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByRole("button", { name: "Speed" })).toBeEnabled();
+});
