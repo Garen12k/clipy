@@ -14,6 +14,7 @@ interface EditorState {
   /** Source files (not clip ids: split clips share one) that were missing when the project loaded. */
   missingSourceUris: string[];
   selectedClipId: string | null;
+  selectedOverlayId: string | null;
   playhead: number;
   isPlaying: boolean;
   pixelsPerSecond: number;
@@ -29,6 +30,7 @@ interface EditorState {
   canUndo: () => boolean;
   canRedo: () => boolean;
   select: (id: string | null) => void;
+  selectOverlay: (id: string | null) => void;
   seek: (t: number) => void;
   setPlaying: (b: boolean) => void;
   setZoom: (pps: number) => void;
@@ -37,13 +39,14 @@ interface EditorState {
 }
 
 const initial = {
-  project: null, missingSourceUris: [], selectedClipId: null, playhead: 0, isPlaying: false,
+  project: null, missingSourceUris: [], selectedClipId: null, selectedOverlayId: null, playhead: 0, isPlaying: false,
   pixelsPerSecond: DEFAULT_PPS, past: [], future: [], dirty: false,
 };
 
 function afterChange(s: EditorState, next: Project): Partial<EditorState> {
   const selected = s.selectedClipId && next.clips.some((c) => c.id === s.selectedClipId) ? s.selectedClipId : null;
-  return { project: next, dirty: true, selectedClipId: selected, playhead: Math.min(s.playhead, totalDuration(next)) };
+  const selectedOverlay = s.selectedOverlayId && next.overlays.some((o) => o.id === s.selectedOverlayId) ? s.selectedOverlayId : null;
+  return { project: next, dirty: true, selectedClipId: selected, selectedOverlayId: selectedOverlay, playhead: Math.min(s.playhead, totalDuration(next)) };
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -82,7 +85,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,
-  select: (id) => set({ selectedClipId: id }),
+  select: (id) => set(id ? { selectedClipId: id, selectedOverlayId: null } : { selectedClipId: null }),
+  selectOverlay: (id) => set(id ? { selectedOverlayId: id, selectedClipId: null } : { selectedOverlayId: null }),
   seek: (t) => {
     const p = get().project;
     set({ playhead: Math.max(0, Math.min(t, p ? totalDuration(p) : 0)) });
