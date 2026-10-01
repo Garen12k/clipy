@@ -13,7 +13,7 @@ import { OverlayLayer } from "./OverlayLayer";
 import { PreviewTag } from "./PreviewTag";
 import { TransitionLayer } from "./TransitionLayer";
 
-export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayId: string) => void }) {
+export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: string) => void }) {
   const project = useEditorStore((s) => s.project);
   const playhead = useEditorStore((s) => s.playhead);
   const isPlaying = useEditorStore((s) => s.isPlaying);
@@ -123,7 +123,7 @@ export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayI
         {!empty && <VideoView player={player} style={{ width: "100%", height: "100%" }} contentFit="cover" nativeControls={false} />}
         <FilterLayer filter={hit?.clip.filter ?? null} />
         <TransitionLayer />
-        {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenTextPanel?.(id)} />}
+        {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenPanel?.(id)} />}
         <PreviewTag visible={!!hit?.clip.filter || isInTransitionWindow(project, playhead)} />
         {!isPlaying && !empty && (
           <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>

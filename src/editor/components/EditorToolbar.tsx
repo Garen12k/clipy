@@ -10,15 +10,17 @@ import { MusicSheet } from "./MusicSheet";
 import { RatioSheet } from "./RatioSheet";
 import { SpeedSheet } from "./SpeedSheet";
 import { FilterSheet } from "./FilterSheet";
+import { StickerPanel } from "./StickerPanel";
 import { StickerSheet } from "./StickerSheet";
 import { TextPanel } from "./TextPanel";
 import { TransitionSheet } from "./TransitionSheet";
 import { TrimSheet } from "./TrimSheet";
 import { VolumeSheet } from "./VolumeSheet";
 
-type Props = { textPanelFor: string | null; onTextPanelChange: (id: string | null) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void; onStickerPanelChange?: (id: string) => void };
+type PanelFor = { id: string; kind: "text" | "sticker" } | null;
+type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void };
 
-export function EditorToolbar({ textPanelFor, onTextPanelChange, transitionFor, onTransitionChange, onStickerPanelChange }: Props) {
+export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransitionChange }: Props) {
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const selectedIndex = useEditorStore((s) => s.project?.clips.findIndex((c) => c.id === s.selectedClipId) ?? -1);
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
@@ -34,15 +36,18 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange, transitionFor, 
     const range = defaultOverlayRange(project, playhead);
     apply((x) => addTextOverlay(x, { ...makeOverlay({ id }), color: theme.colors.text, ...range }));
     selectOverlay(id);
-    onTextPanelChange(id);
+    onPanelChange({ id, kind: "text" });
   };
+
+  const textPanelFor = panelFor?.kind === "text" ? panelFor.id : null;
+  const stickerPanelFor = panelFor?.kind === "sticker" ? panelFor.id : null;
 
   const closeText = () => {
     if (textPanelFor) {
       const overlay = useEditorStore.getState().project?.overlays.find((o) => o.id === textPanelFor);
       if (overlay && isTextOverlay(overlay) && overlay.text.trim().length === 0) apply((x) => deleteOverlay(x, textPanelFor));
     }
-    onTextPanelChange(null);
+    onPanelChange(null);
   };
 
   return (
@@ -67,9 +72,10 @@ export function EditorToolbar({ textPanelFor, onTextPanelChange, transitionFor, 
       <FilterSheet clipId={selectedId} visible={sheet === "filter"} onClose={() => setSheet(null)} />
       <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />
       <VolumeSheet clipId={selectedId} visible={sheet === "volume"} onClose={() => setSheet(null)} />
-      <StickerSheet visible={sheet === "sticker"} onClose={() => setSheet(null)} onAdded={(id) => onStickerPanelChange?.(id)} />
+      <StickerSheet visible={sheet === "sticker"} onClose={() => setSheet(null)} onAdded={() => {}} />
       <TransitionSheet clipIndex={transitionFor ?? 0} visible={transitionFor !== null} onClose={() => onTransitionChange(null)} />
-      <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} onRetarget={onTextPanelChange} />
+      <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} onRetarget={(id) => onPanelChange({ id, kind: "text" })} />
+      <StickerPanel overlayId={stickerPanelFor} visible={!!stickerPanelFor} onClose={() => onPanelChange(null)} onRetarget={(id) => onPanelChange({ id, kind: "sticker" })} />
     </View>
   );
 }
