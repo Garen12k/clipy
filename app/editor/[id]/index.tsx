@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { EditorToolbar } from "@/src/editor/components/EditorToolbar";
 import { EditorTopBar } from "@/src/editor/components/EditorTopBar";
 import { PreviewPlayer } from "@/src/editor/components/PreviewPlayer";
 import { ReorderHandle } from "@/src/editor/components/ReorderHandle";
@@ -51,7 +52,7 @@ export default function EditorScreen() {
           }}
         />
       </View>
-      <View testID="slot-toolbar" style={{ height: 88 }} />
+      <EditorToolbar />
       <ToastHost />
     </View>
   );
