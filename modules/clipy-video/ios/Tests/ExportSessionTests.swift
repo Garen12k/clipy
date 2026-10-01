@@ -31,6 +31,82 @@ final class ExportSessionTests: XCTestCase {
     return url
   }
 
+  /// Writes a 440 Hz mono AAC tone (.m4a) by feeding 16-bit PCM sample buffers to an AVAssetWriter.
+  func makeTone(seconds: Double) async throws -> URL {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).m4a")
+    let sampleRate = 44100.0
+    let writer = try AVAssetWriter(outputURL: url, fileType: .m4a)
+    let settings: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 1]
+    let input = AVAssetWriterInput(mediaType: .audio, outputSettings: settings)
+    input.expectsMediaDataInRealTime = false
+    writer.add(input); writer.startWriting(); writer.startSession(atSourceTime: .zero)
+
+    let pcm = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate, channels: 1, interleaved: true))
+    let formatDescription = pcm.formatDescription
+    let totalFrames = Int(seconds * sampleRate)
+    let chunk = 1024
+    var frame = 0
+    while frame < totalFrames {
+      while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 5_000_000) }
+      let count = min(chunk, totalFrames - frame)
+      var samples = [Int16](repeating: 0, count: count)
+      for i in 0..<count {
+        samples[i] = Int16(sin(2 * Double.pi * 440 * Double(frame + i) / sampleRate) * 0.5 * Double(Int16.max))
+      }
+      let byteCount = count * MemoryLayout<Int16>.size
+      var block: CMBlockBuffer?
+      var status = CMBlockBufferCreateWithMemoryBlock(allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: byteCount, blockAllocator: kCFAllocatorDefault, customBlockSource: nil, offsetToData: 0, dataLength: byteCount, flags: 0, blockBufferOut: &block)
+      XCTAssertEqual(status, 0)
+      let blockBuffer = try XCTUnwrap(block)
+      XCTAssertEqual(CMBlockBufferAssureBlockMemory(blockBuffer), 0)
+      status = samples.withUnsafeBytes { bytes in
+        CMBlockBufferReplaceDataBytes(with: bytes.baseAddress!, blockBuffer: blockBuffer, offsetIntoDestination: 0, dataLength: byteCount)
+      }
+      XCTAssertEqual(status, 0)
+      var sample: CMSampleBuffer?
+      status = CMAudioSampleBufferCreateReadyWithPacketDescriptions(allocator: kCFAllocatorDefault, dataBuffer: blockBuffer, formatDescription: formatDescription, sampleCount: count, presentationTimeStamp: CMTime(value: CMTimeValue(frame), timescale: CMTimeScale(sampleRate)), packetDescriptions: nil, sampleBufferOut: &sample)
+      XCTAssertEqual(status, 0)
+      let sampleBuffer = try XCTUnwrap(sample)
+      XCTAssertTrue(input.append(sampleBuffer))
+      frame += count
+    }
+    input.markAsFinished()
+    await writer.finishWriting()
+    XCTAssertEqual(writer.status, .completed, "\(String(describing: writer.error))")
+    return url
+  }
+
+  func testExportsWithTextAndMusic() async throws {
+    let a = try await makeClip(seconds: 2, color: .red)
+    let b = try await makeClip(seconds: 2, color: .blue)
+    let tone = try await makeTone(seconds: 2)
+    let out = FileManager.default.temporaryDirectory.appendingPathComponent("out-\(UUID().uuidString).mp4")
+    var request = ExportRequest()
+    request.clips = [ExportClip(), ExportClip()]
+    request.clips[0].sourceUri = a.absoluteString; request.clips[0].trimStart = 0; request.clips[0].trimEnd = 2
+    request.clips[1].sourceUri = b.absoluteString; request.clips[1].trimStart = 0; request.clips[1].trimEnd = 2
+    var overlay = ExportOverlay()
+    overlay.text = "Hi"; overlay.start = 0; overlay.end = 4
+    request.overlays = [overlay]
+    var audio = ExportAudio()
+    audio.sourceUri = tone.absoluteString; audio.start = 0; audio.trimStart = 0; audio.trimEnd = 2; audio.volume = 1
+    request.audio = audio
+    request.aspectRatio = "9:16"; request.resolution = 720; request.outputPath = out.absoluteString
+
+    let finished = expectation(description: "export")
+    var result: [String: Any] = [:]
+    let session = ExportSession { payload in if (payload["type"] as? String) != "progress" { result = payload; finished.fulfill() } }
+    try await session.start(request)
+    await fulfillment(of: [finished], timeout: 60)
+
+    XCTAssertEqual(result["type"] as? String, "done", "\(result)")
+    let asset = AVURLAsset(url: out)
+    let duration = try await asset.load(.duration).seconds
+    XCTAssertEqual(duration, 4, accuracy: 0.2)
+    let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+    XCTAssertFalse(audioTracks.isEmpty, "music should produce an audio track")
+  }
+
   func testExportsTwoClipsAt720pPortrait() async throws {
     let a = try await makeClip(seconds: 2, color: .red)
     let b = try await makeClip(seconds: 2, color: .blue)
