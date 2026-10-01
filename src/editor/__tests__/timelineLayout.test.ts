@@ -1,5 +1,5 @@
 import { makeClip } from "@/src/editor/model/types";
-import { indexFromDrop, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
+import { indexFromDrop, LANE_GAP, LANE_HEIGHT, laneTop, stripWidth, thumbInterval, thumbTimes, TIMELINE_HEIGHT } from "../timelineLayout";
 
 const c = makeClip({ id: "a", sourceDuration: 10, trimStart: 2, trimEnd: 6 }); // 4 s
 
@@ -26,4 +26,10 @@ test("indexFromDrop picks the slot whose centre is nearest the drag centre", () 
   expect(indexFromDrop(starts, widths, 250)).toBe(1);
   expect(indexFromDrop(starts, widths, 390)).toBe(2);
   expect(indexFromDrop(starts, widths, 9999)).toBe(2);
+});
+
+test("lanes sit under the clip strip", () => {
+  expect(TIMELINE_HEIGHT).toBe(120 + 2 * (LANE_HEIGHT + LANE_GAP));
+  expect(laneTop(0)).toBe(120);
+  expect(laneTop(1)).toBe(120 + LANE_HEIGHT + LANE_GAP);
 });

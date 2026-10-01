@@ -4,8 +4,10 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { clipStartTimes, timeToX, xToTime } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
-import { STRIP_HEIGHT, TIMELINE_HEIGHT } from "../timelineLayout";
+import { CLIP_AREA_HEIGHT, TIMELINE_HEIGHT } from "../timelineLayout";
 import { ClipThumbStrip } from "./ClipThumbStrip";
+import { MusicLane } from "./MusicLane";
+import { OverlayLane } from "./OverlayLane";
 
 /** Horizontal strip of clips. The playhead is fixed at the horizontal centre; scrolling scrubs. */
 export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: string, index: number) => React.ReactNode }) {
@@ -60,15 +62,19 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
             scrollRef.current?.scrollTo({ x: timeToX(useEditorStore.getState().playhead, pps), animated: false });
           }}
           onScroll={onScroll}
-          contentContainerStyle={{ paddingHorizontal: pad, alignItems: "center", height: TIMELINE_HEIGHT }}>
-          {project.clips.map((clip, i) => (
-            <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
-              onPress={() => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
-              {renderStripExtras?.(clip.id, i)}
-            </ClipThumbStrip>
-          ))}
+          contentContainerStyle={{ paddingHorizontal: pad, height: TIMELINE_HEIGHT }}>
+          <View style={{ height: CLIP_AREA_HEIGHT, flexDirection: "row", alignItems: "center" }}>
+            {project.clips.map((clip, i) => (
+              <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
+                onPress={() => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
+                {renderStripExtras?.(clip.id, i)}
+              </ClipThumbStrip>
+            ))}
+          </View>
+          <OverlayLane />
+          <MusicLane />
         </ScrollView>
-        <View pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: (TIMELINE_HEIGHT - STRIP_HEIGHT) / 2 - 8, width: 2, height: STRIP_HEIGHT + 16, backgroundColor: theme.colors.highlight, borderRadius: 1 }} />
+        <View pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: TIMELINE_HEIGHT - 16, backgroundColor: theme.colors.highlight, borderRadius: 1 }} />
       </View>
     </GestureDetector>
   );
