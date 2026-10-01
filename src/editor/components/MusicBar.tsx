@@ -24,9 +24,9 @@ export function MusicBar({ track: t, missing }: { track: AudioTrack; missing: bo
   const gestures = useMemo(() => {
     const move = Gesture.Pan().activateAfterLongPress(150).onStart(snap)
       .onUpdate((e) => store.applyTransient((p) => updateAudioTrack(p, { start: startRef.current.start + xToTime(e.translationX, pps) }))).runOnJS(true);
-    const left = Gesture.Pan().activeOffsetX([-3, 3]).onStart(snap)
+    const left = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(snap)
       .onUpdate((e) => store.applyTransient((p) => updateAudioTrack(p, { trimStart: startRef.current.trimStart + xToTime(e.translationX, pps) }))).runOnJS(true);
-    const right = Gesture.Pan().activeOffsetX([-3, 3]).onStart(snap)
+    const right = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(snap)
       .onUpdate((e) => store.applyTransient((p) => updateAudioTrack(p, { trimEnd: startRef.current.trimEnd + xToTime(e.translationX, pps) }))).runOnJS(true);
     return { move, left, right };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -43,7 +43,7 @@ export function MusicBar({ track: t, missing }: { track: AudioTrack; missing: bo
         <Text style={{ color: theme.colors.text, fontSize: 12 }}>{Math.round(t.volume * 100)}%</Text>
         <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 12, flex: 1 }}>{t.title}</Text>
         {missing && (
-          <View style={{ position: "absolute", top: 4, right: 4, backgroundColor: theme.colors.danger, borderRadius: 999, padding: 2 }}>
+          <View style={{ position: "absolute", top: 4, right: HANDLE_W + 2, backgroundColor: theme.colors.danger, borderRadius: 999, padding: 2 }}>
             <Ionicons name="warning" size={12} color={theme.colors.text} />
           </View>
         )}

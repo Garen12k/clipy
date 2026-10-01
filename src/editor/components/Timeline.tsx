@@ -50,7 +50,7 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
   return (
     <GestureDetector gesture={pinch}>
       <View style={{ height: TIMELINE_HEIGHT, justifyContent: "center" }}>
-        <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} scrollEventThrottle={16}
+        <ScrollView ref={scrollRef} testID="timeline-scroll" horizontal showsHorizontalScrollIndicator={false} scrollEventThrottle={16}
           onScrollBeginDrag={() => { userScrolling.current = true; setPlaying(false); }}
           onMomentumScrollBegin={() => { userScrolling.current = true; }}
           onMomentumScrollEnd={() => {
@@ -62,7 +62,7 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
             scrollRef.current?.scrollTo({ x: timeToX(useEditorStore.getState().playhead, pps), animated: false });
           }}
           onScroll={onScroll}
-          contentContainerStyle={{ paddingHorizontal: pad, height: TIMELINE_HEIGHT }}>
+          contentContainerStyle={{ paddingHorizontal: pad, height: TIMELINE_HEIGHT, flexDirection: "column" }}>
           <View style={{ height: CLIP_AREA_HEIGHT, flexDirection: "row", alignItems: "center" }}>
             {project.clips.map((clip, i) => (
               <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={clip.id === selectedId} missing={missing.includes(clip.sourceUri)}

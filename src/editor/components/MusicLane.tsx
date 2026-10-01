@@ -7,7 +7,7 @@ export function MusicLane() {
   const track = useEditorStore((s) => s.project?.audioTracks[0]);
   const missing = useEditorStore((s) => s.missingSourceUris);
   return (
-    <View style={{ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP }}>
+    <View testID="music-lane" style={{ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP }}>
       {track && <MusicBar track={track} missing={missing.includes(track.sourceUri)} />}
     </View>
   );

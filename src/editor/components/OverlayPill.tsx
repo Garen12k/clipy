@@ -19,9 +19,9 @@ export function OverlayPill({ overlay: o, selected, onPress }: { overlay: TextOv
   const gestures = useMemo(() => {
     const move = Gesture.Pan().activateAfterLongPress(150).onStart(snap)
       .onUpdate((e) => store.applyTransient((p) => moveOverlay(p, o.id, startRef.current.start + xToTime(e.translationX, pps)))).runOnJS(true);
-    const left = Gesture.Pan().activeOffsetX([-3, 3]).onStart(snap)
+    const left = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(snap)
       .onUpdate((e) => store.applyTransient((p) => updateOverlay(p, o.id, { start: startRef.current.start + xToTime(e.translationX, pps) }))).runOnJS(true);
-    const right = Gesture.Pan().activeOffsetX([-3, 3]).onStart(snap)
+    const right = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(snap)
       .onUpdate((e) => store.applyTransient((p) => updateOverlay(p, o.id, { end: startRef.current.end + xToTime(e.translationX, pps) }))).runOnJS(true);
     return { move, left, right };
     // eslint-disable-next-line react-hooks/exhaustive-deps

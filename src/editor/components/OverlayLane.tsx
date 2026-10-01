@@ -8,7 +8,7 @@ export function OverlayLane() {
   const selectedId = useEditorStore((s) => s.selectedOverlayId);
   const { selectOverlay } = useEditorStore.getState();
   return (
-    <View style={{ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP }}>
+    <View testID="overlay-lane" style={{ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP }}>
       {overlays.map((o) => (
         <OverlayPill key={o.id} overlay={o} selected={o.id === selectedId} onPress={() => selectOverlay(o.id)} />
       ))}
