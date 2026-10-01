@@ -1,9 +1,12 @@
-jest.mock("expo-modules-core", () => ({
-  requireNativeModule: jest.fn((name: string) => {
-    if (name !== "ClipyVideo") throw new Error(`unexpected module ${name}`);
-    return { hello: () => "mock hello" };
-  }),
-}));
+jest.mock("expo-modules-core", () => {
+  const actual = jest.requireActual("expo-modules-core");
+  return {
+    ...actual,
+    requireNativeModule: jest.fn((name: string) =>
+      name === "ClipyVideo" ? { hello: () => "mock hello" } : actual.requireNativeModule(name),
+    ),
+  };
+});
 
 import { hello } from "../index";
 
