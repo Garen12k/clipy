@@ -95,7 +95,12 @@ final class ExportSession {
       let asset = AVURLAsset(url: url)
       guard let srcVideo = try await asset.loadTracks(withMediaType: .video).first else { throw ExportError.noVideoTrack(clip.sourceUri) }
       let (preferredTransform, naturalSize) = try await srcVideo.load(.preferredTransform, .naturalSize)
-      let range = CMTimeRange(start: CMTime(seconds: clip.trimStart, preferredTimescale: 600), end: CMTime(seconds: clip.trimEnd, preferredTimescale: 600))
+      // Clamp the trim range to the source so insertTimeRange never reads past the end.
+      let duration = try await asset.load(.duration)
+      let end = min(clip.trimEnd, duration.seconds)
+      let start = max(0, min(clip.trimStart, end))
+      guard end - start > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(clip.sourceUri)") }
+      let range = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600), end: CMTime(seconds: end, preferredTimescale: 600))
       try videoTrack.insertTimeRange(range, of: srcVideo, at: cursor)
       if let srcAudio = try await asset.loadTracks(withMediaType: .audio).first, let audioTrack {
         if (try? audioTrack.insertTimeRange(range, of: srcAudio, at: cursor)) != nil { hasAudio = true }

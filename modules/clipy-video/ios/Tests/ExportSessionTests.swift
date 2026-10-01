@@ -51,7 +51,8 @@ final class ExportSessionTests: XCTestCase {
     let asset = AVURLAsset(url: out)
     let duration = try await asset.load(.duration).seconds
     XCTAssertEqual(duration, 4, accuracy: 0.2)
-    let track = try XCTUnwrap(try await asset.loadTracks(withMediaType: .video).first)
+    let tracks = try await asset.loadTracks(withMediaType: .video)
+    let track = try XCTUnwrap(tracks.first)
     let size = try await track.load(.naturalSize)
     XCTAssertEqual(size.width, 720, accuracy: 2); XCTAssertEqual(size.height, 1280, accuracy: 2)
   }
