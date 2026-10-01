@@ -28,7 +28,8 @@ test("This clip applies to the selected clip only; Whole project applies to ever
   await fireEvent.press(screen.getByRole("button", { name: "Template Minimal" }));
   s = useEditorStore.getState();
   expect(s.project!.clips.map((c) => c.filter)).toEqual(["mono", "mono"]);
-  expect(s.past).toHaveLength(2);
+  expect(s.project!.overlays).toHaveLength(2);   // Retro's title/sticker were replaced, not stacked
+  expect(s.past).toHaveLength(1);                // the whole re-roll session is one Undo away
 });
 
 test("Random applies a template different from the last one", async () => {
@@ -38,7 +39,19 @@ test("Random applies a template different from the last one", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "Random template" }));
   spy.mockRestore();
   expect(useEditorStore.getState().project!.clips.map((c) => c.filter)).toEqual([null, null]);   // "clean" (first id after excluding hype) → no filter
-  expect(useEditorStore.getState().past).toHaveLength(2);
+  expect(useEditorStore.getState().past).toHaveLength(1);
+});
+
+test("closing the sheet ends the re-roll session: a later apply does not undo unrelated edits", async () => {
+  const view = await render(<TemplateSheet clipId={null} visible onClose={() => {}} />);
+  await fireEvent.press(screen.getByRole("button", { name: "Template Hype" }));
+  await view.rerender(<TemplateSheet clipId={null} visible={false} onClose={() => {}} />);
+  useEditorStore.getState().apply((p) => ({ ...p, name: "Renamed" }));
+  await view.rerender(<TemplateSheet clipId={null} visible onClose={() => {}} />);
+  await fireEvent.press(screen.getByRole("button", { name: "Template Retro" }));
+  const s = useEditorStore.getState();
+  expect(s.project!.name).toBe("Renamed");
+  expect(s.past).toHaveLength(3);
 });
 
 test("This clip is disabled and Whole project selected when no clip is selected", async () => {

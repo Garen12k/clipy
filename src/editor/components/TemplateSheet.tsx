@@ -15,13 +15,17 @@ const TILE_H = 72;
 export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const hasClip = useEditorStore((s) => !!clipId && !!s.project?.clips.some((c) => c.id === clipId));
   const apply = useEditorStore((s) => s.apply);
+  const undo = useEditorStore((s) => s.undo);
   const [scope, setScope] = useState<Scope>(hasClip ? "clip" : "project");
   const [lastId, setLastId] = useState<TemplateId | null>(null);
 
-  useEffect(() => { if (visible) setScope(hasClip ? "clip" : "project"); }, [visible, hasClip]);
+  // Re-rolls within one open sheet replace each other: undo the previous template before applying the next, so
+  // titles/stickers don't pile up and the whole session stays one Undo away. Forget it once the sheet closes.
+  useEffect(() => { if (visible) setScope(hasClip ? "clip" : "project"); else setLastId(null); }, [visible, hasClip]);
 
   const effective: Scope = hasClip ? scope : "project";
   const use = (t: Template) => {
+    if (lastId !== null) undo();
     apply((p) => applyTemplate(p, t, effective, clipId));
     setLastId(t.id);
   };
