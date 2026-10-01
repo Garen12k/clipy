@@ -27,5 +27,15 @@ export function clipAt(p: Project, time: number): ClipHit | null {
   return { clip: p.clips[0], index: 0, offsetInClip: 0 };
 }
 
+/** True when the playhead is inside the window of any transition (centred on its cut). */
+export function isInTransitionWindow(p: Project, playhead: number): boolean {
+  const starts = clipStartTimes(p);
+  return p.clips.some((c, i) => {
+    if (i === p.clips.length - 1 || c.transitionOut.type === "none") return false;
+    const cut = starts[i] + clipDuration(c);
+    return Math.abs(playhead - cut) <= c.transitionOut.duration / 2;
+  });
+}
+
 export const timeToX = (t: number, pixelsPerSecond: number): number => t * pixelsPerSecond;
 export const xToTime = (x: number, pixelsPerSecond: number): number => x / pixelsPerSecond;

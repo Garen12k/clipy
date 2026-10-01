@@ -1,14 +1,16 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { clipAt, clipStartTimes, outputToSource, totalDuration } from "@/src/editor/model/timeline";
+import { clipAt, clipStartTimes, isInTransitionWindow, outputToSource, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
 import { formatDurationPrecise } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { FilterLayer } from "./FilterLayer";
 import { OverlayLayer } from "./OverlayLayer";
+import { PreviewTag } from "./PreviewTag";
 
 export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayId: string) => void }) {
   const project = useEditorStore((s) => s.project);
@@ -118,7 +120,9 @@ export function PreviewPlayer({ onOpenTextPanel }: { onOpenTextPanel?: (overlayI
         accessibilityLabel={isPlaying ? "Pause" : "Play"}
         style={{ aspectRatio: ratio, maxWidth: "100%", maxHeight: "100%", flex: 1, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, overflow: "hidden" }}>
         {!empty && <VideoView player={player} style={{ width: "100%", height: "100%" }} contentFit="cover" nativeControls={false} />}
+        <FilterLayer filter={hit?.clip.filter ?? null} />
         {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenTextPanel?.(id)} />}
+        <PreviewTag visible={!!hit?.clip.filter || isInTransitionWindow(project, playhead)} />
         {!isPlaying && !empty && (
           <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="play" size={48} color={theme.colors.text} />
