@@ -21,6 +21,9 @@ Scan the QR code with the iPhone Camera app; add `--tunnel` if the phone can't r
 In Expo Go the Swift video engine is not available: the app shows a "native module is not
 linked" message where native features would run. All TypeScript features work.
 
+Expo Go only runs the current Expo SDK; if a new SDK ships, upgrade the project
+(`npx expo install expo@latest` then `npx expo install --fix`) before Expo Go will open it again.
+
 ## Running the real native engine (needs an Apple Developer account, $99/year)
 
 One-time: `npm install -g eas-cli`, `eas login`, `eas init`, `eas device:create`.

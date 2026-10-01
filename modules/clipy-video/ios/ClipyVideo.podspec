@@ -4,8 +4,8 @@ Pod::Spec.new do |s|
   s.summary        = 'Clipy native video engine (AVFoundation)'
   s.description    = 'Swift Expo module that will wrap AVFoundation for preview, export and captions.'
   s.author         = 'Clipy'
-  s.homepage       = 'https://github.com/clipy/clipy'
-  s.platforms      = { :ios => '15.1' }
+  s.homepage       = 'https://github.com/Garen12k/clipy'
+  s.platforms      = { :ios => '16.4' }
   s.swift_version  = '5.9'
   s.source         = { git: '' }
   s.static_framework = true
@@ -14,6 +14,7 @@ Pod::Spec.new do |s|
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
+    'SWIFT_COMPILATION_MODE' => 'wholemodule',
   }
 
   s.source_files = "**/*.{h,m,mm,swift}"

@@ -1,5 +1,7 @@
 # Clipy Phase 0 — Project Setup Implementation Plan
 
+> Amended 2026-10-01 after final review: podspec iOS 16.4, app.json splash via expo-splash-screen plugin, wrapper uses requireOptionalNativeModule.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A Clipy Expo app that installs on the developer's iPhone (built in the cloud from Windows) and displays a string returned by a Swift native module.
@@ -95,12 +97,6 @@ Replace the contents of `app.json` with:
     "icon": "./assets/icon.png",
     "scheme": "clipy",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
     "ios": {
       "bundleIdentifier": "com.clipy.app",
       "supportsTablet": false,
@@ -108,7 +104,17 @@ Replace the contents of `app.json` with:
         "ITSAppUsesNonExemptEncryption": false
       }
     },
-    "plugins": ["expo-router"]
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ]
+    ]
   }
 }
 ```
@@ -231,18 +237,29 @@ Open `package.json`; if `jest-expo`, `jest` or `@types/jest` landed under `depen
 Create `modules/clipy-video/__tests__/index.test.ts`:
 
 ```ts
-jest.mock("expo-modules-core", () => ({
-  requireNativeModule: jest.fn((name: string) => {
-    if (name !== "ClipyVideo") throw new Error(`unexpected module ${name}`);
-    return { hello: () => "mock hello" };
-  }),
-}));
+jest.mock("expo-modules-core", () => {
+  const actual = jest.requireActual("expo-modules-core");
+  return {
+    ...actual,
+    requireOptionalNativeModule: jest.fn((name: string) =>
+      name === "ClipyVideo"
+        ? { hello: () => "mock hello" }
+        : actual.requireOptionalNativeModule(name),
+    ),
+  };
+});
 
+import { requireOptionalNativeModule } from "expo-modules-core";
 import { hello } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
     expect(hello()).toBe("mock hello");
+  });
+
+  it("throws a helpful error when the native module is not linked (e.g. Expo Go)", () => {
+    jest.mocked(requireOptionalNativeModule).mockReturnValueOnce(null);
+    expect(() => hello()).toThrow(/not linked/);
   });
 });
 ```
@@ -260,17 +277,25 @@ Expected: FAIL with `Cannot find module '../index'`.
 Create `modules/clipy-video/index.ts`:
 
 ```ts
-import { requireNativeModule } from "expo-modules-core";
+import { requireOptionalNativeModule } from "expo-modules-core";
 
 type ClipyVideoNative = {
   hello(): string;
 };
 
-const native = requireNativeModule<ClipyVideoNative>("ClipyVideo");
+function native(): ClipyVideoNative {
+  const mod = requireOptionalNativeModule<ClipyVideoNative>("ClipyVideo");
+  if (!mod) {
+    throw new Error(
+      "ClipyVideo native module is not linked. Use a development build (eas build --profile development), not Expo Go.",
+    );
+  }
+  return mod;
+}
 
 /** Returns a greeting from the Swift module. Phase 0 smoke test only. */
 export function hello(): string {
-  return native.hello();
+  return native().hello();
 }
 ```
 
@@ -330,8 +355,8 @@ Pod::Spec.new do |s|
   s.summary        = 'Clipy native video engine (AVFoundation)'
   s.description    = 'Swift Expo module that will wrap AVFoundation for preview, export and captions.'
   s.author         = 'Clipy'
-  s.homepage       = 'https://github.com/clipy/clipy'
-  s.platforms      = { :ios => '15.1' }
+  s.homepage       = 'https://github.com/Garen12k/clipy'
+  s.platforms      = { :ios => '16.4' }
   s.source         = { git: '' }
   s.static_framework = true
 
@@ -339,6 +364,7 @@ Pod::Spec.new do |s|
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
+    'SWIFT_COMPILATION_MODE' => 'wholemodule',
   }
 
   s.source_files = "**/*.{h,m,mm,swift}"
@@ -554,7 +580,7 @@ Expected on the iPhone screen:
 - Title **Clipy**
 - Green text: `Hello from ClipyVideo (Swift, AVFoundation) on iOS Version 18.x (Build …)`
 
-If instead the text starts with `Native module unavailable:`, the native module did not link. Check: `expo-module.config.json` present, `Name("ClipyVideo")` matches `requireNativeModule("ClipyVideo")`, and that the build was made **after** Task 3 was committed.
+If instead the text starts with `Native module unavailable:`, the native module did not link. Check: `expo-module.config.json` present, `Name("ClipyVideo")` matches `requireOptionalNativeModule("ClipyVideo")`, and that the build was made **after** Task 3 was committed.
 
 Edit the title in `app/index.tsx` (e.g. to `Clipy ✂️`) and save — the phone should hot-reload within a second or two. Revert the edit.
 

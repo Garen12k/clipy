@@ -1,4 +1,11 @@
-This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+This is an Expo/React Native mobile application. Prioritize mobile-first patterns and performance. This app targets iPhone only.
+
+## This repo (Clipy)
+
+- iPhone only. No Android or web configuration; do not add any.
+- Daily testing is in Expo Go: run `npx expo start --go` (the `--go` flag is required because `expo-dev-client` is installed). Custom native code does not run in Expo Go; the app must degrade gracefully when `modules/clipy-video` is not linked.
+- Native code lives only in `modules/clipy-video` (Swift, Expo Modules API). TypeScript never calls AVFoundation directly.
+- Checks before declaring work done: `npm run typecheck` and `npm test`.
 
 ## Expo has changed — do not trust your training data
 
@@ -15,7 +22,6 @@ Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
 ```bash
 npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
 npx expo start              # start the dev server
-npx expo lint               # lint
 npx tsc --noEmit            # typecheck
 npx expo-doctor             # diagnose dependency and config issues
 npx expo install --fix      # fix incompatible package versions
@@ -31,11 +37,11 @@ Run lint and typecheck before declaring any task done.
 
 ## Building with EAS
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
+Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode required. Install the CLI once with `npm install -g eas-cli`, then run it as `eas <command>`.
 Docs: https://docs.expo.dev/eas/index.md
 
 ## Rules
 
-- If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
+- If `ios/` does not exist, it is generated (Continuous Native Generation). Never create or edit it by hand — configure native behavior in `app.json` and config plugins.
+- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
