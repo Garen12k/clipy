@@ -9,7 +9,7 @@ export function FilterLayer({ filter }: { filter: FilterId | null }) {
   const full = { position: "absolute" as const, inset: 0 };
   return (
     <View pointerEvents="none" style={full}>
-      <View testID="filter-desaturate" style={{ ...full, backgroundColor: "#808080", opacity: Math.max(0, 1 - f.saturation) }} />
+      <View testID="filter-desaturate" style={{ ...full, backgroundColor: "#808080", opacity: Math.max(0, Math.min(0.55, 0.55 * (1 - f.saturation))) }} />
       <View testID="filter-tint" style={{ ...full, backgroundColor: f.tint, opacity: f.tintOpacity }} />
       <View testID="filter-brightness" style={{ ...full, backgroundColor: f.brightness >= 0 ? "#FFFFFF" : "#000000", opacity: Math.abs(f.brightness) }} />
     </View>
