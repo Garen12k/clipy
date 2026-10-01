@@ -33,7 +33,10 @@ describe("export API", () => {
     const listeners: ((e: unknown) => void)[] = [];
     const native = { hello: () => "x", exportTimeline: jest.fn(async () => "job1"), cancelExport: jest.fn(),
       addListener: jest.fn((_: string, cb: (e: unknown) => void) => { listeners.push(cb); return { remove: jest.fn() }; }) };
-    jest.mocked(requireOptionalNativeModule).mockReturnValue(native as never);
+    jest.mocked(requireOptionalNativeModule)
+      .mockReturnValueOnce(native as never)
+      .mockReturnValueOnce(native as never)
+      .mockReturnValueOnce(native as never);
     const req = { clips: [{ sourceUri: "file:///a.mov", trimStart: 0, trimEnd: 2 }], aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4" };
     await expect(exportTimeline(req)).resolves.toBe("job1");
     expect(native.exportTimeline).toHaveBeenCalledWith(req);
@@ -43,6 +46,5 @@ describe("export API", () => {
     expect(cb).toHaveBeenCalledWith({ jobId: "job1", type: "progress", progress: 0.5 });
     cancelExport("job1");
     expect(native.cancelExport).toHaveBeenCalledWith("job1");
-    jest.mocked(requireOptionalNativeModule).mockReset();
   });
 });

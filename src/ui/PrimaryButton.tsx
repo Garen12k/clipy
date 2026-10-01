@@ -9,6 +9,7 @@ export function PrimaryButton({ title, onPress, disabled, icon }: Props) {
     <Pressable
       testID="primary-button"
       accessibilityRole="button"
+      accessibilityLabel={title}
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       onPress={onPress}

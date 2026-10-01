@@ -19,7 +19,7 @@ export function ExportScreenBody({ project, state, start, cancel, reset, onSave,
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg, padding: theme.space.xl, paddingTop: 48, gap: theme.space.xl }}>
-      <Heading style={{ fontSize: 34 }}>Export Video</Heading>
+      <Heading style={{ fontSize: 34 }}>Export</Heading>
       <View style={{ gap: theme.space.sm }}>
         <Body muted>Resolution</Body>
         <View style={{ flexDirection: "row", gap: theme.space.md }}>
