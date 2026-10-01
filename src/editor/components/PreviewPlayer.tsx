@@ -18,6 +18,8 @@ export function PreviewPlayer() {
 
   const hit = useMemo(() => (project ? clipAt(project, playhead) : null), [project, playhead]);
   const loadedClipId = useRef<string | null>(null);
+  // The source URI currently loaded in the player — split clips often share one, letting us skip replaceAsync.
+  const loadedSourceUri = useRef<string | null>(null);
   // Source-time to seek to once the pending `replaceAsync` reports `readyToPlay`; null when no seek is pending.
   const pendingSeek = useRef<number | null>(null);
 
@@ -39,22 +41,38 @@ export function PreviewPlayer() {
     const sourceTime = hit.clip.trimStart + hit.offsetInClip;
     if (loadedClipId.current !== hit.clip.id) {
       loadedClipId.current = hit.clip.id;
+      if (hit.clip.sourceUri === loadedSourceUri.current) {
+        // Same underlying file as before (e.g. the other half of a split clip): no need to reload it,
+        // and expo-video may not emit a fresh readyToPlay for an unchanged source, which would leave
+        // pendingSeek set forever.
+        player.currentTime = sourceTime;
+        if (isPlaying) player.play();
+        return;
+      }
+      loadedSourceUri.current = hit.clip.sourceUri;
       pendingSeek.current = sourceTime;
       player.replaceAsync({ uri: hit.clip.sourceUri });
       return;
     }
-    if (!isPlaying) player.currentTime = sourceTime;
+    if (!isPlaying) {
+      if (pendingSeek.current !== null) pendingSeek.current = sourceTime; // land the pending seek where the user scrubbed to
+      else player.currentTime = sourceTime;
+    }
   }, [hit?.clip.id, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, playhead, isPlaying, missing, project, player, seek, setPlaying]);
 
   useEffect(() => { if (isPlaying) player.play(); else player.pause(); }, [isPlaying, player]);
 
   // Apply the pending seek once the newly replaced source is ready, then resume playback if needed.
   useEffect(() => {
-    const sub = player.addListener("statusChange", ({ status }) => {
+    const sub = player.addListener("statusChange", ({ status, error }) => {
       if (status === "readyToPlay" && pendingSeek.current !== null) {
         player.currentTime = pendingSeek.current;
         pendingSeek.current = null;
         if (useEditorStore.getState().isPlaying) player.play();
+      } else if (status === "error") {
+        // Unblock timeUpdate handling even though the seek never landed, and surface the failure once.
+        pendingSeek.current = null;
+        console.warn("PreviewPlayer: video player error", error);
       }
     });
     return () => sub.remove();
