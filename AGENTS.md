@@ -7,6 +7,7 @@ This is an Expo/React Native mobile application. Prioritize mobile-first pattern
 - Native code lives only in `modules/clipy-video` (Swift, Expo Modules API). TypeScript never calls AVFoundation directly.
 - Checks before declaring work done: `npm run typecheck` and `npm test`.
 - Native code: `modules/clipy-video/ios` is compiled only on EAS; there is no Swift toolchain here — verify by reading against `node_modules/expo-modules-core/ios`.
+- Fonts and music are bundled assets (`assets/fonts`, `assets/music` + manifest); overlay positions are fractions of the frame — keep `src/editor/model/overlayLayout.ts` and `modules/clipy-video/ios/OverlayLayout.swift` identical.
 
 ## Expo has changed — do not trust your training data
 

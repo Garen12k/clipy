@@ -1,7 +1,7 @@
 # Clipy Phase 2 — Text Overlays & Audio — Design
 
 **Date:** 2026-10-01
-**Status:** Approved in brainstorming, pending written-spec review
+**Status:** Implemented 2026-10-01 (Swift export unverified until an EAS build exists; on-device checklist pending; bundled tracks deferred)
 **Parent specs:** `2026-10-01-clip-editor-app-design.md`, `2026-10-01-phase-1-editor-core-design.md` (everything there still applies unless overridden here)
 
 ## 1. Goal

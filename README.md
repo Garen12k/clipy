@@ -45,13 +45,19 @@ npm test
 ## Layout
 
 - `app/` — screens (Expo Router): `index.tsx`, `editor/[id]/index.tsx`, `editor/[id]/export.tsx`
-- `src/editor/` — model (types/ops/timeline), store, and components (PreviewPlayer, Timeline,
-  ClipThumbStrip, TrimHandles, ReorderHandle, EditorToolbar, RatioSheet, TrimSheet)
+- `src/editor/` — model (types/ops/timeline/`overlayLayout.ts`), store, and components (PreviewPlayer, Timeline,
+  ClipThumbStrip, TrimHandles, ReorderHandle, EditorToolbar, RatioSheet, TrimSheet, text style panel,
+  music lane). `src/editor/model/overlayLayout.ts` computes text overlay position/size as fractions of
+  the frame and must stay in sync with `modules/clipy-video/ios/OverlayLayout.swift`, which mirrors the
+  same formula for the native renderer.
 - `src/projects/` — project storage behind `FsAdapter`/`expoFs`, and the Projects screen pieces
 - `src/export/` — export estimate, `useExport`, `ExportScreenBody`
 - `src/theme/` — theme tokens
 - `src/ui/` — shared UI primitives
 - `modules/clipy-video/` — Swift native module (`ios/`, `ios/Tests/`) and its TypeScript wrapper (`index.ts`)
+- `assets/fonts/` — 8 bundled OFL font files used by the text style panel
+- `assets/music/` — bundled background tracks + `manifest.json` (currently empty; see
+  `assets/music/README.md` for how to add a CC0 track)
 - `docs/superpowers/` — specs and implementation plans
 
 ## Phase 1 features
@@ -62,3 +68,21 @@ npm test
   and is skipped by preview and export
 - Preview playback
 - Export, with a fallback card in Expo Go when the native module is not linked
+
+## Phase 2 features
+
+- Text overlays: add, move/pinch-resize/rotate directly on the preview, and a full style panel
+  (font, size, color, background, alignment, outline); each overlay gets a start/end on a
+  dedicated text lane in the timeline. Overlay layout is computed as fractions of the frame
+  (`src/editor/model/overlayLayout.ts`) so preview and export agree on placement.
+- Fonts: 8 bundled OFL fonts in `assets/fonts` (Bangers, Anton, Oswald, Montserrat, Pacifico,
+  Permanent Marker, Lobster, Roboto), loaded via the `expo-font` config plugin.
+- Music: one background track per project, imported from the Files app, with a move/trim handle
+  on a dedicated music lane and a volume control. `assets/music/manifest.json` is intentionally
+  empty for now (no bundled tracks ship yet); see `assets/music/README.md` for how to add a
+  CC0-licensed track.
+- Per-clip volume and mute.
+- Project schema moved to `schemaVersion: 2`; v1 projects migrate automatically on open.
+- The Swift export is extended to render text layers (Core Animation) and mix audio
+  (`AVMutableAudioMix`). This native code only compiles on EAS Build — it is reviewed by reading,
+  not yet verified by a real build.
