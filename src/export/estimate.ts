@@ -10,6 +10,8 @@ export const canExport4K = (clips: { width: number; height: number }[]): boolean
 export function exportableClips(project: Project, missingSourceUris: string[]): Clip[] {
   return project.clips.filter((c) => c.trimEnd > c.trimStart && !missingSourceUris.includes(c.sourceUri));
 }
+/** The music track to export, or `null` if there is none or its source file is missing. */
+export const exportableAudio = (p: Project, missing: string[]) => { const t = p.audioTracks[0]; return t && !missing.includes(t.sourceUri) ? t : null; };
 export function formatBytes(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)} GB`;
   return `${Math.round(n / 1e6)} MB`;

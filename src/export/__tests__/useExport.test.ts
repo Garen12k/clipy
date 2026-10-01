@@ -4,17 +4,23 @@ jest.mock("@/modules/clipy-video", () => ({
   exportTimeline: jest.fn(async () => "job1"),
   addExportListener: jest.fn(() => ({ remove() {} })),
   cancelExport: jest.fn(),
+  toExportOverlay: jest.requireActual("@/modules/clipy-video").toExportOverlay,
 }));
 jest.mock("@/src/projects/expoFs", () => ({
   expoFs: { cacheDir: "file:///cache/", freeBytes: async () => 1e12, mkdir: async () => {} },
 }));
 import { exportTimeline } from "@/modules/clipy-video";
-import { makeClip, makeProject } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeOverlay, makeProject } from "@/src/editor/model/types";
 import { useExport } from "../useExport";
 
-const a = makeClip({ id: "a", sourceDuration: 4 });
+const a = makeClip({ id: "a", sourceDuration: 4, volume: 1.5, muted: true });
 const b = makeClip({ id: "b", sourceDuration: 6 }); // sourceUri file:///media/b.mp4
-const project = makeProject({ id: "p1", clips: [a, b] });
+const project = makeProject({
+  id: "p1",
+  clips: [a, b],
+  overlays: [makeOverlay({ id: "o", text: "Hey", fontId: "anton", start: 0, end: 2 })],
+  audioTracks: [makeAudioTrack({ id: "m", sourceUri: "file:///media/m.m4a", sourceDuration: 9 })],
+});
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -22,7 +28,13 @@ test("exports only clips whose source file is present", async () => {
   const { result } = await renderHook(() => useExport(project, ["file:///media/b.mp4"]));
   await act(() => result.current.start(1080));
   expect(exportTimeline).toHaveBeenCalledTimes(1);
-  expect((exportTimeline as jest.Mock).mock.calls[0][0].clips).toEqual([{ sourceUri: a.sourceUri, trimStart: 0, trimEnd: 4 }]);
+  expect((exportTimeline as jest.Mock).mock.calls[0][0]).toEqual(
+    expect.objectContaining({
+      overlays: [expect.objectContaining({ text: "Hey", fontPostScriptName: "Anton-Regular", x: 0.5 })],
+      audio: expect.objectContaining({ sourceUri: "file:///media/m.m4a", trimEnd: 9, volume: 1 }),
+      clips: [expect.objectContaining({ volume: 1.5, muted: true })],
+    }),
+  );
   expect(result.current.state.status).toBe("exporting");
 });
 
@@ -31,4 +43,11 @@ test("errors when every clip's source is missing", async () => {
   await act(() => result.current.start(1080));
   expect(exportTimeline).not.toHaveBeenCalled();
   expect(result.current.state.status).toBe("error");
+});
+
+test("drops the audio track when its source file is missing", async () => {
+  const { result } = await renderHook(() => useExport(project, ["file:///media/b.mp4", "file:///media/m.m4a"]));
+  await act(() => result.current.start(1080));
+  expect(exportTimeline).toHaveBeenCalledTimes(1);
+  expect((exportTimeline as jest.Mock).mock.calls[0][0].audio).toBeNull();
 });

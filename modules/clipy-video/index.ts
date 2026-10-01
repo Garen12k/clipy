@@ -1,5 +1,6 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
-import type { AspectRatio } from "@/src/editor/model/types";
+import { FONTS } from "@/src/editor/fonts";
+import type { Align, AspectRatio, TextOverlay } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -8,11 +9,26 @@ export type ExportEvent = { jobId: string } & (
   | { type: "error"; message: string }
   | { type: "cancelled" });
 
+export interface ExportOverlay {
+  text: string; fontPostScriptName: string; fontScale: number; color: string;
+  backgroundColor: string | null; backgroundOpacity: number; outline: boolean; align: Align;
+  x: number; y: number; scale: number; rotation: number; start: number; end: number;
+}
+export interface ExportAudio { sourceUri: string; start: number; trimStart: number; trimEnd: number; volume: number }
 export interface ExportRequest {
-  clips: { sourceUri: string; trimStart: number; trimEnd: number }[];
+  clips: { sourceUri: string; trimStart: number; trimEnd: number; volume: number; muted: boolean }[];
+  overlays: ExportOverlay[];
+  audio: ExportAudio | null;
   aspectRatio: AspectRatio;
   resolution: Resolution;
   outputPath: string;
+}
+export function toExportOverlay(o: TextOverlay): ExportOverlay {
+  return {
+    text: o.text, fontPostScriptName: FONTS[o.fontId].postScriptName, fontScale: o.fontScale, color: o.color,
+    backgroundColor: o.background?.color ?? null, backgroundOpacity: o.background?.opacity ?? 0, outline: o.outline, align: o.align,
+    x: o.x, y: o.y, scale: o.scale, rotation: o.rotation, start: o.start, end: o.end,
+  };
 }
 
 // `NativeModule<TEventsMap>` from `expo-modules-core` resolves to the class's constructor
