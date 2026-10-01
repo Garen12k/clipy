@@ -2,6 +2,8 @@ import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration } from "./timeline";
 import { MIN_CLIP_SECONDS, type AspectRatio, type Clip, type Project } from "./types";
+import { totalDuration } from "./timeline";
+import { AUDIO_LIMITS, CLIP_VOLUME, OVERLAY_LIMITS, type AudioTrack, type TextOverlay } from "./types";
 
 function touch(p: Project, patch: Partial<Project>): Project {
   return { ...p, ...patch, updatedAt: nowIso() };
@@ -68,4 +70,100 @@ export function renameProject(p: Project, name: string): Project {
   const trimmed = name.trim();
   if (!trimmed || trimmed === p.name) return p;
   return touch(p, { name: trimmed });
+}
+
+const clamp = (v: number, [lo, hi]: readonly [number, number]) => Math.max(lo, Math.min(hi, v));
+const r3 = (v: number) => Math.round(v * 1000) / 1000;
+
+export function defaultOverlayRange(p: Project, playhead: number): { start: number; end: number } {
+  const total = totalDuration(p);
+  let start = Math.max(0, Math.min(playhead, total));
+  let end = Math.min(start + 3, total);
+  if (end - start < OVERLAY_LIMITS.minDuration) { start = Math.max(0, total - 3); end = total; }
+  return { start: r3(start), end: r3(end) };
+}
+
+export function addTextOverlay(p: Project, o: TextOverlay): Project {
+  return touch(p, { overlays: [...p.overlays, o] });
+}
+
+function normaliseOverlay(p: Project, o: TextOverlay): TextOverlay {
+  const total = totalDuration(p);
+  let end = Math.min(o.end, total);
+  let start = Math.max(0, Math.min(o.start, end));
+  if (end - start < OVERLAY_LIMITS.minDuration) {
+    if (start + OVERLAY_LIMITS.minDuration <= total) end = start + OVERLAY_LIMITS.minDuration;
+    else { end = total; start = Math.max(0, total - OVERLAY_LIMITS.minDuration); }
+  }
+  return { ...o, x: clamp(o.x, [0, 1]), y: clamp(o.y, [0, 1]), scale: clamp(o.scale, OVERLAY_LIMITS.scale),
+    fontScale: clamp(o.fontScale, OVERLAY_LIMITS.fontScale), start: r3(start), end: r3(end) };
+}
+
+export function updateOverlay(p: Project, id: string, patch: Partial<Omit<TextOverlay, "id" | "kind">>): Project {
+  const i = p.overlays.findIndex((o) => o.id === id);
+  if (i < 0) return p;
+  const next = normaliseOverlay(p, { ...p.overlays[i], ...patch });
+  if (JSON.stringify(next) === JSON.stringify(p.overlays[i])) return p;
+  const overlays = p.overlays.slice(); overlays[i] = next;
+  return touch(p, { overlays });
+}
+
+export function moveOverlay(p: Project, id: string, newStart: number): Project {
+  const o = p.overlays.find((x) => x.id === id);
+  if (!o) return p;
+  const d = o.end - o.start;
+  const start = Math.max(0, Math.min(newStart, totalDuration(p) - d));
+  return updateOverlay(p, id, { start, end: start + d });
+}
+
+export function deleteOverlay(p: Project, id: string): Project {
+  if (!p.overlays.some((o) => o.id === id)) return p;
+  return touch(p, { overlays: p.overlays.filter((o) => o.id !== id) });
+}
+
+export function duplicateOverlay(p: Project, id: string): Project {
+  const i = p.overlays.findIndex((o) => o.id === id);
+  if (i < 0) return p;
+  const src = p.overlays[i];
+  const copy = normaliseOverlay(p, { ...src, id: newId(), x: src.x + 0.03, y: src.y + 0.03 });
+  return touch(p, { overlays: [...p.overlays.slice(0, i + 1), copy, ...p.overlays.slice(i + 1)] });
+}
+
+export function setAudioTrack(p: Project, track: AudioTrack): Project {
+  return touch(p, { audioTracks: [track] });
+}
+
+export function updateAudioTrack(p: Project, patch: Partial<Omit<AudioTrack, "id" | "sourceUri" | "sourceDuration">>): Project {
+  const t = p.audioTracks[0];
+  if (!t) return p;
+  const merged = { ...t, ...patch };
+  let trimEnd = Math.min(merged.trimEnd, t.sourceDuration);
+  let trimStart = Math.max(0, Math.min(merged.trimStart, trimEnd));
+  if (trimEnd - trimStart < AUDIO_LIMITS.minDuration) {
+    if (trimStart + AUDIO_LIMITS.minDuration <= t.sourceDuration) trimEnd = trimStart + AUDIO_LIMITS.minDuration;
+    else { trimEnd = t.sourceDuration; trimStart = Math.max(0, trimEnd - AUDIO_LIMITS.minDuration); }
+  }
+  const next: AudioTrack = { ...merged, trimStart: r3(trimStart), trimEnd: r3(trimEnd), start: r3(Math.max(0, merged.start)), volume: clamp(merged.volume, AUDIO_LIMITS.volume) };
+  if (JSON.stringify(next) === JSON.stringify(t)) return p;
+  return touch(p, { audioTracks: [next] });
+}
+
+export function removeAudioTrack(p: Project): Project {
+  return p.audioTracks.length === 0 ? p : touch(p, { audioTracks: [] });
+}
+
+export function setClipVolume(p: Project, clipId: string, volume: number): Project {
+  const i = p.clips.findIndex((c) => c.id === clipId);
+  if (i < 0) return p;
+  const v = clamp(volume, CLIP_VOLUME);
+  if (v === p.clips[i].volume) return p;
+  const clips = p.clips.slice(); clips[i] = { ...clips[i], volume: v };
+  return touch(p, { clips });
+}
+
+export function setClipMuted(p: Project, clipId: string, muted: boolean): Project {
+  const i = p.clips.findIndex((c) => c.id === clipId);
+  if (i < 0 || p.clips[i].muted === muted) return p;
+  const clips = p.clips.slice(); clips[i] = { ...clips[i], muted };
+  return touch(p, { clips });
 }
