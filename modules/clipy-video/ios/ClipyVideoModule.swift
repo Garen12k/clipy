@@ -8,7 +8,7 @@ public class ClipyVideoModule: Module {
     // Phase 0 smoke test: proves the Swift module is linked and callable.
     Function("hello") { () -> String in
       let version = ProcessInfo.processInfo.operatingSystemVersionString
-      return "Hello from ClipyVideo (Swift, AVFoundation) on iOS \(version)"
+      return "Hello from ClipyVideo (Swift, AVFoundation) — \(version)"
     }
   }
 }
