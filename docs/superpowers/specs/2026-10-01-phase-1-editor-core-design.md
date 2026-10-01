@@ -1,7 +1,7 @@
 # Clipy Phase 1 — Editor Core & Share — Design
 
 **Date:** 2026-10-01
-**Status:** Approved in brainstorming, pending written-spec review
+**Status:** Implemented 2026-10-01 (Swift export unverified until an EAS build exists)
 **Parent spec:** `2026-10-01-clip-editor-app-design.md` (sections 4–6 apply unchanged unless overridden here)
 
 ## 1. Goal

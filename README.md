@@ -20,6 +20,7 @@ npx expo start --go
 Scan the QR code with the iPhone Camera app; add `--tunnel` if the phone can't reach the PC.
 In Expo Go the Swift video engine is not available: the app shows a "native module is not
 linked" message where native features would run. All TypeScript features work.
+In Expo Go the Export screen shows a "needs the native build" card.
 
 Expo Go only runs the current Expo SDK; if a new SDK ships, upgrade the project
 (`npx expo install expo@latest` then `npx expo install --fix`) before Expo Go will open it again.
@@ -45,6 +46,20 @@ npm test
 
 ## Layout
 
-- `app/` — screens (Expo Router)
-- `modules/clipy-video/` — Swift native module (`ios/`) and its TypeScript wrapper (`index.ts`)
+- `app/` — screens (Expo Router): `index.tsx`, `editor/[id]/index.tsx`, `editor/[id]/export.tsx`
+- `src/editor/` — model (types/ops/timeline), store, and components (PreviewPlayer, Timeline,
+  ClipThumbStrip, TrimHandles, ReorderHandle, EditorToolbar, RatioSheet, TrimSheet)
+- `src/projects/` — project storage behind `FsAdapter`/`expoFs`, and the Projects screen pieces
+- `src/export/` — export estimate, `useExport`, `ExportScreenBody`
+- `src/theme/` — theme tokens
+- `src/ui/` — shared UI primitives
+- `modules/clipy-video/` — Swift native module (`ios/`, `ios/Tests/`) and its TypeScript wrapper (`index.ts`)
 - `docs/superpowers/` — specs and implementation plans
+
+## Phase 1 features
+
+- Projects (create, list, reopen, delete with a warning badge if a source video is missing)
+- Import clips
+- Timeline (split, trim, reorder)
+- Preview playback
+- Export, with a fallback card in Expo Go when the native module is not linked

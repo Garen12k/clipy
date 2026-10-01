@@ -6,6 +6,7 @@ This is an Expo/React Native mobile application. Prioritize mobile-first pattern
 - Daily testing is in Expo Go: run `npx expo start --go` (the `--go` flag is required because `expo-dev-client` is installed). Custom native code does not run in Expo Go; the app must degrade gracefully when `modules/clipy-video` is not linked.
 - Native code lives only in `modules/clipy-video` (Swift, Expo Modules API). TypeScript never calls AVFoundation directly.
 - Checks before declaring work done: `npm run typecheck` and `npm test`.
+- Native code: `modules/clipy-video/ios` is compiled only on EAS; there is no Swift toolchain here — verify by reading against `node_modules/expo-modules-core/ios`.
 
 ## Expo has changed — do not trust your training data
 
