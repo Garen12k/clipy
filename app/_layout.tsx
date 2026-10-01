@@ -1,14 +1,15 @@
-import { Bangers_400Regular, useFonts } from "@expo-google-fonts/bangers";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { fontAssets } from "@/src/editor/fonts";
 import { theme } from "@/src/theme/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const [loaded] = useFonts({ Bangers_400Regular });
+  const [loaded] = useFonts(fontAssets);
   useEffect(() => { if (loaded) SplashScreen.hideAsync().catch(() => {}); }, [loaded]);
   if (!loaded) return null;
   return (

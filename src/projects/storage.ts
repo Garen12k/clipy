@@ -1,5 +1,6 @@
 import { totalDuration } from "@/src/editor/model/timeline";
-import type { Clip, Project } from "@/src/editor/model/types";
+import { migrateProject } from "@/src/editor/model/migrate";
+import { SCHEMA_VERSION, type Clip, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
 
 export interface PickedAsset { uri: string; durationSec: number; width: number; height: number; fileName?: string }
@@ -14,12 +15,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const jsonPath = (id: string) => `${projectDir(id)}/project.json`;
   const thumbPath = (id: string) => `${projectDir(id)}/thumb.jpg`;
 
-  function parse(text: string): Project {
-    const raw = JSON.parse(text) as Partial<Project>;
-    if (raw.schemaVersion !== 1) throw new Error(`Unsupported project schemaVersion: ${String(raw.schemaVersion)}`);
-    if (!raw.id || !Array.isArray(raw.clips)) throw new Error("Project file is missing required fields");
-    return { overlays: [], audioTracks: [], ...raw } as Project;
-  }
+  function parse(text: string): Project { return migrateProject(JSON.parse(text)); }
 
   async function saveProject(p: Project): Promise<void> {
     await fs.mkdir(projectDir(p.id));
@@ -31,7 +27,8 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   async function loadProject(id: string) {
     const project = parse(await fs.readText(jsonPath(id)));
     const missingSourceUris: string[] = [];
-    for (const uri of new Set(project.clips.map((c) => c.sourceUri))) if (!(await fs.exists(uri))) missingSourceUris.push(uri);
+    for (const uri of new Set([...project.clips.map((c) => c.sourceUri), ...project.audioTracks.map((a) => a.sourceUri)]))
+      if (!(await fs.exists(uri))) missingSourceUris.push(uri);
     return { project, missingSourceUris };
   }
 
@@ -56,10 +53,10 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       try {
         await fs.copy(a.uri, dest);
         clips.push({ id: clipId, sourceUri: dest, sourceDuration: a.durationSec, width: a.width, height: a.height,
-          trimStart: 0, trimEnd: a.durationSec, speed: 1, filter: null, volume: 1, transitionOut: { type: "none", duration: 0 } });
+          trimStart: 0, trimEnd: a.durationSec, speed: 1, filter: null, volume: 1, muted: false, transitionOut: { type: "none", duration: 0 } });
       } catch (e) { failed++; console.warn("import failed", a.uri, e); }
     }
-    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], schemaVersion: 1 };
+    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], schemaVersion: SCHEMA_VERSION };
     await saveProject(project);
     await writeThumb(project);
     return { project, failed };

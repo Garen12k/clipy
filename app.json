@@ -42,7 +42,29 @@
           "isAccessMediaLocationEnabled": false
         }
       ],
-      "expo-font"
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Bangers-Regular.ttf",
+            "./assets/fonts/Anton-Regular.ttf",
+            "./assets/fonts/Oswald-Regular.ttf",
+            "./assets/fonts/Montserrat-Regular.ttf",
+            "./assets/fonts/Pacifico-Regular.ttf",
+            "./assets/fonts/PermanentMarker-Regular.ttf",
+            "./assets/fonts/Lobster-Regular.ttf",
+            "./assets/fonts/Roboto-Regular.ttf"
+          ]
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false
+        }
+      ],
+      "expo-document-picker",
+      "expo-asset"
     ]
   }
 }
