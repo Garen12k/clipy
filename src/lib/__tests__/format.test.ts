@@ -1,4 +1,4 @@
-import { formatDuration, formatDurationPrecise, relativeTime } from "../format";
+import { formatDuration, formatDurationPrecise, formatSpeed, relativeTime } from "../format";
 
 test("formatDuration", () => {
   expect(formatDuration(0)).toBe("0:00");
@@ -7,6 +7,11 @@ test("formatDuration", () => {
 });
 test("formatDurationPrecise shows tenths", () => {
   expect(formatDurationPrecise(65.46)).toBe("1:05.5");
+});
+test("formatSpeed trims trailing zeros", () => {
+  expect(formatSpeed(2)).toBe("2×");
+  expect(formatSpeed(1.5)).toBe("1.5×");
+  expect(formatSpeed(0.25)).toBe("0.25×");
 });
 test("relativeTime", () => {
   const now = new Date("2026-10-01T12:00:00Z");

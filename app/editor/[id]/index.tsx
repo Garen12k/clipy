@@ -25,7 +25,8 @@ export default function EditorScreen() {
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
   const project = useEditorStore((s) => s.project);
   const clipById = (clipId: string) => project?.clips.find((c) => c.id === clipId);
-  const [textPanelFor, setTextPanelFor] = useState<string | null>(null);
+  const [panelFor, setPanelFor] = useState<{ id: string; kind: "text" | "sticker" } | null>(null);
+  const [transitionFor, setTransitionFor] = useState<number | null>(null);
 
   if (load.status === "loading") return <View style={{ flex: 1, backgroundColor: theme.colors.bg, justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></View>;
   if (load.status === "error") return (
@@ -37,7 +38,10 @@ export default function EditorScreen() {
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <EditorTopBar onExport={() => { useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />
       <View testID="slot-preview" style={{ flex: 1 }}>
-        <PreviewPlayer onOpenTextPanel={setTextPanelFor} />
+        <PreviewPlayer onOpenPanel={(overlayId) => {
+          const overlay = useEditorStore.getState().project?.overlays.find((o) => o.id === overlayId);
+          setPanelFor({ id: overlayId, kind: overlay?.kind === "sticker" ? "sticker" : "text" });
+        }} />
         <AudioPreview />
       </View>
       <View testID="slot-timeline">
@@ -53,9 +57,14 @@ export default function EditorScreen() {
               </>
             );
           }}
+          onCutPress={(index) => {
+            const clip = project?.clips[index];
+            if (clip) useEditorStore.getState().select(clip.id);
+            setTransitionFor(index);
+          }}
         />
       </View>
-      <EditorToolbar textPanelFor={textPanelFor} onTextPanelChange={setTextPanelFor} />
+      <EditorToolbar panelFor={panelFor} onPanelChange={setPanelFor} transitionFor={transitionFor} onTransitionChange={setTransitionFor} />
       <ToastHost />
     </View>
   );

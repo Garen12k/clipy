@@ -1,5 +1,15 @@
+import { readFileSync } from "fs";
+import { join } from "path";
 import { makeOverlay } from "../types";
-import { frameSize, layoutOverlay } from "../overlayLayout";
+import { frameSize, layoutOverlay, OUTLINE_FACTOR } from "../overlayLayout";
+
+test("OverlayLayout.swift uses the same OUTLINE_FACTOR (2/450)", () => {
+  const swift = readFileSync(join(__dirname, "../../../../modules/clipy-video/ios/OverlayLayout.swift"), "utf8");
+  const m = swift.match(/static let outlineFactor(?::\s*\w+)?\s*=\s*([0-9.]+)\s*\/\s*([0-9.]+)/);
+  expect(m).not.toBeNull();
+  expect(Number(m![1]) / Number(m![2])).toBe(OUTLINE_FACTOR);
+  expect(OUTLINE_FACTOR).toBe(2 / 450);
+});
 
 const o = makeOverlay({ id: "o", x: 0.25, y: 0.75, fontScale: 0.1, scale: 1.5, rotation: 30, background: { color: "#000000", opacity: 0.5 } });
 

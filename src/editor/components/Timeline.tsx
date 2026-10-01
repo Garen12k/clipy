@@ -6,11 +6,14 @@ import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { CLIP_AREA_HEIGHT, TIMELINE_HEIGHT } from "../timelineLayout";
 import { ClipThumbStrip } from "./ClipThumbStrip";
+import { CutMarker } from "./CutMarker";
 import { MusicLane } from "./MusicLane";
 import { OverlayLane } from "./OverlayLane";
 
+type Props = { renderStripExtras?: (clipId: string, index: number) => React.ReactNode; onCutPress?: (index: number) => void };
+
 /** Horizontal strip of clips. The playhead is fixed at the horizontal centre; scrolling scrubs. */
-export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: string, index: number) => React.ReactNode }) {
+export function Timeline({ renderStripExtras, onCutPress }: Props) {
   const { width: screenW } = useWindowDimensions();
   const project = useEditorStore((s) => s.project);
   const playhead = useEditorStore((s) => s.playhead);
@@ -70,6 +73,11 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
                 {renderStripExtras?.(clip.id, i)}
               </ClipThumbStrip>
             ))}
+            {project.clips.map((clip, i) =>
+              i < project.clips.length - 1 && clip.transitionOut.type !== "none" ? (
+                <CutMarker key={`cut-${clip.id}`} index={i} pixelsPerSecond={pps} onPress={onCutPress} />
+              ) : null,
+            )}
           </View>
           <OverlayLane />
           <MusicLane />

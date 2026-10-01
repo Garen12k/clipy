@@ -39,6 +39,13 @@ test("skips every clip that shares a missing source", () => {
   expect(nextPresentClipIndex(q, 0, [b.sourceUri])).toBe(3);
 });
 
+test("player time maps through speed", () => {
+  const fast = makeClip({ id: "f", sourceDuration: 10, trimStart: 2, trimEnd: 6, speed: 2 });
+  const pf = makeProject({ clips: [fast, makeClip({ id: "g", sourceDuration: 2 })] });
+  expect(nextPlayheadFromPlayer(pf, clipAt(pf, 0)!, 5, [])).toEqual({ playhead: 1.5, ended: false });
+  expect(nextPlayheadFromPlayer(pf, clipAt(pf, 0)!, 6, [])).toEqual({ playhead: 2, ended: false });
+});
+
 describe("nextPresentClipIndex", () => {
   test("returns the next clip index when nothing is missing", () => {
     expect(nextPresentClipIndex(p, 0, [])).toBe(1);

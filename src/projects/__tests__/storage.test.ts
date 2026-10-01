@@ -28,7 +28,7 @@ test("createProject copies media, writes project.json and a thumbnail", async ()
   expect(project.clips.map((c) => c.trimEnd)).toEqual([4, 2]);
   expect(project.clips[0].sourceUri).toBe(`${fs.documentDir}projects/id1/media/id2.mov`);
   expect(fs.files.get(`${fs.documentDir}projects/id1/media/id2.mov`)).toBe("A");
-  expect(JSON.parse(fs.files.get(`${fs.documentDir}projects/id1/project.json`)!).schemaVersion).toBe(2);
+  expect(JSON.parse(fs.files.get(`${fs.documentDir}projects/id1/project.json`)!).schemaVersion).toBe(3);
   expect(fs.files.has(`${fs.documentDir}projects/id1/thumb.jpg`)).toBe(true);
 });
 
@@ -58,7 +58,7 @@ test("saveProject is atomic and loadProject round-trips; missing media is report
 test("loadProject rejects a wrong schemaVersion with a readable error", async () => {
   const { fs, storage } = setup();
   await fs.mkdir(`${fs.documentDir}projects/x`);
-  await fs.writeText(`${fs.documentDir}projects/x/project.json`, JSON.stringify({ id: "x", clips: [], schemaVersion: 3 }));
+  await fs.writeText(`${fs.documentDir}projects/x/project.json`, JSON.stringify({ id: "x", clips: [], schemaVersion: 4 }));
   await expect(storage.loadProject("x")).rejects.toThrow(/newer version/);
 });
 
@@ -71,7 +71,7 @@ test("loadProject migrates a v1 file to v2, adding muted: false", async () => {
     clips: [{ id: "a", sourceUri: "file:///m/a.mp4", sourceDuration: 4, width: 1080, height: 1920, trimStart: 0, trimEnd: 4, speed: 1, filter: null, volume: 1, transitionOut: { type: "none", duration: 0 } }],
   }));
   const { project } = await storage.loadProject("x");
-  expect(project.schemaVersion).toBe(2);
+  expect(project.schemaVersion).toBe(3);
   expect(project.clips[0]).toMatchObject({ muted: false, volume: 1 });
   expect(project.overlays).toEqual([]);
   expect(project.audioTracks).toEqual([]);

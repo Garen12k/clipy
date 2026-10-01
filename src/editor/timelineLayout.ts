@@ -18,7 +18,8 @@ export const thumbInterval = (pps: number, thumbWidth = THUMB_WIDTH): number => 
 export function thumbTimes(c: Clip, pps: number, thumbWidth = THUMB_WIDTH): number[] {
   const interval = thumbInterval(pps, thumbWidth);
   const out: number[] = [];
-  for (let t = c.trimStart; t < c.trimEnd - 1e-9 && out.length < 500; t += interval) out.push(Number(t.toFixed(3)));
+  // SANCTIONED: interval is an output-seconds step; clip.speed scales it to a source-seconds step directly.
+  for (let t = c.trimStart; t < c.trimEnd - 1e-9 && out.length < 500; t += interval * c.speed) out.push(Number(t.toFixed(3)));
   return out.length ? out : [c.trimStart];
 }
 

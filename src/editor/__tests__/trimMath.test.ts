@@ -14,3 +14,8 @@ test("handles cannot cross or leave the source", () => {
   expect(trimFromDrag(c, "end", 6, 10000, 100)).toEqual({ trimStart: 2, trimEnd: 10 });
   expect(trimFromDrag(c, "start", 2, -10000, 100)).toEqual({ trimStart: 0, trimEnd: 6 });
 });
+
+test("drag deltas are output seconds, converted to source seconds by speed", () => {
+  const fast = makeClip({ id: "f", sourceDuration: 10, trimStart: 2, trimEnd: 6, speed: 2 });
+  expect(trimFromDrag(fast, "end", 6, 50, 100)).toEqual({ trimStart: 2, trimEnd: 7 }); // 0.5 s on screen = 1 s of source
+});

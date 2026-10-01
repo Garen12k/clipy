@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { Image, Pressable, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import type { Clip } from "@/src/editor/model/types";
+import { formatSpeed } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { STRIP_HEIGHT, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
 import { getThumb } from "./thumbnails";
@@ -36,6 +37,18 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
           <Ionicons name="warning" size={14} color={theme.colors.text} />
         </View>
       )}
+      <View style={{ position: "absolute", bottom: 4, left: 4, flexDirection: "row", gap: 4 }}>
+        {clip.speed !== 1 && (
+          <View style={{ backgroundColor: theme.colors.highlight, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+            <Text style={{ fontSize: 10, color: theme.colors.bg, fontWeight: "700" }}>{formatSpeed(clip.speed)}</Text>
+          </View>
+        )}
+        {clip.filter && (
+          <View style={{ backgroundColor: theme.colors.sea, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+            <Text style={{ fontSize: 10, color: theme.colors.text, fontWeight: "700" }}>f</Text>
+          </View>
+        )}
+      </View>
       {children}
     </Pressable>
   );

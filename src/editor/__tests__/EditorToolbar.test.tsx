@@ -11,7 +11,7 @@ beforeEach(() => {
 });
 
 test("clip tools are disabled without a selection; Ratio is always enabled", async () => {
-  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
   for (const l of ["Split", "Trim", "Duplicate", "Delete", "Volume"]) expect(screen.getByRole("button", { name: l })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Ratio" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Text" })).toBeEnabled();
@@ -20,12 +20,12 @@ test("clip tools are disabled without a selection; Ratio is always enabled", asy
 test("Text is disabled for an empty project", async () => {
   useEditorStore.getState().reset();
   useEditorStore.getState().setProject(makeProject());
-  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
   expect(screen.getByRole("button", { name: "Text" })).toBeDisabled();
 });
 
 test("Split cuts at the playhead; Duplicate and Delete act on the selection", async () => {
-  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
   await act(() => { useEditorStore.getState().select("a"); useEditorStore.getState().seek(1.5); });
   await fireEvent.press(screen.getByRole("button", { name: "Split" }));
   expect(useEditorStore.getState().project?.clips).toHaveLength(3);
@@ -37,7 +37,7 @@ test("Split cuts at the playhead; Duplicate and Delete act on the selection", as
 });
 
 test("Text adds an overlay at the playhead and selects it", async () => {
-  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
   useEditorStore.getState().seek(2);
   await fireEvent.press(screen.getByRole("button", { name: "Text" }));
   const ovs = useEditorStore.getState().project!.overlays;
@@ -47,8 +47,15 @@ test("Text adds an overlay at the playhead and selects it", async () => {
 });
 
 test("Volume is enabled after selecting a clip", async () => {
-  await render(<EditorToolbar textPanelFor={null} onTextPanelChange={() => {}} />);
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
   expect(screen.getByRole("button", { name: "Volume" })).toBeDisabled();
   await act(() => { useEditorStore.getState().select("a"); });
   expect(screen.getByRole("button", { name: "Volume" })).toBeEnabled();
+});
+
+test("Speed is disabled without a selection and enabled after selecting a clip", async () => {
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
+  expect(screen.getByRole("button", { name: "Speed" })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByRole("button", { name: "Speed" })).toBeEnabled();
 });

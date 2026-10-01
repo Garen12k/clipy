@@ -1,17 +1,17 @@
 jest.mock("expo-modules-core", () => {
   const actual = jest.requireActual("expo-modules-core");
+  const native = {
+    hello: () => "mock hello", exportTimeline: jest.fn(), cancelExport: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })),
+    transcribe: jest.fn(async () => [{ text: "hi", start: 0, end: 1 }]), cancelTranscribe: jest.fn(),
+  };
   return {
     ...actual,
-    requireOptionalNativeModule: jest.fn((name: string) =>
-      name === "ClipyVideo"
-        ? { hello: () => "mock hello", exportTimeline: jest.fn(), cancelExport: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })) }
-        : actual.requireOptionalNativeModule(name),
-    ),
+    requireOptionalNativeModule: jest.fn((name: string) => (name === "ClipyVideo" ? native : actual.requireOptionalNativeModule(name))),
   };
 });
 
 import { requireOptionalNativeModule } from "expo-modules-core";
-import { addExportListener, cancelExport, exportTimeline, hello, isNativeAvailable } from "../index";
+import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -37,7 +37,15 @@ describe("export API", () => {
       .mockReturnValueOnce(native as never)
       .mockReturnValueOnce(native as never)
       .mockReturnValueOnce(native as never);
-    const req = { clips: [{ sourceUri: "file:///a.mov", trimStart: 0, trimEnd: 2, volume: 1, muted: false }], overlays: [], audio: null, aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4" };
+    const req = {
+      clips: [{ sourceUri: "file:///a.mov", trimStart: 0, trimEnd: 2, volume: 1, muted: false, speed: 1, filter: null, transition: { type: "none", duration: 0 } }],
+      overlays: [{
+        kind: "text" as const, text: "Hi", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#fff",
+        backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center" as const, emoji: null, shape: null,
+        x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 2,
+      }],
+      audio: null, aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4",
+    };
     await expect(exportTimeline(req)).resolves.toBe("job1");
     expect(native.exportTimeline).toHaveBeenCalledWith(req);
     const cb = jest.fn();
@@ -46,5 +54,15 @@ describe("export API", () => {
     expect(cb).toHaveBeenCalledWith({ jobId: "job1", type: "progress", progress: 0.5 });
     cancelExport("job1");
     expect(native.cancelExport).toHaveBeenCalledWith("job1");
+  });
+});
+
+describe("transcribe API", () => {
+  it("transcribe forwards the trim range and returns segments", async () => {
+    const native = jest.mocked(requireOptionalNativeModule)("ClipyVideo") as unknown as { transcribe: jest.Mock; cancelTranscribe: jest.Mock };
+    await expect(transcribe("file:///a.mov", 1, 3)).resolves.toEqual([{ text: "hi", start: 0, end: 1 }]);
+    expect(native.transcribe).toHaveBeenCalledWith("file:///a.mov", 1, 3);
+    cancelTranscribe();
+    expect(native.cancelTranscribe).toHaveBeenCalled();
   });
 });

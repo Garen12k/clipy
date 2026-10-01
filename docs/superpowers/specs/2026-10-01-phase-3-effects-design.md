@@ -1,7 +1,7 @@
 # Clipy Phase 3 — Filters, Speed, Transitions, Stickers, Auto-Captions — Design
 
 **Date:** 2026-10-01
-**Status:** Approved in brainstorming, pending written-spec review
+**Status:** Implemented 2026-10-01 (Swift export/transcription unverified until an EAS build exists; on-device checklist pending)
 **Parent specs:** `2026-10-01-clip-editor-app-design.md`, `2026-10-01-phase-1-editor-core-design.md`, `2026-10-01-phase-2-text-audio-design.md` (all still apply unless overridden here)
 
 ## 1. Goal

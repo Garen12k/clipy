@@ -19,6 +19,11 @@ test("thumbTimes samples the trimmed range at one thumb per 64px, min 0.5 s apar
   expect(thumbTimes(c, 8)).toEqual([2]);                    // 8 s per thumb > duration → one
 });
 
+test("thumbTimes steps through source time faster for sped-up clips", () => {
+  const fast = makeClip({ id: "f", sourceDuration: 10, trimStart: 2, trimEnd: 6, speed: 2 }); // 2 s on screen
+  expect(thumbTimes(fast, 64)).toEqual([2, 4]); // one thumb per output second → every 2 s of source
+});
+
 test("indexFromDrop picks the slot whose centre is nearest the drag centre", () => {
   const starts = [0, 100, 300];       // px
   const widths = [100, 200, 100];
