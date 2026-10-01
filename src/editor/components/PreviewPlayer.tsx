@@ -13,7 +13,7 @@ export function PreviewPlayer() {
   const project = useEditorStore((s) => s.project);
   const playhead = useEditorStore((s) => s.playhead);
   const isPlaying = useEditorStore((s) => s.isPlaying);
-  const missing = useEditorStore((s) => s.missingClipIds);
+  const missing = useEditorStore((s) => s.missingSourceUris);
   const { seek, setPlaying } = useEditorStore.getState();
 
   const hit = useMemo(() => (project ? clipAt(project, playhead) : null), [project, playhead]);
@@ -28,7 +28,7 @@ export function PreviewPlayer() {
   // Load the right source and seek while paused.
   useEffect(() => {
     if (!hit || !project) return;
-    if (missing.includes(hit.clip.id)) {
+    if (missing.includes(hit.clip.sourceUri)) {
       // The clip under the playhead is missing its source file: don't play it.
       player.pause();
       if (isPlaying) {
@@ -86,7 +86,7 @@ export function PreviewPlayer() {
       if (!s.isPlaying || !s.project) return;
       const h = clipAt(s.project, s.playhead);
       if (!h || h.clip.id !== loadedClipId.current) return;
-      const { playhead: next, ended } = nextPlayheadFromPlayer(s.project, h, currentTime, s.missingClipIds);
+      const { playhead: next, ended } = nextPlayheadFromPlayer(s.project, h, currentTime, s.missingSourceUris);
       s.seek(next);
       if (ended) s.setPlaying(false);
     });

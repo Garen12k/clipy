@@ -30,9 +30,9 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
 
   async function loadProject(id: string) {
     const project = parse(await fs.readText(jsonPath(id)));
-    const missingClipIds: string[] = [];
-    for (const c of project.clips) if (!(await fs.exists(c.sourceUri))) missingClipIds.push(c.id);
-    return { project, missingClipIds };
+    const missingSourceUris: string[] = [];
+    for (const uri of new Set(project.clips.map((c) => c.sourceUri))) if (!(await fs.exists(uri))) missingSourceUris.push(uri);
+    return { project, missingSourceUris };
   }
 
   async function writeThumb(p: Project): Promise<void> {

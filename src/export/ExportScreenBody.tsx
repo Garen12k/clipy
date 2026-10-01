@@ -1,21 +1,22 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { totalDuration } from "@/src/editor/model/timeline";
+import { clipDuration } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
 import { Mark } from "@/src/theme/Mark";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { Body, Heading } from "@/src/ui/Text";
-import { canExport4K, estimateBytes, formatBytes, RESOLUTIONS, type Resolution } from "./estimate";
+import { canExport4K, estimateBytes, exportableClips, formatBytes, RESOLUTIONS, type Resolution } from "./estimate";
 import type { ExportState } from "./useExport";
 
-type Props = { project: Project; state: ExportState; start: (r: Resolution) => void; cancel: () => void; reset: () => void; onSave: () => void; onShare: () => void; onDone: () => void };
+type Props = { project: Project; missingSourceUris?: string[]; state: ExportState; start: (r: Resolution) => void; cancel: () => void; reset: () => void; onSave: () => void; onShare: () => void; onDone: () => void };
 
-export function ExportScreenBody({ project, state, start, cancel, reset, onSave, onShare, onDone }: Props) {
+export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone }: Props) {
   const [res, setRes] = useState<Resolution>(1080);
-  const has4K = canExport4K(project.clips);
-  const duration = totalDuration(project);
+  const clips = exportableClips(project, missingSourceUris);
+  const has4K = canExport4K(clips);
+  const duration = clips.reduce((s, c) => s + clipDuration(c), 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg, padding: theme.space.xl, paddingTop: 48, gap: theme.space.xl }}>

@@ -8,7 +8,8 @@ import { ToastHost, useToast } from "@/src/ui/Toast";
 
 export default function ExportScreen() {
   const project = useEditorStore((s) => s.project);
-  const { state, start, cancel, reset } = useExport(project);
+  const missingSourceUris = useEditorStore((s) => s.missingSourceUris);
+  const { state, start, cancel, reset } = useExport(project, missingSourceUris);
   if (!project) return null;
 
   // `expo-media-library`'s default (non-legacy) `saveToLibraryAsync` is a shim that throws at
@@ -28,5 +29,5 @@ export default function ExportScreen() {
     catch (e) { useToast.getState().show(e instanceof Error ? e.message : "Could not share the video."); }
   }
 
-  return (<><ExportScreenBody project={project} state={state} start={start} cancel={cancel} reset={reset} onSave={onSave} onShare={onShare} onDone={() => router.back()} /><ToastHost /></>);
+  return (<><ExportScreenBody project={project} missingSourceUris={missingSourceUris} state={state} start={start} cancel={cancel} reset={reset} onSave={onSave} onShare={onShare} onDone={() => router.back()} /><ToastHost /></>);
 }

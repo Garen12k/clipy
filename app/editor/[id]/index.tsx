@@ -33,7 +33,7 @@ export default function EditorScreen() {
   );
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <EditorTopBar onExport={() => router.push(`/editor/${id}/export`)} />
+      <EditorTopBar onExport={() => { useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />
       <View testID="slot-preview" style={{ flex: 1 }}>
         <PreviewPlayer />
       </View>

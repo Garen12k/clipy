@@ -136,7 +136,7 @@ test("Mark renders three slashes in the accent color by default", () => {
   expect(slashes[0].props.stroke).toBe(theme.colors.accent);
 });
 
-test("theme exposes the Shanks-inspired tokens", () => {
+test("theme exposes the red-and-black tokens", () => {
   expect(theme.colors.accent).toBe("#C8102E");
   expect(theme.colors.bg).toBe("#0B0B0D");
   expect(theme.fonts.heading).toBe("Bangers_400Regular");

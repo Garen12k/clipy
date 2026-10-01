@@ -17,9 +17,9 @@ test("advances to the next clip when the trimmed end is reached", () => {
   expect(nextPlayheadFromPlayer(p, hit, 5.0, [])).toEqual({ playhead: 3, ended: false });
 });
 
-test("skips missing clips", () => {
+test("skips clips whose source file is missing", () => {
   const hit = clipAt(p, 1)!;
-  expect(nextPlayheadFromPlayer(p, hit, 5.2, ["b"])).toEqual({ playhead: 5, ended: false });
+  expect(nextPlayheadFromPlayer(p, hit, 5.2, [b.sourceUri])).toEqual({ playhead: 5, ended: false });
 });
 
 test("ends at the end of the last clip", () => {
@@ -32,16 +32,23 @@ test("holds at the clip start when the player hasn't seeked into the trim window
   expect(nextPlayheadFromPlayer(p, hit, 0, [])).toEqual({ playhead: 0, ended: false });
 });
 
+test("skips every clip that shares a missing source", () => {
+  const b2 = makeClip({ id: "b2", sourceDuration: 8, sourceUri: b.sourceUri, trimStart: 3, trimEnd: 5 }); // other half of a split
+  const q = makeProject({ clips: [a, b, b2, c] });
+  expect(nextPlayheadFromPlayer(q, clipAt(q, 1)!, 5.2, [b.sourceUri])).toEqual({ playhead: 7, ended: false });
+  expect(nextPresentClipIndex(q, 0, [b.sourceUri])).toBe(3);
+});
+
 describe("nextPresentClipIndex", () => {
   test("returns the next clip index when nothing is missing", () => {
     expect(nextPresentClipIndex(p, 0, [])).toBe(1);
   });
 
   test("skips missing clips to find the next present one", () => {
-    expect(nextPresentClipIndex(p, 0, ["b"])).toBe(2);
+    expect(nextPresentClipIndex(p, 0, [b.sourceUri])).toBe(2);
   });
 
   test("returns null when there is no present clip left", () => {
-    expect(nextPresentClipIndex(p, 1, ["c"])).toBeNull();
+    expect(nextPresentClipIndex(p, 1, [c.sourceUri])).toBeNull();
   });
 });

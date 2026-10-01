@@ -18,9 +18,7 @@ npx expo start --go
 ```
 
 Scan the QR code with the iPhone Camera app; add `--tunnel` if the phone can't reach the PC.
-In Expo Go the Swift video engine is not available: the app shows a "native module is not
-linked" message where native features would run. All TypeScript features work.
-In Expo Go the Export screen shows a "needs the native build" card.
+In Expo Go the Swift video engine is not available: the Export screen shows a 'needs the native build' card; everything else works.
 
 Expo Go only runs the current Expo SDK; if a new SDK ships, upgrade the project
 (`npx expo install expo@latest` then `npx expo install --fix`) before Expo Go will open it again.
@@ -58,8 +56,9 @@ npm test
 
 ## Phase 1 features
 
-- Projects (create, list, reopen, delete with a warning badge if a source video is missing)
+- Projects (create, list, reopen, rename, duplicate, delete)
 - Import clips
-- Timeline (split, trim, reorder)
+- Timeline (split, trim, reorder); a clip whose source video is missing shows a warning badge
+  and is skipped by preview and export
 - Preview playback
 - Export, with a fallback card in Expo Go when the native module is not linked

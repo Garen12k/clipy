@@ -14,7 +14,7 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
   const playhead = useEditorStore((s) => s.playhead);
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const selectedId = useEditorStore((s) => s.selectedClipId);
-  const missing = useEditorStore((s) => s.missingClipIds);
+  const missing = useEditorStore((s) => s.missingSourceUris);
   const { seek, select, setZoom, setPlaying } = useEditorStore.getState();
 
   const scrollRef = useRef<ScrollView>(null);
@@ -62,7 +62,7 @@ export function Timeline({ renderStripExtras }: { renderStripExtras?: (clipId: s
           onScroll={onScroll}
           contentContainerStyle={{ paddingHorizontal: pad, alignItems: "center", height: TIMELINE_HEIGHT }}>
           {project.clips.map((clip, i) => (
-            <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={clip.id === selectedId} missing={missing.includes(clip.id)}
+            <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
               onPress={() => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
               {renderStripExtras?.(clip.id, i)}
             </ClipThumbStrip>

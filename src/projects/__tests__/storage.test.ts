@@ -12,6 +12,10 @@ function setup() {
   const storage = makeStorage(fs, { thumbnail, newId: () => `id${++n}`, nowIso: () => "2026-10-01T10:00:00.000Z" });
   return { fs, storage, thumbnail };
 }
+let warn: jest.SpyInstance;
+beforeEach(() => { warn = jest.spyOn(console, "warn").mockImplementation(() => {}); });
+afterEach(() => warn.mockRestore());
+
 const asset = (uri: string, durationSec = 4): PickedAsset => ({ uri, durationSec, width: 1080, height: 1920, fileName: "clip.mov" });
 
 test("createProject copies media, writes project.json and a thumbnail", async () => {
@@ -44,9 +48,11 @@ test("saveProject is atomic and loadProject round-trips; missing media is report
   expect(fs.files.has(`${fs.documentDir}projects/id1/project.json.tmp`)).toBe(false);
   const loaded = await storage.loadProject("id1");
   expect(loaded.project.name).toBe("Renamed");
-  expect(loaded.missingClipIds).toEqual([]);
+  expect(loaded.missingSourceUris).toEqual([]);
   fs.files.delete(project.clips[0].sourceUri);
-  expect((await storage.loadProject("id1")).missingClipIds).toEqual([project.clips[0].id]);
+  // Two clips sharing one missing source (e.g. after a split) report it once.
+  await storage.saveProject({ ...project, clips: [project.clips[0], { ...project.clips[0], id: "split" }] });
+  expect((await storage.loadProject("id1")).missingSourceUris).toEqual([project.clips[0].sourceUri]);
 });
 
 test("loadProject rejects a wrong schemaVersion with a readable error", async () => {

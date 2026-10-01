@@ -11,7 +11,8 @@ export type EditOp = (p: Project) => Project;
 
 interface EditorState {
   project: Project | null;
-  missingClipIds: string[];
+  /** Source files (not clip ids: split clips share one) that were missing when the project loaded. */
+  missingSourceUris: string[];
   selectedClipId: string | null;
   playhead: number;
   isPlaying: boolean;
@@ -19,7 +20,7 @@ interface EditorState {
   past: Project[];
   future: Project[];
   dirty: boolean;
-  setProject: (p: Project, missingClipIds?: string[]) => void;
+  setProject: (p: Project, missingSourceUris?: string[]) => void;
   apply: (op: EditOp) => void;
   beginTransaction: () => void;
   applyTransient: (op: EditOp) => void;
@@ -36,7 +37,7 @@ interface EditorState {
 }
 
 const initial = {
-  project: null, missingClipIds: [], selectedClipId: null, playhead: 0, isPlaying: false,
+  project: null, missingSourceUris: [], selectedClipId: null, playhead: 0, isPlaying: false,
   pixelsPerSecond: DEFAULT_PPS, past: [], future: [], dirty: false,
 };
 
@@ -47,7 +48,7 @@ function afterChange(s: EditorState, next: Project): Partial<EditorState> {
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   ...initial,
-  setProject: (p, missingClipIds = []) => set({ ...initial, project: p, missingClipIds }),
+  setProject: (p, missingSourceUris = []) => set({ ...initial, project: p, missingSourceUris }),
   apply: (op) => {
     const s = get();
     if (!s.project) return;

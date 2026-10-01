@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { storage } from "@/src/projects";
+import { setLastFlush } from "./flush";
 import { useEditorStore } from "./store";
 
 export function useLoadProject(id: string) {
@@ -7,9 +8,15 @@ export function useLoadProject(id: string) {
   useEffect(() => {
     let alive = true;
     storage.loadProject(id)
-      .then(({ project, missingClipIds }) => { if (!alive) return; useEditorStore.getState().setProject(project, missingClipIds); setState({ status: "ready" }); })
+      .then(({ project, missingSourceUris }) => { if (!alive) return; useEditorStore.getState().setProject(project, missingSourceUris); setState({ status: "ready" }); })
       .catch((e: unknown) => { if (alive) setState({ status: "error", error: e instanceof Error ? e.message : String(e) }); });
-    return () => { alive = false; useEditorStore.getState().reset(); };
+    return () => {
+      alive = false;
+      // Flush edits the autosave debounce hasn't written yet, then clear the editor.
+      const s = useEditorStore.getState();
+      if (s.dirty && s.project) setLastFlush(storage.saveProject(s.project).catch((e: unknown) => console.warn("flush save failed", e)));
+      s.reset();
+    };
   }, [id]);
   return state;
 }

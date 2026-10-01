@@ -1,7 +1,7 @@
 # Clipy Phase 1 — Editor Core & Share — Design
 
 **Date:** 2026-10-01
-**Status:** Implemented 2026-10-01 (Swift export unverified until an EAS build exists)
+**Status:** Implemented 2026-10-01 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Parent spec:** `2026-10-01-clip-editor-app-design.md` (sections 4–6 apply unchanged unless overridden here)
 
 ## 1. Goal
@@ -17,7 +17,7 @@ A polished, usable clip editor: create projects from camera-roll videos, arrange
 - No copyrighted One Piece artwork, names of characters, or logos anywhere in the app. The theme is *inspired by*, using original elements only.
 - All editing logic is pure TypeScript with Jest tests. Screens never mutate project data directly.
 
-## 3. Visual Design — "Shanks-inspired, accents only"
+## 3. Visual Design — "Red-and-black accents only"
 
 | Token | Value | Use |
 |---|---|---|

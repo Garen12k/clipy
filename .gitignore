@@ -42,3 +42,6 @@ yarn-error.*
 
 .superpowers/
 .claude/settings.local.json
+
+# local screenshots
+IMG_*.png
