@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { EditorTopBar } from "@/src/editor/components/EditorTopBar";
 import { PreviewPlayer } from "@/src/editor/components/PreviewPlayer";
+import { Timeline } from "@/src/editor/components/Timeline";
 import type { Project } from "@/src/editor/model/types";
 import { useAutosave } from "@/src/editor/useAutosave";
 import { useLoadProject } from "@/src/editor/useLoadProject";
@@ -29,7 +30,9 @@ export default function EditorScreen() {
       <View testID="slot-preview" style={{ flex: 1 }}>
         <PreviewPlayer />
       </View>
-      <View testID="slot-timeline" style={{ height: 120 }} />
+      <View testID="slot-timeline">
+        <Timeline />
+      </View>
       <View testID="slot-toolbar" style={{ height: 88 }} />
       <ToastHost />
     </View>
