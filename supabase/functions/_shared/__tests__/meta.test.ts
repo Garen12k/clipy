@@ -1,5 +1,5 @@
 import { PlatformError } from "../errors.ts";
-import { exchangeForPages, graph, GRAPH, META_SECRETS, metaAuthUrl, metaIsAuthError, RUPLOAD_HOST, ruploadTarget } from "../platforms/meta.ts";
+import { exchangeForPages, exchangeForUserAndPages, graph, GRAPH, META_SECRETS, metaAuthUrl, metaIsAuthError, RUPLOAD_HOST, ruploadTarget } from "../platforms/meta.ts";
 import type { AdapterCtx } from "../types.ts";
 
 const REDIRECT = "https://ref.supabase.co/functions/v1/oauth-callback";
@@ -122,6 +122,17 @@ test("exchangeForPages: code → short-lived → long-lived user token → /me/a
     { id: "p2", name: "Page Two", accessToken: "ptok2", tasks: ["CREATE_CONTENT", "MANAGE"], pictureUrl: "https://pic/2.jpg", instagram: { id: "ig1", username: "mo.ig", pictureUrl: "https://pic/ig.jpg" } },
     { id: "p3", name: "Page Three", accessToken: "ptok3", tasks: ["CREATE_CONTENT"], pictureUrl: null, instagram: null },
   ]);
+});
+
+test("exchangeForUserAndPages also returns the long-lived user token and its lifetime", async () => {
+  const r = await exchangeForUserAndPages(ctx([ok({ access_token: "short" }), ok({ access_token: "long", expires_in: 5183944 }), ok(PAGES)]).ctx, "instagram", "c");
+  expect(r.userToken).toBe("long");
+  expect(r.userTokenExpiresIn).toBe(5183944);
+  expect(r.pages.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+  for (const expires_in of [undefined, "5183944", 0, -1]) {
+    const n = await exchangeForUserAndPages(ctx([ok({ access_token: "short" }), ok({ access_token: "long", expires_in }), ok({ data: [] })]).ctx, "instagram", "c");
+    expect(n.userTokenExpiresIn).toBeNull();
+  }
 });
 
 test("exchangeForPages: a token response without a token is a 502, and an expired code keeps Meta's text", async () => {

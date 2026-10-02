@@ -1,6 +1,6 @@
 import { PlatformError } from "../errors.ts";
 import type { AdapterCtx, PublishResult, ServerAdapter } from "../types.ts";
-import { exchangeForPages, graph, META_SECRETS, metaAuthUrl, metaIsAuthError, ruploadTarget } from "./meta.ts";
+import { exchangeForUserAndPages, graph, META_SECRETS, metaAuthUrl, metaIsAuthError, ruploadTarget } from "./meta.ts";
 
 /**
  * Instagram API with Facebook Login for Business: the only route with a documented resumable (no-hosting) upload
@@ -35,19 +35,57 @@ async function ig<T>(c: AdapterCtx, path: string, init: Parameters<typeof graph>
   }
 }
 
-/** With a Page token, "me" is the Page; its linked Instagram professional account is the one we post to. */
-async function igAccount(c: AdapterCtx, token: string): Promise<{ id: string; username: string; avatarUrl: string | null }> {
-  const b = await ig<{ instagram_business_account?: { id?: unknown; username?: unknown; profile_picture_url?: unknown } | null }>(c, "/me", {
-    token, params: { fields: "instagram_business_account{id,username,profile_picture_url}" },
-  });
-  const a = b.instagram_business_account;
+type IgField = { instagram_business_account?: { id?: unknown; username?: unknown; profile_picture_url?: unknown } | null };
+type IgAccount = { id: string; username: string; avatarUrl: string | null };
+const IG_FIELDS = "instagram_business_account{id,username,profile_picture_url}";
+const accountOf = (b: IgField | undefined): IgAccount | null => {
+  const a = b?.instagram_business_account;
   const id = text(a?.id);
-  if (!a || !id) throw new PlatformError("instagram", 400, NO_IG);
-  return { id, username: text(a.username) ?? "", avatarUrl: text(a.profile_picture_url) };
+  return a && id ? { id, username: text(a.username) ?? "", avatarUrl: text(a.profile_picture_url) } : null;
+};
+
+/**
+ * Meta's docs ask for a "User access token" for the Instagram calls; this adapter stores the Page token by default
+ * (works in practice, undocumented). `META_IG_TOKEN_KIND=user` switches to the long-lived user token, without new code.
+ */
+const useUserToken = (c: AdapterCtx) => c.env.get("META_IG_TOKEN_KIND") === "user";
+
+/**
+ * The Instagram professional account, with either kind of token. With a Page token "me" is the Page and carries the field;
+ * with a user token "me" is the User (no such field: absent, or Meta's #100 "nonexisting field"), so the Pages are read instead.
+ */
+async function igAccount(c: AdapterCtx, token: string): Promise<IgAccount> {
+  let me: IgField | undefined;
+  try {
+    me = await ig<IgField>(c, "/me", { token, params: { fields: IG_FIELDS } });
+  } catch (e) {
+    if (!(e instanceof PlatformError && e.reason === "100")) throw e;
+  }
+  const direct = accountOf(me);
+  if (direct) return direct;
+  const b = await ig<{ data?: unknown }>(c, "/me/accounts", { token, params: { fields: IG_FIELDS, limit: "100" } });
+  const rows = Array.isArray(b.data) ? (b.data as IgField[]) : [];
+  for (const row of rows) {
+    const a = accountOf(row && typeof row === "object" ? row : undefined);
+    if (a) return a;
+  }
+  throw new PlatformError("instagram", 400, NO_IG);
 }
 
 /** Whole characters (code points), so an emoji is never cut in half. */
 const cutCaption = (s: string) => Array.from(s).slice(0, MAX_CAPTION).join("");
+
+type Container = { status_code?: unknown; status?: unknown };
+const readContainer = (c: AdapterCtx, token: string, containerId: string) =>
+  ig<Container>(c, `/${encodeURIComponent(containerId)}`, { token, params: { fields: "status_code,status" } });
+
+function processingFailure(s: Container, code: "ERROR" | "EXPIRED"): PlatformError {
+  // For ERROR, Meta documents `status` as an error subcode; it is passed on as is.
+  const detail = code === "ERROR" ? text(s.status) : null;
+  const e = new PlatformError("instagram", 400, "Instagram couldn't process this video." + (detail ? ` ${detail}` : ""));
+  e.reason = code;
+  return e;
+}
 
 /**
  * Shared by finalize and status, so it must be safe to run again: `media_publish` is only ever called for a container that
@@ -55,17 +93,14 @@ const cutCaption = (s: string) => Array.from(s).slice(0, MAX_CAPTION).join("");
  * (publish again) or `PUBLISHED` (done). Statuses: https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-container
  */
 async function publishWhenReady(c: AdapterCtx, token: string, ref: Record<string, unknown>): Promise<PublishResult> {
-  // Asking again cannot repair a missing reference: final, so the phone starts afresh.
+  // Asking again cannot repair a missing reference. 502 with `platform_error`: the handlers do not mark the session failed
+  // (only a 4xx is a rejection), but the phone treats `platform_error` after the upload as final, so Retry starts a fresh post.
   if (typeof ref.containerId !== "string" || !ref.containerId || typeof ref.igUserId !== "string" || !ref.igUserId) throw new PlatformError("instagram", 502, NO_REF, "platform_error");
-  const s = await ig<{ status_code?: unknown; status?: unknown }>(c, `/${encodeURIComponent(ref.containerId)}`, { token, params: { fields: "status_code,status" } });
+  const s = await readContainer(c, token, ref.containerId);
   const code = s.status_code;
-  if (code === "ERROR" || code === "EXPIRED") {
-    // For ERROR, Meta documents `status` as an error subcode; it is passed on as is.
-    const detail = code === "ERROR" ? text(s.status) : null;
-    const e = new PlatformError("instagram", 400, "Instagram couldn't process this video." + (detail ? ` ${detail}` : ""));
-    e.reason = code;
-    throw e;
-  }
+  // No status at all: never poll forever on it. Temporary, so the phone can ask again.
+  if (typeof code !== "string" || !code) throw new PlatformError("instagram", 502, "Instagram did not report the upload's status.");
+  if (code === "ERROR" || code === "EXPIRED") throw processingFailure(s, code);
   // An earlier publish succeeded but its answer was lost. The container does not give the media id, so no link.
   if (code === "PUBLISHED") return { status: "done", url: null };
   if (code !== "FINISHED") return { status: "processing" };
@@ -74,7 +109,16 @@ async function publishWhenReady(c: AdapterCtx, token: string, ref: Record<string
   try {
     published = await ig<{ id?: unknown }>(c, `/${encodeURIComponent(ref.igUserId)}/media_publish`, { method: "POST", token, params: { creation_id: ref.containerId } });
   } catch (e) {
-    if (e instanceof PlatformError && e.reason === NOT_READY) return { status: "processing" };
+    if (!(e instanceof PlatformError)) throw e;
+    if (e.reason === NOT_READY) return { status: "processing" };
+    if (e.status === 401 || metaIsAuthError(e)) throw e;
+    // Another call (an overlapping poll, or a request the phone gave up on) may have published this container, and Meta then
+    // refuses ours. Look once before deciding, so a live Reel is never reported as failed. The original error is never masked.
+    let again: Container;
+    try { again = await readContainer(c, token, ref.containerId); } catch { throw e; }
+    if (again.status_code === "PUBLISHED") return { status: "done", url: null };
+    if (again.status_code === "IN_PROGRESS") return { status: "processing" };
+    if (again.status_code === "ERROR" || again.status_code === "EXPIRED") throw processingFailure(again, again.status_code);
     throw e;
   }
   const mediaId = text(published.id);
@@ -94,10 +138,16 @@ export const instagram: ServerAdapter = {
 
   authUrl: (c, { state }) => metaAuthUrl(c, state, SCOPES),
   async exchange(c, { code }) {
-    const pages = (await exchangeForPages(c, "instagram", code)).filter((p) => p.instagram);
+    const got = await exchangeForUserAndPages(c, "instagram", code);
+    const pages = got.pages.filter((p) => p.instagram);
     // media_publish needs MANAGE or CREATE_CONTENT on the Page (https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media_publish).
     const page = pages.find((p) => p.tasks.includes("CREATE_CONTENT") || p.tasks.includes("MANAGE")) ?? pages[0];
     if (!page) throw new PlatformError("instagram", 400, NO_IG);
+    if (useUserToken(c)) {
+      // The long-lived user token lasts about 60 days and cannot be refreshed here: then Reconnect.
+      const expiresAt = got.userTokenExpiresIn !== null ? new Date(Date.now() + got.userTokenExpiresIn * 1000).toISOString() : null;
+      return { accessToken: got.userToken, refreshToken: null, expiresAt, scopes: SCOPES.join(",") };
+    }
     // A Page token from a long-lived user token does not expire, so there is nothing to refresh.
     return { accessToken: page.accessToken, refreshToken: null, expiresAt: null, scopes: SCOPES.join(",") };
   },

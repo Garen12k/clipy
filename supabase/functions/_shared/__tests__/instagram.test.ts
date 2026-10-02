@@ -83,9 +83,11 @@ test("profile reads the Instagram account linked to the Page", async () => {
 });
 
 test("profile without a linked Instagram account explains what to do", async () => {
-  await expect(instagram.profile(ctx([igMe(undefined)]).ctx, "ptok")).rejects.toMatchObject({ platform: "instagram", status: 400, message: NO_IG });
-  await expect(instagram.profile(ctx([igMe(null)]).ctx, "ptok")).rejects.toMatchObject({ status: 400, message: NO_IG });
-  await expect(instagram.profile(ctx([igMe({ username: "x" })]).ctx, "ptok")).rejects.toMatchObject({ status: 400, message: NO_IG });
+  // No IG field on "me": the resolver also looks at the Pages (user-token case) before giving up.
+  const noPages = () => ok({ data: [{ id: "p1" }] });
+  await expect(instagram.profile(ctx([igMe(undefined), noPages()]).ctx, "ptok")).rejects.toMatchObject({ platform: "instagram", status: 400, message: NO_IG });
+  await expect(instagram.profile(ctx([igMe(null), ok({ data: [] })]).ctx, "ptok")).rejects.toMatchObject({ status: 400, message: NO_IG });
+  await expect(instagram.profile(ctx([igMe({ username: "x" }), ok({})]).ctx, "ptok")).rejects.toMatchObject({ status: 400, message: NO_IG });
 });
 
 test("prepare creates a resumable Reels container and hands the phone Meta's upload host with the documented headers", async () => {
@@ -119,9 +121,9 @@ test("prepare cuts the caption at 2200 whole characters (never half an emoji)", 
 });
 
 test("prepare without a linked Instagram account makes no container", async () => {
-  const { ctx: c, calls } = ctx([igMe(undefined)]);
+  const { ctx: c, calls } = ctx([igMe(undefined), ok({ data: [] })]);
   await expect(instagram.prepare(c, "ptok", INPUT)).rejects.toMatchObject({ status: 400, message: NO_IG });
-  expect(calls).toHaveLength(1);
+  expect(calls.map((x) => path(x.url))).toEqual([`${GRAPH}/me`, `${GRAPH}/me/accounts`]);
 });
 
 test("prepare without id or uri is a 502", async () => {
@@ -200,8 +202,10 @@ describe.each([
   });
 
   test("a Graph error 190 during publish needs a reconnect (401)", async () => {
-    const e = (await run(ctx([st("FINISHED"), fail(400, { code: 190, message: "Error validating access token" })]).ctx, REF).catch((x: unknown) => x)) as PlatformError;
+    const { ctx: c, calls } = ctx([st("FINISHED"), fail(400, { code: 190, message: "Error validating access token" })]);
+    const e = (await run(c, REF).catch((x: unknown) => x)) as PlatformError;
     expect(e).toMatchObject({ platform: "instagram", status: 401, reason: "190" });
+    expect(calls).toHaveLength(2); // an auth failure is not re-checked
     expect(instagram.isAuthError!(e)).toBe(true);
   });
 
@@ -215,14 +219,16 @@ describe.each([
     ["code -2 (download timeout)", fail(400, { code: -2, error_subcode: 2207003, message: "It takes too long to download the media." })],
     ["code 24 (container not found yet)", fail(400, { code: 24, error_subcode: 2207008, message: "The media builder with creation id does not exist or has expired" })],
   ])("a temporary failure of media_publish (%s) is platform_unavailable, so the phone can Resume", async (_n, res) => {
-    const e = (await run(ctx([st("FINISHED"), res]).ctx, REF).catch((x: unknown) => x)) as PlatformError;
+    const { ctx: c, calls } = ctx([st("FINISHED"), res, st("FINISHED")]);
+    const e = (await run(c, REF).catch((x: unknown) => x)) as PlatformError;
+    expect(calls).toHaveLength(3); // the container is re-read once: still FINISHED, so the publish error stands
     expect(e).toBeInstanceOf(PlatformError);
     expect(e.code).toBe("platform_unavailable");
     expect(e.status === 429 || (e.status >= 500 && e.status <= 599)).toBe(true);
   });
 
   test("Resume after a temporary publish failure: still FINISHED → publishes (once); PUBLISHED → done without publishing", async () => {
-    const first = ctx([st("FINISHED"), fail(503, { code: 2, message: "Service temporarily unavailable" })]);
+    const first = ctx([st("FINISHED"), fail(503, { code: 2, message: "Service temporarily unavailable" }), st("FINISHED")]);
     await expect(run(first.ctx, REF)).rejects.toMatchObject({ code: "platform_unavailable" });
     const again = ctx([st("FINISHED"), ok({ id: "m1" }), ok({ permalink: "https://www.instagram.com/reel/X/" })]);
     expect(await run(again.ctx, REF)).toEqual({ status: "done", url: "https://www.instagram.com/reel/X/" });
@@ -237,8 +243,46 @@ describe.each([
   });
 
   test("a final publish refusal (daily limit) keeps Meta's words", async () => {
-    await expect(run(ctx([st("FINISHED"), fail(400, { code: 9, error_subcode: 2207042, message: "You reached maximum number of posts that is allowed" })]).ctx, REF))
+    await expect(run(ctx([st("FINISHED"), fail(400, { code: 9, error_subcode: 2207042, message: "You reached maximum number of posts that is allowed" }), st("FINISHED")]).ctx, REF))
       .rejects.toMatchObject({ status: 400, code: "platform_error", message: "You reached maximum number of posts that is allowed" });
+  });
+
+  test("no status_code from Meta: a temporary 502, never endless polling", async () => {
+    for (const body of [{ id: "c1" }, { id: "c1", status_code: null }, { id: "c1", status_code: 7 }]) {
+      const { ctx: c, calls } = ctx([ok(body)]);
+      await expect(run(c, REF)).rejects.toMatchObject({ platform: "instagram", status: 502, code: "platform_unavailable", message: "Instagram did not report the upload's status." });
+      expect(calls).toHaveLength(1);
+    }
+  });
+
+  test("publish refused (4xx) but the container is PUBLISHED on re-read: someone else's call published it → done", async () => {
+    const { ctx: c, calls } = ctx([st("FINISHED"), fail(400, { code: 100, message: "The media has already been published" }), st("PUBLISHED")]);
+    expect(await run(c, REF)).toEqual({ status: "done", url: null });
+    expect(calls.map((x) => path(x.url))).toEqual([`${GRAPH}/c1`, `${GRAPH}/ig1/media_publish`, `${GRAPH}/c1`]);
+    expect(query(calls[2].url)).toEqual({ fields: "status_code,status", access_token: "ptok" });
+  });
+
+  test("publish failed (500) and the re-read says FINISHED: the original temporary error", async () => {
+    const e = (await run(ctx([st("FINISHED"), fail(500, { message: "Oops" }), st("FINISHED")]).ctx, REF).catch((x: unknown) => x)) as PlatformError;
+    expect(e).toMatchObject({ platform: "instagram", status: 500, code: "platform_unavailable", message: "Oops" });
+  });
+
+  test("publish refused (4xx) and the re-read fails: the ORIGINAL publish error, not the re-read's", async () => {
+    const e = (await run(ctx([st("FINISHED"), fail(400, { code: 9, message: "You reached maximum number of posts that is allowed" }), fail(500, { code: 2, message: "Service temporarily unavailable" })]).ctx, REF).catch((x: unknown) => x)) as PlatformError;
+    expect(e).toMatchObject({ status: 400, code: "platform_error", reason: "9", message: "You reached maximum number of posts that is allowed" });
+    const e2 = (await run(ctx([st("FINISHED"), fail(400, { code: 9, message: "Limit" }), ok({ id: "c1" })]).ctx, REF).catch((x: unknown) => x)) as PlatformError;
+    expect(e2).toMatchObject({ status: 400, message: "Limit" });
+  });
+
+  test("publish failed and the re-read says IN_PROGRESS: keep polling", async () => {
+    expect(await run(ctx([st("FINISHED"), fail(400, { code: 100, message: "x" }), st("IN_PROGRESS")]).ctx, REF)).toEqual({ status: "processing" });
+  });
+
+  test("publish failed and the re-read says ERROR / EXPIRED: the processing failure", async () => {
+    await expect(run(ctx([st("FINISHED"), fail(400, { code: 100, message: "x" }), st("ERROR", "Error: 2207026")]).ctx, REF))
+      .rejects.toMatchObject({ status: 400, code: "platform_error", message: "Instagram couldn't process this video. Error: 2207026" });
+    await expect(run(ctx([st("FINISHED"), fail(500, { message: "x" }), st("EXPIRED")]).ctx, REF))
+      .rejects.toMatchObject({ status: 400, code: "platform_error", message: "Instagram couldn't process this video." });
   });
 
   test.each([[{}], [{ containerId: "c1" }], [{ igUserId: "ig1" }], [{ containerId: "", igUserId: "ig1" }], [{ containerId: 5, igUserId: "ig1" }]])("a missing reference %j is final (502) and calls nothing", async (ref) => {
@@ -248,8 +292,92 @@ describe.each([
   });
 });
 
+test("two overlapping status calls: one publish succeeds, the other is refused as already published; both end done", async () => {
+  // A fake Meta with state: the container is FINISHED until a publish succeeds, then PUBLISHED; a second publish is refused.
+  let published = false, attempts = 0, successes = 0;
+  const calls: string[] = [];
+  const fetchFake = (async (url: string, init: RequestInit = {}) => {
+    const p = path(String(url));
+    calls.push(`${init.method ?? "GET"} ${p}`);
+    await new Promise((r) => setTimeout(r, 0)); // let the other request interleave
+    if (p === `${GRAPH}/c1`) return ok({ id: "c1", status_code: published ? "PUBLISHED" : "FINISHED" });
+    if (p === `${GRAPH}/ig1/media_publish`) {
+      attempts++;
+      if (published) return fail(400, { code: 100, message: "The media has already been published" });
+      published = true; successes++;
+      return ok({ id: "m1" });
+    }
+    if (p === `${GRAPH}/m1`) return ok({ id: "m1", permalink: "https://www.instagram.com/reel/AbC/" });
+    throw new Error(`unexpected ${p}`);
+  }) as unknown as typeof fetch;
+  const c: AdapterCtx = { fetch: fetchFake, env: { get: () => undefined }, redirectUri: REDIRECT };
+  const [a, b] = await Promise.all([instagram.status(c, "ptok", REF), instagram.status(c, "ptok", REF)]);
+  for (const r of [a, b]) expect(r.status).toBe("done");
+  expect([a, b]).toContainEqual({ status: "done", url: "https://www.instagram.com/reel/AbC/" });
+  expect(attempts).toBeLessThanOrEqual(2);
+  expect(successes).toBe(1);
+});
+
+describe("token kind (META_IG_TOKEN_KIND)", () => {
+  const pagesWithIg = () => ok({ data: [
+    { id: "p0", name: "No IG", access_token: "ptok0", tasks: ["CREATE_CONTENT"] },
+    { id: "p1", name: "With IG", access_token: "ptok1", tasks: ["CREATE_CONTENT"], instagram_business_account: ig("ig1") },
+  ] });
+  afterEach(() => jest.restoreAllMocks());
+
+  test.each([[undefined], ["page"], ["PAGE"], ["anything"]])("%j (default): exchange stores the Page token with no expiry", async (kind) => {
+    const env: Record<string, string> = kind === undefined ? {} : { META_IG_TOKEN_KIND: kind };
+    const { ctx: c } = ctx([...tokenCalls(), pagesWithIg()], env);
+    expect(await instagram.exchange(c, { code: "c", codeVerifier: "" })).toEqual({ accessToken: "ptok1", refreshToken: null, expiresAt: null, scopes: SCOPES });
+  });
+
+  test("\"user\": exchange stores the long-lived user token, expiring after expires_in", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-02T10:00:00.000Z"));
+    const { ctx: c } = ctx([...tokenCalls(), pagesWithIg()], { META_IG_TOKEN_KIND: "user" });
+    expect(await instagram.exchange(c, { code: "c", codeVerifier: "" })).toEqual({
+      accessToken: "long", refreshToken: null, expiresAt: new Date(Date.parse("2026-10-02T10:00:00.000Z") + 5183944 * 1000).toISOString(), scopes: SCOPES,
+    });
+    // Without expires_in, no expiry is invented.
+    const n = ctx([ok({ access_token: "short" }), ok({ access_token: "long" }), pagesWithIg()], { META_IG_TOKEN_KIND: "user" });
+    expect(await instagram.exchange(n.ctx, { code: "c", codeVerifier: "" })).toMatchObject({ accessToken: "long", expiresAt: null });
+    // Still requires a Page linked to Instagram.
+    await expect(instagram.exchange(ctx([...tokenCalls(), ok({ data: [] })], { META_IG_TOKEN_KIND: "user" }).ctx, { code: "c", codeVerifier: "" })).rejects.toMatchObject({ status: 400, message: NO_IG });
+    // refresh still means reconnect (about every 60 days with this setting).
+    await expect(instagram.refresh(c, "x")).rejects.toMatchObject({ status: 401 });
+  });
+
+  const IG_FIELDS = { fields: "instagram_business_account{id,username,profile_picture_url}", limit: "100", access_token: "utok" };
+
+  test("profile with a user token: \"me\" has no IG field → the Pages are read and the first with Instagram is used", async () => {
+    const { ctx: c, calls } = ctx([ok({ id: "u1" }), ok({ data: [{ id: "p0" }, { id: "p1", instagram_business_account: { id: "ig1", username: "me", profile_picture_url: "https://pic/ig1.jpg" } }] })]);
+    expect(await instagram.profile(c, "utok")).toEqual({ accountId: "ig1", displayName: "@me", avatarUrl: "https://pic/ig1.jpg" });
+    expect(path(calls[1].url)).toBe(`${GRAPH}/me/accounts`);
+    expect(query(calls[1].url)).toEqual(IG_FIELDS);
+  });
+
+  test("profile with a user token where Meta answers #100 (no such field on a User): falls back too", async () => {
+    const { ctx: c } = ctx([fail(400, { code: 100, message: "Tried accessing nonexisting field (instagram_business_account) on node type (User)" }), ok({ data: [{ id: "p1", instagram_business_account: ig("ig1") }] })]);
+    expect(await instagram.profile(c, "utok")).toEqual({ accountId: "ig1", displayName: "@u_ig1", avatarUrl: null });
+    // Other errors on the first call are not masked.
+    await expect(instagram.profile(ctx([fail(400, { code: 190, message: "expired" })]).ctx, "utok")).rejects.toMatchObject({ status: 401 });
+  });
+
+  test("prepare with a user token: resolves through /me/accounts and puts the user token in the upload headers", async () => {
+    const { ctx: c, calls } = ctx([ok({ id: "u1" }), ok({ data: [{ id: "p1", instagram_business_account: ig("ig1") }] }), ok({ id: "c1", uri: UPLOAD })]);
+    const r = await instagram.prepare(c, "utok", INPUT);
+    expect(calls[2].url).toBe(`${GRAPH}/ig1/media`);
+    expect(form(calls[2].init).access_token).toBe("utok");
+    expect(r).toMatchObject({ uploadUrl: UPLOAD, uploadHeaders: { Authorization: "OAuth utok" }, ref: { containerId: "c1", igUserId: "ig1" } });
+  });
+
+  test("the Facebook adapter is unaffected by META_IG_TOKEN_KIND", async () => {
+    const { ctx: c } = ctx([...tokenCalls(), ok({ data: [{ id: "p1", name: "Mine", access_token: "ptok1", tasks: ["CREATE_CONTENT"] }] })], { META_IG_TOKEN_KIND: "user" });
+    expect(await adapters.facebook!.exchange(c, { code: "c", codeVerifier: "" })).toMatchObject({ accessToken: "ptok1", expiresAt: null });
+  });
+});
+
 test("no token or secret in a publish error message", async () => {
   const token = "ptok-0123456789abcdef";
-  const e = (await instagram.status(ctx([st("FINISHED"), fail(400, { code: 100, message: `Invalid parameter access_token=${token}` })]).ctx, token, REF).catch((x: unknown) => x)) as PlatformError;
+  const e = (await instagram.status(ctx([st("FINISHED"), fail(400, { code: 100, message: `Invalid parameter access_token=${token}` }), st("FINISHED")]).ctx, token, REF).catch((x: unknown) => x)) as PlatformError;
   expect(e.message).not.toContain(token);
 });

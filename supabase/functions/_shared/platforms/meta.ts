@@ -99,19 +99,29 @@ function tokenOf(platform: PlatformId, b: { access_token?: unknown }): string {
  * (https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived).
  */
 export async function exchangeForPages(c: AdapterCtx, platform: PlatformId, code: string): Promise<MetaPage[]> {
+  return (await exchangeForUserAndPages(c, platform, code)).pages;
+}
+
+/**
+ * As `exchangeForPages`, also returning the long-lived user token and its lifetime in seconds (about 60 days; null when
+ * Meta does not say). Used by Instagram when `META_IG_TOKEN_KIND=user`.
+ */
+export async function exchangeForUserAndPages(c: AdapterCtx, platform: PlatformId, code: string): Promise<{ pages: MetaPage[]; userToken: string; userTokenExpiresIn: number | null }> {
   const short = tokenOf(platform, await graph<{ access_token?: unknown }>(c, platform, "/oauth/access_token", {
     params: { client_id: appId(c), redirect_uri: c.redirectUri, client_secret: appSecret(c), code },
   }));
-  const long = tokenOf(platform, await graph<{ access_token?: unknown }>(c, platform, "/oauth/access_token", {
+  const longBody = await graph<{ access_token?: unknown; expires_in?: unknown }>(c, platform, "/oauth/access_token", {
     params: { grant_type: "fb_exchange_token", client_id: appId(c), client_secret: appSecret(c), fb_exchange_token: short },
-  }));
+  });
+  const long = tokenOf(platform, longBody);
+  const expiresIn = typeof longBody.expires_in === "number" && Number.isFinite(longBody.expires_in) && longBody.expires_in > 0 ? longBody.expires_in : null;
   // `picture` and `instagram_business_account` are Page fields (https://developers.facebook.com/docs/graph-api/reference/page/), expanded on the accounts edge.
   // Only the first 100 Pages are read; a person with more picks the Page in the Facebook dialog.
   const b = await graph<{ data?: unknown }>(c, platform, "/me/accounts", {
     token: long, params: { fields: "id,name,access_token,tasks,picture{url},instagram_business_account{id,username,profile_picture_url}", limit: "100" },
   });
   const rows = Array.isArray(b.data) ? (b.data as Array<Record<string, unknown>>) : [];
-  return rows.flatMap((p): MetaPage[] => {
+  const pages = rows.flatMap((p): MetaPage[] => {
     const id = str(p?.id), accessToken = str(p?.access_token);
     if (!id || !accessToken) return [];
     const ig = (typeof p.instagram_business_account === "object" && p.instagram_business_account !== null ? p.instagram_business_account : null) as Record<string, unknown> | null;
@@ -123,6 +133,7 @@ export async function exchangeForPages(c: AdapterCtx, platform: PlatformId, code
       instagram: ig && igId ? { id: igId, username: str(ig.username) ?? "", pictureUrl: str(ig.profile_picture_url) } : null,
     }];
   });
+  return { pages, userToken: long, userTokenExpiresIn: expiresIn };
 }
 
 const MAX_UPLOAD_URL = 2048;

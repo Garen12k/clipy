@@ -173,7 +173,7 @@ After steps 1 to 5 above, on your iPhone in Expo Go:
 - **The Connect link belongs to you, for a short time, once.** When you tap Connect, Clipy asks the server for a sign-in link that is tied to the Clipy account you are signed in with. The link stops working after 10 minutes and works only once.
 - **Your YouTube sign-in is locked on the server.** The server saves it encrypted with your `TOKEN_ENC_KEY` (step 4a). The app never receives it (except the short-lived token of step 4c, if you turn that on).
 - **Your TikTok sign-in is locked the same way.** It is saved encrypted with the same key and never sent to the app. The phone uploads to a one-hour TikTok upload address that needs no sign-in, and that address is never saved.
-- **Instagram and Facebook: a temporary pass on the phone.** While a video is uploading, Clipy's server gives your phone a temporary pass (your Page's access token) so it can send the video straight to Facebook/Instagram. It is kept only in memory and never saved. The phone sends it only to Meta's upload address (`rupload.facebook.com`); the server refuses to hand it out for any other address. On the server, the pass is saved encrypted like the others.
+- **Instagram and Facebook: a temporary pass on the phone.** While a video is uploading, Clipy's server gives your phone a temporary pass (your Page's access token) so it can send the video straight to Facebook/Instagram. It is kept only in memory and never saved. (With the `META_IG_TOKEN_KIND=user` setting, Instagram's pass is your Facebook login's token instead of the Page's.) The phone sends it only to Meta's upload address (`rupload.facebook.com`); the server refuses to hand it out for any other address. On the server, the pass is saved encrypted like the others.
 - **One accepted risk ("login CSRF").** If someone else sent you their own Connect link and you opened it within those 10 minutes and allowed access, your YouTube channel would be connected to *their* Clipy account. For a personal app with one user this is accepted. Only start Connect from inside Clipy, and never open a Connect link someone sends you.
 
 ## 11. TikTok
@@ -296,6 +296,7 @@ Use the Facebook account that manages the Page.
    - Assets: your Page (and its Instagram account, if offered).
    - Permissions: tick all five: `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `instagram_basic`, `instagram_content_publish`.
    - Click **Create**, then copy the **Configuration ID** it shows.
+   - Note: this choice is about how *you* log in. Which pass Clipy then uses for Instagram is a separate server setting: by default your Page's pass, which Meta's documents do not promise will work for Instagram (they ask for a "user access token"). If Instagram refuses it, see the troubleshooting table (step g) for the one-line switch.
 7. Open **App settings → Basic**. Copy the **App ID**, then click **Show** next to **App Secret** and copy it.
 
 ### d. Put the Meta app on the server
@@ -327,7 +328,7 @@ In Clipy, Accounts → **Connect Instagram** (or **Connect Facebook**). Facebook
 - **Facebook posts may be visible only to you at first.** While the Meta app is in **Development** mode, a Facebook post may be shown only to you (and others with a role on the app) until you switch the app to **Live** at the top of the app dashboard *(may be named slightly differently)*.
 - **Limits:** about 30 Facebook Reels a day per Page. Instagram's daily limit is whatever Meta enforces (its own documents say 50 or 100 posts a day). Clipy shows Meta's message when you hit one.
 - **A temporary pass on the phone.** While a video is uploading, Clipy's server gives your phone a temporary pass (your Page's access token) so it can send the video straight to Facebook/Instagram. It is kept only in memory and never saved.
-- **The connection does not expire on its own.** If you change your Facebook password or remove the app, tap Reconnect.
+- **The connection does not expire on its own** (with the default setting). If you change your Facebook password or remove the app, tap Reconnect. With the `META_IG_TOKEN_KIND=user` setting from the troubleshooting table, Instagram needs a Reconnect about every 60 days.
 - **To remove Clipy's access:** on Facebook, **Settings & privacy → Settings → Business integrations** → Clipy → **Remove** *(may be named slightly differently)*. Disconnecting in Clipy only makes Clipy forget the connection.
 - **None of this has run against live Meta yet.** If a step fails, tell the developer what you saw.
 
@@ -340,7 +341,14 @@ In Clipy, Accounts → **Connect Instagram** (or **Connect Facebook**). Facebook
 | **No Instagram professional account is linked to your Facebook Page** | The Instagram account is not professional, not linked to the Page, or that Page was not chosen in the Facebook dialog | Do steps a and b, then connect again and choose that Page. |
 | **No Facebook Page you can post to was found** | No Page was chosen in the Facebook dialog, or you cannot create content on it | Connect again and choose your Page. |
 | Instagram or Facebook shows **Reconnect** | The connection ended (password change, app removed) or a permission was not given | Tap Reconnect and allow everything Facebook asks for. |
+| Instagram says the **token type is wrong** or that it **requires a user access token** | Meta does not accept your Page's pass for Instagram | Run the command below, then in Clipy **Disconnect** Instagram and **Connect** it again. With this setting you reconnect Instagram about every 60 days. |
 | Instagram stays on **Publishing** and then offers **Resume** | Instagram is still processing the video | Wait a few minutes, then press Resume. |
+
+The command for the "token type" row:
+
+```powershell
+npx.cmd supabase secrets set META_IG_TOKEN_KIND=user
+```
 
 ### h. First live run: Instagram/Facebook
 
@@ -352,7 +360,7 @@ Nothing here has run against live Meta. Check each of these the first time, and 
    npx.cmd supabase secrets unset META_LOGIN_CONFIG_ID
    ```
 
-2. **The Page's pass works for Instagram.** After connecting Instagram, the row shows `@yourname`. When posting, Preparing finishes (Meta accepted the Page's pass for Instagram) and Uploading starts (the upload address accepted it too).
+2. **The Page's pass works for Instagram.** After connecting Instagram, the row shows `@yourname`. When posting, Preparing finishes (Meta accepted the Page's pass for Instagram) and Uploading starts (the upload address accepted it too). If Instagram instead says the token type is wrong or that it requires a user access token, run the `META_IG_TOKEN_KIND=user` command under the troubleshooting table (step g), Disconnect and Connect Instagram again, and post again. Tell the developer which setting worked.
 3. **The single-request upload succeeds.** Uploading reaches 100 % for both Instagram and Facebook without an error.
 4. **Publish after processing.** The Instagram row goes Publishing → Done within a few minutes (or after Resume), the Reel appears on your Instagram profile exactly once, and **View on Instagram** opens it.
 5. **The Facebook Reel link opens.** The Facebook row reaches Done, and **View on Facebook** opens the Reel on your Page (it may be visible only to you while the app is in Development mode).
