@@ -22,9 +22,9 @@ test("prepare opens a platform session and stores ours", async () => {
 });
 
 test("prepare passes the adapter's wait hint through, and omits it when there is none", async () => {
-  const wait = { maxSeconds: 300, resumeOnTimeout: false };
+  const wait = { maxSeconds: 300, intervalSeconds: 10, resumeOnTimeout: false };
   const deps = await connected({ adapters: { youtube: fakeAdapter({ prepare: jest.fn(async () => ({ protocol: "meta-rupload" as const, uploadUrl: "https://rupload.facebook.com/video-upload/v1", uploadHeaders: { Authorization: "OAuth t", offset: "0", file_size: "1" }, chunkSize: 1, ref: {}, wait })) }) } });
-  expect(await postPrepare(deps, USER, body)).toMatchObject({ protocol: "meta-rupload", wait });
+  expect((await postPrepare(deps, USER, body)).wait).toEqual(wait);
   const plain = await postPrepare(await connected(), USER, body);
   expect("wait" in plain).toBe(false);
 });

@@ -407,6 +407,52 @@ describe("meta-rupload and the wait hint", () => {
     expect(info).toEqual({ prepared: plan, uploaded: true, clientResult: null });
   });
 
+  const sleeps = (d: PostDeps) => (d.sleep as jest.Mock).mock.calls.map((c) => c[0] as number);
+  test("Instagram's hint {600 s, every 15 s}: 40 polls, 15 s apart", async () => {
+    const d = metaDeps({ ...meta, wait: { maxSeconds: 600, intervalSeconds: 15, resumeOnTimeout: true } }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValue({ status: "processing" });
+    await runPost(ig, d, t.update, signal());
+    expect(d.api.status).toHaveBeenCalledTimes(40);
+    expect(sleeps(d)).toEqual(Array(40).fill(15_000));
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: IG_TIMEOUT });
+  });
+  test("Facebook's hint {300 s, every 10 s}: 30 polls, 10 s apart", async () => {
+    const d = metaDeps({ ...meta, wait: { maxSeconds: 300, intervalSeconds: 10, resumeOnTimeout: false } }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValue({ status: "processing" });
+    await runPost(fb, d, t.update, signal());
+    expect(d.api.status).toHaveBeenCalledTimes(30);
+    expect(sleeps(d)).toEqual(Array(30).fill(10_000));
+    expect(t.row()).toMatchObject({ phase: "done", url: null });
+  });
+  test.each([
+    ["1 s (clamped to 3 s)", 1, 3_000, 40],
+    ["0 (clamped to 3 s)", 0, 3_000, 40],
+    ["-10 (clamped to 3 s)", -10, 3_000, 40],
+    ["7 s", 7, 7_000, 18],
+    ["60 s (the cap)", 60, 60_000, 2],
+    ["120 s (clamped to 60 s)", 120, 60_000, 2],
+    ["NaN (3 s)", NaN, 3_000, 40],
+    ["Infinity (3 s)", Infinity, 3_000, 40],
+    ["a string (3 s)", "15" as unknown as number, 3_000, 40],
+    ["missing (3 s)", undefined, 3_000, 40],
+  ])("intervalSeconds %s with maxSeconds 120: sleeps %i ms, %i polls", async (_name, intervalSeconds, ms, polls) => {
+    const d = metaDeps({ ...meta, wait: { maxSeconds: 120, intervalSeconds, resumeOnTimeout: true } }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValue({ status: "processing" });
+    await runPost(ig, d, t.update, signal());
+    expect(d.api.status).toHaveBeenCalledTimes(polls);
+    expect(sleeps(d)).toEqual(Array(polls).fill(ms));
+  });
+  test("no wait hint (YouTube, TikTok) keeps 3 s × 40", async () => {
+    const d = deps(), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValue({ status: "processing" });
+    await runPost(job, d, t.update, signal());
+    expect(sleeps(d)).toEqual(Array(40).fill(3_000));
+  });
+
   test("done during a long wait ends with the link", async () => {
     const d = metaDeps({ ...meta, wait: { maxSeconds: 600, resumeOnTimeout: true } }), t = track();
     (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });

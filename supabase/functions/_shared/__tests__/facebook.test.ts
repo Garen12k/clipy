@@ -80,7 +80,7 @@ test("prepare starts a Reel upload and hands the phone Meta's upload host with t
     protocol: "meta-rupload", uploadUrl: UPLOAD,
     uploadHeaders: { Authorization: "OAuth ptok", offset: "0", file_size: String(INPUT.fileSize) },
     chunkSize: INPUT.fileSize, ref: { videoId: "vid1", pageId: "p1" },
-    wait: { maxSeconds: 300, resumeOnTimeout: false },
+    wait: { maxSeconds: 300, intervalSeconds: 10, resumeOnTimeout: false },
   });
 });
 

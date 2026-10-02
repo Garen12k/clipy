@@ -127,7 +127,7 @@ export const facebook: ServerAdapter = {
     // The headers carry the Page token: only ever for Meta's own upload host, and only the checked (canonical) address is used from here on.
     const { uploadUrl, uploadHeaders } = ruploadTarget(token, input.fileSize, r.upload_url, "facebook");
     // One request carries the whole file (the only form Meta documents), so the chunk is the file.
-    return { protocol: "meta-rupload", uploadUrl, uploadHeaders, chunkSize: input.fileSize, ref: { videoId, pageId }, wait: { maxSeconds: 300, resumeOnTimeout: false } };
+    return { protocol: "meta-rupload", uploadUrl, uploadHeaders, chunkSize: input.fileSize, ref: { videoId, pageId }, wait: { maxSeconds: 300, intervalSeconds: 10, resumeOnTimeout: false } };
   },
   async finalize(c, token, { ref, input }) {
     if (typeof ref.videoId !== "string" || !ref.videoId || typeof ref.pageId !== "string" || !ref.pageId) throw new PlatformError("facebook", 502, NO_REF, "platform_error");

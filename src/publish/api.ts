@@ -10,8 +10,8 @@ export type UploadProtocol = "google-resumable" | "relay" | "tiktok-chunks" | "m
  */
 export interface Prepared {
   sessionId: string; protocol: UploadProtocol; uploadUrl: string | null; uploadHeaders: Record<string, string>; chunkSize: number;
-  /** How long to keep polling after finalize, and whether running out of time means "tap Resume" rather than "done". */
-  wait?: { maxSeconds: number; resumeOnTimeout: boolean };
+  /** How long to keep polling after finalize, how many seconds apart, and whether running out of time means "tap Resume" rather than "done". */
+  wait?: { maxSeconds: number; intervalSeconds?: number; resumeOnTimeout: boolean };
 }
 export type PublishResult = { status: "done"; url: string | null } | { status: "processing" };
 

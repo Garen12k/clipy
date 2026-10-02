@@ -103,7 +103,7 @@ test("prepare creates a resumable Reels container and hands the phone Meta's upl
     protocol: "meta-rupload", uploadUrl: UPLOAD,
     uploadHeaders: { Authorization: "OAuth ptok", offset: "0", file_size: String(INPUT.fileSize) },
     chunkSize: INPUT.fileSize, ref: { containerId: "c1", igUserId: "ig1" },
-    wait: { maxSeconds: 600, resumeOnTimeout: true },
+    wait: { maxSeconds: 600, intervalSeconds: 15, resumeOnTimeout: true },
   });
 });
 

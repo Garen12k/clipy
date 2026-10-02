@@ -23,11 +23,18 @@ export const POLL_LIMIT = 40; // 2 minutes
 const DEFAULT_WAIT_SECONDS = (POLL_LIMIT * POLL_MS) / 1000;
 /** The longest wait any server hint can ask for (30 minutes), so a bad value cannot keep the phone polling for hours. */
 export const MAX_WAIT_SECONDS = 1800;
+/** The pause between polls the server's hint may ask for: 3 s to 60 s (3 s without a usable hint). */
+export const MIN_INTERVAL_SECONDS = 3;
+export const MAX_INTERVAL_SECONDS = 60;
+const pollMs = (p: Prepared) => {
+  const i = p.wait?.intervalSeconds;
+  return typeof i === "number" && Number.isFinite(i) ? Math.min(MAX_INTERVAL_SECONDS, Math.max(MIN_INTERVAL_SECONDS, i)) * 1000 : POLL_MS;
+};
 /** How many polls the server's `wait` hint allows (the 2-minute default without one, or with a hint we cannot use; never over 30 minutes). */
 const pollLimit = (p: Prepared) => {
   const s = p.wait?.maxSeconds;
   const seconds = typeof s === "number" && Number.isFinite(s) && s > 0 ? Math.min(s, MAX_WAIT_SECONDS) : DEFAULT_WAIT_SECONDS;
-  return Math.ceil(seconds / (POLL_MS / 1000));
+  return Math.ceil(seconds / (pollMs(p) / 1000));
 };
 
 /** The server decides the chunk size and protocol; refuse a plan we cannot follow. */
@@ -87,9 +94,9 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
     // (resumable when the server's wait hint says the post still needs finalizing).
     update({ phase: "publishing", progress: 1, message: null, resumable: false });
     let result = await deps.api.finalize(p.sessionId, info.clientResult);
-    const limit = pollLimit(p);
+    const limit = pollLimit(p), every = pollMs(p);
     for (let i = 0; result.status === "processing" && i < limit; i++) {
-      await deps.sleep(POLL_MS, signal);
+      await deps.sleep(every, signal);
       if (signal.aborted) { stillProcessing(); return info; }
       result = await deps.api.status(p.sessionId);
     }

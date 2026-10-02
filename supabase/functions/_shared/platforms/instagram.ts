@@ -183,7 +183,7 @@ export const instagram: ServerAdapter = {
     // The headers carry the Page token: only ever for Meta's own upload host, and only the checked (canonical) address is used from here on.
     const { uploadUrl, uploadHeaders } = ruploadTarget(token, input.fileSize, r.uri, "instagram");
     // One request carries the whole file (the only form Meta documents). Processing can take minutes: running out of time means Resume.
-    return { protocol: "meta-rupload", uploadUrl, uploadHeaders, chunkSize: input.fileSize, ref: { containerId, igUserId }, wait: { maxSeconds: 600, resumeOnTimeout: true } };
+    return { protocol: "meta-rupload", uploadUrl, uploadHeaders, chunkSize: input.fileSize, ref: { containerId, igUserId }, wait: { maxSeconds: 600, intervalSeconds: 15, resumeOnTimeout: true } };
   },
   finalize: (c, token, { ref }) => publishWhenReady(c, token, ref),
   status: (c, token, ref) => publishWhenReady(c, token, ref),
