@@ -72,8 +72,8 @@ src/publish/
   upload.ts        chunked uploader         oauth-callback ◄───────────────  code → tokens
   usePost.ts       per-row state            accounts (list / disconnect)
   useAccounts.ts                            post-prepare ─────────────────►  open upload session
-                   direct upload ─────────────────────────────────────────►  YouTube, TikTok
-                   relay chunks     ───►    post-upload  ─────────────────►  Instagram, Facebook, X
+                   direct upload ─────────────────────────────────────────►  YouTube, TikTok, Instagram, Facebook
+                   relay chunks     ───►    post-upload  ─────────────────►  X
                                             post-finalize / post-status ──►  publish, poll
                                           Postgres: connected_accounts, oauth_states, post_sessions
 ```
@@ -128,7 +128,7 @@ Row-level security is on for all three with **no** policies for the `anon`/`auth
 
 - Backend not configured / signed out / not available / not connected: dedicated UI states (§4), never exceptions.
 - Token refresh fails or the platform returns an auth error → row `needsReconnect`; Accounts row shows Reconnect.
-- Network loss during upload → the row pauses with **Resume**; direct uploads resume from the platform-reported offset, relay uploads from the last acknowledged offset; Instagram/Facebook restart if the platform refuses the offset.
+- Network loss during upload → the row pauses with **Resume**; YouTube resumes from the platform-reported offset; relay uploads (X) re-send every piece from offset 0 to the same server session and media id (a temporary platform failure on a piece is retried in place first); TikTok, Instagram and Facebook restart with "Post again".
 - Processing longer than 2 minutes → row shows "Still processing on <platform> — check the app later" and counts as done-without-link.
 - `oauth-callback` errors redirect back with `status=error` and the platform's message; the Accounts screen shows it as a toast.
 - Function errors return `{ code, message }` with a 4xx/5xx; unknown errors show "Something went wrong" plus the code.
@@ -157,7 +157,7 @@ Research notes with source URLs were gathered per platform before planning. Wher
 - One Post route, `app/post.tsx` (params `fileUri`, optional `projectId`, `title`), reached from the export result and from **Post a video** on the home header; the home header also gets the **Accounts** icon.
 - Chunked reads use `expo-file-system`'s `File.open()` handle (`offset`, `readBytes`); `File.slice()` and Blob bodies load the whole file and are not used. `fetch` has no upload progress, so progress advances per confirmed chunk (8 MB for YouTube).
 - Post records exist only for project posts; a library video posts without a record.
-- Post sessions on the server follow `uploading → publishing → processing → done | failed` with compare-and-set transitions; a finished upload is never re-uploaded on retry.
+- Post sessions on the server follow `uploading → publishing → processing → done | failed` with compare-and-set transitions (a status call may also loop `processing ⇄ publishing`, see the Backend claim line below); a finished upload is never re-uploaded on retry.
 
 **Backend**
 - All logic lives in plain TypeScript modules under `supabase/functions/_shared/` using only web-standard APIs (`fetch`, `Request`, `Response`, WebCrypto), tested with **Jest in a Node environment** (no Deno or Docker on the dev PC). Each function's `index.ts` is a thin Deno wrapper, verified by reading until deployed.
