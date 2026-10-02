@@ -38,7 +38,7 @@ export function TransitionSheet({ clipIndex, visible, onClose }: Props) {
             key={type}
             label={TRANSITIONS[type].label}
             selected={current.type === type}
-            onPress={() => { haptic("light"); apply((p) => setTransition(p, clip.id, { type, duration: type === "none" ? 0 : Math.min(0.5, cap) })); }}
+            onPress={() => { if (current.type !== type) haptic("light"); apply((p) => setTransition(p, clip.id, { type, duration: type === "none" ? 0 : Math.min(0.5, cap) })); }}
           />
         ))}
       </View>
