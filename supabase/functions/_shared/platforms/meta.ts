@@ -125,20 +125,24 @@ export async function exchangeForPages(c: AdapterCtx, platform: PlatformId, code
   });
 }
 
-/** True only for `https://rupload.facebook.com/...` exactly: no other scheme, host, port or userinfo. */
-export function isRuploadUrl(uploadUrl: string): boolean {
-  let u: URL;
-  try { u = new URL(uploadUrl); } catch { return false; }
-  return u.protocol === "https:" && u.hostname === RUPLOAD_HOST && u.port === "" && u.username === "" && u.password === "";
-}
+const MAX_UPLOAD_URL = 2048;
+/** Printable ASCII with no space and no backslash: nothing another URL parser (the phone's) could read differently. */
+const PLAIN_URL = /^[\x21-\x5B\x5D-\x7E]+$/;
 
 /**
- * Headers for the one-request upload to Meta's upload host (https://developers.facebook.com/docs/video-api/guides/reels-publishing).
- * They carry the token, so they are only ever built for `https://rupload.facebook.com/…`; anything else throws.
+ * The upload address and headers for the one-request upload to Meta's upload host
+ * (https://developers.facebook.com/docs/video-api/guides/reels-publishing). The headers carry the token, so they are only
+ * ever built for `https://rupload.facebook.com/…`, and only when the address is already in canonical form: the string that
+ * was checked is the string returned, so no parser on the phone can read a different host. Anything else throws (no URL in the message).
  */
-export function ruploadHeaders(token: string, fileSize: number, uploadUrl: string): Record<string, string> {
-  if (!isRuploadUrl(uploadUrl)) throw new Error("The upload address is not Meta's upload host.");
-  return { Authorization: `OAuth ${token}`, offset: "0", file_size: String(fileSize) };
+export function ruploadTarget(token: string, fileSize: number, rawUrl: unknown, platform: PlatformId = "facebook"): { uploadUrl: string; uploadHeaders: Record<string, string> } {
+  const refuse = () => new PlatformError(platform, 502, "Meta returned an unexpected upload address.");
+  if (typeof rawUrl !== "string" || rawUrl.length > MAX_UPLOAD_URL || !PLAIN_URL.test(rawUrl)) throw refuse();
+  let u: URL;
+  try { u = new URL(rawUrl); } catch { throw refuse(); }
+  const exact = u.protocol === "https:" && u.hostname === RUPLOAD_HOST && u.port === "" && u.username === "" && u.password === "" && u.href === rawUrl;
+  if (!exact) throw refuse();
+  return { uploadUrl: u.href, uploadHeaders: { Authorization: `OAuth ${token}`, offset: "0", file_size: String(fileSize) } };
 }
 
 /** Token codes (190, 102), permission denied (10) and the permission range (200–299) need a new grant. */

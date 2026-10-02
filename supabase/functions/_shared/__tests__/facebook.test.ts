@@ -84,16 +84,28 @@ test("prepare starts a Reel upload and hands the phone Meta's upload host with t
   });
 });
 
+test("prepare returns the canonical (checked) upload address", async () => {
+  const canonical = "https://rupload.facebook.com/video-upload/vid1?a=1";
+  const r = await facebook.prepare(ctx([ok({ id: "p1" }), ok({ video_id: "vid1", upload_url: canonical })]).ctx, "ptok", INPUT);
+  expect(r.uploadUrl).toBe(new URL(canonical).href);
+  expect(r.uploadUrl).toBe(canonical);
+});
+
 test.each([
   "https://evil.example/video-upload/vid1",
   "https://rupload.facebook.com.evil.example/x",
   "http://rupload.facebook.com/video-upload/vid1",
   "https://rupload.facebook.com@evil.example/",
-])("prepare with a non-rupload upload_url %j rejects (502) and never returns the token", async (upload_url) => {
-  const e = (await facebook.prepare(ctx([ok({ id: "p1" }), ok({ video_id: "vid1", upload_url })]).ctx, "ptok", INPUT).catch((x: unknown) => x)) as PlatformError;
+  "https://rupload.facebook.com\\@evil.example/x",
+  "https://RUPLOAD.facebook.com/x",
+])("prepare with a hostile upload_url %j rejects (502) with neither the URL nor the token in the error", async (upload_url) => {
+  const e = (await facebook.prepare(ctx([ok({ id: "p1" }), ok({ video_id: "vid1", upload_url })]).ctx, "ptok-0123456789abcdef", INPUT).catch((x: unknown) => x)) as PlatformError;
   expect(e).toBeInstanceOf(PlatformError);
-  expect(e).toMatchObject({ status: 502, message: "Facebook did not return an upload address." });
-  expect(JSON.stringify({ ...e, message: e.message })).not.toContain("ptok");
+  expect(e).toMatchObject({ platform: "facebook", status: 502, message: "Meta returned an unexpected upload address." });
+  const all = JSON.stringify({ ...e, message: e.message });
+  expect(all).not.toContain("ptok");
+  expect(all).not.toContain(upload_url);
+  expect(all).not.toContain("evil");
 });
 
 test("prepare without video_id or upload_url is a 502", async () => {
@@ -132,6 +144,17 @@ test("status: processing, ready, published, error", async () => {
   await expect(facebook.status(ctx([st("expired")]).ctx, "ptok", ref)).rejects.toMatchObject({ status: 400, reason: "expired" });
   await expect(facebook.status(ctx([st("upload_failed")]).ctx, "ptok", ref)).rejects.toMatchObject({ status: 400, reason: "upload_failed" });
   await expect(facebook.status(ctx([]).ctx, "ptok", {})).rejects.toMatchObject({ code: "platform_error" });
+});
+
+test.each([
+  ["uploading_phase", { uploading_phase: { status: "error", errors: [{ message: "Upload was cut short." }] } }, "Upload was cut short."],
+  ["processing_phase", { processing_phase: { status: "error", error: { message: "Unsupported codec." } } }, "Unsupported codec."],
+  ["publishing_phase", { publishing_phase: { status: "error", error: { message: "Publishing failed." } } }, "Publishing failed."],
+])("a %s in error fails at once (no polling until the wait runs out)", async (phase, extra, detail) => {
+  await expect(facebook.status(ctx([st("processing", extra)]).ctx, "ptok", { videoId: "vid1", pageId: "p1" }))
+    .rejects.toMatchObject({ status: 400, code: "platform_error", reason: `${phase}_error`, message: `Facebook couldn't process this video. ${detail}` });
+  await expect(facebook.status(ctx([st("processing", { [phase]: { status: "error" } })]).ctx, "ptok", { videoId: "vid1", pageId: "p1" }))
+    .rejects.toMatchObject({ status: 400, message: "Facebook couldn't process this video." });
 });
 
 test("a temporary Graph failure in status is platform_unavailable", async () => {

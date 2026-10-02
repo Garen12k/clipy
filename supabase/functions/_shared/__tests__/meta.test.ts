@@ -1,5 +1,5 @@
 import { PlatformError } from "../errors.ts";
-import { exchangeForPages, graph, GRAPH, META_SECRETS, metaAuthUrl, metaIsAuthError, RUPLOAD_HOST, ruploadHeaders } from "../platforms/meta.ts";
+import { exchangeForPages, graph, GRAPH, META_SECRETS, metaAuthUrl, metaIsAuthError, RUPLOAD_HOST, ruploadTarget } from "../platforms/meta.ts";
 import type { AdapterCtx } from "../types.ts";
 
 const REDIRECT = "https://ref.supabase.co/functions/v1/oauth-callback";
@@ -78,18 +78,19 @@ test("a non-JSON failure keeps the HTTP status and says so", async () => {
   await expect(graph(ctx([new Response("<html>oops</html>", { status: 502 })]).ctx, "facebook", "/me")).rejects.toMatchObject({ status: 502, code: "platform_unavailable", message: "Meta returned 502" });
 });
 test("a network failure never carries the request URL (it may hold the app secret)", async () => {
-  const c = ctx([() => { throw new TypeError("error sending request for url (https://graph.facebook.com/v25.0/oauth/access_token?client_secret=sec)"); }]);
-  const e = (await graph(c.ctx, "facebook", "/oauth/access_token", { params: { client_secret: "sec" } }).catch((x: unknown) => x)) as PlatformError;
+  const SECRET = "f3a9c1d7e5b2a8c4d6e0f1a3b5c7d9e2";
+  const c = ctx([() => { throw new TypeError(`error sending request for url (https://graph.facebook.com/v25.0/oauth/access_token?client_secret=${SECRET})`); }]);
+  const e = (await graph(c.ctx, "facebook", "/oauth/access_token", { params: { client_secret: SECRET } }).catch((x: unknown) => x)) as PlatformError;
   expect(e).toBeInstanceOf(PlatformError);
   expect(e).toMatchObject({ status: 503, code: "platform_unavailable" });
-  expect(e.message).not.toContain("sec");
+  expect(JSON.stringify({ ...e, message: e.message })).not.toContain(SECRET);
   expect(e.message).not.toContain("graph.facebook.com");
 });
 test("a Meta message that echoes a secret or token is redacted", async () => {
-  const c = ctx([res(metaErr(100, "Bad value secretvalue123 for token tokenvalue456"), 400)]);
-  const e = (await graph(c.ctx, "facebook", "/x", { token: "tokenvalue456", params: { client_secret: "secretvalue123" } }).catch((x: unknown) => x)) as PlatformError;
-  expect(e.message).not.toContain("secretvalue123");
-  expect(e.message).not.toContain("tokenvalue456");
+  const SECRET = "f3a9c1d7e5b2a8c4d6e0f1a3b5c7d9e2", TOKEN = "EAAGm0PX4ZCpsBAKZCZBqZAYZBtokenvalue0123456789";
+  const c = ctx([res(metaErr(100, `Bad value ${SECRET} for token ${TOKEN}`), 400)]);
+  const e = (await graph(c.ctx, "facebook", "/x", { token: TOKEN, params: { client_secret: SECRET } }).catch((x: unknown) => x)) as PlatformError;
+  expect(e.message).toBe("Bad value [redacted] for token [redacted]");
 });
 
 const PAGES = {
@@ -136,30 +137,46 @@ test("exchangeForPages skips Page entries without an id or token", async () => {
   expect(pages).toEqual([{ id: "p2", name: "", accessToken: "t2", tasks: [], pictureUrl: null, instagram: null }]);
 });
 
-test("ruploadHeaders returns the documented headers for Meta's upload host", () => {
-  expect(ruploadHeaders("tok", 123, "https://rupload.facebook.com/video-upload/v25.0/1")).toEqual({ Authorization: "OAuth tok", offset: "0", file_size: "123" });
-  expect(ruploadHeaders("tok", 5, "https://rupload.facebook.com/video-upload/1")).toEqual({ Authorization: "OAuth tok", offset: "0", file_size: "5" });
+test.each([
+  "https://rupload.facebook.com/video-upload/v25.0/123",
+  "https://rupload.facebook.com/video-upload/123?session=abc&x=1",
+])("ruploadTarget accepts the canonical Meta upload address %j and returns exactly it with the documented headers", (url) => {
+  expect(ruploadTarget("tok", 123, url)).toEqual({ uploadUrl: url, uploadHeaders: { Authorization: "OAuth tok", offset: "0", file_size: "123" } });
 });
 
-test.each([
-  "https://evil.example/x",
-  "http://rupload.facebook.com/x",
-  "https://rupload.facebook.com.evil.example/x",
-  "https://evil.example/rupload.facebook.com",
-  "https://evil.example/https://rupload.facebook.com/x",
-  "https://rupload.facebook.com@evil.example/",
-  "https://user:pw@rupload.facebook.com/x",
-  "https://rupload.facebook.com:8443/x",
-  "https://xrupload.facebook.com/x",
-  "rupload.facebook.com/x",
-  "//rupload.facebook.com/x",
-  "",
-  "not a url",
-])("ruploadHeaders refuses %j and never returns the token", (url) => {
-  let thrown: unknown;
-  try { ruploadHeaders("secret-token", 123, url); } catch (e) { thrown = e; }
-  expect(thrown).toBeInstanceOf(Error);
-  expect(String((thrown as Error).message)).not.toContain("secret-token");
+test.each<[string, unknown]>([
+  ["backslash userinfo", "https://rupload.facebook.com\\@evil.example/x"],
+  ["userinfo", "https://rupload.facebook.com@evil.example/"],
+  ["user:pw", "https://user:pw@rupload.facebook.com/x"],
+  ["leading space", " https://rupload.facebook.com/x"],
+  ["embedded tab", "https://rupload.face\tbook.com/x"],
+  ["embedded newline", "https://rupload.facebook.com/x\n"],
+  ["no slashes", "https:rupload.facebook.com/x"],
+  ["upper case host", "https://RUPLOAD.FACEBOOK.COM/x"],
+  ["trailing-dot host", "https://rupload.facebook.com./x"],
+  ["port 8443", "https://rupload.facebook.com:8443/x"],
+  ["explicit :443", "https://rupload.facebook.com:443/x"],
+  ["http", "http://rupload.facebook.com/x"],
+  ["suffix host", "https://rupload.facebook.com.evil.example/x"],
+  ["host in path", "https://evil.example/rupload.facebook.com"],
+  ["other host", "https://evil.example/x"],
+  ["prefix host", "https://xrupload.facebook.com/x"],
+  ["no scheme", "rupload.facebook.com/x"],
+  ["protocol-relative", "//rupload.facebook.com/x"],
+  ["IDN look-alike (Cyrillic о)", "https://rupload.facebоok.com/x"],
+  ["IDN look-alike punycode", "https://rupload.xn--facebok-8eg.com/x"],
+  ["3000 chars", `https://rupload.facebook.com/${"a".repeat(3000)}`],
+  ["non-string", 42],
+  ["null", null],
+  ["empty", ""],
+])("ruploadTarget refuses %s and never returns the token", (_name, url) => {
+  let thrown: unknown, out: unknown;
+  try { out = ruploadTarget("secret-token-abcdefgh", 123, url); } catch (e) { thrown = e; }
+  expect(out).toBeUndefined();
+  expect(thrown).toBeInstanceOf(PlatformError);
+  expect(thrown).toMatchObject({ status: 502, message: "Meta returned an unexpected upload address." });
+  expect(JSON.stringify({ ...(thrown as object), message: (thrown as Error).message })).not.toContain("secret-token");
+  expect((thrown as Error).message).not.toContain("evil");
 });
 
 test("metaIsAuthError: token and permission codes reconnect; others do not", () => {

@@ -1,6 +1,6 @@
 import { PlatformError } from "../errors.ts";
 import type { AdapterCtx, PublishResult, ServerAdapter } from "../types.ts";
-import { exchangeForPages, graph, META_SECRETS, metaAuthUrl, metaIsAuthError, ruploadHeaders } from "./meta.ts";
+import { exchangeForPages, graph, META_SECRETS, metaAuthUrl, metaIsAuthError, ruploadTarget } from "./meta.ts";
 
 /** Page Reels permissions (https://developers.facebook.com/docs/video-api/guides/reels-publishing). */
 const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts"];
@@ -9,8 +9,8 @@ const NO_ADDRESS = "Facebook did not return an upload address.";
 type ReelStatus = {
   status?: {
     video_status?: unknown;
-    uploading_phase?: { errors?: Array<{ message?: unknown }> };
-    processing_phase?: { error?: { message?: unknown } };
+    uploading_phase?: { status?: unknown; errors?: Array<{ message?: unknown }> };
+    processing_phase?: { status?: unknown; error?: { message?: unknown } };
     publishing_phase?: { status?: unknown; publish_status?: unknown; error?: { message?: unknown } };
   };
 };
@@ -24,10 +24,12 @@ async function reelStatus(c: AdapterCtx, token: string, ref: Record<string, unkn
   const s = b.status ?? {};
   const videoStatus = typeof s.video_status === "string" ? s.video_status : "";
   const publishStatus = s.publishing_phase?.publish_status;
-  if (FAILED.includes(videoStatus) || publishStatus === "error") {
+  // A phase in error is final: fail now rather than poll until the wait runs out.
+  const failedPhase = (["uploading_phase", "processing_phase", "publishing_phase"] as const).find((p) => s[p]?.status === "error");
+  if (FAILED.includes(videoStatus) || publishStatus === "error" || failedPhase) {
     const detail = text(s.processing_phase?.error?.message) ?? text(s.publishing_phase?.error?.message) ?? text(s.uploading_phase?.errors?.[0]?.message);
     const e = new PlatformError("facebook", 400, detail ? `Facebook couldn't process this video. ${detail}` : "Facebook couldn't process this video.");
-    e.reason = FAILED.includes(videoStatus) ? videoStatus : "publish_error";
+    e.reason = FAILED.includes(videoStatus) ? videoStatus : failedPhase ? `${failedPhase}_error` : "publish_error";
     throw e;
   }
   // The Reels guide documents no permalink field; this is the public Reel address by id. UNVERIFIED until a live post.
@@ -62,11 +64,10 @@ export const facebook: ServerAdapter = {
     const pageId = text(me.id);
     if (!pageId) throw new PlatformError("facebook", 502, "Facebook did not return the Page.");
     const r = await graph<{ video_id?: unknown; upload_url?: unknown }>(c, "facebook", `/${encodeURIComponent(pageId)}/video_reels`, { method: "POST", token, params: { upload_phase: "start" } });
-    const videoId = text(r.video_id), uploadUrl = text(r.upload_url);
-    if (!videoId || !uploadUrl) throw new PlatformError("facebook", 502, NO_ADDRESS);
-    let uploadHeaders: Record<string, string>;
-    // The headers carry the Page token: only ever for Meta's own upload host.
-    try { uploadHeaders = ruploadHeaders(token, input.fileSize, uploadUrl); } catch { throw new PlatformError("facebook", 502, NO_ADDRESS); }
+    const videoId = text(r.video_id);
+    if (!videoId || !text(r.upload_url)) throw new PlatformError("facebook", 502, NO_ADDRESS);
+    // The headers carry the Page token: only ever for Meta's own upload host, and only the checked (canonical) address is used from here on.
+    const { uploadUrl, uploadHeaders } = ruploadTarget(token, input.fileSize, r.upload_url, "facebook");
     // One request carries the whole file (the only form Meta documents), so the chunk is the file.
     return { protocol: "meta-rupload", uploadUrl, uploadHeaders, chunkSize: input.fileSize, ref: { videoId, pageId }, wait: { maxSeconds: 300, resumeOnTimeout: false } };
   },
