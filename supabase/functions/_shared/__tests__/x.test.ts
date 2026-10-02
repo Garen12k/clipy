@@ -4,6 +4,9 @@ import { adapters } from "../platforms/registry.ts";
 import { appendBody, cutToWeighted, hasLink, weightedLength, x, X_CHUNK } from "../platforms/x.ts";
 import type { AdapterCtx } from "../types.ts";
 import { INPUT } from "./fakes.ts";
+import { X_LINK_VECTORS, X_WEIGHT_VECTORS } from "./xWeightVectors.ts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const REDIRECT = "https://ref.supabase.co/functions/v1/oauth-callback";
 const BASIC = `Basic ${Buffer.from("cid:sec").toString("base64")}`;
@@ -294,24 +297,20 @@ describe("finalize and status", () => {
 });
 
 describe("weighted length (X's counting rule)", () => {
-  test.each([
-    ["", 0], ["hello", 5], ["a".repeat(280), 280],
-    ["😀", 2], ["a😀b", 4], ["日本語", 6], ["é", 1], ["—", 1], ["…", 2],
-    ["https://example.com/some/long/path?q=1", 23], ["see http://a.co now", 4 + 23 + 4],
-    // Trailing punctuation is not part of the link and counts normally.
-    ["https://a.co/x.", 23 + 1], ["(see https://a.co/x)!", 5 + 23 + 2],
-    // A bare domain is a link too (X counts it, and bills a post containing one at the "with URL" price).
-    ["see clipy.app now", 4 + 23 + 4], ["clipy.app/about, ok", 23 + 4], ["www.Example.COM", 23],
-    ["version 1.2 is out", 18], ["e.g. this", 9], ["v1.2.3", 6],
-    // By the rule (a final label of 2+ letters is a TLD) a missing space after a full stop reads as a link: conservative.
-    ["hello.World", 23],
-    // An email's domain counts as a link (conservative).
-    ["a@b.com", 2 + 23],
-  ])("weightedLength(%j) = %i", (text, n) => { expect(weightedLength(text)).toBe(n); });
+  // Shared with the phone's test (src/publish/__tests__/adapters.test.ts): both copies of the rule answer the same.
+  test.each(X_WEIGHT_VECTORS)("weightedLength(%j) = %i", (text, n) => { expect(weightedLength(text)).toBe(n); });
+  test.each(X_LINK_VECTORS)("hasLink(%j) = %s (the same matcher)", (text, link) => { expect(hasLink(text)).toBe(link); });
 
-  test("hasLink uses the same matcher", () => {
-    for (const s of ["https://a.co", "see clipy.app now", "hello.World", "a@b.com"]) expect(hasLink(s)).toBe(true);
-    for (const s of ["", "Beach day", "version 1.2 is out", "e.g. this", "😀 ok."]) expect(hasLink(s)).toBe(false);
+  test("no invisible literal characters in the source (the ZWJ is written as an escape)", () => {
+    const src = readFileSync(join(__dirname, "../platforms/x.ts"), "utf8");
+    const invisible = [0x200b, 0x200c, 0x200d, 0x2060, 0xfeff];
+    expect(Array.from(src).filter((c) => invisible.includes(c.codePointAt(0)!))).toEqual([]);
+  });
+
+  test("a long bare domain that does not fit is left out whole, counted at its plain length", () => {
+    const dom = "a".repeat(30) + ".com"; // 34
+    expect(cutToWeighted("b".repeat(250) + " " + dom, 280)).toBe("b".repeat(250) + " ");
+    expect(cutToWeighted("b".repeat(245) + " " + dom, 280)).toBe("b".repeat(245) + " " + dom);
   });
 
   test("cutToWeighted never cuts inside a grapheme (ZWJ emoji, combining accent)", () => {

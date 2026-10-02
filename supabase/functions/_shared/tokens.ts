@@ -61,6 +61,9 @@ export async function accessTokenFor(deps: Deps, userId: string, platform: Platf
           && (latest.accessTokenEnc !== account.accessTokenEnc || latest.refreshTokenEnc !== account.refreshTokenEnc)) {
           return { accessToken: await decrypt(key, latest.accessTokenEnc), account: latest };
         }
+        // The user reconnected as a different account meanwhile: that account is new and valid — never flag it. This request
+        // (for the old account) still cannot go on.
+        if (latest && latest.accountId !== account.accountId) throw reconnect(platform);
         await flagReconnect(deps, userId, platform);
         throw reconnect(platform);
       }

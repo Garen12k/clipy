@@ -81,8 +81,9 @@ function mediaIdOf(ref: Record<string, unknown>): string {
 /**
  * X's counting rule (twitter-text v3 config): these ranges weigh 1, every other code point 2, and each link 23 (t.co).
  * Simplifications, all on the safe side for the 280 limit: emoji sequences count 2 per code point (X counts a whole sequence
- * as 2); no Unicode normalisation; the link matcher below is broader than X's. The phone has the same rule
- * (src/publish/adapters/x.ts) pinned to the same test vectors.
+ * as 2); no Unicode normalisation; the link matcher below is broader than X's, so a bare domain (no `http(s)://`) counts
+ * max(23, its plain length): a long `word.word` that X may not treat as a link is never under-counted. The phone has the
+ * same rule (src/publish/adapters/x.ts), pinned to the same test vectors (__tests__/xWeightVectors.ts).
  */
 const LIGHT: ReadonlyArray<readonly [number, number]> = [[0x0000, 0x10ff], [0x2000, 0x200d], [0x2010, 0x201f], [0x2032, 0x2037]];
 const URL_WEIGHT = 23;
@@ -97,16 +98,17 @@ const LINK = /(https?:\/\/\S+)|(^|[^\w.-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)
 const TRAILING = /[.,;:!?)\]}'"]+$/;
 const weightOf = (cp: number) => (LIGHT.some(([lo, hi]) => cp >= lo && cp <= hi) ? 1 : 2);
 
-/** The text as plain runs and links, in order. */
-function pieces(text: string): Array<{ link: boolean; text: string }> {
-  const out: Array<{ link: boolean; text: string }> = [];
+type Piece = { link: boolean; bare?: boolean; text: string };
+/** The text as plain runs and links (`bare`: a domain without `http(s)://`), in order. */
+function pieces(text: string): Piece[] {
+  const out: Piece[] = [];
   let at = 0;
   for (const m of text.matchAll(LINK)) {
     const start = m.index! + (m[1] ? 0 : m[2].length);
     const link = (m[1] ?? m[3]).replace(TRAILING, "");
     if (!link) continue;
     if (start > at) out.push({ link: false, text: text.slice(at, start) });
-    out.push({ link: true, text: link });
+    out.push({ link: true, bare: !m[1], text: link });
     at = start + link.length; // trimmed punctuation goes back to the following text
   }
   if (at < text.length) out.push({ link: false, text: text.slice(at) });
@@ -116,12 +118,12 @@ function pieces(text: string): Array<{ link: boolean; text: string }> {
 /** True when X would count (and bill) part of the text as a link — same matcher as weightedLength. */
 export function hasLink(text: string): boolean { return pieces(text).some((p) => p.link); }
 
+const plainWeight = (s: string) => { let n = 0; for (const ch of s) n += weightOf(ch.codePointAt(0)!); return n; };
+const linkWeight = (p: Piece) => (p.bare ? Math.max(URL_WEIGHT, plainWeight(p.text)) : URL_WEIGHT);
+
 export function weightedLength(text: string): number {
   let n = 0;
-  for (const p of pieces(text)) {
-    if (p.link) n += URL_WEIGHT;
-    else for (const ch of p.text) n += weightOf(ch.codePointAt(0)!);
-  }
+  for (const p of pieces(text)) n += p.link ? linkWeight(p) : plainWeight(p.text);
   return n;
 }
 
@@ -130,8 +132,9 @@ export function cutToWeighted(text: string, max: number): string {
   let n = 0, out = "";
   for (const p of pieces(text)) {
     if (p.link) {
-      if (n + URL_WEIGHT > max) return wholeGraphemes(text, out);
-      n += URL_WEIGHT; out += p.text;
+      const w = linkWeight(p);
+      if (n + w > max) return wholeGraphemes(text, out);
+      n += w; out += p.text;
       continue;
     }
     for (const ch of p.text) {
@@ -155,7 +158,7 @@ function wholeGraphemes(text: string, prefix: string): string {
     return prefix.slice(0, end);
   }
   // No Segmenter: at least drop a trailing lone surrogate, zero-width joiner or combining mark.
-  return prefix.replace(/(?:[\uD800-\uDBFF]|‍|\p{M})+$/u, "");
+  return prefix.replace(/(?:[\uD800-\uDBFF]|\u200D|\p{M})+$/u, "");
 }
 
 // ---------- upload ----------

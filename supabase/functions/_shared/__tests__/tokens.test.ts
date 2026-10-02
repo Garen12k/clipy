@@ -119,9 +119,10 @@ describe("flagging reconnect updates only the flag on the current row", () => {
   });
 
   test.each([
-    ["a different account (reconnected as someone else)", { accountId: "UC999", displayName: "Other", avatarUrl: null }, {}],
-    ["a row already flagged needsReconnect", profile, { needsReconnect: true }],
-  ])("a refresh race is not resolved by %s: reconnect", async (_n, prof, meta) => {
+    // The user reconnected as someone else meanwhile: that new account is valid and must not be flagged.
+    ["a different account (reconnected as someone else)", { accountId: "UC999", displayName: "Other", avatarUrl: null }, {}, undefined],
+    ["a row already flagged needsReconnect", profile, { needsReconnect: true }, true],
+  ])("a refresh race is not resolved by %s: reconnect", async (_n, prof, meta, flag) => {
     let deps: any;
     const refresh = jest.fn(async () => {
       await saveTokens(deps, USER, "youtube", tokens({ accessToken: "access-9", refreshToken: "refresh-9", expiresAt: "2026-10-02T12:00:00.000Z" }), prof, meta);
@@ -129,9 +130,9 @@ describe("flagging reconnect updates only the flag on the current row", () => {
     });
     deps = fakeDeps({ adapters: { youtube: fakeAdapter({ refresh }) } });
     await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile);
-    await expect(accessTokenFor(deps, USER, "youtube")).rejects.toMatchObject({ code: "reconnect" });
+    await expect(accessTokenFor(deps, USER, "youtube")).rejects.toMatchObject({ status: 401, code: "reconnect" });
     const row = (await deps.db.getAccount(USER, "youtube"))!;
-    expect(row.meta.needsReconnect).toBe(true);
+    expect(row.meta.needsReconnect).toBe(flag);
     expect(row.accountId).toBe(prof.accountId);
     expect(await decrypt(await key(), row.refreshTokenEnc!)).toBe("refresh-9");
   });
