@@ -254,6 +254,13 @@ describe("tiktok-chunks", () => {
     const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt) }, uploadTikTokChunks: jest.fn(async () => { throw new UploadError("The TikTok upload link expired. Post again.", false); }) }), t = track();
     const info = await runPost(job, d, t.update, signal());
     expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: "The TikTok upload link expired. Post again." });
-    expect(info?.uploaded).not.toBe(true);
+    expect(info).toEqual({ prepared: tt, uploaded: false, clientResult: null });
+    // usePost's Retry passes no resume info for a non-resumable, not-uploaded row: a fresh prepare and a fresh upload.
+    (d.uploadTikTokChunks as jest.Mock).mockImplementation(async () => {});
+    const t2 = track();
+    await runPost(job, d, t2.update, signal(), null);
+    expect(d.api.prepare).toHaveBeenCalledTimes(2);
+    expect(d.uploadTikTokChunks).toHaveBeenCalledTimes(2);
+    expect(t2.row()).toMatchObject({ phase: "done" });
   });
 });

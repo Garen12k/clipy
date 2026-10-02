@@ -211,6 +211,63 @@ test("a 201 before the last chunk, or a 206 on the last chunk, is not success", 
   await expect(uploadTikTokChunks("https://up/x", args())).rejects.toMatchObject({ message: "TikTok did not confirm the upload. Post again." });
 });
 
+test("a 200 on the last chunk completes like a 201; a 200 earlier ends the upload early", async () => {
+  fetchMock.mockResolvedValueOnce(r(206)).mockResolvedValueOnce(r(200));
+  const a = args();
+  await uploadTikTokChunks("https://up/x", a);
+  expect(a.onProgress.mock.calls.map((c) => c[0])).toEqual([0.4, 1]);
+  fetchMock.mockReset(); fetchMock.mockResolvedValueOnce(r(200));
+  await expect(uploadTikTokChunks("https://up/x", args())).rejects.toEqual(E("TikTok ended the upload early. Post again."));
+});
+
+test.each([[204], [302], [308]])("any other 2xx/3xx (%p) is an unexpected reply, not retried", async (status) => {
+  fetchMock.mockResolvedValue(r(status));
+  const a = args();
+  await expect(uploadTikTokChunks("https://up/x", a)).rejects.toEqual(E("TikTok sent an unexpected reply. Post again."));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(a.sleep).not.toHaveBeenCalled();
+});
+
+test("a 416 on the last chunk says TikTok may already have the video; earlier it lost track", async () => {
+  fetchMock.mockResolvedValueOnce(r(206)).mockResolvedValueOnce(r(416));
+  await expect(uploadTikTokChunks("https://up/x", args())).rejects.toEqual(E("TikTok may already have this video — check your TikTok inbox before posting again."));
+  fetchMock.mockReset(); fetchMock.mockResolvedValueOnce(r(416));
+  await expect(uploadTikTokChunks("https://up/x", args())).rejects.toEqual(E("TikTok lost track of the upload. Post again."));
+});
+
+test.each([[408], [429], [500], [503]])("a %p is retried in place like a dropped connection, then succeeds", async (status) => {
+  fetchMock.mockResolvedValueOnce(r(status)).mockResolvedValueOnce(r(206)).mockResolvedValueOnce(r(201));
+  const a = args();
+  await uploadTikTokChunks("https://up/x", a);
+  expect(fetchMock.mock.calls.map((c) => c[1].headers["Content-Range"])).toEqual(["bytes 0-3/10", "bytes 0-3/10", "bytes 4-9/10"]);
+  expect(a.sleep.mock.calls.map((c: unknown[]) => c[0])).toEqual([1000]);
+});
+
+test.each([[408], [429], [502]])("a %p that keeps coming gives up after MAX_ATTEMPTS retries", async (status) => {
+  fetchMock.mockResolvedValue(r(status));
+  const a = args();
+  await expect(uploadTikTokChunks("https://up/x", a)).rejects.toEqual(E("The connection dropped. Post again to restart the TikTok upload."));
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+  expect(a.sleep.mock.calls.map((c: unknown[]) => c[0])).toEqual([1000, 2000, 4000]);
+});
+
+test("TikTok: aborting during the backoff sleep cancels without another request", async () => {
+  const ac = new AbortController();
+  fetchMock.mockRejectedValue(new TypeError("Network request failed"));
+  const sleep = jest.fn(() => { ac.abort(); return new Promise<void>(() => {}); });
+  await expect(uploadTikTokChunks("https://up/x", args({ signal: ac.signal, sleep }))).rejects.toEqual(E("Upload cancelled."));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
+test("TikTok: a read failure on a later chunk is a file error after the first chunk went up", async () => {
+  fetchMock.mockResolvedValueOnce(r(206));
+  const rd = { size: 10, read: jest.fn((o: number, n: number) => { if (o > 0) throw new Error("EIO"); return data.slice(o, o + n); }), close: jest.fn() };
+  const a = args({ reader: rd });
+  await expect(uploadTikTokChunks("https://up/x", a)).rejects.toEqual(E("Couldn't read the video file."));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(a.onProgress.mock.calls.map((c) => c[0])).toEqual([0.4]);
+});
+
 test("cancel, empty file and unreadable file behave like the other uploaders", async () => {
   const ac = new AbortController(); ac.abort();
   await expect(uploadTikTokChunks("https://up/x", args({ signal: ac.signal }))).rejects.toMatchObject({ message: "Upload cancelled." });
