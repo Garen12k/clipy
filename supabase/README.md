@@ -1,6 +1,6 @@
-# Clipy server setup (Supabase, YouTube, TikTok)
+# Clipy server setup (Supabase, YouTube, TikTok, Instagram, Facebook)
 
-This folder is Clipy's small server. It lets the app connect your YouTube channel and TikTok account and post videos to them (TikTok: as a draft in your TikTok inbox, see section 11). Your videos never live on the server: the phone sends them straight to YouTube or TikTok.
+This folder is Clipy's small server. It lets the app connect your YouTube channel and TikTok account and post videos to them (TikTok: as a draft in your TikTok inbox, see section 11; Instagram and Facebook: see section 12). Your videos never live on the server: the phone sends them straight to YouTube, TikTok, Instagram or Facebook.
 
 > **Honest status:** none of these steps has been run against the real Supabase or Google services yet. Everything was written from their documentation (October 2026). If a screen looks different from what is written here, trust the screen, and tell the developer what you saw.
 
@@ -173,6 +173,7 @@ After steps 1 to 5 above, on your iPhone in Expo Go:
 - **The Connect link belongs to you, for a short time, once.** When you tap Connect, Clipy asks the server for a sign-in link that is tied to the Clipy account you are signed in with. The link stops working after 10 minutes and works only once.
 - **Your YouTube sign-in is locked on the server.** The server saves it encrypted with your `TOKEN_ENC_KEY` (step 4a). The app never receives it (except the short-lived token of step 4c, if you turn that on).
 - **Your TikTok sign-in is locked the same way.** It is saved encrypted with the same key and never sent to the app. The phone uploads to a one-hour TikTok upload address that needs no sign-in, and that address is never saved.
+- **Instagram and Facebook: a temporary pass on the phone.** While a video is uploading, Clipy's server gives your phone a temporary pass (your Page's access token) so it can send the video straight to Facebook/Instagram. It is kept only in memory and never saved. The phone sends it only to Meta's upload address (`rupload.facebook.com`); the server refuses to hand it out for any other address. On the server, the pass is saved encrypted like the others.
 - **One accepted risk ("login CSRF").** If someone else sent you their own Connect link and you opened it within those 10 minutes and allowed access, your YouTube channel would be connected to *their* Clipy account. For a personal app with one user this is accepted. Only start Connect from inside Clipy, and never open a Connect link someone sends you.
 
 ## 11. TikTok
@@ -255,3 +256,103 @@ After steps a to c above, on your iPhone in Expo Go:
 7. **Dropped upload:** start a TikTok post and turn on Airplane mode while it is uploading. After a few seconds the row says "The connection dropped. Post again to restart the TikTok upload." Turn Airplane mode off and tap **Retry**: the video uploads again from the start, and only **one** draft ends up in the TikTok inbox.
 8. **TikTok busy after the upload:** if the row fails *after* Uploading reached 100 % with a "TikTok is busy" or "TikTok is having trouble" message, tap **Retry**: it should finish without uploading again (no second draft in the inbox).
 9. YouTube still posts in the same session (tick both; a long caption holds back only YouTube).
+
+## 12. Instagram and Facebook
+
+Clipy posts your video as a **Reel** on your Instagram professional account and/or as a **Reel on your Facebook Page**. Both go through one Meta app and your Facebook Page.
+
+> **Honest status:** none of this has run against the real Instagram or Facebook yet. No Meta app existed when it was written; everything comes from Meta's developer documentation (October 2026). If a screen looks different, trust the screen and tell the developer what you saw.
+
+Do steps 1 to 4a above first (the Supabase project, the server online, the encryption key).
+
+### a. Make your Instagram account a professional account
+
+1. In the Instagram app, open your profile → menu (☰) → **Settings and activity** → **Account type and tools** → **Switch to professional account** *(may be named slightly differently)*.
+2. Choose **Creator** or **Business** (either works) and follow the steps.
+
+If you only want Facebook, skip this step.
+
+### b. Create a Facebook Page and link Instagram to it
+
+1. On Facebook, create a Page if you do not have one: menu → **Pages** → **Create new Page** *(may be named slightly differently)*. A name and a category are enough.
+2. Link your Instagram account to the Page. In the Instagram app: **Edit profile** → **Page** → choose your Page. Or on Facebook, in the Page's settings → **Linked accounts** → **Instagram** → **Connect account** *(may be named slightly differently)*.
+
+Instagram posting needs this link even if you never post to Facebook.
+
+### c. Create the Meta app
+
+Use the Facebook account that manages the Page.
+
+1. Go to https://developers.facebook.com/apps and log in. If asked, register as a developer.
+2. Click **Create app**. When asked for a use case, pick the one about managing content on Instagram and Pages, or **Other** *(may be named slightly differently)*. When asked for the app type, choose **Business**. Name it `Clipy`.
+3. In the app's dashboard, add the product **Facebook Login for Business** *(may be named slightly differently)*.
+4. Add the product **Instagram** and choose **API setup with Facebook login** *(may be named slightly differently)*. Not "with Instagram login": only the Facebook-login way lets the phone send the video without storing it somewhere first.
+5. Open **Facebook Login for Business → Settings**. In **Valid OAuth Redirect URIs**, paste exactly (with your project ref, no slash at the end) and save *(may be named slightly differently)*:
+   `https://<ref>.supabase.co/functions/v1/oauth-callback`
+   This is the same address as for YouTube and TikTok.
+6. Open **Facebook Login for Business → Configurations** → **Create configuration**:
+   - Name: `Clipy`.
+   - Access token type: **User access token**.
+   - Assets: your Page (and its Instagram account, if offered).
+   - Permissions: tick all five: `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `instagram_basic`, `instagram_content_publish`.
+   - Click **Create**, then copy the **Configuration ID** it shows.
+7. Open **App settings → Basic**. Copy the **App ID**, then click **Show** next to **App Secret** and copy it.
+
+### d. Put the Meta app on the server
+
+Run these in PowerShell, one at a time (paste your values in place of the `<...>` parts):
+
+```powershell
+npx.cmd supabase secrets set META_APP_ID=<app id>
+```
+
+```powershell
+npx.cmd supabase secrets set META_APP_SECRET=<app secret>
+```
+
+```powershell
+npx.cmd supabase secrets set META_LOGIN_CONFIG_ID=<configuration id>
+```
+
+Until the first two are set, the app shows Instagram and Facebook as "Not available yet".
+
+### e. Connect
+
+In Clipy, Accounts → **Connect Instagram** (or **Connect Facebook**). Facebook's dialog asks which Pages (and Instagram accounts) Clipy may use: **choose exactly one Page**, the one linked to your Instagram account. Clipy uses the first suitable Page it receives, so choosing only one avoids surprises.
+
+### f. What to expect
+
+- **Instagram posts as a Reel and can take a few minutes to process.** After the upload, Instagram works on the video before it can be published. Keep the Post screen open. If Clipy runs out of time it offers **Resume**: press it later and Clipy finishes the post without uploading again.
+- **Facebook Reels must be 3 to 90 seconds long.** Facebook refuses longer or shorter videos. (Instagram Reels can be 3 seconds to 15 minutes.)
+- **Facebook posts may be visible only to you at first.** While the Meta app is in **Development** mode, a Facebook post may be shown only to you (and others with a role on the app) until you switch the app to **Live** at the top of the app dashboard *(may be named slightly differently)*.
+- **Limits:** about 30 Facebook Reels a day per Page. Instagram's daily limit is whatever Meta enforces (its own documents say 50 or 100 posts a day). Clipy shows Meta's message when you hit one.
+- **A temporary pass on the phone.** While a video is uploading, Clipy's server gives your phone a temporary pass (your Page's access token) so it can send the video straight to Facebook/Instagram. It is kept only in memory and never saved.
+- **The connection does not expire on its own.** If you change your Facebook password or remove the app, tap Reconnect.
+- **To remove Clipy's access:** on Facebook, **Settings & privacy → Settings → Business integrations** → Clipy → **Remove** *(may be named slightly differently)*. Disconnecting in Clipy only makes Clipy forget the connection.
+- **None of this has run against live Meta yet.** If a step fails, tell the developer what you saw.
+
+### g. Instagram and Facebook troubleshooting
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| Instagram or Facebook shows **Not available yet** | `META_APP_ID` or `META_APP_SECRET` is not set on the server | Do step d. Check with `npx.cmd supabase secrets list`. |
+| Connecting shows an error about the **redirect** or **URL blocked** | The address in step c.5 does not match exactly | Fix it in Facebook Login for Business → Settings: `https://<ref>.supabase.co/functions/v1/oauth-callback`, no slash at the end. |
+| **No Instagram professional account is linked to your Facebook Page** | The Instagram account is not professional, not linked to the Page, or that Page was not chosen in the Facebook dialog | Do steps a and b, then connect again and choose that Page. |
+| **No Facebook Page you can post to was found** | No Page was chosen in the Facebook dialog, or you cannot create content on it | Connect again and choose your Page. |
+| Instagram or Facebook shows **Reconnect** | The connection ended (password change, app removed) or a permission was not given | Tap Reconnect and allow everything Facebook asks for. |
+| Instagram stays on **Publishing** and then offers **Resume** | Instagram is still processing the video | Wait a few minutes, then press Resume. |
+
+### h. First live run: Instagram/Facebook
+
+Nothing here has run against live Meta. Check each of these the first time, and if one fails, tell the developer what you saw (copy any error message).
+
+1. **Login with the configuration.** Connecting opens Facebook's dialog with the permissions from step c.6. If the dialog complains about the configuration, remove it and try again; Clipy then asks for the permissions directly (`scope` instead of `config_id`). Tell the developer which way worked.
+
+   ```powershell
+   npx.cmd supabase secrets unset META_LOGIN_CONFIG_ID
+   ```
+
+2. **The Page's pass works for Instagram.** After connecting Instagram, the row shows `@yourname`. When posting, Preparing finishes (Meta accepted the Page's pass for Instagram) and Uploading starts (the upload address accepted it too).
+3. **The single-request upload succeeds.** Uploading reaches 100 % for both Instagram and Facebook without an error.
+4. **Publish after processing.** The Instagram row goes Publishing → Done within a few minutes (or after Resume), the Reel appears on your Instagram profile exactly once, and **View on Instagram** opens it.
+5. **The Facebook Reel link opens.** The Facebook row reaches Done, and **View on Facebook** opens the Reel on your Page (it may be visible only to you while the app is in Development mode).
