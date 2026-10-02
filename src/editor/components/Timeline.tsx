@@ -52,7 +52,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
 
   return (
     <GestureDetector gesture={pinch}>
-      <View style={{ height: TIMELINE_HEIGHT, justifyContent: "center" }}>
+      <View style={{ height: TIMELINE_HEIGHT, justifyContent: "center", backgroundColor: theme.colors.bgDeep }}>
         <ScrollView ref={scrollRef} testID="timeline-scroll" horizontal showsHorizontalScrollIndicator={false} scrollEventThrottle={16}
           onScrollBeginDrag={() => { userScrolling.current = true; setPlaying(false); }}
           onMomentumScrollBegin={() => { userScrolling.current = true; }}
@@ -82,7 +82,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           <OverlayLane />
           <MusicLane />
         </ScrollView>
-        <View pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: TIMELINE_HEIGHT - 16, backgroundColor: theme.colors.accent, borderRadius: 1 }} />
+        <View pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: TIMELINE_HEIGHT - 16, backgroundColor: theme.colors.text, borderRadius: 1 }} />
       </View>
     </GestureDetector>
   );

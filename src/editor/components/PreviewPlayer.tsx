@@ -1,11 +1,10 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { clipAt, clipStartTimes, isInTransitionWindow, outputToSource, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
-import { formatDurationPrecise } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { FilterLayer } from "./FilterLayer";
@@ -121,8 +120,9 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
           setPlaying(!isPlaying);
         }}
         onLayout={(e) => setFrame({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
-        accessibilityLabel={isPlaying ? "Pause" : "Play"}
-        style={{ aspectRatio: ratio, maxWidth: "100%", maxHeight: "100%", flex: 1, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, overflow: "hidden" }}>
+        accessibilityLabel="Preview"
+        accessibilityHint="Tap to play or pause"
+        style={{ aspectRatio: ratio, maxWidth: "100%", maxHeight: "100%", flex: 1, backgroundColor: theme.colors.surface, borderRadius: 10, overflow: "hidden" }}>
         {!empty && <VideoView player={player} style={{ width: "100%", height: "100%" }} contentFit="cover" nativeControls={false} />}
         <FilterLayer filter={hit?.clip.filter ?? null} />
         <TransitionLayer />
@@ -133,9 +133,6 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
             <Ionicons name="play" size={48} color={theme.colors.text} />
           </View>
         )}
-        <View pointerEvents="none" style={{ position: "absolute", bottom: 8, right: 10, backgroundColor: theme.colors.scrim, borderRadius: theme.radius.chip, paddingHorizontal: 8, paddingVertical: 3 }}>
-          <Text style={{ color: theme.colors.text, fontVariant: ["tabular-nums"], fontSize: 12 }}>{formatDurationPrecise(playhead)} / {formatDurationPrecise(total)}</Text>
-        </View>
       </Pressable>
     </View>
   );

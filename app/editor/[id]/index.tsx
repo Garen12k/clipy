@@ -7,6 +7,7 @@ import { EditorTopBar } from "@/src/editor/components/EditorTopBar";
 import { PreviewPlayer } from "@/src/editor/components/PreviewPlayer";
 import { ReorderHandle } from "@/src/editor/components/ReorderHandle";
 import { Timeline } from "@/src/editor/components/Timeline";
+import { TransportRow } from "@/src/editor/components/TransportRow";
 import { TrimHandles } from "@/src/editor/components/TrimHandles";
 import type { Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -14,7 +15,8 @@ import { useAutosave } from "@/src/editor/useAutosave";
 import { useLoadProject } from "@/src/editor/useLoadProject";
 import { storage } from "@/src/projects";
 import { theme } from "@/src/theme/theme";
-import { Body, Heading } from "@/src/ui/Text";
+import { Screen } from "@/src/ui/Screen";
+import { Body, Title } from "@/src/ui/Text";
 import { ToastHost } from "@/src/ui/Toast";
 
 export default function EditorScreen() {
@@ -28,14 +30,14 @@ export default function EditorScreen() {
   const [panelFor, setPanelFor] = useState<{ id: string; kind: "text" | "sticker" } | null>(null);
   const [transitionFor, setTransitionFor] = useState<number | null>(null);
 
-  if (load.status === "loading") return <View style={{ flex: 1, backgroundColor: theme.colors.bg, justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></View>;
+  if (load.status === "loading") return <Screen style={{ justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></Screen>;
   if (load.status === "error") return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg, justifyContent: "center", alignItems: "center", padding: 32, gap: 12 }}>
-      <Heading>Can't open project</Heading><Body muted>{load.error}</Body>
-    </View>
+    <Screen style={{ justifyContent: "center", alignItems: "center", padding: 32, gap: 12 }}>
+      <Title>Can't open project</Title><Body muted>{load.error}</Body>
+    </Screen>
   );
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+    <Screen>
       <EditorTopBar onExport={() => { useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />
       <View testID="slot-preview" style={{ flex: 1 }}>
         <PreviewPlayer onOpenPanel={(overlayId) => {
@@ -44,6 +46,7 @@ export default function EditorScreen() {
         }} />
         <AudioPreview />
       </View>
+      <TransportRow />
       <View testID="slot-timeline">
         <Timeline
           renderStripExtras={(clipId, index) => {
@@ -66,6 +69,6 @@ export default function EditorScreen() {
       </View>
       <EditorToolbar panelFor={panelFor} onPanelChange={setPanelFor} transitionFor={transitionFor} onTransitionChange={setTransitionFor} />
       <ToastHost />
-    </View>
+    </Screen>
   );
 }

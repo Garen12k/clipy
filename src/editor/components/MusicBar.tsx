@@ -37,14 +37,14 @@ export function MusicBar({ track: t, missing }: { track: AudioTrack; missing: bo
     <GestureDetector gesture={gestures.move}>
       <Pressable testID="music-bar" onPress={() => { useEditorStore.getState().selectOverlay(null); useEditorStore.getState().select(null); }}
         accessibilityLabel={`Music ${t.title}`}
-        style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: theme.colors.sea,
-          borderWidth: 2, borderColor: theme.colors.sea, flexDirection: "row", alignItems: "center", paddingHorizontal: HANDLE_W + 2, gap: 4 }}>
-        <Ionicons name="volume-medium" size={14} color={theme.colors.text} />
-        <Text style={{ color: theme.colors.text, fontSize: 12 }}>{Math.round(t.volume * 100)}%</Text>
-        <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 12, flex: 1 }}>{t.title}</Text>
+        style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: theme.colors.laneMusic,
+          borderWidth: 2, borderColor: theme.colors.laneMusic, flexDirection: "row", alignItems: "center", paddingHorizontal: HANDLE_W + 2, gap: 4 }}>
+        <Ionicons name="volume-medium" size={14} color={theme.colors.onAccent} />
+        <Text style={{ color: theme.colors.onAccent, fontSize: 12 }}>{Math.round(t.volume * 100)}%</Text>
+        <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12, flex: 1 }}>{t.title}</Text>
         {missing && (
           <View style={{ position: "absolute", top: 4, right: HANDLE_W + 2, backgroundColor: theme.colors.danger, borderRadius: 999, padding: 2 }}>
-            <Ionicons name="warning" size={12} color={theme.colors.text} />
+            <Ionicons name="warning" size={12} color={theme.colors.onAccent} />
           </View>
         )}
         <GestureDetector gesture={gestures.left}><View accessibilityLabel="Music start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.accent, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>
