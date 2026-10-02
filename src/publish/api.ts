@@ -9,7 +9,7 @@ export type PublishResult = { status: "done"; url: string | null } | { status: "
 
 const UNREACHABLE = "Clipy's server is asleep or unreachable. Open the Supabase dashboard to wake it, then try again.";
 
-type Init = { method?: "GET" | "POST" | "DELETE"; query?: Record<string, string>; json?: unknown; bytes?: Uint8Array; headers?: Record<string, string> };
+type Init = { method?: "GET" | "POST" | "DELETE"; query?: Record<string, string>; json?: unknown; bytes?: Uint8Array; headers?: Record<string, string>; signal?: AbortSignal };
 
 async function call<T>(name: string, init: Init = {}): Promise<T> {
   const supabase = getSupabase();
@@ -35,6 +35,7 @@ async function call<T>(name: string, init: Init = {}): Promise<T> {
       headers: { Authorization: `Bearer ${session.access_token}`, apikey: backendKey()!, ...(init.json !== undefined ? { "Content-Type": "application/json" } : {}), ...init.headers },
       // React Native's fetch accepts typed arrays at runtime, but its BodyInit type does not list them.
       body: (init.bytes ?? (init.json !== undefined ? JSON.stringify(init.json) : undefined)) as BodyInit | undefined,
+      signal: init.signal,
     });
   } catch {
     throw new ApiFailure("unreachable", UNREACHABLE);
@@ -50,8 +51,8 @@ export const api = {
   disconnect: async (platform: PlatformId) => { await call("accounts", { method: "DELETE", query: { platform } }); },
   oauthStart: async (platform: PlatformId, returnUrl: string) => (await call<{ authUrl: string }>("oauth-start", { json: { platform, returnUrl } })).authUrl,
   prepare: (body: { platform: PlatformId; fileSize: number; durationSec: number; mimeType: string; caption: string; options: Record<string, unknown> }) => call<Prepared>("post-prepare", { json: body }),
-  uploadChunk: (sessionId: string, offset: number, total: number, bytes: Uint8Array) =>
-    call<{ nextOffset: number }>("post-upload", { bytes, headers: { "Content-Type": "application/octet-stream", "x-session-id": sessionId, "x-offset": String(offset), "x-total": String(total) } }),
+  uploadChunk: (sessionId: string, offset: number, total: number, bytes: Uint8Array, signal?: AbortSignal) =>
+    call<{ nextOffset: number }>("post-upload", { bytes, signal, headers: { "Content-Type": "application/octet-stream", "x-session-id": sessionId, "x-offset": String(offset), "x-total": String(total) } }),
   finalize: (sessionId: string, clientResult: string | null) => call<PublishResult>("post-finalize", { json: { sessionId, clientResult } }),
   status: (sessionId: string) => call<PublishResult>("post-status", { json: { sessionId } }),
 };

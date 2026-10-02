@@ -34,6 +34,13 @@ test("uploadChunk sends raw bytes with the session headers", async () => {
   expect(init.headers).toMatchObject({ "x-session-id": "s1", "x-offset": "0", "x-total": "10", "Content-Type": "application/octet-stream" });
 });
 
+test("uploadChunk passes an abort signal to fetch", async () => {
+  fetchMock.mockResolvedValue(res(200, { nextOffset: 3 }));
+  const ac = new AbortController();
+  await api.uploadChunk("s1", 0, 10, new Uint8Array([1, 2, 3]), ac.signal);
+  expect(fetchMock.mock.calls[0][1].signal).toBe(ac.signal);
+});
+
 test("failures map to ApiFailure codes", async () => {
   fetchMock.mockResolvedValue(res(401, { code: "reconnect", message: "Reconnect youtube in Accounts." }));
   await expect(api.status("s1")).rejects.toMatchObject({ code: "reconnect", message: "Reconnect youtube in Accounts." });
