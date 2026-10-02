@@ -11,7 +11,7 @@ export function EditorTopBar({ onExport }: { onExport: () => void }) {
   const name = useEditorStore((s) => s.project?.name ?? "");
   const { apply } = useEditorStore.getState();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.sm, paddingTop: 54, paddingBottom: theme.space.sm, gap: theme.space.xs }}>
+    <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.sm, paddingBottom: theme.space.sm, gap: theme.space.xs }}>
       <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => router.back()} />
       <Pressable style={{ flex: 1 }} onPress={() => Alert.prompt("Rename project", undefined, (n) => n && apply((p) => renameProject(p, n)), "plain-text", name)}>
         <Title size={16} numberOfLines={1} style={{ textAlign: "center" }}>{name}</Title>

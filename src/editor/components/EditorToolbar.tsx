@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { addTextOverlay, defaultOverlayRange, deleteClip, deleteOverlay, duplicateClip, splitClipAt } from "@/src/editor/model/ops";
 import { isTextOverlay, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -35,6 +36,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | null>(null);
   const noSel = !selectedId;
   const reduced = useReducedMotion();
+  const insets = useSafeAreaInsets();
   const [group, setGroup] = useState<ToolGroupId>("edit");
   const overlayKind = useEditorStore((s) => s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind ?? null);
   useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind }, cur) ?? cur); }, [selectedId, overlayKind]);
@@ -79,7 +81,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const active = TOOL_GROUPS.find((g) => g.id === group)!;
 
   return (
-    <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: 24 }}>
+    <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: Math.max(insets.bottom, theme.space.sm) }}>
       <Animated.View key={group} entering={reduced ? undefined : FadeIn.duration(150)}
         style={{ flexDirection: "row", justifyContent: "center", paddingVertical: theme.space.xs, borderBottomWidth: 1, borderBottomColor: theme.colors.surfaceAlt }}>
         {active.tools.map((id) => <ToolButton key={id} {...TOOLS[id]} />)}

@@ -52,6 +52,9 @@ jest.mock("react-native-gesture-handler", () => {
   }
 });
 
+// The library's official Jest mock: zero insets unless a test wraps in SafeAreaProvider with initialMetrics.
+jest.mock("react-native-safe-area-context", () => require("react-native-safe-area-context/jest/mock").default);
+
 jest.mock("expo-linear-gradient", () => {
   const { View } = require("react-native");
   return { LinearGradient: View };

@@ -36,7 +36,7 @@ export function LoadingScreen({ leaving, onGone }: { leaving: boolean; onGone: (
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, fade]} pointerEvents={leaving ? "none" : "auto"}>
-      <Screen style={{ alignItems: "center", justifyContent: "center" }}>
+      <Screen edges={[]} style={{ alignItems: "center", justifyContent: "center" }}>
         <View style={{ alignItems: "center", gap: theme.space.lg }}>
           <Animated.View testID="loading-compass" style={spin}><Compass size={96} /></Animated.View>
           <Animated.View style={[{ alignItems: "center", gap: theme.space.sm }, up]}>

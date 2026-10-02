@@ -30,7 +30,8 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
   const resLabel = RESOLUTIONS.find((r) => r.value === res)?.label ?? "";
 
   return (
-    <Screen style={{ padding: theme.space.xl, paddingTop: 48, gap: theme.space.xl }}>
+    // Presented as an iOS page sheet, which already sits below the status bar: only the bottom inset applies.
+    <Screen edges={["bottom"]} style={{ padding: theme.space.xl, paddingTop: theme.space.xxl, gap: theme.space.xl }}>
       <Title size={26}>Export</Title>
       {(state.status === "idle" || state.status === "unavailable") && (
         <View style={{ gap: theme.space.sm }}>
