@@ -1,5 +1,5 @@
 import { decrypt, importKey } from "../crypto.ts";
-import { ApiError, PlatformError } from "../errors.ts";
+import { PlatformError } from "../errors.ts";
 import { accessTokenFor, saveTokens } from "../tokens.ts";
 import { fakeAdapter, fakeDeps, TEST_KEY, tokens, USER } from "./fakes.ts";
 
@@ -25,6 +25,7 @@ test("an expiring token is refreshed, saved, and the old refresh token kept when
   const deps = fakeDeps();
   await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T10:00:30.000Z" }), profile);
   expect((await accessTokenFor(deps, USER, "youtube")).accessToken).toBe("access-2");
+  expect(deps.adapters.youtube!.refresh).toHaveBeenCalledWith(expect.anything(), "refresh-1");
   const row = (await deps.db.getAccount(USER, "youtube"))!;
   const key = await importKey(TEST_KEY);
   expect(await decrypt(key, row.accessTokenEnc)).toBe("access-2");
@@ -55,5 +56,22 @@ test("refresh failure marks the account and throws reconnect", async () => {
 test("expired with no refresh token -> reconnect", async () => {
   const deps = fakeDeps();
   await saveTokens(deps, USER, "youtube", tokens({ refreshToken: null, expiresAt: "2026-10-02T09:00:00.000Z" }), profile);
-  await expect(accessTokenFor(deps, USER, "youtube")).rejects.toBeInstanceOf(ApiError);
+  await expect(accessTokenFor(deps, USER, "youtube")).rejects.toMatchObject({ status: 401, code: "reconnect" });
+  expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBe(true);
+});
+
+test("a platform 5xx is rethrown and does not flag the account", async () => {
+  const adapter = fakeAdapter({ refresh: jest.fn(async () => { throw new PlatformError("youtube", 503, "down"); }) });
+  const deps = fakeDeps({ adapters: { youtube: adapter } });
+  await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile);
+  await expect(accessTokenFor(deps, USER, "youtube")).rejects.toMatchObject({ status: 503 });
+  expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBeUndefined();
+});
+
+test("a network error becomes 502 platform_unreachable and does not flag the account", async () => {
+  const adapter = fakeAdapter({ refresh: jest.fn(async () => { throw new TypeError("fetch failed"); }) });
+  const deps = fakeDeps({ adapters: { youtube: adapter } });
+  await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile);
+  await expect(accessTokenFor(deps, USER, "youtube")).rejects.toMatchObject({ status: 502, code: "platform_unreachable" });
+  expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBeUndefined();
 });
