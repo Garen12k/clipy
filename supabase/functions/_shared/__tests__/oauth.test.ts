@@ -25,6 +25,22 @@ test.each([
   await expect(oauthStart(fakeDeps(), USER, body)).rejects.toMatchObject({ code });
 });
 
+test.each([
+  ["a fragment", `${RETURN}#frag`],
+  ["an over-long address", `exp://${"a".repeat(501)}`],
+])("start rejects a returnUrl with %s", async (_n, returnUrl) => {
+  await expect(oauthStart(fakeDeps(), USER, { platform: "youtube", returnUrl })).rejects.toMatchObject({ code: "bad_request" });
+});
+
+test("a returnUrl that already has a query is accepted and the callback appends with &", async () => {
+  const deps = fakeDeps();
+  const returnUrl = "exp://h/--/oauth?x=1";
+  const { authUrl } = await oauthStart(deps, USER, { platform: "youtube", returnUrl });
+  const state = new URL(authUrl).searchParams.get("state")!;
+  const { redirect } = await oauthCallback(deps, cb(`code=abc&state=${state}`));
+  expect(redirect).toBe("exp://h/--/oauth?x=1&status=ok&platform=youtube");
+});
+
 test("start reports unavailable when a secret is missing", async () => {
   const deps = fakeDeps({ env: { get: () => undefined } });
   await expect(oauthStart(deps, USER, { platform: "youtube", returnUrl: RETURN })).rejects.toMatchObject({ status: 409, code: "unavailable" });

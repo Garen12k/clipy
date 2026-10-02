@@ -3,7 +3,7 @@ import { challengeFor, randomToken } from "../pkce.ts";
 import { adapterCtx, availableAdapter, isPlatformId, type Deps } from "../types.ts";
 
 /** Where the callback may send the browser back to: Expo Go (exp/exps) or the built app (clipy). Nothing else. */
-export const RETURN_URL = /^(exp|exps|clipy):\/\/[^\s]*$/;
+export const RETURN_URL = /^(exp|exps|clipy):\/\/[^\s#]{0,500}$/;
 export const STATE_TTL_MS = 600_000;
 
 export async function oauthStart(deps: Deps, userId: string, body: unknown): Promise<{ authUrl: string }> {
