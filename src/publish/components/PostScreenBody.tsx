@@ -27,7 +27,7 @@ import { cardStyle, SignInCard } from "./SignInCard";
 /** Same look as the editor's text fields (TextPanel / NumField). */
 const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, borderRadius: theme.radius.chip, fontFamily: theme.fonts.body, padding: 10, fontSize: 16 } as const;
 const small = { fontSize: 12 } as const;
-const goBack =() => (router.canGoBack() ? router.back() : router.replace("/"));
+const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
 
 export function PostScreenBody({ target: { video, projectId, title } }: { target: PostTarget }) {
   const session = useSession();

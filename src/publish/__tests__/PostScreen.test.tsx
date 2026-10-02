@@ -233,6 +233,12 @@ test("a finished post is recorded on the open project", async () => {
   expect(Haptics.notificationAsync).toHaveBeenCalled();
 });
 
+test("a finished TikTok post (no link) is recorded on the open project with url null", async () => {
+  await render(<PostScreen />);
+  await act(() => { onPosted("tiktok", null); });
+  expect(useEditorStore.getState().project!.posts).toEqual([{ platform: "tiktok", url: null, postedAt: "2026-10-02T10:00:00.000Z" }]);
+});
+
 test("a post for a different (or no) project is not recorded", async () => {
   mockParams = { ...baseParams, projectId: undefined };
   await render(<PostScreen />);
