@@ -1,7 +1,7 @@
 export const theme = {
   colors: {
     bg: "#0A1B33", bgDeep: "#081527", bgEnd: "#0C2542", surface: "#0E2440", surfaceAlt: "#17365C",
-    accent: "#D9B36A", accentPressed: "#B8934D", onAccent: "#0A1B33",
+    accent: "#D9B36A", onAccent: "#0A1B33",
     text: "#F6E7C1", textMuted: "#9FB3CC", hairline: "rgba(217,179,106,0.45)",
     sea: "#1C6E9E", seaLight: "#2E86AB", danger: "#E5484D",
     laneText: "#D9B36A", laneSticker: "#E86A7A", laneMusic: "#3BA7C9",
