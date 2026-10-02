@@ -6,8 +6,10 @@ export interface ChunkReader { size: number; read(offset: number, length: number
 export function openReader(uri: string): ChunkReader {
   const file = new File(uri);
   const handle = file.open(FileMode.ReadOnly);
+  let size: number;
+  try { size = file.size; } catch (e) { try { handle.close(); } catch { /* ignore */ } throw e; }
   return {
-    size: file.size,
+    size,
     read(offset, length) { handle.offset = offset; return handle.readBytes(length); },
     close() { try { handle.close(); } catch { /* already closed */ } },
   };
