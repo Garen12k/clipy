@@ -15,6 +15,12 @@ test("shows name, duration badge and edited line; press and long-press work", as
   expect(onPress).toHaveBeenCalled(); expect(onLongPress).toHaveBeenCalled();
 });
 
+test("a damaged project has no duration badge", async () => {
+  await render(<ProjectCard summary={{ ...summary, durationSec: 0, updatedAt: "", broken: true }} index={0} onPress={jest.fn()} onLongPress={jest.fn()} />);
+  expect(screen.getByText("Damaged")).toBeTruthy();
+  expect(screen.queryByText("0:00")).toBeNull();
+});
+
 test("cell is exactly half the row (not flex:1) so an odd last card does not stretch", async () => {
   await render(<ProjectCard summary={summary} index={0} onPress={jest.fn()} onLongPress={jest.fn()} />);
   const style = StyleSheet.flatten(screen.getByTestId("project-card-cell").props.style);

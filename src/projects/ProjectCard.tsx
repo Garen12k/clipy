@@ -22,9 +22,11 @@ export function ProjectCard({ summary, index, onPress, onLongPress }: Props) {
         style={{ borderRadius: theme.radius.card, borderWidth: 1.5, borderColor: summary.broken ? theme.colors.danger : theme.colors.hairline, backgroundColor: theme.colors.surface, overflow: "hidden", aspectRatio: 3 / 4 }}>
         {summary.thumbUri ? <Image source={{ uri: summary.thumbUri }} style={{ position: "absolute", width: "100%", height: "100%" }} resizeMode="cover" />
           : <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><Body muted>{summary.broken ? "Damaged" : "No preview"}</Body></View>}
-        <View style={{ position: "absolute", top: theme.space.sm, right: theme.space.sm, backgroundColor: theme.colors.scrimStrong, borderRadius: theme.radius.pill, paddingHorizontal: theme.space.sm, paddingVertical: 2 }}>
-          <Body weight="semi" style={{ fontSize: 11, color: theme.colors.accent }}>{formatDuration(summary.durationSec)}</Body>
-        </View>
+        {summary.broken ? null : (
+          <View style={{ position: "absolute", top: theme.space.sm, right: theme.space.sm, backgroundColor: theme.colors.scrimStrong, borderRadius: theme.radius.pill, paddingHorizontal: theme.space.sm, paddingVertical: 2 }}>
+            <Body weight="semi" style={{ fontSize: 11, color: theme.colors.accent }}>{formatDuration(summary.durationSec)}</Body>
+          </View>
+        )}
         <LinearGradient colors={["transparent", theme.colors.scrimStrong]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.md, paddingTop: theme.space.xl }}>
           <Body weight="semi" numberOfLines={1} style={{ color: summary.broken ? theme.colors.danger : theme.colors.text }}>{summary.name}</Body>
           <Body muted style={{ fontSize: 11 }}>{summary.updatedAt ? editedLabel(summary.updatedAt) : ""}</Body>
