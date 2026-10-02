@@ -25,8 +25,50 @@ test("youtube: defaults, limits and the private-until-audit note", () => {
   expect(yt.captionMax).toBe(5000);
 });
 
-test("clientAdapters has youtube and tiktok", () => {
-  expect(Object.keys(clientAdapters).sort()).toEqual(["tiktok", "youtube"]);
+test("clientAdapters has youtube, tiktok, instagram and facebook", () => {
+  expect(Object.keys(clientAdapters).sort()).toEqual(["facebook", "instagram", "tiktok", "youtube"]);
+  for (const id of Object.keys(clientAdapters) as (keyof typeof clientAdapters)[]) expect(clientAdapters[id]!.id).toBe(id);
+});
+
+const MB = 1024 * 1024;
+
+test("instagram: caption 2200, no options, Reel limits at the boundaries, the processing note", () => {
+  const ig = clientAdapters.instagram!;
+  expect(ig.id).toBe("instagram");
+  expect(ig.captionMax).toBe(2200);
+  expect(ig.hasOptions).toBe(false);
+  expect(ig.defaultOptions("Beach day")).toEqual({});
+  expect(ig.validate(video, "hello", {})).toBeNull();
+  expect(ig.validate({ ...video, durationSec: 2.9 }, "", {})).toBe("Instagram Reels must be at least 3 seconds.");
+  expect(ig.validate({ ...video, durationSec: 3 }, "", {})).toBeNull();
+  expect(ig.validate({ ...video, durationSec: 90.1 }, "", {})).toBeNull();
+  expect(ig.validate({ ...video, durationSec: 900 }, "", {})).toBeNull();
+  expect(ig.validate({ ...video, durationSec: 900.1 }, "", {})).toBe("Instagram Reels can be up to 15 minutes.");
+  expect(ig.validate({ ...video, fileSize: 300 * MB }, "", {})).toBeNull();
+  expect(ig.validate({ ...video, fileSize: 300 * MB + 1 }, "", {})).toBe("Instagram accepts videos up to 300 MB.");
+  expect(ig.validate(video, "x".repeat(2200), {})).toBeNull();
+  expect(ig.validate(video, "x".repeat(2201), {})).toBe("Instagram captions can be up to 2200 characters.");
+  expect(ig.note(video)).toBe("Posts as a Reel. Instagram can take a few minutes to process — keep this screen open.");
+  expect(ig.doneNote).toBeUndefined();
+});
+
+test("facebook: caption 5000, no options, Reel limits at the boundaries, the Development-mode note", () => {
+  const fb = clientAdapters.facebook!;
+  expect(fb.id).toBe("facebook");
+  expect(fb.captionMax).toBe(5000);
+  expect(fb.hasOptions).toBe(false);
+  expect(fb.defaultOptions("Beach day")).toEqual({});
+  expect(fb.validate(video, "hello", {})).toBeNull();
+  expect(fb.validate({ ...video, durationSec: 2.9 }, "", {})).toBe("Facebook Reels must be at least 3 seconds.");
+  expect(fb.validate({ ...video, durationSec: 3 }, "", {})).toBeNull();
+  expect(fb.validate({ ...video, durationSec: 90 }, "", {})).toBeNull();
+  expect(fb.validate({ ...video, durationSec: 90.1 }, "", {})).toBe("Facebook Reels can be up to 90 seconds.");
+  expect(fb.validate({ ...video, durationSec: 900 }, "", {})).toBe("Facebook Reels can be up to 90 seconds.");
+  expect(fb.validate({ ...video, fileSize: 300 * MB + 1 }, "", {})).toBeNull();
+  expect(fb.validate({ ...video, fileSize: 1024 ** 3 }, "", {})).toBeNull();
+  expect(fb.validate({ ...video, fileSize: 1024 ** 3 + 1 }, "", {})).toBe("Facebook accepts videos up to 1 GB.");
+  expect(fb.note(video)).toBe("Posts as a Reel on your Page. Until Clipy's Facebook app is switched to Live, the Reel may be visible only to you.");
+  expect(fb.doneNote).toBeUndefined();
 });
 
 test("tiktok: no caption, no options, its limits, the inbox note and the done note", () => {
