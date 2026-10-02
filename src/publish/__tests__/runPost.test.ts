@@ -66,8 +66,8 @@ test("reconnect, platform errors and resumable drops each land in the right stat
   const ta = track(); expect(await runPost(job, a, ta.update, signal())).toBeNull();
   expect(ta.row()).toMatchObject({ phase: "needsReconnect", message: "Reconnect youtube in Accounts." });
 
-  const b = deps(); (b.api.finalize as jest.Mock).mockRejectedValue(new ApiFailure("platform_error", "The video has been rejected."));
-  const tb = track(); await runPost(job, b, tb.update, signal());
+  const b = deps(); (b.api.prepare as jest.Mock).mockRejectedValue(new ApiFailure("platform_error", "The video has been rejected."));
+  const tb = track(); expect(await runPost(job, b, tb.update, signal())).toBeNull();
   expect(tb.row()).toMatchObject({ phase: "failed", message: "The video has been rejected.", resumable: false });
 
   const c = deps({ uploadGoogleResumable: jest.fn(async () => { throw new UploadError("The connection dropped. Check your internet, then resume.", true); }) });
@@ -167,4 +167,68 @@ test("reconnect after upload keeps the resume info", async () => {
   const t = track(); const info = await runPost(job, d, t.update, signal());
   expect(t.row()).toMatchObject({ phase: "needsReconnect" });
   expect(info).toMatchObject({ uploaded: true });
+});
+
+describe("a finished upload is never uploaded again", () => {
+  const uploadedInfo = { prepared, uploaded: true, clientResult: '{"id":"abc"}' };
+
+  test.each([
+    ["unreachable", new ApiFailure("unreachable", "offline")],
+    ["internal", new ApiFailure("internal", "Something went wrong.")],
+    ["platform_unreachable", new ApiFailure("platform_unreachable", "Couldn't reach YouTube. Try again.")],
+    ["unauthorized", new ApiFailure("unauthorized", "Sign in again.")],
+    ["signed_out", new ApiFailure("signed_out", "Sign in to Clipy first.")],
+    ["unavailable", new ApiFailure("unavailable", "YouTube isn't set up on the server yet.")],
+    ["not_configured", new ApiFailure("not_configured", "Posting isn't set up yet.")],
+    ["bad_request", new ApiFailure("bad_request", "Finish the upload first.")],
+    ["a plain exception", new Error("boom")],
+  ])("finalize failing with %s is resumable and keeps the upload result", async (_name, err) => {
+    const d = deps(); (d.api.finalize as jest.Mock).mockRejectedValue(err);
+    const t = track(); const info = await runPost(job, d, t.update, signal());
+    expect(t.row()).toMatchObject({ phase: "failed", message: err.message, resumable: true });
+    expect(info).toEqual(uploadedInfo);
+  });
+
+  test("a status poll failing with a non-final code is resumable", async () => {
+    const d = deps();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockRejectedValue(new ApiFailure("unavailable", "not set up"));
+    const t = track(); expect(await runPost(job, d, t.update, signal())).toEqual(uploadedInfo);
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true });
+  });
+
+  test("cancel then a failure while polling still keeps the upload resumable", async () => {
+    const ac = new AbortController();
+    const d = deps();
+    (d.api.finalize as jest.Mock).mockImplementation(async () => { ac.abort(); throw new ApiFailure("internal", "Something went wrong."); });
+    const t = track(); expect(await runPost(job, d, t.update, ac.signal)).toEqual(uploadedInfo);
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true });
+  });
+
+  test.each([
+    ["platform_error", "The video has been rejected."],
+    ["not_found", "That upload no longer exists."],
+  ])("%s after the upload is final: keeps the platform's text, says Retry uploads again, drops the info", async (code, text) => {
+    const d = deps(); (d.api.finalize as jest.Mock).mockRejectedValue(new ApiFailure(code, text));
+    const t = track(); expect(await runPost(job, d, t.update, signal())).toBeNull();
+    expect(t.row()).toMatchObject({ phase: "failed", message: `${text} Retry will upload the video again.`, resumable: false });
+  });
+
+  test("end to end: upload done, finalize unreachable, resume finalizes with the stored result and never uploads again", async () => {
+    const d = deps();
+    (d.api.finalize as jest.Mock).mockRejectedValueOnce(new ApiFailure("platform_unreachable", "Couldn't reach YouTube. Try again."));
+    const t = track();
+    const info = await runPost(job, d, t.update, signal());
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true });
+    expect(d.uploadGoogleResumable).toHaveBeenCalledTimes(1);
+
+    (d.uploadGoogleResumable as jest.Mock).mockClear(); (d.openReader as jest.Mock).mockClear(); (d.api.prepare as jest.Mock).mockClear(); (d.api.finalize as jest.Mock).mockClear();
+    await runPost(job, d, t.update, signal(), info);
+    expect(d.uploadGoogleResumable).not.toHaveBeenCalled();
+    expect(d.uploadRelay).not.toHaveBeenCalled();
+    expect(d.openReader).not.toHaveBeenCalled();
+    expect(d.api.prepare).not.toHaveBeenCalled();
+    expect(d.api.finalize).toHaveBeenCalledWith("s1", '{"id":"abc"}');
+    expect(t.row()).toMatchObject({ phase: "done", url: "https://youtu.be/abc" });
+  });
 });

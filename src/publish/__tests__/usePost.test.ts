@@ -48,15 +48,32 @@ test("onPosted fires once per successful run", async () => {
   expect(onPosted).toHaveBeenCalledWith("youtube", "https://y/1");
 });
 
-test("retry of a resumable failure passes the stored ResumeInfo; non-resumable passes null", async () => {
+test("retry of a resumable failure passes the stored ResumeInfo; non-resumable before the upload passes null", async () => {
+  const notUploaded: ResumeInfo = { ...info, uploaded: false };
   const { h } = await setup();
   await act(async () => h.result.current.start([yt]));
-  await act(async () => { calls[0].update({ phase: "failed", resumable: true }); calls[0].finish(info); });
+  await act(async () => { calls[0].update({ phase: "failed", resumable: true }); calls[0].finish(notUploaded); });
   await act(async () => h.result.current.retry(yt));
-  expect(calls[1].resume).toBe(info);
-  await act(async () => { calls[1].update({ phase: "failed", resumable: false }); calls[1].finish(info); });
+  expect(calls[1].resume).toBe(notUploaded);
+  await act(async () => { calls[1].update({ phase: "failed", resumable: false }); calls[1].finish(notUploaded); });
   await act(async () => h.result.current.retry(yt));
   expect(calls[2].resume).toBeNull();
+});
+
+test("retry after a finished upload passes the stored info even when the row is not marked resumable", async () => {
+  const { h } = await setup();
+  await act(async () => h.result.current.start([yt]));
+  await act(async () => { calls[0].update({ phase: "failed", resumable: false }); calls[0].finish(info); });
+  await act(async () => h.result.current.retry(yt));
+  expect(calls[1].resume).toBe(info);
+});
+
+test("retry after a final failure (runPost dropped the info) starts over", async () => {
+  const { h } = await setup();
+  await act(async () => h.result.current.start([yt]));
+  await act(async () => { calls[0].update({ phase: "failed", resumable: false }); calls[0].finish(null); });
+  await act(async () => h.result.current.retry(yt));
+  expect(calls[1].resume).toBeNull();
 });
 
 test("cancel aborts every controller", async () => {

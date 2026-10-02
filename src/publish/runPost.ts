@@ -22,8 +22,12 @@ export const POLL_LIMIT = 40; // 2 minutes
 
 /** The server decides the chunk size and protocol; refuse a plan we cannot follow. */
 const planIsValid = (p: Prepared) => Number.isInteger(p.chunkSize) && p.chunkSize > 0 && !(p.protocol === "google-resumable" && !p.uploadUrl);
-/** Failures that say "try again", not "the platform refused". */
-const RETRYABLE = new Set(["unreachable", "internal", "platform_unreachable"]);
+/**
+ * After the upload finished, every failure is resumable (the stored session decides) except these two: the server says
+ * the session itself is gone or finished-and-failed, so only a fresh upload can help.
+ */
+const FINAL_AFTER_UPLOAD = new Set(["platform_error", "not_found"]);
+const messageOf = (e: unknown) => (e instanceof Error && e.message ? e.message : "Something went wrong.");
 
 /** Runs one platform's post to the end. Never throws: every outcome is reported through `update`. Returns what Resume needs, or null. */
 export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Partial<RowState>) => void, signal: AbortSignal, resumeFrom: ResumeInfo | null = null): Promise<ResumeInfo | null> {
@@ -69,9 +73,15 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
     const uploaded = !!info?.uploaded;
     if (signal.aborted && !uploaded) update({ ...IDLE_ROW });
     else if (e instanceof ApiFailure && e.code === "reconnect") update({ phase: "needsReconnect", message: e.message });
-    else if (e instanceof ApiFailure && uploaded && RETRYABLE.has(e.code)) update({ phase: "failed", message: e.message, resumable: true });
+    else if (uploaded && e instanceof ApiFailure && FINAL_AFTER_UPLOAD.has(e.code)) {
+      // Nothing left to resume: drop the info so Retry starts over, and say so.
+      update({ phase: "failed", message: `${messageOf(e)} Retry will upload the video again.`, resumable: false });
+      return null;
+    }
+    // A finished upload is never uploaded again: any other failure keeps the info for Resume.
+    else if (uploaded) update({ phase: "failed", message: messageOf(e), resumable: true });
     else if (e instanceof UploadError) update({ phase: "failed", message: e.message, resumable: e.resumable });
-    else update({ phase: "failed", message: e instanceof Error && e.message ? e.message : "Something went wrong.", resumable: false });
+    else update({ phase: "failed", message: messageOf(e), resumable: false });
   } finally { reader?.close(); }
   return info;
 }

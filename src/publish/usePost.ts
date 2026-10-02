@@ -60,8 +60,10 @@ export function usePost(video: VideoInfo, onPosted: (platform: PlatformId, url: 
   const start = useCallback((jobs: Array<Omit<PostJob, "video">>) => { for (const j of jobs) run(j, null); }, [run]);
   const retry = useCallback((job: Omit<PostJob, "video">) => {
     const row = rowsRef.current[job.platform];
+    const stored = resumeInfo.current[job.platform] ?? null;
     const resumable = (row.phase === "failed" && row.resumable) || row.phase === "needsReconnect";
-    run(job, resumable ? resumeInfo.current[job.platform] ?? null : null);
+    // A finished upload is never sent again: its info is kept whatever the row says (runPost drops it when only a fresh upload can help).
+    run(job, resumable || stored?.uploaded ? stored : null);
   }, [run]);
   const cancel = useCallback(() => {
     for (const ac of Object.values(aborts.current)) ac?.abort();
