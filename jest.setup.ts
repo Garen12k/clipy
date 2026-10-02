@@ -63,3 +63,14 @@ jest.mock("expo-haptics", () => ({
   impactAsync: jest.fn(async () => {}), notificationAsync: jest.fn(async () => {}),
   ImpactFeedbackStyle: { Light: "light", Medium: "medium" }, NotificationFeedbackType: { Success: "success" },
 }));
+jest.mock("expo-sqlite/localStorage/install", () => {
+  const m = new Map<string, string>();
+  (globalThis as { localStorage?: unknown }).localStorage = { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v); }, removeItem: (k: string) => { m.delete(k); } };
+  return {};
+});
+jest.mock("expo-apple-authentication", () => {
+  const { View } = require("react-native");
+  return { isAvailableAsync: jest.fn(async () => true), signInAsync: jest.fn(), AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
+    AppleAuthenticationButton: View, AppleAuthenticationButtonType: { SIGN_IN: 0 }, AppleAuthenticationButtonStyle: { WHITE: 0 } };
+});
+jest.mock("expo-web-browser", () => ({ openAuthSessionAsync: jest.fn() }));

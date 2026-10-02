@@ -1,0 +1,4 @@
+project_id = "clipy"
+
+[functions.oauth-callback]
+verify_jwt = false

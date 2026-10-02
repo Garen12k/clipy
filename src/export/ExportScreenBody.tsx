@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
-import { clipDuration } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
+import { fileSize } from "@/src/lib/fileInfo";
 import { formatDuration } from "@/src/lib/format";
 import { Compass } from "@/src/theme/Compass";
 import { theme } from "@/src/theme/theme";
@@ -12,16 +12,23 @@ import { ProgressRing } from "@/src/ui/ProgressRing";
 import { Screen } from "@/src/ui/Screen";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Body, Title } from "@/src/ui/Text";
-import { canExport4K, estimateBytes, exportableClips, formatBytes, RESOLUTIONS, type Resolution } from "./estimate";
+import { canExport4K, estimateBytes, exportableClips, exportDuration, formatBytes, RESOLUTIONS, type Resolution } from "./estimate";
 import type { ExportState } from "./useExport";
 
-type Props = { project: Project; missingSourceUris?: string[]; state: ExportState; start: (r: Resolution) => void; cancel: () => void; reset: () => void; onSave: () => void; onShare: () => void; onDone: () => void };
+type Props = {
+  project: Project; missingSourceUris?: string[]; state: ExportState; start: (r: Resolution) => void; cancel: () => void; reset: () => void;
+  onSave: () => void; onShare: () => void; onDone: () => void;
+  /** When given, "Post to…" is the main action on the finish screen and Save to Photos steps down to secondary. */
+  onPost?: () => void;
+};
 
-export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone }: Props) {
+export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone, onPost }: Props) {
   const [res, setRes] = useState<Resolution>(1080);
   const clips = exportableClips(project, missingSourceUris);
   const has4K = canExport4K(clips);
-  const duration = clips.reduce((s, c) => s + clipDuration(c), 0);
+  const duration = exportDuration(project, missingSourceUris);
+  const doneUri = state.status === "done" ? state.fileUri ?? "" : "";
+  const bytes = useMemo(() => fileSize(doneUri), [doneUri]);
   const wasDone = useRef(false);
   useEffect(() => {
     if (state.status === "done" && !wasDone.current) haptic("success");
@@ -64,9 +71,12 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: theme.space.md }}>
           <ProgressRing progress={1} size={120} done />
           <Title size={20}>Ready to sail</Title>
-          <Body muted>{`${resLabel} · ${formatDuration(duration)}`}</Body>
+          <Body muted>{[resLabel, formatDuration(duration), bytes > 0 ? formatBytes(bytes) : null].filter(Boolean).join(" · ")}</Body>
           <View style={{ alignSelf: "stretch", gap: theme.space.md, marginTop: theme.space.lg }}>
-            <PrimaryButton title="Save to Photos" onPress={onSave} />
+            {onPost ? (<>
+              <PrimaryButton title="Post to…" onPress={onPost} />
+              <SecondaryButton title="Save to Photos" onPress={onSave} />
+            </>) : <PrimaryButton title="Save to Photos" onPress={onSave} />}
             <SecondaryButton title="Share" onPress={onShare} />
             <SecondaryButton title="Done" onPress={onDone} />
           </View>

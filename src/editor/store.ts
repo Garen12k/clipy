@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { totalDuration } from "./model/timeline";
-import type { Project } from "./model/types";
+import type { PostRecord, Project } from "./model/types";
 
 export const HISTORY_LIMIT = 50;
 export const MIN_PPS = 20;
@@ -25,6 +25,7 @@ interface EditorState {
   apply: (op: EditOp) => void;
   beginTransaction: () => void;
   applyTransient: (op: EditOp) => void;
+  addPostRecord: (record: PostRecord) => void;
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
@@ -49,6 +50,9 @@ function afterChange(s: EditorState, next: Project): Partial<EditorState> {
   return { project: next, dirty: true, selectedClipId: selected, selectedOverlayId: selectedOverlay, playhead: Math.min(s.playhead, totalDuration(next)) };
 }
 
+/** Post records are not undoable: carry the live list onto a restored snapshot (same object when unchanged). */
+const withPosts = (p: Project, posts: PostRecord[]): Project => (p.posts === posts ? p : { ...p, posts });
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   ...initial,
   setProject: (p, missingSourceUris = []) => set({ ...initial, project: p, missingSourceUris }),
@@ -71,17 +75,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (next === s.project) return;
     set(afterChange(s, next));
   },
+  addPostRecord: (record) => {
+    const s = get();
+    if (!s.project) return;
+    set({ project: { ...s.project, posts: [...s.project.posts, record] }, dirty: true });
+  },
   undo: () => {
     const s = get();
     const prev = s.past[s.past.length - 1];
     if (!prev || !s.project) return;
-    set({ ...afterChange(s, prev), past: s.past.slice(0, -1), future: [s.project, ...s.future] });
+    set({ ...afterChange(s, withPosts(prev, s.project.posts)), past: s.past.slice(0, -1), future: [s.project, ...s.future] });
   },
   redo: () => {
     const s = get();
     const [next, ...rest] = s.future;
     if (!next || !s.project) return;
-    set({ ...afterChange(s, next), past: [...s.past, s.project].slice(-HISTORY_LIMIT), future: rest });
+    set({ ...afterChange(s, withPosts(next, s.project.posts)), past: [...s.past, s.project].slice(-HISTORY_LIMIT), future: rest });
   },
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,

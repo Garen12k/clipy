@@ -3,7 +3,9 @@ import { router } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useEditorStore } from "@/src/editor/store";
 import { ExportScreenBody } from "@/src/export/ExportScreenBody";
+import { exportDuration } from "@/src/export/estimate";
 import { useExport } from "@/src/export/useExport";
+import { isBackendConfigured } from "@/src/publish/supabase";
 import { ToastHost, useToast } from "@/src/ui/Toast";
 
 export default function ExportScreen() {
@@ -29,5 +31,16 @@ export default function ExportScreen() {
     catch (e) { useToast.getState().show(e instanceof Error ? e.message : "Could not share the video."); }
   }
 
-  return (<><ExportScreenBody project={project} missingSourceUris={missingSourceUris} state={state} start={start} cancel={cancel} reset={reset} onSave={onSave} onShare={onShare} onDone={() => router.back()} /><ToastHost /></>);
+  // Close this modal first, then open Post as a normal screen on top of the editor: inside the modal, swiping the
+  // sheet down would tear down an upload without the "Stop posting?" prompt. The exported file is not removed when
+  // this screen closes (nothing deletes cache/exports), so the Post screen can still read it.
+  function onPost() {
+    if (!state.fileUri || !project) return;
+    const params = { fileUri: state.fileUri, durationSec: String(exportDuration(project, missingSourceUris)), mimeType: "video/mp4", projectId: project.id, title: project.name };
+    router.dismiss();
+    router.push({ pathname: "/post", params });
+  }
+
+  return (<><ExportScreenBody project={project} missingSourceUris={missingSourceUris} state={state} start={start} cancel={cancel} reset={reset}
+    onSave={onSave} onShare={onShare} onDone={() => router.back()} onPost={isBackendConfigured() ? onPost : undefined} /><ToastHost /></>);
 }

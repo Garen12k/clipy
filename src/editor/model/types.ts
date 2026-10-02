@@ -2,7 +2,11 @@ export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 3 as const;
+export const SCHEMA_VERSION = 4 as const;
+export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
+export type PostPlatform = (typeof POST_PLATFORMS)[number];
+export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
+export interface PostRecord { platform: PostPlatform; url: string | null; postedAt: string }
 export const FONT_IDS = ["bangers", "anton", "oswald", "montserrat", "pacifico", "permanentMarker", "lobster", "roboto"] as const;
 export type FontId = (typeof FONT_IDS)[number];
 export type Align = "left" | "center" | "right";
@@ -49,7 +53,7 @@ export interface AudioTrack {
 
 export interface Project {
   id: string; name: string; createdAt: string; updatedAt: string; aspectRatio: AspectRatio;
-  clips: Clip[]; overlays: Overlay[]; audioTracks: AudioTrack[]; schemaVersion: typeof SCHEMA_VERSION;
+  clips: Clip[]; overlays: Overlay[]; audioTracks: AudioTrack[]; posts: PostRecord[]; schemaVersion: typeof SCHEMA_VERSION;
 }
 
 export function makeClip(partial: Partial<Clip> & Pick<Clip, "id" | "sourceDuration">): Clip {
@@ -68,7 +72,7 @@ export function makeAudioTrack(partial: Partial<AudioTrack> & Pick<AudioTrack, "
 }
 export function makeProject(partial: Partial<Project> = {}): Project {
   return { id: "p1", name: "Project 1", createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
-    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], schemaVersion: SCHEMA_VERSION, ...partial };
+    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], posts: [], schemaVersion: SCHEMA_VERSION, ...partial };
 }
 
 export function aspectRatioValue(r: AspectRatio): number {

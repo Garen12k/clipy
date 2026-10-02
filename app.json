@@ -10,6 +10,7 @@
     "ios": {
       "bundleIdentifier": "com.clipy.app",
       "supportsTablet": false,
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSpeechRecognitionUsageDescription": "Clipy turns speech in your clips into captions.",
@@ -66,7 +67,9 @@
         }
       ],
       "expo-document-picker",
-      "expo-asset"
+      "expo-asset",
+      "expo-sqlite",
+      "expo-web-browser"
     ]
   }
 }

@@ -1,3 +1,4 @@
+import { clipDuration } from "@/src/editor/model/timeline";
 import type { Clip, Project } from "@/src/editor/model/types";
 
 export type Resolution = 720 | 1080 | 2160;
@@ -10,6 +11,8 @@ export const canExport4K = (clips: { width: number; height: number }[]): boolean
 export function exportableClips(project: Project, missingSourceUris: string[]): Clip[] {
   return project.clips.filter((c) => c.trimEnd > c.trimStart && !missingSourceUris.includes(c.sourceUri));
 }
+/** Length of the exported video in seconds (what the finish screen shows and the Post screen receives). */
+export const exportDuration = (project: Project, missingSourceUris: string[]): number => exportableClips(project, missingSourceUris).reduce((s, c) => s + clipDuration(c), 0);
 /** The music track to export, or `null` if there is none or its source file is missing. */
 export const exportableAudio = (p: Project, missing: string[]) => { const t = p.audioTracks[0]; return t && !missing.includes(t.sourceUri) ? t : null; };
 export function formatBytes(n: number): string {

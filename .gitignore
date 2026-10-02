@@ -45,3 +45,8 @@ yarn-error.*
 
 # local screenshots
 IMG_*.png
+
+# server
+.env
+supabase/.temp/
+supabase/functions/.env

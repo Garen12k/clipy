@@ -21,7 +21,7 @@ test("v3 passes through unchanged (idempotent)", () => {
 });
 
 test("rejects newer versions and malformed files with readable errors", () => {
-  expect(() => migrateProject({ ...v1, schemaVersion: 4 })).toThrow(/newer version of Clipy/);
+  expect(() => migrateProject({ ...v1, schemaVersion: SCHEMA_VERSION + 1 })).toThrow(/newer version of Clipy/);
   expect(() => migrateProject({ schemaVersion: 1 })).toThrow(/missing required fields/);
   expect(() => migrateProject("nope")).toThrow(/missing required fields/);
 });
@@ -29,10 +29,10 @@ test("rejects newer versions and malformed files with readable errors", () => {
 test("v2 → v3 normalises effect fields; v1 → v3 chains", () => {
   const v2 = { ...v1, schemaVersion: 2, overlays: [], audioTracks: [], clips: [{ ...v1.clips[0], muted: false, speed: 7, filter: "sepia", transitionOut: { type: "wipe", duration: 2 } }] };
   const p = migrateProject(v2);
-  expect(p.schemaVersion).toBe(3);
+  expect(p.schemaVersion).toBe(SCHEMA_VERSION);
   expect(p.clips[0]).toMatchObject({ speed: 1, filter: null, transitionOut: { type: "none", duration: 0 } });
   const fromV1 = migrateProject(v1);
-  expect(fromV1.schemaVersion).toBe(3);
+  expect(fromV1.schemaVersion).toBe(SCHEMA_VERSION);
   expect(fromV1.clips[0]).toMatchObject({ muted: false, speed: 1, filter: null });
   expect(FILTER_IDS).toContain("none");
 });
@@ -51,7 +51,7 @@ test("a corrupted v3 file loads safely (unknown ids normalised, bad stickers fix
     ],
   };
   const p = migrateProject(bad);
-  expect(p.schemaVersion).toBe(3);
+  expect(p.schemaVersion).toBe(SCHEMA_VERSION);
   expect(p.clips[0]).toMatchObject({ filter: null, speed: 1, transitionOut: { type: "none", duration: 0 } });
   expect(p.clips[1].transitionOut).toEqual({ type: "none", duration: 0 });
   expect(p.overlays.map((o) => o.id)).toEqual(["ok", "blob-emoji"]);
@@ -64,4 +64,13 @@ test("a corrupted v3 file loads safely (unknown ids normalised, bad stickers fix
 test("v3 overlays keep kind; a text overlay without kind gets kind text", () => {
   const v3 = { ...v1, schemaVersion: 2, audioTracks: [], clips: [{ ...v1.clips[0], muted: false }], overlays: [{ id: "o", text: "x", fontId: "bangers", fontScale: 0.07, color: "#fff", background: null, outline: true, align: "center", x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 1 }] };
   expect(migrateProject(v3).overlays[0]).toMatchObject({ kind: "text" });
+});
+
+test("v3 → v4 adds an empty posts list; v4 keeps valid records and drops junk", () => {
+  const v3 = { ...makeProject(), schemaVersion: 3 } as Record<string, unknown>;
+  delete v3.posts;
+  expect(migrateProject(v3)).toMatchObject({ schemaVersion: 4, posts: [] });
+  const good = { platform: "youtube", url: "https://youtu.be/abc", postedAt: "2026-10-02T10:00:00.000Z" };
+  const v4 = { ...makeProject(), posts: [good, { platform: "myspace", url: "x", postedAt: "y" }, "nope", { platform: "tiktok", url: null, postedAt: "2026-10-02T11:00:00.000Z" }] };
+  expect(migrateProject(v4).posts).toEqual([good, { platform: "tiktok", url: null, postedAt: "2026-10-02T11:00:00.000Z" }]);
 });

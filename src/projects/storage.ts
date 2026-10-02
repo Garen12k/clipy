@@ -1,10 +1,10 @@
 import { totalDuration } from "@/src/editor/model/timeline";
 import { migrateProject } from "@/src/editor/model/migrate";
-import { SCHEMA_VERSION, type AudioTrack, type Clip, type Project } from "@/src/editor/model/types";
+import { POST_PLATFORMS, SCHEMA_VERSION, type AudioTrack, type Clip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
 
 export interface PickedAsset { uri: string; durationSec: number; width: number; height: number; fileName?: string }
-export interface ProjectSummary { id: string; name: string; durationSec: number; updatedAt: string; thumbUri: string | null; broken: boolean }
+export interface ProjectSummary { id: string; name: string; durationSec: number; updatedAt: string; thumbUri: string | null; broken: boolean; postedTo: PostPlatform[] }
 export interface StorageDeps { thumbnail(uri: string, timeMs: number): Promise<string>; newId(): string; nowIso(): string }
 
 const ext = (a: PickedAsset) => { const m = /\.([A-Za-z0-9]+)$/.exec(a.fileName ?? a.uri); return (m?.[1] ?? "mp4").toLowerCase(); };
@@ -56,7 +56,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
           trimStart: 0, trimEnd: a.durationSec, speed: 1, filter: null, volume: 1, muted: false, transitionOut: { type: "none", duration: 0 } });
       } catch (e) { failed++; console.warn("import failed", a.uri, e); }
     }
-    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], schemaVersion: SCHEMA_VERSION };
+    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], schemaVersion: SCHEMA_VERSION };
     await saveProject(project);
     await writeThumb(project);
     return { project, failed };
@@ -69,8 +69,9 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       try {
         const p = parse(await fs.readText(jsonPath(id)));
         out.push({ id: p.id, name: p.name, durationSec: totalDuration(p), updatedAt: p.updatedAt,
-          thumbUri: (await fs.exists(thumbPath(id))) ? thumbPath(id) : null, broken: false });
-      } catch { out.push({ id, name: "Can't open", durationSec: 0, updatedAt: "", thumbUri: null, broken: true }); }
+          thumbUri: (await fs.exists(thumbPath(id))) ? thumbPath(id) : null, broken: false,
+          postedTo: POST_PLATFORMS.filter((pl) => p.posts.some((r) => r.platform === pl)) });
+      } catch { out.push({ id, name: "Can't open", durationSec: 0, updatedAt: "", thumbUri: null, broken: true, postedTo: [] }); }
     }
     return out.sort((a, b) => Number(a.broken) - Number(b.broken) || b.updatedAt.localeCompare(a.updatedAt));
   }
@@ -91,7 +92,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       await fs.copy(a.sourceUri, dest);
       audioTracks.push({ ...a, sourceUri: dest });
     }
-    const copy: Project = { ...project, id: copyId, name: `${project.name} copy`, clips, audioTracks, createdAt: deps.nowIso(), updatedAt: deps.nowIso() };
+    const copy: Project = { ...project, id: copyId, name: `${project.name} copy`, clips, audioTracks, createdAt: deps.nowIso(), updatedAt: deps.nowIso(), posts: [] };
     await saveProject(copy);
     if (await fs.exists(thumbPath(id))) await fs.copy(thumbPath(id), thumbPath(copyId));
     return copy;

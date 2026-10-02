@@ -1,3 +1,4 @@
+import { SCHEMA_VERSION } from "@/src/editor/model/types";
 import { memoryFs } from "../fs";
 import { makeStorage, type PickedAsset } from "../storage";
 
@@ -28,7 +29,7 @@ test("createProject copies media, writes project.json and a thumbnail", async ()
   expect(project.clips.map((c) => c.trimEnd)).toEqual([4, 2]);
   expect(project.clips[0].sourceUri).toBe(`${fs.documentDir}projects/id1/media/id2.mov`);
   expect(fs.files.get(`${fs.documentDir}projects/id1/media/id2.mov`)).toBe("A");
-  expect(JSON.parse(fs.files.get(`${fs.documentDir}projects/id1/project.json`)!).schemaVersion).toBe(3);
+  expect(JSON.parse(fs.files.get(`${fs.documentDir}projects/id1/project.json`)!).schemaVersion).toBe(SCHEMA_VERSION);
   expect(fs.files.has(`${fs.documentDir}projects/id1/thumb.jpg`)).toBe(true);
 });
 
@@ -58,7 +59,7 @@ test("saveProject is atomic and loadProject round-trips; missing media is report
 test("loadProject rejects a wrong schemaVersion with a readable error", async () => {
   const { fs, storage } = setup();
   await fs.mkdir(`${fs.documentDir}projects/x`);
-  await fs.writeText(`${fs.documentDir}projects/x/project.json`, JSON.stringify({ id: "x", clips: [], schemaVersion: 4 }));
+  await fs.writeText(`${fs.documentDir}projects/x/project.json`, JSON.stringify({ id: "x", clips: [], schemaVersion: SCHEMA_VERSION + 1 }));
   await expect(storage.loadProject("x")).rejects.toThrow(/newer version/);
 });
 
@@ -71,7 +72,7 @@ test("loadProject migrates a v1 file to v2, adding muted: false", async () => {
     clips: [{ id: "a", sourceUri: "file:///m/a.mp4", sourceDuration: 4, width: 1080, height: 1920, trimStart: 0, trimEnd: 4, speed: 1, filter: null, volume: 1, transitionOut: { type: "none", duration: 0 } }],
   }));
   const { project } = await storage.loadProject("x");
-  expect(project.schemaVersion).toBe(3);
+  expect(project.schemaVersion).toBe(SCHEMA_VERSION);
   expect(project.clips[0]).toMatchObject({ muted: false, volume: 1 });
   expect(project.overlays).toEqual([]);
   expect(project.audioTracks).toEqual([]);
@@ -100,4 +101,30 @@ test("deleteProject, duplicateProject, renameProject", async () => {
   expect((await storage.loadProject(copy.id)).project.name).toBe("Second");
   await storage.deleteProject(project.id);
   expect((await storage.listProjects()).map((s) => s.id)).toEqual([copy.id]);
+});
+
+test("listProjects reports unique postedTo in platform order; new projects have no posts", async () => {
+  const { fs, storage } = setup();
+  const { project } = await storage.createProject("P", []);
+  expect(project.posts).toEqual([]);
+  const at = "2026-10-02T10:00:00.000Z";
+  await storage.saveProject({ ...project, posts: [
+    { platform: "tiktok", url: null, postedAt: at }, { platform: "youtube", url: "u", postedAt: at }, { platform: "youtube", url: "v", postedAt: at }] });
+  await fs.writeText(`${fs.documentDir}projects/bad/project.json`, "{");
+  const list = await storage.listProjects();
+  expect(list.find((p) => p.id === project.id)!.postedTo).toEqual(["youtube", "tiktok"]);
+  expect(list.find((p) => p.id === "bad")!.postedTo).toEqual([]);
+});
+
+test("duplicateProject starts with no posts and leaves the original's records", async () => {
+  const { storage } = setup();
+  const { project } = await storage.createProject("P", []);
+  const post = { platform: "youtube" as const, url: "u", postedAt: "2026-10-02T10:00:00.000Z" };
+  await storage.saveProject({ ...project, posts: [post] });
+  const copy = await storage.duplicateProject(project.id);
+  expect(copy.posts).toEqual([]);
+  const list = await storage.listProjects();
+  expect(list.find((p) => p.id === copy.id)!.postedTo).toEqual([]);
+  expect(list.find((p) => p.id === project.id)!.postedTo).toEqual(["youtube"]);
+  expect((await storage.loadProject(project.id)).project.posts).toEqual([post]);
 });
