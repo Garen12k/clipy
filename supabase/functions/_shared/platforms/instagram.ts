@@ -48,7 +48,7 @@ const accountOf = (b: IgField | undefined): IgAccount | null => {
  * Meta's docs ask for a "User access token" for the Instagram calls; this adapter stores the Page token by default
  * (works in practice, undocumented). `META_IG_TOKEN_KIND=user` switches to the long-lived user token, without new code.
  */
-const useUserToken = (c: AdapterCtx) => c.env.get("META_IG_TOKEN_KIND") === "user";
+const useUserToken = (c: AdapterCtx) => (c.env.get("META_IG_TOKEN_KIND") ?? "").trim().toLowerCase() === "user";
 
 /**
  * The Instagram professional account, with either kind of token. With a Page token "me" is the Page and carries the field;
@@ -63,7 +63,14 @@ async function igAccount(c: AdapterCtx, token: string): Promise<IgAccount> {
   }
   const direct = accountOf(me);
   if (direct) return direct;
-  const b = await ig<{ data?: unknown }>(c, "/me/accounts", { token, params: { fields: IG_FIELDS, limit: "100" } });
+  let b: { data?: unknown };
+  try {
+    b = await ig<{ data?: unknown }>(c, "/me/accounts", { token, params: { fields: IG_FIELDS, limit: "100" } });
+  } catch (e) {
+    // With a Page token, "me" is a Page and has no accounts edge (#100): there simply is no linked Instagram account.
+    if (e instanceof PlatformError && e.reason === "100") throw new PlatformError("instagram", 400, NO_IG);
+    throw e;
+  }
   const rows = Array.isArray(b.data) ? (b.data as IgField[]) : [];
   for (const row of rows) {
     const a = accountOf(row && typeof row === "object" ? row : undefined);
@@ -88,9 +95,9 @@ function processingFailure(s: Container, code: "ERROR" | "EXPIRED"): PlatformErr
 }
 
 /**
- * Shared by finalize and status, so it must be safe to run again: `media_publish` is only ever called for a container that
- * reports `FINISHED` (not yet published). If publish fails temporarily, the next run finds the container `FINISHED`
- * (publish again) or `PUBLISHED` (done). Statuses: https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-container
+ * Shared by finalize and status, so it must be safe to run again: `media_publish` is only called when the container reports
+ * `FINISHED`. Overlapping calls can still both try (the status may also lag a publish that just succeeded); a refused publish
+ * is therefore answered as temporary, and a later run finds `PUBLISHED` (done) or `FINISHED` (publish again). Statuses: https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-container
  */
 async function publishWhenReady(c: AdapterCtx, token: string, ref: Record<string, unknown>): Promise<PublishResult> {
   // Asking again cannot repair a missing reference. 502 with `platform_error`: the handlers do not mark the session failed
@@ -112,14 +119,22 @@ async function publishWhenReady(c: AdapterCtx, token: string, ref: Record<string
     if (!(e instanceof PlatformError)) throw e;
     if (e.reason === NOT_READY) return { status: "processing" };
     if (e.status === 401 || metaIsAuthError(e)) throw e;
-    // Another call (an overlapping poll, or a request the phone gave up on) may have published this container, and Meta then
-    // refuses ours. Look once before deciding, so a live Reel is never reported as failed. The original error is never masked.
+    // A refused publish is never final here: another call (an overlapping poll, or a request the phone gave up on) may be
+    // publishing or have published this container, and Meta's status can lag behind. Look once: PUBLISHED is done,
+    // ERROR/EXPIRED is the container's own failure. Otherwise (still FINISHED, or the look itself failed) answer with a
+    // temporary error carrying Meta's words, so the app's Resume asks again and a later check finds PUBLISHED. A container
+    // that truly cannot be published expires after 24 hours and then fails for good (EXPIRED above).
+    const temporary = () => {
+      const t = new PlatformError("instagram", 503, e.message);
+      t.reason = e.reason;
+      return t;
+    };
     let again: Container;
-    try { again = await readContainer(c, token, ref.containerId); } catch { throw e; }
+    try { again = await readContainer(c, token, ref.containerId); } catch { throw temporary(); }
     if (again.status_code === "PUBLISHED") return { status: "done", url: null };
     if (again.status_code === "IN_PROGRESS") return { status: "processing" };
     if (again.status_code === "ERROR" || again.status_code === "EXPIRED") throw processingFailure(again, again.status_code);
-    throw e;
+    throw temporary();
   }
   const mediaId = text(published.id);
   if (!mediaId) return { status: "done", url: null };
