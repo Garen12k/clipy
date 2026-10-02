@@ -1,3 +1,4 @@
+import { PlatformError } from "../errors.ts";
 import { youtube } from "../platforms/youtube.ts";
 import type { AdapterCtx } from "../types.ts";
 import { INPUT } from "./fakes.ts";
@@ -113,6 +114,30 @@ test("finalize builds the link from the uploaded video's id and refuses anything
   expect(await youtube.finalize(ctx([]).ctx, "at", { ...s, clientResult: '{"kind":"youtube#video","id":"abc123XYZ_-"}' })).toEqual({ status: "done", url: "https://youtu.be/abc123XYZ_-" });
   for (const bad of [null, "not json", '{"id":"../../evil"}', "{}"])
     await expect(youtube.finalize(ctx([]).ctx, "at", { ...s, clientResult: bad })).rejects.toMatchObject({ message: "YouTube did not confirm the upload." });
+});
+
+test("prepare passes Google's reason along without showing it", async () => {
+  const err = { error: { code: 403, message: "Request had insufficient authentication scopes.", errors: [{ message: "Insufficient Permission", domain: "global", reason: "insufficientPermissions" }], status: "PERMISSION_DENIED" } };
+  await expect(youtube.prepare(ctx([new Response(JSON.stringify(err), { status: 403 })]).ctx, "at", INPUT))
+    .rejects.toMatchObject({ status: 403, reason: "insufficientPermissions", message: err.error.message });
+  const details = { error: { code: 403, message: "Request had insufficient authentication scopes.", status: "PERMISSION_DENIED", details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT" }] } };
+  await expect(youtube.prepare(ctx([new Response(JSON.stringify(details), { status: 403 })]).ctx, "at", INPUT)).rejects.toMatchObject({ reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT" });
+});
+
+describe("isAuthError", () => {
+  const e = (status: number, message: string, reason?: string) => { const x = new PlatformError("youtube", status, message); x.reason = reason; return x; };
+  test.each([
+    ["insufficientPermissions", e(403, "Insufficient Permission", "insufficientPermissions")],
+    ["ACCESS_TOKEN_SCOPE_INSUFFICIENT", e(403, "Request had insufficient authentication scopes.", "ACCESS_TOKEN_SCOPE_INSUFFICIENT")],
+    ["a message saying insufficient", e(403, "Request had insufficient authentication scopes.")],
+  ])("a 403 for %s means reconnect", (_n, err) => { expect(youtube.isAuthError!(err)).toBe(true); });
+  test.each([
+    ["quotaExceeded", e(403, "The request cannot be completed because you have exceeded your quota.", "quotaExceeded")],
+    ["a quota reason even with an 'insufficient' message", e(403, "Insufficient quota.", "quotaExceeded")],
+    ["forbidden", e(403, "Forbidden", "forbidden")],
+    ["a 400 saying insufficient", e(400, "insufficient data", "badRequest")],
+    ["a 500", e(500, "insufficient", "backendError")],
+  ])("%s is not an auth error", (_n, err) => { expect(youtube.isAuthError!(err)).toBe(false); });
 });
 
 test("secrets", () => { expect(youtube.secrets).toEqual(["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"]); });

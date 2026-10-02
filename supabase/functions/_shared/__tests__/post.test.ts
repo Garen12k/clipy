@@ -3,6 +3,7 @@ import { postFinalize } from "../handlers/postFinalize.ts";
 import { postPrepare } from "../handlers/postPrepare.ts";
 import { postStatus } from "../handlers/postStatus.ts";
 import { MAX_RELAY_BYTES, postUpload } from "../handlers/postUpload.ts";
+import { youtube } from "../platforms/youtube.ts";
 import { saveTokens } from "../tokens.ts";
 import { fakeAdapter, fakeDeps, INPUT, tokens, USER } from "./fakes.ts";
 
@@ -36,6 +37,18 @@ test("a platform auth failure during prepare becomes reconnect", async () => {
   const deps = await connected({ adapters: { youtube: adapter } });
   await expect(postPrepare(deps, USER, body)).rejects.toMatchObject({ status: 401, code: "reconnect" });
   expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBe(true);
+});
+
+test("a 403 the adapter calls an auth error during prepare becomes reconnect; a quota 403 does not", async () => {
+  const scope = new PlatformError("youtube", 403, "Request had insufficient authentication scopes."); scope.reason = "insufficientPermissions";
+  const quota = new PlatformError("youtube", 403, "The request cannot be completed because you have exceeded your quota."); quota.reason = "quotaExceeded";
+  const isAuthError = youtube.isAuthError;
+  const a = await connected({ adapters: { youtube: fakeAdapter({ isAuthError, prepare: jest.fn(async () => { throw scope; }) }) } });
+  await expect(postPrepare(a, USER, body)).rejects.toMatchObject({ status: 401, code: "reconnect" });
+  expect((await a.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBe(true);
+  const b = await connected({ adapters: { youtube: fakeAdapter({ isAuthError, prepare: jest.fn(async () => { throw quota; }) }) } });
+  await expect(postPrepare(b, USER, body)).rejects.toMatchObject({ status: 403, code: "platform_error", message: quota.message });
+  expect((await b.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBeUndefined();
 });
 
 test("finalize publishes, records the link, and is idempotent", async () => {
@@ -151,6 +164,20 @@ test("relay upload rejects a mismatched total, overrun, and a finished session",
 });
 const fin = (deps: any, sessionId: string) => postFinalize(deps, USER, { sessionId, clientResult: null });
 async function prepared(over: any = {}) { const deps = await connected({ adapters: { youtube: fakeAdapter(over) } }); const { sessionId } = await postPrepare(deps, USER, body); return { deps, sessionId, adapter: deps.adapters.youtube! }; }
+
+test("a token endpoint 5xx during finalize is platform_unreachable, keeps the session, and a retry publishes", async () => {
+  const refresh = jest.fn()
+    .mockRejectedValueOnce(new PlatformError("youtube", 503, "Backend Error"))
+    .mockResolvedValue(tokens({ accessToken: "access-2", refreshToken: null, expiresAt: "2026-10-02T12:00:00.000Z" }));
+  const adapter = fakeAdapter({ refresh });
+  const deps = await connected({ adapters: { youtube: adapter } });
+  const { sessionId } = await postPrepare(deps, USER, body);
+  await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile); // expired by finalize time
+  await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 502, code: "platform_unreachable" });
+  expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
+  expect(adapter.finalize).not.toHaveBeenCalled();
+  expect(await fin(deps, sessionId)).toEqual({ status: "done", url: "https://youtu.be/abc123XYZ_-" });
+});
 
 test("finalize done ends done with the url", async () => {
   const { deps, sessionId } = await prepared();

@@ -15,6 +15,14 @@ const id = (c: AdapterCtx) => c.env.get("YOUTUBE_CLIENT_ID") ?? "";
 const secret = (c: AdapterCtx) => c.env.get("YOUTUBE_CLIENT_SECRET") ?? "";
 const oauthErr = (b: unknown) => (b as { error_description?: string; error?: string } | null)?.error_description ?? (b as { error?: string } | null)?.error;
 const apiErr = (b: unknown) => (b as { error?: { message?: string } } | null)?.error?.message;
+type GoogleError = { error?: { errors?: Array<{ reason?: unknown }>; details?: Array<{ reason?: unknown }> } } | null;
+/** Google's reason: `error.errors[].reason` (e.g. insufficientPermissions, quotaExceeded), else `error.details[].reason` (e.g. ACCESS_TOKEN_SCOPE_INSUFFICIENT). */
+const apiReason = (b: unknown) => {
+  const e = (b as GoogleError)?.error;
+  const r = [...(Array.isArray(e?.errors) ? e.errors : []), ...(Array.isArray(e?.details) ? e.details : [])].find((x) => typeof x?.reason === "string")?.reason;
+  return typeof r === "string" ? r : undefined;
+};
+const SCOPE_REASONS = ["insufficientPermissions", "ACCESS_TOKEN_SCOPE_INSUFFICIENT"];
 
 /** YouTube rejects angle brackets in titles and descriptions. A title is one line; a description keeps its line breaks. */
 const cleanLine = (s: string) => s.replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
@@ -57,7 +65,7 @@ export const youtube: ServerAdapter = {
   },
   async profile(c, accessToken) {
     const res = await c.fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true", { headers: { Authorization: `Bearer ${accessToken}` } });
-    const b = await readJson<{ items?: Array<{ id: string; snippet: { title: string; thumbnails?: { default?: { url?: string } } } }> }>("youtube", res, apiErr);
+    const b = await readJson<{ items?: Array<{ id: string; snippet: { title: string; thumbnails?: { default?: { url?: string } } } }> }>("youtube", res, apiErr, apiReason);
     const ch = b?.items?.[0];
     if (!ch) throw new PlatformError("youtube", 400, "This Google account has no YouTube channel yet.");
     return { accountId: ch.id, displayName: ch.snippet.title, avatarUrl: ch.snippet.thumbnails?.default?.url ?? null };
@@ -72,7 +80,7 @@ export const youtube: ServerAdapter = {
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Length": String(input.fileSize), "X-Upload-Content-Type": input.mimeType },
       body: JSON.stringify({ snippet: { title, description, categoryId: "22" }, status: { privacyStatus, selfDeclaredMadeForKids: false } }),
     });
-    if (!res.ok) await readJson("youtube", res, apiErr);
+    if (!res.ok) await readJson("youtube", res, apiErr, apiReason);
     const uploadUrl = res.headers.get("Location");
     if (!uploadUrl) throw new PlatformError("youtube", 502, "YouTube did not return an upload address.");
     // Whether the session URL alone authorises the upload is undocumented for YouTube; this switch sends a short-lived token to the phone instead.
@@ -86,4 +94,9 @@ export const youtube: ServerAdapter = {
     return { status: "done", url: `https://youtu.be/${videoId}` };
   },
   async status() { return { status: "done", url: null }; },
+  // A 403 for a missing permission (the user unticked the upload box at consent) needs a new grant; a quota 403 does not.
+  isAuthError(e) {
+    if (e.status !== 403 || /quota|limit/i.test(e.reason ?? "")) return false;
+    return SCOPE_REASONS.includes(e.reason ?? "") || /insufficient/i.test(e.message);
+  },
 };

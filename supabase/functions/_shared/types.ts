@@ -1,3 +1,5 @@
+import type { PlatformError } from "./errors.ts";
+
 export const PLATFORM_IDS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
 export type PlatformId = (typeof PLATFORM_IDS)[number];
 export interface Env { get(name: string): string | undefined }
@@ -21,6 +23,8 @@ export interface ServerAdapter {
   relayChunk?(ctx: AdapterCtx, accessToken: string, ref: Record<string, unknown>, chunk: { offset: number; total: number; body: Uint8Array }): Promise<{ nextOffset: number; ref?: Record<string, unknown> }>;
   finalize(ctx: AdapterCtx, accessToken: string, s: { ref: Record<string, unknown>; input: PrepareInput; clientResult: string | null; account: Profile }): Promise<PublishResult>;
   status(ctx: AdapterCtx, accessToken: string, ref: Record<string, unknown>): Promise<PublishResult>;
+  /** True when a platform error (besides a 401) means the grant itself is not enough, e.g. a permission was not given: the account must be reconnected. */
+  isAuthError?(e: PlatformError): boolean;
 }
 export interface AccountRow { userId: string; platform: PlatformId; accountId: string; displayName: string; avatarUrl: string | null; accessTokenEnc: string; refreshTokenEnc: string | null; expiresAt: string | null; scopes: string; meta: Record<string, unknown> }
 export interface OAuthStateRow { state: string; userId: string; platform: PlatformId; codeVerifier: string; returnUrl: string; expiresAt: string }

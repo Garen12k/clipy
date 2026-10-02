@@ -1,6 +1,6 @@
 import { decrypt, importKey } from "../crypto.ts";
 import { PlatformError } from "../errors.ts";
-import { accessTokenFor, saveTokens } from "../tokens.ts";
+import { accessTokenFor, saveTokens, withPlatformAuth } from "../tokens.ts";
 import { fakeAdapter, fakeDeps, TEST_KEY, tokens, USER } from "./fakes.ts";
 
 const profile = { accountId: "UC123", displayName: "My Channel", avatarUrl: null };
@@ -60,12 +60,51 @@ test("expired with no refresh token -> reconnect", async () => {
   expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBe(true);
 });
 
-test("a platform 5xx is rethrown and does not flag the account", async () => {
-  const adapter = fakeAdapter({ refresh: jest.fn(async () => { throw new PlatformError("youtube", 503, "down"); }) });
+test.each([500, 503, 408, 429])("a platform %i on refresh becomes 502 platform_unreachable and does not flag the account", async (status) => {
+  const adapter = fakeAdapter({ refresh: jest.fn(async () => { throw new PlatformError("youtube", status, "down"); }) });
   const deps = fakeDeps({ adapters: { youtube: adapter } });
   await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile);
-  await expect(accessTokenFor(deps, USER, "youtube")).rejects.toMatchObject({ status: 503 });
+  const err = await accessTokenFor(deps, USER, "youtube").catch((e: unknown) => e);
+  expect(err).toMatchObject({ status: 502, code: "platform_unreachable" });
+  expect(err).not.toBeInstanceOf(PlatformError);
   expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBeUndefined();
+});
+
+test("another platform 4xx on refresh is rethrown as the platform's error", async () => {
+  const adapter = fakeAdapter({ refresh: jest.fn(async () => { throw new PlatformError("youtube", 403, "Forbidden."); }) });
+  const deps = fakeDeps({ adapters: { youtube: adapter } });
+  await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile);
+  await expect(accessTokenFor(deps, USER, "youtube")).rejects.toMatchObject({ status: 403, code: "platform_error", message: "Forbidden." });
+  expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBeUndefined();
+});
+
+describe("withPlatformAuth", () => {
+  async function setup(isAuthError?: (e: PlatformError) => boolean) {
+    const deps = fakeDeps({ adapters: { youtube: fakeAdapter(isAuthError ? { isAuthError } : {}) } });
+    await saveTokens(deps, USER, "youtube", tokens(), profile);
+    return { deps, account: (await deps.db.getAccount(USER, "youtube"))! };
+  }
+  const forbidden = new PlatformError("youtube", 403, "Request had insufficient authentication scopes.");
+
+  test("an error the adapter calls an auth error flags the account and becomes reconnect", async () => {
+    const isAuthError = jest.fn(() => true);
+    const { deps, account } = await setup(isAuthError);
+    await expect(withPlatformAuth(deps, account, async () => { throw forbidden; })).rejects.toMatchObject({ status: 401, code: "reconnect" });
+    expect(isAuthError).toHaveBeenCalledWith(forbidden);
+    expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBe(true);
+  });
+
+  test("an error the adapter does not call an auth error is rethrown unchanged", async () => {
+    const { deps, account } = await setup(() => false);
+    await expect(withPlatformAuth(deps, account, async () => { throw forbidden; })).rejects.toBe(forbidden);
+    expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBeUndefined();
+  });
+
+  test("without the hook only a 401 is an auth error", async () => {
+    const { deps, account } = await setup();
+    await expect(withPlatformAuth(deps, account, async () => { throw forbidden; })).rejects.toBe(forbidden);
+    await expect(withPlatformAuth(deps, account, async () => { throw new PlatformError("youtube", 401, "Invalid Credentials"); })).rejects.toMatchObject({ code: "reconnect" });
+  });
 });
 
 test("a network error becomes 502 platform_unreachable and does not flag the account", async () => {

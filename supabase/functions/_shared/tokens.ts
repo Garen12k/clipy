@@ -15,12 +15,13 @@ export async function saveTokens(deps: Deps, userId: string, platform: PlatformI
 }
 
 const reconnect = (platform: PlatformId) => new ApiError(401, "reconnect", `Reconnect ${platform} in Accounts.`);
+const unreachable = (platform: PlatformId) => new ApiError(502, "platform_unreachable", `Couldn't reach ${platform}. Try again.`);
 
-/** Runs a platform call; a 401 from the platform flags the account and becomes `reconnect`. */
+/** Runs a platform call; a 401 from the platform (or an error the adapter calls an auth error) flags the account and becomes `reconnect`. */
 export async function withPlatformAuth<T>(deps: Deps, account: AccountRow, run: () => Promise<T>): Promise<T> {
   try { return await run(); }
   catch (e) {
-    if (e instanceof PlatformError && e.status === 401) {
+    if (e instanceof PlatformError && (e.status === 401 || deps.adapters[account.platform]?.isAuthError?.(e) === true)) {
       await deps.db.upsertAccount({ ...account, meta: { ...account.meta, needsReconnect: true } });
       throw reconnect(account.platform);
     }
@@ -44,9 +45,10 @@ export async function accessTokenFor(deps: Deps, userId: string, platform: Platf
   catch (e) {
     if (e instanceof PlatformError) {
       if (e.status === 400 || e.status === 401) { await flag(); throw reconnect(platform); }
-      throw e;
+      // A busy or failing token endpoint is temporary: say "try again", never "the platform refused".
+      if (!(e.status >= 500 || e.status === 408 || e.status === 429)) throw e;
     }
-    throw new ApiError(502, "platform_unreachable", `Couldn't reach ${platform}. Try again.`);
+    throw unreachable(platform);
   }
   const updated: AccountRow = {
     ...account, accessTokenEnc: await encrypt(key, next.accessToken),

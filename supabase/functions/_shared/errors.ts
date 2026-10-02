@@ -3,6 +3,8 @@ export class ApiError extends Error {
 }
 /** A failure reported by a platform; `message` is the platform's own text, shown to the user verbatim. */
 export class PlatformError extends ApiError {
+  /** The platform's machine-readable reason (e.g. YouTube's `insufficientPermissions`), when it sent one. Never shown to the user. */
+  public reason?: string;
   constructor(public platform: string, status: number, message: string, code = "platform_error") { super(status, code, message); }
 }
 export function json(body: unknown, status = 200): Response {
