@@ -16,6 +16,18 @@ export async function saveTokens(deps: Deps, userId: string, platform: PlatformI
 
 const reconnect = (platform: PlatformId) => new ApiError(401, "reconnect", `Reconnect ${platform} in Accounts.`);
 
+/** Runs a platform call; a 401 from the platform flags the account and becomes `reconnect`. */
+export async function withPlatformAuth<T>(deps: Deps, account: AccountRow, run: () => Promise<T>): Promise<T> {
+  try { return await run(); }
+  catch (e) {
+    if (e instanceof PlatformError && e.status === 401) {
+      await deps.db.upsertAccount({ ...account, meta: { ...account.meta, needsReconnect: true } });
+      throw reconnect(account.platform);
+    }
+    throw e;
+  }
+}
+
 export async function accessTokenFor(deps: Deps, userId: string, platform: PlatformId): Promise<{ accessToken: string; account: AccountRow }> {
   const account = await deps.db.getAccount(userId, platform);
   if (!account) throw new ApiError(404, "not_connected", `Connect ${platform} in Accounts first.`);
