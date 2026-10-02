@@ -1,11 +1,16 @@
-import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { useEffect, useState } from "react";
+import { View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
+import type { Ionicons } from "@expo/vector-icons";
 import { addTextOverlay, defaultOverlayRange, deleteClip, deleteOverlay, duplicateClip, splitClipAt } from "@/src/editor/model/ops";
 import { isTextOverlay, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { TOOL_GROUPS, groupForSelection, type ToolGroupId, type ToolId } from "@/src/editor/toolGroups";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
+import { haptic } from "@/src/ui/haptics";
 import { ToolButton } from "@/src/ui/ToolButton";
+import { useReducedMotion } from "@/src/ui/useReducedMotion";
 import { CaptionsSheet } from "./CaptionsSheet";
 import { MusicSheet } from "./MusicSheet";
 import { RatioSheet } from "./RatioSheet";
@@ -19,6 +24,7 @@ import { TransitionSheet } from "./TransitionSheet";
 import { TrimSheet } from "./TrimSheet";
 import { VolumeSheet } from "./VolumeSheet";
 
+type IoniconName = keyof typeof Ionicons.glyphMap;
 type PanelFor = { id: string; kind: "text" | "sticker" } | null;
 type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void };
 
@@ -30,6 +36,10 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const apply = useEditorStore((s) => s.apply);
   const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | null>(null);
   const noSel = !selectedId;
+  const reduced = useReducedMotion();
+  const [group, setGroup] = useState<ToolGroupId>("edit");
+  const overlayKind = useEditorStore((s) => s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind ?? null);
+  useEffect(() => { const g = groupForSelection({ clipId: selectedId, overlayKind }); if (g) setGroup(g); }, [selectedId, overlayKind]);
 
   const addText = () => {
     const { project, playhead, selectOverlay } = useEditorStore.getState();
@@ -52,24 +62,33 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     onPanelChange(null);
   };
 
+  const TOOLS: Record<ToolId, { label: string; icon: IoniconName; disabled?: boolean; onPress: () => void }> = {
+    split: { label: "Split", icon: "cut", disabled: noSel, onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
+    trim: { label: "Trim", icon: "crop", disabled: noSel, onPress: () => setSheet("trim") },
+    duplicate: { label: "Duplicate", icon: "copy", disabled: noSel, onPress: () => selectedId && apply((p) => duplicateClip(p, selectedId)) },
+    delete: { label: "Delete", icon: "trash", disabled: noSel, onPress: () => { if (selectedId) { haptic("medium"); apply((p) => deleteClip(p, selectedId)); } } },
+    ratio: { label: "Ratio", icon: "phone-portrait", onPress: () => setSheet("ratio") },
+    filter: { label: "Filter", icon: "color-filter", disabled: noSel, onPress: () => setSheet("filter") },
+    speed: { label: "Speed", icon: "speedometer", disabled: noSel, onPress: () => setSheet("speed") },
+    transition: { label: "Transition", icon: "swap-horizontal", disabled: noSel || selectedIndex === clipCount - 1, onPress: () => onTransitionChange(selectedIndex) },
+    templates: { label: "Templates", icon: "color-wand", disabled: !hasClips, onPress: () => setSheet("templates") },
+    text: { label: "Text", icon: "text", disabled: !hasClips, onPress: addText },
+    captions: { label: "Captions", icon: "chatbox-ellipses", disabled: !hasClips, onPress: () => setSheet("captions") },
+    sticker: { label: "Sticker", icon: "happy", disabled: !hasClips, onPress: () => setSheet("sticker") },
+    music: { label: "Music", icon: "musical-notes", onPress: () => setSheet("music") },
+    volume: { label: "Volume", icon: "volume-high", disabled: noSel, onPress: () => setSheet("volume") },
+  };
+  const active = TOOL_GROUPS.find((g) => g.id === group)!;
+
   return (
-    <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.surfaceAlt, paddingBottom: 24 }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 8 }}>
-        <ToolButton label="Split" icon="cut" disabled={noSel} onPress={() => apply((p) => splitClipAt(p, useEditorStore.getState().playhead))} />
-        <ToolButton label="Trim" icon="crop" disabled={noSel} onPress={() => setSheet("trim")} />
-        <ToolButton label="Speed" icon="speedometer" disabled={noSel} onPress={() => setSheet("speed")} />
-        <ToolButton label="Filter" icon="color-filter" disabled={noSel} onPress={() => setSheet("filter")} />
-        <ToolButton label="Templates" icon="color-wand" disabled={!hasClips} onPress={() => setSheet("templates")} />
-        <ToolButton label="Transition" icon="swap-horizontal" disabled={noSel || selectedIndex === clipCount - 1} onPress={() => onTransitionChange(selectedIndex)} />
-        <ToolButton label="Ratio" icon="phone-portrait" onPress={() => setSheet("ratio")} />
-        <ToolButton label="Text" icon="text" disabled={!hasClips} onPress={addText} />
-        <ToolButton label="Sticker" icon="happy" disabled={!hasClips} onPress={() => setSheet("sticker")} />
-        <ToolButton label="Captions" icon="chatbox-ellipses" disabled={!hasClips} onPress={() => setSheet("captions")} />
-        <ToolButton label="Music" icon="musical-notes" onPress={() => setSheet("music")} />
-        <ToolButton label="Volume" icon="volume-high" disabled={noSel} onPress={() => setSheet("volume")} />
-        <ToolButton label="Duplicate" icon="copy" disabled={noSel} onPress={() => selectedId && apply((p) => duplicateClip(p, selectedId))} />
-        <ToolButton label="Delete" icon="trash" disabled={noSel} onPress={() => selectedId && apply((p) => deleteClip(p, selectedId))} />
-      </ScrollView>
+    <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: 24 }}>
+      <Animated.View key={group} entering={reduced ? undefined : FadeIn.duration(150)}
+        style={{ flexDirection: "row", justifyContent: "center", paddingVertical: theme.space.xs, borderBottomWidth: 1, borderBottomColor: theme.colors.surfaceAlt }}>
+        {active.tools.map((id) => <ToolButton key={id} {...TOOLS[id]} />)}
+      </Animated.View>
+      <View accessibilityRole="tablist" style={{ flexDirection: "row", justifyContent: "space-around", paddingTop: theme.space.xs }}>
+        {TOOL_GROUPS.map((g) => <ToolButton key={g.id} role="tab" label={g.label} icon={g.icon} active={g.id === group} onPress={() => { haptic("light"); setGroup(g.id); }} />)}
+      </View>
       <RatioSheet visible={sheet === "ratio"} onClose={() => setSheet(null)} />
       <TrimSheet clipId={selectedId} visible={sheet === "trim"} onClose={() => setSheet(null)} />
       <SpeedSheet clipId={selectedId} visible={sheet === "speed"} onClose={() => setSheet(null)} />
