@@ -24,8 +24,17 @@ test("shows time and ratio; play toggles; undo/redo follow history", async () =>
   expect(screen.getByRole("button", { name: "Redo" })).toBeEnabled();
 });
 
-test("play is disabled for an empty project and restarts from 0 at the end", async () => {
+test("play is disabled for an empty project", async () => {
   useEditorStore.getState().setProject(makeProject());
   await render(<TransportRow />);
   expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
+});
+
+test("play at the end restarts from 0", async () => {
+  await render(<TransportRow />);
+  await act(() => { useEditorStore.getState().seek(21); });
+  expect(useEditorStore.getState().playhead).toBe(21);
+  await fireEvent.press(screen.getByRole("button", { name: "Play" }));
+  expect(useEditorStore.getState().playhead).toBe(0);
+  expect(useEditorStore.getState().isPlaying).toBe(true);
 });
