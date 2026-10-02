@@ -74,6 +74,46 @@ test("callback: platform failure comes back as an error with the platform's word
   expect(redirect).toBe(`${RETURN}?status=error&platform=youtube&message=Bad%20Request`);
 });
 
+async function callbackWith(over: Parameters<typeof fakeAdapter>[0], depsOver: Parameters<typeof fakeDeps>[0] = {}) {
+  const adapter = fakeAdapter(over);
+  const deps = fakeDeps({ adapters: { youtube: adapter }, ...depsOver });
+  const { authUrl } = await oauthStart(deps, USER, { platform: "youtube", returnUrl: RETURN });
+  const state = new URL(authUrl).searchParams.get("state")!;
+  return { adapter, deps, ...(await oauthCallback(deps, cb(`code=abc&state=${state}`))) };
+}
+
+test("callback: a failed exchange revokes nothing", async () => {
+  const { adapter } = await callbackWith({ exchange: jest.fn(async () => { throw new PlatformError("youtube", 400, "Bad Request"); }) });
+  expect(adapter.revoke).not.toHaveBeenCalled();
+});
+
+test("callback: profile failing after the exchange revokes the new grant and keeps the platform's message", async () => {
+  const { adapter, deps, redirect } = await callbackWith({ profile: jest.fn(async () => { throw new PlatformError("youtube", 400, "This Google account has no YouTube channel yet."); }) });
+  expect(adapter.revoke).toHaveBeenCalledWith(expect.anything(), { accessToken: "access-1", refreshToken: "refresh-1" });
+  expect(redirect).toBe(`${RETURN}?status=error&platform=youtube&message=${encodeURIComponent("This Google account has no YouTube channel yet.")}`);
+  expect(await deps.db.getAccount(USER, "youtube")).toBeNull();
+});
+
+test("callback: saving failing after the exchange revokes the new grant", async () => {
+  const err = jest.spyOn(console, "error").mockImplementation(() => {});
+  const { adapter, redirect } = await callbackWith({}, { key: async () => { throw new Error("TOKEN_ENC_KEY missing"); } });
+  expect(adapter.revoke).toHaveBeenCalledWith(expect.anything(), { accessToken: "access-1", refreshToken: "refresh-1" });
+  expect(redirect).toBe(`${RETURN}?status=error&platform=youtube&message=${encodeURIComponent("Something went wrong.")}`);
+  err.mockRestore();
+});
+
+test("callback: a revoke failure never masks the original error", async () => {
+  const err = jest.spyOn(console, "error").mockImplementation(() => {});
+  const { adapter, redirect } = await callbackWith({
+    profile: jest.fn(async () => { throw new PlatformError("youtube", 403, "Channel suspended."); }),
+    revoke: jest.fn(async () => { throw new TypeError("fetch failed"); }),
+  });
+  expect(adapter.revoke).toHaveBeenCalled();
+  expect(redirect).toBe(`${RETURN}?status=error&platform=youtube&message=${encodeURIComponent("Channel suspended.")}`);
+  expect(JSON.stringify(err.mock.calls)).not.toContain("access-1");
+  err.mockRestore();
+});
+
 test("callback: unknown or expired state throws (there is nowhere safe to redirect)", async () => {
   await expect(oauthCallback(fakeDeps(), cb("code=abc&state=nope"))).rejects.toMatchObject({ status: 400, code: "bad_state" });
   const deps = fakeDeps();
