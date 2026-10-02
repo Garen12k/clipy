@@ -173,6 +173,18 @@ test("tiktokChunkRanges matches TikTok's plan: floor(total / chunk) chunks, the 
   expect(tiktokChunkRanges(3, 10)).toEqual([{ start: 0, end: 3 }]);
 });
 
+// Same sizes as the server's chunkPlan tests (supabase/.../tiktok.test.ts): the two must agree on the count.
+test.each([
+  [Math.floor(19.9 * 1024 * 1024), 1, Math.floor(19.9 * 1024 * 1024)],
+  [20 * 1024 * 1024, 2, 10 * 1024 * 1024],
+  [1024 ** 3, 102, 14 * 1024 * 1024],
+])("tiktokChunkRanges(%i, 10 MiB) has %i chunks; the last is %i bytes", (total, count, lastSize) => {
+  const ranges = tiktokChunkRanges(total, 10 * 1024 * 1024);
+  expect(ranges).toHaveLength(count);
+  expect(ranges[count - 1].end - ranges[count - 1].start).toBe(lastSize);
+  expect(ranges[count - 1].end).toBe(total);
+});
+
 test("uploads each chunk in order; 206 continues, 201 completes", async () => {
   fetchMock.mockResolvedValueOnce(r(206)).mockResolvedValueOnce(r(201));
   const a = args();

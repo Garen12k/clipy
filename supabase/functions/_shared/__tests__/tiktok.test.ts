@@ -77,6 +77,10 @@ test.each([
   [30 * 1024 * 1024, { chunkSize: 10 * 1024 * 1024, totalChunkCount: 3 }],
   // TikTok's own example: 50,000,123 bytes in 10,000,000-byte chunks is 5 chunks; ours are 10 MiB.
   [50_000_123, { chunkSize: 10 * 1024 * 1024, totalChunkCount: 4 }],
+  // Same sizes as the phone's tiktokChunkRanges tests (src/publish/__tests__/upload.test.ts): the two must agree.
+  [Math.floor(19.9 * 1024 * 1024), { chunkSize: 10 * 1024 * 1024, totalChunkCount: 1 }],
+  [20 * 1024 * 1024, { chunkSize: 10 * 1024 * 1024, totalChunkCount: 2 }],
+  [1024 ** 3, { chunkSize: 10 * 1024 * 1024, totalChunkCount: 102 }],
 ])("chunkPlan(%i)", (size, plan) => { expect(chunkPlan(size)).toEqual(plan); });
 
 test("prepare opens an inbox upload and hands the phone the pre-signed address", async () => {
