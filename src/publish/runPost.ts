@@ -12,47 +12,66 @@ export interface PostDeps {
   api: Pick<typeof api, "prepare" | "uploadChunk" | "finalize" | "status">;
   openReader(uri: string): ChunkReader;
   uploadGoogleResumable: typeof uploadGoogleResumable; uploadRelay: typeof uploadRelay;
-  sleep(ms: number): Promise<void>;
+  /** Resolves after `ms`, or early when `signal` aborts. */
+  sleep(ms: number, signal: AbortSignal): Promise<void>;
 }
+/** Everything needed to carry on a post without starting over. */
+export interface ResumeInfo { prepared: Prepared; uploaded: boolean; clientResult: string | null }
 export const POLL_MS = 3000;
 export const POLL_LIMIT = 40; // 2 minutes
 
 /** The server decides the chunk size and protocol; refuse a plan we cannot follow. */
 const planIsValid = (p: Prepared) => Number.isInteger(p.chunkSize) && p.chunkSize > 0 && !(p.protocol === "google-resumable" && !p.uploadUrl);
+/** Failures that say "try again", not "the platform refused". */
+const RETRYABLE = new Set(["unreachable", "internal", "platform_unreachable"]);
 
-/** Runs one platform's post to the end. Never throws: every outcome is reported through `update`. Returns the prepared session (for Resume) or null. */
-export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Partial<RowState>) => void, signal: AbortSignal, resumeFrom: Prepared | null = null): Promise<Prepared | null> {
-  let prepared = resumeFrom;
+/** Runs one platform's post to the end. Never throws: every outcome is reported through `update`. Returns what Resume needs, or null. */
+export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Partial<RowState>) => void, signal: AbortSignal, resumeFrom: ResumeInfo | null = null): Promise<ResumeInfo | null> {
+  let info = resumeFrom;
   let reader: ChunkReader | null = null;
+  const stillProcessing = () => update({ phase: "done", url: null, message: `Still processing on ${PLATFORMS[job.platform].label} — check the app later.` });
   try {
-    if (!prepared) {
+    if (!info) {
       update({ ...IDLE_ROW, phase: "preparing" });
       const { video } = job;
-      prepared = await deps.api.prepare({ platform: job.platform, fileSize: video.fileSize, durationSec: video.durationSec, mimeType: video.mimeType, caption: job.caption, options: job.options });
-    }
-    const p = prepared;
-    if (!planIsValid(p)) {
+      const prepared = await deps.api.prepare({ platform: job.platform, fileSize: video.fileSize, durationSec: video.durationSec, mimeType: video.mimeType, caption: job.caption, options: job.options });
+      if (signal.aborted) { update({ ...IDLE_ROW }); return null; }
+      if (!planIsValid(prepared)) {
+        update({ phase: "failed", message: "The server sent an unexpected upload plan.", resumable: false });
+        return null;
+      }
+      info = { prepared, uploaded: false, clientResult: null };
+    } else if (!planIsValid(info.prepared)) {
       update({ phase: "failed", message: "The server sent an unexpected upload plan.", resumable: false });
       return null;
     }
-    update({ phase: "uploading", message: null, resumable: false });
-    reader = deps.openReader(job.video.fileUri);
-    const args = { reader, mimeType: job.video.mimeType, chunkSize: p.chunkSize, onProgress: (f: number) => update({ progress: f }), signal, resume: !!resumeFrom };
-    let clientResult: string | null = null;
-    if (p.protocol === "google-resumable") clientResult = await deps.uploadGoogleResumable(p.uploadUrl ?? "", p.uploadHeaders, args);
-    else await deps.uploadRelay((offset, total, bytes, sig) => deps.api.uploadChunk(p.sessionId, offset, total, bytes, sig), args);
-
-    update({ phase: "publishing", progress: 1 });
-    let result = await deps.api.finalize(p.sessionId, clientResult);
-    for (let i = 0; result.status === "processing" && i < POLL_LIMIT; i++) { await deps.sleep(POLL_MS); result = await deps.api.status(p.sessionId); }
-    update(result.status === "done"
-      ? { phase: "done", url: result.url, message: null }
-      : { phase: "done", url: null, message: `Still processing on ${PLATFORMS[job.platform].label} — check the app later.` });
+    const p = info.prepared;
+    if (!info.uploaded) {
+      update({ phase: "uploading", message: null, resumable: false });
+      reader = deps.openReader(job.video.fileUri);
+      const args = { reader, mimeType: job.video.mimeType, chunkSize: p.chunkSize, onProgress: (f: number) => update({ progress: f }), signal, resume: !!resumeFrom };
+      let clientResult: string | null = null;
+      if (p.protocol === "google-resumable") clientResult = await deps.uploadGoogleResumable(p.uploadUrl ?? "", p.uploadHeaders, args);
+      else await deps.uploadRelay((offset, total, bytes, sig) => deps.api.uploadChunk(p.sessionId, offset, total, bytes, sig), args);
+      info = { prepared: p, uploaded: true, clientResult };
+    }
+    // The video now exists on the platform: finalize is never cancelled, and cancel while polling ends the row as "still processing".
+    update({ phase: "publishing", progress: 1, message: null, resumable: false });
+    let result = await deps.api.finalize(p.sessionId, info.clientResult);
+    for (let i = 0; result.status === "processing" && i < POLL_LIMIT; i++) {
+      await deps.sleep(POLL_MS, signal);
+      if (signal.aborted) { stillProcessing(); return info; }
+      result = await deps.api.status(p.sessionId);
+    }
+    if (result.status === "done") update({ phase: "done", url: result.url, message: null });
+    else stillProcessing();
   } catch (e) {
-    if (signal.aborted) update({ ...IDLE_ROW });
+    const uploaded = !!info?.uploaded;
+    if (signal.aborted && !uploaded) update({ ...IDLE_ROW });
     else if (e instanceof ApiFailure && e.code === "reconnect") update({ phase: "needsReconnect", message: e.message });
+    else if (e instanceof ApiFailure && uploaded && RETRYABLE.has(e.code)) update({ phase: "failed", message: e.message, resumable: true });
     else if (e instanceof UploadError) update({ phase: "failed", message: e.message, resumable: e.resumable });
     else update({ phase: "failed", message: e instanceof Error && e.message ? e.message : "Something went wrong.", resumable: false });
   } finally { reader?.close(); }
-  return prepared;
+  return info;
 }

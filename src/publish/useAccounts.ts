@@ -17,17 +17,19 @@ export function useAccounts(enabled: boolean) {
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
+  const requestId = useRef(0);
   const refresh = useCallback(async () => {
+    const id = ++requestId.current; // last request wins
     try {
       const list = await api.accounts();
-      if (!mounted.current) return;
+      if (!mounted.current || id !== requestId.current) return;
       setPlatforms(list); setError(null); setStatus("ready");
     } catch (e) {
-      if (!mounted.current) return;
+      if (!mounted.current || id !== requestId.current) return;
       setError(text(e)); setStatus("error");
     }
   }, []);
-  useEffect(() => { if (enabled) { setStatus("loading"); refresh(); } else setStatus("idle"); }, [enabled, refresh]);
+  useEffect(() => { if (enabled) { setStatus("loading"); refresh(); } else { requestId.current++; setPlatforms([]); setStatus("idle"); } }, [enabled, refresh]);
 
   const connect = useCallback(async (platform: PlatformId) => {
     setBusy(platform);

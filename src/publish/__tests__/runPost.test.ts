@@ -1,10 +1,11 @@
 import { ApiFailure, type Prepared } from "../api";
-import { IDLE_ROW, POLL_LIMIT, runPost, type PostDeps, type RowState } from "../runPost";
+import { IDLE_ROW, POLL_LIMIT, runPost, type PostDeps, type ResumeInfo, type RowState } from "../runPost";
 import { UploadError } from "../upload";
 
 const video = { fileUri: "file:///v.mp4", fileSize: 10, durationSec: 21, mimeType: "video/mp4" };
 const job = { platform: "youtube" as const, video, caption: "Beach day", options: { title: "Beach", privacy: "public" } };
 const prepared: Prepared = { sessionId: "s1", protocol: "google-resumable", uploadUrl: "https://u/s", uploadHeaders: {}, chunkSize: 4 };
+const fresh: ResumeInfo = { prepared, uploaded: false, clientResult: null };
 const reader = { size: 10, read: jest.fn(), close: jest.fn() };
 
 function deps(over: Partial<PostDeps> = {}): PostDeps {
@@ -13,7 +14,7 @@ function deps(over: Partial<PostDeps> = {}): PostDeps {
     openReader: jest.fn(() => reader),
     uploadGoogleResumable: jest.fn(async (_u, _h, a) => { a.onProgress(0.5); a.onProgress(1); return '{"id":"abc"}'; }),
     uploadRelay: jest.fn(async () => {}),
-    sleep: jest.fn(async () => {}),
+    sleep: jest.fn(async (_ms: number, _s: AbortSignal) => {}),
     ...over,
   };
 }
@@ -23,7 +24,7 @@ beforeEach(() => { reader.close.mockClear(); });
 
 test("happy path: prepare → upload → publish → done with the link", async () => {
   const d = deps(), t = track();
-  expect(await runPost(job, d, t.update, signal())).toEqual(prepared);
+  expect(await runPost(job, d, t.update, signal())).toEqual({ prepared, uploaded: true, clientResult: '{"id":"abc"}' });
   expect(t.phases).toEqual(["preparing", "uploading", "publishing", "done"]);
   expect(t.row()).toMatchObject({ phase: "done", progress: 1, url: "https://youtu.be/abc", message: null });
   expect(d.api.prepare).toHaveBeenCalledWith({ platform: "youtube", fileSize: 10, durationSec: 21, mimeType: "video/mp4", caption: "Beach day", options: job.options });
@@ -46,7 +47,7 @@ test("processing is polled until done", async () => {
   (d.api.status as jest.Mock).mockResolvedValueOnce({ status: "processing" }).mockResolvedValueOnce({ status: "done", url: "https://p/1" });
   const t = track();
   await runPost(job, d, t.update, signal());
-  expect(d.sleep).toHaveBeenCalledWith(3000);
+  expect(d.sleep).toHaveBeenCalledWith(3000, expect.any(AbortSignal));
   expect(t.row()).toMatchObject({ phase: "done", url: "https://p/1" });
 });
 
@@ -70,14 +71,14 @@ test("reconnect, platform errors and resumable drops each land in the right stat
   expect(tb.row()).toMatchObject({ phase: "failed", message: "The video has been rejected.", resumable: false });
 
   const c = deps({ uploadGoogleResumable: jest.fn(async () => { throw new UploadError("The connection dropped. Check your internet, then resume.", true); }) });
-  const tc = track(); expect(await runPost(job, c, tc.update, signal())).toEqual(prepared);
+  const tc = track(); expect(await runPost(job, c, tc.update, signal())).toEqual(fresh);
   expect(tc.row()).toMatchObject({ phase: "failed", resumable: true });
   expect(reader.close).toHaveBeenCalled();
 });
 
 test("resume skips prepare and tells the uploader to query first", async () => {
   const d = deps();
-  await runPost(job, d, track().update, signal(), prepared);
+  await runPost(job, d, track().update, signal(), fresh);
   expect(d.api.prepare).not.toHaveBeenCalled();
   expect((d.uploadGoogleResumable as jest.Mock).mock.calls[0][2]).toMatchObject({ resume: true, chunkSize: 4, mimeType: "video/mp4" });
 });
@@ -99,4 +100,71 @@ test.each([
   await runPost(job, d, t.update, signal());
   expect(t.row()).toMatchObject({ phase: "failed", message: "The server sent an unexpected upload plan.", resumable: false });
   expect(d.openReader).not.toHaveBeenCalled();
+});
+
+test("cancel during polling stops at once and ends as still processing", async () => {
+  const ac = new AbortController();
+  const d = deps({ sleep: jest.fn(async () => { ac.abort(); }) });
+  (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+  const t = track();
+  await runPost(job, d, t.update, ac.signal);
+  expect(d.api.status).not.toHaveBeenCalled();
+  expect(t.row()).toMatchObject({ phase: "done", url: null, message: "Still processing on YouTube — check the app later." });
+});
+
+test("cancel during the upload returns to idle", async () => {
+  const ac = new AbortController();
+  const d = deps({ uploadGoogleResumable: jest.fn(async () => { ac.abort(); throw new UploadError("Upload cancelled.", false); }) });
+  const t = track(); await runPost(job, d, t.update, ac.signal);
+  expect(t.row()).toMatchObject({ phase: "idle", progress: 0 });
+  expect(d.api.finalize).not.toHaveBeenCalled();
+});
+
+test("cancel while prepare is in flight leaves the row idle", async () => {
+  const ac = new AbortController();
+  const d = deps(); (d.api.prepare as jest.Mock).mockImplementation(async () => { ac.abort(); return prepared; });
+  const t = track(); expect(await runPost(job, d, t.update, ac.signal)).toBeNull();
+  expect(t.row()).toMatchObject({ phase: "idle" });
+  expect(d.openReader).not.toHaveBeenCalled();
+});
+
+test("finalize is not cancelled once the upload finished", async () => {
+  const ac = new AbortController();
+  const d = deps({ uploadGoogleResumable: jest.fn(async () => { ac.abort(); return "{}"; }) });
+  const t = track(); await runPost(job, d, t.update, ac.signal);
+  expect(d.api.finalize).toHaveBeenCalled();
+  expect(t.row()).toMatchObject({ phase: "done", url: "https://youtu.be/abc" });
+});
+
+test("unreachable during finalize is resumable and keeps the upload result", async () => {
+  const d = deps(); (d.api.finalize as jest.Mock).mockRejectedValue(new ApiFailure("unreachable", "offline"));
+  const t = track(); const info = await runPost(job, d, t.update, signal());
+  expect(t.row()).toMatchObject({ phase: "failed", message: "offline", resumable: true });
+  expect(info).toEqual({ prepared, uploaded: true, clientResult: '{"id":"abc"}' });
+});
+
+test("unreachable during status polling is resumable", async () => {
+  const d = deps();
+  (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+  (d.api.status as jest.Mock).mockRejectedValue(new ApiFailure("platform_unreachable", "YouTube unreachable"));
+  const t = track(); await runPost(job, d, t.update, signal());
+  expect(t.row()).toMatchObject({ phase: "failed", resumable: true });
+});
+
+test("resume from an uploaded session skips prepare and the uploaders and finalizes with the stored result", async () => {
+  const d = deps(); const t = track();
+  await runPost(job, d, t.update, signal(), { prepared, uploaded: true, clientResult: "stored" });
+  expect(d.api.prepare).not.toHaveBeenCalled();
+  expect(d.uploadGoogleResumable).not.toHaveBeenCalled();
+  expect(d.uploadRelay).not.toHaveBeenCalled();
+  expect(d.openReader).not.toHaveBeenCalled();
+  expect(d.api.finalize).toHaveBeenCalledWith("s1", "stored");
+  expect(t.row()).toMatchObject({ phase: "done" });
+});
+
+test("reconnect after upload keeps the resume info", async () => {
+  const d = deps(); (d.api.finalize as jest.Mock).mockRejectedValue(new ApiFailure("reconnect", "Reconnect"));
+  const t = track(); const info = await runPost(job, d, t.update, signal());
+  expect(t.row()).toMatchObject({ phase: "needsReconnect" });
+  expect(info).toMatchObject({ uploaded: true });
 });

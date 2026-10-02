@@ -81,6 +81,37 @@ test("results arriving after unmount are ignored", async () => {
   err.mockRestore();
 });
 
+test("last refresh wins over a slower earlier one", async () => {
+  const h = await renderHook(() => useAccounts(true));
+  await waitFor(() => expect(h.result.current.status).toBe("ready"));
+  let slow!: (v: unknown) => void;
+  (api.accounts as jest.Mock).mockReturnValueOnce(new Promise((r) => { slow = r; })).mockResolvedValueOnce([yt({ name: "New" })]);
+  await act(async () => {
+    const first = h.result.current.refresh();
+    await h.result.current.refresh();
+    slow([yt({ name: "Old" })]);
+    await first;
+  });
+  expect(h.result.current.platforms[0].name).toBe("New");
+});
+
+test("platforms are cleared when disabled", async () => {
+  const h = await renderHook(({ on }: { on: boolean }) => useAccounts(on), { initialProps: { on: true } });
+  await waitFor(() => expect(h.result.current.platforms).toHaveLength(1));
+  await h.rerender({ on: false });
+  expect(h.result.current.platforms).toEqual([]);
+  expect(h.result.current.status).toBe("idle");
+});
+
+test("a disconnect error is shown and busy is cleared", async () => {
+  (api.disconnect as jest.Mock).mockRejectedValueOnce(new Error("Nope"));
+  const h = await renderHook(() => useAccounts(true));
+  await waitFor(() => expect(h.result.current.status).toBe("ready"));
+  await act(() => h.result.current.disconnect("youtube"));
+  expect(useToast.getState().message).toBe("Nope");
+  expect(h.result.current.busy).toBeNull();
+});
+
 test("disconnect calls the server and refreshes", async () => {
   const h = await renderHook(() => useAccounts(true));
   await waitFor(() => expect(h.result.current.status).toBe("ready"));

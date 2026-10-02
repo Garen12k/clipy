@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Prepared } from "./api";
+import { api } from "./api";
 import type { VideoInfo } from "./adapters/types";
 import { openReader } from "./fileReader";
 import { PLATFORM_IDS, type PlatformId } from "./platforms";
-import { IDLE_ROW, runPost, type PostDeps, type PostJob, type RowState } from "./runPost";
+import { IDLE_ROW, runPost, type PostDeps, type PostJob, type ResumeInfo, type RowState } from "./runPost";
 import { uploadGoogleResumable, uploadRelay } from "./upload";
 
-const realDeps: PostDeps = { api, openReader, uploadGoogleResumable, uploadRelay, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
+/** Timer that also ends early (and cleans up) when the signal aborts. */
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (signal.aborted) return resolve();
+    const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
+    const timer = setTimeout(done, ms);
+    signal.addEventListener("abort", done);
+  });
+}
+const realDeps: PostDeps = { api, openReader, uploadGoogleResumable, uploadRelay, sleep };
 const allIdle = () => Object.fromEntries(PLATFORM_IDS.map((id) => [id, IDLE_ROW])) as Record<PlatformId, RowState>;
 const ACTIVE = ["preparing", "uploading", "publishing"];
 
@@ -14,17 +23,19 @@ const ACTIVE = ["preparing", "uploading", "publishing"];
 export function usePost(video: VideoInfo, onPosted: (platform: PlatformId, url: string | null) => void) {
   const [rows, setRows] = useState(allIdle);
   const rowsRef = useRef(rows); rowsRef.current = rows;
-  const prepared = useRef<Partial<Record<PlatformId, Prepared | null>>>({});
+  const resumeInfo = useRef<Partial<Record<PlatformId, ResumeInfo | null>>>({});
   const aborts = useRef<Partial<Record<PlatformId, AbortController>>>({});
   const runIds = useRef<Partial<Record<PlatformId, number>>>({});
+  const active = useRef<Partial<Record<PlatformId, boolean>>>({});
   const mounted = useRef(true);
   const posted = useRef(onPosted); posted.current = onPosted;
 
-  const run = useCallback((job: Omit<PostJob, "video">, resume: boolean) => {
+  const run = useCallback((job: Omit<PostJob, "video">, resume: ResumeInfo | null) => {
     const { platform } = job;
-    aborts.current[platform]?.abort();
+    if (active.current[platform]) return; // a double press must not start a second run
     const id = (runIds.current[platform] ?? 0) + 1;
     runIds.current[platform] = id;
+    active.current[platform] = true;
     const ac = new AbortController();
     aborts.current[platform] = ac;
     const live = () => mounted.current && runIds.current[platform] === id;
@@ -32,15 +43,28 @@ export function usePost(video: VideoInfo, onPosted: (platform: PlatformId, url: 
     const update = (patch: Partial<RowState>) => {
       if (!live()) return;
       setRows((r) => ({ ...r, [platform]: { ...r[platform], ...patch } }));
-      if (patch.phase === "done" && !notified) { notified = true; posted.current(platform, patch.url ?? null); }
+      if (patch.phase === "done" && !notified) {
+        notified = true;
+        try { posted.current(platform, patch.url ?? null); } catch (e) { console.warn("onPosted failed", e); }
+      }
     };
-    runPost({ ...job, video }, realDeps, update, ac.signal, resume ? prepared.current[platform] ?? null : null)
-      .then((p) => { if (live()) prepared.current[platform] = p; });
+    runPost({ ...job, video }, realDeps, update, ac.signal, resume).then((info) => {
+      if (runIds.current[platform] !== id) return;
+      active.current[platform] = false;
+      resumeInfo.current[platform] = info;
+    });
   }, [video]);
 
-  const start = useCallback((jobs: Array<Omit<PostJob, "video">>) => { for (const j of jobs) run(j, false); }, [run]);
-  const retry = useCallback((job: Omit<PostJob, "video">) => run(job, rowsRef.current[job.platform].resumable), [run]);
-  const cancel = useCallback(() => { for (const ac of Object.values(aborts.current)) ac?.abort(); }, []);
+  const start = useCallback((jobs: Array<Omit<PostJob, "video">>) => { for (const j of jobs) run(j, null); }, [run]);
+  const retry = useCallback((job: Omit<PostJob, "video">) => {
+    const row = rowsRef.current[job.platform];
+    const resumable = (row.phase === "failed" && row.resumable) || row.phase === "needsReconnect";
+    run(job, resumable ? resumeInfo.current[job.platform] ?? null : null);
+  }, [run]);
+  const cancel = useCallback(() => {
+    for (const ac of Object.values(aborts.current)) ac?.abort();
+    active.current = {}; // the rows settle on their own; a new press may start a fresh run now
+  }, []);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; cancel(); }; // leaving the screen stops uploads
