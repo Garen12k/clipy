@@ -31,7 +31,7 @@ test("registered, secrets and authUrl scopes", () => {
   expect(instagram.secrets).toEqual(["META_APP_ID", "META_APP_SECRET"]);
   const u = new URL(instagram.authUrl(ctx([]).ctx, { state: "st", codeChallenge: "unused" }));
   expect(u.origin + u.pathname).toBe("https://www.facebook.com/v25.0/dialog/oauth");
-  expect(Object.fromEntries(u.searchParams)).toEqual({ client_id: "app", redirect_uri: REDIRECT, state: "st", response_type: "code", scope: SCOPES });
+  expect(Object.fromEntries(u.searchParams)).toEqual({ client_id: "app", redirect_uri: REDIRECT, state: "st", response_type: "code", auth_type: "rerequest", scope: SCOPES });
   const withConfig = new URL(instagram.authUrl(ctx([], { META_LOGIN_CONFIG_ID: "cfg" }).ctx, { state: "st", codeChallenge: "" }));
   expect(withConfig.searchParams.get("config_id")).toBe("cfg");
   expect(withConfig.searchParams.has("scope")).toBe(false);

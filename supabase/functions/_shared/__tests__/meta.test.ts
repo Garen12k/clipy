@@ -24,12 +24,12 @@ test("constants", () => {
 test("metaAuthUrl asks for scopes when no Login for Business configuration is set", () => {
   const u = new URL(metaAuthUrl(ctx([]).ctx, "st", ["pages_show_list", "pages_manage_posts"]));
   expect(u.origin + u.pathname).toBe("https://www.facebook.com/v25.0/dialog/oauth");
-  expect(Object.fromEntries(u.searchParams)).toEqual({ client_id: "app", redirect_uri: REDIRECT, state: "st", response_type: "code", scope: "pages_show_list,pages_manage_posts" });
+  expect(Object.fromEntries(u.searchParams)).toEqual({ client_id: "app", redirect_uri: REDIRECT, state: "st", response_type: "code", auth_type: "rerequest", scope: "pages_show_list,pages_manage_posts" });
 });
 
 test("metaAuthUrl uses config_id (and no scope) when META_LOGIN_CONFIG_ID is set", () => {
   const u = new URL(metaAuthUrl(ctx([], { META_LOGIN_CONFIG_ID: "cfg1" }).ctx, "st", ["pages_show_list"]));
-  expect(Object.fromEntries(u.searchParams)).toEqual({ client_id: "app", redirect_uri: REDIRECT, state: "st", response_type: "code", config_id: "cfg1" });
+  expect(Object.fromEntries(u.searchParams)).toEqual({ client_id: "app", redirect_uri: REDIRECT, state: "st", response_type: "code", auth_type: "rerequest", config_id: "cfg1" });
 });
 
 test("graph GET puts params and access_token in the query", async () => {

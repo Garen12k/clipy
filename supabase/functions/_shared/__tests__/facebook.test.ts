@@ -23,7 +23,7 @@ test("secrets and authUrl scopes", () => {
   expect(facebook.secrets).toEqual(["META_APP_ID", "META_APP_SECRET"]);
   const u = new URL(facebook.authUrl(ctx([]).ctx, { state: "st", codeChallenge: "unused" }));
   expect(u.origin + u.pathname).toBe("https://www.facebook.com/v25.0/dialog/oauth");
-  expect(Object.fromEntries(u.searchParams)).toEqual({ client_id: "app", redirect_uri: REDIRECT, state: "st", response_type: "code", scope: SCOPES });
+  expect(Object.fromEntries(u.searchParams)).toEqual({ client_id: "app", redirect_uri: REDIRECT, state: "st", response_type: "code", auth_type: "rerequest", scope: SCOPES });
 });
 
 const tokenCalls = () => [ok({ access_token: "short" }), ok({ access_token: "long", expires_in: 5183944 })];

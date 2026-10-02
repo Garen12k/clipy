@@ -75,9 +75,11 @@ function redact(message: string, params: Record<string, string>): string {
  * Facebook Login dialog (https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow).
  * With Facebook Login for Business a configuration (`config_id`) replaces `scope`; Meta recommends not sending both
  * (https://developers.facebook.com/docs/facebook-login/facebook-login-for-business).
+ * `auth_type=rerequest` makes the dialog ask again for a permission the person declined before (manual-flow guide,
+ * "Re-asking for Declined Permissions"), so Reconnect can repair a missing permission; harmless when none was declined.
  */
 export function metaAuthUrl(c: AdapterCtx, state: string, scopes: string[]): string {
-  const q: Record<string, string> = { client_id: appId(c), redirect_uri: c.redirectUri, state, response_type: "code" };
+  const q: Record<string, string> = { client_id: appId(c), redirect_uri: c.redirectUri, state, response_type: "code", auth_type: "rerequest" };
   const configId = c.env.get("META_LOGIN_CONFIG_ID");
   if (configId) q.config_id = configId; else q.scope = scopes.join(",");
   return `https://www.facebook.com/${VERSION}/dialog/oauth?${new URLSearchParams(q)}`;
