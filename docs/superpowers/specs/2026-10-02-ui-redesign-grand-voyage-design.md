@@ -92,7 +92,7 @@ Navy gradient; a gold compass ring (SVG) whose red/cream needle swings and settl
   - Accessibility: group buttons have role `tab` with selected state; tool buttons keep their current labels so existing tests and VoiceOver flows hold.
 
 ### 5.4 Sheets (`src/ui/Sheet.tsx`)
-One component for every tool sheet: dim backdrop, `surface` panel with radius 18 top corners and a hairline top border, grab handle, Oswald title with an optional right-aligned action (e.g. "Apply to all"), content area, safe-area padding. Spring-in, swipe-down to close, backdrop tap to close. Selected items in grids (filters, templates, fonts, ratios, transitions) use a 2 px gold ring. Sliders use a gold track and thumb. All existing sheets adopt it without changing their content or logic.
+One component for every tool sheet: dim backdrop, `surface` panel with radius 18 top corners and a hairline top border, grab handle, Oswald title with an optional right-aligned action (e.g. "Apply to all"), content area, safe-area padding. Spring-in, swipe-down to close, backdrop tap to close. Selected tiles in grids (filters, templates, fonts, colour swatches, emoji and shapes) use a 2 px gold ring; chip-shaped options (ratios, transition types, resolutions, scope toggles) use the kit `Chip`, whose selected state is a gold fill. Sliders use a gold track and thumb. All existing sheets adopt it without changing their content or logic.
 
 ### 5.5 Export (`app/editor/[id]/export.tsx`)
 - Resolution choice as three chips; gold **EXPORT** pill.
