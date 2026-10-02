@@ -14,7 +14,7 @@ import { Screen } from "@/src/ui/Screen";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Body, Title } from "@/src/ui/Text";
 import { ToastHost, useToast } from "@/src/ui/Toast";
-import type { PlatformId } from "../platforms";
+import { PLATFORMS, type PlatformId } from "../platforms";
 import { useAccounts } from "../useAccounts";
 import { usePost } from "../usePost";
 import type { PostTarget } from "../postParams";
@@ -26,7 +26,8 @@ import { cardStyle, SignInCard } from "./SignInCard";
 
 /** Same look as the editor's text fields (TextPanel / NumField). */
 const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, borderRadius: theme.radius.chip, fontFamily: theme.fonts.body, padding: 10, fontSize: 16 } as const;
-const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
+const small = { fontSize: 12 } as const;
+const goBack =() => (router.canGoBack() ? router.back() : router.replace("/"));
 
 export function PostScreenBody({ target: { video, projectId, title } }: { target: PostTarget }) {
   const session = useSession();
@@ -67,8 +68,15 @@ export function PostScreenBody({ target: { video, projectId, title } }: { target
               <TextInput accessibilityLabel="Caption" multiline value={form.caption} onChangeText={form.setCaption} placeholder="Write a caption…"
                 placeholderTextColor={theme.colors.textMuted} style={{ ...field, minHeight: 96, textAlignVertical: "top" }} />
               {form.captionMax !== null ? (
-                <Body muted style={[{ fontSize: 12, alignSelf: "flex-end" }, form.overLimit ? { color: theme.colors.danger } : null]}>{`${form.caption.length} / ${form.captionMax}`}</Body>
+                <Body muted style={[small, { alignSelf: "flex-end" }, form.overLimit ? { color: theme.colors.danger } : null]}>{`${form.caption.length} / ${form.captionMax}`}</Body>
+              ) : form.anyTicked ? (
+                // Only platforms that don't take the caption are ticked: no limit, never red.
+                <Body muted style={[small, { alignSelf: "flex-end" }]}>{String(form.caption.length)}</Body>
               ) : null}
+              {form.captionless.map((id) => {
+                const { label } = PLATFORMS[id];
+                return <Body key={id} muted style={small}>{`${label} doesn't receive this caption — you'll write it in ${label}.`}</Body>;
+              })}
             </View>
             {accounts.status === "error" ? (
               <View style={[cardStyle, { gap: theme.space.md, alignItems: "flex-start" }]}>

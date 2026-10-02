@@ -34,8 +34,11 @@ import { usePost } from "../usePost";
 import { useSession } from "../useSession";
 
 const acct = (id: string, over = {}) => ({ id, available: false, connected: false, name: null, avatarUrl: null, needsReconnect: false, ...over });
-const accounts = (yt = {}) => ({ status: "ready", platforms: [acct("youtube", { available: true, connected: true, name: "My Channel", ...yt }), acct("tiktok"), acct("instagram"), acct("facebook"), acct("x")], error: null, busy: null, refresh: jest.fn(async () => {}), connect: jest.fn(), disconnect: jest.fn() });
-const rows = (yt = {}) => ({ youtube: { ...IDLE_ROW, ...yt }, tiktok: IDLE_ROW, instagram: IDLE_ROW, facebook: IDLE_ROW, x: IDLE_ROW });
+const accounts = (yt = {}, tt = {}) => ({ status: "ready", platforms: [acct("youtube", { available: true, connected: true, name: "My Channel", ...yt }), acct("tiktok", tt), acct("instagram"), acct("facebook"), acct("x")], error: null, busy: null, refresh: jest.fn(async () => {}), connect: jest.fn(), disconnect: jest.fn() });
+const rows = (yt = {}, tt = {}) => ({ youtube: { ...IDLE_ROW, ...yt }, tiktok: { ...IDLE_ROW, ...tt }, instagram: IDLE_ROW, facebook: IDLE_ROW, x: IDLE_ROW });
+const TT_ON = { available: true, connected: true, name: "@sunny" };
+const TT_NOTE = "Clipy sends the video to your TikTok inbox. Open TikTok to add the caption and post it (up to 5 unfinished drafts a day).";
+const TT_CAPTION = "TikTok doesn't receive this caption — you'll write it in TikTok.";
 const post = (over = {}) => ({ rows: rows(), busy: false, start: jest.fn(), retry: jest.fn(), cancel: jest.fn(), ...over });
 const usePostReturns = (p: ReturnType<typeof post>) => (usePost as jest.Mock).mockImplementation((_v, cb) => { onPosted = cb; return p; });
 let onPosted: (p: string, url: string | null) => void;
@@ -294,6 +297,104 @@ test.each([
   await fireEvent.press(screen.getByRole("button", { name: "Back" }));
   expect(router.back).toHaveBeenCalled();
   expect(usePost).not.toHaveBeenCalled();
+});
+
+describe("TikTok", () => {
+  beforeEach(() => { (useAccounts as jest.Mock).mockReturnValue(accounts({}, TT_ON)); });
+
+  test("TikTok is ticked by default with its note and has no options button", async () => {
+    await render(<PostScreen />);
+    expect(screen.getByRole("checkbox", { name: "TikTok" })).toBeChecked();
+    expect(screen.getByText("@sunny")).toBeTruthy();
+    expect(screen.getByText(TT_NOTE)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "TikTok options" })).toBeNull();
+    expect(screen.getByRole("button", { name: "YouTube options" })).toBeTruthy();
+    expect(screen.getByText(TT_CAPTION)).toBeTruthy();
+    expect(screen.getAllByText("Not available yet")).toHaveLength(3);
+    // tapping the row unticks it (there is no options sheet to open); the caption line goes with it
+    await fireEvent.press(screen.getByRole("checkbox", { name: "TikTok" }));
+    expect(screen.getByRole("checkbox", { name: "TikTok" })).not.toBeChecked();
+    expect(screen.queryByText("TikTok options")).toBeNull();
+    expect(screen.queryByText(TT_CAPTION)).toBeNull();
+  });
+
+  test("with only TikTok ticked the counter has no limit, never turns red and the caption can't block it", async () => {
+    const p = post(); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("checkbox", { name: "YouTube" }));
+    await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(6000));
+    expect(screen.getByText("6000")).not.toHaveStyle({ color: theme.colors.danger });
+    expect(screen.queryByText(/\/ 5000/)).toBeNull();
+    expect(screen.getByText(TT_CAPTION)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Post" })).toBeEnabled();
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([{ platform: "tiktok", caption: "x".repeat(6000), options: {} }]);
+  });
+
+  test("with YouTube and TikTok ticked the limit is YouTube's; an over-long caption blocks YouTube only", async () => {
+    const p = post(); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.changeText(screen.getByLabelText("Caption"), "Sunny");
+    expect(screen.getByText("5 / 5000")).toBeTruthy();
+    expect(screen.getByText(TT_CAPTION)).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([
+      { platform: "youtube", caption: "Sunny", options: { title: "Beach day", privacy: "public" } },
+      { platform: "tiktok", caption: "Sunny", options: {} },
+    ]);
+    p.start.mockClear();
+    await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(5001));
+    expect(screen.getByText("5001 / 5000")).toHaveStyle({ color: theme.colors.danger });
+    expect(screen.getByText("YouTube descriptions can be up to 5000 characters.")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([{ platform: "tiktok", caption: "x".repeat(5001), options: {} }]);
+  });
+
+  test("a finished TikTok row with no link shows the draft note and no View button", async () => {
+    usePostReturns(post({ rows: rows({}, { phase: "done", progress: 1, url: null }) }));
+    await render(<PostScreen />);
+    expect(screen.getByText("Sent to TikTok — open TikTok to finish posting.")).toBeTruthy();
+    expect(screen.getByLabelText("TikTok, posted")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "View on TikTok" })).toBeNull();
+    expect(screen.queryByText(TT_NOTE)).toBeNull();
+  });
+
+  test("a done row without a link prefers its own message over the done note", async () => {
+    usePostReturns(post({ rows: rows({}, { phase: "done", progress: 1, url: null, message: "Still processing on TikTok — check the app later." }) }));
+    await render(<PostScreen />);
+    expect(screen.getByText("Still processing on TikTok — check the app later.")).toBeTruthy();
+    expect(screen.queryByText("Sent to TikTok — open TikTok to finish posting.")).toBeNull();
+  });
+
+  test("an 11-minute video holds TikTok back while YouTube still posts", async () => {
+    const p = post(); usePostReturns(p);
+    mockParams = { ...baseParams, durationSec: String(11 * 60) };
+    await render(<PostScreen />);
+    expect(screen.getByText("TikTok accepts videos up to 10 minutes.")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "TikTok" })).not.toBeChecked();
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([{ platform: "youtube", caption: "", options: { title: "Beach day", privacy: "public" } }]);
+  });
+
+  test("names stay unique with two platforms on screen: Retry, Connect and Reconnect per platform", async () => {
+    const p = post({ rows: rows({ phase: "failed", message: "The connection dropped.", resumable: false }, { phase: "failed", message: "The TikTok upload link expired. Post again.", resumable: false }) }); usePostReturns(p);
+    const a = await render(<PostScreen />);
+    expect(screen.getByRole("button", { name: "Retry YouTube" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry TikTok" }));
+    expect(p.retry).toHaveBeenCalledWith({ platform: "tiktok", caption: "", options: {} });
+    await a.unmount();
+    (useAccounts as jest.Mock).mockReturnValue(accounts({ connected: false, name: null }, { available: true }));
+    usePostReturns(post());
+    const b = await render(<PostScreen />);
+    expect(screen.getByRole("button", { name: "Connect YouTube" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Connect TikTok" }));
+    expect(router.push).toHaveBeenCalledWith("/accounts");
+    await b.unmount();
+    (useAccounts as jest.Mock).mockReturnValue(accounts({ needsReconnect: true }, { ...TT_ON, needsReconnect: true }));
+    await render(<PostScreen />);
+    expect(screen.getByRole("button", { name: "Reconnect YouTube" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reconnect TikTok" })).toBeTruthy();
+  });
 });
 
 test("a fileSize param is ignored: the size is always read from the file", async () => {

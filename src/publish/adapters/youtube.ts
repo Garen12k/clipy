@@ -5,6 +5,7 @@ const SHORT_MAX_SEC = 180;
 export const youtube: ClientAdapter = {
   id: "youtube",
   captionMax: 5000,
+  hasOptions: true,
   defaultOptions: (title) => ({ title: title.slice(0, 100), privacy: "public" }),
   validate(_video, caption, options) {
     const title = typeof options.title === "string" ? options.title.trim() : "";
