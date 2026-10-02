@@ -53,13 +53,19 @@
   "scripts": {
     "start": "expo start",
     "ios": "expo start --ios",
-    "test": "jest",
-    "typecheck": "tsc --noEmit",
+    "test": "npm run test:app && npm run test:server",
+    "test:app": "jest",
+    "test:server": "jest -c jest.server.config.js",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p supabase",
     "gen:emoji": "node scripts/gen-emoji.mjs",
     "gen:brand": "node scripts/gen-brand.mjs"
   },
   "jest": {
     "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "<rootDir>/supabase/"
+    ],
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
     ],
