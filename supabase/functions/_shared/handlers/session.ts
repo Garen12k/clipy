@@ -1,4 +1,4 @@
-import { ApiError } from "../errors.ts";
+import { ApiError, PlatformError } from "../errors.ts";
 import { accessTokenFor, withPlatformAuth } from "../tokens.ts";
 import { adapterCtx, type Deps, type PostSessionRow, type PublishResult } from "../types.ts";
 
@@ -9,24 +9,33 @@ export async function ownSession(deps: Deps, userId: string, sessionId: unknown)
 }
 
 export const settled = (s: PostSessionRow): PublishResult | null => (s.status === "done" ? { status: "done", url: s.url } : null);
-
 export const failedError = (s: PostSessionRow) => new ApiError(400, "platform_error", s.error ?? "The post failed.");
 
-export async function record(deps: Deps, session: PostSessionRow, run: () => Promise<PublishResult>): Promise<PublishResult> {
-  try {
-    const r = await run();
-    await deps.db.updateSession(session.id, r.status === "done" ? { status: "done", url: r.url } : { status: "processing" });
-    return r;
-  } catch (e) {
-    if (e instanceof ApiError && e.code !== "reconnect") await deps.db.updateSession(session.id, { status: "failed", error: e.message });
-    throw e;
-  }
+/** A real rejection by the platform (4xx). Auth failures were already turned into `reconnect` by withPlatformAuth. */
+export const isRejection = (e: unknown): e is PlatformError => e instanceof PlatformError && e.status >= 400 && e.status < 500;
+
+/** Moves to `failed` only if the session is still in `from`; nothing ever overwrites `done`. */
+export async function failFrom(deps: Deps, id: string, from: "publishing" | "processing", message: string): Promise<void> {
+  if (await deps.db.claimSession(id, from, "failed")) await deps.db.updateSession(id, { error: message });
 }
 
-/** Asks the platform how an already-finalized (processing) session is doing. */
-export async function pollSession(deps: Deps, userId: string, session: PostSessionRow): Promise<PublishResult> {
+/** Moves to `done` only if the session is still in `from`; returns what is stored when the claim is lost. */
+export async function finishFrom(deps: Deps, session: PostSessionRow, from: "publishing" | "processing", url: string | null): Promise<PublishResult> {
+  if (await deps.db.claimSession(session.id, from, "done")) { await deps.db.updateSession(session.id, { url }); return { status: "done", url }; }
+  const now = await deps.db.getSession(session.id);
+  return now ? (settled(now) ?? { status: "processing" }) : { status: "done", url };
+}
+
+/** Status logic shared by finalize (when processing) and status. The session must be `processing`. */
+export async function pollProcessing(deps: Deps, userId: string, session: PostSessionRow): Promise<PublishResult> {
   const adapter = deps.adapters[session.platform];
   if (!adapter) throw new ApiError(409, "unavailable", `${session.platform} isn't set up on the server yet.`);
   const { accessToken, account } = await accessTokenFor(deps, userId, session.platform);
-  return record(deps, session, () => withPlatformAuth(deps, account, () => adapter.status(adapterCtx(deps), accessToken, session.ref)));
+  try {
+    const r = await withPlatformAuth(deps, account, () => adapter.status(adapterCtx(deps), accessToken, session.ref));
+    return r.status === "done" ? await finishFrom(deps, session, "processing", r.url) : r;
+  } catch (e) {
+    if (isRejection(e)) await failFrom(deps, session.id, "processing", e.message);
+    throw e;
+  }
 }

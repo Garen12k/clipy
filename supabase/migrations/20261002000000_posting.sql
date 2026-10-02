@@ -28,7 +28,7 @@ create table public.post_sessions (
   platform text not null,
   platform_ref jsonb not null default '{}'::jsonb,
   input jsonb not null default '{}'::jsonb,
-  status text not null default 'uploading' check (status in ('uploading','processing','done','failed')),
+  status text not null default 'uploading' check (status in ('uploading','publishing','processing','done','failed')),
   url text,
   error text,
   created_at timestamptz not null default now()

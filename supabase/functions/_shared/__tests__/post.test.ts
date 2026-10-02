@@ -111,9 +111,9 @@ test("two simultaneous finalizes publish once", async () => {
   const { sessionId } = await postPrepare(deps, USER, body);
   const [a, b] = await Promise.all([postFinalize(deps, USER, { sessionId, clientResult: null }), postFinalize(deps, USER, { sessionId, clientResult: null })]);
   expect(a).toEqual({ status: "processing" });
-  expect(b).toEqual({ status: "done", url: null }); // the loser polls the adapter (default fake status)
+  expect(["processing", "done"]).toContain(b.status); // the loser sees publishing (processing) or polls status
   expect(adapter.finalize).toHaveBeenCalledTimes(1);
-  expect(adapter.status).toHaveBeenCalledTimes(1);
+  expect(["processing", "done"]).toContain((await deps.db.getSession(sessionId))!.status);
 });
 
 test("reconnect during finalize leaves the session uploading", async () => {
@@ -147,4 +147,88 @@ test("relay upload rejects a mismatched total, overrun, and a finished session",
   await postFinalize(deps, USER, { sessionId, clientResult: null });
   await expect(postUpload(deps, USER, { sessionId, offset: 0, total: INPUT.fileSize }, new Uint8Array(1))).rejects.toMatchObject({ code: "bad_request", message: "This upload is already finished." });
   expect(relayChunk).not.toHaveBeenCalled();
+});
+const fin = (deps: any, sessionId: string) => postFinalize(deps, USER, { sessionId, clientResult: null });
+async function prepared(over: any = {}) { const deps = await connected({ adapters: { youtube: fakeAdapter(over) } }); const { sessionId } = await postPrepare(deps, USER, body); return { deps, sessionId, adapter: deps.adapters.youtube! }; }
+
+test("finalize done ends done with the url", async () => {
+  const { deps, sessionId } = await prepared();
+  await fin(deps, sessionId);
+  expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "done", url: "https://youtu.be/abc123XYZ_-" });
+});
+
+test("finalize processing ends processing", async () => {
+  const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => ({ status: "processing" as const })) });
+  await fin(deps, sessionId);
+  expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+});
+
+test("platform 4xx in finalize ends failed with the message", async () => {
+  const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => { throw new PlatformError("youtube", 403, "Quota exceeded."); }) });
+  await expect(fin(deps, sessionId)).rejects.toMatchObject({ message: "Quota exceeded." });
+  expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "failed", error: "Quota exceeded." });
+});
+
+test("a TypeError in finalize returns to uploading and a retry publishes", async () => {
+  const finalize = jest.fn().mockRejectedValueOnce(new TypeError("network")).mockResolvedValue({ status: "done", url: "https://x.test/2" });
+  const { deps, sessionId } = await prepared({ finalize });
+  await expect(fin(deps, sessionId)).rejects.toBeInstanceOf(TypeError);
+  expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
+  expect(await fin(deps, sessionId)).toEqual({ status: "done", url: "https://x.test/2" });
+  expect(finalize).toHaveBeenCalledTimes(2);
+});
+
+test("platform 503 in finalize returns to uploading", async () => {
+  const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => { throw new PlatformError("youtube", 503, "Unavailable"); }) });
+  await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 503 });
+  expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
+});
+
+test("finalize while another is publishing returns processing without touching anything", async () => {
+  const { deps, sessionId, adapter } = await prepared();
+  await deps.db.updateSession(sessionId, { status: "publishing" });
+  expect(await fin(deps, sessionId)).toEqual({ status: "processing" });
+  expect(adapter.finalize).not.toHaveBeenCalled();
+  expect((await deps.db.getSession(sessionId))!.status).toBe("publishing");
+});
+
+test("two simultaneous finalizes publish once and end consistent with the adapter", async () => {
+  const { deps, sessionId, adapter } = await prepared();
+  const [a, b] = await Promise.all([fin(deps, sessionId), fin(deps, sessionId)]);
+  expect(adapter.finalize).toHaveBeenCalledTimes(1);
+  for (const r of [a, b]) expect(["done", "processing"]).toContain(r.status);
+  expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "done", url: "https://youtu.be/abc123XYZ_-" });
+});
+
+test("status on uploading is refused; on publishing it reports processing; neither calls the adapter", async () => {
+  const { deps, sessionId, adapter } = await prepared();
+  await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 400, code: "bad_request" });
+  expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
+  await deps.db.updateSession(sessionId, { status: "publishing" });
+  expect(await postStatus(deps, USER, { sessionId })).toEqual({ status: "processing" });
+  expect(adapter.status).not.toHaveBeenCalled();
+});
+
+test("status on a done session never calls the adapter", async () => {
+  const { deps, sessionId, adapter } = await prepared();
+  await fin(deps, sessionId);
+  expect(await postStatus(deps, USER, { sessionId })).toEqual({ status: "done", url: "https://youtu.be/abc123XYZ_-" });
+  expect(adapter.status).not.toHaveBeenCalled();
+});
+
+test("a status 4xx that loses to a concurrent done does not overwrite it", async () => {
+  let deps: any, sid = "";
+  const status = jest.fn(async () => { await deps.db.updateSession(sid, { status: "done", url: "https://x.test/win" }); throw new PlatformError("youtube", 404, "Gone"); });
+  const p = await prepared({ finalize: jest.fn(async () => ({ status: "processing" as const })), status });
+  deps = p.deps; sid = p.sessionId;
+  await fin(sid && deps, sid);
+  await expect(postStatus(deps, USER, { sessionId: sid })).rejects.toMatchObject({ message: "Gone" });
+  expect(await deps.db.getSession(sid)).toMatchObject({ status: "done", url: "https://x.test/win" });
+});
+
+test("status 503 is rethrown and the session stays processing", async () => {
+  const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => ({ status: "processing" as const })), status: jest.fn(async () => { throw new PlatformError("youtube", 503, "Unavailable"); }) });
+  await fin(deps, sessionId);
+  await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 503 });
+  expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
 });

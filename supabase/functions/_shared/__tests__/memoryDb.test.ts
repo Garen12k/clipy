@@ -34,3 +34,10 @@ test("claimSession moves status once", async () => {
   expect((await db.getSession(id))!.status).toBe("processing");
   expect(await db.claimSession(id, "uploading", "processing")).toBe(false);
 });
+
+test("claimSession cannot move a done session", async () => {
+  const db = memoryDb();
+  const id = await db.createSession({ userId: USER, platform: "youtube", ref: {}, input: INPUT, status: "done", url: "u", error: null });
+  expect(await db.claimSession(id, "processing", "failed")).toBe(false);
+  expect((await db.getSession(id))!.status).toBe("done");
+});

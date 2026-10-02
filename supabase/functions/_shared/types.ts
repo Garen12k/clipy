@@ -24,7 +24,8 @@ export interface ServerAdapter {
 }
 export interface AccountRow { userId: string; platform: PlatformId; accountId: string; displayName: string; avatarUrl: string | null; accessTokenEnc: string; refreshTokenEnc: string | null; expiresAt: string | null; scopes: string; meta: Record<string, unknown> }
 export interface OAuthStateRow { state: string; userId: string; platform: PlatformId; codeVerifier: string; returnUrl: string; expiresAt: string }
-export type SessionStatus = "uploading" | "processing" | "done" | "failed";
+/** `publishing` = a finalize call is in flight. If the function process dies mid-finalize the session stays `publishing`; the app's Retry opens a fresh session. */
+export type SessionStatus = "uploading" | "publishing" | "processing" | "done" | "failed";
 export interface PostSessionRow { id: string; userId: string; platform: PlatformId; ref: Record<string, unknown>; input: PrepareInput; status: SessionStatus; url: string | null; error: string | null }
 export interface Db {
   getAccount(userId: string, platform: PlatformId): Promise<AccountRow | null>;
