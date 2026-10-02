@@ -1,6 +1,6 @@
 # Clipy server setup (Supabase, YouTube, TikTok)
 
-This folder is Clipy's small server. It lets the app connect your YouTube channel and post videos to it. Your videos never live on the server: the phone sends them straight to YouTube.
+This folder is Clipy's small server. It lets the app connect your YouTube channel and TikTok account and post videos to them (TikTok: as a draft in your TikTok inbox, see section 11). Your videos never live on the server: the phone sends them straight to YouTube or TikTok.
 
 > **Honest status:** none of these steps has been run against the real Supabase or Google services yet. Everything was written from their documentation (October 2026). If a screen looks different from what is written here, trust the screen, and tell the developer what you saw.
 
@@ -172,6 +172,7 @@ After steps 1 to 5 above, on your iPhone in Expo Go:
 
 - **The Connect link belongs to you, for a short time, once.** When you tap Connect, Clipy asks the server for a sign-in link that is tied to the Clipy account you are signed in with. The link stops working after 10 minutes and works only once.
 - **Your YouTube sign-in is locked on the server.** The server saves it encrypted with your `TOKEN_ENC_KEY` (step 4a). The app never receives it (except the short-lived token of step 4c, if you turn that on).
+- **Your TikTok sign-in is locked the same way.** It is saved encrypted with the same key and never sent to the app. The phone uploads to a one-hour TikTok upload address that needs no sign-in, and that address is never saved.
 - **One accepted risk ("login CSRF").** If someone else sent you their own Connect link and you opened it within those 10 minutes and allowed access, your YouTube channel would be connected to *their* Clipy account. For a personal app with one user this is accepted. Only start Connect from inside Clipy, and never open a Connect link someone sends you.
 
 ## 11. TikTok
@@ -227,7 +228,7 @@ Until both are set, the app shows TikTok as "Not available yet".
 - **The video arrives in your TikTok inbox as a draft.** TikTok sends you a notification. Open TikTok, tap it, add the caption and hashtags, choose who can see it, and post. Clipy cannot post for you, and it cannot send the caption.
 - **Nothing is public until you post it in TikTok.** If you never finish the draft, nobody sees it.
 - **At most 5 unfinished drafts a day.** TikTok refuses a new upload when 5 drafts from Clipy are still waiting in the last 24 hours. Clipy then says: "TikTok allows 5 unfinished drafts a day. Open TikTok and post or delete some first."
-- **No link back.** Because you finish the post in TikTok, Clipy shows "Done" without a "View on TikTok" link.
+- **No link back.** Because you finish the post in TikTok, the TikTok row ends with "Sent to TikTok — open TikTok to finish posting." and has no "View on TikTok" link.
 - **The TikTok connection lasts about a day at a time** and renews itself. If you do not use Clipy for a year, you will need to reconnect.
 - **None of this has run against live TikTok yet.** If a step fails, tell the developer what you saw.
 
@@ -240,3 +241,17 @@ Until both are set, the app shows TikTok as "Not available yet".
 | Connecting TikTok says the app or account is **not allowed** | Your account is not (yet) a sandbox target user | Do step b, then wait up to an hour. |
 | TikTok shows **Reconnect** | The connection ended or a permission was not given when connecting | Tap Reconnect and allow everything TikTok asks for. |
 | **TikTok allows 5 unfinished drafts a day** | 5 Clipy drafts are waiting in TikTok | Open TikTok, post or delete some drafts, or wait a day. |
+
+### f. Device checklist — TikTok
+
+After steps a to c above, on your iPhone in Expo Go:
+
+1. Accounts → **Connect TikTok** → TikTok asks for permission (allow everything) → back in Clipy, the TikTok row shows your TikTok name.
+2. Home → **Post a video** → pick a short clip → tick **TikTok**. There is no options button for TikTok, and the line "TikTok doesn't receive this caption — you'll write it in TikTok." appears under the caption.
+3. **Post** → Preparing → Uploading % → the TikTok row reads **"Sent to TikTok — open TikTok to finish posting."** (no View button).
+4. TikTok sends a notification and the **draft appears in your TikTok inbox**.
+5. **Finish in TikTok:** open the draft, add the caption, choose who can see it, post. Nothing was public before this step.
+6. **5 drafts:** with 5 Clipy drafts still unfinished in TikTok, post a sixth. Clipy says "TikTok allows 5 unfinished drafts a day. Open TikTok and post or delete some first." and nothing is uploaded.
+7. **Dropped upload:** start a TikTok post and turn on Airplane mode while it is uploading. After a few seconds the row says "The connection dropped. Post again to restart the TikTok upload." Turn Airplane mode off and tap **Retry**: the video uploads again from the start, and only **one** draft ends up in the TikTok inbox.
+8. **TikTok busy after the upload:** if the row fails *after* Uploading reached 100 % with a "TikTok is busy" or "TikTok is having trouble" message, tap **Retry**: it should finish without uploading again (no second draft in the inbox).
+9. YouTube still posts in the same session (tick both; a long caption holds back only YouTube).

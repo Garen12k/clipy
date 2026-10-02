@@ -173,7 +173,7 @@ Research notes with source URLs were gathered per platform before planning. Wher
 - Shorts: square or vertical, up to 3 minutes; no `#Shorts` needed. Scopes `youtube.upload` + `youtube.readonly`. Quota: 100 uploads/day.
 
 **TikTok**
-- Un-audited apps can only post privately and only to accounts that are themselves private, so 4B uses **Upload to inbox** (`video.upload`): the video lands in the user's TikTok inbox and they finish the post in TikTok. The row ends as "Sent to TikTok — open TikTok to finish" with no link. Direct Post (privacy picker, interaction toggles, consent text) is built behind a flag for after the audit.
+- Un-audited apps can only post privately and only to accounts that are themselves private, so 4B uses **Upload to inbox** (`video.upload`): the video lands in the user's TikTok inbox and they finish the post in TikTok. The row ends as "Sent to TikTok — open TikTok to finish" with no link.
 - The upload URL needs no token (direct mode); refresh tokens rotate and must be re-saved on every refresh.
 - Direct Post is deferred until the app is audited (it is restricted to private accounts and private posts before that); 4B ships the inbox route only. A dropped TikTok upload restarts from a fresh address — TikTok has no resume query.
 
