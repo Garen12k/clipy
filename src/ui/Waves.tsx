@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useWindowDimensions, View } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
+import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import { theme } from "@/src/theme/theme";
 
@@ -15,7 +15,10 @@ function Layer({ color, duration, bottom, opacity, still }: { color: string; dur
   const { width } = useWindowDimensions();
   const w = Math.ceil(width / PERIOD + 2) * PERIOD;
   const x = useSharedValue(0);
-  useEffect(() => { if (!still) x.value = withRepeat(withTiming(-PERIOD, { duration, easing: Easing.linear }), -1); }, [still, duration, x]);
+  useEffect(() => {
+    if (still) { cancelAnimation(x); x.value = 0; return; }
+    x.value = withRepeat(withTiming(-PERIOD, { duration, easing: Easing.linear }), -1);
+  }, [still, duration, x]);
   const anim = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
   return (
     <Animated.View style={[{ position: "absolute", left: 0, bottom, opacity }, anim]}>

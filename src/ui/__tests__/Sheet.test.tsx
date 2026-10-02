@@ -1,6 +1,23 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { Text } from "react-native";
-import { Sheet, shouldDismiss } from "../Sheet";
+import { withSpring, withTiming } from "react-native-reanimated";
+import { settle, Sheet, shouldDismiss } from "../Sheet";
+
+jest.mock("react-native-reanimated", () => {
+  const m = require("react-native-reanimated/mock");
+  return { ...m, withSpring: jest.fn(m.withSpring), withTiming: jest.fn(m.withTiming) };
+});
+
+test("settle (open and cancelled-drag snap-back): spring normally, timing without spring under Reduce Motion", () => {
+  (withSpring as jest.Mock).mockClear(); (withTiming as jest.Mock).mockClear();
+  settle(false);
+  expect(withSpring).toHaveBeenCalledTimes(1);
+  expect(withTiming).not.toHaveBeenCalled();
+  (withSpring as jest.Mock).mockClear();
+  settle(true);
+  expect(withTiming).toHaveBeenCalledTimes(1);
+  expect(withSpring).not.toHaveBeenCalled();
+});
 
 test("renders title, content and optional action; backdrop closes", async () => {
   const onClose = jest.fn(), onAction = jest.fn();

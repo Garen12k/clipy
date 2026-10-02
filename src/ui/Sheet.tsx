@@ -15,6 +15,11 @@ export function shouldDismiss(translationY: number, velocityY: number, height: n
 
 const START_OFFSET = 320;
 
+/** Animation that brings the panel to rest: spring normally, plain timing (no spring) under Reduce Motion. */
+export function settle(reduced: boolean) {
+  return reduced ? withTiming(0, { duration: theme.motion.fade }) : withSpring(0, theme.motion.sheet);
+}
+
 export function Sheet({ visible, onClose, title, children, height, action }: Props) {
   const reduced = useReducedMotion();
   const y = useSharedValue(START_OFFSET);
@@ -22,13 +27,13 @@ export function Sheet({ visible, onClose, title, children, height, action }: Pro
 
   useEffect(() => {
     if (!visible) { y.value = START_OFFSET; return; }
-    y.value = reduced ? withTiming(0, { duration: theme.motion.fade }) : withSpring(0, theme.motion.sheet);
+    y.value = settle(reduced);
   }, [visible, reduced, y]);
 
   // runOnJS(true): callbacks run on the JS thread, so onClose needs no worklet bridge.
   const pan = Gesture.Pan().runOnJS(true)
     .onUpdate((e) => { y.value = Math.max(0, e.translationY); })
-    .onEnd((e) => { if (shouldDismiss(e.translationY, e.velocityY, panelH)) onClose(); else y.value = withSpring(0, theme.motion.sheet); });
+    .onEnd((e) => { if (shouldDismiss(e.translationY, e.velocityY, panelH)) onClose(); else y.value = settle(reduced); });
   const anim = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
 
   return (
