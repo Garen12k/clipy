@@ -1,0 +1,28 @@
+import { memoryDb } from "../memoryDb.ts";
+import { INPUT, USER } from "./fakes.ts";
+
+test("accounts: upsert replaces, list is per user, delete removes", async () => {
+  const db = memoryDb();
+  const row = { userId: USER, platform: "youtube" as const, accountId: "UC1", displayName: "A", avatarUrl: null, accessTokenEnc: "x", refreshTokenEnc: null, expiresAt: null, scopes: "", meta: {} };
+  await db.upsertAccount(row);
+  await db.upsertAccount({ ...row, displayName: "B" });
+  expect((await db.getAccount(USER, "youtube"))?.displayName).toBe("B");
+  expect(await db.listAccounts("someone-else")).toEqual([]);
+  await db.deleteAccount(USER, "youtube");
+  expect(await db.getAccount(USER, "youtube")).toBeNull();
+});
+
+test("states are single use", async () => {
+  const db = memoryDb();
+  await db.putState({ state: "s1", userId: USER, platform: "youtube", codeVerifier: "v", returnUrl: "exp://x", expiresAt: "2026-10-02T10:10:00.000Z" });
+  expect((await db.takeState("s1"))?.codeVerifier).toBe("v");
+  expect(await db.takeState("s1")).toBeNull();
+});
+
+test("sessions: create, read, patch", async () => {
+  const db = memoryDb();
+  const id = await db.createSession({ userId: USER, platform: "youtube", ref: {}, input: INPUT, status: "uploading", url: null, error: null });
+  await db.updateSession(id, { status: "done", url: "https://youtu.be/x" });
+  expect(await db.getSession(id)).toMatchObject({ id, status: "done", url: "https://youtu.be/x" });
+  expect(await db.getSession("nope")).toBeNull();
+});
