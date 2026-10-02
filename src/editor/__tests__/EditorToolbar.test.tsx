@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { makeClip, makeProject } from "@/src/editor/model/types";
+import { makeClip, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 
@@ -68,7 +68,6 @@ test("Volume is enabled after selecting a clip", async () => {
   await openGroup("Audio");
   expect(screen.getByRole("button", { name: "Volume" })).toBeDisabled();
   await act(() => { useEditorStore.getState().select("a"); });
-  await openGroup("Audio");
   expect(screen.getByRole("button", { name: "Volume" })).toBeEnabled();
 });
 
@@ -77,7 +76,6 @@ test("Speed is disabled without a selection and enabled after selecting a clip",
   await openGroup("Effects");
   expect(screen.getByRole("button", { name: "Speed" })).toBeDisabled();
   await act(() => { useEditorStore.getState().select("a"); });
-  await openGroup("Effects");
   expect(screen.getByRole("button", { name: "Speed" })).toBeEnabled();
 });
 
@@ -89,13 +87,27 @@ test("five group tabs; Edit is selected by default and only its tools show", asy
   expect(screen.queryByRole("button", { name: "Filter" })).toBeNull();
 });
 
-test("selecting a clip switches to Edit; selecting a sticker switches to Stickers; manual choice is otherwise kept", async () => {
+test("selecting a clip keeps Effects/Audio, but leaves Text/Stickers for Edit", async () => {
   await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
   await openGroup("Effects");
-  expect(screen.getByRole("tab", { name: "Effects" })).toBeSelected();
   await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByRole("tab", { name: "Effects" })).toBeSelected();
+  await openGroup("Text");
+  await act(() => { useEditorStore.getState().select("b"); });
   expect(screen.getByRole("tab", { name: "Edit" })).toBeSelected();
   await openGroup("Audio");
   await act(() => { useEditorStore.getState().select(null); });
   expect(screen.getByRole("tab", { name: "Audio" })).toBeSelected();
+});
+
+test("selecting a sticker overlay shows Stickers; a text overlay shows Text", async () => {
+  useEditorStore.getState().setProject(makeProject({
+    clips: [makeClip({ id: "a", sourceDuration: 4 })],
+    overlays: [makeSticker({ id: "s1" }), makeOverlay({ id: "t1" })],
+  }));
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
+  await act(() => { useEditorStore.getState().selectOverlay("s1"); });
+  expect(screen.getByRole("tab", { name: "Stickers" })).toBeSelected();
+  await act(() => { useEditorStore.getState().selectOverlay("t1"); });
+  expect(screen.getByRole("tab", { name: "Text" })).toBeSelected();
 });

@@ -1,6 +1,6 @@
 import type { Ionicons } from "@expo/vector-icons";
 
-type IoniconName = keyof typeof Ionicons.glyphMap;
+export type IoniconName = keyof typeof Ionicons.glyphMap;
 export type ToolGroupId = "edit" | "effects" | "text" | "stickers" | "audio";
 export type ToolId = "split" | "trim" | "duplicate" | "delete" | "ratio" | "filter" | "speed" | "transition" | "templates" | "text" | "captions" | "sticker" | "music" | "volume";
 
@@ -13,9 +13,14 @@ export const TOOL_GROUPS: { id: ToolGroupId; label: string; icon: IoniconName; t
   { id: "audio", label: "Audio", icon: "musical-notes", tools: ["music", "volume"] },
 ];
 
-/** Which group a new selection should jump to; null leaves the user's last choice alone. */
-export function groupForSelection(sel: { clipId: string | null; overlayKind: "text" | "caption" | "sticker" | null }): ToolGroupId | null {
+/**
+ * Which group a new selection should jump to; null leaves the user's current group alone.
+ * A clip selection only pulls the user to Edit from the overlay groups (Text/Stickers); Edit, Effects
+ * and Audio all act on the selected clip, so they stay put.
+ */
+export function groupForSelection(sel: { clipId: string | null; overlayKind: "text" | "caption" | "sticker" | null }, current: ToolGroupId): ToolGroupId | null {
   if (sel.overlayKind === "sticker") return "stickers";
   if (sel.overlayKind) return "text";
-  return sel.clipId ? "edit" : null;
+  if (sel.clipId && (current === "text" || current === "stickers")) return "edit";
+  return null;
 }
