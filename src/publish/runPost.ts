@@ -24,7 +24,8 @@ export const POLL_LIMIT = 40; // 2 minutes
 const planIsValid = (p: Prepared) => Number.isInteger(p.chunkSize) && p.chunkSize > 0 && !((p.protocol === "google-resumable" || p.protocol === "tiktok-chunks") && !p.uploadUrl);
 /**
  * After the upload finished, every failure is resumable (the stored session decides) except these two: the server says
- * the session itself is gone or finished-and-failed, so only a fresh upload can help.
+ * the session itself is gone or finished-and-failed, so only a fresh upload can help. A temporary platform failure
+ * (`platform_unavailable`: 408, 429, 5xx) is not final: Retry asks again without uploading.
  */
 const FINAL_AFTER_UPLOAD = new Set(["platform_error", "not_found"]);
 const messageOf = (e: unknown) => (e instanceof Error && e.message ? e.message : "Something went wrong.");
