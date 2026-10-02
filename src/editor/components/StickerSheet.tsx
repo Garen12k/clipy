@@ -19,7 +19,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
   const [tab, setTab] = useState<Tab>("emoji");
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
-  const [color, setColor] = useState<string>(theme.colors.highlight);
+  const [color, setColor] = useState<string>(theme.colors.accent);
   const apply = useEditorStore((s) => s.apply);
 
   useEffect(() => {

@@ -31,7 +31,7 @@ export function ReorderHandle({ clipId, index }: { clipId: string; index: number
 
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View accessibilityLabel="Move clip" style={[{ position: "absolute", bottom: 4, alignSelf: "center", left: "50%", marginLeft: -14, width: 28, height: 20, borderRadius: 10, backgroundColor: theme.colors.highlight, alignItems: "center", justifyContent: "center" }, style]}>
+      <Animated.View accessibilityLabel="Move clip" style={[{ position: "absolute", bottom: 4, alignSelf: "center", left: "50%", marginLeft: -14, width: 28, height: 20, borderRadius: 10, backgroundColor: theme.colors.accent, alignItems: "center", justifyContent: "center" }, style]}>
         <Ionicons name="reorder-two" size={16} color={theme.colors.bg} />
       </Animated.View>
     </GestureDetector>

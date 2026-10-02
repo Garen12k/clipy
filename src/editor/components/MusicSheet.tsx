@@ -94,7 +94,7 @@ export function MusicSheet({ visible, onClose }: { visible: boolean; onClose: ()
                 {BUNDLED_TRACKS.map((t) => (
                   <View key={t.id} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, padding: theme.space.md }}>
                     <Pressable accessibilityRole="button" accessibilityLabel={`${previewId === t.id ? "Stop" : "Play"} ${t.title}`} onPress={() => togglePreview(t)}>
-                      <Text style={{ color: theme.colors.highlight, fontSize: 18 }}>{previewId === t.id ? "■" : "▶"}</Text>
+                      <Text style={{ color: theme.colors.accent, fontSize: 18 }}>{previewId === t.id ? "■" : "▶"}</Text>
                     </Pressable>
                     <View style={{ flex: 1 }}><Text style={{ color: theme.colors.text }}>{t.title}</Text><Body muted style={{ fontSize: 12 }}>{formatDuration(t.durationSec)} · {t.license}</Body></View>
                     <Chip label="Use" accessibilityLabel={`Use ${t.title}`} selected={false} disabled={busy} onPress={() => useBundled(t)} />

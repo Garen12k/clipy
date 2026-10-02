@@ -8,7 +8,7 @@ type Props = { summary: ProjectSummary; onPress: () => void; onLongPress: () => 
 export function ProjectCard({ summary, onPress, onLongPress }: Props) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={summary.name} onPress={onPress} onLongPress={onLongPress} delayLongPress={350}
-      style={({ pressed }) => ({ flex: 1, margin: theme.space.sm, borderRadius: theme.radius.card, borderWidth: 1, borderColor: theme.colors.straw,
+      style={({ pressed }) => ({ flex: 1, margin: theme.space.sm, borderRadius: theme.radius.card, borderWidth: 1, borderColor: theme.colors.hairline,
         backgroundColor: theme.colors.surface, overflow: "hidden", opacity: pressed ? 0.85 : 1 })}>
       <View style={{ aspectRatio: 9 / 16, maxHeight: 180, backgroundColor: theme.colors.surfaceAlt, alignItems: "center", justifyContent: "center" }}>
         {summary.thumbUri ? <Image source={{ uri: summary.thumbUri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />

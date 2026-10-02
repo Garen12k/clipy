@@ -133,7 +133,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
             <Ionicons name="play" size={48} color={theme.colors.text} />
           </View>
         )}
-        <View pointerEvents="none" style={{ position: "absolute", bottom: 8, right: 10, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: theme.radius.chip, paddingHorizontal: 8, paddingVertical: 3 }}>
+        <View pointerEvents="none" style={{ position: "absolute", bottom: 8, right: 10, backgroundColor: theme.colors.scrim, borderRadius: theme.radius.chip, paddingHorizontal: 8, paddingVertical: 3 }}>
           <Text style={{ color: theme.colors.text, fontVariant: ["tabular-nums"], fontSize: 12 }}>{formatDurationPrecise(playhead)} / {formatDurationPrecise(total)}</Text>
         </View>
       </Pressable>

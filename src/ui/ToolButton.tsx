@@ -5,7 +5,7 @@ import { theme } from "@/src/theme/theme";
 type Props = { label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; disabled?: boolean; active?: boolean };
 
 export function ToolButton({ label, icon, onPress, disabled, active }: Props) {
-  const color = active ? theme.colors.highlight : theme.colors.text;
+  const color = active ? theme.colors.accent : theme.colors.text;
   return (
     <Pressable
       accessibilityRole="button"

@@ -23,7 +23,7 @@ export function SpeedSheet({ clipId, visible, onClose }: { clipId: string | null
       </View>
       <Slider testID="speed-slider" minimumValue={SPEED_LIMITS[0]} maximumValue={SPEED_LIMITS[1]} step={0.05} value={clip.speed}
         onSlidingStart={beginTransaction} onValueChange={(v) => applyTransient((p) => setClipSpeed(p, clip.id, v))}
-        minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.highlight} />
+        minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
       <Body muted style={{ fontSize: 12 }}>Audio keeps its pitch in the exported video.</Body>
     </Sheet>
   );

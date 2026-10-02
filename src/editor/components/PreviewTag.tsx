@@ -11,7 +11,7 @@ export function PreviewTag({ visible }: { visible: boolean }) {
       pointerEvents="none"
       style={{
         position: "absolute", left: 8, top: 8, overflow: "hidden",
-        borderWidth: 1, borderColor: theme.colors.straw,
+        borderWidth: 1, borderColor: theme.colors.hairline,
         borderRadius: theme.radius.pill,
         paddingHorizontal: 8, paddingVertical: 3,
       }}

@@ -23,7 +23,7 @@ export function PrimaryButton({ title, onPress, disabled, icon }: Props) {
       })}
     >
       {icon ?? null}
-      <Text style={{ fontFamily: theme.fonts.heading, fontSize: 22, color: theme.colors.text, letterSpacing: 1 }}>{title}</Text>
+      <Text style={{ fontFamily: theme.fonts.title, fontSize: 22, color: theme.colors.onAccent, letterSpacing: 1 }}>{title}</Text>
     </Pressable>
   );
 }

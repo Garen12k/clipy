@@ -31,7 +31,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
       </View>
 
       {state.status === "unavailable" && (
-        <View style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors.straw, borderWidth: 1, borderRadius: theme.radius.card, padding: theme.space.xl, gap: theme.space.sm }}>
+        <View style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors.hairline, borderWidth: 1, borderRadius: theme.radius.card, padding: theme.space.xl, gap: theme.space.sm }}>
           <Heading style={{ fontSize: 22 }}>Export needs the native build</Heading>
           <Body>Rendering the final video uses Clipy's Swift engine, which Expo Go can't load. Install a development build to export.</Body>
           <Body muted>Everything else in Clipy works in Expo Go.</Body>
@@ -41,7 +41,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
       {state.status === "exporting" && (
         <View style={{ gap: theme.space.md }}>
           <View style={{ height: 10, borderRadius: 5, backgroundColor: theme.colors.surfaceAlt, overflow: "hidden" }}>
-            <View style={{ width: `${Math.round(state.progress * 100)}%`, height: "100%", backgroundColor: theme.colors.highlight }} />
+            <View style={{ width: `${Math.round(state.progress * 100)}%`, height: "100%", backgroundColor: theme.colors.accent }} />
           </View>
           <Body muted>{Math.round(state.progress * 100)}%</Body>
           <PrimaryButton title="Cancel" onPress={cancel} />

@@ -12,10 +12,10 @@ export function Chip({ label, selected, onPress, disabled, accessibilityLabel }:
       style={{
         paddingVertical: theme.space.sm, paddingHorizontal: theme.space.lg, borderRadius: theme.radius.chip,
         backgroundColor: selected ? theme.colors.accent : theme.colors.surfaceAlt,
-        borderWidth: 1, borderColor: selected ? theme.colors.accent : theme.colors.straw, opacity: disabled ? 0.4 : 1,
+        borderWidth: 1, borderColor: selected ? theme.colors.accent : theme.colors.hairline, opacity: disabled ? 0.4 : 1,
       }}
     >
-      <Text style={{ color: theme.colors.text, fontWeight: "600" }}>{label}</Text>
+      <Text style={{ fontFamily: theme.fonts.bodySemi, color: selected ? theme.colors.onAccent : theme.colors.text }}>{label}</Text>
     </Pressable>
   );
 }

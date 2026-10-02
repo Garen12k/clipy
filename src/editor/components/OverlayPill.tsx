@@ -34,12 +34,12 @@ export function OverlayPill({ overlay: o, selected, onPress }: { overlay: Overla
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`overlay-pill-${o.id}`} onPress={onPress} accessibilityLabel={`${isSticker(o) ? "Sticker" : "Text"} ${label}`}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: theme.colors.surfaceAlt,
-          borderWidth: 2, borderColor: selected ? theme.colors.highlight : theme.colors.straw, justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
+          borderWidth: 2, borderColor: selected ? theme.colors.accent : theme.colors.hairline, justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
         <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 12 }}>{label}</Text>
         {selected && (
           <>
-            <GestureDetector gesture={gestures.left}><View accessibilityLabel="Text start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.highlight, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>
-            <GestureDetector gesture={gestures.right}><View accessibilityLabel="Text end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.highlight, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} /></GestureDetector>
+            <GestureDetector gesture={gestures.left}><View accessibilityLabel="Text start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.accent, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>
+            <GestureDetector gesture={gestures.right}><View accessibilityLabel="Text end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.accent, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} /></GestureDetector>
           </>
         )}
       </Pressable>

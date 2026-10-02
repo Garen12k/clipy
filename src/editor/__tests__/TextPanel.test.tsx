@@ -1,3 +1,4 @@
+import { theme } from "@/src/theme/theme";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
@@ -20,8 +21,8 @@ test("edits text, font, color, alignment, outline, background through the store"
   expect(ov().text).toBe("Hello world");
   await fireEvent.press(screen.getByRole("button", { name: "Anton" }));
   expect(ov().fontId).toBe("anton");
-  await fireEvent.press(screen.getByLabelText("Color #F5C542"));
-  expect(ov().color).toBe("#F5C542");
+  await fireEvent.press(screen.getByLabelText(`Color ${theme.colors.accent}`));
+  expect(ov().color).toBe(theme.colors.accent);
   await fireEvent.press(screen.getByRole("button", { name: "Align left" }));
   expect(ov().align).toBe("left");
   await fireEvent(screen.getByLabelText("Outline"), "valueChange", false);

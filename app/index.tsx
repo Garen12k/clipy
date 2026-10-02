@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { ActivityIndicator, Alert, FlatList, Image, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, View } from "react-native";
 import { ProjectCard } from "@/src/projects/ProjectCard";
 import { useProjects } from "@/src/projects/useProjects";
 import type { ProjectSummary } from "@/src/projects";
@@ -32,7 +32,6 @@ export default function ProjectsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg, paddingTop: 60 }}>
-      {theme.projectsWallpaper ? <Image source={theme.projectsWallpaper} style={{ position: "absolute", width: "100%", height: "100%", opacity: 0.3 }} resizeMode="cover" /> : null}
       <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.lg, marginBottom: theme.space.md }}>
         <Mark size={28} />
         <Heading style={{ fontSize: 36 }}>Clipy</Heading>

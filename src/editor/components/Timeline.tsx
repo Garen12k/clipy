@@ -82,7 +82,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           <OverlayLane />
           <MusicLane />
         </ScrollView>
-        <View pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: TIMELINE_HEIGHT - 16, backgroundColor: theme.colors.highlight, borderRadius: 1 }} />
+        <View pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: TIMELINE_HEIGHT - 16, backgroundColor: theme.colors.accent, borderRadius: 1 }} />
       </View>
     </GestureDetector>
   );

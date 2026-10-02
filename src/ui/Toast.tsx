@@ -21,7 +21,7 @@ export function ToastHost() {
   if (!message) return null;
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: 16, right: 16, bottom: 100, alignItems: "center" }}>
-      <View style={{ backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.straw, borderWidth: 1, borderRadius: theme.radius.pill, paddingVertical: 10, paddingHorizontal: 18 }}>
+      <View style={{ backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.hairline, borderWidth: 1, borderRadius: theme.radius.pill, paddingVertical: 10, paddingHorizontal: 18 }}>
         <Text style={{ color: theme.colors.text }}>{message}</Text>
       </View>
     </View>

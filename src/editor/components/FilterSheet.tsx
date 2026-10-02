@@ -45,7 +45,7 @@ export function FilterSheet({ clipId, visible, onClose }: { clipId: string | nul
               onPress={() => apply((p) => setClipFilter(p, clip.id, id))}
               style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}
             >
-              <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", backgroundColor: theme.colors.surfaceAlt, borderWidth: 2, borderColor: selected ? theme.colors.highlight : "transparent" }}>
+              <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", backgroundColor: theme.colors.surfaceAlt, borderWidth: 2, borderColor: selected ? theme.colors.accent : "transparent" }}>
                 {thumb ? <Image source={{ uri: thumb }} style={{ width: TILE_W, height: TILE_H }} resizeMode="cover" /> : null}
                 <FilterLayer filter={id} />
               </View>

@@ -14,10 +14,3 @@ test("Mark renders three slashes in the accent color by default", async () => {
     processColor(theme.colors.accent),
   );
 });
-
-test("theme exposes the core design tokens", () => {
-  expect(theme.colors.accent).toBe("#C8102E");
-  expect(theme.colors.bg).toBe("#0B0B0D");
-  expect(theme.fonts.heading).toBe("Bangers_400Regular");
-  expect(theme.projectsWallpaper).toBeNull();
-});

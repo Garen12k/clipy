@@ -47,8 +47,8 @@ export function MusicBar({ track: t, missing }: { track: AudioTrack; missing: bo
             <Ionicons name="warning" size={12} color={theme.colors.text} />
           </View>
         )}
-        <GestureDetector gesture={gestures.left}><View accessibilityLabel="Music start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.highlight, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>
-        <GestureDetector gesture={gestures.right}><View accessibilityLabel="Music end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.highlight, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} /></GestureDetector>
+        <GestureDetector gesture={gestures.left}><View accessibilityLabel="Music start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.accent, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>
+        <GestureDetector gesture={gestures.right}><View accessibilityLabel="Music end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.accent, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} /></GestureDetector>
       </Pressable>
     </GestureDetector>
   );

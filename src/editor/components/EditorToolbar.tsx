@@ -36,7 +36,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     if (!project) return;
     const id = newId();
     const range = defaultOverlayRange(project, playhead);
-    apply((x) => addTextOverlay(x, { ...makeOverlay({ id }), color: theme.colors.text, ...range }));
+    apply((x) => addTextOverlay(x, { ...makeOverlay({ id }), ...range }));
     selectOverlay(id);
     onPanelChange({ id, kind: "text" });
   };

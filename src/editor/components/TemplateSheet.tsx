@@ -39,7 +39,7 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.md }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Random template" onPress={() => use(pickRandomTemplate(lastId))}
           style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}>
-          <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, backgroundColor: theme.colors.surfaceAlt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: theme.colors.straw }}>
+          <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, backgroundColor: theme.colors.surfaceAlt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: theme.colors.hairline }}>
             <Text style={{ fontSize: 30 }}>🎲</Text>
           </View>
           <Body style={{ fontSize: 12 }}>Random</Body>
@@ -50,7 +50,7 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
           return (
             <Pressable key={id} accessibilityRole="button" accessibilityLabel={`Template ${t.label}`} accessibilityState={{ selected }}
               onPress={() => use(t)} style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}>
-              <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", borderWidth: 2, borderColor: selected ? theme.colors.highlight : "transparent" }}>
+              <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", borderWidth: 2, borderColor: selected ? theme.colors.accent : "transparent" }}>
                 <View style={{ flex: 1, backgroundColor: t.swatch[0] }} />
                 <View style={{ flex: 1, backgroundColor: t.swatch[1] }} />
               </View>

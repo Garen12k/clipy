@@ -49,3 +49,12 @@ jest.mock("react-native-gesture-handler", () => {
     return g;
   }
 });
+
+jest.mock("expo-linear-gradient", () => {
+  const { View } = require("react-native");
+  return { LinearGradient: View };
+});
+jest.mock("expo-haptics", () => ({
+  impactAsync: jest.fn(async () => {}), notificationAsync: jest.fn(async () => {}),
+  ImpactFeedbackStyle: { Light: "light", Medium: "medium" }, NotificationFeedbackType: { Success: "success" },
+}));

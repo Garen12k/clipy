@@ -1,3 +1,4 @@
+import { theme } from "@/src/theme/theme";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
@@ -12,8 +13,8 @@ const st = () => useEditorStore.getState().project!.overlays.find((o) => o.id ==
 test("color (shapes only), size slider, fine-tune, duplicate", async () => {
   const onRetarget = jest.fn();
   await render(<StickerPanel overlayId="s1" visible onClose={() => {}} onRetarget={onRetarget} />);
-  await fireEvent.press(screen.getByLabelText("Color #C8102E"));
-  expect(st()).toMatchObject({ color: "#C8102E" });
+  await fireEvent.press(screen.getByLabelText(`Color ${theme.colors.accent}`));
+  expect(st()).toMatchObject({ color: theme.colors.accent });
   const slider = screen.getByTestId("sticker-size-slider");
   await fireEvent(slider, "touchStart"); await fireEvent(slider, "touchMove");
   expect(st()).toMatchObject({ scale: 2 });
@@ -28,5 +29,5 @@ test("color (shapes only), size slider, fine-tune, duplicate", async () => {
 test("emoji stickers hide the color row", async () => {
   useEditorStore.getState().apply((p) => ({ ...p, overlays: [makeSticker({ id: "s1", emoji: "🔥", start: 1, end: 4 })] }));
   await render(<StickerPanel overlayId="s1" visible onClose={() => {}} />);
-  expect(screen.queryByLabelText("Color #C8102E")).toBeNull();
+  expect(screen.queryByLabelText(`Color ${theme.colors.accent}`)).toBeNull();
 });

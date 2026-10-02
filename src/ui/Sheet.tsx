@@ -7,7 +7,7 @@ type Props = { visible: boolean; onClose: () => void; title: string; children: R
 export function Sheet({ visible, onClose, title, children, height }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }} onPress={onClose} accessibilityLabel="Close sheet" />
+      <Pressable style={{ flex: 1, backgroundColor: theme.colors.scrim }} onPress={onClose} accessibilityLabel="Close sheet" />
       <View style={{ backgroundColor: theme.colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: theme.space.xl, paddingBottom: theme.space.xxl, gap: theme.space.lg, maxHeight: height }}>
         <Heading style={{ fontSize: 22 }}>{title}</Heading>
         {children}
