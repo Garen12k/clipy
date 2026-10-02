@@ -3,7 +3,7 @@ import { backendKey, backendUrl, getSupabase } from "./supabase";
 
 export class ApiFailure extends Error { constructor(public code: string, message: string) { super(message); } }
 export interface PlatformStatus { id: PlatformId; available: boolean; connected: boolean; name: string | null; avatarUrl: string | null; needsReconnect: boolean }
-export type UploadProtocol = "google-resumable" | "relay";
+export type UploadProtocol = "google-resumable" | "relay" | "tiktok-chunks";
 export interface Prepared { sessionId: string; protocol: UploadProtocol; uploadUrl: string | null; uploadHeaders: Record<string, string>; chunkSize: number }
 export type PublishResult = { status: "done"; url: string | null } | { status: "processing" };
 

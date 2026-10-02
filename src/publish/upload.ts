@@ -104,3 +104,41 @@ export async function uploadRelay(send: (offset: number, total: number, bytes: U
     }
   }
 }
+
+/** TikTok's plan: floor(total / chunk) chunks (at least 1); the last one carries the remainder. `end` is exclusive. */
+export function tiktokChunkRanges(total: number, chunkSize: number): Array<{ start: number; end: number }> {
+  const size = Math.min(chunkSize, total), count = Math.max(1, Math.floor(total / size));
+  return Array.from({ length: count }, (_, i) => ({ start: i * size, end: i === count - 1 ? total : (i + 1) * size }));
+}
+
+const again = (what: string) => new UploadError(`${what} Post again.`, false);
+
+/**
+ * TikTok's pre-signed upload address: the chunks go in order, 206 = keep going, 201 = everything received.
+ * TikTok offers no way to ask how far an upload got, so a failed upload is restarted from a fresh address (never "resumed").
+ */
+export async function uploadTikTokChunks(url: string, a: UploadArgs): Promise<void> {
+  const total = a.reader.size, sleep = a.sleep ?? wait;
+  if (!(total > 0)) throw new UploadError("The video file is empty.", false);
+  const ranges = tiktokChunkRanges(total, a.chunkSize);
+  for (let i = 0; i < ranges.length; i++) {
+    const { start, end } = ranges[i], last = i === ranges.length - 1;
+    if (a.signal.aborted) throw cancelled();
+    const bytes = readChunk(a.reader, start, end - start);
+    for (let attempts = 0; ; ) {
+      if (a.signal.aborted) throw cancelled();
+      let res: Awaited<ReturnType<typeof fetch>> | null = null;
+      try {
+        res = await fetch(url, { method: "PUT", headers: { "Content-Type": a.mimeType, "Content-Range": `bytes ${start}-${end - 1}/${total}` }, body: bytes as unknown as BodyInit, signal: a.signal });
+      } catch { if (a.signal.aborted) throw cancelled(); }
+      if (res && res.status === 201) { if (!last) throw again("TikTok ended the upload early."); break; }
+      if (res && res.status === 206) { if (last) throw again("TikTok did not confirm the upload."); break; }
+      if (res && res.status === 403) throw again("The TikTok upload link expired.");
+      if (res && res.status === 416) throw again("TikTok lost track of the upload.");
+      if (res && res.status >= 400 && res.status < 500) throw new UploadError(await platformText(res, `Upload failed (${res.status}).`), false);
+      if (++attempts > MAX_ATTEMPTS) throw new UploadError("The connection dropped. Post again to restart the TikTok upload.", false);
+      await sleepOrAbort(1000 * 2 ** (attempts - 1), a.signal, sleep);
+    }
+    a.onProgress(end / total);
+  }
+}

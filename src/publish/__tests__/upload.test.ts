@@ -1,5 +1,5 @@
 import { ApiFailure } from "../api";
-import { uploadGoogleResumable, UploadError, uploadRelay } from "../upload";
+import { uploadGoogleResumable, UploadError, uploadRelay, uploadTikTokChunks, tiktokChunkRanges } from "../upload";
 
 const data = Uint8Array.from({ length: 10 }, (_, i) => i);
 const reader = () => ({ size: data.length, read: jest.fn((o: number, n: number) => data.slice(o, o + n)), close: jest.fn() });
@@ -164,4 +164,57 @@ test("relay passes the abort signal and stops if aborted during a send", async (
   const a = args({ signal: ac.signal });
   await expect(uploadRelay(send, a)).rejects.toEqual(E("Upload cancelled."));
   expect(a.onProgress).not.toHaveBeenCalled();
+});
+
+test("tiktokChunkRanges matches TikTok's plan: floor(total / chunk) chunks, the last takes the remainder", () => {
+  expect(tiktokChunkRanges(10, 4)).toEqual([{ start: 0, end: 4 }, { start: 4, end: 10 }]);
+  expect(tiktokChunkRanges(10, 10)).toEqual([{ start: 0, end: 10 }]);
+  expect(tiktokChunkRanges(12, 4)).toEqual([{ start: 0, end: 4 }, { start: 4, end: 8 }, { start: 8, end: 12 }]);
+  expect(tiktokChunkRanges(3, 10)).toEqual([{ start: 0, end: 3 }]);
+});
+
+test("uploads each chunk in order; 206 continues, 201 completes", async () => {
+  fetchMock.mockResolvedValueOnce(r(206)).mockResolvedValueOnce(r(201));
+  const a = args();
+  await uploadTikTokChunks("https://up/x?token=1", a);
+  expect(fetchMock.mock.calls.map((c) => [c[0], c[1].method, c[1].headers["Content-Range"], c[1].body.length])).toEqual([
+    ["https://up/x?token=1", "PUT", "bytes 0-3/10", 4], ["https://up/x?token=1", "PUT", "bytes 4-9/10", 6]]);
+  expect(fetchMock.mock.calls[0][1].headers["Content-Type"]).toBe("video/mp4");
+  expect(fetchMock.mock.calls[0][1].headers.Authorization).toBeUndefined();
+  expect(a.onProgress.mock.calls.map((c) => c[0])).toEqual([0.4, 1]);
+});
+
+test("a dropped chunk is retried in place, then gives up without offering resume", async () => {
+  fetchMock.mockRejectedValueOnce(new TypeError("Network request failed")).mockResolvedValueOnce(r(206)).mockResolvedValueOnce(r(201));
+  const a = args();
+  await uploadTikTokChunks("https://up/x", a);
+  expect(fetchMock.mock.calls.map((c) => c[1].headers["Content-Range"])).toEqual(["bytes 0-3/10", "bytes 0-3/10", "bytes 4-9/10"]);
+  expect(a.sleep).toHaveBeenCalledWith(1000);
+  fetchMock.mockReset(); fetchMock.mockRejectedValue(new TypeError("Network request failed"));
+  await expect(uploadTikTokChunks("https://up/x", args())).rejects.toMatchObject({ resumable: false, message: "The connection dropped. Post again to restart the TikTok upload." });
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+});
+
+test("TikTok's refusals are final and explained", async () => {
+  fetchMock.mockResolvedValueOnce(r(403));
+  await expect(uploadTikTokChunks("https://up/x", args())).rejects.toMatchObject({ resumable: false, message: "The TikTok upload link expired. Post again." });
+  fetchMock.mockResolvedValueOnce(r(416));
+  await expect(uploadTikTokChunks("https://up/x", args())).rejects.toMatchObject({ message: "TikTok lost track of the upload. Post again." });
+  fetchMock.mockResolvedValueOnce(r(400, {}, "bad range"));
+  await expect(uploadTikTokChunks("https://up/x", args())).rejects.toMatchObject({ message: "bad range" });
+});
+
+test("a 201 before the last chunk, or a 206 on the last chunk, is not success", async () => {
+  fetchMock.mockResolvedValueOnce(r(201));
+  await expect(uploadTikTokChunks("https://up/x", args())).rejects.toMatchObject({ message: "TikTok ended the upload early. Post again." });
+  fetchMock.mockReset(); fetchMock.mockResolvedValueOnce(r(206)).mockResolvedValueOnce(r(206));
+  await expect(uploadTikTokChunks("https://up/x", args())).rejects.toMatchObject({ message: "TikTok did not confirm the upload. Post again." });
+});
+
+test("cancel, empty file and unreadable file behave like the other uploaders", async () => {
+  const ac = new AbortController(); ac.abort();
+  await expect(uploadTikTokChunks("https://up/x", args({ signal: ac.signal }))).rejects.toMatchObject({ message: "Upload cancelled." });
+  await expect(uploadTikTokChunks("https://up/x", args({ reader: { size: 0, read: jest.fn(), close: jest.fn() } }))).rejects.toMatchObject({ message: "The video file is empty." });
+  await expect(uploadTikTokChunks("https://up/x", args({ reader: { size: 10, read: () => { throw new Error("io"); }, close: jest.fn() } }))).rejects.toMatchObject({ message: "Couldn't read the video file." });
+  expect(fetchMock).not.toHaveBeenCalled();
 });

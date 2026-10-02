@@ -14,6 +14,7 @@ function deps(over: Partial<PostDeps> = {}): PostDeps {
     openReader: jest.fn(() => reader),
     uploadGoogleResumable: jest.fn(async (_u, _h, a) => { a.onProgress(0.5); a.onProgress(1); return '{"id":"abc"}'; }),
     uploadRelay: jest.fn(async () => {}),
+    uploadTikTokChunks: jest.fn(async () => {}),
     sleep: jest.fn(async (_ms: number, _s: AbortSignal) => {}),
     ...over,
   };
@@ -230,5 +231,29 @@ describe("a finished upload is never uploaded again", () => {
     expect(d.api.prepare).not.toHaveBeenCalled();
     expect(d.api.finalize).toHaveBeenCalledWith("s1", '{"id":"abc"}');
     expect(t.row()).toMatchObject({ phase: "done", url: "https://youtu.be/abc" });
+  });
+});
+
+describe("tiktok-chunks", () => {
+  const tt = { ...prepared, protocol: "tiktok-chunks" as const, uploadUrl: "https://up/x?t=1" };
+  test("uploads through uploadTikTokChunks and finalizes with no client result", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt) } });
+    await runPost(job, d, track().update, signal());
+    expect(d.uploadTikTokChunks).toHaveBeenCalledWith("https://up/x?t=1", expect.objectContaining({ chunkSize: 4 }));
+    expect(d.uploadGoogleResumable).not.toHaveBeenCalled();
+    expect(d.uploadRelay).not.toHaveBeenCalled();
+    expect(d.api.finalize).toHaveBeenCalledWith("s1", null);
+  });
+  test("a plan without uploadUrl is refused", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => ({ ...tt, uploadUrl: null })) } }), t = track();
+    expect(await runPost(job, d, t.update, signal())).toBeNull();
+    expect(t.row()).toMatchObject({ phase: "failed", message: "The server sent an unexpected upload plan.", resumable: false });
+    expect(d.uploadTikTokChunks).not.toHaveBeenCalled();
+  });
+  test("a non-resumable upload failure is not resumable and does not mark the upload done", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt) }, uploadTikTokChunks: jest.fn(async () => { throw new UploadError("The TikTok upload link expired. Post again.", false); }) }), t = track();
+    const info = await runPost(job, d, t.update, signal());
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: "The TikTok upload link expired. Post again." });
+    expect(info?.uploaded).not.toBe(true);
   });
 });
