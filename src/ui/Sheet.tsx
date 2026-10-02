@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, View, type DimensionValue } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/src/theme/theme";
@@ -40,25 +40,28 @@ export function Sheet({ visible, onClose, title, children, height, action }: Pro
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: theme.colors.scrim }} onPress={onClose} accessibilityLabel="Close sheet" />
-      <Animated.View onLayout={(e) => setPanelH(e.nativeEvent.layout.height)}
-        style={[{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet,
-          borderTopWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: theme.space.xl, paddingBottom: insets.bottom + theme.space.lg, gap: theme.space.lg, maxHeight: height }, anim]}>
-        <GestureDetector gesture={pan}>
-          <View style={{ paddingTop: theme.space.sm, gap: theme.space.md }}>
-            <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: theme.colors.textMuted, opacity: 0.5 }} />
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Title size={18} accessibilityRole="header">{title}</Title>
-              {action ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={8}>
-                  <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 13 }}>{action.label}</Body>
-                </Pressable>
-              ) : null}
+      {/* A Modal is a separate native root: give its gestures their own root view. */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <Pressable style={{ flex: 1, backgroundColor: theme.colors.scrim }} onPress={onClose} accessibilityLabel="Close sheet" />
+        <Animated.View onLayout={(e) => setPanelH(e.nativeEvent.layout.height)}
+          style={[{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet,
+            borderTopWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: theme.space.xl, paddingBottom: insets.bottom + theme.space.lg, gap: theme.space.lg, maxHeight: height }, anim]}>
+          <GestureDetector gesture={pan}>
+            <View style={{ paddingTop: theme.space.sm, gap: theme.space.md }}>
+              <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: theme.colors.textMuted, opacity: 0.5 }} />
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Title size={18} accessibilityRole="header">{title}</Title>
+                {action ? (
+                  <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={8}>
+                    <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 13 }}>{action.label}</Body>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
-          </View>
-        </GestureDetector>
-        {children}
-      </Animated.View>
+          </GestureDetector>
+          {children}
+        </Animated.View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
