@@ -1,4 +1,4 @@
-import { ApiError, PlatformError } from "../errors.ts";
+import { ApiError, isRejectionStatus, PlatformError } from "../errors.ts";
 import { accessTokenFor, withPlatformAuth } from "../tokens.ts";
 import { adapterCtx, type Deps, type PostSessionRow, type PublishResult } from "../types.ts";
 
@@ -12,8 +12,7 @@ export const settled = (s: PostSessionRow): PublishResult | null => (s.status ==
 export const failedError = (s: PostSessionRow) => new ApiError(400, "platform_error", s.error ?? "The post failed.");
 
 /** A real rejection by the platform (4xx). Auth failures were already turned into `reconnect` by withPlatformAuth. */
-export const isRejection = (e: unknown): e is PlatformError =>
-  e instanceof PlatformError && e.status >= 400 && e.status < 500 && e.status !== 401 && e.status !== 408 && e.status !== 429;
+export const isRejection = (e: unknown): e is PlatformError => e instanceof PlatformError && isRejectionStatus(e.status);
 
 /** Moves to `failed` only if the session is still in `from`; nothing ever overwrites `done`. */
 export async function failFrom(deps: Deps, id: string, from: "publishing" | "processing", message: string): Promise<void> {

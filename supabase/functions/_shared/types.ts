@@ -6,7 +6,7 @@ export interface Env { get(name: string): string | undefined }
 export interface Tokens { accessToken: string; refreshToken: string | null; expiresAt: string | null; scopes: string }
 export interface Profile { accountId: string; displayName: string; avatarUrl: string | null }
 export interface PrepareInput { fileSize: number; durationSec: number; mimeType: string; caption: string; options: Record<string, unknown> }
-export type UploadProtocol = "google-resumable" | "relay";
+export type UploadProtocol = "google-resumable" | "relay" | "tiktok-chunks";
 export interface PrepareResult { protocol: UploadProtocol; uploadUrl: string | null; uploadHeaders: Record<string, string>; chunkSize: number; ref: Record<string, unknown> }
 export type PublishResult = { status: "done"; url: string | null } | { status: "processing" };
 export interface AdapterCtx { fetch: typeof fetch; env: Env; redirectUri: string }

@@ -3,6 +3,7 @@ import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
+import { clientAdapters } from "../adapters";
 import { PLATFORMS, type PlatformId } from "../platforms";
 
 /** Same look as the editor's text fields (TextPanel / NumField). */
@@ -10,8 +11,8 @@ const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.te
 const TITLE_MAX = 100;
 const PRIVACY = [{ value: "public", label: "Public" }, { value: "unlisted", label: "Unlisted" }, { value: "private", label: "Private" }] as const;
 
-/** Platforms that have options of their own; the others have no Options button. */
-export const hasOptions = (id: PlatformId) => id === "youtube";
+/** Platforms that have options of their own (adapter `hasOptions`, default true); the others have no Options button. */
+export const hasOptions = (id: PlatformId) => { const a = clientAdapters[id]; return !!a && a.hasOptions !== false; };
 
 type Props = { platform: PlatformId | null; options: Record<string, unknown>; onChange: (patch: Record<string, unknown>) => void; onClose: () => void };
 

@@ -90,7 +90,8 @@ export const youtube: ServerAdapter = {
   async finalize(_c, _t, { clientResult }) {
     let videoId: unknown;
     try { videoId = (JSON.parse(clientResult ?? "") as { id?: unknown } | null)?.id; } catch { /* handled below */ }
-    if (typeof videoId !== "string" || !VIDEO_ID.test(videoId)) throw new PlatformError("youtube", 502, "YouTube did not confirm the upload.");
+    // Asking again cannot fix a missing upload result, so this stays final (only a fresh upload helps), not `platform_unavailable`.
+    if (typeof videoId !== "string" || !VIDEO_ID.test(videoId)) throw new PlatformError("youtube", 502, "YouTube did not confirm the upload.", "platform_error");
     return { status: "done", url: `https://youtu.be/${videoId}` };
   },
   async status() { return { status: "done", url: null }; },

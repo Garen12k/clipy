@@ -49,7 +49,9 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
         <SecondaryButton title="View" accessibilityLabel={`View on ${label}`} onPress={() => onView(url)} />
       </View>
     ) : <Body weight="semi" style={{ color: theme.colors.accent }}>Done</Body>;
-    if (!url && row.message) below.push(<View key="m">{msg(row.message)}</View>);
+    // No link (e.g. a TikTok draft): the row's own message, else the platform's done note.
+    const doneText = url ? null : row.message ?? view.adapter?.doneNote ?? null;
+    if (doneText) below.push(<View key="m">{msg(doneText)}</View>);
   } else if (row.phase === "failed" || row.phase === "needsReconnect") {
     const verb = row.phase === "failed" ? (row.resumable ? "Resume" : "Retry") : canResume ? "Resume" : null;
     // Retry / Resume follow the same rule as Post: not while the row is invalid or the caption is too long.

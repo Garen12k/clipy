@@ -55,13 +55,20 @@ export function usePostForm(video: VideoInfo, platforms: PlatformStatus[], title
     const on = !reason && (ticked[status.id] ?? true);
     return { status, adapter, reason, on, opts, error: on && adapter ? adapter.validate(video, caption, opts) : null };
   });
-  // The caption limit is the smallest one among the ticked platforms.
-  const limits = base.filter((b) => b.on && b.adapter).map((b) => b.adapter!.captionMax);
+  // The caption limit is the smallest one among the ticked platforms that receive the caption.
+  const tickedAdapters = base.filter((b) => b.on && b.adapter).map((b) => b.adapter!);
+  const limits = tickedAdapters.flatMap((a) => (a.captionMax === null ? [] : [a.captionMax]));
   const captionMax = limits.length ? Math.min(...limits) : null;
   const overLimit = captionMax !== null && caption.length > captionMax;
+  /** Some platform is ticked, so the caption counter is shown (with or without a limit). */
+  const anyTicked = tickedAdapters.length > 0;
+  /** Ticked platforms that never receive the caption, by id. */
+  const captionless = tickedAdapters.filter((a) => a.captionMax === null).map((a) => a.id);
 
   const views: PlatformView[] = base.map(({ status, adapter, reason, on, opts, error }) => {
-    const blocker = !on ? null : error ?? (overLimit ? `Captions can be up to ${captionMax} characters.` : null);
+    // A platform that doesn't receive the caption is never held back by its length.
+    const tooLong = overLimit && adapter?.captionMax !== null;
+    const blocker = !on ? null : error ?? (tooLong ? `Captions can be up to ${captionMax} characters.` : null);
     return {
       status, adapter, reason, checked: on && !error, error, options: opts,
       canPost: on && !blocker, blocker,
@@ -87,5 +94,5 @@ export function usePostForm(video: VideoInfo, platforms: PlatformStatus[], title
   /** The job a Retry / Resume press sends (current caption and options), or null when the row can't be sent now. */
   const retryJob = (v: PlatformView): Job | null => { if (!v.canPost) return null; forget(v.status.id); return jobFor(v); };
 
-  return { caption, setCaption, captionMax, overLimit, views, jobs, toggle, setOption, markReconnect, retryJob };
+  return { caption, setCaption, captionMax, overLimit, anyTicked, captionless, views, jobs, toggle, setOption, markReconnect, retryJob };
 }

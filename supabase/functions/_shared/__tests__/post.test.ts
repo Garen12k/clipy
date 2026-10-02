@@ -1,8 +1,9 @@
-import { PlatformError } from "../errors.ts";
+import { PlatformError, toResponse } from "../errors.ts";
 import { postFinalize } from "../handlers/postFinalize.ts";
 import { postPrepare } from "../handlers/postPrepare.ts";
 import { postStatus } from "../handlers/postStatus.ts";
 import { MAX_RELAY_BYTES, postUpload } from "../handlers/postUpload.ts";
+import { tiktok } from "../platforms/tiktok.ts";
 import { youtube } from "../platforms/youtube.ts";
 import { saveTokens } from "../tokens.ts";
 import { fakeAdapter, fakeDeps, INPUT, tokens, USER } from "./fakes.ts";
@@ -193,7 +194,7 @@ test("finalize processing ends processing", async () => {
 
 test("platform 4xx in finalize ends failed with the message", async () => {
   const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => { throw new PlatformError("youtube", 403, "Quota exceeded."); }) });
-  await expect(fin(deps, sessionId)).rejects.toMatchObject({ message: "Quota exceeded." });
+  await expect(fin(deps, sessionId)).rejects.toMatchObject({ code: "platform_error", message: "Quota exceeded." });
   expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "failed", error: "Quota exceeded." });
 });
 
@@ -208,7 +209,7 @@ test("a TypeError in finalize returns to uploading and a retry publishes", async
 
 test("platform 503 in finalize returns to uploading", async () => {
   const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => { throw new PlatformError("youtube", 503, "Unavailable"); }) });
-  await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 503 });
+  await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 503, code: "platform_unavailable" });
   expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
 });
 
@@ -257,7 +258,7 @@ test("a status 4xx that loses to a concurrent done does not overwrite it", async
 test("status 503 is rethrown and the session stays processing", async () => {
   const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => ({ status: "processing" as const })), status: jest.fn(async () => { throw new PlatformError("youtube", 503, "Unavailable"); }) });
   await fin(deps, sessionId);
-  await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 503 });
+  await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 503, code: "platform_unavailable" });
   expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
 });
 test("a DB failure after a successful platform call never reverts to uploading or re-publishes", async () => {
@@ -272,13 +273,66 @@ test("a DB failure after a successful platform call never reverts to uploading o
 
 test("429 in finalize returns to uploading (retryable)", async () => {
   const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => { throw new PlatformError("youtube", 429, "Slow down"); }) });
-  await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 429 });
+  await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 429, code: "platform_unavailable" });
   expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
 });
 
 test("429 in status is rethrown without writing", async () => {
   const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => ({ status: "processing" as const })), status: jest.fn(async () => { throw new PlatformError("youtube", 429, "Slow down"); }) });
   await fin(deps, sessionId);
-  await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 429 });
+  await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 429, code: "platform_unavailable" });
   expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+});
+
+test("YouTube with no upload result in finalize stays final (platform_error): asking again cannot help", async () => {
+  const deps = await connected({ adapters: { youtube } });
+  await saveTokens(deps, USER, "youtube", tokens({ expiresAt: null }), profile);
+  const { sessionId } = await postPrepare({ ...deps, fetch: (async () => new Response(null, { status: 200, headers: { Location: "https://upload.test/s" } })) as unknown as typeof fetch }, USER, body);
+  await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 502, code: "platform_error", message: "YouTube did not confirm the upload." });
+});
+
+describe("TikTok handlers: a temporary failure after the upload never asks for a new upload", () => {
+  const ttProfile = { accountId: "o1", displayName: "Mo", avatarUrl: null };
+  const ttBody = { platform: "tiktok", ...INPUT };
+  const api = (data: unknown, code = "ok", status = 200) => new Response(JSON.stringify({ data, error: { code, message: "" } }), { status });
+  async function tiktokSession(replies: Array<() => Response>) {
+    const fetchFake = jest.fn(async () => replies.shift()!()) as unknown as typeof fetch;
+    const env = new Map([["TIKTOK_CLIENT_KEY", "ck"], ["TIKTOK_CLIENT_SECRET", "cs"]]);
+    const deps = fakeDeps({ adapters: { tiktok }, fetch: fetchFake, env: { get: (n) => env.get(n) } });
+    await saveTokens(deps, USER, "tiktok", tokens({ expiresAt: null }), ttProfile);
+    const { sessionId } = await postPrepare(deps, USER, ttBody);
+    return { deps, sessionId };
+  }
+  const init = () => api({ publish_id: "p1", upload_url: "https://up.test/x" });
+
+  test.each([
+    ["429", () => api({}, "rate_limit_exceeded", 429), 429],
+    ["internal_error in a 200", () => api({}, "internal_error"), 500],
+    ["bare 502", () => new Response("bad gateway", { status: 502 }), 502],
+  ])("finalize: %s → platform_unavailable, session back to uploading; the next finalize reaches the inbox with no link", async (_n, reply, status) => {
+    const { deps, sessionId } = await tiktokSession([init, reply, () => api({ status: "SEND_TO_USER_INBOX" })]);
+    const err = await fin(deps, sessionId).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status, code: "platform_unavailable" });
+    expect((await toResponse(err).json()).code).toBe("platform_unavailable");
+    expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
+    expect(await fin(deps, sessionId)).toEqual({ status: "done", url: null });
+    expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "done", url: null });
+  });
+
+  test("status: 503 → platform_unavailable, session stays processing; a FAILED status fails it with platform_error", async () => {
+    const { deps, sessionId } = await tiktokSession([init, () => api({ status: "PROCESSING_UPLOAD" }), () => new Response("down", { status: 503 }), () => api({ status: "FAILED", fail_reason: "internal" })]);
+    expect(await fin(deps, sessionId)).toEqual({ status: "processing" });
+    await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 503, code: "platform_unavailable" });
+    expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+    await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 400, code: "platform_error", message: "TikTok had a problem processing the video." });
+    expect((await deps.db.getSession(sessionId))!.status).toBe("failed");
+  });
+
+  test("a token endpoint server_error inside HTTP 200 during finalize is platform_unreachable and does not flag the account", async () => {
+    const { deps, sessionId } = await tiktokSession([init, () => new Response(JSON.stringify({ error: "server_error", error_description: "busy" }), { status: 200 })]);
+    await saveTokens(deps, USER, "tiktok", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), ttProfile); // expired: finalize refreshes first
+    await expect(fin(deps, sessionId)).rejects.toMatchObject({ code: "platform_unreachable" });
+    expect((await deps.db.getAccount(USER, "tiktok"))!.meta.needsReconnect).toBeUndefined();
+    expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
+  });
 });

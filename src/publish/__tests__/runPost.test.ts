@@ -14,6 +14,7 @@ function deps(over: Partial<PostDeps> = {}): PostDeps {
     openReader: jest.fn(() => reader),
     uploadGoogleResumable: jest.fn(async (_u, _h, a) => { a.onProgress(0.5); a.onProgress(1); return '{"id":"abc"}'; }),
     uploadRelay: jest.fn(async () => {}),
+    uploadTikTokChunks: jest.fn(async () => {}),
     sleep: jest.fn(async (_ms: number, _s: AbortSignal) => {}),
     ...over,
   };
@@ -176,6 +177,7 @@ describe("a finished upload is never uploaded again", () => {
     ["unreachable", new ApiFailure("unreachable", "offline")],
     ["internal", new ApiFailure("internal", "Something went wrong.")],
     ["platform_unreachable", new ApiFailure("platform_unreachable", "Couldn't reach YouTube. Try again.")],
+    ["platform_unavailable", new ApiFailure("platform_unavailable", "Backend Error")],
     ["unauthorized", new ApiFailure("unauthorized", "Sign in again.")],
     ["signed_out", new ApiFailure("signed_out", "Sign in to Clipy first.")],
     ["unavailable", new ApiFailure("unavailable", "YouTube isn't set up on the server yet.")],
@@ -230,5 +232,66 @@ describe("a finished upload is never uploaded again", () => {
     expect(d.api.prepare).not.toHaveBeenCalled();
     expect(d.api.finalize).toHaveBeenCalledWith("s1", '{"id":"abc"}');
     expect(t.row()).toMatchObject({ phase: "done", url: "https://youtu.be/abc" });
+  });
+});
+
+describe("tiktok-chunks", () => {
+  const tt = { ...prepared, protocol: "tiktok-chunks" as const, uploadUrl: "https://up/x?t=1" };
+  test("uploads through uploadTikTokChunks and finalizes with no client result", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt) } });
+    await runPost(job, d, track().update, signal());
+    expect(d.uploadTikTokChunks).toHaveBeenCalledWith("https://up/x?t=1", expect.objectContaining({ chunkSize: 4 }));
+    expect(d.uploadGoogleResumable).not.toHaveBeenCalled();
+    expect(d.uploadRelay).not.toHaveBeenCalled();
+    expect(d.api.finalize).toHaveBeenCalledWith("s1", null);
+  });
+  test("a plan without uploadUrl is refused", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => ({ ...tt, uploadUrl: null })) } }), t = track();
+    expect(await runPost(job, d, t.update, signal())).toBeNull();
+    expect(t.row()).toMatchObject({ phase: "failed", message: "The server sent an unexpected upload plan.", resumable: false });
+    expect(d.uploadTikTokChunks).not.toHaveBeenCalled();
+  });
+  test("a non-resumable upload failure is not resumable and does not mark the upload done", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt) }, uploadTikTokChunks: jest.fn(async () => { throw new UploadError("The TikTok upload link expired. Post again.", false); }) }), t = track();
+    const info = await runPost(job, d, t.update, signal());
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: "The TikTok upload link expired. Post again." });
+    expect(info).toEqual({ prepared: tt, uploaded: false, clientResult: null });
+    // usePost's Retry passes no resume info for a non-resumable, not-uploaded row: a fresh prepare and a fresh upload.
+    (d.uploadTikTokChunks as jest.Mock).mockImplementation(async () => {});
+    const t2 = track();
+    await runPost(job, d, t2.update, signal(), null);
+    expect(d.api.prepare).toHaveBeenCalledTimes(2);
+    expect(d.uploadTikTokChunks).toHaveBeenCalledTimes(2);
+    expect(t2.row()).toMatchObject({ phase: "done" });
+  });
+  test("upload done, finalize platform_unavailable: resumable with TikTok's words; Retry only finalizes (no second draft)", async () => {
+    const ttJob = { ...job, platform: "tiktok" as const };
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt) } }), t = track();
+    (d.api.finalize as jest.Mock).mockRejectedValueOnce(new ApiFailure("platform_unavailable", "TikTok is busy — wait a minute, then try again.")).mockResolvedValue({ status: "done", url: null });
+    const info = await runPost(ttJob, d, t.update, signal());
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: "TikTok is busy — wait a minute, then try again." });
+    expect(info).toEqual({ prepared: tt, uploaded: true, clientResult: null });
+    await runPost(ttJob, d, t.update, signal(), info);
+    expect(d.api.prepare).toHaveBeenCalledTimes(1);
+    expect(d.uploadTikTokChunks).toHaveBeenCalledTimes(1);
+    expect(d.openReader).toHaveBeenCalledTimes(1);
+    expect(d.api.finalize).toHaveBeenCalledTimes(2);
+    expect(t.row()).toMatchObject({ phase: "done", url: null });
+  });
+  test("a status poll answering platform_unavailable after the upload is resumable too", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt) } }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockRejectedValue(new ApiFailure("platform_unavailable", "TikTok is having trouble — try again."));
+    expect(await runPost({ ...job, platform: "tiktok" }, d, t.update, signal())).toEqual({ prepared: tt, uploaded: true, clientResult: null });
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true });
+  });
+  test("platform_unavailable from prepare (nothing uploaded) is a plain failed row; Retry opens a fresh session", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn().mockRejectedValueOnce(new ApiFailure("platform_unavailable", "TikTok is busy — wait a minute, then try again.")).mockResolvedValue(tt) } }), t = track();
+    expect(await runPost({ ...job, platform: "tiktok" }, d, t.update, signal())).toBeNull();
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: "TikTok is busy — wait a minute, then try again." });
+    expect(d.uploadTikTokChunks).not.toHaveBeenCalled();
+    await runPost({ ...job, platform: "tiktok" }, d, t.update, signal(), null);
+    expect(d.api.prepare).toHaveBeenCalledTimes(2);
+    expect(t.row()).toMatchObject({ phase: "done" });
   });
 });

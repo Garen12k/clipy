@@ -4,7 +4,7 @@ import type { VideoInfo } from "./adapters/types";
 import { openReader } from "./fileReader";
 import { PLATFORM_IDS, type PlatformId } from "./platforms";
 import { IDLE_ROW, runPost, type PostDeps, type PostJob, type ResumeInfo, type RowState } from "./runPost";
-import { uploadGoogleResumable, uploadRelay } from "./upload";
+import { uploadGoogleResumable, uploadRelay, uploadTikTokChunks } from "./upload";
 
 /** Timer that also ends early (and cleans up) when the signal aborts. */
 export function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -15,7 +15,7 @@ export function sleep(ms: number, signal: AbortSignal): Promise<void> {
     signal.addEventListener("abort", done);
   });
 }
-const realDeps: PostDeps = { api, openReader, uploadGoogleResumable, uploadRelay, sleep };
+const realDeps: PostDeps = { api, openReader, uploadGoogleResumable, uploadRelay, uploadTikTokChunks, sleep };
 const allIdle = () => Object.fromEntries(PLATFORM_IDS.map((id) => [id, IDLE_ROW])) as Record<PlatformId, RowState>;
 const ACTIVE = ["preparing", "uploading", "publishing"];
 

@@ -2,7 +2,7 @@ import { ApiFailure, type api, type Prepared } from "./api";
 import type { VideoInfo } from "./adapters/types";
 import type { ChunkReader } from "./fileReader";
 import { PLATFORMS, type PlatformId } from "./platforms";
-import { UploadError, type uploadGoogleResumable, type uploadRelay } from "./upload";
+import { UploadError, type uploadGoogleResumable, type uploadRelay, type uploadTikTokChunks } from "./upload";
 
 export type RowPhase = "idle" | "preparing" | "uploading" | "publishing" | "done" | "failed" | "needsReconnect";
 export interface RowState { phase: RowPhase; progress: number; url: string | null; message: string | null; resumable: boolean }
@@ -11,7 +11,7 @@ export interface PostJob { platform: PlatformId; video: VideoInfo; caption: stri
 export interface PostDeps {
   api: Pick<typeof api, "prepare" | "uploadChunk" | "finalize" | "status">;
   openReader(uri: string): ChunkReader;
-  uploadGoogleResumable: typeof uploadGoogleResumable; uploadRelay: typeof uploadRelay;
+  uploadGoogleResumable: typeof uploadGoogleResumable; uploadRelay: typeof uploadRelay; uploadTikTokChunks: typeof uploadTikTokChunks;
   /** Resolves after `ms`, or early when `signal` aborts. */
   sleep(ms: number, signal: AbortSignal): Promise<void>;
 }
@@ -21,10 +21,11 @@ export const POLL_MS = 3000;
 export const POLL_LIMIT = 40; // 2 minutes
 
 /** The server decides the chunk size and protocol; refuse a plan we cannot follow. */
-const planIsValid = (p: Prepared) => Number.isInteger(p.chunkSize) && p.chunkSize > 0 && !(p.protocol === "google-resumable" && !p.uploadUrl);
+const planIsValid = (p: Prepared) => Number.isInteger(p.chunkSize) && p.chunkSize > 0 && !((p.protocol === "google-resumable" || p.protocol === "tiktok-chunks") && !p.uploadUrl);
 /**
  * After the upload finished, every failure is resumable (the stored session decides) except these two: the server says
- * the session itself is gone or finished-and-failed, so only a fresh upload can help.
+ * the session itself is gone or finished-and-failed, so only a fresh upload can help. A temporary platform failure
+ * (`platform_unavailable`: 408, 429, 5xx) is not final: Retry asks again without uploading.
  */
 const FINAL_AFTER_UPLOAD = new Set(["platform_error", "not_found"]);
 const messageOf = (e: unknown) => (e instanceof Error && e.message ? e.message : "Something went wrong.");
@@ -56,6 +57,7 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
       const args = { reader, mimeType: job.video.mimeType, chunkSize: p.chunkSize, onProgress: (f: number) => update({ progress: f }), signal, resume: !!resumeFrom };
       let clientResult: string | null = null;
       if (p.protocol === "google-resumable") clientResult = await deps.uploadGoogleResumable(p.uploadUrl ?? "", p.uploadHeaders, args);
+      else if (p.protocol === "tiktok-chunks") await deps.uploadTikTokChunks(p.uploadUrl ?? "", args);
       else await deps.uploadRelay((offset, total, bytes, sig) => deps.api.uploadChunk(p.sessionId, offset, total, bytes, sig), args);
       info = { prepared: p, uploaded: true, clientResult };
     }

@@ -104,3 +104,54 @@ export async function uploadRelay(send: (offset: number, total: number, bytes: U
     }
   }
 }
+
+/** TikTok's plan: floor(total / chunk) chunks (at least 1); the last one carries the remainder. `end` is exclusive. */
+export function tiktokChunkRanges(total: number, chunkSize: number): Array<{ start: number; end: number }> {
+  const size = Math.min(chunkSize, total), count = Math.max(1, Math.floor(total / size));
+  return Array.from({ length: count }, (_, i) => ({ start: i * size, end: i === count - 1 ? total : (i + 1) * size }));
+}
+
+const again = (what: string) => new UploadError(`${what} Post again.`, false);
+/** Replies worth sending the same chunk again for: the server is busy or slow, not refusing. */
+const retryInPlace = (status: number) => status >= 500 || status === 408 || status === 429;
+
+/**
+ * PUTs one chunk, retrying a dropped connection, 5xx, 408 or 429 in place (MAX_ATTEMPTS retries with backoff).
+ * Returns any other reply for the caller to judge.
+ */
+async function putTikTokChunk(url: string, init: { headers: Record<string, string>; body: Uint8Array }, a: UploadArgs, sleep: (ms: number) => Promise<void>) {
+  for (let failures = 0; failures <= MAX_ATTEMPTS; failures++) {
+    if (failures > 0) await sleepOrAbort(1000 * 2 ** (failures - 1), a.signal, sleep);
+    if (a.signal.aborted) throw cancelled();
+    try {
+      const res = await fetch(url, { method: "PUT", headers: init.headers, body: init.body as unknown as BodyInit, signal: a.signal });
+      if (!retryInPlace(res.status)) return res;
+    } catch { if (a.signal.aborted) throw cancelled(); }
+  }
+  throw new UploadError("The connection dropped. Post again to restart the TikTok upload.", false);
+}
+
+/**
+ * TikTok's pre-signed upload address: the chunks go in order, 206 = keep going, 201 (or 200) on the last chunk = everything received.
+ * TikTok offers no way to ask how far an upload got, so a failed upload is restarted from a fresh address (never "resumed").
+ */
+export async function uploadTikTokChunks(url: string, a: UploadArgs): Promise<void> {
+  const total = a.reader.size, sleep = a.sleep ?? wait;
+  if (!(total > 0)) throw new UploadError("The video file is empty.", false);
+  const ranges = tiktokChunkRanges(total, a.chunkSize);
+  for (let i = 0; i < ranges.length; i++) {
+    const { start, end } = ranges[i], last = i === ranges.length - 1;
+    if (a.signal.aborted) throw cancelled();
+    const body = readChunk(a.reader, start, end - start);
+    const res = await putTikTokChunk(url, { headers: { "Content-Type": a.mimeType, "Content-Range": `bytes ${start}-${end - 1}/${total}` }, body }, a, sleep);
+    const s = res.status;
+    if (s === 200 || s === 201) { if (!last) throw again("TikTok ended the upload early."); }
+    else if (s === 206) { if (last) throw again("TikTok did not confirm the upload."); }
+    else if (s === 403) throw again("The TikTok upload link expired.");
+    // On the last chunk a 416 usually means a retry of a chunk TikTok already has: the video may well be there.
+    else if (s === 416) throw last ? new UploadError("TikTok may already have this video — check your TikTok inbox before posting again.", false) : again("TikTok lost track of the upload.");
+    else if (s >= 400) throw new UploadError(await platformText(res, `Upload failed (${s}).`), false);
+    else throw again("TikTok sent an unexpected reply.");
+    a.onProgress(end / total);
+  }
+}

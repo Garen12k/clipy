@@ -42,14 +42,15 @@ npm run typecheck
 npm test
 ```
 
-## Posting (Phase 4A)
+## Posting (Phases 4A and 4B)
 
-Works: Sign in with Apple, an Accounts screen (connect / disconnect), a Post screen and YouTube posting. Reach Post from **Post to…** on the export result or **Post a video** on the home screen; Accounts is the icon in the home header.
+Works: Sign in with Apple, an Accounts screen (connect / disconnect), a Post screen, YouTube posting and **sending to your TikTok inbox**. Reach Post from **Post to…** on the export result or **Post a video** on the home screen; Accounts is the icon in the home header.
 
 - Needs the Supabase backend: follow `supabase/README.md`, and copy `.env.example` to `.env` with your Supabase URL and key. Without `.env` the app shows "Posting isn't set up yet" and the Share button still works.
 - YouTube videos arrive **private** until Google audits the app; open the video from the Done screen and make it Public in YouTube yourself.
-- TikTok, Instagram, Facebook and X arrive in phases 4B to 4D.
-- **Nothing has been run against live Supabase or Google yet.** The code and tests were written from the platforms' documentation; the device checklist is in `supabase/README.md` (section 9).
+- TikTok works as **"send to TikTok inbox"**: the video arrives in TikTok as a draft, and you open TikTok to add the caption and post it. Clipy does this because TikTok keeps apps it has not audited to private-only posts on private accounts. Clipy's caption is not sent to TikTok, TikTok has no options on the Post screen, and the row ends with "Sent to TikTok — open TikTok to finish posting." (no link). TikTok allows **at most 5 unfinished drafts a day**. TikTok setup is in `supabase/README.md` (section 11).
+- Instagram, Facebook and X are still to come (phases 4C and 4D).
+- **Nothing has been run against live Supabase, Google or TikTok yet.** The code and tests were written from the platforms' documentation; the device checklists are in `supabase/README.md` (sections 9 and 11).
 - Retries never re-upload a video that has already finished uploading, unless the server says that upload failed or no longer exists; the message then says Retry will upload the video again.
 - Leaving the Post screen stops any upload in progress.
 - A post that completes after you have left the Post screen is not recorded on the project card.

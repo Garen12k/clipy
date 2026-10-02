@@ -68,6 +68,15 @@ test("retry after a finished upload passes the stored info even when the row is 
   expect(calls[1].resume).toBe(info);
 });
 
+test("retry of a TikTok row left resumable by platform_unavailable after the upload passes the stored ResumeInfo", async () => {
+  const ttInfo: ResumeInfo = { prepared: { ...prepared, protocol: "tiktok-chunks", uploadUrl: "https://up/x" }, uploaded: true, clientResult: null };
+  const { h } = await setup();
+  await act(async () => h.result.current.start([tt]));
+  await act(async () => { calls[0].update({ phase: "failed", resumable: true, message: "TikTok is busy — wait a minute, then try again." }); calls[0].finish(ttInfo); });
+  await act(async () => h.result.current.retry(tt));
+  expect(calls[1].resume).toBe(ttInfo);
+});
+
 test("retry after a final failure (runPost dropped the info) starts over", async () => {
   const { h } = await setup();
   await act(async () => h.result.current.start([yt]));

@@ -21,4 +21,28 @@ test("youtube: defaults, limits and the private-until-audit note", () => {
   expect(yt.validate(video, "x".repeat(5001), { title: "t", privacy: "public" })).toBe("YouTube descriptions can be up to 5000 characters.");
   expect(yt.note(video)).toMatch(/private until Google reviews/i);
   expect(yt.note({ ...video, durationSec: 200 })).toMatch(/regular video, not a Short/i);
+  expect(yt.hasOptions ?? true).toBe(true);
+  expect(yt.captionMax).toBe(5000);
+});
+
+test("clientAdapters has youtube and tiktok", () => {
+  expect(Object.keys(clientAdapters).sort()).toEqual(["tiktok", "youtube"]);
+});
+
+test("tiktok: no caption, no options, its limits, the inbox note and the done note", () => {
+  const tt = clientAdapters.tiktok!;
+  expect(tt.id).toBe("tiktok");
+  expect(tt.captionMax).toBeNull();
+  expect(tt.hasOptions).toBe(false);
+  expect(tt.defaultOptions("Beach day")).toEqual({});
+  expect(tt.validate(video, "x".repeat(10000), {})).toBeNull();
+  expect(tt.validate({ ...video, durationSec: 600 }, "", {})).toBeNull();
+  expect(tt.validate({ ...video, durationSec: 601 }, "", {})).toBe("TikTok accepts videos up to 10 minutes.");
+  expect(tt.validate({ ...video, fileSize: 4 * 1024 ** 3 }, "", {})).toBeNull();
+  expect(tt.validate({ ...video, fileSize: 4 * 1024 ** 3 + 1 }, "", {})).toBe("TikTok accepts videos up to 4 GB.");
+  expect(tt.validate({ ...video, mimeType: "video/quicktime" }, "", {})).toBeNull();
+  expect(tt.validate({ ...video, mimeType: "video/webm" }, "", {})).toBeNull();
+  expect(tt.validate({ ...video, mimeType: "video/x-msvideo" }, "", {})).toBe("TikTok accepts MP4, MOV or WebM videos.");
+  expect(tt.note(video)).toBe("Clipy sends the video to your TikTok inbox. Open TikTok to add the caption and post it (up to 5 unfinished drafts a day).");
+  expect(tt.doneNote).toBe("Sent to TikTok — open TikTok to finish posting.");
 });

@@ -1,7 +1,7 @@
 # Clipy Phase 4 — Direct Posting — Design
 
 **Date:** 2026-10-02
-**Status:** 4A (foundation + YouTube) implemented 2026-10-02 — unverified against live Supabase/Google until accounts exist; 4B–4D pending. Approved 2026-10-02; amended the same day after verifying platform docs (see §10, which overrides earlier sections where they differ)
+**Status:** 4A + 4B (TikTok inbox) implemented 2026-10-02 — unverified against live services; 4C–4D pending. Approved 2026-10-02; amended the same day after verifying platform docs (see §10, which overrides earlier sections where they differ)
 **Parent specs:** `2026-10-01-clip-editor-app-design.md` and the Phase 1–3 specs (all still apply unless overridden here)
 
 ## 1. Goal
@@ -173,8 +173,9 @@ Research notes with source URLs were gathered per platform before planning. Wher
 - Shorts: square or vertical, up to 3 minutes; no `#Shorts` needed. Scopes `youtube.upload` + `youtube.readonly`. Quota: 100 uploads/day.
 
 **TikTok**
-- Un-audited apps can only post privately and only to accounts that are themselves private, so 4B uses **Upload to inbox** (`video.upload`): the video lands in the user's TikTok inbox and they finish the post in TikTok. The row ends as "Sent to TikTok — open TikTok to finish" with no link. Direct Post (privacy picker, interaction toggles, consent text) is built behind a flag for after the audit.
+- Un-audited apps can only post privately and only to accounts that are themselves private, so 4B uses **Upload to inbox** (`video.upload`): the video lands in the user's TikTok inbox and they finish the post in TikTok. The row ends as "Sent to TikTok — open TikTok to finish" with no link.
 - The upload URL needs no token (direct mode); refresh tokens rotate and must be re-saved on every refresh.
+- Direct Post is deferred until the app is audited (it is restricted to private accounts and private posts before that); 4B ships the inbox route only. A dropped TikTok upload restarts from a fresh address — TikTok has no resume query.
 
 **Instagram and Facebook**
 - Instagram uses **Instagram API with Facebook Login** (the only route with a documented no-hosting resumable upload); one Meta login yields the Page token for Facebook too. Requires an Instagram professional account linked to a Facebook Page.
