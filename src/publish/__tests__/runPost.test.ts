@@ -378,6 +378,23 @@ describe("meta-rupload and the wait hint", () => {
     expect(t.row()).toMatchObject({ phase: "done", url: null });
   });
 
+  test.each([
+    ["1800 s (the cap)", 1800, 600],
+    ["1801 s (capped at 1800)", 1801, 600],
+    ["a huge value (capped at 1800)", 1e9, 600],
+    ["0 (the default)", 0, POLL_LIMIT],
+    ["a negative value (the default)", -5, POLL_LIMIT],
+    ["NaN (the default)", NaN, POLL_LIMIT],
+    ["Infinity (the default)", Infinity, POLL_LIMIT],
+  ])("wait.maxSeconds %s polls %i times at most", async (_name, maxSeconds, polls) => {
+    const d = metaDeps({ ...meta, wait: { maxSeconds, resumeOnTimeout: true } }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValue({ status: "processing" });
+    await runPost(ig, d, t.update, signal());
+    expect(d.api.status).toHaveBeenCalledTimes(polls);
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: IG_TIMEOUT });
+  });
+
   test("cancel during polling with resumeOnTimeout is a resumable failure, not done", async () => {
     const ac = new AbortController();
     const plan = { ...meta, wait: { maxSeconds: 600, resumeOnTimeout: true } };

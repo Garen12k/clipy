@@ -161,8 +161,9 @@ const META_UPLOAD_HOST = "rupload.facebook.com";
 /** Exactly `https://rupload.facebook.com/` followed by printable ASCII other than backslash: no userinfo, port, whitespace or look-alike host. */
 const META_UPLOAD_URL = /^https:\/\/rupload\.facebook\.com\/[\x21-\x5b\x5d-\x7e]*$/;
 /**
- * The headers carry a long-lived Meta token, so they only ever go to Meta's upload host. Checked twice: a fixed pattern (the same on every
- * runtime — React Native's own `URL` is a loose regex parser) and the URL parser, which must agree and must not change the string.
+ * The headers carry a long-lived Meta token, so they only ever go to Meta's upload host. Checked twice: a fixed pattern (independent of
+ * any parser) and the global `URL` (on Expo SDK 57 the WHATWG implementation installed by Expo's runtime, not React Native's older loose
+ * one), which must agree and must not change the string.
  */
 function isMetaUploadUrl(url: string): boolean {
   if (typeof url !== "string" || !META_UPLOAD_URL.test(url)) return false;
@@ -171,10 +172,14 @@ function isMetaUploadUrl(url: string): boolean {
     return u.protocol === "https:" && u.hostname === META_UPLOAD_HOST && u.port === "" && u.username === "" && u.password === "" && u.href === url;
   } catch { return false; }
 }
-/** Removes any header value (the token above all) from text that came back from the network before it is shown. */
+/**
+ * Hides the `Authorization` header's value (the token, with and without its "OAuth " scheme) in text that came back from the network
+ * before it is shown. Other header values (offset, file_size) are not secret and stay readable.
+ */
 function redact(text: string, headers: Record<string, string>): string {
   let out = text;
-  for (const v of Object.values(headers)) {
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() !== "authorization" || typeof v !== "string") continue;
     for (const s of [v, v.replace(/^\S+\s+/, "")]) if (s.length >= 8) out = out.split(s).join("…");
   }
   return out;

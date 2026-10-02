@@ -21,10 +21,13 @@ export interface ResumeInfo { prepared: Prepared; uploaded: boolean; clientResul
 export const POLL_MS = 3000;
 export const POLL_LIMIT = 40; // 2 minutes
 const DEFAULT_WAIT_SECONDS = (POLL_LIMIT * POLL_MS) / 1000;
-/** How many polls the server's `wait` hint allows (the 2-minute default without one, or with a hint we cannot use). */
+/** The longest wait any server hint can ask for (30 minutes), so a bad value cannot keep the phone polling for hours. */
+export const MAX_WAIT_SECONDS = 1800;
+/** How many polls the server's `wait` hint allows (the 2-minute default without one, or with a hint we cannot use; never over 30 minutes). */
 const pollLimit = (p: Prepared) => {
   const s = p.wait?.maxSeconds;
-  return Math.ceil((typeof s === "number" && Number.isFinite(s) && s > 0 ? s : DEFAULT_WAIT_SECONDS) / (POLL_MS / 1000));
+  const seconds = typeof s === "number" && Number.isFinite(s) && s > 0 ? Math.min(s, MAX_WAIT_SECONDS) : DEFAULT_WAIT_SECONDS;
+  return Math.ceil(seconds / (POLL_MS / 1000));
 };
 
 /** The server decides the chunk size and protocol; refuse a plan we cannot follow. */

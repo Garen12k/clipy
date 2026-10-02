@@ -313,7 +313,8 @@ describe("meta-rupload (uploadMetaWhole)", () => {
     ["userinfo", "https://user:pw@rupload.facebook.com/x"],
     ["userinfo trick", "https://rupload.facebook.com@evil.com/x"],
     ["upper case (not canonical)", "https://RUPLOAD.facebook.com/x"],
-    ["a backslash", "https://rupload.facebook.com\@evil.com/x"],
+    ["a backslash", "https://rupload.facebook.com\\@evil.com/x"],
+    ["a backslash in the path", "https://rupload.facebook.com/x\\y"],
     ["whitespace", "https://rupload.facebook.com/x y"],
     ["a control character", "https://rupload.facebook.com/x\ty"],
     ["non-ASCII", "https://rupload.facebook.com/é"],
@@ -382,5 +383,19 @@ describe("meta-rupload (uploadMetaWhole)", () => {
     }
     const bad = await uploadMetaWhole("https://evil.example.com/x", H, "f", margs(), ok()).then(() => null, (e: Error) => e);
     expect(bad!.message).not.toContain(TOKEN);
+  });
+
+  test("the backslash case really contains a backslash", () => {
+    expect("https://rupload.facebook.com\\@evil.com/x").toContain("\\");
+  });
+
+  test("only the Authorization value is hidden: other header values (e.g. file_size) stay readable", async () => {
+    const big = { Authorization: `OAuth ${TOKEN}`, offset: "0", file_size: "123456789" };
+    const body = `{"error":{"message":"file_size 123456789 does not match; got OAuth ${TOKEN}"}}`;
+    await expect(uploadMetaWhole(URL_OK, big, "f", margs(), jest.fn(async () => ({ status: 400, body })))).rejects.toEqual(new UploadError("file_size 123456789 does not match; got …", false));
+    // The header name is matched without regard to case.
+    const lower = { authorization: `OAuth ${TOKEN}`, file_size: "123456789" };
+    const err = await uploadMetaWhole(URL_OK, lower, "f", margs(), jest.fn(async () => ({ status: 400, body: `bad ${TOKEN} 123456789` }))).then(() => null, (e: Error) => e);
+    expect(err!.message).toBe("bad … 123456789");
   });
 });
