@@ -17,5 +17,6 @@ export function memoryDb(): Db {
     createSession: async (row) => { const id = `session-${++n}`; sessions.set(id, { ...row, id }); return id; },
     getSession: async (id) => sessions.get(id) ?? null,
     updateSession: async (id, patch) => { const s = sessions.get(id); if (s) sessions.set(id, { ...s, ...patch }); },
+    claimSession: async (id, from, to) => { const s = sessions.get(id); if (!s || s.status !== from) return false; sessions.set(id, { ...s, status: to }); return true; },
   };
 }

@@ -26,3 +26,11 @@ test("sessions: create, read, patch", async () => {
   expect(await db.getSession(id)).toMatchObject({ id, status: "done", url: "https://youtu.be/x" });
   expect(await db.getSession("nope")).toBeNull();
 });
+
+test("claimSession moves status once", async () => {
+  const db = memoryDb();
+  const id = await db.createSession({ userId: USER, platform: "youtube", ref: {}, input: INPUT, status: "uploading", url: null, error: null });
+  expect(await db.claimSession(id, "uploading", "processing")).toBe(true);
+  expect((await db.getSession(id))!.status).toBe("processing");
+  expect(await db.claimSession(id, "uploading", "processing")).toBe(false);
+});
