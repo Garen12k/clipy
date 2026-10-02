@@ -18,7 +18,8 @@ export const instagram: ClientAdapter = {
     if (video.durationSec < MIN_DURATION_SEC) return "Instagram Reels must be at least 3 seconds.";
     if (video.durationSec > MAX_DURATION_SEC) return "Instagram Reels can be up to 15 minutes.";
     if (video.fileSize > MAX_BYTES) return "Instagram accepts videos up to 300 MB.";
-    if (caption.length > CAPTION_MAX) return "Instagram captions can be up to 2200 characters.";
+    // Whole characters (code points), as the server counts when it cuts the caption: an emoji counts once.
+    if (Array.from(caption).length > CAPTION_MAX) return "Instagram captions can be up to 2200 characters.";
     return null;
   },
   note: () => "Posts as a Reel. Instagram can take a few minutes to process — keep this screen open.",

@@ -48,6 +48,9 @@ test("instagram: caption 2200, no options, Reel limits at the boundaries, the pr
   expect(ig.validate({ ...video, fileSize: 300 * MB + 1 }, "", {})).toBe("Instagram accepts videos up to 300 MB.");
   expect(ig.validate(video, "x".repeat(2200), {})).toBeNull();
   expect(ig.validate(video, "x".repeat(2201), {})).toBe("Instagram captions can be up to 2200 characters.");
+  // Counted by whole characters, like the server: 2200 emoji (4400 UTF-16 units) fit, 2201 do not.
+  expect(ig.validate(video, "😀".repeat(2200), {})).toBeNull();
+  expect(ig.validate(video, "😀".repeat(2201), {})).toBe("Instagram captions can be up to 2200 characters.");
   expect(ig.note(video)).toBe("Posts as a Reel. Instagram can take a few minutes to process — keep this screen open.");
   expect(ig.doneNote).toBeUndefined();
 });
