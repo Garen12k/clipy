@@ -13,7 +13,7 @@ export function ColorRow({ value, onChange }: { value: string; onChange: (hex: s
     <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm, flexWrap: "wrap" }}>
       {PALETTE.map((c) => (
         <Pressable key={c} accessibilityLabel={`Color ${c}`} onPress={() => onChange(c)}
-          style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2, borderColor: value.toUpperCase() === c.toUpperCase() ? theme.colors.accent : "transparent" }} />
+          style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2, borderColor: value.toUpperCase() === c.toUpperCase() ? theme.ring.borderColor : "transparent" }} />
       ))}
       <TextInput accessibilityLabel="Custom color" value={custom} onChangeText={setCustom} onBlur={() => isHex(custom) && onChange(custom.toUpperCase())}
         autoCapitalize="characters" maxLength={7} placeholder="#RRGGBB" placeholderTextColor={theme.colors.textMuted}
