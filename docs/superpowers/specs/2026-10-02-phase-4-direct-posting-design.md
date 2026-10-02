@@ -1,7 +1,7 @@
 # Clipy Phase 4 — Direct Posting — Design
 
 **Date:** 2026-10-02
-**Status:** Approved in chat (sections 1–4), awaiting written-spec review
+**Status:** Approved 2026-10-02; amended the same day after verifying platform docs (see §10, which overrides earlier sections where they differ)
 **Parent specs:** `2026-10-01-clip-editor-app-design.md` and the Phase 1–3 specs (all still apply unless overridden here)
 
 ## 1. Goal
@@ -144,3 +144,42 @@ Row-level security is on for all three with **no** policies for the `anon`/`auth
 ## 9. Out of Scope
 
 Scheduled or background posting; drafts; analytics; comments; more than one account per platform; platforms beyond the five; hosting video on the server; App Store submission and each platform's public app review/audit (the "going public" step after the Apple Developer account); Android and web.
+
+## 10. Amendments after verifying current platform docs (2026-10-02)
+
+Research notes with source URLs were gathered per platform before planning. Where this section differs from §1–§9, this section wins. The user chose to **build all five platforms now from the documentation and test later**, so every adapter is unverified against the live platform until the developer accounts exist.
+
+**Delivery:** four plans built back to back — 4A foundation + YouTube, 4B TikTok, 4C Instagram + Facebook, 4D X.
+
+**App**
+- Supabase session storage follows Expo's current guide: `expo-sqlite/localStorage/install` (not `expo-secure-store`, whose ~2 KB value limit is too small for a session). No URL polyfill.
+- Env vars: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_KEY` (the project's publishable/anon key).
+- One Post route, `app/post.tsx` (params `fileUri`, optional `projectId`, `title`), reached from the export result and from **Post a video** on the home header; the home header also gets the **Accounts** icon.
+- Chunked reads use `expo-file-system`'s `File.open()` handle (`offset`, `readBytes`); `File.slice()` and Blob bodies load the whole file and are not used. `fetch` has no upload progress, so progress advances per confirmed chunk (8 MB for YouTube).
+- Post records exist only for project posts; a library video posts without a record.
+
+**Backend**
+- All logic lives in plain TypeScript modules under `supabase/functions/_shared/` using only web-standard APIs (`fetch`, `Request`, `Response`, WebCrypto), tested with **Jest in a Node environment** (no Deno or Docker on the dev PC). Each function's `index.ts` is a thin Deno wrapper, verified by reading until deployed.
+- One `oauth-callback` URL for every platform (the platform is recovered from `state`).
+- `post-prepare` returns `{ sessionId, mode, uploadUrl, uploadHeaders, chunkSize }`. `uploadHeaders` is normally empty.
+- Free-plan limits (150 s wall clock, 2 s CPU, 256 MB, undocumented ~10 MB request body) cap relay chunks at 4 MB and forbid buffering whole videos.
+- Free projects pause after about a week without activity; the app shows "Server is asleep — open the Supabase dashboard to wake it" when the backend is unreachable.
+
+**YouTube**
+- Uploads from an un-audited API project are **locked to private** by Google until the project passes YouTube's API audit. The row shows this note and the finished post links to the video so the user can switch it to Public in YouTube. The chosen privacy is still sent.
+- The OAuth consent screen must be **published** (unverified is fine) or the connection expires every 7 days; the Accounts row shows Reconnect when it does.
+- Whether the resumable session URL accepts the phone's upload without a token is not documented. Default: no token on the phone. Fallback switch (function secret `YOUTUBE_UPLOAD_TOKEN_ON_PHONE=true`): `uploadHeaders` carries a short-lived (≈1 h) access token, held in memory only.
+- Shorts: square or vertical, up to 3 minutes; no `#Shorts` needed. Scopes `youtube.upload` + `youtube.readonly`. Quota: 100 uploads/day.
+
+**TikTok**
+- Un-audited apps can only post privately and only to accounts that are themselves private, so 4B uses **Upload to inbox** (`video.upload`): the video lands in the user's TikTok inbox and they finish the post in TikTok. The row ends as "Sent to TikTok — open TikTok to finish" with no link. Direct Post (privacy picker, interaction toggles, consent text) is built behind a flag for after the audit.
+- The upload URL needs no token (direct mode); refresh tokens rotate and must be re-saved on every refresh.
+
+**Instagram and Facebook**
+- Instagram uses **Instagram API with Facebook Login** (the only route with a documented no-hosting resumable upload); one Meta login yields the Page token for Facebook too. Requires an Instagram professional account linked to a Facebook Page.
+- Every upload request needs the token, so both use `relay`. Only "whole remaining body from an offset" is documented, so the relay sends 4 MB pieces with `offset` and must be confirmed against the live API; the documented fallback is a storage-hosted `video_url`/`file_url` for Instagram.
+- Facebook Reels: 3–90 s, 30 per day per Page. Instagram Reels: up to 15 min, 300 MB (not 1 GB). Posts from a Development-mode app may be visible only to the app's own roles until the app is Live.
+
+**X**
+- No free tier and no flat monthly plan are required: pricing is pay-per-use (about $0.015 per post; to be re-confirmed in 4D). Video limits are 20 min / 8 GB for ordinary accounts.
+- Uploads use the v2 chunked media endpoints with the user's token (`relay`, multipart, ≤ 4 MB pieces through the function). The authorization code expires in 30 s, so `oauth-callback` exchanges it immediately.
