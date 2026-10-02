@@ -25,6 +25,14 @@ test("prepare posts JSON; disconnect uses DELETE with a query", async () => {
   expect(fetchMock.mock.calls[1][1].method).toBe("DELETE");
 });
 
+test("prepare passes the meta-rupload plan and its wait hint through unchanged", async () => {
+  const plan = { sessionId: "m1", protocol: "meta-rupload", uploadUrl: "https://rupload.facebook.com/video-upload/v25.0/1", uploadHeaders: { Authorization: "OAuth t", offset: "0", file_size: "9" }, chunkSize: 9, wait: { maxSeconds: 600, intervalSeconds: 15, resumeOnTimeout: true } };
+  fetchMock.mockResolvedValue(res(200, plan));
+  const p = await api.prepare({ platform: "instagram", fileSize: 9, durationSec: 5, mimeType: "video/mp4", caption: "c", options: {} });
+  expect(p).toEqual(plan);
+  expect(p.wait).toEqual({ maxSeconds: 600, intervalSeconds: 15, resumeOnTimeout: true });
+});
+
 test("uploadChunk sends raw bytes with the session headers", async () => {
   fetchMock.mockResolvedValue(res(200, { nextOffset: 3 }));
   const bytes = new Uint8Array([1, 2, 3]);

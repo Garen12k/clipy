@@ -1,5 +1,6 @@
 import { ApiFailure } from "./api";
 import type { ChunkReader } from "./fileReader";
+import { postWholeFile } from "./wholeFileUpload";
 
 export class UploadError extends Error { constructor(message: string, public resumable: boolean) { super(message); } }
 export interface UploadArgs { reader: ChunkReader; mimeType: string; chunkSize: number; onProgress(fraction: number): void; signal: AbortSignal; resume?: boolean; sleep?(ms: number): Promise<void> }
@@ -154,4 +155,68 @@ export async function uploadTikTokChunks(url: string, a: UploadArgs): Promise<vo
     else throw again("TikTok sent an unexpected reply.");
     a.onProgress(end / total);
   }
+}
+
+const META_UPLOAD_HOST = "rupload.facebook.com";
+/** Exactly `https://rupload.facebook.com/` followed by printable ASCII other than backslash: no userinfo, port, whitespace or look-alike host. */
+const META_UPLOAD_URL = /^https:\/\/rupload\.facebook\.com\/[\x21-\x5b\x5d-\x7e]*$/;
+/**
+ * The headers carry a long-lived Meta token, so they only ever go to Meta's upload host. Checked twice: a fixed pattern (independent of
+ * any parser) and the global `URL` (on Expo SDK 57 the WHATWG implementation installed by Expo's runtime, not React Native's older loose
+ * one), which must agree and must not change the string.
+ */
+function isMetaUploadUrl(url: string): boolean {
+  if (typeof url !== "string" || !META_UPLOAD_URL.test(url)) return false;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && u.hostname === META_UPLOAD_HOST && u.port === "" && u.username === "" && u.password === "" && u.href === url;
+  } catch { return false; }
+}
+/**
+ * Hides the `Authorization` header's value (the token, with and without its "OAuth " scheme) in text that came back from the network
+ * before it is shown. Other header values (offset, file_size) are not secret and stay readable.
+ */
+function redact(text: string, headers: Record<string, string>): string {
+  let out = text;
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() !== "authorization" || typeof v !== "string") continue;
+    for (const s of [v, v.replace(/^\S+\s+/, "")]) if (s.length >= 8) out = out.split(s).join("…");
+  }
+  return out;
+}
+/** Meta's error text: `error.message`, then a `success: false` reply's `message` / `debug_info.message`, else the raw start of the body. */
+function metaText(body: string, fallback: string): string {
+  let parsed = false;
+  try {
+    const j = JSON.parse(body) as { error?: { message?: unknown }; message?: unknown; debug_info?: { message?: unknown } };
+    parsed = j !== null && typeof j === "object";
+    const m = [j?.error?.message, j?.message, j?.debug_info?.message].find((x) => typeof x === "string" && x);
+    if (typeof m === "string") return m;
+  } catch { /* not JSON */ }
+  // A JSON reply without any message says nothing useful to the user: show the status instead.
+  return (parsed ? "" : body.slice(0, 200)) || fallback;
+}
+
+/**
+ * Meta's `rupload` host: one request carrying the whole file from offset 0, streamed natively from disk. Meta offers resuming from an
+ * offset, but a failed upload here is simply restarted from a fresh session ("Post again"), like TikTok. Never logs the headers.
+ * Redirects are followed by iOS itself (see `postWholeFile`); a 3xx that does reach us is a failure like any other non-2xx.
+ */
+export async function uploadMetaWhole(url: string, headers: Record<string, string>, fileUri: string, a: Pick<UploadArgs, "onProgress" | "signal">, post: typeof postWholeFile = postWholeFile): Promise<void> {
+  if (!isMetaUploadUrl(url)) throw new UploadError("Unexpected upload address.", false);
+  if (a.signal.aborted) throw cancelled();
+  let res: Awaited<ReturnType<typeof postWholeFile>>;
+  try {
+    res = await post(url, fileUri, headers, a.onProgress, a.signal);
+  } catch {
+    if (a.signal.aborted) throw cancelled();
+    throw new UploadError("The connection dropped. Post again to restart the upload.", false);
+  }
+  const body = typeof res.body === "string" ? res.body : "";
+  const fail = () => new UploadError(redact(metaText(body, `Upload failed (${res.status}).`), headers), false);
+  if (!(res.status >= 200 && res.status < 300)) throw fail();
+  let success: unknown;
+  try { success = (JSON.parse(body) as { success?: unknown })?.success; } catch { /* a 2xx without JSON counts as accepted */ }
+  if (success === false) throw fail();
+  a.onProgress(1);
 }

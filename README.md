@@ -42,17 +42,21 @@ npm run typecheck
 npm test
 ```
 
-## Posting (Phases 4A and 4B)
+## Posting (Phases 4A–4C)
 
-Works: Sign in with Apple, an Accounts screen (connect / disconnect), a Post screen, YouTube posting and **sending to your TikTok inbox**. Reach Post from **Post to…** on the export result or **Post a video** on the home screen; Accounts is the icon in the home header.
+Works: Sign in with Apple, an Accounts screen (connect / disconnect), a Post screen, YouTube posting, **sending to your TikTok inbox**, and **Instagram and Facebook Reels**. Reach Post from **Post to…** on the export result or **Post a video** on the home screen; Accounts is the icon in the home header.
 
 - Needs the Supabase backend: follow `supabase/README.md`, and copy `.env.example` to `.env` with your Supabase URL and key. Without `.env` the app shows "Posting isn't set up yet" and the Share button still works.
 - YouTube videos arrive **private** until Google audits the app; open the video from the Done screen and make it Public in YouTube yourself.
 - TikTok works as **"send to TikTok inbox"**: the video arrives in TikTok as a draft, and you open TikTok to add the caption and post it. Clipy does this because TikTok keeps apps it has not audited to private-only posts on private accounts. Clipy's caption is not sent to TikTok, TikTok has no options on the Post screen, and the row ends with "Sent to TikTok — open TikTok to finish posting." (no link). TikTok allows **at most 5 unfinished drafts a day**. TikTok setup is in `supabase/README.md` (section 11).
-- Instagram, Facebook and X are still to come (phases 4C and 4D).
-- **Nothing has been run against live Supabase, Google or TikTok yet.** The code and tests were written from the platforms' documentation; the device checklists are in `supabase/README.md` (sections 9 and 11).
+- Instagram and Facebook both post as **Reels**. They need a **Facebook Page**; Instagram also needs a **professional (Business or Creator) Instagram account linked to that Page**. Setup is in `supabase/README.md` (section 12).
+- Instagram Reels: 3 seconds to 15 minutes, up to 300 MB, captions up to 2200 characters. Instagram processes the video before it can be published, which can take a few minutes: keep the Post screen open. Clipy waits up to 10 minutes; if Instagram is still processing, the row says so and offers **Resume Instagram**, which finishes the post without uploading the video again.
+- Facebook Reels must be **3 to 90 seconds** (longer videos are held back with that reason while the other platforms still post), up to 1 GB. While Clipy's Meta app is in Development mode, a Facebook Reel may be visible only to you.
+- During an Instagram or Facebook upload the phone is given your Page's access token. This token does not expire on its own: it stays valid until you remove Clipy in Facebook's settings. Clipy keeps it in memory only, drops it once the upload is done, and never saves it. Clipy only ever sends it to Meta's upload address. The iPhone follows web redirects automatically, so Clipy relies on that address not redirecting elsewhere.
+- Only X is still to come (phase 4D).
+- **Nothing has been run against live Supabase, Google, TikTok or Meta (Instagram / Facebook) yet.** The code and tests were written from the platforms' documentation; the device checklists are in `supabase/README.md` (sections 9, 11 and 12).
 - Retries never re-upload a video that has already finished uploading, unless the server says that upload failed or no longer exists; the message then says Retry will upload the video again.
-- Leaving the Post screen stops any upload in progress.
+- Leaving the Post screen stops any upload in progress. An Instagram or Facebook upload is sent in one piece, so leaving the app (or losing the connection) during a large upload means it starts again from the beginning when you post again.
 - A post that completes after you have left the Post screen is not recorded on the project card.
 - The Post screen only accepts videos from Clipy's own folders.
 - Server code lives in `supabase/functions/_shared/` and is tested with `npm run test:server`; `npm test` runs the app and server suites.

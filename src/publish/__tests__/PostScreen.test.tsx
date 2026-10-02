@@ -403,6 +403,138 @@ describe("TikTok", () => {
   });
 });
 
+describe("Instagram and Facebook", () => {
+  const IG_ON = { available: true, connected: true, name: "@sunny.reels" };
+  const FB_ON = { available: true, connected: true, name: "Sunny Surf Page" };
+  const IG_NOTE = "Posts as a Reel. Instagram can take a few minutes to process — keep this screen open.";
+  const FB_NOTE = "Posts as a Reel on your Page. Until Clipy's Facebook app is switched to Live, the Reel may be visible only to you.";
+  const IG_TIMEOUT = "Instagram is still processing the video. Tap Resume in a minute to finish posting.";
+  type Over = Partial<Record<"youtube" | "tiktok" | "instagram" | "facebook" | "x", object>>;
+  /** All five platforms; YouTube connected as in `accounts()`, Instagram and Facebook connected unless overridden. */
+  const accounts5 = (over: Over = {}) => {
+    const a = accounts(over.youtube, over.tiktok);
+    a.platforms = [a.platforms[0], a.platforms[1], acct("instagram", { ...IG_ON, ...over.instagram }), acct("facebook", { ...FB_ON, ...over.facebook }), acct("x", over.x)];
+    return a;
+  };
+  const rows5 = (over: Over = {}) => ({ youtube: { ...IDLE_ROW, ...over.youtube }, tiktok: { ...IDLE_ROW, ...over.tiktok }, instagram: { ...IDLE_ROW, ...over.instagram }, facebook: { ...IDLE_ROW, ...over.facebook }, x: { ...IDLE_ROW, ...over.x } });
+  const YT_JOB = { platform: "youtube", caption: "", options: { title: "Beach day", privacy: "public" } };
+  beforeEach(() => { (useAccounts as jest.Mock).mockReturnValue(accounts5()); });
+
+  test("both are ticked by default with their account, their notes and no options buttons", async () => {
+    await render(<PostScreen />);
+    expect(screen.getByRole("checkbox", { name: "Instagram" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Facebook" })).toBeChecked();
+    expect(screen.getByText("@sunny.reels")).toBeTruthy();
+    expect(screen.getByText("Sunny Surf Page")).toBeTruthy();
+    expect(screen.getByText(IG_NOTE)).toBeTruthy();
+    expect(screen.getByText(FB_NOTE)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Instagram options" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Facebook options" })).toBeNull();
+    expect(screen.getAllByText("Not available yet")).toHaveLength(2); // TikTok and X
+    // tapping a row unticks it and its note goes with it
+    await fireEvent.press(screen.getByRole("checkbox", { name: "Facebook" }));
+    expect(screen.getByRole("checkbox", { name: "Facebook" })).not.toBeChecked();
+    expect(screen.queryByText(FB_NOTE)).toBeNull();
+    expect(screen.queryByText("Facebook options")).toBeNull();
+  });
+
+  test("a 2-minute video holds Facebook back with its reason while Instagram and YouTube still post", async () => {
+    const p = post(); usePostReturns(p);
+    mockParams = { ...baseParams, durationSec: "120" };
+    await render(<PostScreen />);
+    expect(screen.getByText("Facebook Reels can be up to 90 seconds.")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "Facebook" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Instagram" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Post" })).toBeEnabled();
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([YT_JOB, { platform: "instagram", caption: "", options: {} }]);
+  });
+
+  test("a 2-second video holds both Reels back; YouTube still posts", async () => {
+    const p = post(); usePostReturns(p);
+    mockParams = { ...baseParams, durationSec: "2" };
+    await render(<PostScreen />);
+    expect(screen.getByText("Instagram Reels must be at least 3 seconds.")).toBeTruthy();
+    expect(screen.getByText("Facebook Reels must be at least 3 seconds.")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([YT_JOB]);
+  });
+
+  test("with YouTube and Instagram ticked the caption limit is 2200; unticking Instagram lifts it to 5000", async () => {
+    const p = post(); usePostReturns(p);
+    (useAccounts as jest.Mock).mockReturnValue(accounts5({ facebook: { connected: false, name: null } }));
+    await render(<PostScreen />);
+    await fireEvent.changeText(screen.getByLabelText("Caption"), "Sunny");
+    expect(screen.getByText("5 / 2200")).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(2201));
+    expect(screen.getByText("2201 / 2200")).toHaveStyle({ color: theme.colors.danger });
+    expect(screen.getByText("Instagram captions can be up to 2200 characters.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
+    // Instagram has no options, so tapping its held-back row unticks it
+    await fireEvent.press(screen.getByRole("checkbox", { name: "Instagram" }));
+    expect(screen.getByText("2201 / 5000")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([{ ...YT_JOB, caption: "x".repeat(2201) }]);
+  });
+
+  test("a resumable Instagram timeout shows its message and Resume Instagram, which sends the Instagram job", async () => {
+    const p = post({ rows: rows5({ instagram: { phase: "failed", message: IG_TIMEOUT, resumable: true } }) }); usePostReturns(p);
+    await render(<PostScreen />);
+    expect(screen.getByText(IG_TIMEOUT)).toBeTruthy();
+    expect(screen.queryByText(/upload again/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry Instagram" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Resume Instagram" }));
+    expect(p.retry).toHaveBeenCalledWith({ platform: "instagram", caption: "", options: {} });
+    // the row that already ran is not sent again by Post
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([YT_JOB, { platform: "facebook", caption: "", options: {} }]);
+  });
+
+  test("Post sends one job per ticked valid platform", async () => {
+    const p = post(); usePostReturns(p);
+    (useAccounts as jest.Mock).mockReturnValue(accounts5({ tiktok: TT_ON }));
+    await render(<PostScreen />);
+    await fireEvent.changeText(screen.getByLabelText("Caption"), "Sunny");
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledTimes(1);
+    expect(p.start).toHaveBeenCalledWith([
+      { ...YT_JOB, caption: "Sunny" },
+      { platform: "tiktok", caption: "Sunny", options: {} },
+      { platform: "instagram", caption: "Sunny", options: {} },
+      { platform: "facebook", caption: "Sunny", options: {} },
+    ]);
+  });
+
+  test("with all five platforms on screen every accessible name is unique", async () => {
+    const p = post({ rows: rows5({
+      youtube: { phase: "failed", message: "The connection dropped.", resumable: false },
+      tiktok: { phase: "failed", message: "The TikTok upload link expired. Post again.", resumable: false },
+      instagram: { phase: "failed", message: IG_TIMEOUT, resumable: true },
+      facebook: { phase: "done", progress: 1, url: "https://www.facebook.com/reel/1" },
+    }) }); usePostReturns(p);
+    (useAccounts as jest.Mock).mockReturnValue(accounts5({ tiktok: TT_ON }));
+    const open = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+    const a = await render(<PostScreen />);
+    expect(screen.getByRole("button", { name: "Retry YouTube" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry TikTok" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Resume Instagram" })).toBeTruthy();
+    expect(screen.getByLabelText("Facebook, posted")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "View on Facebook" }));
+    expect(open).toHaveBeenCalledWith("https://www.facebook.com/reel/1"); open.mockRestore();
+    await a.unmount();
+    (useAccounts as jest.Mock).mockReturnValue(accounts5({ youtube: { connected: false, name: null }, tiktok: { available: true }, instagram: { connected: false, name: null }, facebook: { connected: false, name: null } }));
+    usePostReturns(post());
+    const b = await render(<PostScreen />);
+    for (const l of ["YouTube", "TikTok", "Instagram", "Facebook"]) expect(screen.getByRole("button", { name: `Connect ${l}` })).toBeTruthy();
+    await b.unmount();
+    (useAccounts as jest.Mock).mockReturnValue(accounts5());
+    usePostReturns(post({ rows: rows5({ instagram: { phase: "uploading", progress: 0.5 }, facebook: { phase: "uploading", progress: 0.25 } }) }));
+    await render(<PostScreen />);
+    expect(screen.getByLabelText("Uploading to Instagram")).toBeTruthy();
+    expect(screen.getByLabelText("Uploading to Facebook")).toBeTruthy();
+  });
+});
+
 test("a fileSize param is ignored: the size is always read from the file", async () => {
   (fileSize as jest.Mock).mockReturnValue(9000000);
   mockParams = { ...baseParams, fileSize: "1" };
