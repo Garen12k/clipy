@@ -49,7 +49,7 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
           <ColorRow value={overlay.background.color} onChange={(color) => patch({ background: { color, opacity: overlay.background!.opacity } })} />
           <Slider testID="opacity-slider" minimumValue={0.2} maximumValue={1} value={overlay.background.opacity} {...slider("opacity")} minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
         </>)}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: theme.space.md }}>
           {(["left", "center", "right"] as Align[]).map((a) => <Chip key={a} label={`Align ${a}`} selected={overlay.align === a} onPress={() => patch({ align: a })} />)}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
