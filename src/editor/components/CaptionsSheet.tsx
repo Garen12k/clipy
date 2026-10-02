@@ -35,11 +35,10 @@ export function CaptionsSheet({ visible, onClose }: Props) {
         {state.status === "idle" && hasCaptions && (
           <View style={{ gap: theme.space.md }}>
             <Body>Replace existing captions?</Body>
-            <View style={{ flexDirection: "row", gap: theme.space.md }}>
-              <PrimaryButton compact title="Replace" onPress={run} />
-              <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
-              <SecondaryButton title="Cancel" onPress={close} />
-            </View>
+            {/* Stacked like the "done" branch: three uppercase buttons don't fit one row in a 327 pt sheet. */}
+            <PrimaryButton compact title="Replace" onPress={run} />
+            <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
+            <SecondaryButton title="Cancel" onPress={close} />
           </View>
         )}
 
