@@ -66,12 +66,26 @@ test("cancel aborts every controller", async () => {
   expect(calls.every((c) => c.signal.aborted)).toBe(true);
 });
 
-test("a stale run's update is ignored and cannot overwrite a newer run", async () => {
+test("a cancelled run still settling blocks a second start and its final update is applied", async () => {
   const { h, onPosted } = await setup();
   await act(async () => h.result.current.start([yt]));
   await act(async () => h.result.current.cancel());
-  await act(async () => h.result.current.start([yt]));
   expect(calls[0].signal.aborted).toBe(true);
+  await act(async () => h.result.current.start([yt]));
+  await act(async () => h.result.current.retry(yt));
+  expect(calls).toHaveLength(1);
+  await act(async () => { calls[0].update({ phase: "done", url: "https://y/1" }); calls[0].finish(info); });
+  expect(h.result.current.rows.youtube).toMatchObject({ phase: "done", url: "https://y/1" });
+  expect(onPosted).toHaveBeenCalledTimes(1);
+  await act(async () => h.result.current.start([yt]));
+  expect(calls).toHaveLength(2);
+});
+
+test("a late update from a superseded run is ignored", async () => {
+  const { h, onPosted } = await setup();
+  await act(async () => h.result.current.start([yt]));
+  await act(async () => { calls[0].update({ phase: "failed" }); calls[0].finish(null); });
+  await act(async () => h.result.current.start([yt]));
   await act(async () => { calls[1].update({ phase: "uploading", progress: 0.2 }); });
   await act(async () => { calls[0].update({ phase: "done", url: "old" }); });
   expect(h.result.current.rows.youtube).toMatchObject({ phase: "uploading", progress: 0.2 });

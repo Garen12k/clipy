@@ -7,7 +7,7 @@ import { IDLE_ROW, runPost, type PostDeps, type PostJob, type ResumeInfo, type R
 import { uploadGoogleResumable, uploadRelay } from "./upload";
 
 /** Timer that also ends early (and cleans up) when the signal aborts. */
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
+export function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve) => {
     if (signal.aborted) return resolve();
     const done = () => { clearTimeout(timer); signal.removeEventListener("abort", done); resolve(); };
@@ -43,6 +43,8 @@ export function usePost(video: VideoInfo, onPosted: (platform: PlatformId, url: 
     const update = (patch: Partial<RowState>) => {
       if (!live()) return;
       setRows((r) => ({ ...r, [platform]: { ...r[platform], ...patch } }));
+      // onPosted may touch state of an unmounted screen, so it is never called after unmount: a post that completes
+      // after the user left the screen is not recorded on the project (live() is false then).
       if (patch.phase === "done" && !notified) {
         notified = true;
         try { posted.current(platform, patch.url ?? null); } catch (e) { console.warn("onPosted failed", e); }
@@ -63,7 +65,7 @@ export function usePost(video: VideoInfo, onPosted: (platform: PlatformId, url: 
   }, [run]);
   const cancel = useCallback(() => {
     for (const ac of Object.values(aborts.current)) ac?.abort();
-    active.current = {}; // the rows settle on their own; a new press may start a fresh run now
+    // `active` is cleared only when each run settles, so a cancelled run that is still finalizing blocks a second upload.
   }, []);
   useEffect(() => {
     mounted.current = true;
