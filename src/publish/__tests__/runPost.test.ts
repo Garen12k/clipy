@@ -15,6 +15,7 @@ function deps(over: Partial<PostDeps> = {}): PostDeps {
     uploadGoogleResumable: jest.fn(async (_u, _h, a) => { a.onProgress(0.5); a.onProgress(1); return '{"id":"abc"}'; }),
     uploadRelay: jest.fn(async () => {}),
     uploadTikTokChunks: jest.fn(async () => {}),
+    uploadMetaWhole: jest.fn(async () => {}),
     sleep: jest.fn(async (_ms: number, _s: AbortSignal) => {}),
     ...over,
   };
@@ -293,5 +294,107 @@ describe("tiktok-chunks", () => {
     await runPost({ ...job, platform: "tiktok" }, d, t.update, signal(), null);
     expect(d.api.prepare).toHaveBeenCalledTimes(2);
     expect(t.row()).toMatchObject({ phase: "done" });
+  });
+});
+
+describe("meta-rupload and the wait hint", () => {
+  const META_URL = "https://rupload.facebook.com/video-upload/v25.0/123";
+  const headers = { Authorization: "OAuth tok", offset: "0", file_size: "10" };
+  const meta: Prepared = { sessionId: "m1", protocol: "meta-rupload", uploadUrl: META_URL, uploadHeaders: headers, chunkSize: 10 };
+  const ig = { ...job, platform: "instagram" as const };
+  const fb = { ...job, platform: "facebook" as const };
+  const metaDeps = (plan: Prepared, over: Partial<PostDeps> = {}) => deps({ api: { ...deps().api, prepare: jest.fn(async () => plan) }, ...over });
+  const IG_TIMEOUT = "Instagram is still processing the video. Tap Resume in a minute to finish posting.";
+
+  test("uploads through uploadMetaWhole with the file and headers, opens no reader, finalizes with no client result", async () => {
+    const d = metaDeps(meta), t = track();
+    expect(await runPost(ig, d, t.update, signal())).toEqual({ prepared: meta, uploaded: true, clientResult: null });
+    expect(d.uploadMetaWhole).toHaveBeenCalledWith(META_URL, headers, "file:///v.mp4", { onProgress: expect.any(Function), signal: expect.any(AbortSignal) });
+    expect(d.openReader).not.toHaveBeenCalled();
+    expect(d.uploadGoogleResumable).not.toHaveBeenCalled();
+    expect(d.uploadRelay).not.toHaveBeenCalled();
+    expect(d.uploadTikTokChunks).not.toHaveBeenCalled();
+    expect(d.api.finalize).toHaveBeenCalledWith("m1", null);
+    expect(t.phases).toEqual(["preparing", "uploading", "publishing", "done"]);
+  });
+
+  test("progress from uploadMetaWhole reaches the row", async () => {
+    const seen: number[] = [];
+    const d = metaDeps(meta, { uploadMetaWhole: jest.fn(async (_u, _h, _f, a) => { a.onProgress(0.25); }) });
+    await runPost(ig, d, (p) => { if (p.progress !== undefined) seen.push(p.progress); }, signal());
+    expect(seen).toContain(0.25);
+  });
+
+  test("a meta-rupload plan without uploadUrl is refused", async () => {
+    const d = metaDeps({ ...meta, uploadUrl: null }), t = track();
+    expect(await runPost(ig, d, t.update, signal())).toBeNull();
+    expect(t.row()).toMatchObject({ phase: "failed", message: "The server sent an unexpected upload plan.", resumable: false });
+    expect(d.uploadMetaWhole).not.toHaveBeenCalled();
+  });
+
+  test("an upload failure keeps the row failed and not uploaded", async () => {
+    const d = metaDeps(meta, { uploadMetaWhole: jest.fn(async () => { throw new UploadError("The connection dropped. Post again to restart the upload.", false); }) }), t = track();
+    expect(await runPost(ig, d, t.update, signal())).toEqual({ prepared: meta, uploaded: false, clientResult: null });
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: "The connection dropped. Post again to restart the upload." });
+  });
+
+  test("wait {600, resumeOnTimeout}: polls up to 200 times, then a resumable failure that keeps the upload", async () => {
+    const plan = { ...meta, wait: { maxSeconds: 600, resumeOnTimeout: true } };
+    const d = metaDeps(plan), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValue({ status: "processing" });
+    const info = await runPost(ig, d, t.update, signal());
+    expect(d.api.status).toHaveBeenCalledTimes(200);
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: IG_TIMEOUT, url: null });
+    expect(info).toEqual({ prepared: plan, uploaded: true, clientResult: null });
+
+    // Resume goes straight to finalize: no prepare, no reader, no second upload.
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "done", url: "https://www.instagram.com/reel/abc/" });
+    const t2 = track();
+    await runPost(ig, d, t2.update, signal(), info);
+    expect(d.api.prepare).toHaveBeenCalledTimes(1);
+    expect(d.uploadMetaWhole).toHaveBeenCalledTimes(1);
+    expect(d.api.finalize).toHaveBeenCalledTimes(2);
+    expect(d.api.finalize).toHaveBeenLastCalledWith("m1", null);
+    expect(t2.row()).toMatchObject({ phase: "done", url: "https://www.instagram.com/reel/abc/" });
+  });
+
+  test("wait {300, no resume}: polls up to 100 times, then done without a link", async () => {
+    const d = metaDeps({ ...meta, wait: { maxSeconds: 300, resumeOnTimeout: false } }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValue({ status: "processing" });
+    await runPost(fb, d, t.update, signal());
+    expect(d.api.status).toHaveBeenCalledTimes(100);
+    expect(t.row()).toMatchObject({ phase: "done", url: null, message: "Still processing on Facebook — check the app later." });
+  });
+
+  test("no wait keeps the 40-poll default", async () => {
+    const d = metaDeps(meta), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValue({ status: "processing" });
+    await runPost(fb, d, t.update, signal());
+    expect(d.api.status).toHaveBeenCalledTimes(POLL_LIMIT);
+    expect(POLL_LIMIT).toBe(40);
+    expect(t.row()).toMatchObject({ phase: "done", url: null });
+  });
+
+  test("cancel during polling with resumeOnTimeout is a resumable failure, not done", async () => {
+    const ac = new AbortController();
+    const plan = { ...meta, wait: { maxSeconds: 600, resumeOnTimeout: true } };
+    const d = metaDeps(plan, { sleep: jest.fn(async () => { ac.abort(); }) }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    const info = await runPost(ig, d, t.update, ac.signal);
+    expect(d.api.status).not.toHaveBeenCalled();
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: IG_TIMEOUT });
+    expect(t.phases).not.toContain("done");
+    expect(info).toEqual({ prepared: plan, uploaded: true, clientResult: null });
+  });
+
+  test("done during a long wait ends with the link", async () => {
+    const d = metaDeps({ ...meta, wait: { maxSeconds: 600, resumeOnTimeout: true } }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValueOnce({ status: "processing" }).mockResolvedValueOnce({ status: "done", url: "https://www.instagram.com/reel/x/" });
+    await runPost(ig, d, t.update, signal());
+    expect(t.row()).toMatchObject({ phase: "done", url: "https://www.instagram.com/reel/x/" });
   });
 });

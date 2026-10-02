@@ -1,5 +1,5 @@
 import { ApiFailure } from "../api";
-import { uploadGoogleResumable, UploadError, uploadRelay, uploadTikTokChunks, tiktokChunkRanges } from "../upload";
+import { uploadGoogleResumable, UploadError, uploadMetaWhole, uploadRelay, uploadTikTokChunks, tiktokChunkRanges } from "../upload";
 
 const data = Uint8Array.from({ length: 10 }, (_, i) => i);
 const reader = () => ({ size: data.length, read: jest.fn((o: number, n: number) => data.slice(o, o + n)), close: jest.fn() });
@@ -286,4 +286,101 @@ test("cancel, empty file and unreadable file behave like the other uploaders", a
   await expect(uploadTikTokChunks("https://up/x", args({ reader: { size: 0, read: jest.fn(), close: jest.fn() } }))).rejects.toMatchObject({ message: "The video file is empty." });
   await expect(uploadTikTokChunks("https://up/x", args({ reader: { size: 10, read: () => { throw new Error("io"); }, close: jest.fn() } }))).rejects.toMatchObject({ message: "Couldn't read the video file." });
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+describe("meta-rupload (uploadMetaWhole)", () => {
+  const URL_OK = "https://rupload.facebook.com/video-upload/v25.0/123";
+  const TOKEN = "EAAGsecretPageToken";
+  const H = { Authorization: `OAuth ${TOKEN}`, offset: "0", file_size: "10" };
+  const ok = (body = '{"success":true}') => jest.fn(async (_u: string, _f: string, _h: Record<string, string>, onP: (f: number) => void, _s: AbortSignal) => { onP(0.5); return { status: 200, body }; });
+  const margs = (over = {}) => ({ onProgress: jest.fn(), signal: new AbortController().signal, ...over });
+
+  test("streams the file with the exact headers, forwards progress and ends at 1", async () => {
+    const post = ok(), a = margs();
+    await uploadMetaWhole(URL_OK, H, "file:///v.mp4", a, post);
+    expect(post).toHaveBeenCalledWith(URL_OK, "file:///v.mp4", H, expect.any(Function), a.signal);
+    expect(post.mock.calls[0][2]).toEqual({ Authorization: `OAuth ${TOKEN}`, offset: "0", file_size: "10" });
+    expect(a.onProgress.mock.calls.map((c) => c[0])).toEqual([0.5, 1]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["another host", "https://evil.example.com/video-upload/v25.0/123"],
+    ["a look-alike host", "https://rupload.facebook.com.evil.com/x"],
+    ["a subdomain", "https://a.rupload.facebook.com/x"],
+    ["plain http", "http://rupload.facebook.com/x"],
+    ["a port", "https://rupload.facebook.com:8443/x"],
+    ["userinfo", "https://user:pw@rupload.facebook.com/x"],
+    ["userinfo trick", "https://rupload.facebook.com@evil.com/x"],
+    ["upper case (not canonical)", "https://RUPLOAD.facebook.com/x"],
+    ["a backslash", "https://rupload.facebook.com\@evil.com/x"],
+    ["whitespace", "https://rupload.facebook.com/x y"],
+    ["a control character", "https://rupload.facebook.com/x\ty"],
+    ["non-ASCII", "https://rupload.facebook.com/é"],
+    ["no path (not canonical)", "https://rupload.facebook.com"],
+    ["not a URL", "rupload.facebook.com/x"],
+    ["empty", ""],
+  ])("refuses %s without sending anything", async (_name, url) => {
+    const post = ok();
+    await expect(uploadMetaWhole(url, H, "file:///v.mp4", margs(), post)).rejects.toEqual(new UploadError("Unexpected upload address.", false));
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  test("HTTP 400 shows Meta's error message", async () => {
+    const post = jest.fn(async () => ({ status: 400, body: '{"error":{"message":"Invalid file size"}}' }));
+    await expect(uploadMetaWhole(URL_OK, H, "file:///v.mp4", margs(), post)).rejects.toEqual(new UploadError("Invalid file size", false));
+  });
+
+  test("a non-JSON error body shows its first 200 characters, an empty one the status", async () => {
+    const long = "x".repeat(300);
+    await expect(uploadMetaWhole(URL_OK, H, "f", margs(), jest.fn(async () => ({ status: 502, body: long })))).rejects.toMatchObject({ message: long.slice(0, 200), resumable: false });
+    await expect(uploadMetaWhole(URL_OK, H, "f", margs(), jest.fn(async () => ({ status: 500, body: "" })))).rejects.toMatchObject({ message: "Upload failed (500).", resumable: false });
+  });
+
+  test("a redirect is a failure (the address could not be verified)", async () => {
+    await expect(uploadMetaWhole(URL_OK, H, "f", margs(), jest.fn(async () => ({ status: 302, body: "" })))).rejects.toMatchObject({ message: "Upload failed (302).", resumable: false });
+  });
+
+  test("HTTP 200 with success:false is a failure with Meta's message", async () => {
+    const post = jest.fn(async () => ({ status: 200, body: '{"success":false,"message":"Partial request"}' }));
+    const a = margs();
+    await expect(uploadMetaWhole(URL_OK, H, "f", a, post)).rejects.toEqual(new UploadError("Partial request", false));
+    expect(a.onProgress).not.toHaveBeenCalledWith(1);
+    const post2 = jest.fn(async () => ({ status: 200, body: '{"success":false,"debug_info":{"message":"Bad offset"}}' }));
+    await expect(uploadMetaWhole(URL_OK, H, "f", margs(), post2)).rejects.toEqual(new UploadError("Bad offset", false));
+    const post3 = jest.fn(async () => ({ status: 200, body: '{"success":false}' }));
+    await expect(uploadMetaWhole(URL_OK, H, "f", margs(), post3)).rejects.toEqual(new UploadError("Upload failed (200).", false));
+  });
+
+  test("a dropped connection asks to post again", async () => {
+    const post = jest.fn(async () => { throw new Error(`Network failed for OAuth ${TOKEN}`); });
+    await expect(uploadMetaWhole(URL_OK, H, "f", margs(), post)).rejects.toEqual(new UploadError("The connection dropped. Post again to restart the upload.", false));
+  });
+
+  test("abort before the start never sends; abort during the upload is a cancel", async () => {
+    const ac = new AbortController(); ac.abort();
+    const post = ok();
+    await expect(uploadMetaWhole(URL_OK, H, "f", margs({ signal: ac.signal }), post)).rejects.toEqual(new UploadError("Upload cancelled.", false));
+    expect(post).not.toHaveBeenCalled();
+    const ac2 = new AbortController();
+    const during = jest.fn(async () => { ac2.abort(); const e = new Error("The operation was aborted."); e.name = "AbortError"; throw e; });
+    await expect(uploadMetaWhole(URL_OK, H, "f", margs({ signal: ac2.signal }), during)).rejects.toEqual(new UploadError("Upload cancelled.", false));
+  });
+
+  test("no error message ever contains the token", async () => {
+    const leaky = `{"error":{"message":"Bad header Authorization: OAuth ${TOKEN}"}}`;
+    const cases = [
+      jest.fn(async () => ({ status: 400, body: leaky })),
+      jest.fn(async () => ({ status: 400, body: `raw OAuth ${TOKEN}` })),
+      jest.fn(async () => ({ status: 200, body: `{"success":false,"message":"token ${TOKEN}"}` })),
+      jest.fn(async () => { throw new Error(TOKEN); }),
+    ];
+    for (const post of cases) {
+      const err = await uploadMetaWhole(URL_OK, H, "f", margs(), post).then(() => null, (e: Error) => e);
+      expect(err).toBeInstanceOf(UploadError);
+      expect(err!.message).not.toContain(TOKEN);
+    }
+    const bad = await uploadMetaWhole("https://evil.example.com/x", H, "f", margs(), ok()).then(() => null, (e: Error) => e);
+    expect(bad!.message).not.toContain(TOKEN);
+  });
 });
