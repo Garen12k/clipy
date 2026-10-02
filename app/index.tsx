@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProjectActionsSheet } from "@/src/projects/ProjectActionsSheet";
 import { ProjectCard } from "@/src/projects/ProjectCard";
 import { useProjects } from "@/src/projects/useProjects";
 import type { ProjectSummary } from "@/src/projects";
+import { pickVideoForPost } from "@/src/publish/pickVideo";
 import { theme } from "@/src/theme/theme";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { haptic } from "@/src/ui/haptics";
@@ -25,6 +26,16 @@ export default function ProjectsScreen() {
     { text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => { haptic("medium"); remove(p.id); } }]);
   const promptRename = (p: ProjectSummary) => Alert.prompt("Rename project", undefined, (name) => name && rename(p.id, name), "plain-text", p.name);
 
+  const picking = useRef(false);
+  async function onPostVideo() {
+    if (picking.current) return; // the picker is already up
+    picking.current = true;
+    try {
+      const v = await pickVideoForPost();
+      if (v) router.push({ pathname: "/post", params: { fileUri: v.fileUri, durationSec: String(v.durationSec), fileSize: String(v.fileSize), mimeType: v.mimeType } });
+    } finally { picking.current = false; }
+  }
+
   async function onNew() {
     const id = await create();
     if (id) router.push(`/editor/${id}`);
@@ -34,7 +45,10 @@ export default function ProjectsScreen() {
     <Screen>
       <View style={{ paddingLeft: theme.space.lg, paddingRight: theme.space.sm, marginBottom: theme.space.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Title size={26} accessibilityRole="header">Your voyages</Title>
-        <IconButton name="person-circle" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <IconButton name="paper-plane" accessibilityLabel="Post a video" onPress={onPostVideo} />
+          <IconButton name="person-circle" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
+        </View>
       </View>
       {loading ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 40 }} /> : projects.length === 0 ? (
         <EmptyState emoji="🏝️" title="No clips yet" hint="Pick some videos from your library and start your first edit." />

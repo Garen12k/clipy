@@ -31,27 +31,31 @@ export function useAccounts(enabled: boolean) {
   }, []);
   useEffect(() => { if (enabled) { setStatus("loading"); refresh(); } else { requestId.current++; setPlatforms([]); setStatus("idle"); } }, [enabled, refresh]);
 
-  const connect = useCallback(async (platform: PlatformId) => {
+  // One connect / disconnect at a time: a ref, so two presses in the same frame can't both get through.
+  const inFlight = useRef(false);
+  const exclusive = useCallback(async (platform: PlatformId, work: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(platform);
-    try {
-      const returnUrl = Linking.createURL("oauth");
-      const result = await WebBrowser.openAuthSessionAsync(await api.oauthStart(platform, returnUrl), returnUrl);
-      if (!mounted.current) return;
-      if (result.type === "success") {
-        const q = Linking.parse(result.url).queryParams ?? {};
-        if (q.status === "error") useToast.getState().show(typeof q.message === "string" && q.message ? q.message : "Couldn't connect.");
-        if (q.status !== "cancelled") await refresh();
-      }
-    } catch (e) { if (mounted.current) useToast.getState().show(text(e)); }
-    finally { if (mounted.current) setBusy(null); }
-  }, [refresh]);
-
-  const disconnect = useCallback(async (platform: PlatformId) => {
-    setBusy(platform);
-    try { await api.disconnect(platform); await refresh(); }
+    try { await work(); }
     catch (e) { if (mounted.current) useToast.getState().show(text(e)); }
-    finally { if (mounted.current) setBusy(null); }
-  }, [refresh]);
+    finally { inFlight.current = false; if (mounted.current) setBusy(null); }
+  }, []);
+
+  const connect = useCallback((platform: PlatformId) => exclusive(platform, async () => {
+    const returnUrl = Linking.createURL("oauth");
+    const result = await WebBrowser.openAuthSessionAsync(await api.oauthStart(platform, returnUrl), returnUrl);
+    if (!mounted.current) return;
+    if (result.type === "success") {
+      const q = Linking.parse(result.url).queryParams ?? {};
+      if (q.status === "error") useToast.getState().show(typeof q.message === "string" && q.message ? q.message : "Couldn't connect.");
+      if (q.status !== "cancelled") await refresh();
+    }
+  }), [exclusive, refresh]);
+
+  const disconnect = useCallback((platform: PlatformId) => exclusive(platform, async () => {
+    await api.disconnect(platform); await refresh();
+  }), [exclusive, refresh]);
 
   return { status, platforms, error, busy, refresh, connect, disconnect };
 }

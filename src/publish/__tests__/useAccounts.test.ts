@@ -112,6 +112,24 @@ test("a disconnect error is shown and busy is cleared", async () => {
   expect(h.result.current.busy).toBeNull();
 });
 
+test("connect / disconnect are ignored while another one is in flight", async () => {
+  let finish!: (v: unknown) => void;
+  (api.oauthStart as jest.Mock).mockResolvedValue("https://x");
+  (WebBrowser.openAuthSessionAsync as jest.Mock).mockReturnValueOnce(new Promise((r) => { finish = r; }));
+  const h = await renderHook(() => useAccounts(true));
+  await waitFor(() => expect(h.result.current.status).toBe("ready"));
+  let first!: Promise<void>;
+  await act(async () => { first = h.result.current.connect("youtube"); });
+  expect(h.result.current.busy).toBe("youtube");
+  await act(async () => { await h.result.current.connect("youtube"); await h.result.current.disconnect("youtube"); });
+  expect(api.oauthStart).toHaveBeenCalledTimes(1);
+  expect(api.disconnect).not.toHaveBeenCalled();
+  await act(async () => { finish({ type: "cancel" }); await first; });
+  expect(h.result.current.busy).toBeNull();
+  await act(() => h.result.current.disconnect("youtube"));
+  expect(api.disconnect).toHaveBeenCalledWith("youtube");
+});
+
 test("disconnect calls the server and refreshes", async () => {
   const h = await renderHook(() => useAccounts(true));
   await waitFor(() => expect(h.result.current.status).toBe("ready"));

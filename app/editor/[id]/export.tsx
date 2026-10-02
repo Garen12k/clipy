@@ -3,7 +3,10 @@ import { router } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useEditorStore } from "@/src/editor/store";
 import { ExportScreenBody } from "@/src/export/ExportScreenBody";
+import { exportDuration } from "@/src/export/estimate";
 import { useExport } from "@/src/export/useExport";
+import { fileSize } from "@/src/lib/fileInfo";
+import { isBackendConfigured } from "@/src/publish/supabase";
 import { ToastHost, useToast } from "@/src/ui/Toast";
 
 export default function ExportScreen() {
@@ -29,5 +32,15 @@ export default function ExportScreen() {
     catch (e) { useToast.getState().show(e instanceof Error ? e.message : "Could not share the video."); }
   }
 
-  return (<><ExportScreenBody project={project} missingSourceUris={missingSourceUris} state={state} start={start} cancel={cancel} reset={reset} onSave={onSave} onShare={onShare} onDone={() => router.back()} /><ToastHost /></>);
+  function onPost() {
+    if (!state.fileUri || !project) return;
+    const size = fileSize(state.fileUri);
+    router.push({ pathname: "/post", params: {
+      fileUri: state.fileUri, durationSec: String(exportDuration(project, missingSourceUris)), ...(size > 0 ? { fileSize: String(size) } : {}),
+      mimeType: "video/mp4", projectId: project.id, title: project.name,
+    } });
+  }
+
+  return (<><ExportScreenBody project={project} missingSourceUris={missingSourceUris} state={state} start={start} cancel={cancel} reset={reset}
+    onSave={onSave} onShare={onShare} onDone={() => router.back()} onPost={isBackendConfigured() ? onPost : undefined} /><ToastHost /></>);
 }

@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn() }, useFocusEffect: (cb: () => void) => { const React = require("react"); React.useEffect(cb, []); } }));
 jest.mock("@/src/projects/pickVideos", () => ({ pickVideos: jest.fn() }));
+jest.mock("@/src/publish/pickVideo", () => ({ pickVideoForPost: jest.fn() }));
 jest.mock("@/src/projects", () => ({
   storage: {
     listProjects: jest.fn(), createProject: jest.fn(), renameProject: jest.fn(), duplicateProject: jest.fn(), deleteProject: jest.fn(),
@@ -13,6 +14,7 @@ jest.mock("@/src/projects", () => ({
 import { router } from "expo-router";
 import { storage } from "@/src/projects";
 import { pickVideos } from "@/src/projects/pickVideos";
+import { pickVideoForPost } from "@/src/publish/pickVideo";
 import ProjectsScreen from "@/app/index";
 
 const list = storage.listProjects as jest.Mock;
@@ -38,6 +40,18 @@ test("the header's Accounts button opens the Accounts screen", async () => {
   await render(<ProjectsScreen />);
   await fireEvent.press(await screen.findByRole("button", { name: "Accounts" }));
   expect(mockPush).toHaveBeenCalledWith("/accounts");
+});
+
+test("the header's Post a video button picks a video and opens the Post screen; cancelling stays home", async () => {
+  list.mockResolvedValue([]);
+  (pickVideoForPost as jest.Mock).mockResolvedValueOnce(null).mockResolvedValueOnce({ fileUri: "file:///pick.mov", durationSec: 21, fileSize: 14000000, mimeType: "video/quicktime" });
+  await render(<ProjectsScreen />);
+  const button = await screen.findByRole("button", { name: "Post a video" });
+  await fireEvent.press(button);
+  await waitFor(() => expect(pickVideoForPost).toHaveBeenCalledTimes(1));
+  expect(mockPush).not.toHaveBeenCalled();
+  await fireEvent.press(button);
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith({ pathname: "/post", params: { fileUri: "file:///pick.mov", durationSec: "21", fileSize: "14000000", mimeType: "video/quicktime" } }));
 });
 
 test("lists projects with duration and marks broken ones", async () => {
