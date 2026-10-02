@@ -17,6 +17,8 @@ jest.mock("@react-native-community/slider", () => {
   const { View } = require("react-native");
   return View;
 });
+// reanimated 4 pulls in react-native-worklets, whose native module does not exist under Jest.
+jest.mock("react-native-worklets", () => require("react-native-worklets/lib/module/mock"));
 jest.mock("react-native-reanimated", () => require("react-native-reanimated/mock"));
 // react-native-svg's real <Path> parses `fill` into a processColor object (like Mark.tsx's <Line
 // stroke=.../> does, see Mark.test.tsx), but StickerView's test reads `props.fill` back as the
