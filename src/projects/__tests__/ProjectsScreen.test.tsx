@@ -35,8 +35,8 @@ test("shows the empty state, then creates a project from picked videos and opens
 
 test("lists projects with duration and marks broken ones", async () => {
   list.mockResolvedValueOnce([
-    { id: "a", name: "Beach", durationSec: 65, updatedAt: new Date().toISOString(), thumbUri: null, broken: false },
-    { id: "b", name: "Can't open", durationSec: 0, updatedAt: "", thumbUri: null, broken: true },
+    { id: "a", name: "Beach", durationSec: 65, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] },
+    { id: "b", name: "Can't open", durationSec: 0, updatedAt: "", thumbUri: null, broken: true, postedTo: [] },
   ]);
   await render(<ProjectsScreen />);
   expect(await screen.findByText("Beach")).toBeTruthy();
@@ -47,7 +47,7 @@ test("lists projects with duration and marks broken ones", async () => {
 });
 
 test("long-press opens the actions sheet; Delete confirms via Alert and removes", async () => {
-  list.mockResolvedValue([{ id: "a", name: "Beach", durationSec: 65, updatedAt: new Date().toISOString(), thumbUri: null, broken: false }]);
+  list.mockResolvedValue([{ id: "a", name: "Beach", durationSec: 65, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] }]);
   const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
   await render(<ProjectsScreen />);
   const card = await screen.findByRole("button", { name: "Beach" });

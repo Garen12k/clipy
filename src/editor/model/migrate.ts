@@ -1,5 +1,5 @@
 import { normaliseTransitions } from "./ops";
-import { FILTER_IDS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES, type Clip, type Overlay, type Project, type ShapeId } from "./types";
+import { FILTER_IDS, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES, type Clip, type Overlay, type PostRecord, type Project, type ShapeId } from "./types";
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 type Raw = Record<string, unknown> & { clips: unknown[] };
@@ -20,10 +20,10 @@ function normaliseSticker(o: Record<string, unknown>): Overlay | null {
 }
 
 /**
- * Brings a v2 or v3 file to a safe v3 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
+ * Brings a v2, v3 or v4 file to a safe v4 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
  * null, unknown transition → none, transitions re-capped (last clip cleared), overlays get a kind, bad stickers fixed/dropped.
  */
-function normaliseV3(raw: Raw): Raw {
+function normaliseCurrent(raw: Raw): Raw {
   const mapped = (raw.clips as Clip[]).map((c) => {
     const speed = typeof c.speed === "number" && c.speed >= SPEED_LIMITS[0] && c.speed <= SPEED_LIMITS[1] ? c.speed : 1;
     const filter = (FILTER_IDS as readonly string[]).includes(c.filter as string) && c.filter !== "none" ? c.filter : null;
@@ -38,7 +38,9 @@ function normaliseV3(raw: Raw): Raw {
     if (o.kind === "sticker") { const s = normaliseSticker(o); return s ? [s] : []; }
     return [o as unknown as Overlay];
   });
-  return { ...raw, clips, overlays, audioTracks: (raw.audioTracks as unknown[] | undefined) ?? [], schemaVersion: 3 };
+  const posts = (Array.isArray(raw.posts) ? raw.posts : []).filter((r): r is PostRecord =>
+    isObj(r) && (POST_PLATFORMS as readonly unknown[]).includes(r.platform) && (typeof r.url === "string" || r.url === null) && typeof r.postedAt === "string");
+  return { ...raw, clips, overlays, audioTracks: (raw.audioTracks as unknown[] | undefined) ?? [], posts, schemaVersion: SCHEMA_VERSION };
 }
 
 /** Upgrades any supported project file to the current schema. Throws readable errors for bad input. */
@@ -49,6 +51,6 @@ export function migrateProject(raw: unknown): Project {
   if (version < 1) throw new Error("Project file is missing required fields");
   let cur = raw as Raw;
   if (version === 1) cur = v1to2(cur);
-  // v2 → v3 and the v3 sanity pass are the same idempotent step, so corrupted v3 files load safely too.
-  return normaliseV3(cur) as unknown as Project;
+  // v2 → v4 and the sanity pass are the same idempotent step, so corrupted v3 files load safely too.
+  return normaliseCurrent(cur) as unknown as Project;
 }
