@@ -1,7 +1,7 @@
 # Clipy Phase 4 — Direct Posting — Design
 
 **Date:** 2026-10-02
-**Status:** 4A–4C implemented 2026-10-02 — unverified against live services; 4D (X) pending. Approved 2026-10-02; amended the same day after verifying platform docs (see §10, which overrides earlier sections where they differ)
+**Status:** Implemented 2026-10-02 (4A–4D) — unverified against live services until the developer accounts exist; device checklists pending. Approved 2026-10-02; amended the same day after verifying platform docs (see §10, which overrides earlier sections where they differ)
 **Parent specs:** `2026-10-01-clip-editor-app-design.md` and the Phase 1–3 specs (all still apply unless overridden here)
 
 ## 1. Goal
@@ -166,6 +166,7 @@ Research notes with source URLs were gathered per platform before planning. Wher
 - Free-plan limits (150 s wall clock, 2 s CPU, 256 MB, undocumented ~10 MB request body) cap relay chunks at 4 MB and forbid buffering whole videos.
 - Free projects pause after about a week without activity; the app shows "Server is asleep — open the Supabase dashboard to wake it" when the backend is unreachable.
 - The Instagram publish step is never treated as a final failure unless Meta reports the upload itself as failed or expired.
+- Every `adapter.status` call is serialised by a `processing → publishing` claim.
 
 **YouTube**
 - Uploads from an un-audited API project are **locked to private** by Google until the project passes YouTube's API audit. The row shows this note and the finished post links to the video so the user can switch it to Public in YouTube. The chosen privacy is still sent.
@@ -184,6 +185,9 @@ Research notes with source URLs were gathered per platform before planning. Wher
 - `META_IG_TOKEN_KIND` (`page` default, `user`) selects which token Instagram calls use; `user` requires reconnecting about every 60 days.
 - Facebook Reels: 3–90 s, 30 per day per Page. Instagram Reels: up to 15 min, 300 MB (not 1 GB). Posts from a Development-mode app may be visible only to the app's own roles until the app is Live.
 
-**X**
-- No free tier and no flat monthly plan are required: pricing is pay-per-use (about $0.015 per post; to be re-confirmed in 4D). Video limits are 20 min / 8 GB for ordinary accounts.
-- Uploads use the v2 chunked media endpoints with the user's token (`relay`, multipart, ≤ 4 MB pieces through the function). The authorization code expires in 30 s, so `oauth-callback` exchanges it immediately.
+**X** (as implemented in 4D; unverified against live X — no developer app, no credits)
+- Pricing is pay-per-use, charged to Clipy's developer account: about $0.015 per post, about $0.20 when the text contains a link. A bare domain (`clipy.app`) counts as a link, both for billing and for X's 280-character weighted count; Clipy's matcher is deliberately broader than X's, and a bare domain counts max(23, its plain length) so the count is never under the real one. Clipy never adds a link to the text. The X row shows the cost, and a link-price warning when the caption has a link.
+- Upload: `relay` — the phone sends **4 MiB segments** to `post-upload`, which appends each one to X's v2 chunked media upload with the user's token and keeps nothing. The authorization code expires in 30 s, so `oauth-callback` exchanges it immediately; refresh tokens rotate.
+- The post is created only after X has processed the video, inside a **claim-guarded status call** (finalize, then status polls every 5 s for up to 5 minutes; a timeout offers Resume, which never re-uploads).
+- An unknown outcome of post creation (network error, 408, 5xx, a 2xx without an id) is **final**: the session fails with "X didn't confirm the post. It may already be on your profile — check X before posting again." Clipy never retries post creation.
+- App limits: weighted caption ≤ 280, video ≤ 20 min, ≤ 1 GB (the relay limit, below X's own).

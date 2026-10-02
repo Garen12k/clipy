@@ -533,6 +533,135 @@ describe("Instagram and Facebook", () => {
     expect(screen.getByLabelText("Uploading to Instagram")).toBeTruthy();
     expect(screen.getByLabelText("Uploading to Facebook")).toBeTruthy();
   });
+
+  describe("X", () => {
+    const X_ON = { available: true, connected: true, name: "@sunnysurf" };
+    const X_COST = "Posting to X costs about 1.5¢ (about 20¢ if the caption has a link). The video goes through Clipy's server in small pieces.";
+    const X_LINK = "This caption contains a link — X charges about 20¢ for posts with links.";
+    const X_TOO_LONG = "X posts can be up to 280 characters (emoji and links count extra).";
+    const X_UNCONFIRMED = "X didn't confirm the post. It may already be on your profile — check X before posting again. Retry will upload the video again.";
+    const X_TIMEOUT = "X is still processing the video. Tap Resume in a minute to finish posting.";
+    beforeEach(() => { (useAccounts as jest.Mock).mockReturnValue(accounts5({ x: X_ON })); });
+
+    test("X available and connected: ticked with its account and cost note, no options button", async () => {
+      await render(<PostScreen />);
+      expect(screen.getByRole("checkbox", { name: "X" })).toBeChecked();
+      expect(screen.getByText("@sunnysurf")).toBeTruthy();
+      expect(screen.getByText(X_COST)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "X options" })).toBeNull();
+      expect(screen.queryByText(X_LINK)).toBeNull();
+      expect(screen.getAllByText("Not available yet")).toHaveLength(1); // TikTok only
+      await fireEvent.press(screen.getByRole("checkbox", { name: "X" }));
+      expect(screen.getByRole("checkbox", { name: "X" })).not.toBeChecked();
+      expect(screen.queryByText(X_COST)).toBeNull();
+    });
+
+    test("a caption with a link (a bare domain too) shows X's link price under the row", async () => {
+      await render(<PostScreen />);
+      await fireEvent.changeText(screen.getByLabelText("Caption"), "More at clipy.app");
+      expect(screen.getByText(X_LINK)).toBeTruthy();
+      expect(screen.getByText(X_COST)).toBeTruthy();
+      await fireEvent.changeText(screen.getByLabelText("Caption"), "Beach day");
+      expect(screen.queryByText(X_LINK)).toBeNull();
+      // only while X is ticked
+      await fireEvent.changeText(screen.getByLabelText("Caption"), "More at clipy.app");
+      await fireEvent.press(screen.getByRole("checkbox", { name: "X" }));
+      expect(screen.queryByText(X_LINK)).toBeNull();
+    });
+
+    test("with X ticked the caption limit is 280 and the counter turns red at 281", async () => {
+      const p = post(); usePostReturns(p);
+      await render(<PostScreen />);
+      await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(280));
+      expect(screen.getByText("280 / 280")).not.toHaveStyle({ color: theme.colors.danger });
+      await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(281));
+      expect(screen.getByText("281 / 280")).toHaveStyle({ color: theme.colors.danger });
+      expect(screen.getByText(X_TOO_LONG)).toBeTruthy();
+      expect(screen.getByRole("checkbox", { name: "X" })).not.toBeChecked();
+      // X has no options, so tapping its held-back row unticks it and the limit goes back to Instagram's
+      await fireEvent.press(screen.getByRole("checkbox", { name: "X" }));
+      expect(screen.getByText("281 / 2200")).toBeTruthy();
+      await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+      const c = "x".repeat(281);
+      expect(p.start).toHaveBeenCalledWith([{ ...YT_JOB, caption: c }, { platform: "instagram", caption: c, options: {} }, { platform: "facebook", caption: c, options: {} }]);
+    });
+
+    test("wide characters weigh 2 on X: 141 of them hold X back while the others still post", async () => {
+      const p = post(); usePostReturns(p);
+      await render(<PostScreen />);
+      const c = "日".repeat(141); // 141 characters, weight 282
+      await fireEvent.changeText(screen.getByLabelText("Caption"), c);
+      expect(screen.getByText("141 / 280")).not.toHaveStyle({ color: theme.colors.danger });
+      expect(screen.getByText(X_TOO_LONG)).toBeTruthy();
+      expect(screen.getByRole("checkbox", { name: "X" })).not.toBeChecked();
+      await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+      expect(p.start).toHaveBeenCalledWith([{ ...YT_JOB, caption: c }, { platform: "instagram", caption: c, options: {} }, { platform: "facebook", caption: c, options: {} }]);
+    });
+
+    test("all five connected: Post sends five jobs", async () => {
+      const p = post(); usePostReturns(p);
+      (useAccounts as jest.Mock).mockReturnValue(accounts5({ tiktok: TT_ON, x: X_ON }));
+      await render(<PostScreen />);
+      expect(screen.queryByText("Not available yet")).toBeNull();
+      await fireEvent.changeText(screen.getByLabelText("Caption"), "Sunny");
+      await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+      expect(p.start).toHaveBeenCalledTimes(1);
+      expect(p.start).toHaveBeenCalledWith([
+        { ...YT_JOB, caption: "Sunny" },
+        { platform: "tiktok", caption: "Sunny", options: {} },
+        { platform: "instagram", caption: "Sunny", options: {} },
+        { platform: "facebook", caption: "Sunny", options: {} },
+        { platform: "x", caption: "Sunny", options: {} },
+      ]);
+    });
+
+    test("Retry X, Resume X and View on X: unique names next to the other four", async () => {
+      (useAccounts as jest.Mock).mockReturnValue(accounts5({ tiktok: TT_ON, x: X_ON }));
+      const p = post({ rows: rows5({
+        youtube: { phase: "failed", message: "The connection dropped.", resumable: false },
+        tiktok: { phase: "failed", message: "The TikTok upload link expired. Post again.", resumable: false },
+        instagram: { phase: "failed", message: IG_TIMEOUT, resumable: true },
+        facebook: { phase: "done", progress: 1, url: "https://www.facebook.com/reel/1" },
+        x: { phase: "failed", message: X_UNCONFIRMED, resumable: false },
+      }) }); usePostReturns(p);
+      const a = await render(<PostScreen />);
+      expect(screen.getByText(X_UNCONFIRMED)).toBeTruthy();
+      for (const name of ["Retry YouTube", "Retry TikTok", "Resume Instagram", "View on Facebook", "Retry X"]) expect(screen.getAllByRole("button", { name })).toHaveLength(1);
+      await fireEvent.press(screen.getByRole("button", { name: "Retry X" }));
+      expect(p.retry).toHaveBeenCalledWith({ platform: "x", caption: "", options: {} });
+      await a.unmount();
+
+      const p2 = post({ rows: rows5({ instagram: { phase: "failed", message: IG_TIMEOUT, resumable: true }, x: { phase: "failed", message: X_TIMEOUT, resumable: true } }) }); usePostReturns(p2);
+      const b = await render(<PostScreen />);
+      expect(screen.getByText(X_TIMEOUT)).toBeTruthy();
+      expect(screen.getAllByRole("button", { name: "Resume X" })).toHaveLength(1);
+      expect(screen.getAllByRole("button", { name: "Resume Instagram" })).toHaveLength(1);
+      await fireEvent.press(screen.getByRole("button", { name: "Resume X" }));
+      expect(p2.retry).toHaveBeenCalledWith({ platform: "x", caption: "", options: {} });
+      await b.unmount();
+
+      const open = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+      usePostReturns(post({ rows: rows5({ facebook: { phase: "done", progress: 1, url: "https://www.facebook.com/reel/1" }, x: { phase: "done", progress: 1, url: "https://x.com/i/status/123" } }) }));
+      await render(<PostScreen />);
+      expect(screen.getByLabelText("X, posted")).toBeTruthy();
+      expect(screen.queryByText(X_COST)).toBeNull();
+      await fireEvent.press(screen.getByRole("button", { name: "View on X" }));
+      expect(open).toHaveBeenCalledWith("https://x.com/i/status/123");
+      expect(screen.getAllByRole("button", { name: "View on Facebook" })).toHaveLength(1);
+      open.mockRestore();
+    });
+
+    test("Connect X and Reconnect X", async () => {
+      (useAccounts as jest.Mock).mockReturnValue(accounts5({ x: { available: true } }));
+      const a = await render(<PostScreen />);
+      await fireEvent.press(screen.getByRole("button", { name: "Connect X" }));
+      expect(router.push).toHaveBeenCalledWith("/accounts");
+      await a.unmount();
+      (useAccounts as jest.Mock).mockReturnValue(accounts5({ x: { ...X_ON, needsReconnect: true } }));
+      await render(<PostScreen />);
+      expect(screen.getByRole("button", { name: "Reconnect X" })).toBeTruthy();
+    });
+  });
 });
 
 test("a fileSize param is ignored: the size is always read from the file", async () => {

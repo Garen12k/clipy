@@ -135,7 +135,7 @@ interface AudioTrack {
 | **1. Editor core + share** | Projects list, import, timeline UI, split/trim/reorder/delete, aspect ratio, preview, export 720p/1080p/4K, Save to Photos, share sheet | Can make a multi-clip vertical edit and post it via share sheet to any app |
 | **2. Text & audio** | Text overlays (fonts/colors/position/timing), music import (Files app + bundled tracks), clip volume, mute | Exported video shows timed text and mixed music |
 | **3. Effects** | Filters (Core Image presets), speed 0.25×–4×, transitions, stickers/emoji, auto-captions | All effects appear correctly in preview and export |
-| **4. Direct posting** | Supabase backend; adapters in order: YouTube → TikTok → Instagram + Facebook (Meta Graph API) → X | Can post an exported video directly to each connected account |
+| **4. Direct posting** | Supabase backend; adapters in order: YouTube → TikTok → Instagram + Facebook (Meta Graph API) → X | Can post an exported video directly to each connected account — **implemented 2026-10-02 (4A–4D); unverified against live services until the developer accounts exist; device checklists pending** |
 
 Each phase gets its own implementation plan.
 

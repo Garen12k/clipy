@@ -19,6 +19,8 @@ export interface PlatformView {
   /** Why a ticked platform can't be sent right now (validation or caption length), or null. */
   blocker: string | null;
   note: string | null;
+  /** The adapter's caption-dependent note while the platform is ticked (e.g. X's link price), or null. */
+  captionNote: string | null;
   options: Record<string, unknown>;
   /** The row failed with "reconnect", the user went to Accounts and the platform is healthy again. */
   canResume: boolean;
@@ -73,6 +75,7 @@ export function usePostForm(video: VideoInfo, platforms: PlatformStatus[], title
       status, adapter, reason, checked: on && !error, error, options: opts,
       canPost: on && !blocker, blocker,
       note: on && adapter ? adapter.note(video) : null,
+      captionNote: on && adapter?.captionNote ? adapter.captionNote(caption) : null,
       canResume: rows[status.id]?.phase === "needsReconnect" && returned.has(status.id) && !reason,
     };
   });
