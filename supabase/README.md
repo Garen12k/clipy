@@ -1,4 +1,4 @@
-# Clipy server setup (Supabase + YouTube)
+# Clipy server setup (Supabase, YouTube, TikTok)
 
 This folder is Clipy's small server. It lets the app connect your YouTube channel and post videos to it. Your videos never live on the server: the phone sends them straight to YouTube.
 
@@ -173,3 +173,70 @@ After steps 1 to 5 above, on your iPhone in Expo Go:
 - **The Connect link belongs to you, for a short time, once.** When you tap Connect, Clipy asks the server for a sign-in link that is tied to the Clipy account you are signed in with. The link stops working after 10 minutes and works only once.
 - **Your YouTube sign-in is locked on the server.** The server saves it encrypted with your `TOKEN_ENC_KEY` (step 4a). The app never receives it (except the short-lived token of step 4c, if you turn that on).
 - **One accepted risk ("login CSRF").** If someone else sent you their own Connect link and you opened it within those 10 minutes and allowed access, your YouTube channel would be connected to *their* Clipy account. For a personal app with one user this is accepted. Only start Connect from inside Clipy, and never open a Connect link someone sends you.
+
+## 11. TikTok
+
+Clipy sends your video to TikTok as a **draft in your TikTok inbox**. You then open TikTok, add the caption and post it there. Clipy never posts to TikTok by itself.
+
+> **Honest status:** none of this has run against the real TikTok yet. It was written from TikTok's developer documentation (October 2026). If a screen looks different, trust the screen and tell the developer what you saw.
+
+Do steps 1 to 4a above first (the Supabase project, the server online, the encryption key).
+
+### a. Create the TikTok developer app
+
+Use the TikTok account you will post with.
+
+1. Go to https://developers.tiktok.com and log in with that TikTok account. If it asks you to register as a developer, do so.
+2. Open **Manage apps** → **Connect an app**. Choose yourself as the owner and confirm.
+3. Fill in the app details: an app icon (a square picture, 1024 × 1024), the name `Clipy`, a short description and a category *(may be named slightly differently)*. If it asks for a Terms of Service or Privacy Policy address, ask the developer.
+4. If it asks for a platform, choose **Web** *(may be named slightly differently)*.
+5. Under **Products**, click **Add products** and add **Login Kit** and **Content Posting API**.
+6. Open **Login Kit**. In **Redirect URI**, paste exactly (with your project ref, no slash at the end):
+   `https://<ref>.supabase.co/functions/v1/oauth-callback`
+   This is the same address as for YouTube.
+7. Open **Content Posting API**. Make sure uploading drafts (the **video.upload** permission) is available. You do **not** need to turn on **Direct Post** *(may be named slightly differently)*.
+8. Under **Credentials**, you see the **Client key** and the **Client secret**. Keep this page open for step c.
+
+### b. Sandbox: let your own account use the app
+
+Until TikTok reviews the app, it only works for accounts you add as "target users" in a sandbox.
+
+1. At the top of the app page, switch from **Production** to **Sandbox**.
+2. Click **Create Sandbox**, give it a name (for example `Clipy test`) and click **Confirm**.
+3. Check that **Login Kit**, **Content Posting API** and the redirect address from step a.6 are in the sandbox too, then click **Apply changes**.
+4. Open **Sandbox settings**. Under **Target users**, click **Add account**, log in with your TikTok account and agree to the **TikTok Developer Terms of Service**.
+5. Wait. TikTok says it can take **up to an hour** before your account shows up (refresh the page to check).
+6. The sandbox may have its own **Client key** and **Client secret** *(may be shown separately for the sandbox)*. Use the ones shown while **Sandbox** is selected.
+
+### c. Put the TikTok client on the server
+
+Run these in PowerShell, one at a time (paste your values in place of `<client key>` and `<client secret>`):
+
+```powershell
+npx.cmd supabase secrets set TIKTOK_CLIENT_KEY=<client key>
+```
+
+```powershell
+npx.cmd supabase secrets set TIKTOK_CLIENT_SECRET=<client secret>
+```
+
+Until both are set, the app shows TikTok as "Not available yet".
+
+### d. What to expect
+
+- **The video arrives in your TikTok inbox as a draft.** TikTok sends you a notification. Open TikTok, tap it, add the caption and hashtags, choose who can see it, and post. Clipy cannot post for you, and it cannot send the caption.
+- **Nothing is public until you post it in TikTok.** If you never finish the draft, nobody sees it.
+- **At most 5 unfinished drafts a day.** TikTok refuses a new upload when 5 drafts from Clipy are still waiting in the last 24 hours. Clipy then says: "TikTok allows 5 unfinished drafts a day. Open TikTok and post or delete some first."
+- **No link back.** Because you finish the post in TikTok, Clipy shows "Done" without a "View on TikTok" link.
+- **The TikTok connection lasts about a day at a time** and renews itself. If you do not use Clipy for a year, you will need to reconnect.
+- **None of this has run against live TikTok yet.** If a step fails, tell the developer what you saw.
+
+### e. TikTok troubleshooting
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| TikTok shows **Not available yet** | `TIKTOK_CLIENT_KEY` or `TIKTOK_CLIENT_SECRET` is not set on the server | Do step c. Check with `npx.cmd supabase secrets list`. |
+| Connecting TikTok shows an error about the **redirect** | The address in step a.6 does not match exactly | Fix it in Login Kit: `https://<ref>.supabase.co/functions/v1/oauth-callback`, no slash at the end. |
+| Connecting TikTok says the app or account is **not allowed** | Your account is not (yet) a sandbox target user | Do step b, then wait up to an hour. |
+| TikTok shows **Reconnect** | The connection ended or a permission was not given when connecting | Tap Reconnect and allow everything TikTok asks for. |
+| **TikTok allows 5 unfinished drafts a day** | 5 Clipy drafts are waiting in TikTok | Open TikTok, post or delete some drafts, or wait a day. |
