@@ -645,6 +645,8 @@ describe("Instagram and Facebook", () => {
       await render(<PostScreen />);
       expect(screen.getByLabelText("X, posted")).toBeTruthy();
       expect(screen.queryByText(X_COST)).toBeNull();
+      await fireEvent.changeText(screen.getByLabelText("Caption"), "More at clipy.app");
+      expect(screen.queryByText(X_LINK)).toBeNull(); // the link-price note is hidden on a done row
       await fireEvent.press(screen.getByRole("button", { name: "View on X" }));
       expect(open).toHaveBeenCalledWith("https://x.com/i/status/123");
       expect(screen.getAllByRole("button", { name: "View on Facebook" })).toHaveLength(1);
