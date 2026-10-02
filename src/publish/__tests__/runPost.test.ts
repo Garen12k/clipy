@@ -308,7 +308,7 @@ describe("meta-rupload and the wait hint", () => {
 
   test("uploads through uploadMetaWhole with the file and headers, opens no reader, finalizes with no client result", async () => {
     const d = metaDeps(meta), t = track();
-    expect(await runPost(ig, d, t.update, signal())).toEqual({ prepared: meta, uploaded: true, clientResult: null });
+    expect(await runPost(ig, d, t.update, signal())).toEqual({ prepared: { ...meta, uploadHeaders: {} }, uploaded: true, clientResult: null });
     expect(d.uploadMetaWhole).toHaveBeenCalledWith(META_URL, headers, "file:///v.mp4", { onProgress: expect.any(Function), signal: expect.any(AbortSignal) });
     expect(d.openReader).not.toHaveBeenCalled();
     expect(d.uploadGoogleResumable).not.toHaveBeenCalled();
@@ -346,7 +346,7 @@ describe("meta-rupload and the wait hint", () => {
     const info = await runPost(ig, d, t.update, signal());
     expect(d.api.status).toHaveBeenCalledTimes(200);
     expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: IG_TIMEOUT, url: null });
-    expect(info).toEqual({ prepared: plan, uploaded: true, clientResult: null });
+    expect(info).toEqual({ prepared: { ...plan, uploadHeaders: {} }, uploaded: true, clientResult: null });
 
     // Resume goes straight to finalize: no prepare, no reader, no second upload.
     (d.api.finalize as jest.Mock).mockResolvedValue({ status: "done", url: "https://www.instagram.com/reel/abc/" });
@@ -404,7 +404,31 @@ describe("meta-rupload and the wait hint", () => {
     expect(d.api.status).not.toHaveBeenCalled();
     expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: IG_TIMEOUT });
     expect(t.phases).not.toContain("done");
-    expect(info).toEqual({ prepared: plan, uploaded: true, clientResult: null });
+    expect(info).toEqual({ prepared: { ...plan, uploadHeaders: {} }, uploaded: true, clientResult: null });
+  });
+
+  test("after the upload the token is dropped: the ResumeInfo carries no Authorization header, on success or failure", async () => {
+    const ok = await runPost(ig, metaDeps(meta), track().update, signal());
+    expect(ok!.prepared.uploadHeaders).toEqual({});
+    expect(JSON.stringify(ok)).not.toContain("OAuth tok");
+    const d = metaDeps(meta);
+    (d.api.finalize as jest.Mock).mockRejectedValue(new ApiFailure("platform_unavailable", "Instagram is busy."));
+    const failed = await runPost(ig, d, track().update, signal());
+    expect(failed).toMatchObject({ uploaded: true, prepared: { uploadHeaders: {} } });
+    expect(JSON.stringify(failed)).not.toContain("Authorization");
+  });
+  test("Resume after the upload needs neither the headers nor the address", async () => {
+    const d = metaDeps(meta), t = track();
+    const info: ResumeInfo = { prepared: { ...meta, uploadUrl: null, uploadHeaders: {} }, uploaded: true, clientResult: null };
+    expect(await runPost(ig, d, t.update, signal(), info)).toEqual(info);
+    expect(d.api.prepare).not.toHaveBeenCalled();
+    expect(d.uploadMetaWhole).not.toHaveBeenCalled();
+    expect(d.api.finalize).toHaveBeenCalledWith("m1", null);
+    expect(t.row()).toMatchObject({ phase: "done" });
+  });
+  test("before the upload the headers are kept (the upload still needs them)", async () => {
+    const d = metaDeps(meta, { uploadMetaWhole: jest.fn(async () => { throw new UploadError("Dropped.", false); }) });
+    expect(await runPost(ig, d, track().update, signal())).toEqual({ prepared: meta, uploaded: false, clientResult: null });
   });
 
   const sleeps = (d: PostDeps) => (d.sleep as jest.Mock).mock.calls.map((c) => c[0] as number);

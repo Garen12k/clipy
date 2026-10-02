@@ -16,7 +16,7 @@ export interface PostDeps {
   /** Resolves after `ms`, or early when `signal` aborts. */
   sleep(ms: number, signal: AbortSignal): Promise<void>;
 }
-/** Everything needed to carry on a post without starting over. In memory only: `prepared` may hold a platform token. */
+/** Everything needed to carry on a post without starting over. In memory only: before the upload, `prepared` may hold a platform token (dropped once uploaded). */
 export interface ResumeInfo { prepared: Prepared; uploaded: boolean; clientResult: string | null }
 export const POLL_MS = 3000;
 export const POLL_LIMIT = 40; // 2 minutes
@@ -37,8 +37,8 @@ const pollLimit = (p: Prepared) => {
   return Math.ceil(seconds / (pollMs(p) / 1000));
 };
 
-/** The server decides the chunk size and protocol; refuse a plan we cannot follow. */
-const planIsValid = (p: Prepared) => Number.isInteger(p.chunkSize) && p.chunkSize > 0 && !((p.protocol === "google-resumable" || p.protocol === "tiktok-chunks" || p.protocol === "meta-rupload") && !p.uploadUrl);
+/** The server decides the chunk size and protocol; refuse a plan we cannot follow. After the upload, the address is no longer needed. */
+const planIsValid = (p: Prepared, uploaded = false) => Number.isInteger(p.chunkSize) && p.chunkSize > 0 && (uploaded || !((p.protocol === "google-resumable" || p.protocol === "tiktok-chunks" || p.protocol === "meta-rupload") && !p.uploadUrl));
 /**
  * After the upload finished, every failure is resumable (the stored session decides) except these two: the server says
  * the session itself is gone or finished-and-failed, so only a fresh upload can help. A temporary platform failure
@@ -70,7 +70,7 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
         return null;
       }
       info = { prepared, uploaded: false, clientResult: null };
-    } else if (!planIsValid(info.prepared)) {
+    } else if (!planIsValid(info.prepared, info.uploaded)) {
       update({ phase: "failed", message: "The server sent an unexpected upload plan.", resumable: false });
       return null;
     }
@@ -88,7 +88,8 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
         else if (p.protocol === "tiktok-chunks") await deps.uploadTikTokChunks(p.uploadUrl ?? "", args);
         else await deps.uploadRelay((offset, total, bytes, sig) => deps.api.uploadChunk(p.sessionId, offset, total, bytes, sig), args);
       }
-      info = { prepared: p, uploaded: true, clientResult };
+      // The upload headers may hold a platform token, needed for that upload only: Resume (finalize, status) never uses them.
+      info = { prepared: { ...p, uploadHeaders: {} }, uploaded: true, clientResult };
     }
     // The video now exists on the platform: finalize is never cancelled, and cancel while polling ends the row as "still processing"
     // (resumable when the server's wait hint says the post still needs finalizing).
