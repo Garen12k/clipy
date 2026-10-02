@@ -105,15 +105,16 @@ test("finalize twice while processing publishes once; the second call polls stat
   expect(adapter.status).toHaveBeenCalledTimes(1);
 });
 
-test("two simultaneous finalizes publish once", async () => {
-  const adapter = fakeAdapter({ finalize: jest.fn(async () => ({ status: "processing" as const })) });
+test("two simultaneous finalizes publish once (order-independent)", async () => {
+  const win = { status: "done" as const, url: "https://w.test/1" };
+  const adapter = fakeAdapter({ finalize: jest.fn(async () => win), status: jest.fn(async () => win) });
   const deps = await connected({ adapters: { youtube: adapter } });
   const { sessionId } = await postPrepare(deps, USER, body);
-  const [a, b] = await Promise.all([postFinalize(deps, USER, { sessionId, clientResult: null }), postFinalize(deps, USER, { sessionId, clientResult: null })]);
-  expect(a).toEqual({ status: "processing" });
-  expect(["processing", "done"]).toContain(b.status); // the loser sees publishing (processing) or polls status
+  const results = await Promise.all([fin(deps, sessionId), fin(deps, sessionId)]);
   expect(adapter.finalize).toHaveBeenCalledTimes(1);
-  expect(["processing", "done"]).toContain((await deps.db.getSession(sessionId))!.status);
+  for (const r of results) expect([{ status: "processing" }, win]).toContainEqual(r);
+  expect(results).toContainEqual(win); // the winner's answer
+  expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "done", url: "https://w.test/1" });
 });
 
 test("reconnect during finalize leaves the session uploading", async () => {
