@@ -1,7 +1,7 @@
 import { PlatformError } from "../errors.ts";
 import { MAX_RELAY_BYTES } from "../handlers/postUpload.ts";
 import { adapters } from "../platforms/registry.ts";
-import { appendBody, cutToWeighted, weightedLength, x, X_CHUNK } from "../platforms/x.ts";
+import { appendBody, cutToWeighted, hasLink, weightedLength, x, X_CHUNK } from "../platforms/x.ts";
 import type { AdapterCtx } from "../types.ts";
 import { INPUT } from "./fakes.ts";
 
@@ -240,9 +240,29 @@ describe("finalize and status", () => {
     await expect(x.status(ctx([info("failed")]).ctx, "at", REF)).rejects.toMatchObject({ status: 400, message: "X couldn't process this video." });
   });
 
-  test("create-post 403 duplicate → done without a link (an earlier attempt already posted it)", async () => {
+  test("create-post 403 duplicate → final, in X's words (never reported as done)", async () => {
     const dup = problem(403, "You are not allowed to create a Tweet with duplicate content.");
-    expect(await x.status(ctx([info("succeeded"), dup]).ctx, "at", REF)).toEqual({ status: "done", url: null });
+    await expect(x.status(ctx([info("succeeded"), dup]).ctx, "at", REF))
+      .rejects.toMatchObject({ platform: "x", status: 403, code: "platform_error", message: "You are not allowed to create a Tweet with duplicate content." });
+  });
+
+  const UNKNOWN = "X didn't confirm the post. It may already be on your profile — check X before posting again.";
+  test.each([
+    ["the fetch rejecting (network)", () => new TypeError("fetch failed")],
+    ["HTTP 500", () => new Response("", { status: 500 })],
+    ["HTTP 503 with a problem body", () => problem(503, "Service Unavailable", "about:blank", "Service Unavailable")],
+    ["HTTP 408", () => new Response("", { status: 408 })],
+    ["HTTP 504", () => new Response("<html>", { status: 504 })],
+    ["a 201 without an id", () => ok({ errors: [{ title: "Partial" }] }, 201)],
+    ["a 200 that is not JSON", () => new Response("<html>", { status: 200 })],
+  ])("create-post with an unknown outcome (%s) is a FINAL 409, never temporary", async (_n, reply) => {
+    for (const run of [(c: AdapterCtx) => x.status(c, "at", REF), (c: AdapterCtx) => x.finalize(c, "at", S)]) {
+      const a = ctx([info("succeeded"), reply()]);
+      const err = await run(a.ctx).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PlatformError);
+      expect(err).toMatchObject({ platform: "x", status: 409, code: "platform_error", message: UNKNOWN });
+      expect(a.calls.filter((c) => c.url === "https://api.x.com/2/tweets")).toHaveLength(1);
+    }
   });
 
   test("create-post 403 other → final with X's detail; billing/enrolment problems are final too", async () => {
@@ -256,9 +276,8 @@ describe("finalize and status", () => {
       .rejects.toMatchObject({ status: 403, reason: "unsupported-authentication", message: "Unsupported Authentication" });
   });
 
-  test("create-post 429 → temporary 429; a 2xx without a post id is temporary too", async () => {
+  test("create-post 429 → temporary 429 (not accepted); a 5xx on the STATUS read (before any post) stays temporary", async () => {
     await expect(x.status(ctx([info("succeeded"), problem(429, "Too Many Requests", "about:blank", "Too Many Requests")]).ctx, "at", REF)).rejects.toMatchObject({ status: 429, code: "platform_unavailable" });
-    await expect(x.status(ctx([info("succeeded"), ok({ errors: [{ title: "Partial" }] }, 200)]).ctx, "at", REF)).rejects.toMatchObject({ status: 502, code: "platform_unavailable", message: "X did not confirm the post." });
     await expect(x.status(ctx([new Response("<html>", { status: 503 })]).ctx, "at", REF)).rejects.toMatchObject({ status: 503, code: "platform_unavailable", message: "X is having trouble — try again." });
   });
 
@@ -279,7 +298,31 @@ describe("weighted length (X's counting rule)", () => {
     ["", 0], ["hello", 5], ["a".repeat(280), 280],
     ["😀", 2], ["a😀b", 4], ["日本語", 6], ["é", 1], ["—", 1], ["…", 2],
     ["https://example.com/some/long/path?q=1", 23], ["see http://a.co now", 4 + 23 + 4],
+    // Trailing punctuation is not part of the link and counts normally.
+    ["https://a.co/x.", 23 + 1], ["(see https://a.co/x)!", 5 + 23 + 2],
+    // A bare domain is a link too (X counts it, and bills a post containing one at the "with URL" price).
+    ["see clipy.app now", 4 + 23 + 4], ["clipy.app/about, ok", 23 + 4], ["www.Example.COM", 23],
+    ["version 1.2 is out", 18], ["e.g. this", 9], ["v1.2.3", 6],
+    // By the rule (a final label of 2+ letters is a TLD) a missing space after a full stop reads as a link: conservative.
+    ["hello.World", 23],
+    // An email's domain counts as a link (conservative).
+    ["a@b.com", 2 + 23],
   ])("weightedLength(%j) = %i", (text, n) => { expect(weightedLength(text)).toBe(n); });
+
+  test("hasLink uses the same matcher", () => {
+    for (const s of ["https://a.co", "see clipy.app now", "hello.World", "a@b.com"]) expect(hasLink(s)).toBe(true);
+    for (const s of ["", "Beach day", "version 1.2 is out", "e.g. this", "😀 ok."]) expect(hasLink(s)).toBe(false);
+  });
+
+  test("cutToWeighted never cuts inside a grapheme (ZWJ emoji, combining accent)", () => {
+    const family = "👨‍👩‍👧";
+    // 276 + 👨(2) + ZWJ(1) = 279, then 👩 does not fit: the whole family is dropped, not left as "👨‍".
+    expect(cutToWeighted("a".repeat(276) + family, 280)).toBe("a".repeat(276));
+    // e (1) fits at 280, its combining accent does not: the bare "e" is dropped too.
+    expect(cutToWeighted("a".repeat(279) + "é", 280)).toBe("a".repeat(279));
+    expect(cutToWeighted("a".repeat(278) + "é", 280)).toBe("a".repeat(278) + "é");
+    expect(cutToWeighted("a".repeat(270) + family + "bcd", 280)).toBe("a".repeat(270) + family + "bc");
+  });
 
   test("cutToWeighted keeps whole code points and whole links", () => {
     expect(cutToWeighted("hello", 280)).toBe("hello");

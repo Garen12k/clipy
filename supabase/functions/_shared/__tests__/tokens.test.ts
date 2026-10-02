@@ -94,6 +94,49 @@ describe("rotating refresh tokens: two requests refreshing at once", () => {
   });
 });
 
+describe("flagging reconnect updates only the flag on the current row", () => {
+  const key = () => importKey(TEST_KEY);
+
+  test("withPlatformAuth after another request rotated the tokens keeps the rotated pair", async () => {
+    const deps = fakeDeps();
+    await saveTokens(deps, USER, "youtube", tokens(), profile);
+    const stale = (await deps.db.getAccount(USER, "youtube"))!;
+    await saveTokens(deps, USER, "youtube", tokens({ accessToken: "access-9", refreshToken: "refresh-9" }), profile); // rotated meanwhile
+    await expect(withPlatformAuth(deps, stale, async () => { throw new PlatformError("youtube", 401, "Invalid Credentials"); })).rejects.toMatchObject({ code: "reconnect" });
+    const row = (await deps.db.getAccount(USER, "youtube"))!;
+    expect(row.meta.needsReconnect).toBe(true);
+    expect(await decrypt(await key(), row.refreshTokenEnc!)).toBe("refresh-9");
+    expect(await decrypt(await key(), row.accessTokenEnc)).toBe("access-9");
+  });
+
+  test("a disconnected account (row gone) is not recreated by the flag", async () => {
+    const deps = fakeDeps();
+    await saveTokens(deps, USER, "youtube", tokens(), profile);
+    const stale = (await deps.db.getAccount(USER, "youtube"))!;
+    await deps.db.deleteAccount(USER, "youtube");
+    await expect(withPlatformAuth(deps, stale, async () => { throw new PlatformError("youtube", 401, "x"); })).rejects.toMatchObject({ code: "reconnect" });
+    expect(await deps.db.getAccount(USER, "youtube")).toBeNull();
+  });
+
+  test.each([
+    ["a different account (reconnected as someone else)", { accountId: "UC999", displayName: "Other", avatarUrl: null }, {}],
+    ["a row already flagged needsReconnect", profile, { needsReconnect: true }],
+  ])("a refresh race is not resolved by %s: reconnect", async (_n, prof, meta) => {
+    let deps: any;
+    const refresh = jest.fn(async () => {
+      await saveTokens(deps, USER, "youtube", tokens({ accessToken: "access-9", refreshToken: "refresh-9", expiresAt: "2026-10-02T12:00:00.000Z" }), prof, meta);
+      throw new PlatformError("youtube", 400, "invalid");
+    });
+    deps = fakeDeps({ adapters: { youtube: fakeAdapter({ refresh }) } });
+    await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile);
+    await expect(accessTokenFor(deps, USER, "youtube")).rejects.toMatchObject({ code: "reconnect" });
+    const row = (await deps.db.getAccount(USER, "youtube"))!;
+    expect(row.meta.needsReconnect).toBe(true);
+    expect(row.accountId).toBe(prof.accountId);
+    expect(await decrypt(await key(), row.refreshTokenEnc!)).toBe("refresh-9");
+  });
+});
+
 test("expired with no refresh token -> reconnect", async () => {
   const deps = fakeDeps();
   await saveTokens(deps, USER, "youtube", tokens({ refreshToken: null, expiresAt: "2026-10-02T09:00:00.000Z" }), profile);

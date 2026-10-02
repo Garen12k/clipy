@@ -5,6 +5,7 @@ import { postStatus } from "../handlers/postStatus.ts";
 import { MAX_RELAY_BYTES, postUpload } from "../handlers/postUpload.ts";
 import { facebook } from "../platforms/facebook.ts";
 import { tiktok } from "../platforms/tiktok.ts";
+import { x } from "../platforms/x.ts";
 import { youtube } from "../platforms/youtube.ts";
 import { saveTokens } from "../tokens.ts";
 import { fakeAdapter, fakeDeps, INPUT, tokens, USER } from "./fakes.ts";
@@ -526,5 +527,56 @@ describe("TikTok handlers: a temporary failure after the upload never asks for a
     await expect(fin(deps, sessionId)).rejects.toMatchObject({ code: "platform_unreachable" });
     expect((await deps.db.getAccount(USER, "tiktok"))!.meta.needsReconnect).toBeUndefined();
     expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
+  });
+});
+
+describe("X handlers: a post whose outcome is unknown is never created a second time", () => {
+  const xProfile = { accountId: "42", displayName: "@mo", avatarUrl: null };
+  const xjson = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+  const MEDIA = "1880028106020515840";
+  const init = () => xjson({ data: { id: MEDIA, media_key: "7_1", expires_after_secs: 86400 } });
+  const media = (state?: string) => () => xjson({ data: { id: MEDIA, ...(state ? { processing_info: { state, check_after_secs: 1 } } : {}) } });
+  const UNKNOWN = "X didn't confirm the post. It may already be on your profile — check X before posting again.";
+  async function xSession(replies: Array<() => Response>) {
+    const urls: string[] = [];
+    const fetchFake = jest.fn(async (url: string) => { urls.push(String(url)); const r = replies.shift(); if (!r) throw new Error(`unexpected request to ${url}`); return r(); }) as unknown as typeof fetch;
+    const env = new Map([["X_CLIENT_ID", "cid"], ["X_CLIENT_SECRET", "sec"]]);
+    const deps = fakeDeps({ adapters: { x }, fetch: fetchFake, env: { get: (n) => env.get(n) } });
+    await saveTokens(deps, USER, "x", tokens({ expiresAt: null }), xProfile);
+    const { sessionId } = await postPrepare(deps, USER, { platform: "x", ...INPUT });
+    const posts = () => urls.filter((u) => u === "https://api.x.com/2/tweets").length;
+    return { deps, sessionId, posts };
+  }
+
+  test.each([
+    ["a 503", () => new Response("", { status: 503 })],
+    ["a 201 without an id", () => xjson({ errors: [{ title: "Partial" }] }, 201)],
+  ])("status: create-post answered with %s → session failed with the 409 message; later status/finalize calls never post again", async (_n, reply) => {
+    const { deps, sessionId, posts } = await xSession([init, media("pending"), media("succeeded"), reply]);
+    expect(await fin(deps, sessionId)).toEqual({ status: "processing" });
+    await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 409, code: "platform_error", message: UNKNOWN });
+    expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "failed", error: UNKNOWN });
+    await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 400, message: UNKNOWN });
+    await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 400, message: UNKNOWN });
+    expect(posts()).toBe(1);
+  });
+
+  test("finalize: a network failure on create-post → session failed; a retried finalize never posts again", async () => {
+    const replies: Array<() => Response> = [init, media()];
+    const { deps, sessionId, posts } = await xSession(replies);
+    replies.push(() => { throw new TypeError("fetch failed"); });
+    await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 409, message: UNKNOWN });
+    expect((await deps.db.getSession(sessionId))!.status).toBe("failed");
+    await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 400, message: UNKNOWN });
+    expect(posts()).toBe(1);
+  });
+
+  test("create-post 429 (not accepted) → session back to processing; the next status posts once", async () => {
+    const { deps, sessionId, posts } = await xSession([init, media("pending"), media("succeeded"), () => xjson({ title: "Too Many Requests", detail: "Too Many Requests" }, 429), media("succeeded"), () => xjson({ data: { id: "77" } }, 201)]);
+    await fin(deps, sessionId);
+    await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 429, code: "platform_unavailable" });
+    expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+    expect(await postStatus(deps, USER, { sessionId })).toEqual({ status: "done", url: "https://x.com/i/status/77" });
+    expect(posts()).toBe(2);
   });
 });

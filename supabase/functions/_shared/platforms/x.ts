@@ -80,13 +80,21 @@ function mediaIdOf(ref: Record<string, unknown>): string {
 
 /**
  * X's counting rule (twitter-text v3 config): these ranges weigh 1, every other code point 2, and each link 23 (t.co).
- * Simplifications, all on the safe side for the 280 limit except the first: links are only recognised with http(s)://
- * (X also counts a bare "example.com" as a link); emoji sequences count 2 per code point (X counts a whole sequence as 2);
- * no Unicode normalisation. The phone has the same rule (src/publish/adapters/x.ts) pinned to the same test vectors.
+ * Simplifications, all on the safe side for the 280 limit: emoji sequences count 2 per code point (X counts a whole sequence
+ * as 2); no Unicode normalisation; the link matcher below is broader than X's. The phone has the same rule
+ * (src/publish/adapters/x.ts) pinned to the same test vectors.
  */
 const LIGHT: ReadonlyArray<readonly [number, number]> = [[0x0000, 0x10ff], [0x2000, 0x200d], [0x2010, 0x201f], [0x2032, 0x2037]];
 const URL_WEIGHT = 23;
-const LINK = /https?:\/\/\S+/g;
+/**
+ * A link: `http(s)://…`, or a bare domain `label(.label)*.tld` (optionally followed by a path) whose last label is 2+ letters.
+ * Conservative on purpose — X counts bare domains as links too, and bills a post containing a link at the "with URL" price:
+ * so "hello.World" (a missing space after a full stop) and the domain of an email address ("a@b.com") count as links, while
+ * "1.2" or "e.g." do not. Group 2 is the character before a bare domain (no lookbehind, so the phone's engine can run the
+ * same expression); trailing `.,;:!?)]}'"` is not part of the link and is counted as text.
+ */
+const LINK = /(https?:\/\/\S+)|(^|[^\w.-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?![\w-])(?:\/\S*)?)/gi;
+const TRAILING = /[.,;:!?)\]}'"]+$/;
 const weightOf = (cp: number) => (LIGHT.some(([lo, hi]) => cp >= lo && cp <= hi) ? 1 : 2);
 
 /** The text as plain runs and links, in order. */
@@ -94,13 +102,19 @@ function pieces(text: string): Array<{ link: boolean; text: string }> {
   const out: Array<{ link: boolean; text: string }> = [];
   let at = 0;
   for (const m of text.matchAll(LINK)) {
-    if (m.index! > at) out.push({ link: false, text: text.slice(at, m.index) });
-    out.push({ link: true, text: m[0] });
-    at = m.index! + m[0].length;
+    const start = m.index! + (m[1] ? 0 : m[2].length);
+    const link = (m[1] ?? m[3]).replace(TRAILING, "");
+    if (!link) continue;
+    if (start > at) out.push({ link: false, text: text.slice(at, start) });
+    out.push({ link: true, text: link });
+    at = start + link.length; // trimmed punctuation goes back to the following text
   }
   if (at < text.length) out.push({ link: false, text: text.slice(at) });
   return out;
 }
+
+/** True when X would count (and bill) part of the text as a link — same matcher as weightedLength. */
+export function hasLink(text: string): boolean { return pieces(text).some((p) => p.link); }
 
 export function weightedLength(text: string): number {
   let n = 0;
@@ -111,22 +125,37 @@ export function weightedLength(text: string): number {
   return n;
 }
 
-/** The longest start of `text` that weighs at most `max`; never splits a code point (surrogate pair) or a link. */
+/** The longest start of `text` that weighs at most `max`; never splits a link, a code point or a grapheme (emoji sequence, accent). */
 export function cutToWeighted(text: string, max: number): string {
   let n = 0, out = "";
   for (const p of pieces(text)) {
     if (p.link) {
-      if (n + URL_WEIGHT > max) return out;
+      if (n + URL_WEIGHT > max) return wholeGraphemes(text, out);
       n += URL_WEIGHT; out += p.text;
       continue;
     }
     for (const ch of p.text) {
       const w = weightOf(ch.codePointAt(0)!);
-      if (n + w > max) return out;
+      if (n + w > max) return wholeGraphemes(text, out);
       n += w; out += ch;
     }
   }
   return out;
+}
+
+/** Cuts `prefix` (a start of `text`) back to the last grapheme boundary, so no half emoji or bare base letter is sent. */
+function wholeGraphemes(text: string, prefix: string): string {
+  const Segmenter = (Intl as { Segmenter?: typeof Intl.Segmenter }).Segmenter;
+  if (Segmenter) {
+    let end = 0;
+    for (const g of new Segmenter(undefined, { granularity: "grapheme" }).segment(text)) {
+      if (g.index + g.segment.length > prefix.length) break;
+      end = g.index + g.segment.length;
+    }
+    return prefix.slice(0, end);
+  }
+  // No Segmenter: at least drop a trailing lone surrogate, zero-width joiner or combining mark.
+  return prefix.replace(/(?:[\uD800-\uDBFF]|‍|\p{M})+$/u, "");
 }
 
 // ---------- upload ----------
@@ -159,23 +188,37 @@ async function readStatus(c: AdapterCtx, token: string, mediaId: string): Promis
   return processingOf(await xJson(await c.fetch(`${API}/2/media/upload?${new URLSearchParams({ command: "STATUS", media_id: mediaId })}`, { headers: bearer(token) })));
 }
 
+const UNCONFIRMED = "X didn't confirm the post. It may already be on your profile — check X before posting again.";
+/** The post may or may not exist. 409 is a final rejection for the handlers (a 4xx other than 401/408/429): the session fails. */
+const unconfirmed = () => { const e = new PlatformError("x", 409, UNCONFIRMED); e.reason = "post_unconfirmed"; return e; };
+
 /**
  * Creates the post — called only from finalize/status, which the handlers serialise with a claim; never retried here.
- * A 403 saying the content is a duplicate means an earlier attempt (whose answer was lost) already posted it.
+ * Clipy must never create a second post, and never say "done" without knowing a post exists. So the outcome is classified:
+ * - 2xx with `data.id`                     → done, with the link;
+ * - HTTP 401                               → not accepted: reconnect (the handlers' rule);
+ * - HTTP 429                               → not accepted: temporary, Resume may try again;
+ * - any other definite 4xx (incl. X's duplicate-content 403) → not accepted: final, in X's words;
+ * - UNKNOWN — the request threw (network), HTTP 408, any 5xx (or other non-2xx), a 2xx without an id or unreadable
+ *   → FINAL 409 "check X before posting again". Never temporary: a temporary error would let Resume post a second time.
  */
 async function createPost(c: AdapterCtx, token: string, ref: Record<string, unknown>, mediaId: string): Promise<PublishResult> {
   const text = cutToWeighted(typeof ref.text === "string" ? ref.text : "", X_MAX_WEIGHT);
-  let b: Record<string, unknown>;
+  let res: Response;
   try {
-    b = await xJson(await c.fetch(`${API}/2/tweets`, { method: "POST", headers: jsonHeaders(token), body: JSON.stringify({ ...(text ? { text } : {}), media: { media_ids: [mediaId] } }) }));
-  } catch (e) {
-    if (e instanceof PlatformError && e.status === 403 && /duplicate/i.test(e.message)) return { status: "done", url: null };
-    throw e;
+    res = await c.fetch(`${API}/2/tweets`, { method: "POST", headers: jsonHeaders(token), body: JSON.stringify({ ...(text ? { text } : {}), media: { media_ids: [mediaId] } }) });
+  } catch { throw unconfirmed(); }
+  const definiteRefusal = res.status >= 400 && res.status < 500 && res.status !== 408;
+  if (!res.ok && !definiteRefusal) throw unconfirmed();
+  let b: Record<string, unknown>;
+  try { b = await xJson(res); }
+  catch (e) {
+    // 401, 429, other 4xx: X's own status and words (the status alone is the answer if the body could not be read).
+    if (definiteRefusal) throw e instanceof PlatformError ? e : new PlatformError("x", res.status, `X returned an error (${res.status}).`);
+    throw unconfirmed(); // the 2xx body could not be read
   }
   const id = str(obj(b.data).id);
-  // A 2xx without an id (X can answer 200 with only `errors`): not a verdict. Temporary, so the session asks again; if the post
-  // did go out, the next attempt gets the duplicate answer above.
-  if (!id) throw new PlatformError("x", 502, "X did not confirm the post.");
+  if (!id) throw unconfirmed(); // X can answer 2xx with only `errors`
   return { status: "done", url: `https://x.com/i/status/${encodeURIComponent(id)}` };
 }
 

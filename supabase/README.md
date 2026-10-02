@@ -415,15 +415,16 @@ In Clipy, Accounts → **Connect X** → X asks you to allow Clipy → **Authori
 
 ### d. What to expect
 
-- **Each post costs money.** X's price list (checked on 2 October 2026 at https://docs.x.com/x-api/getting-started/pricing) says: **Post: Create — $0.015 per request** (about 1.5 cents) and **Post: Create (with URL) — $0.200 per request** (about 20 cents) when the post contains a web link. Clipy never adds a link by itself; if you type one in the caption, that post costs about 20 cents. X's price list does not list the video upload steps separately; check the usage page after your first post to see what was really charged.
+- **Each post costs money.** X's price list (checked on 2 October 2026 at https://docs.x.com/x-api/getting-started/pricing) says: **Post: Create — $0.015 per request** (about 1.5 cents) and **Post: Create (with URL) — $0.200 per request** (about 20 cents) when the post contains a web link. Clipy never adds a link by itself; if you type one in the caption (even without `https://`, like `clipy.app`), that post costs about 20 cents. X's price list does not list the video upload steps separately; check the usage page after your first post to see what was really charged.
 - **The video travels through Clipy's server in small pieces.** Unlike the other platforms, X needs your login on every piece of the upload, so the phone sends the video to Clipy's server 4 MB at a time and the server passes each piece straight on to X. Nothing is stored on the server.
 - **X processes the video for a short while before the post appears.** After the upload, the X row shows Publishing. Keep the Post screen open. If it takes too long, Clipy offers **Resume**: press it a little later and Clipy finishes the post without uploading again.
 - **Your X login token never leaves the server.** The phone never sees it, not even during the upload.
-- **Captions are limited to 280 characters**, and emoji, Chinese/Japanese/Korean characters and some symbols count as 2. A web link always counts as 23.
+- **Captions are limited to 280 characters**, and emoji, Chinese/Japanese/Korean characters and some symbols count as 2. A web link always counts as 23 — and so does anything that looks like one, such as `clipy.app` or a word stuck to the next after a full stop (`hello.World`). Leave a space after full stops to avoid that.
 - **Videos up to 20 minutes** for a normal X account. X refuses longer ones when posting, with its own message.
 - **The X connection renews itself** every couple of hours in the background. If you remove Clipy from your X account, tap Reconnect.
 - **To remove Clipy's access:** on X, **Settings and privacy → Security and account access → Apps and sessions → Connected apps** → Clipy → **Revoke app permissions** *(may be named slightly differently)*. Disconnecting in Clipy also asks X to forget the connection.
-- **If the same caption was already posted:** X refuses identical posts. If an earlier try of the same post already went out (for example the answer got lost on a bad connection), Clipy shows X as done but without a "View on X" link — check your X profile.
+- **If Clipy says "X didn't confirm the post":** the connection to X failed just as the post was being made, so Clipy cannot tell whether it went out. **Look at your X profile first.** Only post again if the post is not there — otherwise you would post it twice (and pay twice). Clipy never retries this step by itself.
+- **X refuses identical posts.** If you post the same caption you posted recently, X may refuse it as a duplicate; Clipy shows X's message. Change the caption a little and post again.
 - **None of this has run against live X yet.** If a step fails, tell the developer what you saw.
 
 ### e. X troubleshooting
@@ -437,6 +438,8 @@ In Clipy, Accounts → **Connect X** → X asks you to allow Clipy → **Authori
 | X shows **Reconnect** | The connection ended (you removed the app on X, or it was not used for a long time) | Tap Reconnect and allow access. |
 | X stays on **Publishing** and then offers **Resume** | X is still processing the video | Wait a minute, then press Resume. |
 | **X couldn't process this video** | X could not read the video | Try exporting it again, or a shorter clip. |
+| **X didn't confirm the post. It may already be on your profile — check X before posting again.** | The connection to X failed while the post was being made | Open your X profile. If the post is there, you are done. Only if it is not there, post again. |
+| X's message says the post is a **duplicate** | You posted the same text recently | Change the caption slightly and post again. |
 
 ### f. First live run: X
 
