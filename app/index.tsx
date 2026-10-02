@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, FlatList, View } from "react-native";
 import { ProjectCard } from "@/src/projects/ProjectCard";
 import { useProjects } from "@/src/projects/useProjects";
 import type { ProjectSummary } from "@/src/projects";
-import { Mark } from "@/src/theme/Mark";
+import { Compass } from "@/src/theme/Compass";
 import { theme } from "@/src/theme/theme";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { Body, Heading } from "@/src/ui/Text";
@@ -33,12 +33,12 @@ export default function ProjectsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg, paddingTop: 60 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.lg, marginBottom: theme.space.md }}>
-        <Mark size={28} />
+        <Compass size={28} />
         <Heading style={{ fontSize: 36 }}>Clipy</Heading>
       </View>
       {loading ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 40 }} /> : projects.length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: theme.space.md, padding: theme.space.xxl }}>
-          <Mark size={56} />
+          <Compass size={56} />
           <Heading>No projects yet</Heading>
           <Body muted>Tap New Project to start</Body>
         </View>

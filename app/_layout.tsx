@@ -1,22 +1,31 @@
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useCallback, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { fontAssets } from "@/src/editor/fonts";
 import { theme } from "@/src/theme/theme";
+import { uiFontAssets } from "@/src/theme/uiFonts";
+import { LoadingScreen } from "@/src/ui/LoadingScreen";
+import { useAppReady } from "@/src/ui/useAppReady";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const [loaded] = useFonts(fontAssets);
-  useEffect(() => { if (loaded) SplashScreen.hideAsync().catch(() => {}); }, [loaded]);
-  if (!loaded) return null;
+  const [loaded] = useFonts({ ...fontAssets, ...uiFontAssets });
+  const { ready } = useAppReady(loaded);
+  const [gone, setGone] = useState(false);
+  const onGone = useCallback(() => setGone(true), []);
+  // Our own loading screen is the first thing drawn, so the native splash can go as soon as it lays out.
+  const hideSplash = useCallback(() => { SplashScreen.hideAsync().catch(() => {}); }, []);
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bg } }}>
-        <Stack.Screen name="editor/[id]/export" options={{ presentation: "modal" }} />
-      </Stack>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.bg }} onLayout={hideSplash}>
+      {ready ? (
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bg }, animation: "fade" }}>
+          <Stack.Screen name="editor/[id]/export" options={{ presentation: "modal" }} />
+        </Stack>
+      ) : null}
+      {gone ? null : <LoadingScreen leaving={ready} onGone={onGone} />}
     </GestureHandlerRootView>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { clipDuration } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
-import { Mark } from "@/src/theme/Mark";
+import { Compass } from "@/src/theme/Compass";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
@@ -37,7 +37,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
           <Body muted>Everything else in Clipy works in Expo Go.</Body>
         </View>
       )}
-      {state.status === "idle" && <PrimaryButton title="Export" icon={<Mark size={20} color={theme.colors.text} />} onPress={() => start(res)} />}
+      {state.status === "idle" && <PrimaryButton title="Export" icon={<Compass size={18} />} onPress={() => start(res)} />}
       {state.status === "exporting" && (
         <View style={{ gap: theme.space.md }}>
           <View style={{ height: 10, borderRadius: 5, backgroundColor: theme.colors.surfaceAlt, overflow: "hidden" }}>
