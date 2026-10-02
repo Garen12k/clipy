@@ -26,7 +26,7 @@ Post a finished video from Clipy straight to YouTube Shorts, TikTok, Instagram R
 - **Platform tokens never reach the phone** (exceptions: §10 — the YouTube fallback switch and Meta uploads). They are stored AES-GCM-encrypted in Postgres and decrypted only inside Edge Functions.
 - **The server never stores video.** Two upload modes, declared per adapter:
   - `direct` — the server opens an upload session and returns a URL that is itself the credential; the phone uploads straight to the platform (YouTube, TikTok).
-  - `relay` — the platform requires the user's token on every upload request (Instagram, Facebook, X), so the phone sends ≤ 4 MB chunks to the `post-upload` function, which forwards each chunk with the token and discards it. Video bytes pass through the server in transit only; nothing is written to storage or the database.
+  - `relay` — the platform requires the user's token on every upload request (X), so the phone sends ≤ 4 MB chunks to the `post-upload` function, which forwards each chunk with the token and discards it. Video bytes pass through the server in transit only; nothing is written to storage or the database.
 - **Graceful absence.** No Supabase config, not signed in, platform not registered, or platform not connected are all normal states with their own UI; none may throw. The share sheet never depends on the backend.
 - **Expo Go safe.** Only modules bundled in Expo Go: `expo-apple-authentication`, `expo-web-browser`, `expo-secure-store`, `expo-linking`, `expo-file-system`, `expo-image-picker`, `@supabase/supabase-js`. No new native code.
 - **OAuth returns through the server.** The platform redirects to the HTTPS `oauth-callback` function, which redirects to the app's return URL (`exp://…/--/oauth` in Expo Go, `clipy://oauth` in a native build). Return URLs are checked against an allowlist of schemes; no open redirect.
@@ -162,7 +162,7 @@ Research notes with source URLs were gathered per platform before planning. Wher
 **Backend**
 - All logic lives in plain TypeScript modules under `supabase/functions/_shared/` using only web-standard APIs (`fetch`, `Request`, `Response`, WebCrypto), tested with **Jest in a Node environment** (no Deno or Docker on the dev PC). Each function's `index.ts` is a thin Deno wrapper, verified by reading until deployed.
 - One `oauth-callback` URL for every platform (the platform is recovered from `state`).
-- `post-prepare` returns `{ sessionId, protocol, uploadUrl, uploadHeaders, chunkSize }` (`protocol` is `google-resumable` or `relay`). `uploadHeaders` is normally empty.
+- `post-prepare` returns `{ sessionId, protocol, uploadUrl, uploadHeaders, chunkSize, wait? }`. `protocol` is `google-resumable` (YouTube), `tiktok-chunks` (TikTok), `meta-rupload` (Instagram, Facebook: one whole-file request to `rupload.facebook.com`, whose `uploadHeaders` carry the Page token — §10) or `relay` (X). Otherwise `uploadHeaders` is empty (except YouTube's fallback switch, §10). `wait` (`{ maxSeconds, intervalSeconds, resumeOnTimeout }`) tells the phone how long and how often to poll after finalize, and whether running out of time means Resume.
 - Free-plan limits (150 s wall clock, 2 s CPU, 256 MB, undocumented ~10 MB request body) cap relay chunks at 4 MB and forbid buffering whole videos.
 - Free projects pause after about a week without activity; the app shows "Server is asleep — open the Supabase dashboard to wake it" when the backend is unreachable.
 - The Instagram publish step is never treated as a final failure unless Meta reports the upload itself as failed or expired.
