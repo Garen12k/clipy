@@ -5,7 +5,8 @@ This is an Expo/React Native mobile application. Prioritize mobile-first pattern
 - iPhone only. No Android or web configuration; do not add any.
 - Daily testing is in Expo Go: run `npx expo start --go` (the `--go` flag is required because `expo-dev-client` is installed). Custom native code does not run in Expo Go; the app must degrade gracefully when `modules/clipy-video` is not linked.
 - Native code lives only in `modules/clipy-video` (Swift, Expo Modules API). TypeScript never calls AVFoundation directly.
-- Checks before declaring work done: `npm run typecheck` and `npm test`.
+- Checks before declaring work done: `npm run typecheck` and `npm test` (`npm test` runs both the app and the server suites).
+- Posting: app code in src/publish/ talks only to Supabase Edge Functions via src/publish/api.ts; platform secrets and tokens live on the server only. Server logic is plain TS in supabase/functions/_shared/ (web-standard APIs, .ts import extensions, no Deno.* outside runtime.ts / index.ts) and is tested with npm run test:server (Node). Adding a platform = one server adapter (platforms/<id>.ts + registry) and one client adapter (src/publish/adapters/<id>.ts).
 - Native code: `modules/clipy-video/ios` is compiled only on EAS; there is no Swift toolchain here — verify by reading against `node_modules/expo-modules-core/ios`.
 - Fonts and music are bundled assets (`assets/fonts`, `assets/music` + manifest); overlay positions are fractions of the frame — keep `src/editor/model/overlayLayout.ts` and `modules/clipy-video/ios/OverlayLayout.swift` identical.
 - UI: every colour, font, radius and duration comes from src/theme/theme.ts and the kit in src/ui/ — no hex literals in screens (guarded by src/__tests__/noHexLiterals.test.ts). UI fonts (src/theme/uiFonts.ts) are separate from overlay fonts (src/editor/fonts.ts).

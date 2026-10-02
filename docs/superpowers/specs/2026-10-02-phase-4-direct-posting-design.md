@@ -1,7 +1,7 @@
 # Clipy Phase 4 — Direct Posting — Design
 
 **Date:** 2026-10-02
-**Status:** Approved 2026-10-02; amended the same day after verifying platform docs (see §10, which overrides earlier sections where they differ)
+**Status:** 4A (foundation + YouTube) implemented 2026-10-02 — unverified against live Supabase/Google until accounts exist; 4B–4D pending. Approved 2026-10-02; amended the same day after verifying platform docs (see §10, which overrides earlier sections where they differ)
 **Parent specs:** `2026-10-01-clip-editor-app-design.md` and the Phase 1–3 specs (all still apply unless overridden here)
 
 ## 1. Goal
@@ -157,6 +157,7 @@ Research notes with source URLs were gathered per platform before planning. Wher
 - One Post route, `app/post.tsx` (params `fileUri`, optional `projectId`, `title`), reached from the export result and from **Post a video** on the home header; the home header also gets the **Accounts** icon.
 - Chunked reads use `expo-file-system`'s `File.open()` handle (`offset`, `readBytes`); `File.slice()` and Blob bodies load the whole file and are not used. `fetch` has no upload progress, so progress advances per confirmed chunk (8 MB for YouTube).
 - Post records exist only for project posts; a library video posts without a record.
+- Post sessions on the server follow `uploading → publishing → processing → done | failed` with compare-and-set transitions; a finished upload is never re-uploaded on retry.
 
 **Backend**
 - All logic lives in plain TypeScript modules under `supabase/functions/_shared/` using only web-standard APIs (`fetch`, `Request`, `Response`, WebCrypto), tested with **Jest in a Node environment** (no Deno or Docker on the dev PC). Each function's `index.ts` is a thin Deno wrapper, verified by reading until deployed.

@@ -1,7 +1,7 @@
 # Clipy UI Redesign — "Grand Voyage" — Design
 
 **Date:** 2026-10-02
-**Status:** Implemented 2026-10-02 (on-device checklist pending; home settings icon, export file size and "Post to…" land with Phase 4)
+**Status:** Implemented 2026-10-02 (on-device checklist pending; the home Accounts icon, export file size and "Post to…" were delivered by Phase 4A, 2026-10-02)
 **Parent specs:** `2026-10-01-clip-editor-app-design.md` and the Phase 1–3 specs. This spec replaces their visual language (colours, fonts, toolbar layout, home screen, loading) and nothing else: features, data model, export and timing rules are unchanged.
 
 ## 1. Goal
@@ -70,7 +70,7 @@ Radii: `card 12`, `chip 8`, `tile 7`, `sheet 18`, `pill 999`. Spacing scale unch
 Navy gradient; a gold compass ring (SVG) whose red/cream needle swings and settles; "CLIPY" in Oswald rises and fades in; tagline "EDIT · SET SAIL · SHARE"; two wave layers scrolling at different speeds along the bottom. It is displayed while fonts load **and for a minimum of 1.2 s**, then the waves slide down and the screen cross-fades to the home screen (300 ms). The native splash is hidden as soon as the first frame of this screen is drawn. `assets/icon.png` and `assets/splash-icon.png` are regenerated in the new look (navy field, gold compass mark) by `scripts/gen-brand.mjs` from an SVG source committed alongside.
 
 ### 5.2 Home (`app/index.tsx`)
-- Header: "YOUR VOYAGES" (Oswald) left; settings/accounts icon right (arrives with Phase 4, which wires Accounts).
+- Header: "YOUR VOYAGES" (Oswald) left; Accounts icon right (delivered in Phase 4A).
 - **Empty state:** island emoji, "NO CLIPS YET", one-line hint, gold pill **＋ NEW CLIP** pinned bottom-centre.
 - **Grid:** two columns of tall thumbnail cards (hairline border, radius 12): duration badge top-right, name and "Edited today / Yesterday / N days ago" over a bottom gradient. The gold pill stays pinned above the safe area. Long-press opens the existing rename / duplicate / delete actions in the new sheet style. Missing-media and error states keep their logic with restyled cards.
 - The optional `projectsWallpaper` hook is removed (unused).
@@ -97,7 +97,7 @@ One component for every tool sheet: dim backdrop, `surface` panel with radius 18
 ### 5.5 Export (`app/editor/[id]/export.tsx`)
 - Resolution choice as three chips; gold **EXPORT** pill.
 - While exporting: a circular progress ring (SVG) filling gold with the percentage inside, and a Cancel outline button.
-- Finished: check mark in the ring, "READY TO SAIL", `1080p · 0:21 · 14 MB` (file size arrives with Phase 4), then **POST TO…** (gold; arrives with Phase 4), **SAVE TO PHOTOS**, **SHARE** (outline pills).
+- Finished: check mark in the ring, "READY TO SAIL", `1080p · 0:21 · 14 MB` (file size delivered in Phase 4A), then **POST TO…** (gold; delivered in Phase 4A), **SAVE TO PHOTOS**, **SHARE** (outline pills).
 - The Expo Go "needs the native build" card and error states are restyled, logic unchanged.
 
 ### 5.6 Shared kit (`src/ui/`)

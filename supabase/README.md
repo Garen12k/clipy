@@ -140,6 +140,30 @@ Use the Google account that owns your YouTube channel.
 | YouTube shows **Reconnect** | Google ended the connection (app still in "Testing" after 7 days, password change, or access removed in your Google account) | Tap Reconnect. If it happens every week, do the **Publish app** part of step 5. |
 | **Server is asleep** | The free project was paused after a week unused | Restore it from the Supabase dashboard (step 6), wait a few minutes, try again. |
 | Error mentioning **quota** | The Google project used up today's YouTube allowance (about 100 uploads a day) | Wait until tomorrow (the allowance resets once a day). |
-| Every action fails with a sign-in error (**401**, **Invalid JWT** or **Sign in to Clipy first**) although you are signed in | Supabase's own sign-in check at the door rejects the app's login (this can happen after Supabase changes its signing keys) | Run `npx.cmd supabase functions deploy --no-verify-jwt`. Clipy still checks your sign-in itself inside each function. |
+| Every action fails with a sign-in error (**401**, **Invalid JWT** or **Sign in to Clipy first**) although you are signed in | Supabase's own sign-in check at the door rejects the app's login (this can happen after Supabase changes its signing keys) | Run `npx.cmd supabase functions deploy --no-verify-jwt`. Clipy still checks your sign-in itself inside each function. If it still fails, tell the developer. |
 | Connecting YouTube ends with **redirect_uri_mismatch** | The redirect address in step 5.6 does not match exactly | Fix it in Google's **Clients** page: `https://<ref>.supabase.co/functions/v1/oauth-callback`, no slash at the end. |
 | **This Google account has no YouTube channel yet** | The Google account has never created a channel | Open YouTube with that account, create a channel, then connect again. |
+
+## 8. First deploy: things nobody has been able to test yet
+
+Nothing here has run against the real Supabase or Google. Check each of these the first time you use it, and if one fails, tell the developer what you saw.
+
+1. **The sign-in check inside the server functions accepts the app's login.** The functions use `createSupabaseContext` from `@supabase/server` to check who is calling. If every action fails with 401 even after the `--no-verify-jwt` fix in the troubleshooting table, tell the developer.
+2. **After connecting an account, the browser hands back to the app.** When Google finishes, Safari should close and Clipy should reopen (the address it returns to starts with `exp://` in Expo Go or `clipy://` in a real build). If you are left on a Supabase or Google page, tell the developer which address you see.
+3. **YouTube accepts the phone's upload without a token.** If uploads fail at 0 % with a 401 or 403 error, run `npx.cmd supabase secrets set YOUTUBE_UPLOAD_TOKEN_ON_PHONE=true` and try again (step 4c).
+4. **The 4 MB limit is honoured.** Some platforms (not YouTube) pass the video through the server in 4 MB pieces. Whether Supabase's gateway accepts those pieces and respects their declared size has not been checked. It matters for the later platforms; for YouTube nothing is needed now.
+5. **The functions bundle `npm:@supabase/server@1`.** The first `npx.cmd supabase functions deploy` has to download this package. If the deploy stops with an error mentioning `@supabase/server` or `npm:`, tell the developer and copy the message.
+
+## 9. Device checklist — posting
+
+After steps 1 to 5 above, on your iPhone in Expo Go:
+
+1. With no `.env`, Accounts shows "Posting isn't set up yet" and the Share button still works.
+2. Accounts → Sign in with Apple → Connect YouTube (Google "unverified app" screen → Advanced → continue) → the row shows your channel name.
+3. Home → Post a video → pick a short clip. It opens the Post screen (not "This video can't be posted.").
+4. Type a caption. The keyboard does not cover the caption field.
+5. Post → Preparing → Uploading % → Publishing → Done.
+6. While uploading: swipe-back does nothing, and the Back button asks "Stop posting?".
+7. View on YouTube opens the (private) video.
+8. From a finished export, **Post to…** closes the export sheet and then opens the Post screen.
+9. Accounts → Sign out asks you to confirm.
