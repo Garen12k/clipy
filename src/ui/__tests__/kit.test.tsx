@@ -47,6 +47,13 @@ test("ProgressRing shows a check when done", async () => {
   expect(screen.getByLabelText("Done")).toBeTruthy();
 });
 
+test("ProgressRing when done reports 100 and labels the accessible root", async () => {
+  await render(<ProgressRing progress={0.3} done />);
+  const ring = screen.getByRole("progressbar");
+  expect(ring).toHaveProp("accessibilityValue", { min: 0, max: 100, now: 100 });
+  expect(ring).toHaveProp("accessibilityLabel", "Done");
+});
+
 test("EmptyState and Title render", async () => {
   await render(<><Title>Your voyages</Title><EmptyState emoji="🏝️" title="No clips yet" hint="Pick some videos" /></>);
   expect(screen.getByText("Your voyages")).toHaveStyle({ fontFamily: theme.fonts.title });

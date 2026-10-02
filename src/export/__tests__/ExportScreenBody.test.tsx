@@ -1,9 +1,19 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import * as Haptics from "expo-haptics";
 import { makeClip, makeProject } from "@/src/editor/model/types";
+import type { ExportState } from "../useExport";
 import { ExportScreenBody } from "../ExportScreenBody";
 
 const project = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 30 })] });
 const base = { progress: 0 };
+
+const el = (state: Partial<ExportState> & { status: ExportState["status"] }, p = project) => (
+  <ExportScreenBody project={p} state={{ progress: 0, ...state }} start={jest.fn()} cancel={jest.fn()} reset={jest.fn()} onSave={jest.fn()} onShare={jest.fn()} onDone={jest.fn()} />
+);
+const renderBody = (state: Partial<ExportState> & { status: ExportState["status"] }) => render(el(state));
+const rerenderBody = (view: Awaited<ReturnType<typeof render>>, state: Partial<ExportState> & { status: ExportState["status"] }) => view.rerender(el(state));
+
+beforeEach(() => jest.clearAllMocks());
 
 test("shows the fallback card when native is unavailable", async () => {
   await render(<ExportScreenBody project={project} state={{ status: "unavailable", ...base }} start={jest.fn()} cancel={jest.fn()} reset={jest.fn()} onSave={jest.fn()} onShare={jest.fn()} onDone={jest.fn()} />);
@@ -20,6 +30,12 @@ test("idle: 4K disabled for HD sources, Export starts with the chosen resolution
   expect(start).toHaveBeenCalledWith(720);
 });
 
+test("the Export button's name is exactly Export (compass is decorative)", async () => {
+  await renderBody({ status: "idle" });
+  expect(screen.getByRole("button", { name: "Export" })).toBeTruthy();
+  expect(screen.queryByLabelText("Clipy compass")).toBeNull();
+});
+
 test("missing clips are left out of the 4K check and the size estimate", async () => {
   const uhd = makeClip({ id: "u", sourceDuration: 60, width: 2160, height: 3840 });
   const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 }), uhd] });
@@ -28,8 +44,23 @@ test("missing clips are left out of the 4K check and the size estimate", async (
   expect(screen.getByText("Estimated size: 10 MB")).toBeTruthy(); // 8 s at 10 Mbps
 });
 
-test("done: shows Save, Share, Done", async () => {
-  await render(<ExportScreenBody project={project} state={{ status: "done", progress: 1, fileUri: "file:///x.mp4" }} start={jest.fn()} cancel={jest.fn()} reset={jest.fn()} onSave={jest.fn()} onShare={jest.fn()} onDone={jest.fn()} />);
-  expect(screen.getByText("Save to Photos")).toBeTruthy();
-  expect(screen.getByText("Share…")).toBeTruthy();
+test("exporting shows the ring with the percentage and a Cancel button", async () => {
+  await renderBody({ status: "exporting", progress: 0.42 });
+  expect(screen.getByRole("progressbar")).toHaveProp("accessibilityValue", { min: 0, max: 100, now: 42 });
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+});
+
+test("done shows Ready to sail, the summary line and Save / Share / Done; no Post button yet", async () => {
+  await renderBody({ status: "done", progress: 1, fileUri: "file:///out.mp4" });
+  expect(screen.getByText("Ready to sail")).toBeTruthy();
+  expect(screen.getByText(/1080p · 0:\d\d/)).toBeTruthy();
+  for (const n of ["Save to Photos", "Share", "Done"]) expect(screen.getByRole("button", { name: n })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /post/i })).toBeNull();
+});
+
+test("success haptic fires once when the export finishes", async () => {
+  const view = await renderBody({ status: "exporting", progress: 0.9 });
+  await rerenderBody(view, { status: "done", progress: 1, fileUri: "file:///out.mp4" });
+  await rerenderBody(view, { status: "done", progress: 1, fileUri: "file:///out.mp4" });
+  expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
 });
