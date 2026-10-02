@@ -7,27 +7,41 @@ export type UploadProtocol = "google-resumable" | "relay";
 export interface Prepared { sessionId: string; protocol: UploadProtocol; uploadUrl: string | null; uploadHeaders: Record<string, string>; chunkSize: number }
 export type PublishResult = { status: "done"; url: string | null } | { status: "processing" };
 
+const UNREACHABLE = "Clipy's server is asleep or unreachable. Open the Supabase dashboard to wake it, then try again.";
+
 type Init = { method?: "GET" | "POST" | "DELETE"; query?: Record<string, string>; json?: unknown; bytes?: Uint8Array; headers?: Record<string, string> };
 
 async function call<T>(name: string, init: Init = {}): Promise<T> {
   const supabase = getSupabase();
   if (!supabase) throw new ApiFailure("not_configured", "Posting isn't set up yet.");
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) throw new ApiFailure("signed_out", "Sign in to Clipy first.");
+  let session: { access_token: string } | null = null;
+  let sessionError = false;
+  try {
+    const r = await supabase.auth.getSession();
+    session = r.data.session;
+    sessionError = !!r.error;
+  } catch {
+    sessionError = true;
+  }
+  if (!session) {
+    if (sessionError) throw new ApiFailure("unreachable", UNREACHABLE);
+    throw new ApiFailure("signed_out", "Sign in to Clipy first.");
+  }
   const qs = init.query ? `?${new URLSearchParams(init.query)}` : "";
   let res: Response;
   try {
     res = await fetch(`${backendUrl()}/functions/v1/${name}${qs}`, {
       method: init.method ?? (init.json !== undefined || init.bytes ? "POST" : "GET"),
-      headers: { Authorization: `Bearer ${data.session.access_token}`, apikey: backendKey()!, ...(init.json !== undefined ? { "Content-Type": "application/json" } : {}), ...init.headers },
+      headers: { Authorization: `Bearer ${session.access_token}`, apikey: backendKey()!, ...(init.json !== undefined ? { "Content-Type": "application/json" } : {}), ...init.headers },
       // React Native's fetch accepts typed arrays at runtime, but its BodyInit type does not list them.
       body: (init.bytes ?? (init.json !== undefined ? JSON.stringify(init.json) : undefined)) as BodyInit | undefined,
     });
   } catch {
-    throw new ApiFailure("unreachable", "Clipy's server is asleep or unreachable. Open the Supabase dashboard to wake it, then try again.");
+    throw new ApiFailure("unreachable", UNREACHABLE);
   }
   const body = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
   if (!res.ok) throw new ApiFailure(body?.code ?? "internal", body?.message ?? "Something went wrong.");
+  if (body === null) throw new ApiFailure("internal", "Something went wrong.");
   return body as T;
 }
 

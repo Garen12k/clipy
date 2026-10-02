@@ -25,3 +25,13 @@ test("Apple sign-in hands the identity token to Supabase; cancel is quiet; failu
   (Apple.signInAsync as jest.Mock).mockResolvedValueOnce({ identityToken: "apple-jwt" });
   await expect(m.signInWithApple()).rejects.toThrow("Unacceptable audience in id_token");
 });
+
+test("signOut calls auth.signOut, and is a no-op without a client", async () => {
+  await expect(load().signOut()).resolves.toBeUndefined();
+  process.env.EXPO_PUBLIC_SUPABASE_URL = "https://ref.supabase.co"; process.env.EXPO_PUBLIC_SUPABASE_KEY = "pk";
+  const { createClient } = require("@supabase/supabase-js");
+  const m = load();
+  await m.signOut();
+  const results = (createClient as jest.Mock).mock.results;
+  expect(results[results.length - 1].value.auth.signOut).toHaveBeenCalled();
+});

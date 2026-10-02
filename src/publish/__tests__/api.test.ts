@@ -47,3 +47,15 @@ test("failures map to ApiFailure codes", async () => {
   await expect(api.accounts()).rejects.toBeInstanceOf(ApiFailure);
   await expect(api.accounts()).rejects.toMatchObject({ code: "not_configured" });
 });
+
+test("a session lookup that errors or throws is unreachable, not signed_out", async () => {
+  (getSupabase as jest.Mock).mockReturnValue({ auth: { getSession: async () => ({ data: { session: null }, error: { message: "offline" } }) } });
+  await expect(api.accounts()).rejects.toMatchObject({ code: "unreachable" });
+  (getSupabase as jest.Mock).mockReturnValue({ auth: { getSession: async () => { throw new Error("offline"); } } });
+  await expect(api.accounts()).rejects.toMatchObject({ code: "unreachable" });
+});
+
+test("a 2xx with a non-JSON body is an internal failure", async () => {
+  fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => { throw new Error("html"); } });
+  await expect(api.accounts()).rejects.toMatchObject({ code: "internal", message: "Something went wrong." });
+});
