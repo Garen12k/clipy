@@ -92,7 +92,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       await fs.copy(a.sourceUri, dest);
       audioTracks.push({ ...a, sourceUri: dest });
     }
-    const copy: Project = { ...project, id: copyId, name: `${project.name} copy`, clips, audioTracks, createdAt: deps.nowIso(), updatedAt: deps.nowIso() };
+    const copy: Project = { ...project, id: copyId, name: `${project.name} copy`, clips, audioTracks, createdAt: deps.nowIso(), updatedAt: deps.nowIso(), posts: [] };
     await saveProject(copy);
     if (await fs.exists(thumbPath(id))) await fs.copy(thumbPath(id), thumbPath(copyId));
     return copy;

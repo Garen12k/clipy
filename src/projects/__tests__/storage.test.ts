@@ -115,3 +115,16 @@ test("listProjects reports unique postedTo in platform order; new projects have 
   expect(list.find((p) => p.id === project.id)!.postedTo).toEqual(["youtube", "tiktok"]);
   expect(list.find((p) => p.id === "bad")!.postedTo).toEqual([]);
 });
+
+test("duplicateProject starts with no posts and leaves the original's records", async () => {
+  const { storage } = setup();
+  const { project } = await storage.createProject("P", []);
+  const post = { platform: "youtube" as const, url: "u", postedAt: "2026-10-02T10:00:00.000Z" };
+  await storage.saveProject({ ...project, posts: [post] });
+  const copy = await storage.duplicateProject(project.id);
+  expect(copy.posts).toEqual([]);
+  const list = await storage.listProjects();
+  expect(list.find((p) => p.id === copy.id)!.postedTo).toEqual([]);
+  expect(list.find((p) => p.id === project.id)!.postedTo).toEqual(["youtube"]);
+  expect((await storage.loadProject(project.id)).project.posts).toEqual([post]);
+});

@@ -51,6 +51,6 @@ export function migrateProject(raw: unknown): Project {
   if (version < 1) throw new Error("Project file is missing required fields");
   let cur = raw as Raw;
   if (version === 1) cur = v1to2(cur);
-  // v2 → v4 and the sanity pass are the same idempotent step, so corrupted v3 files load safely too.
+  // v2 → v4 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
   return normaliseCurrent(cur) as unknown as Project;
 }

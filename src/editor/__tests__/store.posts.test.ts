@@ -28,3 +28,14 @@ test("no project → no-op", () => {
   useEditorStore.getState().reset();
   expect(() => useEditorStore.getState().addPostRecord(rec)).not.toThrow();
 });
+
+test("post record survives a later edit and a second undo", () => {
+  const s = useEditorStore.getState();
+  s.apply((p) => renameProject(p, "A"));
+  s.apply((p) => renameProject(p, "B"));
+  s.addPostRecord(rec);
+  useEditorStore.getState().undo();
+  useEditorStore.getState().apply((p) => renameProject(p, "C"));
+  useEditorStore.getState().undo();
+  expect(useEditorStore.getState().project).toMatchObject({ name: "A", posts: [rec] });
+});

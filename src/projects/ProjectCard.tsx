@@ -17,6 +17,8 @@ export function ProjectCard({ summary, index, onPress, onLongPress }: Props) {
   const t = useSharedValue(0);
   useEffect(() => { t.value = reduced ? 1 : withDelay(Math.min(index, 8) * theme.motion.stagger, withTiming(1, { duration: theme.motion.fade })); }, [index, reduced, t]);
   const enter = useAnimatedStyle(() => ({ opacity: t.value, transform: [{ translateY: (1 - t.value) * 8 }] }));
+  const edited = summary.updatedAt ? editedLabel(summary.updatedAt) : "";
+  const secondLine = summary.postedTo.length ? `Posted · ${summary.postedTo.map((id) => PLATFORM_LABELS[id]).join(", ")}` : edited;
   return (
     <Animated.View testID="project-card-cell" style={[{ width: "50%", padding: theme.space.sm }, enter]}>
       <PressableScale accessibilityRole="button" accessibilityLabel={summary.name} onPress={onPress} onLongPress={onLongPress} delayLongPress={350}
@@ -30,7 +32,7 @@ export function ProjectCard({ summary, index, onPress, onLongPress }: Props) {
         )}
         <LinearGradient colors={["transparent", theme.colors.scrimStrong]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.md, paddingTop: theme.space.xl }}>
           <Body weight="semi" numberOfLines={1} style={{ color: summary.broken ? theme.colors.danger : theme.colors.text }}>{summary.name}</Body>
-          <Body muted style={{ fontSize: 11 }}>{summary.postedTo.length ? `Posted · ${summary.postedTo.map((id) => PLATFORM_LABELS[id]).join(", ")}` : summary.updatedAt ? editedLabel(summary.updatedAt) : ""}</Body>
+          <Body muted style={{ fontSize: 11 }}>{secondLine}</Body>
         </LinearGradient>
       </PressableScale>
     </Animated.View>
