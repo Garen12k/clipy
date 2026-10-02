@@ -72,27 +72,23 @@ async function reelStatus(c: AdapterCtx, token: string, ref: Record<string, unkn
 }
 
 /**
- * `finish` failed (not an auth error). An earlier `finish` (a request the phone gave up on, or a Resume after a lost answer)
- * may already have been accepted, so look once before failing. Meta's own failure report is final; a published or ready
- * Reel is done; a publishing phase under way (or video processing) is processing. Only a publishing phase Meta reports as
- * "not_started" proves this finish was not accepted: then the finish error stands as it was. Anything else (the look failed,
- * or says nothing either way) is temporary with the finish error's words, so Resume asks again instead of uploading again.
+ * `finish` failed (not an auth error). As with Instagram's publish, a refused `finish` is never final on its own: an earlier
+ * `finish` may have been accepted with its answer lost (a request the phone gave up on, then Resume), and that is
+ * indistinguishable from a refusal — Meta even reports publishing as "not_started" while an accepted Reel is still processing.
+ * So look once: Meta's own failure report is final; a published or ready Reel is done; everything else (not_started,
+ * processing, nothing either way, or the look failed) is temporary with the finish error's words, so the phone offers Resume
+ * (check again), never "upload again".
  */
 async function afterRefusedFinish(c: AdapterCtx, token: string, videoId: string, finishError: PlatformError): Promise<PublishResult> {
-  const unsure = () => (isTemporaryStatus(finishError.status) ? finishError : temporary(finishError));
   let s: Status;
   try { s = await readReel(c, token, videoId); } catch (e) {
     if (e instanceof PlatformError && isAuth(e)) throw e;
-    throw unsure();
+    throw temporary(finishError);
   }
   const failure = failureOf(s);
   if (failure) throw failure;
-  const publishing = s.publishing_phase?.status;
-  if (s.publishing_phase?.publish_status === "published") return done(videoId);
-  if (publishing === "not_started") throw finishError;
-  if (s.video_status === "ready") return done(videoId);
-  if (publishing === "in_progress" || publishing === "complete" || s.video_status === "processing") return { status: "processing" };
-  throw unsure();
+  if (s.publishing_phase?.publish_status === "published" || s.video_status === "ready") return done(videoId);
+  throw temporary(finishError);
 }
 
 export const facebook: ServerAdapter = {

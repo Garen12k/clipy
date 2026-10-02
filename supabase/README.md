@@ -344,6 +344,7 @@ In Clipy, Accounts → **Connect Instagram** (or **Connect Facebook**). Facebook
 | Instagram or Facebook shows **Reconnect** | The connection ended (password change, app removed) or a permission was not given | Tap Reconnect and allow everything Facebook asks for. |
 | Instagram says the **token type is wrong** or that it **requires a user access token** | Meta does not accept your Page's pass for Instagram | Run the command below, then in Clipy **Disconnect** Instagram and **Connect** it again. With this setting you reconnect Instagram about every 60 days. |
 | Instagram stays on **Publishing** and then offers **Resume** | Instagram is still processing the video | Wait a few minutes, then press Resume. |
+| A **Facebook** row keeps saying it is still working after several tries | Facebook may have the Reel already but has not said so yet | Check your Page in Facebook — the Reel may already be there. If it is not there after an hour, leave the Post screen and post again. |
 | **Resume** keeps saying Instagram is still processing for over an hour | The server may have stopped part-way through publishing | Check your Instagram profile — the Reel may already be there. If it is not, post again. |
 
 The command for the "token type" row:

@@ -184,13 +184,14 @@ describe("after finish, only Meta's own failure report is final (no second Reel)
     await expect(facebook.finalize(ctx([ok({ success: true }), st("error")]).ctx, "ptok", s)).rejects.toMatchObject({ status: 400, code: "platform_error", reason: "error" });
   });
 
-  test("a second finish refused after the first succeeded: the status decides (processing or done), never failed", async () => {
+  const TEMP = { status: 503, code: "platform_unavailable", message: "Video already finished.", reason: "100" };
+  test("a second finish refused after the first succeeded: published/ready is done, anything still under way is temporary, never failed", async () => {
     const refused = () => graphError(400, 100, "Video already finished.");
     const a = ctx([refused(), st("processing", { publishing_phase: { status: "in_progress" } })]);
-    expect(await facebook.finalize(a.ctx, "ptok", s)).toEqual({ status: "processing" });
+    await expect(facebook.finalize(a.ctx, "ptok", s)).rejects.toMatchObject(TEMP);
     expect(a.calls).toHaveLength(2);
     expect(a.calls[1].url.split("?")[0]).toBe(`${GRAPH}/vid1`);
-    expect(await facebook.finalize(ctx([refused(), st("processing")]).ctx, "ptok", s)).toEqual({ status: "processing" });
+    await expect(facebook.finalize(ctx([refused(), st("processing")]).ctx, "ptok", s)).rejects.toMatchObject(TEMP);
     expect(await facebook.finalize(ctx([refused(), st("ready")]).ctx, "ptok", s)).toEqual(REEL);
     expect(await facebook.finalize(ctx([refused(), st("processing", { publishing_phase: { status: "complete", publish_status: "published" } })]).ctx, "ptok", s)).toEqual(REEL);
   });
@@ -204,13 +205,18 @@ describe("after finish, only Meta's own failure report is final (no second Reel)
     await expect(facebook.finalize(ctx([graphError(400, 100, "Nope."), st("upload_complete")]).ctx, "ptok", s))
       .rejects.toMatchObject({ status: 503, code: "platform_unavailable", message: "Nope." });
   });
-  test("a temporary finish failure stays as it was when the look cannot decide", async () => {
+  test("a temporary finish failure stays temporary when the look cannot decide", async () => {
     await expect(facebook.finalize(ctx([graphError(500, 2, "Service temporarily unavailable"), graphError(500, 2)]).ctx, "ptok", s))
       .rejects.toMatchObject({ status: 503, message: "Service temporarily unavailable" });
   });
-  test("a refused finish is final only when Meta shows publishing has not started", async () => {
-    await expect(facebook.finalize(ctx([graphError(400, 100, "Bad description."), st("upload_complete", { publishing_phase: { status: "not_started" } })]).ctx, "ptok", s))
-      .rejects.toMatchObject({ status: 400, code: "platform_error", message: "Bad description.", reason: "100" });
+  test("lost answer to an accepted finish, Resume, second finish refused, publishing not_started: temporary 503, never final", async () => {
+    // Meta reports publishing as not_started while an accepted Reel is still processing.
+    for (const video_status of ["upload_complete", "processing"]) {
+      const e = (await facebook.finalize(ctx([graphError(400, 100, "Video already finished."), st(video_status, { publishing_phase: { status: "not_started" } })]).ctx, "ptok", s)
+        .catch((x: unknown) => x)) as PlatformError;
+      expect(e).toMatchObject(TEMP);
+      expect(e.status).toBe(503);
+    }
   });
   test("a refused finish with Meta's error phase is final with Meta's report", async () => {
     await expect(facebook.finalize(ctx([graphError(400, 100, "Nope."), st("processing", { processing_phase: { status: "error", error: { message: "Unsupported codec." } } })]).ctx, "ptok", s))
