@@ -18,8 +18,13 @@ const CODE_STATUS: Record<string, number> = {
   spam_risk_too_many_pending_share: 403, spam_risk_too_many_posts: 403, spam_risk_user_banned_from_posting: 403,
   reached_active_user_cap: 403, unaudited_client_can_only_post_to_private_accounts: 403, url_ownership_unverified: 403,
 };
+/** OAuth error codes that mean the token endpoint itself is failing (RFC 6749): temporary, never "reconnect", even inside an HTTP 200. */
+const OAUTH_STATUS: Record<string, number> = { server_error: 503, temporarily_unavailable: 503 };
+const BUSY = "TikTok is having trouble — try again.";
 const FRIENDLY: Record<string, string> = {
   spam_risk_too_many_pending_share: "TikTok allows 5 unfinished drafts a day. Open TikTok and post or delete some first.",
+  rate_limit_exceeded: "TikTok is busy — wait a minute, then try again.",
+  internal_error: BUSY,
 };
 
 const key = (c: AdapterCtx) => c.env.get("TIKTOK_CLIENT_KEY") ?? "";
@@ -38,14 +43,17 @@ async function body(res: Response): Promise<Record<string, unknown>> {
   } catch { return {}; }
 }
 function fail(status: number, code: string, message: string): never {
-  const e = new PlatformError("tiktok", status, FRIENDLY[code] ?? (message || code));
+  const e = new PlatformError("tiktok", status, FRIENDLY[code] ?? (message || (code.startsWith("http_5") ? BUSY : code)));
   e.reason = code;
   throw e;
 }
 /** OAuth endpoints answer with a flat `{ error, error_description }`; TikTok does not document the HTTP status, so a 200 can carry one too. */
 async function oauthJson(res: Response): Promise<Record<string, unknown>> {
   const b = await body(res);
-  if (!res.ok || typeof b.error === "string") fail(res.ok ? 400 : res.status, typeof b.error === "string" ? b.error : `http_${res.status}`, typeof b.error_description === "string" ? b.error_description : "");
+  if (!res.ok || typeof b.error === "string") {
+    const code = typeof b.error === "string" ? b.error : `http_${res.status}`;
+    fail(res.ok ? (OAUTH_STATUS[code] ?? 400) : res.status, code, typeof b.error_description === "string" ? b.error_description : "");
+  }
   if (typeof b.access_token !== "string" || !b.access_token) throw new PlatformError("tiktok", 502, "TikTok did not return a sign-in token.");
   return b;
 }
@@ -64,11 +72,14 @@ const toTokens = (b: Record<string, unknown>): Tokens => ({
 const authed = (accessToken: string) => ({ Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" });
 
 async function fetchStatus(c: AdapterCtx, accessToken: string, ref: Record<string, unknown>): Promise<PublishResult> {
-  if (typeof ref.publishId !== "string" || !ref.publishId) throw new PlatformError("tiktok", 502, "TikTok upload reference is missing.");
+  // Asking again cannot repair a missing reference: final (`platform_error`), so the phone starts a fresh upload.
+  if (typeof ref.publishId !== "string" || !ref.publishId) throw new PlatformError("tiktok", 502, "TikTok upload reference is missing.", "platform_error");
   const data = await apiJson(await c.fetch(`${API}/v2/post/publish/status/fetch/`, { method: "POST", headers: authed(accessToken), body: JSON.stringify({ publish_id: ref.publishId }) }));
   if (data.status === "FAILED") {
     const reason = typeof data.fail_reason === "string" && data.fail_reason ? data.fail_reason : "unknown";
-    const e = new PlatformError("tiktok", 400, `TikTok couldn't use this video: ${reason}.`);
+    // FAILED is final for this publish_id (asking again returns FAILED again), so even TikTok's own `internal` failure stays a 400:
+    // the session fails and the phone's Retry uploads afresh, which is the only retry that can work.
+    const e = new PlatformError("tiktok", 400, reason === "internal" ? "TikTok had a problem processing the video." : `TikTok couldn't use this video: ${reason}.`);
     e.reason = reason;
     throw e;
   }

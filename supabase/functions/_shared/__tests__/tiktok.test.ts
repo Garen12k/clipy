@@ -39,6 +39,10 @@ test("token errors arrive flat (even with HTTP 200) and keep TikTok's descriptio
   await expect(tiktok.refresh(ctx([new Response(JSON.stringify(flat), { status: 400 })]).ctx, "rt")).rejects.toMatchObject({ status: 400 });
   // A 5xx from the token endpoint stays a 5xx, so a refresh failure reads as "try again", not "reconnect".
   await expect(tiktok.refresh(ctx([new Response("oops", { status: 503 })]).ctx, "rt")).rejects.toMatchObject({ status: 503 });
+  // A failing token endpoint (server_error / temporarily_unavailable) inside an HTTP 200 is temporary: 503, so a refresh reads "try again", not "reconnect".
+  for (const error of ["server_error", "temporarily_unavailable"]) {
+    await expect(tiktok.refresh(ctx([ok({ error, error_description: "Try later." })]).ctx, "rt")).rejects.toMatchObject({ status: 503, code: "platform_unavailable", reason: error, message: "Try later." });
+  }
   // No access token in a 200 body is not a success.
   await expect(tiktok.exchange(ctx([ok({})]).ctx, { code: "c", codeVerifier: "" })).rejects.toMatchObject({ status: 502 });
 });
@@ -93,10 +97,13 @@ test("API errors keep TikTok's message (or its code) whether the HTTP status is 
   await expect(tiktok.prepare(ctx([ok(body("spam_risk_too_many_pending_share"))]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 403, reason: "spam_risk_too_many_pending_share", message: pending });
   await expect(tiktok.prepare(ctx([new Response(JSON.stringify(body("access_token_invalid", "The access token is invalid.")), { status: 401 })]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 401, message: "The access token is invalid." });
   await expect(tiktok.prepare(ctx([ok(body("access_token_invalid"))]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 401 });
-  await expect(tiktok.prepare(ctx([new Response(JSON.stringify(body("rate_limit_exceeded")), { status: 429 })]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 429, message: "rate_limit_exceeded" });
+  await expect(tiktok.prepare(ctx([new Response(JSON.stringify(body("rate_limit_exceeded")), { status: 429 })]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 429, code: "platform_unavailable", reason: "rate_limit_exceeded", message: "TikTok is busy — wait a minute, then try again." });
   await expect(tiktok.prepare(ctx([ok(body("rate_limit_exceeded"))]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 429 });
   await expect(tiktok.prepare(ctx([ok(body("invalid_param", "chunk_size is invalid"))]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 400, message: "chunk_size is invalid" });
-  await expect(tiktok.prepare(ctx([new Response("<html>bad gateway</html>", { status: 502 })]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 502, reason: "http_502" });
+  await expect(tiktok.prepare(ctx([new Response("<html>bad gateway</html>", { status: 502 })]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 502, reason: "http_502", message: "TikTok is having trouble — try again." });
+  await expect(tiktok.prepare(ctx([ok(body("internal_error"))]).ctx, "at", INPUT)).rejects.toMatchObject({ status: 500, code: "platform_unavailable", message: "TikTok is having trouble — try again." });
+  // A rejection keeps platform_error.
+  await expect(tiktok.prepare(ctx([ok(body("invalid_param", "x"))]).ctx, "at", INPUT)).rejects.toMatchObject({ code: "platform_error" });
   await expect(tiktok.prepare(ctx([ok({ data: {}, error: { code: "ok" } })]).ctx, "at", INPUT)).rejects.toMatchObject({ message: "TikTok did not return an upload address." });
 });
 
@@ -111,7 +118,20 @@ test("finalize and status read the post status", async () => {
   expect(await tiktok.status(ctx([st("SEND_TO_USER_INBOX")]).ctx, "at", { publishId: "p1" })).toEqual({ status: "done", url: null });
   expect(await tiktok.status(ctx([st("PUBLISH_COMPLETE")]).ctx, "at", { publishId: "p1" })).toEqual({ status: "done", url: null });
   await expect(tiktok.status(ctx([st("FAILED", { fail_reason: "file_format_check_failed" })]).ctx, "at", { publishId: "p1" })).rejects.toMatchObject({ status: 400, reason: "file_format_check_failed", message: "TikTok couldn't use this video: file_format_check_failed." });
-  await expect(tiktok.status(ctx([]).ctx, "at", {})).rejects.toMatchObject({ message: "TikTok upload reference is missing." });
+  // FAILED is final for this publish_id, so `internal` stays a rejection (Retry uploads afresh) but in plain words.
+  await expect(tiktok.status(ctx([st("FAILED", { fail_reason: "internal" })]).ctx, "at", { publishId: "p1" })).rejects.toMatchObject({ status: 400, code: "platform_error", reason: "internal", message: "TikTok had a problem processing the video." });
+  await expect(tiktok.status(ctx([]).ctx, "at", {})).rejects.toMatchObject({ message: "TikTok upload reference is missing.", code: "platform_error" });
+});
+
+test.each([
+  ["429 rate_limit_exceeded", () => new Response(JSON.stringify({ data: {}, error: { code: "rate_limit_exceeded", message: "" } }), { status: 429 }), 429],
+  ["200 rate_limit_exceeded", () => ok({ data: {}, error: { code: "rate_limit_exceeded", message: "" } }), 429],
+  ["200 internal_error", () => ok({ data: {}, error: { code: "internal_error", message: "" } }), 500],
+  ["bare 503", () => new Response("down", { status: 503 }), 503],
+])("a temporary failure (%s) from status/fetch is platform_unavailable in finalize and status", async (_n, res, status) => {
+  const s = { ref: { publishId: "p1" }, input: INPUT, clientResult: null, account: { accountId: "o1", displayName: "Mo", avatarUrl: null } };
+  await expect(tiktok.finalize(ctx([res()]).ctx, "at", s)).rejects.toMatchObject({ status, code: "platform_unavailable" });
+  await expect(tiktok.status(ctx([res()]).ctx, "at", { publishId: "p1" })).rejects.toMatchObject({ status, code: "platform_unavailable" });
 });
 
 test("auth errors and secrets", () => {

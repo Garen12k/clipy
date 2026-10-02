@@ -1,5 +1,5 @@
 import { decrypt, encrypt } from "./crypto.ts";
-import { ApiError, PlatformError } from "./errors.ts";
+import { ApiError, isTemporaryStatus, PlatformError } from "./errors.ts";
 import { adapterCtx, type AccountRow, type Deps, type PlatformId, type Profile, type Tokens } from "./types.ts";
 
 const REFRESH_MARGIN_MS = 60_000;
@@ -46,7 +46,7 @@ export async function accessTokenFor(deps: Deps, userId: string, platform: Platf
     if (e instanceof PlatformError) {
       if (e.status === 400 || e.status === 401) { await flag(); throw reconnect(platform); }
       // A busy or failing token endpoint is temporary: say "try again", never "the platform refused".
-      if (!(e.status >= 500 || e.status === 408 || e.status === 429)) throw e;
+      if (!isTemporaryStatus(e.status)) throw e;
     }
     throw unreachable(platform);
   }
