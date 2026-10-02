@@ -33,18 +33,26 @@ export async function accessTokenFor(deps: Deps, userId: string, platform: Platf
   const account = await deps.db.getAccount(userId, platform);
   if (!account) throw new ApiError(404, "not_connected", `Connect ${platform} in Accounts first.`);
   const key = await deps.key();
-  const fresh = !account.expiresAt || new Date(account.expiresAt).getTime() - deps.now().getTime() > REFRESH_MARGIN_MS;
-  if (fresh) return { accessToken: await decrypt(key, account.accessTokenEnc), account };
+  const isFresh = (row: AccountRow) => !row.expiresAt || new Date(row.expiresAt).getTime() - deps.now().getTime() > REFRESH_MARGIN_MS;
+  if (isFresh(account)) return { accessToken: await decrypt(key, account.accessTokenEnc), account };
 
   const adapter = deps.adapters[platform];
   const oldRefresh = account.refreshTokenEnc ? await decrypt(key, account.refreshTokenEnc) : null;
-  const flag = () => deps.db.upsertAccount({ ...account, meta: { ...account.meta, needsReconnect: true } });
-  if (!adapter || !oldRefresh) { await flag(); throw reconnect(platform); }
+  const flag = (row: AccountRow) => deps.db.upsertAccount({ ...row, meta: { ...row.meta, needsReconnect: true } });
+  if (!adapter || !oldRefresh) { await flag(account); throw reconnect(platform); }
   let next: Tokens;
   try { next = await adapter.refresh(adapterCtx(deps), oldRefresh); }
   catch (e) {
     if (e instanceof PlatformError) {
-      if (e.status === 400 || e.status === 401) { await flag(); throw reconnect(platform); }
+      if (e.status === 400 || e.status === 401) {
+        // Rotating refresh tokens (X, TikTok) are single-use: when two requests refresh at once, the loser's refresh is refused
+        // because the winner already spent the token. If the stored row changed since we read it and is fresh, use it.
+        const latest = (await deps.db.getAccount(userId, platform)) ?? account;
+        const changed = latest.accessTokenEnc !== account.accessTokenEnc || latest.refreshTokenEnc !== account.refreshTokenEnc;
+        if (changed && isFresh(latest)) return { accessToken: await decrypt(key, latest.accessTokenEnc), account: latest };
+        await flag(latest);
+        throw reconnect(platform);
+      }
       // A busy or failing token endpoint is temporary: say "try again", never "the platform refused".
       if (!isTemporaryStatus(e.status)) throw e;
     }

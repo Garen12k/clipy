@@ -14,6 +14,15 @@ export const failedError = (s: PostSessionRow) => new ApiError(400, "platform_er
 /** A real rejection by the platform (4xx). Auth failures were already turned into `reconnect` by withPlatformAuth. */
 export const isRejection = (e: unknown): e is PlatformError => e instanceof PlatformError && isRejectionStatus(e.status);
 
+/**
+ * A state write made while handling an error: if the write itself fails, the original error is still the one the caller
+ * rethrows. Only the write failure's message is logged (never a token, never the session's contents).
+ */
+export async function quietly(write: () => Promise<unknown>): Promise<void> {
+  try { await write(); }
+  catch (w) { console.error(`session state write after an error failed: ${w instanceof Error ? w.message : String(w)}`); }
+}
+
 /** Moves to `failed` only if the session is still in `from`; nothing ever overwrites `done`. */
 export async function failFrom(deps: Deps, id: string, from: "publishing", message: string): Promise<void> {
   await deps.db.claimSession(id, from, "failed", { error: message });
@@ -50,14 +59,14 @@ export async function pollProcessing(deps: Deps, userId: string, session: PostSe
   // Fetched inside the claim so racing polls never refresh (and rotate) the token twice; a token failure is never a verdict on the post.
   let token: Awaited<ReturnType<typeof accessTokenFor>>;
   try { token = await accessTokenFor(deps, userId, session.platform); }
-  catch (e) { await back(); throw e; }
+  catch (e) { await quietly(back); throw e; }
   const { accessToken, account } = token;
   let r: PublishResult;
   try {
     r = await withPlatformAuth(deps, account, () => adapter.status(adapterCtx(deps), accessToken, session.ref));
   } catch (e) {
-    if (isRejection(e)) await failFrom(deps, session.id, "publishing", e.message);
-    else await back();
+    if (isRejection(e)) await quietly(() => failFrom(deps, session.id, "publishing", e.message));
+    else await quietly(back);
     throw e;
   }
   // The platform answered: never revert from here. A failed write leaves `publishing` (accepted dead end).

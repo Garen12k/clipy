@@ -424,6 +424,63 @@ describe("status is claim-guarded: one platform status call at a time per post",
     expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
     expect(await st(deps, sessionId)).toEqual(done);
   });
+
+  test("a token refresh that ends in reconnect while claimed returns the session to processing and flags the account", async () => {
+    const { deps, sessionId, adapter } = await processing(async () => done);
+    await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile);
+    (adapter.refresh as jest.Mock).mockImplementationOnce(async () => { throw new PlatformError("youtube", 400, "Token has been expired or revoked."); });
+    await expect(st(deps, sessionId)).rejects.toMatchObject({ status: 401, code: "reconnect" });
+    expect(adapter.status).not.toHaveBeenCalled();
+    expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+    expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBe(true);
+  });
+
+  /** Makes the publishing -> processing revert throw, as a DB outage would. */
+  function breakRevert(deps: any) {
+    const real = deps.db.claimSession.bind(deps.db);
+    deps.db.claimSession = async (id: string, from: any, to: any, patch: any) => { if (from === "publishing" && to === "processing") throw new Error("db down"); return real(id, from, to, patch); };
+  }
+
+  test("a failing revert after a platform error still rethrows the platform's error", async () => {
+    const err = new PlatformError("youtube", 503, "Unavailable");
+    const { deps, sessionId } = await processing(async () => { throw err; });
+    breakRevert(deps);
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(st(deps, sessionId)).rejects.toBe(err);
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("db down"));
+    } finally { spy.mockRestore(); }
+  });
+
+  test("a failing revert after a token failure still rethrows the token failure", async () => {
+    const { deps, sessionId, adapter } = await processing(async () => done);
+    await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile);
+    (adapter.refresh as jest.Mock).mockImplementationOnce(async () => { throw new PlatformError("youtube", 503, "Backend Error"); });
+    breakRevert(deps);
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    try { await expect(st(deps, sessionId)).rejects.toMatchObject({ code: "platform_unreachable" }); } finally { spy.mockRestore(); }
+  });
+});
+
+test("finalize: a failing revert to uploading still rethrows the platform's error", async () => {
+  const err = new PlatformError("youtube", 503, "Unavailable");
+  const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => { throw err; }) });
+  const real = deps.db.claimSession.bind(deps.db);
+  deps.db.claimSession = async (id, from, to, patch) => { if (from === "publishing" && to === "uploading") throw new Error("db down"); return real(id, from, to, patch); };
+  const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await expect(fin(deps, sessionId)).rejects.toBe(err);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("db down"));
+  } finally { spy.mockRestore(); }
+});
+
+test("finalize: a failing write of the failure still rethrows the platform's rejection", async () => {
+  const err = new PlatformError("youtube", 400, "Rejected.");
+  const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => { throw err; }) });
+  const real = deps.db.claimSession.bind(deps.db);
+  deps.db.claimSession = async (id, from, to, patch) => { if (to === "failed") throw new Error("db down"); return real(id, from, to, patch); };
+  const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+  try { await expect(fin(deps, sessionId)).rejects.toBe(err); } finally { spy.mockRestore(); }
 });
 
 describe("TikTok handlers: a temporary failure after the upload never asks for a new upload", () => {
