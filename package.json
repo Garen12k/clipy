@@ -14,7 +14,9 @@
     "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
+    "expo-haptics": "~57.0.3",
     "expo-image-picker": "~57.0.20",
+    "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.11",
     "expo-media-library": "~57.0.5",
     "expo-router": "~57.0.24",
@@ -34,6 +36,8 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@expo-google-fonts/montserrat": "^0.4.2",
+    "@expo-google-fonts/oswald": "^0.4.2",
     "@react-native/jest-preset": "~0.86.3",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "29.5.14",
@@ -42,6 +46,7 @@
     "jest": "~29.7.0",
     "jest-expo": "~57.0.5",
     "react-dom": "19.2.3",
+    "sharp": "^0.35.5",
     "typescript": "~6.0.3",
     "unicode-emoji-json": "^0.9.0"
   },
@@ -50,7 +55,8 @@
     "ios": "expo start --ios",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "gen:emoji": "node scripts/gen-emoji.mjs"
+    "gen:emoji": "node scripts/gen-emoji.mjs",
+    "gen:brand": "node scripts/gen-brand.mjs"
   },
   "jest": {
     "preset": "jest-expo",

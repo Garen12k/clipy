@@ -11,13 +11,12 @@ export function PreviewTag({ visible }: { visible: boolean }) {
       pointerEvents="none"
       style={{
         position: "absolute", left: 8, top: 8, overflow: "hidden",
-        borderWidth: 1, borderColor: theme.colors.straw,
-        borderRadius: theme.radius.pill,
+        borderWidth: 1, borderColor: theme.colors.hairline,
+        borderRadius: theme.radius.pill, backgroundColor: theme.colors.scrimStrong,
         paddingHorizontal: 8, paddingVertical: 3,
       }}
     >
-      <View style={{ position: "absolute", inset: 0, backgroundColor: theme.colors.surfaceAlt, opacity: 0.8 }} />
-      <Body style={{ fontSize: 12 }}>Preview</Body>
+      <Body weight="semi" style={{ fontSize: 10, color: theme.colors.accent }}>Preview</Body>
     </View>
   );
 }

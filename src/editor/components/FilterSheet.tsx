@@ -5,7 +5,7 @@ import { setClipFilter, setFilterForAllClips } from "@/src/editor/model/ops";
 import { FILTER_IDS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
-import { PrimaryButton } from "@/src/ui/PrimaryButton";
+import { haptic } from "@/src/ui/haptics";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 import { FilterLayer } from "./FilterLayer";
@@ -31,7 +31,7 @@ export function FilterSheet({ clipId, visible, onClose }: { clipId: string | nul
   const current = clip.filter ?? "none";
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Filter">
+    <Sheet visible={visible} onClose={onClose} title="Filter" action={{ label: "Apply to all clips", onPress: () => apply((p) => setFilterForAllClips(p, clip.filter)) }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.sm }}>
         {FILTER_IDS.map((id) => {
           const def = FILTERS[id];
@@ -42,10 +42,10 @@ export function FilterSheet({ clipId, visible, onClose }: { clipId: string | nul
               accessibilityRole="button"
               accessibilityLabel={def.label}
               accessibilityState={{ selected }}
-              onPress={() => apply((p) => setClipFilter(p, clip.id, id))}
+              onPress={() => { haptic("light"); apply((p) => setClipFilter(p, clip.id, id)); }}
               style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}
             >
-              <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", backgroundColor: theme.colors.surfaceAlt, borderWidth: 2, borderColor: selected ? theme.colors.highlight : "transparent" }}>
+              <View testID={`filter-tile-${id}`} style={[{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", backgroundColor: theme.colors.surfaceAlt }, selected ? theme.ring : { borderWidth: 2, borderColor: "transparent" }]}>
                 {thumb ? <Image source={{ uri: thumb }} style={{ width: TILE_W, height: TILE_H }} resizeMode="cover" /> : null}
                 <FilterLayer filter={id} />
               </View>
@@ -54,7 +54,6 @@ export function FilterSheet({ clipId, visible, onClose }: { clipId: string | nul
           );
         })}
       </ScrollView>
-      <PrimaryButton title="Apply to all clips" onPress={() => apply((p) => setFilterForAllClips(p, clip.filter))} />
     </Sheet>
   );
 }

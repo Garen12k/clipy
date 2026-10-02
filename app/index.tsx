@@ -1,29 +1,28 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { ActivityIndicator, Alert, FlatList, Image, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Alert, FlatList, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ProjectActionsSheet } from "@/src/projects/ProjectActionsSheet";
 import { ProjectCard } from "@/src/projects/ProjectCard";
 import { useProjects } from "@/src/projects/useProjects";
 import type { ProjectSummary } from "@/src/projects";
-import { Mark } from "@/src/theme/Mark";
 import { theme } from "@/src/theme/theme";
+import { EmptyState } from "@/src/ui/EmptyState";
+import { haptic } from "@/src/ui/haptics";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
-import { Body, Heading } from "@/src/ui/Text";
+import { Screen } from "@/src/ui/Screen";
+import { Title } from "@/src/ui/Text";
 import { ToastHost } from "@/src/ui/Toast";
 
 export default function ProjectsScreen() {
   const { projects, loading, create, rename, duplicate, remove } = useProjects();
+  const [actionsFor, setActionsFor] = useState<ProjectSummary | null>(null);
+  const insets = useSafeAreaInsets();
 
-  function onLongPress(p: ProjectSummary) {
-    if (p.broken) {
-      Alert.alert("Can't open this project", "Its file is damaged.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => remove(p.id) }]);
-      return;
-    }
-    Alert.alert(p.name, undefined, [
-      { text: "Rename", onPress: () => Alert.prompt("Rename project", undefined, (name) => name && rename(p.id, name), "plain-text", p.name) },
-      { text: "Duplicate", onPress: () => duplicate(p.id) },
-      { text: "Delete", style: "destructive", onPress: () => Alert.alert("Delete project?", "This can't be undone.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => remove(p.id) }]) },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  }
+  const confirmDelete = (p: ProjectSummary) => Alert.alert("Delete project?", "This can't be undone.", [
+    { text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => { haptic("medium"); remove(p.id); } }]);
+  const promptRename = (p: ProjectSummary) => Alert.prompt("Rename project", undefined, (name) => name && rename(p.id, name), "plain-text", p.name);
 
   async function onNew() {
     const id = await create();
@@ -31,26 +30,21 @@ export default function ProjectsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg, paddingTop: 60 }}>
-      {theme.projectsWallpaper ? <Image source={theme.projectsWallpaper} style={{ position: "absolute", width: "100%", height: "100%", opacity: 0.3 }} resizeMode="cover" /> : null}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.lg, marginBottom: theme.space.md }}>
-        <Mark size={28} />
-        <Heading style={{ fontSize: 36 }}>Clipy</Heading>
+    <Screen>
+      <View style={{ paddingHorizontal: theme.space.lg, marginBottom: theme.space.md }}>
+        <Title size={26}>Your voyages</Title>
       </View>
       {loading ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 40 }} /> : projects.length === 0 ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: theme.space.md, padding: theme.space.xxl }}>
-          <Mark size={56} />
-          <Heading>No projects yet</Heading>
-          <Body muted>Tap New Project to start</Body>
-        </View>
+        <EmptyState emoji="🏝️" title="No clips yet" hint="Pick some videos from your library and start your first edit." />
       ) : (
-        <FlatList data={projects} numColumns={2} keyExtractor={(p) => p.id} contentContainerStyle={{ padding: theme.space.sm, paddingBottom: 120 }}
-          renderItem={({ item }) => <ProjectCard summary={item} onPress={() => (item.broken ? onLongPress(item) : router.push(`/editor/${item.id}`))} onLongPress={() => onLongPress(item)} />} />
+        <FlatList data={projects} numColumns={2} keyExtractor={(p) => p.id} contentContainerStyle={{ padding: theme.space.sm, paddingBottom: 120 + insets.bottom }}
+          renderItem={({ item, index }) => <ProjectCard summary={item} index={index} onPress={() => (item.broken ? setActionsFor(item) : router.push(`/editor/${item.id}`))} onLongPress={() => { haptic("light"); setActionsFor(item); }} />} />
       )}
-      <View style={{ position: "absolute", left: theme.space.lg, right: theme.space.lg, bottom: theme.space.xxl }}>
-        <PrimaryButton title="New Project" onPress={onNew} />
+      <View style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + theme.space.lg, alignItems: "center" }}>
+        <PrimaryButton title="New clip" icon={<Ionicons name="add" size={18} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
       </View>
+      <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onDelete={confirmDelete} />
       <ToastHost />
-    </View>
+    </Screen>
   );
 }

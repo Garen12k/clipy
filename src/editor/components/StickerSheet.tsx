@@ -8,9 +8,11 @@ import { useEditorStore } from "@/src/editor/store";
 import { SHAPES } from "@/src/editor/effects";
 import { newId } from "@/src/lib/id";
 import { prefs } from "@/src/projects/prefs";
+import { DEFAULT_STICKER_COLOR } from "@/src/editor/components/ColorRow";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { Sheet } from "@/src/ui/Sheet";
+import { Body } from "@/src/ui/Text";
 import { ColorRow } from "./ColorRow";
 
 type Tab = "emoji" | "shapes";
@@ -19,7 +21,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
   const [tab, setTab] = useState<Tab>("emoji");
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
-  const [color, setColor] = useState<string>(theme.colors.highlight);
+  const [color, setColor] = useState<string>(DEFAULT_STICKER_COLOR);
   const apply = useEditorStore((s) => s.apply);
 
   useEffect(() => {
@@ -60,7 +62,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
         <View style={{ flex: 1, gap: theme.space.sm }}>
           <TextInput accessibilityLabel="Search emoji" value={query} onChangeText={setQuery}
             placeholder="Search" placeholderTextColor={theme.colors.textMuted}
-            style={{ color: theme.colors.text, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 8 }} />
+            style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 8 }} />
           {recent.length > 0 && !query && (
             <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap" }}>
               {recent.map((char) => (
@@ -85,7 +87,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={SHAPES[id].label} onPress={() => addShape(id)}
                 style={{ width: 64, alignItems: "center", gap: theme.space.xs }}>
                 <Svg width={48} height={48} viewBox="0 0 100 100"><Path d={SHAPES[id].path} fill={color} /></Svg>
-                <Text style={{ color: theme.colors.text, fontSize: 12 }}>{SHAPES[id].label}</Text>
+                <Body style={{ fontSize: 12 }}>{SHAPES[id].label}</Body>
               </Pressable>
             ))}
           </View>

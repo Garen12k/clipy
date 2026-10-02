@@ -16,7 +16,7 @@ export function VolumeSheet({ clipId, visible, onClose }: { clipId: string | nul
       <Body muted>{Math.round(clip.volume * 100)}%</Body>
       <Slider testID="volume-slider" minimumValue={CLIP_VOLUME[0]} maximumValue={CLIP_VOLUME[1]} value={clip.volume} step={0.05}
         onSlidingStart={beginTransaction} onValueChange={(v) => applyTransient((p) => setClipVolume(p, clip.id, v))}
-        minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.highlight} />
+        minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
       <Body muted style={{ fontSize: 12 }}>Above 100% only applies in the exported video.</Body>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Body>Mute</Body>

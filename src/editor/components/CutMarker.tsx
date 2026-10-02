@@ -23,7 +23,7 @@ export function CutMarker({ index, pixelsPerSecond, onPress }: Props) {
       onPress={() => onPress?.(index)}
       style={{ position: "absolute", left, top, width: 12, height: 12 }}
     >
-      <View style={{ width: 12, height: 12, backgroundColor: theme.colors.highlight, transform: [{ rotate: "45deg" }] }} />
+      <View style={{ width: 12, height: 12, backgroundColor: theme.colors.accent, transform: [{ rotate: "45deg" }] }} />
     </Pressable>
   );
 }

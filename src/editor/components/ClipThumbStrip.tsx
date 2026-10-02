@@ -25,8 +25,8 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Clip ${clip.id}`} accessibilityState={{ selected }}
       style={{ width, height: STRIP_HEIGHT, borderRadius: 8, overflow: "hidden", backgroundColor: theme.colors.surfaceAlt,
-        borderWidth: 2, borderColor: selected ? theme.colors.highlight : "transparent",
-        borderRightWidth: 2, borderRightColor: theme.colors.bg, flexDirection: "row" }}>
+        borderWidth: 2, borderColor: selected ? theme.colors.accent : "transparent",
+        borderRightWidth: 2, borderRightColor: theme.colors.bgDeep, flexDirection: "row" }}>
       {times.map((t, i) => (
         <View key={t} style={{ width: Math.min(slotWidth, width - i * slotWidth), height: STRIP_HEIGHT, overflow: "hidden" }}>
           {thumbs[t] ? <Image source={{ uri: thumbs[t] }} style={{ width: slotWidth, height: STRIP_HEIGHT }} resizeMode="cover" /> : null}
@@ -39,8 +39,8 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
       )}
       <View style={{ position: "absolute", bottom: 4, left: 4, flexDirection: "row", gap: 4 }}>
         {clip.speed !== 1 && (
-          <View style={{ backgroundColor: theme.colors.highlight, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
-            <Text style={{ fontSize: 10, color: theme.colors.bg, fontWeight: "700" }}>{formatSpeed(clip.speed)}</Text>
+          <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+            <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>{formatSpeed(clip.speed)}</Text>
           </View>
         )}
         {clip.filter && (

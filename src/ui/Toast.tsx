@@ -1,7 +1,8 @@
 import { useEffect } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { create } from "zustand";
 import { theme } from "@/src/theme/theme";
+import { Body } from "./Text";
 
 type ToastState = { message: string | null; stamp: number; show: (message: string) => void; clear: () => void };
 export const useToast = create<ToastState>((set) => ({
@@ -21,8 +22,8 @@ export function ToastHost() {
   if (!message) return null;
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: 16, right: 16, bottom: 100, alignItems: "center" }}>
-      <View style={{ backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.straw, borderWidth: 1, borderRadius: theme.radius.pill, paddingVertical: 10, paddingHorizontal: 18 }}>
-        <Text style={{ color: theme.colors.text }}>{message}</Text>
+      <View style={{ backgroundColor: theme.colors.surface, borderColor: theme.colors.hairline, borderWidth: 1, borderRadius: theme.radius.pill, paddingVertical: 10, paddingHorizontal: 18 }}>
+        <Body>{message}</Body>
       </View>
     </View>
   );

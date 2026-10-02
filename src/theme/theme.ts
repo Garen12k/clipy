@@ -1,17 +1,20 @@
-import type { ImageSourcePropType } from "react-native";
+const ACCENT = "#D9B36A";
 
 export const theme = {
   colors: {
-    bg: "#0B0B0D", surface: "#17171B", surfaceAlt: "#222228",
-    accent: "#C8102E", accentPressed: "#9E0C24", highlight: "#F5C542",
-    straw: "#D9B36A", sea: "#2E86AB", text: "#F4F4F5", textMuted: "#9A9AA3", danger: "#FF4D4F",
+    bg: "#0A1B33", bgDeep: "#081527", bgEnd: "#0C2542", surface: "#0E2440", surfaceAlt: "#17365C",
+    accent: ACCENT, onAccent: "#0A1B33",
+    text: "#F6E7C1", textMuted: "#9FB3CC", hairline: "rgba(217,179,106,0.45)",
+    sea: "#1C6E9E", seaLight: "#2E86AB", danger: "#E5484D",
+    laneText: "#D9B36A", laneSticker: "#E86A7A", laneMusic: "#3BA7C9",
+    scrim: "rgba(3,10,20,0.55)", scrimStrong: "rgba(3,10,20,0.75)",
   },
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
-  radius: { card: 12, chip: 8, pill: 999 },
-  fonts: { heading: "Bangers_400Regular", body: undefined as string | undefined },
-  motion: { press: 150, sheet: 200 },
-  /** Optional user-supplied image rendered dimmed behind the Projects grid. Nothing ships in the repo. */
-  projectsWallpaper: null as ImageSourcePropType | null,
+  radius: { card: 12, chip: 8, tile: 7, sheet: 18, pill: 999 },
+  fonts: { title: "Oswald_700Bold", body: "Montserrat_400Regular", bodySemi: "Montserrat_600SemiBold", bodyBold: "Montserrat_800ExtraBold" },
+  motion: { press: 120, sheet: { damping: 18, stiffness: 220 }, fade: 200, stagger: 40, minLoading: 1200, fontTimeout: 5000 },
+  /** 2 px gold ring for the selected item in any grid (filters, templates, fonts, ratios, transitions). */
+  ring: { borderWidth: 2, borderColor: ACCENT },
 } as const;
 
 export type Theme = typeof theme;

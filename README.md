@@ -42,6 +42,10 @@ npm run typecheck
 npm test
 ```
 
+## Design
+
+The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and a five-group editor toolbar (Edit, Text, Stickers, Effects, Audio). Every colour, font, radius and duration comes from `src/theme/theme.ts`; the shared kit lives in `src/ui/`. UI fonts are Oswald (titles) and Montserrat (body), both under the SIL Open Font License (OFL). Regenerate the app icon and splash with `npm run gen:brand`.
+
 ## Layout
 
 - `app/` — screens (Expo Router): `index.tsx`, `editor/[id]/index.tsx`, `editor/[id]/export.tsx`

@@ -6,7 +6,7 @@ import { useCaptions } from "@/src/editor/useCaptions";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
-import { Chip } from "@/src/ui/Chip";
+import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { CaptionStyleSheet } from "./CaptionStyleSheet";
 
 type Props = { visible: boolean; onClose: () => void };
@@ -35,11 +35,10 @@ export function CaptionsSheet({ visible, onClose }: Props) {
         {state.status === "idle" && hasCaptions && (
           <View style={{ gap: theme.space.md }}>
             <Body>Replace existing captions?</Body>
-            <View style={{ flexDirection: "row", gap: theme.space.md }}>
-              <PrimaryButton title="Replace" onPress={run} />
-              <Chip label="Style captions" selected={false} onPress={() => setStyling(true)} />
-              <Chip label="Cancel" selected={false} onPress={close} />
-            </View>
+            {/* Stacked like the "done" branch: three uppercase buttons don't fit one row in a 327 pt sheet. */}
+            <PrimaryButton compact title="Replace" onPress={run} />
+            <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
+            <SecondaryButton title="Cancel" onPress={close} />
           </View>
         )}
 
@@ -56,7 +55,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
             <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.surfaceAlt, overflow: "hidden" }}>
               <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.accent, width: `${state.clipCount ? ((state.clipIndex + 1) / state.clipCount) * 100 : 0}%` }} />
             </View>
-            <Chip label="Cancel" selected={false} onPress={cancel} />
+            <SecondaryButton title="Cancel" onPress={cancel} />
           </View>
         )}
 
@@ -68,8 +67,8 @@ export function CaptionsSheet({ visible, onClose }: Props) {
                 No speech found in: {state.skipped.map((id) => `clip ${clipIds.indexOf(id) + 1}`).join(", ")}
               </Body>
             )}
-            <PrimaryButton title="Style captions" onPress={() => setStyling(true)} />
-            <Chip label="Done" selected={false} onPress={close} />
+            <PrimaryButton compact title="Style captions" onPress={() => setStyling(true)} />
+            <SecondaryButton title="Done" onPress={close} />
           </View>
         )}
 

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
-import { Linking } from "react-native";
+import { Linking, StyleSheet } from "react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 let mockNative = false;
 jest.mock("@/modules/clipy-video", () => ({ isNativeAvailable: () => mockNative, transcribe: jest.fn(), cancelTranscribe: jest.fn() }));
@@ -28,6 +28,11 @@ test("offers Style captions next to Replace when captions already exist", async 
   mockNative = true; load(true);
   await render(<CaptionsSheet visible onClose={() => {}} />);
   expect(screen.getByText("Replace")).toBeTruthy();
+  // The three actions are stacked (no horizontal row), so none can be pushed off a 327 pt sheet.
+  for (const name of ["Replace", "Style captions", "Cancel"]) {
+    const parentStyle = StyleSheet.flatten(screen.getByRole("button", { name }).parent?.props.style) ?? {};
+    expect(parentStyle.flexDirection).not.toBe("row");
+  }
   await fireEvent.press(screen.getByText("Style captions"));
   expect(screen.getByText("Caption style")).toBeTruthy();
 });

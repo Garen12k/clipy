@@ -49,9 +49,9 @@ export function SelectionFrame({ overlay, frameW, frameH, onDoubleTap }: Props) 
   return (
     <GestureDetector gesture={gesture}>
       <View testID={`selection-frame-${id}`} onStartShouldSetResponder={() => true}
-        style={{ position: "absolute", inset: -8, borderWidth: 1.5, borderStyle: "dashed", borderColor: theme.colors.highlight, borderRadius: 6 }}>
+        style={{ position: "absolute", inset: -8, borderWidth: 1.5, borderStyle: "dashed", borderColor: theme.colors.accent, borderRadius: 6 }}>
         {[["left", "top"], ["right", "top"], ["left", "bottom"], ["right", "bottom"]].map(([h, v]) => (
-          <View key={`${h}${v}`} style={{ position: "absolute", [h]: -5, [v]: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.highlight }} />
+          <View key={`${h}${v}`} style={{ position: "absolute", [h]: -5, [v]: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.accent }} />
         ))}
       </View>
     </GestureDetector>

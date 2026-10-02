@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 
-export const PALETTE = [theme.colors.text, theme.colors.highlight, theme.colors.accent, theme.colors.sea, theme.colors.straw, "#000000", "#FFFFFF", "#00E5A0"] as const;
+/** User-content colours (burned into exports): fixed literals, independent of the UI theme. */
+export const DEFAULT_STICKER_COLOR = "#F5C542";
+export const PALETTE = ["#F4F4F5", "#F5C542", "#C8102E", "#2E86AB", "#D9B36A", "#000000", "#FFFFFF", "#00E5A0"] as const;
 const isHex = (s: string) => /^#[0-9A-Fa-f]{6}$/.test(s);
 
 export function ColorRow({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
@@ -11,11 +13,11 @@ export function ColorRow({ value, onChange }: { value: string; onChange: (hex: s
     <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm, flexWrap: "wrap" }}>
       {PALETTE.map((c) => (
         <Pressable key={c} accessibilityLabel={`Color ${c}`} onPress={() => onChange(c)}
-          style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2, borderColor: value.toUpperCase() === c.toUpperCase() ? theme.colors.highlight : theme.colors.surfaceAlt }} />
+          style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2, borderColor: value.toUpperCase() === c.toUpperCase() ? theme.ring.borderColor : "transparent" }} />
       ))}
       <TextInput accessibilityLabel="Custom color" value={custom} onChangeText={setCustom} onBlur={() => isHex(custom) && onChange(custom.toUpperCase())}
         autoCapitalize="characters" maxLength={7} placeholder="#RRGGBB" placeholderTextColor={theme.colors.textMuted}
-        style={{ color: theme.colors.text, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 6, width: 96 }} />
+        style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 6, width: 96 }} />
     </View>
   );
 }

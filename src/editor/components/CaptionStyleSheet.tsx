@@ -31,7 +31,8 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
           <Body muted>Size {Math.round(style.fontScale * 100)}%</Body>
           <Slider testID="caption-size-slider" minimumValue={0.02} maximumValue={0.1} value={style.fontScale}
             onSlidingStart={beginTransaction} onValueChange={(v) => patchTransient({ fontScale: v })}
-            onSlidingComplete={(v) => patchTransient({ fontScale: v })} minimumTrackTintColor={theme.colors.accent} />
+            onSlidingComplete={(v) => patchTransient({ fontScale: v })}
+            minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
         </View>
         <ColorRow value={style.color} onChange={(color) => patch({ color })} />
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -44,7 +45,8 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
           <ColorRow value={style.background.color} onChange={(color) => patch({ background: { color, opacity: style.background!.opacity } })} />
           <Slider testID="caption-opacity-slider" minimumValue={0.2} maximumValue={1} value={style.background.opacity}
             onSlidingStart={beginTransaction} onValueChange={(v) => patchTransient(opacityPatch(v))}
-            onSlidingComplete={(v) => patchTransient(opacityPatch(v))} minimumTrackTintColor={theme.colors.accent} />
+            onSlidingComplete={(v) => patchTransient(opacityPatch(v))}
+            minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
         </>)}
         <NumField label="Y %" value={Math.round(style.y * 100)} onCommit={(v) => patch({ y: v / 100 })} />
       </View>

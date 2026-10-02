@@ -17,6 +17,8 @@ jest.mock("@react-native-community/slider", () => {
   const { View } = require("react-native");
   return View;
 });
+// reanimated 4 pulls in react-native-worklets, whose native module does not exist under Jest.
+jest.mock("react-native-worklets", () => require("react-native-worklets/lib/module/mock"));
 jest.mock("react-native-reanimated", () => require("react-native-reanimated/mock"));
 // react-native-svg's real <Path> parses `fill` into a processColor object (like Mark.tsx's <Line
 // stroke=.../> does, see Mark.test.tsx), but StickerView's test reads `props.fill` back as the
@@ -49,3 +51,15 @@ jest.mock("react-native-gesture-handler", () => {
     return g;
   }
 });
+
+// The library's official Jest mock: zero insets unless a test wraps in SafeAreaProvider with initialMetrics.
+jest.mock("react-native-safe-area-context", () => require("react-native-safe-area-context/jest/mock").default);
+
+jest.mock("expo-linear-gradient", () => {
+  const { View } = require("react-native");
+  return { LinearGradient: View };
+});
+jest.mock("expo-haptics", () => ({
+  impactAsync: jest.fn(async () => {}), notificationAsync: jest.fn(async () => {}),
+  ImpactFeedbackStyle: { Light: "light", Medium: "medium" }, NotificationFeedbackType: { Success: "success" },
+}));

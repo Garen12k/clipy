@@ -3,7 +3,7 @@ import { TextInput, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { Body } from "./Text";
 
-const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, borderRadius: theme.radius.chip, padding: 10, fontSize: 16, minWidth: 72 } as const;
+const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, fontFamily: theme.fonts.body, borderRadius: theme.radius.chip, padding: 10, fontSize: 16, minWidth: 72 } as const;
 
 type Props = { label: string; value: number; onCommit: (v: number) => void; step?: number };
 
