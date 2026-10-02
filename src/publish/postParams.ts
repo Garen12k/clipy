@@ -15,13 +15,20 @@ export interface PostTarget { video: VideoInfo; projectId: string | null; title:
 const pathOf = (uri: string) => decodeURIComponent(uri.slice("file://".length)).replace(/\/{2,}/g, "/").replace(/^\/private\//, "/");
 const withSlash = (p: string) => (p.endsWith("/") ? p : `${p}/`);
 
-/** True only for a file:// URI inside the app's own cache or documents directory. */
+/** The projects folder inside Documents (see src/projects/storage.ts). The rest of Documents (e.g. the sign-in database) is never posted. */
+const PROJECTS_DIR = "projects/";
+
+/**
+ * True only for a file:// URI inside the folders the app posts from: the cache (export output in `exports/`, Photos
+ * picks from expo-image-picker, whose sub-folder name depends on a native path detail, so the whole cache is allowed)
+ * and the projects folder in Documents.
+ */
 export function isAppFileUri(uri: string): boolean {
   if (!uri.startsWith("file://")) return false;
   try {
     const path = pathOf(uri);
     if (uri.includes("..") || path.split("/").includes("..")) return false;
-    const roots = [Paths.cache.uri, Paths.document.uri].map((r) => withSlash(pathOf(r)));
+    const roots = [withSlash(pathOf(Paths.cache.uri)), withSlash(pathOf(Paths.document.uri)) + PROJECTS_DIR];
     return roots.some((root) => path.startsWith(root) && path.length > root.length);
   } catch { return false; }
 }
@@ -29,7 +36,7 @@ export function isAppFileUri(uri: string): boolean {
 /**
  * The Post screen's route params as a video to post, or null when they can't describe one (never throws).
  * The route can be opened by a deep link (clipy://post?…), so nothing in the params is trusted: the file must
- * be one of the app's own files (export output or a Photos pick, both in the cache), its size is always read
+ * be one of the app's own files (export output or a Photos pick in the cache, or a project file), its size is always read
  * from disk, and every other value is range-checked. projectId is only ever compared with the open project.
  */
 export function videoFromParams(params: Record<string, Param>): PostTarget | null {

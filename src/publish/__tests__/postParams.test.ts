@@ -12,9 +12,10 @@ test("a valid export: size read from disk, values passed through", () => {
   expect(fileSize).toHaveBeenCalledWith(CACHE); // the fileSize param is never trusted
 });
 
-test("files in the cache or documents are accepted, also via /private and doubled slashes", () => {
+test("files in the cache or the projects folder are accepted, also via /private and doubled slashes", () => {
   expect(isAppFileUri(CACHE)).toBe(true);
   expect(isAppFileUri("file:///var/app/Documents/projects/a.mov")).toBe(true);
+  expect(isAppFileUri("file:///private/var/app/Documents//projects/p1/media/b.mp4")).toBe(true);
   expect(isAppFileUri("file:///private/var/app/Library/Caches/ImagePicker/x.mov")).toBe(true);
   expect(isAppFileUri("file:///var/app/Library//Caches/x.mov")).toBe(true);
 });
@@ -23,6 +24,12 @@ test.each([
   ["an https URI", { fileUri: "https://evil.example/v.mp4" }],
   ["a content-less scheme", { fileUri: "ph://ABC" }],
   ["a file outside cache/documents", { fileUri: "file:///var/app/Library/Preferences/x.plist" }],
+  ["a file directly in Documents", { fileUri: "file:///var/app/Documents/x.mp4" }],
+  ["the sign-in database in Documents", { fileUri: "file:///var/app/Documents/SQLite/expo-sqlite-localstorage.db" }],
+  ["another Documents folder", { fileUri: "file:///var/app/Documents/ExponentExperienceData/x.mp4" }],
+  ["a sibling of the projects folder with the same prefix", { fileUri: "file:///var/app/Documents/projects2/x.mp4" }],
+  ["the projects folder itself", { fileUri: "file:///var/app/Documents/projects/" }],
+  ["a projects/.. escape", { fileUri: "file:///var/app/Documents/projects/../SQLite/x.db" }],
   ["a sibling directory with the same prefix", { fileUri: "file:///var/app/Documents2/x.mp4" }],
   ["the cache directory itself", { fileUri: "file:///var/app/Library/Caches/" }],
   ["a path with ..", { fileUri: "file:///var/app/Library/Caches/../Preferences/x.plist" }],
