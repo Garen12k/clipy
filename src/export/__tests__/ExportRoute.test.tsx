@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
-jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn() } }));
+jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn(), dismiss: jest.fn() } }));
 jest.mock("expo-media-library/legacy", () => ({ requestPermissionsAsync: jest.fn(), saveToLibraryAsync: jest.fn() }));
 jest.mock("expo-sharing", () => ({ shareAsync: jest.fn() }));
 jest.mock("@/src/lib/fileInfo", () => ({ fileSize: () => 14000000 }));
@@ -24,9 +24,14 @@ test("without a posting backend the finish screen has no Post button", async () 
   expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Save to Photos");
 });
 
-test("Post to… opens the Post screen for the exported file and project", async () => {
+test("Post to… closes the export modal, then opens the Post screen for the exported file and project", async () => {
   (isBackendConfigured as jest.Mock).mockReturnValue(true);
+  const order: string[] = [];
+  (router.dismiss as jest.Mock).mockImplementation(() => order.push("dismiss"));
+  (router.push as jest.Mock).mockImplementation(() => order.push("push"));
   await render(<ExportScreen />);
   await fireEvent.press(screen.getByRole("button", { name: "Post to…" }));
-  expect(router.push).toHaveBeenCalledWith({ pathname: "/post", params: { fileUri: "file:///out.mp4", durationSec: "21", fileSize: "14000000", mimeType: "video/mp4", projectId: "p1", title: "Beach day" } });
+  expect(order).toEqual(["dismiss", "push"]);
+  expect(router.dismiss).toHaveBeenCalledWith();
+  expect(router.push).toHaveBeenCalledWith({ pathname: "/post", params: { fileUri: "file:///out.mp4", durationSec: "21", mimeType: "video/mp4", projectId: "p1", title: "Beach day" } });
 });

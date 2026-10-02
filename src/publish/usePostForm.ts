@@ -1,29 +1,9 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fileSize } from "@/src/lib/fileInfo";
 import { clientAdapters, type ClientAdapter, type VideoInfo } from "./adapters";
 import type { PlatformStatus } from "./api";
 import type { PlatformId } from "./platforms";
 import type { PostJob, RowState } from "./runPost";
-
-type Param = string | string[] | undefined;
-const one = (v: Param) => (Array.isArray(v) ? v[0] : v);
-const positive = (v: Param) => { const s = one(v); const n = s ? Number(s) : NaN; return Number.isFinite(n) && n > 0 ? n : null; };
-
-export interface PostTarget { video: VideoInfo; projectId: string | null; title: string | null }
-
-/** The Post screen's route params as a video to post, or null when they can't describe one (never throws). */
-export function videoFromParams(params: Record<string, Param>): PostTarget | null {
-  const fileUri = one(params.fileUri);
-  const durationSec = positive(params.durationSec);
-  if (!fileUri || durationSec === null) return null;
-  const size = one(params.fileSize) === undefined ? fileSize(fileUri) : positive(params.fileSize);
-  if (!size) return null;
-  return {
-    video: { fileUri, durationSec, fileSize: size, mimeType: one(params.mimeType) || "video/mp4" },
-    projectId: one(params.projectId) || null, title: one(params.title) ?? null,
-  };
-}
 
 export type Reason = "Not available yet" | "Not connected" | "Sign-in expired";
 export interface PlatformView {
@@ -34,6 +14,10 @@ export interface PlatformView {
   checked: boolean;
   /** The adapter's validation sentence while the platform is ticked. */
   error: string | null;
+  /** Ticked, valid and the caption within the limit: the one rule for Post, Retry and Resume alike. */
+  canPost: boolean;
+  /** Why a ticked platform can't be sent right now (validation or caption length), or null. */
+  blocker: string | null;
   note: string | null;
   options: Record<string, unknown>;
   /** The row failed with "reconnect", the user went to Accounts and the platform is healthy again. */
@@ -64,25 +48,30 @@ export function usePostForm(video: VideoInfo, platforms: PlatformStatus[], title
 
   const optionsFor = (id: PlatformId, adapter: ClientAdapter) => options[id] ?? adapter.defaultOptions(title ?? "");
 
-  const views: PlatformView[] = platforms.map((status) => {
+  const base = platforms.map((status) => {
     const adapter = clientAdapters[status.id] ?? null;
     const reason: Reason | null = !status.available || !adapter ? "Not available yet" : status.needsReconnect ? "Sign-in expired" : !status.connected ? "Not connected" : null;
     const opts = adapter ? optionsFor(status.id, adapter) : {};
     const on = !reason && (ticked[status.id] ?? true);
-    const error = on && adapter ? adapter.validate(video, caption, opts) : null;
+    return { status, adapter, reason, on, opts, error: on && adapter ? adapter.validate(video, caption, opts) : null };
+  });
+  // The caption limit is the smallest one among the ticked platforms.
+  const limits = base.filter((b) => b.on && b.adapter).map((b) => b.adapter!.captionMax);
+  const captionMax = limits.length ? Math.min(...limits) : null;
+  const overLimit = captionMax !== null && caption.length > captionMax;
+
+  const views: PlatformView[] = base.map(({ status, adapter, reason, on, opts, error }) => {
+    const blocker = !on ? null : error ?? (overLimit ? `Captions can be up to ${captionMax} characters.` : null);
     return {
       status, adapter, reason, checked: on && !error, error, options: opts,
+      canPost: on && !blocker, blocker,
       note: on && adapter ? adapter.note(video) : null,
       canResume: rows[status.id]?.phase === "needsReconnect" && returned.has(status.id) && !reason,
     };
   });
-
-  const limits = views.filter((v) => !v.reason && (ticked[v.status.id] ?? true) && v.adapter).map((v) => v.adapter!.captionMax);
-  const captionMax = limits.length ? Math.min(...limits) : null;
-  const overLimit = captionMax !== null && caption.length > captionMax;
   const jobFor = (v: PlatformView): Job => ({ platform: v.status.id, caption, options: v.options });
   // Rows that already ran keep their own Retry / Resume / View; Post only sends the fresh ones.
-  const jobs = overLimit ? [] : views.filter((v) => v.checked && (rows[v.status.id]?.phase ?? "idle") === "idle").map(jobFor);
+  const jobs = views.filter((v) => v.canPost && (rows[v.status.id]?.phase ?? "idle") === "idle").map(jobFor);
 
   const toggle = (id: PlatformId) => setTicked((t) => ({ ...t, [id]: !(t[id] ?? true) }));
   const setOption = (id: PlatformId, patch: Record<string, unknown>) => {
@@ -95,8 +84,8 @@ export function usePostForm(video: VideoInfo, platforms: PlatformStatus[], title
   };
   /** The user is sent to Accounts to reconnect this platform. */
   const markReconnect = (id: PlatformId) => { setAwaiting((s) => new Set(s).add(id)); setReturned((s) => { const n = new Set(s); n.delete(id); return n; }); };
-  /** The job a Retry / Resume press sends for this platform (current caption and options). */
-  const retryJob = (v: PlatformView) => { forget(v.status.id); return jobFor(v); };
+  /** The job a Retry / Resume press sends (current caption and options), or null when the row can't be sent now. */
+  const retryJob = (v: PlatformView): Job | null => { if (!v.canPost) return null; forget(v.status.id); return jobFor(v); };
 
   return { caption, setCaption, captionMax, overLimit, views, jobs, toggle, setOption, markReconnect, retryJob };
 }

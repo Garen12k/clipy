@@ -32,7 +32,7 @@ export default function ProjectsScreen() {
     picking.current = true;
     try {
       const v = await pickVideoForPost();
-      if (v) router.push({ pathname: "/post", params: { fileUri: v.fileUri, durationSec: String(v.durationSec), fileSize: String(v.fileSize), mimeType: v.mimeType } });
+      if (v) router.push({ pathname: "/post", params: { fileUri: v.fileUri, durationSec: String(v.durationSec), mimeType: v.mimeType } }); // size is re-read from disk
     } finally { picking.current = false; }
   }
 

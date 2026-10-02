@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { Alert, Linking } from "react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-02T10:00:00.000Z" }));
-const baseParams = { fileUri: "file:///out.mp4", durationSec: "21", fileSize: "14000000", mimeType: "video/mp4", projectId: "p1", title: "Beach day" };
+const FILE = "file:///cache/exports/p1-1.mp4";
+const baseParams = { fileUri: FILE, durationSec: "21", mimeType: "video/mp4", projectId: "p1", title: "Beach day" };
 let mockParams: Record<string, string | undefined> = { ...baseParams };
 let mockFocus: (() => void) | null = null;
 const mockNav = { addListener: jest.fn(() => () => {}), setOptions: jest.fn(), dispatch: jest.fn() };
@@ -13,7 +14,8 @@ jest.mock("expo-router", () => ({
   useFocusEffect: (cb: () => void) => { mockFocus = cb; require("react").useEffect(() => { cb(); }, []); },
 }));
 jest.mock("expo-sharing", () => ({ shareAsync: jest.fn(async () => {}) }));
-jest.mock("@/src/lib/fileInfo", () => ({ fileSize: jest.fn(() => 0) }));
+jest.mock("@/src/lib/fileInfo", () => ({ fileSize: jest.fn() }));
+jest.mock("expo-file-system", () => ({ Paths: { cache: { uri: "file:///cache/" }, document: { uri: "file:///doc/" } } }));
 jest.mock("../useSession", () => ({ useSession: jest.fn() }));
 jest.mock("../useAccounts", () => ({ useAccounts: jest.fn() }));
 jest.mock("../usePost", () => ({ usePost: jest.fn() }));
@@ -40,6 +42,7 @@ let onPosted: (p: string, url: string | null) => void;
 beforeEach(() => {
   jest.clearAllMocks();
   mockParams = { ...baseParams }; mockFocus = null;
+  (fileSize as jest.Mock).mockReturnValue(14000000);
   (useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: null });
   (useAccounts as jest.Mock).mockReturnValue(accounts());
   usePostReturns(post());
@@ -80,7 +83,7 @@ test("unticking everything disables Post; a not-connected platform links to Acco
   await render(<PostScreen />);
   expect(screen.getByText("Not connected")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
-  await fireEvent.press(screen.getByRole("button", { name: "Connect" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Connect YouTube" }));
   expect(router.push).toHaveBeenCalledWith("/accounts");
 });
 
@@ -91,7 +94,7 @@ test("a caption over the smallest limit turns the counter red and disables Post"
   expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
 });
 
-test("options sheet edits the YouTube title and privacy; a blank title blocks posting with a reason", async () => {
+test("options sheet edits the YouTube title and privacy; blank title and caption block posting with a reason", async () => {
   const p = post(); usePostReturns(p);
   await render(<PostScreen />);
   await fireEvent.press(screen.getByRole("button", { name: "YouTube options" }));
@@ -106,9 +109,65 @@ test("options sheet edits the YouTube title and privacy; a blank title blocks po
   await fireEvent.press(screen.getByRole("button", { name: "YouTube options" }));
   await fireEvent.changeText(screen.getByLabelText("YouTube title"), "  ");
   await fireEvent.press(screen.getByLabelText("Close sheet"));
-  expect(screen.getByText("Add a title for YouTube.")).toBeTruthy();
+  expect(screen.getByText("Add a caption or a title for YouTube.")).toBeTruthy();
+  expect(screen.getByText(/private until Google reviews/i)).toBeTruthy(); // the note stays next to the message
   expect(screen.getByRole("checkbox", { name: "YouTube" })).not.toBeChecked();
   expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
+  // tapping the held-back row opens its options instead of unticking it
+  await fireEvent.press(screen.getByRole("checkbox", { name: "YouTube" }));
+  expect(screen.getByLabelText("YouTube title")).toBeTruthy();
+});
+
+test("a library video (no title) posts with its caption; with neither, YouTube asks for one", async () => {
+  const p = post(); usePostReturns(p);
+  mockParams = { ...baseParams, title: undefined, projectId: undefined };
+  await render(<PostScreen />);
+  expect(screen.getByText("Add a caption or a title for YouTube.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
+  await fireEvent.changeText(screen.getByLabelText("Caption"), "Sunny");
+  expect(screen.queryByText("Add a caption or a title for YouTube.")).toBeNull();
+  expect(screen.getByRole("checkbox", { name: "YouTube" })).toBeChecked();
+  await fireEvent.press(screen.getByRole("button", { name: "YouTube options" }));
+  expect(screen.getByLabelText("YouTube title")).toHaveProp("placeholder", "Uses your caption");
+  await fireEvent.press(screen.getByLabelText("Close sheet"));
+  await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+  expect(p.start).toHaveBeenCalledWith([{ platform: "youtube", caption: "Sunny", options: { title: "", privacy: "public" } }]);
+});
+
+test("Retry and Resume follow the Post rule: an over-limit caption disables them with the reason; fixing it re-enables", async () => {
+  for (const resumable of [false, true]) {
+    const p = post({ rows: rows({ phase: "failed", message: "The connection dropped.", resumable }) }); usePostReturns(p);
+    const view = await render(<PostScreen />);
+    const name = resumable ? "Resume YouTube" : "Retry YouTube";
+    await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(5001));
+    expect(screen.getByRole("button", { name })).toBeDisabled();
+    expect(screen.getByText("YouTube descriptions can be up to 5000 characters.")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name }));
+    expect(p.retry).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByLabelText("Caption"), "Short");
+    expect(screen.getByRole("button", { name })).toBeEnabled();
+    expect(screen.queryByText("YouTube descriptions can be up to 5000 characters.")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name }));
+    expect(p.retry).toHaveBeenCalledWith({ platform: "youtube", caption: "Short", options: { title: "Beach day", privacy: "public" } });
+    await view.unmount();
+  }
+});
+
+test("Resume after reconnecting is also held back by an invalid row", async () => {
+  const p = post({ rows: rows({ phase: "needsReconnect", message: "Reconnect youtube in Accounts." }) }); usePostReturns(p);
+  mockParams = { ...baseParams, title: undefined };
+  await render(<PostScreen />);
+  await fireEvent.press(screen.getByRole("button", { name: "Reconnect YouTube" }));
+  await act(async () => { mockFocus!(); });
+  expect(screen.getByRole("button", { name: "Resume YouTube" })).toBeDisabled();
+  expect(screen.getByText("Add a caption or a title for YouTube.")).toBeTruthy();
+});
+
+test("a posted row shows a static mark, not a checkbox", async () => {
+  usePostReturns(post({ rows: rows({ phase: "done", progress: 1, url: "https://youtu.be/abc" }) }));
+  await render(<PostScreen />);
+  expect(screen.queryByRole("checkbox", { name: "YouTube" })).toBeNull();
+  expect(screen.getByLabelText("YouTube, posted")).toBeTruthy();
 });
 
 test("row phases: uploading shows percent, done links out, failed offers Retry or Resume, reconnect links to Accounts", async () => {
@@ -133,7 +192,7 @@ test("row phases: uploading shows percent, done links out, failed offers Retry o
   expect(screen.getByRole("button", { name: "Resume YouTube" })).toBeTruthy(); await d.unmount();
   await render1({ phase: "needsReconnect", message: "Reconnect youtube in Accounts." });
   expect(screen.getByText("Reconnect youtube in Accounts.")).toBeTruthy();
-  await fireEvent.press(screen.getByRole("button", { name: "Reconnect" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Reconnect YouTube" }));
   expect(router.push).toHaveBeenCalledWith("/accounts");
 });
 
@@ -142,7 +201,7 @@ test("after reconnecting in Accounts and coming back, the row offers Resume", as
   const acc = accounts({ needsReconnect: true }); (useAccounts as jest.Mock).mockReturnValue(acc);
   await render(<PostScreen />);
   expect(acc.refresh).not.toHaveBeenCalled(); // useAccounts loads on mount; the first focus doesn't reload
-  await fireEvent.press(screen.getByRole("button", { name: "Reconnect" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Reconnect YouTube" }));
   expect(router.push).toHaveBeenCalledWith("/accounts");
   expect(screen.queryByRole("button", { name: "Resume YouTube" })).toBeNull();
   // back on the screen: accounts refresh on focus and now show YouTube connected again
@@ -158,10 +217,10 @@ test("still expired after coming back: the row keeps offering Reconnect", async 
   usePostReturns(post({ rows: rows({ phase: "needsReconnect", message: "Reconnect youtube in Accounts." }) }));
   (useAccounts as jest.Mock).mockReturnValue(accounts({ needsReconnect: true }));
   await render(<PostScreen />);
-  await fireEvent.press(screen.getByRole("button", { name: "Reconnect" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Reconnect YouTube" }));
   await act(async () => { mockFocus!(); });
   expect(screen.queryByRole("button", { name: "Resume YouTube" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Reconnect" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Reconnect YouTube" })).toBeTruthy();
 });
 
 test("a finished post is recorded on the open project", async () => {
@@ -216,15 +275,19 @@ test("leaving when nothing is running is not interrupted", async () => {
 test("Share… opens the share sheet for the same file", async () => {
   await render(<PostScreen />);
   await fireEvent.press(screen.getByRole("button", { name: "Share…" }));
-  expect(Sharing.shareAsync).toHaveBeenCalledWith("file:///out.mp4", { mimeType: "video/mp4", UTI: "public.mpeg-4" });
+  expect(Sharing.shareAsync).toHaveBeenCalledWith(FILE, { mimeType: "video/mp4", UTI: "public.mpeg-4" });
 });
 
 test.each([
-  ["missing duration", { durationSec: undefined }],
-  ["NaN duration", { durationSec: "abc" }],
-  ["NaN size", { fileSize: "abc" }],
-  ["missing file", { fileUri: undefined }],
-])("odd params (%s) show a message instead of throwing", async (_n, over) => {
+  ["missing duration", { durationSec: undefined }, 14000000],
+  ["NaN duration", { durationSec: "abc" }, 14000000],
+  ["no file param", { fileUri: undefined }, 14000000],
+  ["an https URI", { fileUri: "https://evil.example/v.mp4" }, 14000000],
+  ["a file outside cache/documents", { fileUri: "file:///etc/passwd" }, 14000000],
+  ["a path with ..", { fileUri: "file:///cache/../etc/passwd" }, 14000000],
+  ["a missing / zero-size file", {}, 0],
+])("untrusted or odd params (%s) show a message instead of throwing", async (_n, over, size) => {
+  (fileSize as jest.Mock).mockReturnValue(size);
   mockParams = { ...baseParams, ...over };
   await render(<PostScreen />);
   expect(screen.getByText("This video can't be posted.")).toBeTruthy();
@@ -233,9 +296,9 @@ test.each([
   expect(usePost).not.toHaveBeenCalled();
 });
 
-test("without a size param the size is read from the file", async () => {
+test("a fileSize param is ignored: the size is always read from the file", async () => {
   (fileSize as jest.Mock).mockReturnValue(9000000);
-  mockParams = { ...baseParams, fileSize: undefined };
+  mockParams = { ...baseParams, fileSize: "1" };
   await render(<PostScreen />);
   expect(screen.getByText("0:21 · 9 MB")).toBeTruthy();
 });

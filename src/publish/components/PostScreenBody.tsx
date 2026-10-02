@@ -17,7 +17,8 @@ import { ToastHost, useToast } from "@/src/ui/Toast";
 import type { PlatformId } from "../platforms";
 import { useAccounts } from "../useAccounts";
 import { usePost } from "../usePost";
-import { usePostForm, type PostTarget } from "../usePostForm";
+import type { PostTarget } from "../postParams";
+import { usePostForm } from "../usePostForm";
 import { useSession } from "../useSession";
 import { PostOptionsSheet } from "./PostOptionsSheet";
 import { PostRow } from "./PostRow";
@@ -81,7 +82,7 @@ export function PostScreenBody({ target: { video, projectId, title } }: { target
                     <PostRow view={v} row={rows[v.status.id]} onToggle={() => form.toggle(v.status.id)} onOptions={() => setOptionsFor(v.status.id)}
                       onConnect={() => router.push("/accounts")}
                       onReconnect={() => { form.markReconnect(v.status.id); router.push("/accounts"); }}
-                      onRetry={() => retry(form.retryJob(v))} onView={openUrl} />
+                      onRetry={() => { const job = form.retryJob(v); if (job) retry(job); }} onView={openUrl} />
                   </View>
                 ))}
               </View>

@@ -31,11 +31,13 @@ export async function pickVideoForPost(): Promise<VideoInfo | null> {
   }
   const asset = result.canceled ? null : result.assets?.[0];
   if (!asset) return null;
+  const durationSec = (asset.duration ?? NaN) / 1000; // the picker reports milliseconds
   const onDisk = fileSize(asset.uri);
-  if (onDisk <= 0) { useToast.getState().show("Couldn't read that video."); return null; }
+  // Stay on home with a toast rather than opening a Post screen that can only say "can't be posted".
+  if (onDisk <= 0 || !Number.isFinite(durationSec) || durationSec <= 0) { useToast.getState().show("Couldn't read that video."); return null; }
   return {
     fileUri: asset.uri,
-    durationSec: (asset.duration ?? 0) / 1000, // the picker reports milliseconds
+    durationSec,
     fileSize: asset.fileSize && asset.fileSize > 0 ? asset.fileSize : onDisk,
     mimeType: asset.mimeType ?? "video/mp4",
   };

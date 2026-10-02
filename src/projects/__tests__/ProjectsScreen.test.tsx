@@ -51,7 +51,7 @@ test("the header's Post a video button picks a video and opens the Post screen; 
   await waitFor(() => expect(pickVideoForPost).toHaveBeenCalledTimes(1));
   expect(mockPush).not.toHaveBeenCalled();
   await fireEvent.press(button);
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith({ pathname: "/post", params: { fileUri: "file:///pick.mov", durationSec: "21", fileSize: "14000000", mimeType: "video/quicktime" } }));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith({ pathname: "/post", params: { fileUri: "file:///pick.mov", durationSec: "21", mimeType: "video/quicktime" } }));
 });
 
 test("lists projects with duration and marks broken ones", async () => {

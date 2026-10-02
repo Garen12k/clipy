@@ -44,6 +44,12 @@ test("a missing or empty file → toast and null", async () => {
   expect(useToast.getState().message).toBe("Couldn't read that video.");
 });
 
+test.each([[null], [undefined], [0], [NaN]])("no usable duration (%s) → toast and null", async (duration) => {
+  launch.mockResolvedValue({ canceled: false, assets: [asset({ duration })] });
+  expect(await pickVideoForPost()).toBeNull();
+  expect(useToast.getState().message).toBe("Couldn't read that video.");
+});
+
 test("Photos access denied → explains, opens Settings when it can't ask again, null", async () => {
   const open = jest.spyOn(Linking, "openSettings").mockResolvedValue(undefined);
   (ImagePicker.requestMediaLibraryPermissionsAsync as jest.Mock).mockResolvedValue({ granted: false, canAskAgain: false });

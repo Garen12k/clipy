@@ -26,7 +26,7 @@ export function PostOptionsSheet({ platform, options, onChange, onClose }: Props
           <View style={{ gap: theme.space.xs }}>
             <Body muted style={{ fontSize: 12 }}>Title</Body>
             <TextInput accessibilityLabel="YouTube title" value={title} maxLength={TITLE_MAX} onChangeText={(t) => onChange({ title: t })}
-              style={field} placeholder="Video title" placeholderTextColor={theme.colors.textMuted} returnKeyType="done" />
+              style={field} placeholder="Uses your caption" placeholderTextColor={theme.colors.textMuted} returnKeyType="done" />
             <Body muted style={{ fontSize: 12, alignSelf: "flex-end" }}>{`${title.length} / ${TITLE_MAX}`}</Body>
           </View>
           <View style={{ gap: theme.space.sm }}>
