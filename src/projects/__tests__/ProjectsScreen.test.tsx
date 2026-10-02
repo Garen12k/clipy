@@ -1,5 +1,6 @@
 import { Alert } from "react-native";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { AFTER_SHEET_MS } from "@/src/projects/ProjectActionsSheet";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn() }, useFocusEffect: (cb: () => void) => { const React = require("react"); React.useEffect(cb, []); } }));
 jest.mock("@/src/projects/pickVideos", () => ({ pickVideos: jest.fn() }));
@@ -53,10 +54,14 @@ test("long-press opens the actions sheet; Delete confirms via Alert and removes"
   await fireEvent(card, "longPress");
   expect(await screen.findByRole("button", { name: "Rename" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Duplicate" })).toBeTruthy();
+  jest.useFakeTimers();
   await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+  expect(alert).not.toHaveBeenCalled();
+  await act(async () => { jest.advanceTimersByTime(AFTER_SHEET_MS); });
   expect(alert).toHaveBeenCalledWith("Delete project?", "This can't be undone.", expect.any(Array));
   const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
   await buttons.find((b) => b.text === "Delete")!.onPress!();
   await waitFor(() => expect(storage.deleteProject).toHaveBeenCalledWith("a"));
   alert.mockRestore();
+  jest.useRealTimers();
 });

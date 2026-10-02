@@ -14,10 +14,10 @@ type Props = { summary: ProjectSummary; index: number; onPress: () => void; onLo
 export function ProjectCard({ summary, index, onPress, onLongPress }: Props) {
   const reduced = useReducedMotion();
   const t = useSharedValue(0);
-  useEffect(() => { t.value = reduced ? 1 : withDelay(index * theme.motion.stagger, withTiming(1, { duration: theme.motion.fade })); }, [index, reduced, t]);
+  useEffect(() => { t.value = reduced ? 1 : withDelay(Math.min(index, 8) * theme.motion.stagger, withTiming(1, { duration: theme.motion.fade })); }, [index, reduced, t]);
   const enter = useAnimatedStyle(() => ({ opacity: t.value, transform: [{ translateY: (1 - t.value) * 8 }] }));
   return (
-    <Animated.View style={[{ flex: 1, margin: theme.space.sm }, enter]}>
+    <Animated.View testID="project-card-cell" style={[{ width: "50%", padding: theme.space.sm }, enter]}>
       <PressableScale accessibilityRole="button" accessibilityLabel={summary.name} onPress={onPress} onLongPress={onLongPress} delayLongPress={350}
         style={{ borderRadius: theme.radius.card, borderWidth: 1.5, borderColor: summary.broken ? theme.colors.danger : theme.colors.hairline, backgroundColor: theme.colors.surface, overflow: "hidden", aspectRatio: 3 / 4 }}>
         {summary.thumbUri ? <Image source={{ uri: summary.thumbUri }} style={{ position: "absolute", width: "100%", height: "100%" }} resizeMode="cover" />

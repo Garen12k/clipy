@@ -1,3 +1,4 @@
+import { StyleSheet } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { ProjectCard } from "../ProjectCard";
 
@@ -12,4 +13,11 @@ test("shows name, duration badge and edited line; press and long-press work", as
   await fireEvent.press(screen.getByRole("button", { name: "Beach day" }));
   await fireEvent(screen.getByRole("button", { name: "Beach day" }), "longPress");
   expect(onPress).toHaveBeenCalled(); expect(onLongPress).toHaveBeenCalled();
+});
+
+test("cell is exactly half the row (not flex:1) so an odd last card does not stretch", async () => {
+  await render(<ProjectCard summary={summary} index={0} onPress={jest.fn()} onLongPress={jest.fn()} />);
+  const style = StyleSheet.flatten(screen.getByTestId("project-card-cell").props.style);
+  expect(style.width).toBe("50%");
+  expect(style.flex).toBeUndefined();
 });
