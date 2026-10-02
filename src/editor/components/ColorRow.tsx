@@ -13,11 +13,11 @@ export function ColorRow({ value, onChange }: { value: string; onChange: (hex: s
     <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm, flexWrap: "wrap" }}>
       {PALETTE.map((c) => (
         <Pressable key={c} accessibilityLabel={`Color ${c}`} onPress={() => onChange(c)}
-          style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2, borderColor: value.toUpperCase() === c.toUpperCase() ? theme.colors.accent : theme.colors.surfaceAlt }} />
+          style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2, borderColor: value.toUpperCase() === c.toUpperCase() ? theme.colors.accent : "transparent" }} />
       ))}
       <TextInput accessibilityLabel="Custom color" value={custom} onChangeText={setCustom} onBlur={() => isHex(custom) && onChange(custom.toUpperCase())}
         autoCapitalize="characters" maxLength={7} placeholder="#RRGGBB" placeholderTextColor={theme.colors.textMuted}
-        style={{ color: theme.colors.text, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 6, width: 96 }} />
+        style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 6, width: 96 }} />
     </View>
   );
 }

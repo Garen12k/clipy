@@ -39,9 +39,9 @@ export function Sheet({ visible, onClose, title, children, height, action }: Pro
           borderTopWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: theme.space.xl, paddingBottom: theme.space.xxl, gap: theme.space.lg, maxHeight: height }, anim]}>
         <GestureDetector gesture={pan}>
           <View style={{ paddingTop: theme.space.sm, gap: theme.space.md }}>
-            <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: theme.colors.surfaceAlt }} />
+            <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: theme.colors.textMuted, opacity: 0.5 }} />
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Title size={18}>{title}</Title>
+              <Title size={18} accessibilityRole="header">{title}</Title>
               {action ? (
                 <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={8}>
                   <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 13 }}>{action.label}</Body>

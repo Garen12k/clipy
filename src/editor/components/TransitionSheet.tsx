@@ -6,6 +6,7 @@ import { TRANSITION_LIMITS, TRANSITION_TYPES } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
+import { haptic } from "@/src/ui/haptics";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 
@@ -37,7 +38,7 @@ export function TransitionSheet({ clipIndex, visible, onClose }: Props) {
             key={type}
             label={TRANSITIONS[type].label}
             selected={current.type === type}
-            onPress={() => apply((p) => setTransition(p, clip.id, { type, duration: type === "none" ? 0 : Math.min(0.5, cap) }))}
+            onPress={() => { haptic("light"); apply((p) => setTransition(p, clip.id, { type, duration: type === "none" ? 0 : Math.min(0.5, cap) })); }}
           />
         ))}
       </View>

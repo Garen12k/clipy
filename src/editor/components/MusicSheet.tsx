@@ -15,6 +15,7 @@ import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { NumField } from "@/src/ui/NumField";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
+import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
@@ -66,18 +67,19 @@ export function MusicSheet({ visible, onClose }: { visible: boolean; onClose: ()
     <Sheet visible={visible} onClose={() => { preview.pause(); onClose(); }} title="Music" height="60%">
       {track ? (
         <View style={{ gap: theme.space.lg }}>
-          <Text style={{ color: theme.colors.text, fontSize: 18, fontWeight: "600" }}>{track.title}</Text>
+          <Body weight="semi" style={{ fontSize: 18 }}>{track.title}</Body>
           <Body muted>Volume {Math.round(track.volume * 100)}%</Body>
           <Slider minimumValue={AUDIO_LIMITS.volume[0]} maximumValue={AUDIO_LIMITS.volume[1]} value={track.volume} onSlidingStart={beginTransaction}
-            onValueChange={(v) => applyTransient((p) => updateAudioTrack(p, { volume: v }))} minimumTrackTintColor={theme.colors.accent} />
+            onValueChange={(v) => applyTransient((p) => updateAudioTrack(p, { volume: v }))}
+            minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
           <View style={{ flexDirection: "row", gap: theme.space.md, flexWrap: "wrap" }}>
             <NumField label="Start in video (s)" value={track.start} step={0.1} onCommit={(v) => apply((p) => updateAudioTrack(p, { start: v }))} />
             <NumField label="Trim start (s)" value={track.trimStart} step={0.1} onCommit={(v) => apply((p) => updateAudioTrack(p, { trimStart: v }))} />
             <NumField label="Trim end (s)" value={track.trimEnd} step={0.1} onCommit={(v) => apply((p) => updateAudioTrack(p, { trimEnd: v }))} />
           </View>
           <View style={{ flexDirection: "row", gap: theme.space.md }}>
-            <Chip label="Replace" selected={false} onPress={() => apply((p) => removeAudioTrack(p))} />
-            <Chip label="Remove" selected={false} onPress={() => { apply((p) => removeAudioTrack(p)); onClose(); }} />
+            <SecondaryButton title="Replace" onPress={() => apply((p) => removeAudioTrack(p))} />
+            <SecondaryButton danger title="Remove" onPress={() => { apply((p) => removeAudioTrack(p)); onClose(); }} />
           </View>
         </View>
       ) : (
@@ -94,9 +96,9 @@ export function MusicSheet({ visible, onClose }: { visible: boolean; onClose: ()
                 {BUNDLED_TRACKS.map((t) => (
                   <View key={t.id} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, padding: theme.space.md }}>
                     <Pressable accessibilityRole="button" accessibilityLabel={`${previewId === t.id ? "Stop" : "Play"} ${t.title}`} onPress={() => togglePreview(t)}>
-                      <Text style={{ color: theme.colors.accent, fontSize: 18 }}>{previewId === t.id ? "■" : "▶"}</Text>
+                      <Text style={{ color: theme.colors.accent, fontSize: 18, fontFamily: theme.fonts.body }}>{previewId === t.id ? "■" : "▶"}</Text>
                     </Pressable>
-                    <View style={{ flex: 1 }}><Text style={{ color: theme.colors.text }}>{t.title}</Text><Body muted style={{ fontSize: 12 }}>{formatDuration(t.durationSec)} · {t.license}</Body></View>
+                    <View style={{ flex: 1 }}><Body>{t.title}</Body><Body muted style={{ fontSize: 12 }}>{formatDuration(t.durationSec)} · {t.license}</Body></View>
                     <Chip label="Use" accessibilityLabel={`Use ${t.title}`} selected={false} disabled={busy} onPress={() => useBundled(t)} />
                   </View>
                 ))}

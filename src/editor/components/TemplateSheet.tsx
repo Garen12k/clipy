@@ -5,6 +5,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { pickRandomTemplate, TEMPLATE_IDS, TEMPLATES, type Template, type TemplateId } from "@/src/editor/templates";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
+import { haptic } from "@/src/ui/haptics";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 
@@ -25,6 +26,7 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
 
   const effective: Scope = hasClip ? scope : "project";
   const use = (t: Template) => {
+    haptic("light");
     if (lastId !== null) undo();
     apply((p) => applyTemplate(p, t, effective, clipId));
     setLastId(t.id);
@@ -39,7 +41,7 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.md }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Random template" onPress={() => use(pickRandomTemplate(lastId))}
           style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}>
-          <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, backgroundColor: theme.colors.surfaceAlt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: theme.colors.hairline }}>
+          <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, backgroundColor: theme.colors.surfaceAlt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" }}>
             <Text style={{ fontSize: 30 }}>🎲</Text>
           </View>
           <Body style={{ fontSize: 12 }}>Random</Body>
@@ -50,7 +52,7 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
           return (
             <Pressable key={id} accessibilityRole="button" accessibilityLabel={`Template ${t.label}`} accessibilityState={{ selected }}
               onPress={() => use(t)} style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}>
-              <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", borderWidth: 2, borderColor: selected ? theme.colors.accent : "transparent" }}>
+              <View style={[{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden" }, selected ? theme.ring : { borderWidth: 2, borderColor: "transparent" }]}>
                 <View style={{ flex: 1, backgroundColor: t.swatch[0] }} />
                 <View style={{ flex: 1, backgroundColor: t.swatch[1] }} />
               </View>
@@ -59,7 +61,7 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
           );
         })}
       </View>
-      {lastId ? <Body style={{ fontSize: 13, color: theme.colors.textMuted }}>{`Applied ${TEMPLATES[lastId].label} · tap Undo to revert`}</Body> : null}
+      {lastId ? <Body muted style={{ fontSize: 13 }}>{`Applied ${TEMPLATES[lastId].label} · tap Undo to revert`}</Body> : null}
     </Sheet>
   );
 }

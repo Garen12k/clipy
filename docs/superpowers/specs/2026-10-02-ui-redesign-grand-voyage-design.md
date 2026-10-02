@@ -1,7 +1,7 @@
 # Clipy UI Redesign — "Grand Voyage" — Design
 
 **Date:** 2026-10-02
-**Status:** Approved in chat with browser mockups (`.superpowers/brainstorm/931-1790929683/content/{visual-direction,editor-layout,full-flow}.html`), awaiting written-spec review
+**Status:** Implemented 2026-10-02 (on-device checklist pending; home settings icon, export file size and "Post to…" land with Phase 4)
 **Parent specs:** `2026-10-01-clip-editor-app-design.md` and the Phase 1–3 specs. This spec replaces their visual language (colours, fonts, toolbar layout, home screen, loading) and nothing else: features, data model, export and timing rules are unchanged.
 
 ## 1. Goal
@@ -70,7 +70,7 @@ Radii: `card 12`, `chip 8`, `tile 7`, `sheet 18`, `pill 999`. Spacing scale unch
 Navy gradient; a gold compass ring (SVG) whose red/cream needle swings and settles; "CLIPY" in Oswald rises and fades in; tagline "EDIT · SET SAIL · SHARE"; two wave layers scrolling at different speeds along the bottom. It is displayed while fonts load **and for a minimum of 1.2 s**, then the waves slide down and the screen cross-fades to the home screen (300 ms). The native splash is hidden as soon as the first frame of this screen is drawn. `assets/icon.png` and `assets/splash-icon.png` are regenerated in the new look (navy field, gold compass mark) by `scripts/gen-brand.mjs` from an SVG source committed alongside.
 
 ### 5.2 Home (`app/index.tsx`)
-- Header: "YOUR VOYAGES" (Oswald) left; settings/accounts icon right (inert until Phase 4 wires Accounts).
+- Header: "YOUR VOYAGES" (Oswald) left; settings/accounts icon right (arrives with Phase 4, which wires Accounts).
 - **Empty state:** island emoji, "NO CLIPS YET", one-line hint, gold pill **＋ NEW CLIP** pinned bottom-centre.
 - **Grid:** two columns of tall thumbnail cards (hairline border, radius 12): duration badge top-right, name and "Edited today / Yesterday / N days ago" over a bottom gradient. The gold pill stays pinned above the safe area. Long-press opens the existing rename / duplicate / delete actions in the new sheet style. Missing-media and error states keep their logic with restyled cards.
 - The optional `projectsWallpaper` hook is removed (unused).
@@ -88,7 +88,7 @@ Navy gradient; a gold compass ring (SVG) whose red/cream needle swings and settl
     - Text: Add text, Captions
     - Stickers: Add sticker
     - Audio: Music, Volume
-  - Enable/disable rules per tool are exactly today's. Selecting a clip switches the group to Edit; selecting a text/caption overlay switches to Text; selecting a sticker switches to Stickers (their existing inline panels replace the sub-row as today). The last manually chosen group is otherwise kept for the session.
+  - Enable/disable rules per tool are exactly today's. Selecting a text/caption overlay switches to Text and selecting a sticker switches to Stickers; selecting a clip switches to Edit only when the current group is Text or Stickers (Edit, Effects and Audio all act on the selected clip, so they stay put) (their existing inline panels replace the sub-row as today). The last manually chosen group is otherwise kept for the session.
   - Accessibility: group buttons have role `tab` with selected state; tool buttons keep their current labels so existing tests and VoiceOver flows hold.
 
 ### 5.4 Sheets (`src/ui/Sheet.tsx`)
@@ -97,7 +97,7 @@ One component for every tool sheet: dim backdrop, `surface` panel with radius 18
 ### 5.5 Export (`app/editor/[id]/export.tsx`)
 - Resolution choice as three chips; gold **EXPORT** pill.
 - While exporting: a circular progress ring (SVG) filling gold with the percentage inside, and a Cancel outline button.
-- Finished: check mark in the ring, "READY TO SAIL", `1080p · 0:21 · 14 MB`, then **POST TO…** (gold; hidden until Phase 4 ships), **SAVE TO PHOTOS**, **SHARE** (outline pills).
+- Finished: check mark in the ring, "READY TO SAIL", `1080p · 0:21 · 14 MB` (file size arrives with Phase 4), then **POST TO…** (gold; arrives with Phase 4), **SAVE TO PHOTOS**, **SHARE** (outline pills).
 - The Expo Go "needs the native build" card and error states are restyled, logic unchanged.
 
 ### 5.6 Shared kit (`src/ui/`)

@@ -40,7 +40,7 @@ function Handle({ clip, edge }: { clip: Clip; edge: "start" | "end" }) {
         style={{ position: "absolute", [edge === "start" ? "left" : "right"]: -2, top: -2, width: 14, height: STRIP_HEIGHT + 4, backgroundColor: theme.colors.accent,
           borderTopLeftRadius: edge === "start" ? 8 : 0, borderBottomLeftRadius: edge === "start" ? 8 : 0, borderTopRightRadius: edge === "end" ? 8 : 0, borderBottomRightRadius: edge === "end" ? 8 : 0,
           alignItems: "center", justifyContent: "center" }}>
-        <View style={{ width: 2, height: 20, backgroundColor: theme.colors.bg, borderRadius: 1 }} />
+        <View style={{ width: 2, height: 20, backgroundColor: theme.colors.onAccent, borderRadius: 1 }} />
       </View>
     </GestureDetector>
   );

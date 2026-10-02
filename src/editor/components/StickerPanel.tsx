@@ -5,7 +5,7 @@ import { deleteOverlay, duplicateOverlay, updateOverlayShared, updateSticker } f
 import { isSticker, OVERLAY_LIMITS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
-import { Chip } from "@/src/ui/Chip";
+import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { NumField } from "@/src/ui/NumField";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
@@ -32,7 +32,7 @@ export function StickerPanel({ overlayId, visible, onClose, onRetarget }: Props)
           <Slider testID="sticker-size-slider" minimumValue={OVERLAY_LIMITS.scale[0]} maximumValue={OVERLAY_LIMITS.scale[1]} value={sticker.scale}
             onSlidingStart={() => beginTransaction()}
             onValueChange={(v: number) => applyTransient((x) => updateOverlayShared(x, id, { scale: v }))}
-            minimumTrackTintColor={theme.colors.accent} /></View>
+            minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} /></View>
         <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Body style={{ color: theme.colors.sea }}>Fine-tune</Body>
           <Body style={{ color: theme.colors.sea }}>{fine ? "▲" : "▼"}</Body>
@@ -48,13 +48,13 @@ export function StickerPanel({ overlayId, visible, onClose, onRetarget }: Props)
           </View>
         )}
         <View style={{ flexDirection: "row", gap: theme.space.md }}>
-          <Chip label="Duplicate" selected={false} onPress={() => {
+          <SecondaryButton title="Duplicate" onPress={() => {
             apply((x) => duplicateOverlay(x, id));
             const overlays = useEditorStore.getState().project?.overlays ?? [];
             const dup = overlays[overlays.findIndex((o) => o.id === id) + 1];
             if (dup) { selectOverlay(dup.id); onRetarget?.(dup.id); }
           }} />
-          <Chip label="Delete" selected={false} onPress={() => { apply((x) => deleteOverlay(x, id)); onClose(); }} />
+          <SecondaryButton danger title="Delete" onPress={() => { apply((x) => deleteOverlay(x, id)); onClose(); }} />
         </View>
       </ScrollView>
     </Sheet>
