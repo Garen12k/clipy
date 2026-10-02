@@ -162,6 +162,81 @@ test("a temporary Graph failure in status is platform_unavailable", async () => 
     .rejects.toMatchObject({ status: 503, code: "platform_unavailable" });
 });
 
+describe("after finish, only Meta's own failure report is final (no second Reel)", () => {
+  const s = { ref: { videoId: "vid1", pageId: "p1" }, input: INPUT, clientResult: null, account };
+  const ref = { videoId: "vid1", pageId: "p1" };
+  const graphError = (status: number, code: number, message = "Meta said no") => new Response(JSON.stringify({ error: { code, message } }), { status });
+  const REEL = { status: "done", url: "https://www.facebook.com/reel/vid1" };
+
+  test("finish OK, then the status read is refused (#100, 400): processing, not failed", async () => {
+    const a = ctx([ok({ success: true }), graphError(400, 100, "Unsupported get request.")]);
+    expect(await facebook.finalize(a.ctx, "ptok", s)).toEqual({ status: "processing" });
+    expect(a.calls).toHaveLength(2);
+  });
+  test("finish OK, then the status read fails temporarily or cannot be reached: processing", async () => {
+    expect(await facebook.finalize(ctx([ok({ success: true }), graphError(500, 2)]).ctx, "ptok", s)).toEqual({ status: "processing" });
+    expect(await facebook.finalize(ctx([ok({ success: true }), () => { throw new TypeError("network down"); }]).ctx, "ptok", s)).toEqual({ status: "processing" });
+  });
+  test("finish OK, then an auth error on the status read still asks to reconnect", async () => {
+    await expect(facebook.finalize(ctx([ok({ success: true }), graphError(400, 190)]).ctx, "ptok", s)).rejects.toMatchObject({ status: 401 });
+  });
+  test("finish OK, then Meta reports an error phase: final", async () => {
+    await expect(facebook.finalize(ctx([ok({ success: true }), st("error")]).ctx, "ptok", s)).rejects.toMatchObject({ status: 400, code: "platform_error", reason: "error" });
+  });
+
+  test("a second finish refused after the first succeeded: the status decides (processing or done), never failed", async () => {
+    const refused = () => graphError(400, 100, "Video already finished.");
+    const a = ctx([refused(), st("processing", { publishing_phase: { status: "in_progress" } })]);
+    expect(await facebook.finalize(a.ctx, "ptok", s)).toEqual({ status: "processing" });
+    expect(a.calls).toHaveLength(2);
+    expect(a.calls[1].url.split("?")[0]).toBe(`${GRAPH}/vid1`);
+    expect(await facebook.finalize(ctx([refused(), st("processing")]).ctx, "ptok", s)).toEqual({ status: "processing" });
+    expect(await facebook.finalize(ctx([refused(), st("ready")]).ctx, "ptok", s)).toEqual(REEL);
+    expect(await facebook.finalize(ctx([refused(), st("processing", { publishing_phase: { status: "complete", publish_status: "published" } })]).ctx, "ptok", s)).toEqual(REEL);
+  });
+  test("a refused finish whose status read also fails is temporary, with the finish error's words", async () => {
+    const e = facebook.finalize(ctx([graphError(400, 100, "Video already finished."), graphError(400, 100, "Unsupported get request.")]).ctx, "ptok", s);
+    await expect(e).rejects.toMatchObject({ status: 503, code: "platform_unavailable", message: "Video already finished.", reason: "100" });
+    await expect(facebook.finalize(ctx([graphError(400, 100, "Nope."), () => { throw new TypeError("down"); }]).ctx, "ptok", s))
+      .rejects.toMatchObject({ status: 503, code: "platform_unavailable", message: "Nope." });
+  });
+  test("a refused finish with a status that says nothing either way is temporary", async () => {
+    await expect(facebook.finalize(ctx([graphError(400, 100, "Nope."), st("upload_complete")]).ctx, "ptok", s))
+      .rejects.toMatchObject({ status: 503, code: "platform_unavailable", message: "Nope." });
+  });
+  test("a temporary finish failure stays as it was when the look cannot decide", async () => {
+    await expect(facebook.finalize(ctx([graphError(500, 2, "Service temporarily unavailable"), graphError(500, 2)]).ctx, "ptok", s))
+      .rejects.toMatchObject({ status: 503, message: "Service temporarily unavailable" });
+  });
+  test("a refused finish is final only when Meta shows publishing has not started", async () => {
+    await expect(facebook.finalize(ctx([graphError(400, 100, "Bad description."), st("upload_complete", { publishing_phase: { status: "not_started" } })]).ctx, "ptok", s))
+      .rejects.toMatchObject({ status: 400, code: "platform_error", message: "Bad description.", reason: "100" });
+  });
+  test("a refused finish with Meta's error phase is final with Meta's report", async () => {
+    await expect(facebook.finalize(ctx([graphError(400, 100, "Nope."), st("processing", { processing_phase: { status: "error", error: { message: "Unsupported codec." } } })]).ctx, "ptok", s))
+      .rejects.toMatchObject({ status: 400, code: "platform_error", message: "Facebook couldn't process this video. Unsupported codec." });
+  });
+  test("an auth refusal of finish asks to reconnect without reading the status", async () => {
+    const a = ctx([graphError(400, 190, "Session expired.")]);
+    await expect(facebook.finalize(a.ctx, "ptok", s)).rejects.toMatchObject({ status: 401 });
+    expect(a.calls).toHaveLength(1);
+  });
+
+  test("status: an unrecognised Graph 4xx (#100) is temporary (platform_unavailable), with Meta's words", async () => {
+    await expect(facebook.status(ctx([graphError(400, 100, "Unsupported get request.")]).ctx, "ptok", ref))
+      .rejects.toMatchObject({ status: 503, code: "platform_unavailable", message: "Unsupported get request.", reason: "100" });
+    await expect(facebook.status(ctx([new Response("nope", { status: 404 })]).ctx, "ptok", ref)).rejects.toMatchObject({ status: 503, code: "platform_unavailable" });
+  });
+  test("status: an auth error is still an auth error", async () => {
+    const e = (await facebook.status(ctx([graphError(400, 200, "Permission denied.")]).ctx, "ptok", ref).catch((x: unknown) => x)) as PlatformError;
+    expect(e).toMatchObject({ status: 400, reason: "200" });
+    expect(facebook.isAuthError!(e)).toBe(true);
+  });
+  test("status: Meta's error phase is final", async () => {
+    await expect(facebook.status(ctx([st("processing", { publishing_phase: { status: "error" } })]).ctx, "ptok", ref)).rejects.toMatchObject({ status: 400, code: "platform_error" });
+  });
+});
+
 test("isAuthError is Meta's", () => {
   const e = (reason: string) => Object.assign(new PlatformError("facebook", 400, "m"), { reason });
   expect(facebook.isAuthError!(e("190"))).toBe(true);

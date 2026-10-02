@@ -3,6 +3,7 @@ import { postFinalize } from "../handlers/postFinalize.ts";
 import { postPrepare } from "../handlers/postPrepare.ts";
 import { postStatus } from "../handlers/postStatus.ts";
 import { MAX_RELAY_BYTES, postUpload } from "../handlers/postUpload.ts";
+import { facebook } from "../platforms/facebook.ts";
 import { tiktok } from "../platforms/tiktok.ts";
 import { youtube } from "../platforms/youtube.ts";
 import { saveTokens } from "../tokens.ts";
@@ -86,6 +87,19 @@ test("a platform failure in finalize is stored and rethrown verbatim", async () 
   const { sessionId } = await postPrepare(deps, USER, body);
   await expect(postFinalize(deps, USER, { sessionId, clientResult: null })).rejects.toMatchObject({ message: "The video has been rejected." });
   expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "failed", error: "The video has been rejected." });
+});
+
+test("Facebook: finish accepted, then unreadable statuses never fail the session (no second Reel)", async () => {
+  // The real Facebook adapter, in the youtube slot of the fake deps (the handlers only look it up by the session's platform).
+  const graphError = () => new Response(JSON.stringify({ error: { code: 100, message: "Unsupported get request." } }), { status: 400 });
+  const replies = [new Response(JSON.stringify({ success: true })), graphError(), graphError(), new Response(JSON.stringify({ status: { video_status: "ready" } }))];
+  const deps = await connected({ adapters: { youtube: facebook }, fetch: jest.fn(async () => replies.shift()!) as unknown as typeof fetch });
+  const sessionId = await deps.db.createSession({ userId: USER, platform: "youtube", ref: { videoId: "vid1", pageId: "p1" }, input: INPUT, status: "uploading", url: null, error: null });
+  expect(await postFinalize(deps, USER, { sessionId, clientResult: null })).toEqual({ status: "processing" });
+  expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+  await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 503, code: "platform_unavailable" });
+  expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+  expect(await postStatus(deps, USER, { sessionId })).toEqual({ status: "done", url: "https://www.facebook.com/reel/vid1" });
 });
 
 test("someone else's session is not found", async () => {

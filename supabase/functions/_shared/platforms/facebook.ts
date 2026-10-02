@@ -1,4 +1,4 @@
-import { PlatformError } from "../errors.ts";
+import { isTemporaryStatus, PlatformError } from "../errors.ts";
 import type { AdapterCtx, PublishResult, ServerAdapter } from "../types.ts";
 import { exchangeForPages, graph, META_SECRETS, metaAuthUrl, metaIsAuthError, ruploadTarget } from "./meta.ts";
 
@@ -14,27 +14,85 @@ type ReelStatus = {
     publishing_phase?: { status?: unknown; publish_status?: unknown; error?: { message?: unknown } };
   };
 };
+type Status = NonNullable<ReelStatus["status"]>;
 const FAILED = ["error", "expired", "upload_failed"];
 const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+const NO_REF = "Facebook upload reference is missing.";
+const isAuth = (e: PlatformError) => e.status === 401 || metaIsAuthError(e);
+/** Same status and message, but temporary (503, `platform_unavailable`): the phone keeps the upload and asks again. */
+function temporary(e: PlatformError): PlatformError {
+  const t = new PlatformError("facebook", 503, e.message);
+  t.reason = e.reason;
+  return t;
+}
 
-async function reelStatus(c: AdapterCtx, token: string, ref: Record<string, unknown>): Promise<PublishResult> {
-  // Asking again cannot repair a missing reference: final, so the phone starts afresh.
-  if (typeof ref.videoId !== "string" || !ref.videoId) throw new PlatformError("facebook", 502, "Facebook upload reference is missing.", "platform_error");
-  const b = await graph<ReelStatus>(c, "facebook", `/${encodeURIComponent(ref.videoId)}`, { token, params: { fields: "status" } });
-  const s = b.status ?? {};
+/**
+ * Once `finish` has been accepted the Reel exists (or will) on Facebook, so only Meta's own failure report may end the post as
+ * failed — anything else would let the app's Retry upload a second Reel. Meta's own report is an error/expired/upload_failed
+ * `video_status`, or a phase whose `status` is "error". A Graph error from the status read itself is never that verdict: auth
+ * errors stay auth errors (Reconnect), and every other one becomes temporary (Meta's words, 503), so the phone asks again.
+ */
+async function readReel(c: AdapterCtx, token: string, videoId: string): Promise<Status> {
+  try {
+    const b = await graph<ReelStatus>(c, "facebook", `/${encodeURIComponent(videoId)}`, { token, params: { fields: "status" } });
+    return b.status ?? {};
+  } catch (e) {
+    if (!(e instanceof PlatformError) || isAuth(e) || isTemporaryStatus(e.status)) throw e;
+    throw temporary(e);
+  }
+}
+
+/** Meta's own failure report as a final error (400), or null when the status reports none. */
+function failureOf(s: Status): PlatformError | null {
   const videoStatus = typeof s.video_status === "string" ? s.video_status : "";
   const publishStatus = s.publishing_phase?.publish_status;
   // A phase in error is final: fail now rather than poll until the wait runs out.
   const failedPhase = (["uploading_phase", "processing_phase", "publishing_phase"] as const).find((p) => s[p]?.status === "error");
-  if (FAILED.includes(videoStatus) || publishStatus === "error" || failedPhase) {
-    const detail = text(s.processing_phase?.error?.message) ?? text(s.publishing_phase?.error?.message) ?? text(s.uploading_phase?.errors?.[0]?.message);
-    const e = new PlatformError("facebook", 400, detail ? `Facebook couldn't process this video. ${detail}` : "Facebook couldn't process this video.");
-    e.reason = FAILED.includes(videoStatus) ? videoStatus : failedPhase ? `${failedPhase}_error` : "publish_error";
-    throw e;
-  }
-  // The Reels guide documents no permalink field; this is the public Reel address by id. UNVERIFIED until a live post.
-  if (videoStatus === "ready" || publishStatus === "published") return { status: "done", url: `https://www.facebook.com/reel/${encodeURIComponent(ref.videoId)}` };
+  if (!FAILED.includes(videoStatus) && publishStatus !== "error" && !failedPhase) return null;
+  const detail = text(s.processing_phase?.error?.message) ?? text(s.publishing_phase?.error?.message) ?? text(s.uploading_phase?.errors?.[0]?.message);
+  const e = new PlatformError("facebook", 400, detail ? `Facebook couldn't process this video. ${detail}` : "Facebook couldn't process this video.");
+  e.reason = FAILED.includes(videoStatus) ? videoStatus : failedPhase ? `${failedPhase}_error` : "publish_error";
+  return e;
+}
+
+// The Reels guide documents no permalink field; this is the public Reel address by id. UNVERIFIED until a live post.
+const done = (videoId: string): PublishResult => ({ status: "done", url: `https://www.facebook.com/reel/${encodeURIComponent(videoId)}` });
+
+function verdict(s: Status, videoId: string): PublishResult {
+  const failure = failureOf(s);
+  if (failure) throw failure;
+  if (s.video_status === "ready" || s.publishing_phase?.publish_status === "published") return done(videoId);
   return { status: "processing" };
+}
+
+async function reelStatus(c: AdapterCtx, token: string, ref: Record<string, unknown>): Promise<PublishResult> {
+  // Asking again cannot repair a missing reference: final, so the phone starts afresh.
+  if (typeof ref.videoId !== "string" || !ref.videoId) throw new PlatformError("facebook", 502, NO_REF, "platform_error");
+  return verdict(await readReel(c, token, ref.videoId), ref.videoId);
+}
+
+/**
+ * `finish` failed (not an auth error). An earlier `finish` (a request the phone gave up on, or a Resume after a lost answer)
+ * may already have been accepted, so look once before failing. Meta's own failure report is final; a published or ready
+ * Reel is done; a publishing phase under way (or video processing) is processing. Only a publishing phase Meta reports as
+ * "not_started" proves this finish was not accepted: then the finish error stands as it was. Anything else (the look failed,
+ * or says nothing either way) is temporary with the finish error's words, so Resume asks again instead of uploading again.
+ */
+async function afterRefusedFinish(c: AdapterCtx, token: string, videoId: string, finishError: PlatformError): Promise<PublishResult> {
+  const unsure = () => (isTemporaryStatus(finishError.status) ? finishError : temporary(finishError));
+  let s: Status;
+  try { s = await readReel(c, token, videoId); } catch (e) {
+    if (e instanceof PlatformError && isAuth(e)) throw e;
+    throw unsure();
+  }
+  const failure = failureOf(s);
+  if (failure) throw failure;
+  const publishing = s.publishing_phase?.status;
+  if (s.publishing_phase?.publish_status === "published") return done(videoId);
+  if (publishing === "not_started") throw finishError;
+  if (s.video_status === "ready") return done(videoId);
+  if (publishing === "in_progress" || publishing === "complete" || s.video_status === "processing") return { status: "processing" };
+  throw unsure();
 }
 
 export const facebook: ServerAdapter = {
@@ -72,11 +130,24 @@ export const facebook: ServerAdapter = {
     return { protocol: "meta-rupload", uploadUrl, uploadHeaders, chunkSize: input.fileSize, ref: { videoId, pageId }, wait: { maxSeconds: 300, resumeOnTimeout: false } };
   },
   async finalize(c, token, { ref, input }) {
-    if (typeof ref.videoId !== "string" || !ref.videoId || typeof ref.pageId !== "string" || !ref.pageId) throw new PlatformError("facebook", 502, "Facebook upload reference is missing.", "platform_error");
-    await graph(c, "facebook", `/${encodeURIComponent(ref.pageId)}/video_reels`, {
-      method: "POST", token, params: { video_id: ref.videoId, upload_phase: "finish", video_state: "PUBLISHED", description: input.caption },
-    });
-    return reelStatus(c, token, ref);
+    if (typeof ref.videoId !== "string" || !ref.videoId || typeof ref.pageId !== "string" || !ref.pageId) throw new PlatformError("facebook", 502, NO_REF, "platform_error");
+    const videoId = ref.videoId;
+    try {
+      await graph(c, "facebook", `/${encodeURIComponent(ref.pageId)}/video_reels`, {
+        method: "POST", token, params: { video_id: videoId, upload_phase: "finish", video_state: "PUBLISHED", description: input.caption },
+      });
+    } catch (e) {
+      if (!(e instanceof PlatformError) || isAuth(e)) throw e;
+      return afterRefusedFinish(c, token, videoId, e);
+    }
+    // `finish` was accepted: the Reel is on its way. A status read that fails (other than auth) is not a verdict on the video,
+    // so answer "processing" and let the session's polling read it again; finish is never sent twice from here.
+    let s: Status;
+    try { s = await readReel(c, token, videoId); } catch (e) {
+      if (e instanceof PlatformError && isAuth(e)) throw e;
+      return { status: "processing" };
+    }
+    return verdict(s, videoId);
   },
   status: (c, token, ref) => reelStatus(c, token, ref),
   isAuthError: metaIsAuthError,
