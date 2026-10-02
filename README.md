@@ -50,7 +50,7 @@ Works: Sign in with Apple, an Accounts screen (connect / disconnect), a Post scr
 - YouTube videos arrive **private** until Google audits the app; open the video from the Done screen and make it Public in YouTube yourself.
 - TikTok, Instagram, Facebook and X arrive in phases 4B to 4D.
 - **Nothing has been run against live Supabase or Google yet.** The code and tests were written from the platforms' documentation; the device checklist is in `supabase/README.md` (section 9).
-- Retries never re-upload a video that has already finished uploading.
+- Retries never re-upload a video that has already finished uploading, unless the server says that upload failed or no longer exists; the message then says Retry will upload the video again.
 - Leaving the Post screen stops any upload in progress.
 - A post that completes after you have left the Post screen is not recorded on the project card.
 - The Post screen only accepts videos from Clipy's own folders.

@@ -96,7 +96,7 @@ Edge Functions (Deno, TypeScript). All except `oauth-callback` require the user'
 | `oauth-start` | `{ platform, returnUrl }` → `{ authUrl }`. Validates `returnUrl`, stores `state` + PKCE verifier in `oauth_states` (10-minute expiry). |
 | `oauth-callback` | Platform redirect (`code`, `state`). Exchanges the code, fetches the account profile, encrypts and upserts tokens, deletes the state, redirects to `returnUrl?status=ok|error&platform=…`. |
 | `accounts` | `GET` → `{ platforms: [{ id, available, connected, name?, avatarUrl?, needsReconnect }] }`. `DELETE ?platform=` → revokes where supported, deletes the row. |
-| `post-prepare` | `{ platform, fileSize, durationSec, mimeType, caption, options }` → `{ sessionId, mode, uploadUrl?, chunkSize, tiktokCreatorInfo? }`. Refreshes the token if needed; creates a `post_sessions` row. |
+| `post-prepare` | `{ platform, fileSize, durationSec, mimeType, caption, options }` → `{ sessionId, protocol, uploadUrl?, chunkSize, tiktokCreatorInfo? }`. Refreshes the token if needed; creates a `post_sessions` row. |
 | `post-upload` | relay mode only: `sessionId`, `offset`, `total` headers + chunk body → `{ nextOffset }`. Rejects bodies over 4 MB and sessions not owned by the caller. |
 | `post-finalize` | `{ sessionId }` → `{ status: "done", url } | { status: "processing" }`. |
 | `post-status` | `{ sessionId }` → same shape; the app polls every 3 s for up to 2 minutes while `processing`. |
@@ -162,7 +162,7 @@ Research notes with source URLs were gathered per platform before planning. Wher
 **Backend**
 - All logic lives in plain TypeScript modules under `supabase/functions/_shared/` using only web-standard APIs (`fetch`, `Request`, `Response`, WebCrypto), tested with **Jest in a Node environment** (no Deno or Docker on the dev PC). Each function's `index.ts` is a thin Deno wrapper, verified by reading until deployed.
 - One `oauth-callback` URL for every platform (the platform is recovered from `state`).
-- `post-prepare` returns `{ sessionId, mode, uploadUrl, uploadHeaders, chunkSize }`. `uploadHeaders` is normally empty.
+- `post-prepare` returns `{ sessionId, protocol, uploadUrl, uploadHeaders, chunkSize }` (`protocol` is `google-resumable` or `relay`). `uploadHeaders` is normally empty.
 - Free-plan limits (150 s wall clock, 2 s CPU, 256 MB, undocumented ~10 MB request body) cap relay chunks at 4 MB and forbid buffering whole videos.
 - Free projects pause after about a week without activity; the app shows "Server is asleep — open the Supabase dashboard to wake it" when the backend is unreachable.
 

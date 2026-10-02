@@ -137,7 +137,7 @@ Use the Google account that owns your YouTube channel.
 | What you see | Why | What to do |
 | --- | --- | --- |
 | YouTube shows **Not available yet** | `YOUTUBE_CLIENT_ID` or `YOUTUBE_CLIENT_SECRET` is not set on the server | Do step 4b. Check with `npx.cmd supabase secrets list` (it shows names, not values). |
-| YouTube shows **Reconnect** | Google ended the connection (app still in "Testing" after 7 days, password change, or access removed in your Google account) | Tap Reconnect. If it happens every week, do the **Publish app** part of step 5. |
+| YouTube shows **Reconnect** | Google ended the connection (app still in "Testing" after 7 days, password change, or access removed in your Google account), or the "upload videos" box was unticked when connecting | Tap Reconnect. If it happens every week, do the **Publish app** part of step 5. |
 | **Server is asleep** | The free project was paused after a week unused | Restore it from the Supabase dashboard (step 6), wait a few minutes, try again. |
 | Error mentioning **quota** | The Google project used up today's YouTube allowance (about 100 uploads a day) | Wait until tomorrow (the allowance resets once a day). |
 | Every action fails with a sign-in error (**401**, **Invalid JWT** or **Sign in to Clipy first**) although you are signed in | Supabase's own sign-in check at the door rejects the app's login (this can happen after Supabase changes its signing keys) | Run `npx.cmd supabase functions deploy --no-verify-jwt`. Clipy still checks your sign-in itself inside each function. If it still fails, tell the developer. |
@@ -167,3 +167,9 @@ After steps 1 to 5 above, on your iPhone in Expo Go:
 7. View on YouTube opens the (private) video.
 8. From a finished export, **Post to…** closes the export sheet and then opens the Post screen.
 9. Accounts → Sign out asks you to confirm.
+
+## 10. Security notes
+
+- **The Connect link belongs to you, for a short time, once.** When you tap Connect, Clipy asks the server for a sign-in link that is tied to the Clipy account you are signed in with. The link stops working after 10 minutes and works only once.
+- **Your YouTube sign-in is locked on the server.** The server saves it encrypted with your `TOKEN_ENC_KEY` (step 4a). The app never receives it (except the short-lived token of step 4c, if you turn that on).
+- **One accepted risk ("login CSRF").** If someone else sent you their own Connect link and you opened it within those 10 minutes and allowed access, your YouTube channel would be connected to *their* Clipy account. For a personal app with one user this is accepted. Only start Connect from inside Clipy, and never open a Connect link someone sends you.
