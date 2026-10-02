@@ -39,7 +39,7 @@ export interface Db {
   getSession(id: string): Promise<PostSessionRow | null>;
   updateSession(id: string, patch: Partial<Pick<PostSessionRow, "ref" | "status" | "url" | "error">>): Promise<void>;
   /** Atomically moves a session from one status to another; false when it was not in `from`. */
-  claimSession(id: string, from: SessionStatus, to: SessionStatus): Promise<boolean>;
+  claimSession(id: string, from: SessionStatus, to: SessionStatus, patch?: { url?: string | null; error?: string | null }): Promise<boolean>;
 }
 export interface Deps {
   db: Db; env: Env; fetch: typeof fetch; now(): Date; key(): Promise<CryptoKey>;

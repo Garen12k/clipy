@@ -41,3 +41,12 @@ test("claimSession cannot move a done session", async () => {
   expect(await db.claimSession(id, "processing", "failed")).toBe(false);
   expect((await db.getSession(id))!.status).toBe("done");
 });
+
+test("claimSession with a patch sets status and fields together; a lost claim sets neither", async () => {
+  const db = memoryDb();
+  const id = await db.createSession({ userId: USER, platform: "youtube", ref: {}, input: INPUT, status: "publishing", url: null, error: null });
+  expect(await db.claimSession(id, "uploading", "done", { url: "u" })).toBe(false);
+  expect(await db.getSession(id)).toMatchObject({ status: "publishing", url: null });
+  expect(await db.claimSession(id, "publishing", "done", { url: "u" })).toBe(true);
+  expect(await db.getSession(id)).toMatchObject({ status: "done", url: "u" });
+});

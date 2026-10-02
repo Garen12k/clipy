@@ -12,16 +12,17 @@ export const settled = (s: PostSessionRow): PublishResult | null => (s.status ==
 export const failedError = (s: PostSessionRow) => new ApiError(400, "platform_error", s.error ?? "The post failed.");
 
 /** A real rejection by the platform (4xx). Auth failures were already turned into `reconnect` by withPlatformAuth. */
-export const isRejection = (e: unknown): e is PlatformError => e instanceof PlatformError && e.status >= 400 && e.status < 500;
+export const isRejection = (e: unknown): e is PlatformError =>
+  e instanceof PlatformError && e.status >= 400 && e.status < 500 && e.status !== 401 && e.status !== 408 && e.status !== 429;
 
 /** Moves to `failed` only if the session is still in `from`; nothing ever overwrites `done`. */
 export async function failFrom(deps: Deps, id: string, from: "publishing" | "processing", message: string): Promise<void> {
-  if (await deps.db.claimSession(id, from, "failed")) await deps.db.updateSession(id, { error: message });
+  await deps.db.claimSession(id, from, "failed", { error: message });
 }
 
 /** Moves to `done` only if the session is still in `from`; returns what is stored when the claim is lost. */
 export async function finishFrom(deps: Deps, session: PostSessionRow, from: "publishing" | "processing", url: string | null): Promise<PublishResult> {
-  if (await deps.db.claimSession(session.id, from, "done")) { await deps.db.updateSession(session.id, { url }); return { status: "done", url }; }
+  if (await deps.db.claimSession(session.id, from, "done", { url })) return { status: "done", url };
   const now = await deps.db.getSession(session.id);
   return now ? (settled(now) ?? { status: "processing" }) : { status: "done", url };
 }

@@ -221,7 +221,7 @@ test("a status 4xx that loses to a concurrent done does not overwrite it", async
   const status = jest.fn(async () => { await deps.db.updateSession(sid, { status: "done", url: "https://x.test/win" }); throw new PlatformError("youtube", 404, "Gone"); });
   const p = await prepared({ finalize: jest.fn(async () => ({ status: "processing" as const })), status });
   deps = p.deps; sid = p.sessionId;
-  await fin(sid && deps, sid);
+  await fin(deps, sid);
   await expect(postStatus(deps, USER, { sessionId: sid })).rejects.toMatchObject({ message: "Gone" });
   expect(await deps.db.getSession(sid)).toMatchObject({ status: "done", url: "https://x.test/win" });
 });
@@ -230,5 +230,27 @@ test("status 503 is rethrown and the session stays processing", async () => {
   const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => ({ status: "processing" as const })), status: jest.fn(async () => { throw new PlatformError("youtube", 503, "Unavailable"); }) });
   await fin(deps, sessionId);
   await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 503 });
+  expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+});
+test("a DB failure after a successful platform call never reverts to uploading or re-publishes", async () => {
+  const { deps, sessionId, adapter } = await prepared();
+  const real = deps.db.claimSession.bind(deps.db);
+  deps.db.claimSession = async (id, from, to, patch) => { if (from === "publishing" && to === "done") throw new Error("db down"); return real(id, from, to, patch); };
+  await expect(fin(deps, sessionId)).rejects.toThrow("db down");
+  expect((await deps.db.getSession(sessionId))!.status).toBe("publishing");
+  expect(await fin(deps, sessionId)).toEqual({ status: "processing" });
+  expect(adapter.finalize).toHaveBeenCalledTimes(1);
+});
+
+test("429 in finalize returns to uploading (retryable)", async () => {
+  const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => { throw new PlatformError("youtube", 429, "Slow down"); }) });
+  await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 429 });
+  expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
+});
+
+test("429 in status is rethrown without writing", async () => {
+  const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => ({ status: "processing" as const })), status: jest.fn(async () => { throw new PlatformError("youtube", 429, "Slow down"); }) });
+  await fin(deps, sessionId);
+  await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 429 });
   expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
 });
