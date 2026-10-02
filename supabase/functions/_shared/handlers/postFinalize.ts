@@ -12,7 +12,7 @@ export async function postFinalize(deps: Deps, userId: string, body: unknown): P
     if (done) return done;
     if (session.status === "failed") throw failedError(session);
     if (session.status === "publishing") return { status: "processing" };
-    if (session.status === "processing") return pollProcessing(deps, userId, session);
+    if (session.status === "processing") return pollProcessing(deps, userId, session); // claim-guarded, like the publish below
 
     // uploading
     const adapter = deps.adapters[session.platform];

@@ -299,7 +299,7 @@ test("429 in finalize returns to uploading (retryable)", async () => {
   expect((await deps.db.getSession(sessionId))!.status).toBe("uploading");
 });
 
-test("429 in status is rethrown without writing", async () => {
+test("429 in status is rethrown and the session goes back to processing", async () => {
   const { deps, sessionId } = await prepared({ finalize: jest.fn(async () => ({ status: "processing" as const })), status: jest.fn(async () => { throw new PlatformError("youtube", 429, "Slow down"); }) });
   await fin(deps, sessionId);
   await expect(postStatus(deps, USER, { sessionId })).rejects.toMatchObject({ status: 429, code: "platform_unavailable" });
@@ -311,6 +311,119 @@ test("YouTube with no upload result in finalize stays final (platform_error): as
   await saveTokens(deps, USER, "youtube", tokens({ expiresAt: null }), profile);
   const { sessionId } = await postPrepare({ ...deps, fetch: (async () => new Response(null, { status: 200, headers: { Location: "https://upload.test/s" } })) as unknown as typeof fetch }, USER, body);
   await expect(fin(deps, sessionId)).rejects.toMatchObject({ status: 502, code: "platform_error", message: "YouTube did not confirm the upload." });
+});
+
+describe("status is claim-guarded: one platform status call at a time per post", () => {
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const st = (deps: any, sessionId: string) => postStatus(deps, USER, { sessionId });
+  /** A session already in `processing`; `seen` records the session's status at each adapter.status call. */
+  async function processing(status: (...a: any[]) => Promise<any>) {
+    const seen: string[] = [];
+    let deps: any, sid = "";
+    const p = await prepared({ status: jest.fn(async (...a: any[]) => { seen.push((await deps.db.getSession(sid))!.status); return status(...a); }) });
+    deps = p.deps; sid = p.sessionId;
+    await deps.db.updateSession(sid, { status: "processing" });
+    return { ...p, seen };
+  }
+  const done = { status: "done" as const, url: "https://x.test/9" };
+
+  test.each([
+    ["done", done, { status: "done", url: "https://x.test/9" }],
+    ["processing", { status: "processing" as const }, { status: "processing", url: null }],
+  ])("two simultaneous status calls ask the platform once (adapter says %s; order-independent)", async (_n, answer, end) => {
+    const { deps, sessionId, adapter } = await processing(async () => { await tick(); return answer; });
+    const results = await Promise.all([st(deps, sessionId), st(deps, sessionId)]);
+    expect(adapter.status).toHaveBeenCalledTimes(1);
+    for (const r of results) expect([{ status: "processing" }, answer]).toContainEqual(r);
+    expect(results).toContainEqual(answer); // the winner's answer
+    expect(await deps.db.getSession(sessionId)).toMatchObject(end);
+  });
+
+  test("status while another status is in flight reports processing and touches nothing", async () => {
+    const { deps, sessionId, adapter } = await processing(async () => done);
+    await deps.db.updateSession(sessionId, { status: "publishing" });
+    expect(await st(deps, sessionId)).toEqual({ status: "processing" });
+    expect(adapter.status).not.toHaveBeenCalled();
+    expect((await deps.db.getSession(sessionId))!.status).toBe("publishing");
+  });
+
+  test("done: the platform is asked while the session is claimed, which then ends done with the url", async () => {
+    const { deps, sessionId, adapter, seen } = await processing(async () => done);
+    expect(await st(deps, sessionId)).toEqual(done);
+    expect(seen).toEqual(["publishing"]);
+    expect(adapter.status).toHaveBeenCalledWith(expect.anything(), "access-1", { k: 1 });
+    expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "done", url: "https://x.test/9" });
+  });
+
+  test("processing: the session goes back to processing", async () => {
+    const { deps, sessionId, seen } = await processing(async () => ({ status: "processing" as const }));
+    expect(await st(deps, sessionId)).toEqual({ status: "processing" });
+    expect(seen).toEqual(["publishing"]);
+    expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+  });
+
+  test("a platform 400 fails the session with the message and is rethrown", async () => {
+    const { deps, sessionId, seen } = await processing(async () => { throw new PlatformError("youtube", 400, "Rejected by the platform."); });
+    await expect(st(deps, sessionId)).rejects.toMatchObject({ status: 400, code: "platform_error", message: "Rejected by the platform." });
+    expect(seen).toEqual(["publishing"]);
+    expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "failed", error: "Rejected by the platform." });
+  });
+
+  test("a platform 503 returns the session to processing and is rethrown", async () => {
+    const { deps, sessionId, seen } = await processing(async () => { throw new PlatformError("youtube", 503, "Unavailable"); });
+    await expect(st(deps, sessionId)).rejects.toMatchObject({ status: 503, code: "platform_unavailable" });
+    expect(seen).toEqual(["publishing"]);
+    expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+  });
+
+  test("a TypeError returns the session to processing and is rethrown", async () => {
+    const { deps, sessionId, seen } = await processing(async () => { throw new TypeError("network"); });
+    await expect(st(deps, sessionId)).rejects.toBeInstanceOf(TypeError);
+    expect(seen).toEqual(["publishing"]);
+    expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+  });
+
+  test("an auth failure flags the account, returns the session to processing and throws reconnect", async () => {
+    const { deps, sessionId, seen } = await processing(async () => { throw new PlatformError("youtube", 401, "Invalid Credentials"); });
+    await expect(st(deps, sessionId)).rejects.toMatchObject({ status: 401, code: "reconnect" });
+    expect(seen).toEqual(["publishing"]);
+    expect((await deps.db.getAccount(USER, "youtube"))!.meta.needsReconnect).toBe(true);
+    expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+  });
+
+  test("a claim write failing after the platform said done is not reverted to processing", async () => {
+    const { deps, sessionId, adapter } = await processing(async () => done);
+    const real = deps.db.claimSession.bind(deps.db);
+    deps.db.claimSession = async (id: string, from: any, to: any, patch: any) => { if (from === "publishing" && to === "done") throw new Error("db down"); return real(id, from, to, patch); };
+    await expect(st(deps, sessionId)).rejects.toThrow("db down");
+    expect((await deps.db.getSession(sessionId))!.status).toBe("publishing");
+    expect(await st(deps, sessionId)).toEqual({ status: "processing" });
+    expect(adapter.status).toHaveBeenCalledTimes(1);
+  });
+
+  test("finalize on a processing session takes the same guarded path (raced with status: one platform call)", async () => {
+    const { deps, sessionId, adapter, seen } = await processing(async () => { await tick(); return done; });
+    const results = await Promise.all([fin(deps, sessionId), st(deps, sessionId)]);
+    expect(adapter.status).toHaveBeenCalledTimes(1);
+    expect(adapter.finalize).not.toHaveBeenCalled();
+    expect(seen).toEqual(["publishing"]);
+    for (const r of results) expect([{ status: "processing" }, done]).toContainEqual(r);
+    expect(results).toContainEqual(done);
+    expect(await deps.db.getSession(sessionId)).toMatchObject({ status: "done", url: "https://x.test/9" });
+  });
+
+  test("a token refresh failure while claimed returns the session to processing; racing calls refresh once", async () => {
+    const { deps, sessionId, adapter } = await processing(async () => done);
+    await saveTokens(deps, USER, "youtube", tokens({ expiresAt: "2026-10-02T09:00:00.000Z" }), profile); // expired: status refreshes first
+    (adapter.refresh as jest.Mock).mockImplementationOnce(async () => { await tick(); throw new PlatformError("youtube", 503, "Backend Error"); });
+    const results = await Promise.allSettled([st(deps, sessionId), st(deps, sessionId)]);
+    expect(adapter.refresh).toHaveBeenCalledTimes(1);
+    expect(results.filter((r) => r.status === "rejected")).toEqual([{ status: "rejected", reason: expect.objectContaining({ code: "platform_unreachable" }) }]);
+    expect(results.filter((r) => r.status === "fulfilled")).toEqual([{ status: "fulfilled", value: { status: "processing" } }]);
+    expect(adapter.status).not.toHaveBeenCalled();
+    expect((await deps.db.getSession(sessionId))!.status).toBe("processing");
+    expect(await st(deps, sessionId)).toEqual(done);
+  });
 });
 
 describe("TikTok handlers: a temporary failure after the upload never asks for a new upload", () => {
