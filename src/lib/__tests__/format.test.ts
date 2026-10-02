@@ -1,4 +1,4 @@
-import { formatDuration, formatDurationPrecise, formatSpeed, relativeTime } from "../format";
+import { editedLabel, formatDuration, formatDurationPrecise, formatSpeed, relativeTime } from "../format";
 
 test("formatDuration", () => {
   expect(formatDuration(0)).toBe("0:00");
@@ -19,4 +19,10 @@ test("relativeTime", () => {
   expect(relativeTime("2026-10-01T11:30:00Z", now)).toBe("30m ago");
   expect(relativeTime("2026-10-01T09:00:00Z", now)).toBe("3h ago");
   expect(relativeTime("2026-09-28T09:00:00Z", now)).toBe("3d ago");
+});
+test("editedLabel", () => {
+  const now = new Date("2026-10-02T15:00:00");
+  expect(editedLabel("2026-10-02T01:00:00", now)).toBe("Edited today");
+  expect(editedLabel("2026-10-01T23:00:00", now)).toBe("Yesterday");
+  expect(editedLabel("2026-09-29T12:00:00", now)).toBe("3 days ago");
 });
