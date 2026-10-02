@@ -22,7 +22,7 @@ const small = { fontSize: 12 };
 
 /** One platform on the Post screen: tick box + account on the left, its state and one action on the right, messages below. */
 export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect, onRetry, onView }: Props) {
-  const { status, reason, checked, error, blocker, canPost, note, canResume } = view;
+  const { status, reason, checked, error, blocker, canPost, note, captionNote, canResume } = view;
   const { label, icon } = PLATFORMS[status.id];
   const active = ACTIVE.includes(row.phase);
   const done = row.phase === "done";
@@ -74,6 +74,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
   }
   // The platform's standing note stays visible whenever the row is ticked, next to any validation message.
   if (note && !done) below.push(<View key="n">{msg(note)}</View>);
+  if (captionNote && !done) below.push(<View key="c">{msg(captionNote)}</View>);
 
   const identity = (<>
     <Ionicons name={icon} size={24} color={reason && !done ? theme.colors.textMuted : theme.colors.text} />

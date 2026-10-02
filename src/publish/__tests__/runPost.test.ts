@@ -1,6 +1,6 @@
 import { ApiFailure, type Prepared } from "../api";
 import { IDLE_ROW, POLL_LIMIT, runPost, type PostDeps, type ResumeInfo, type RowState } from "../runPost";
-import { UploadError } from "../upload";
+import { UploadError, uploadRelay } from "../upload";
 
 const video = { fileUri: "file:///v.mp4", fileSize: 10, durationSec: 21, mimeType: "video/mp4" };
 const job = { platform: "youtube" as const, video, caption: "Beach day", options: { title: "Beach", privacy: "public" } };
@@ -233,6 +233,71 @@ describe("a finished upload is never uploaded again", () => {
     expect(d.api.prepare).not.toHaveBeenCalled();
     expect(d.api.finalize).toHaveBeenCalledWith("s1", '{"id":"abc"}');
     expect(t.row()).toMatchObject({ phase: "done", url: "https://youtu.be/abc" });
+  });
+});
+
+describe("X: relay upload, then the post is created after processing", () => {
+  const plan: Prepared = { sessionId: "x1", protocol: "relay", uploadUrl: null, uploadHeaders: {}, chunkSize: 4 * 1024 * 1024, wait: { maxSeconds: 300, intervalSeconds: 5, resumeOnTimeout: true } };
+  const xJob = { ...job, platform: "x" as const, options: {} };
+  const X_TIMEOUT = "X is still processing the video. Tap Resume in a minute to finish posting.";
+  const xDeps = () => deps({ api: { ...deps().api, prepare: jest.fn(async () => plan) } });
+
+  test("60 polls 5 s apart, then a resumable failure; Resume finalizes without uploading again", async () => {
+    const d = xDeps(), t = track(), sig = signal();
+    (d.uploadRelay as jest.Mock).mockImplementation(async (send, a) => { await send(0, 10, new Uint8Array(10), sig); a.onProgress(1); });
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockResolvedValue({ status: "processing" });
+    const info = await runPost(xJob, d, t.update, sig);
+    expect(d.api.uploadChunk).toHaveBeenCalledWith("x1", 0, 10, expect.any(Uint8Array), sig);
+    expect(d.uploadGoogleResumable).not.toHaveBeenCalled();
+    expect(d.api.status).toHaveBeenCalledTimes(60);
+    expect((d.sleep as jest.Mock).mock.calls.map((c) => c[0])).toEqual(Array(60).fill(5_000));
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: X_TIMEOUT, url: null });
+    expect(t.phases).not.toContain("done");
+    expect(info).toEqual({ prepared: plan, uploaded: true, clientResult: null });
+
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "done", url: "https://x.com/i/status/123" });
+    const t2 = track();
+    await runPost(xJob, d, t2.update, signal(), info);
+    expect(d.api.prepare).toHaveBeenCalledTimes(1);
+    expect(d.uploadRelay).toHaveBeenCalledTimes(1);
+    expect(d.api.uploadChunk).toHaveBeenCalledTimes(1);
+    expect(d.api.finalize).toHaveBeenLastCalledWith("x1", null);
+    expect(t2.row()).toMatchObject({ phase: "done", url: "https://x.com/i/status/123" });
+  });
+
+  test("an unconfirmed post is final: X's words plus Retry uploads again, and nothing left to resume", async () => {
+    const text = "X didn't confirm the post. It may already be on your profile — check X before posting again.";
+    const d = xDeps(), t = track();
+    (d.api.finalize as jest.Mock).mockRejectedValue(new ApiFailure("platform_error", text));
+    expect(await runPost(xJob, d, t.update, signal())).toBeNull();
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: `${text} Retry will upload the video again.` });
+  });
+
+  test("X busy on every try of a piece: the row is resumable, and Resume re-sends to the SAME session (no new prepare)", async () => {
+    const bytes = new Uint8Array(10);
+    const fileReader = { size: 10, read: jest.fn((o: number, n: number) => bytes.slice(o, o + n)), close: jest.fn() };
+    const small: Prepared = { ...plan, chunkSize: 4 };
+    // The real uploader, with an instant backoff.
+    const relay = jest.fn((send: Parameters<typeof uploadRelay>[0], a: Parameters<typeof uploadRelay>[1]) => uploadRelay(send, { ...a, sleep: async () => {} }));
+    const busy = new ApiFailure("platform_unavailable", "X is having trouble — try again.");
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => small) }, openReader: jest.fn(() => fileReader), uploadRelay: relay });
+    (d.api.uploadChunk as jest.Mock).mockReset().mockResolvedValueOnce({ nextOffset: 4 }).mockRejectedValueOnce(busy).mockRejectedValueOnce(busy).mockRejectedValueOnce(busy).mockRejectedValueOnce(busy);
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "done", url: "https://x.com/i/status/9" });
+    const t = track();
+    const info = await runPost(xJob, d, t.update, signal());
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: "The connection dropped. Check your internet, then resume." });
+    expect(info).toEqual({ prepared: small, uploaded: false, clientResult: null });
+    expect(d.api.finalize).not.toHaveBeenCalled();
+
+    (d.api.uploadChunk as jest.Mock).mockResolvedValueOnce({ nextOffset: 4 }).mockResolvedValueOnce({ nextOffset: 8 }).mockResolvedValueOnce({ nextOffset: 10 });
+    const t2 = track();
+    await runPost(xJob, d, t2.update, signal(), info);
+    expect(d.api.prepare).toHaveBeenCalledTimes(1);
+    expect(relay).toHaveBeenCalledTimes(2);
+    expect((d.api.uploadChunk as jest.Mock).mock.calls.slice(5).map((c) => [c[0], c[1]])).toEqual([["x1", 0], ["x1", 4], ["x1", 8]]);
+    expect(d.api.finalize).toHaveBeenCalledWith("x1", null);
+    expect(t2.row()).toMatchObject({ phase: "done", url: "https://x.com/i/status/9" });
   });
 });
 

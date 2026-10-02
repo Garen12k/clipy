@@ -83,6 +83,12 @@ export async function uploadGoogleResumable(url: string, headers: Record<string,
   }
 }
 
+/**
+ * Relay failures worth sending the same piece again for: our function was unreachable or crashed, or the platform (or its token
+ * endpoint) was busy or briefly unreachable. Anything else — a refusal, Reconnect, a bad piece — is passed through unchanged.
+ */
+const RELAY_RETRY = new Set(["unreachable", "internal", "platform_unavailable", "platform_unreachable"]);
+
 export async function uploadRelay(send: (offset: number, total: number, bytes: Uint8Array, signal: AbortSignal) => Promise<{ nextOffset: number }>, a: UploadArgs): Promise<void> {
   const total = a.reader.size, sleep = a.sleep ?? wait;
   if (!(total > 0)) throw new UploadError("The video file is empty.", false);
@@ -99,7 +105,7 @@ export async function uploadRelay(send: (offset: number, total: number, bytes: U
       attempts = 0;
       a.onProgress(offset / total);
     } catch (e) {
-      if (!(e instanceof ApiFailure) || (e.code !== "unreachable" && e.code !== "internal")) throw e;
+      if (!(e instanceof ApiFailure) || !RELAY_RETRY.has(e.code)) throw e;
       if (++attempts > MAX_ATTEMPTS) throw dropped();
       await sleepOrAbort(1000 * 2 ** (attempts - 1), a.signal, sleep);
     }

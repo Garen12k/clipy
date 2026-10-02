@@ -1,7 +1,7 @@
 import { ApiError } from "../errors.ts";
 import { accessTokenFor, withPlatformAuth } from "../tokens.ts";
 import { adapterCtx, type Deps, type PublishResult } from "../types.ts";
-import { failedError, failFrom, finishFrom, isRejection, ownSession, pollProcessing, settled } from "./session.ts";
+import { failedError, failFrom, finishFrom, isRejection, ownSession, pollProcessing, quietly, settled } from "./session.ts";
 
 /** Publishes once: only the caller that wins the uploading -> publishing claim calls the platform. */
 export async function postFinalize(deps: Deps, userId: string, body: unknown): Promise<PublishResult> {
@@ -12,7 +12,7 @@ export async function postFinalize(deps: Deps, userId: string, body: unknown): P
     if (done) return done;
     if (session.status === "failed") throw failedError(session);
     if (session.status === "publishing") return { status: "processing" };
-    if (session.status === "processing") return pollProcessing(deps, userId, session);
+    if (session.status === "processing") return pollProcessing(deps, userId, session); // claim-guarded, like the publish below
 
     // uploading
     const adapter = deps.adapters[session.platform];
@@ -25,9 +25,9 @@ export async function postFinalize(deps: Deps, userId: string, body: unknown): P
         r = await withPlatformAuth(deps, account, () =>
           adapter.finalize(adapterCtx(deps), accessToken, { ref: session.ref, input: session.input, clientResult: typeof clientResult === "string" ? clientResult : null, account: profile }));
       } catch (e) {
-        if (isRejection(e)) await failFrom(deps, session.id, "publishing", e.message);
-        else await deps.db.claimSession(session.id, "publishing", "uploading"); // nothing was published: let the user try again
-        throw e;
+        if (isRejection(e)) await quietly(() => failFrom(deps, session.id, "publishing", e.message));
+        else await quietly(() => deps.db.claimSession(session.id, "publishing", "uploading")); // nothing was published: let the user try again
+        throw e; // always the platform's error, even when the state write above failed
       }
       // The platform call succeeded: never revert from here. A failed write leaves `publishing` (accepted dead end).
       if (r.status === "done") return await finishFrom(deps, session, "publishing", r.url);

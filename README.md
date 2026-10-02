@@ -42,19 +42,33 @@ npm run typecheck
 npm test
 ```
 
-## Posting (Phases 4A–4C)
+## Posting (Phase 4: 4A–4D)
 
-Works: Sign in with Apple, an Accounts screen (connect / disconnect), a Post screen, YouTube posting, **sending to your TikTok inbox**, and **Instagram and Facebook Reels**. Reach Post from **Post to…** on the export result or **Post a video** on the home screen; Accounts is the icon in the home header.
+Built: Sign in with Apple, an Accounts screen (connect / disconnect), and a Post screen that posts one video to several platforms at once. Reach Post from **Post to…** on the export result or **Post a video** on the home screen; Accounts is the icon in the home header. If one platform fails, the others still post.
 
-- Needs the Supabase backend: follow `supabase/README.md`, and copy `.env.example` to `.env` with your Supabase URL and key. Without `.env` the app shows "Posting isn't set up yet" and the Share button still works.
+- **YouTube** — uploads arrive **private** until Google audits Clipy's app; open the video and make it Public yourself.
+- **TikTok** — sent to your **TikTok inbox** as a draft; you add the caption and post it in TikTok.
+- **Instagram** — posts as a **Reel** (needs a professional account linked to a Facebook Page).
+- **Facebook** — posts as a **Reel** on your Page (3 to 90 seconds).
+- **X** — posts with your caption; X charges Clipy's developer account **per post** (about 1.5¢, about 20¢ if the caption has a link).
+- **Nothing has been run against the live services yet** (no real Supabase project, no developer apps). All of this was written from the platforms' documentation and tested with fakes.
+
+**Before first use:** set up the server and the developer apps by following `supabase/README.md`, and copy `.env.example` to `.env` with your Supabase URL and key. Without `.env` the app shows "Posting isn't set up yet" and the Share button still works.
+
+**What still needs you**
+- Create the Supabase project and each platform's developer app, following `supabase/README.md`.
+- Run the device checklists in `supabase/README.md` (sections 9, 11, 12 and 13) on your iPhone.
+- An Apple Developer account and a first native build: video export and auto-captions have never been compiled.
+- Ask YouTube and TikTok to audit the app, so posts can be public (YouTube) and go straight to your profile (TikTok).
+
+Details per platform:
 - YouTube videos arrive **private** until Google audits the app; open the video from the Done screen and make it Public in YouTube yourself.
 - TikTok works as **"send to TikTok inbox"**: the video arrives in TikTok as a draft, and you open TikTok to add the caption and post it. Clipy does this because TikTok keeps apps it has not audited to private-only posts on private accounts. Clipy's caption is not sent to TikTok, TikTok has no options on the Post screen, and the row ends with "Sent to TikTok — open TikTok to finish posting." (no link). TikTok allows **at most 5 unfinished drafts a day**. TikTok setup is in `supabase/README.md` (section 11).
 - Instagram and Facebook both post as **Reels**. They need a **Facebook Page**; Instagram also needs a **professional (Business or Creator) Instagram account linked to that Page**. Setup is in `supabase/README.md` (section 12).
 - Instagram Reels: 3 seconds to 15 minutes, up to 300 MB, captions up to 2200 characters. Instagram processes the video before it can be published, which can take a few minutes: keep the Post screen open. Clipy waits up to 10 minutes; if Instagram is still processing, the row says so and offers **Resume Instagram**, which finishes the post without uploading the video again.
 - Facebook Reels must be **3 to 90 seconds** (longer videos are held back with that reason while the other platforms still post), up to 1 GB. While Clipy's Meta app is in Development mode, a Facebook Reel may be visible only to you.
 - During an Instagram or Facebook upload the phone is given your Page's access token. This token does not expire on its own: it stays valid until you remove Clipy in Facebook's settings. Clipy keeps it in memory only, drops it once the upload is done, and never saves it. Clipy only ever sends it to Meta's upload address. The iPhone follows web redirects automatically, so Clipy relies on that address not redirecting elsewhere.
-- Only X is still to come (phase 4D).
-- **Nothing has been run against live Supabase, Google, TikTok or Meta (Instagram / Facebook) yet.** The code and tests were written from the platforms' documentation; the device checklists are in `supabase/README.md` (sections 9, 11 and 12).
+- X: captions up to 280 characters **as X counts them** (emoji and other wide characters count 2, a link counts 23, and a plain domain like `clipy.app` counts as a link). When the caption has a link, the X row warns that the post costs about 20¢. Videos up to 20 minutes and 1 GB. The video goes through Clipy's server in 4 MB pieces (nothing is stored), and the post is created only after X has processed the video: Clipy checks every 5 seconds for up to 5 minutes, then offers **Resume X**. If X doesn't clearly confirm the post, the row says "X didn't confirm the post. It may already be on your profile — check X before posting again." — Clipy never tries to create the post a second time on its own. X setup is in `supabase/README.md` (section 13).
 - Retries never re-upload a video that has already finished uploading, unless the server says that upload failed or no longer exists; the message then says Retry will upload the video again.
 - Leaving the Post screen stops any upload in progress. An Instagram or Facebook upload is sent in one piece, so leaving the app (or losing the connection) during a large upload means it starts again from the beginning when you post again.
 - A post that completes after you have left the Post screen is not recorded on the project card.

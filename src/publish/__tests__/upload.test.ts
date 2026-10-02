@@ -83,6 +83,41 @@ test("relay retries unreachable/internal, gives up resumably, and passes other f
   await expect(uploadRelay(denied, args())).rejects.toMatchObject({ code: "reconnect" });
 });
 
+describe("relay: a temporary platform failure on one piece", () => {
+  const DROPPED = "The connection dropped. Check your internet, then resume.";
+  test("platform_unavailable twice, then success: the same piece is sent again in place, with backoff", async () => {
+    const send = jest.fn().mockResolvedValueOnce({ nextOffset: 4 })
+      .mockRejectedValueOnce(new ApiFailure("platform_unavailable", "X is having trouble — try again."))
+      .mockRejectedValueOnce(new ApiFailure("platform_unavailable", "X is having trouble — try again."))
+      .mockResolvedValueOnce({ nextOffset: 8 }).mockResolvedValueOnce({ nextOffset: 10 });
+    const a = args();
+    await uploadRelay(send, a);
+    expect(send.mock.calls.map((c) => c[0])).toEqual([0, 4, 4, 4, 8]);
+    expect(a.sleep.mock.calls).toEqual([[1000], [2000]]);
+    expect(a.onProgress).toHaveBeenLastCalledWith(1);
+  });
+  test.each(["platform_unavailable", "platform_unreachable"])("%s four times in a row ends resumable", async (code) => {
+    const send = jest.fn().mockRejectedValue(new ApiFailure(code, "Couldn't reach x. Try again."));
+    const a = args();
+    await expect(uploadRelay(send, a)).rejects.toEqual(expect.objectContaining({ message: DROPPED, resumable: true }));
+    await expect(uploadRelay(send, a)).rejects.toBeInstanceOf(UploadError);
+    expect(send.mock.calls.slice(0, 4).map((c) => c[0])).toEqual([0, 0, 0, 0]);
+  });
+  test("platform_unreachable once, then success: retried in place", async () => {
+    const send = jest.fn().mockRejectedValueOnce(new ApiFailure("platform_unreachable", "Couldn't reach x. Try again.")).mockResolvedValue({ nextOffset: 10 });
+    await uploadRelay(send, args({ chunkSize: 10 }));
+    expect(send.mock.calls.map((c) => c[0])).toEqual([0, 0]);
+  });
+  test.each(["platform_error", "too_large", "bad_request", "not_found"])("%s propagates at once, with no retry", async (code) => {
+    const e = new ApiFailure(code, "Refused.");
+    const send = jest.fn().mockRejectedValue(e);
+    const a = args();
+    await expect(uploadRelay(send, a)).rejects.toBe(e);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(a.sleep).not.toHaveBeenCalled();
+  });
+});
+
 const ctx = { Authorization: "x" };
 const E = (m: string, resumable = false) => expect.objectContaining({ message: m, resumable });
 

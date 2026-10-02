@@ -1,7 +1,7 @@
 # Clipy Phase 4 — Direct Posting — Design
 
 **Date:** 2026-10-02
-**Status:** 4A–4C implemented 2026-10-02 — unverified against live services; 4D (X) pending. Approved 2026-10-02; amended the same day after verifying platform docs (see §10, which overrides earlier sections where they differ)
+**Status:** Implemented 2026-10-02 (4A–4D) — unverified against live services until the developer accounts exist; device checklists pending. Approved 2026-10-02; amended the same day after verifying platform docs (see §10, which overrides earlier sections where they differ)
 **Parent specs:** `2026-10-01-clip-editor-app-design.md` and the Phase 1–3 specs (all still apply unless overridden here)
 
 ## 1. Goal
@@ -72,8 +72,8 @@ src/publish/
   upload.ts        chunked uploader         oauth-callback ◄───────────────  code → tokens
   usePost.ts       per-row state            accounts (list / disconnect)
   useAccounts.ts                            post-prepare ─────────────────►  open upload session
-                   direct upload ─────────────────────────────────────────►  YouTube, TikTok
-                   relay chunks     ───►    post-upload  ─────────────────►  Instagram, Facebook, X
+                   direct upload ─────────────────────────────────────────►  YouTube, TikTok, Instagram, Facebook
+                   relay chunks     ───►    post-upload  ─────────────────►  X
                                             post-finalize / post-status ──►  publish, poll
                                           Postgres: connected_accounts, oauth_states, post_sessions
 ```
@@ -128,7 +128,7 @@ Row-level security is on for all three with **no** policies for the `anon`/`auth
 
 - Backend not configured / signed out / not available / not connected: dedicated UI states (§4), never exceptions.
 - Token refresh fails or the platform returns an auth error → row `needsReconnect`; Accounts row shows Reconnect.
-- Network loss during upload → the row pauses with **Resume**; direct uploads resume from the platform-reported offset, relay uploads from the last acknowledged offset; Instagram/Facebook restart if the platform refuses the offset.
+- Network loss during upload → the row pauses with **Resume**; YouTube resumes from the platform-reported offset; relay uploads (X) re-send every piece from offset 0 to the same server session and media id (a temporary platform failure on a piece is retried in place first); TikTok, Instagram and Facebook restart with "Post again".
 - Processing longer than 2 minutes → row shows "Still processing on <platform> — check the app later" and counts as done-without-link.
 - `oauth-callback` errors redirect back with `status=error` and the platform's message; the Accounts screen shows it as a toast.
 - Function errors return `{ code, message }` with a 4xx/5xx; unknown errors show "Something went wrong" plus the code.
@@ -157,7 +157,7 @@ Research notes with source URLs were gathered per platform before planning. Wher
 - One Post route, `app/post.tsx` (params `fileUri`, optional `projectId`, `title`), reached from the export result and from **Post a video** on the home header; the home header also gets the **Accounts** icon.
 - Chunked reads use `expo-file-system`'s `File.open()` handle (`offset`, `readBytes`); `File.slice()` and Blob bodies load the whole file and are not used. `fetch` has no upload progress, so progress advances per confirmed chunk (8 MB for YouTube).
 - Post records exist only for project posts; a library video posts without a record.
-- Post sessions on the server follow `uploading → publishing → processing → done | failed` with compare-and-set transitions; a finished upload is never re-uploaded on retry.
+- Post sessions on the server follow `uploading → publishing → processing → done | failed` with compare-and-set transitions (a status call may also loop `processing ⇄ publishing`, see the Backend claim line below); a finished upload is never re-uploaded on retry.
 
 **Backend**
 - All logic lives in plain TypeScript modules under `supabase/functions/_shared/` using only web-standard APIs (`fetch`, `Request`, `Response`, WebCrypto), tested with **Jest in a Node environment** (no Deno or Docker on the dev PC). Each function's `index.ts` is a thin Deno wrapper, verified by reading until deployed.
@@ -166,6 +166,7 @@ Research notes with source URLs were gathered per platform before planning. Wher
 - Free-plan limits (150 s wall clock, 2 s CPU, 256 MB, undocumented ~10 MB request body) cap relay chunks at 4 MB and forbid buffering whole videos.
 - Free projects pause after about a week without activity; the app shows "Server is asleep — open the Supabase dashboard to wake it" when the backend is unreachable.
 - The Instagram publish step is never treated as a final failure unless Meta reports the upload itself as failed or expired.
+- Every `adapter.status` call is serialised by a `processing → publishing` claim.
 
 **YouTube**
 - Uploads from an un-audited API project are **locked to private** by Google until the project passes YouTube's API audit. The row shows this note and the finished post links to the video so the user can switch it to Public in YouTube. The chosen privacy is still sent.
@@ -184,6 +185,9 @@ Research notes with source URLs were gathered per platform before planning. Wher
 - `META_IG_TOKEN_KIND` (`page` default, `user`) selects which token Instagram calls use; `user` requires reconnecting about every 60 days.
 - Facebook Reels: 3–90 s, 30 per day per Page. Instagram Reels: up to 15 min, 300 MB (not 1 GB). Posts from a Development-mode app may be visible only to the app's own roles until the app is Live.
 
-**X**
-- No free tier and no flat monthly plan are required: pricing is pay-per-use (about $0.015 per post; to be re-confirmed in 4D). Video limits are 20 min / 8 GB for ordinary accounts.
-- Uploads use the v2 chunked media endpoints with the user's token (`relay`, multipart, ≤ 4 MB pieces through the function). The authorization code expires in 30 s, so `oauth-callback` exchanges it immediately.
+**X** (as implemented in 4D; unverified against live X — no developer app, no credits)
+- Pricing is pay-per-use, charged to Clipy's developer account: about $0.015 per post, about $0.20 when the text contains a link. A bare domain (`clipy.app`) counts as a link, both for billing and for X's 280-character weighted count; Clipy's matcher is deliberately broader than X's, and a bare domain counts max(23, its plain length) so the count is never under the real one. Clipy never adds a link to the text. The X row shows the cost, and a link-price warning when the caption has a link.
+- Upload: `relay` — the phone sends **4 MiB segments** to `post-upload`, which appends each one to X's v2 chunked media upload with the user's token and keeps nothing. The authorization code expires in 30 s, so `oauth-callback` exchanges it immediately; refresh tokens rotate.
+- The post is created only after X has processed the video, inside a **claim-guarded status call** (finalize, then status polls every 5 s for up to 5 minutes; a timeout offers Resume, which never re-uploads).
+- An unknown outcome of post creation (network error, 408, 5xx, a 2xx without an id) is **final**: the session fails with "X didn't confirm the post. It may already be on your profile — check X before posting again." Clipy never retries post creation.
+- App limits: weighted caption ≤ 280, video ≤ 20 min, ≤ 1 GB (the relay limit, below X's own).

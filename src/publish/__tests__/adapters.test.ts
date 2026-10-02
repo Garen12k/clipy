@@ -1,4 +1,6 @@
+import { X_LINK_VECTORS, X_WEIGHT_VECTORS } from "@/supabase/functions/_shared/__tests__/xWeightVectors";
 import { clientAdapters } from "../adapters";
+import { hasLink, weightedLength } from "../adapters/x";
 import { PLATFORM_IDS, PLATFORMS } from "../platforms";
 
 const video = { fileUri: "file:///v.mp4", fileSize: 20_000_000, durationSec: 21, mimeType: "video/mp4" };
@@ -25,8 +27,8 @@ test("youtube: defaults, limits and the private-until-audit note", () => {
   expect(yt.captionMax).toBe(5000);
 });
 
-test("clientAdapters has youtube, tiktok, instagram and facebook", () => {
-  expect(Object.keys(clientAdapters).sort()).toEqual(["facebook", "instagram", "tiktok", "youtube"]);
+test("clientAdapters has all five platforms", () => {
+  expect(Object.keys(clientAdapters).sort()).toEqual(["facebook", "instagram", "tiktok", "x", "youtube"]);
   for (const id of Object.keys(clientAdapters) as (keyof typeof clientAdapters)[]) expect(clientAdapters[id]!.id).toBe(id);
 });
 
@@ -90,4 +92,55 @@ test("tiktok: no caption, no options, its limits, the inbox note and the done no
   expect(tt.validate({ ...video, mimeType: "video/x-msvideo" }, "", {})).toBe("TikTok accepts MP4, MOV or WebM videos.");
   expect(tt.note(video)).toBe("Clipy sends the video to your TikTok inbox. Open TikTok to add the caption and post it (up to 5 unfinished drafts a day).");
   expect(tt.doneNote).toBe("Sent to TikTok — open TikTok to finish posting.");
+});
+
+describe("x", () => {
+  const xa = () => clientAdapters.x!;
+  const TOO_LONG = "X posts can be up to 280 characters (emoji and links count extra).";
+  const COST = "Posting to X costs about 1.5¢ (about 20¢ if the caption has a link). The video goes through Clipy's server in small pieces.";
+  const LINK_NOTE = "This caption contains a link — X charges about 20¢ for posts with links.";
+
+  test("defaults: caption 280, no options, the cost note", () => {
+    expect(xa().id).toBe("x");
+    expect(xa().captionMax).toBe(280);
+    expect(xa().hasOptions).toBe(false);
+    expect(xa().defaultOptions("Beach day")).toEqual({});
+    expect(xa().validate(video, "hello", {})).toBeNull();
+    expect(xa().note(video)).toBe(COST);
+    expect(xa().doneNote).toBeUndefined();
+  });
+
+  test("the caption is counted the way X counts it, at the 280 boundary", () => {
+    expect(xa().validate(video, "a".repeat(280), {})).toBeNull();
+    expect(xa().validate(video, "a".repeat(281), {})).toBe(TOO_LONG);
+    // An emoji weighs 2: 140 fit, 141 do not (282), although 141 emoji are only 141 characters.
+    expect(xa().validate(video, "😀".repeat(140), {})).toBeNull();
+    expect(xa().validate(video, "😀".repeat(141), {})).toBe(TOO_LONG);
+    expect(xa().validate(video, "a".repeat(279) + "😀", {})).toBe(TOO_LONG);
+    // A link counts 23 however long it is.
+    const link = " https://example.com/" + "p".repeat(60);
+    expect(xa().validate(video, "a".repeat(256) + link, {})).toBeNull(); // 256 + 1 + 23 = 280
+    expect(xa().validate(video, "a".repeat(257) + link, {})).toBe(TOO_LONG);
+  });
+
+  test("duration and size at their boundaries", () => {
+    expect(xa().validate({ ...video, durationSec: 1200 }, "", {})).toBeNull();
+    expect(xa().validate({ ...video, durationSec: 1200.1 }, "", {})).toBe("X accepts videos up to 20 minutes.");
+    expect(xa().validate({ ...video, fileSize: 1024 ** 3 }, "", {})).toBeNull();
+    expect(xa().validate({ ...video, fileSize: 1024 ** 3 + 1 }, "", {})).toBe("X uploads go through Clipy's server and are limited to 1 GB.");
+  });
+
+  test("weightedLength and hasLink give the server's answers on the shared vectors", () => {
+    expect(X_WEIGHT_VECTORS.length).toBeGreaterThan(20);
+    for (const [text, n] of X_WEIGHT_VECTORS) expect([text, weightedLength(text)]).toEqual([text, n]);
+    for (const [text, link] of X_LINK_VECTORS) expect([text, hasLink(text)]).toEqual([text, link]);
+  });
+
+  test("a caption with a link (a bare domain too) gets the price warning; one without does not", () => {
+    const note = xa().captionNote!;
+    expect(note("Beach day")).toBeNull();
+    expect(note("")).toBeNull();
+    expect(note("More at clipy.app")).toBe(LINK_NOTE);
+    expect(note("https://example.com")).toBe(LINK_NOTE);
+  });
 });

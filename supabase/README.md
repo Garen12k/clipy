@@ -1,6 +1,6 @@
-# Clipy server setup (Supabase, YouTube, TikTok, Instagram, Facebook)
+# Clipy server setup (Supabase, YouTube, TikTok, Instagram, Facebook, X)
 
-This folder is Clipy's small server. It lets the app connect your YouTube channel and TikTok account and post videos to them (TikTok: as a draft in your TikTok inbox, see section 11; Instagram and Facebook: see section 12). Your videos never live on the server: the phone sends them straight to YouTube, TikTok, Instagram or Facebook.
+This folder is Clipy's small server. It lets the app connect your YouTube, TikTok, Instagram, Facebook and X accounts and post videos to them (TikTok: as a draft in your TikTok inbox, see section 11; Instagram and Facebook: see section 12; X: see section 13). Your videos never live on the server: the phone sends them straight to YouTube, TikTok, Instagram or Facebook. For X, the video passes through the server in small pieces on its way to X, without being stored.
 
 > **Honest status:** none of these steps has been run against the real Supabase or Google services yet. Everything was written from their documentation (October 2026). If a screen looks different from what is written here, trust the screen, and tell the developer what you saw.
 
@@ -151,7 +151,7 @@ Nothing here has run against the real Supabase or Google. Check each of these th
 1. **The sign-in check inside the server functions accepts the app's login.** The functions use `createSupabaseContext` from `@supabase/server` to check who is calling. If every action fails with 401 even after the `--no-verify-jwt` fix in the troubleshooting table, tell the developer.
 2. **After connecting an account, the browser hands back to the app.** When Google finishes, Safari should close and Clipy should reopen (the address it returns to starts with `exp://` in Expo Go or `clipy://` in a real build). If you are left on a Supabase or Google page, tell the developer which address you see.
 3. **YouTube accepts the phone's upload without a token.** If uploads fail at 0 % with a 401 or 403 error, run `npx.cmd supabase secrets set YOUTUBE_UPLOAD_TOKEN_ON_PHONE=true` and try again (step 4c).
-4. **The 4 MB limit is honoured.** Some platforms (not YouTube) pass the video through the server in 4 MB pieces. Whether Supabase's gateway accepts those pieces and respects their declared size has not been checked. It matters for the later platforms; for YouTube nothing is needed now.
+4. **The 4 MB limit is honoured.** Only X passes the video through the server, in 4 MB pieces. Whether Supabase's gateway accepts those pieces and respects their declared size has not been checked. It is checked in section 13f item 3; for the other platforms nothing is needed.
 5. **The functions bundle `npm:@supabase/server@1`.** The first `npx.cmd supabase functions deploy` has to download this package. If the deploy stops with an error mentioning `@supabase/server` or `npm:`, tell the developer and copy the message.
 
 ## 9. Device checklist — posting
@@ -173,6 +173,7 @@ After steps 1 to 5 above, on your iPhone in Expo Go:
 - **The Connect link belongs to you, for a short time, once.** When you tap Connect, Clipy asks the server for a sign-in link that is tied to the Clipy account you are signed in with. The link stops working after 10 minutes and works only once.
 - **Your YouTube sign-in is locked on the server.** The server saves it encrypted with your `TOKEN_ENC_KEY` (step 4a). The app never receives it (except the short-lived token of step 4c, if you turn that on).
 - **Your TikTok sign-in is locked the same way.** It is saved encrypted with the same key and never sent to the app. The phone uploads to a one-hour TikTok upload address that needs no sign-in, and that address is never saved.
+- **Your X sign-in never leaves the server.** It is saved encrypted with the same key. The phone sends the video to Clipy's server in pieces and the server adds the sign-in when passing each piece on to X; the pieces are not stored. X's Client Secret is only ever sent to X's sign-in address.
 - **Instagram and Facebook: the phone holds your Page's access token during an upload.** While a video is uploading, Clipy's server gives your phone your Page's access token so it can send the video straight to Facebook/Instagram. This token does not expire on its own: it stays valid until you remove Clipy in Facebook's settings (section 12f). The phone keeps it in memory only, drops it once the upload is done, and never saves it. (With the `META_IG_TOKEN_KIND=user` setting, Instagram's token is your Facebook login's token instead, which lasts about 60 days.) Clipy only ever sends it to Meta's upload address (`rupload.facebook.com`); the server refuses to hand it out for any other address. The iPhone follows web redirects automatically; Clipy only ever sends the token to Meta's upload address, and relies on that address not redirecting elsewhere. On the server, the token is saved encrypted like the others.
 - **Meta's login exchange puts the app secret in the request address.** When you connect, Clipy's server sends `META_APP_SECRET` to Meta inside the request address (this is the form Meta documents). That request goes only between Clipy's server and Meta, but treat any server request logs as sensitive.
 - **One accepted risk ("login CSRF").** If someone else sent you their own Connect link and you opened it within those 10 minutes and allowed access, your YouTube channel would be connected to *their* Clipy account. For a personal app with one user this is accepted. Only start Connect from inside Clipy, and never open a Connect link someone sends you.
@@ -367,3 +368,89 @@ Nothing here has run against live Meta. Check each of these the first time, and 
 3. **The single-request upload succeeds.** Uploading reaches 100 % for both Instagram and Facebook without an error.
 4. **Publish after processing.** The Instagram row goes Publishing → Done within a few minutes (or after Resume), the Reel appears on your Instagram profile exactly once, and **View on Instagram** opens it.
 5. **The Facebook Reel link opens.** The Facebook row reaches Done, and **View on Facebook** opens the Reel on your Page (it may be visible only to you while the app is in Development mode).
+
+## 13. X
+
+Clipy posts your video to X with your caption. **X charges for every post** (see "What to expect" below), so you need an X developer account with some credit on it.
+
+> **Honest status:** none of this has run against the real X yet. No X developer app existed when it was written; everything comes from X's developer documentation (October 2026). If a screen looks different, trust the screen and tell the developer what you saw.
+
+Do steps 1 to 4a above first (the Supabase project, the server online, the encryption key).
+
+### a. Create the X developer app
+
+Use the X account you will post with.
+
+1. Go to https://console.x.com and sign in with that X account. If it asks you to sign up as a developer, do so.
+2. Click **Create App**. Give it the name `Clipy`, a short description and a use case (for example "Posting my own videos from my phone").
+3. Add credit: X is **pay-per-use** — you buy credit up front and each post uses some of it. Open the billing or credits page in the console and add a small amount (a few dollars is plenty to start) *(may be named slightly differently)*. You can set a spending limit there too.
+4. In the app, open **User authentication settings** → **Set up** *(may be named slightly differently)*:
+   - Turn on **OAuth 2.0**.
+   - **Type of App**: **Web App, Automated App or Bot** *(may be named slightly differently)*. Not "Native App": Clipy's server keeps the secret.
+   - **App permissions**: **Read and write** (not "Read only").
+   - **Callback URI / Redirect URL**: paste exactly (with your project ref, no slash at the end):
+     `https://<ref>.supabase.co/functions/v1/oauth-callback`
+     This is the same address as for the other platforms.
+   - **Website URL**: if it is required, any address you own works, for example `https://<ref>.supabase.co` *(may be named slightly differently)*.
+   - Save.
+5. X now shows the **Client ID** and the **Client Secret** (the OAuth 2.0 ones, not the "API Key"). **Copy both right away: X shows the secret only once.** If you lose it, generate a new one in the app's **Keys and tokens** page *(may be named slightly differently)* and set it again in step b.
+
+### b. Put the X client on the server
+
+Run these in PowerShell, one at a time (paste your values in place of `<client id>` and `<client secret>`):
+
+```powershell
+npx.cmd supabase secrets set X_CLIENT_ID=<client id>
+```
+
+```powershell
+npx.cmd supabase secrets set X_CLIENT_SECRET=<client secret>
+```
+
+Until both are set, the app shows X as "Not available yet".
+
+### c. Connect
+
+In Clipy, Accounts → **Connect X** → X asks you to allow Clipy → **Authorize app** *(may be named slightly differently)*. Back in Clipy, the X row shows your `@name`. Connecting reads your X profile once, which X also charges for (about 1 cent).
+
+### d. What to expect
+
+- **Each post costs money.** X's price list (checked on 2 October 2026 at https://docs.x.com/x-api/getting-started/pricing) says: **Post: Create — $0.015 per request** (about 1.5 cents) and **Post: Create (with URL) — $0.200 per request** (about 20 cents) when the post contains a web link. Clipy never adds a link by itself; if you type one in the caption (even without `https://`, like `clipy.app`), that post costs about 20 cents. X's price list does not list the video upload steps separately; check the usage page after your first post to see what was really charged.
+- **The video travels through Clipy's server in small pieces.** Unlike the other platforms, X needs your login on every piece of the upload, so the phone sends the video to Clipy's server 4 MB at a time and the server passes each piece straight on to X. Nothing is stored on the server.
+- **X processes the video for a short while before the post appears.** After the upload, the X row shows Publishing. Keep the Post screen open. If it takes too long, Clipy offers **Resume**: press it a little later and Clipy finishes the post without uploading again.
+- **Your X login token never leaves the server.** The phone never sees it, not even during the upload.
+- **Captions are limited to 280 characters**, and emoji, Chinese/Japanese/Korean characters and some symbols count as 2. A web link counts as 23 (a bare domain without `https://` counts at least 23: its full length if longer) — and so does anything that looks like one, such as `clipy.app` or a word stuck to the next after a full stop (`hello.World`). Leave a space after full stops to avoid that.
+- **Videos up to 20 minutes** for a normal X account. X refuses longer ones when posting, with its own message.
+- **The X connection renews itself** the next time you post after it expires (every couple of hours); nothing runs in the background. If you remove Clipy from your X account, tap Reconnect.
+- **To remove Clipy's access:** on X, **Settings and privacy → Security and account access → Apps and sessions → Connected apps** → Clipy → **Revoke app permissions** *(may be named slightly differently)*. Disconnecting in Clipy also asks X to forget the connection.
+- **If Clipy says "X didn't confirm the post":** the connection to X failed just as the post was being made, so Clipy cannot tell whether it went out. **Look at your X profile first.** Only post again if the post is not there — otherwise you would post it twice (and pay twice). Clipy never retries this step by itself.
+- **X refuses identical posts.** If you post the same caption you posted recently, X may refuse it as a duplicate; Clipy shows X's message. Change the caption a little and post again.
+- **None of this has run against live X yet.** If a step fails, tell the developer what you saw.
+
+### e. X troubleshooting
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| X shows **Not available yet** | `X_CLIENT_ID` or `X_CLIENT_SECRET` is not set on the server | Do step b. Check with `npx.cmd supabase secrets list`. |
+| Connecting X shows an error about the **redirect** or **callback** | The address in step a.4 does not match exactly | Fix it in User authentication settings: `https://<ref>.supabase.co/functions/v1/oauth-callback`, no slash at the end. |
+| Connecting X says the **client** is not valid or unauthorized | The Client ID or Client Secret on the server is wrong, or the app type is not "Web App, Automated App or Bot" | Copy the OAuth 2.0 Client ID and Secret again (step a.5), set them again (step b), and check the app type. |
+| X refuses with a message about **credits**, **enrolment**, **client forbidden** or **authentication** | Your X developer account has no credit left, or the app is not set up for posting | Add credit in the console (step a.3) and check the app permissions are **Read and write**. Then tap **Retry**. |
+| X shows **Reconnect** | The connection ended (you removed the app on X, or it was not used for a long time) | Tap Reconnect and allow access. |
+| X stays on **Publishing** and then offers **Resume** | X is still processing the video | Wait a minute, then press Resume. |
+| **X couldn't process this video** | X could not read the video | Try exporting it again, or a shorter clip. |
+| **X didn't confirm the post. It may already be on your profile — check X before posting again.** | The connection to X failed while the post was being made | Open your X profile. If the post is there, you are done. Only if it is not there, post again. |
+| X's message says the post is a **duplicate** | You posted the same text recently | Change the caption slightly and post again. |
+
+### f. First live run: X
+
+Nothing here has run against live X. Check each of these the first time, and if one fails, tell the developer what you saw (copy any error message).
+
+1. **Login with PKCE.** Accounts → Connect X opens X's sign-in page, you allow access, and the X row shows your `@name`. (If X says the request is invalid, the developer needs to know: the sign-in uses "PKCE", which X requires.)
+2. **The upload is accepted with your X login.** After you press Post, Preparing finishes and Uploading starts. If it fails right at the start with an "authentication" message, X did not accept this kind of login for video uploads.
+3. **4 MB pieces go through.** Uploading reaches 100 % without an error (both Clipy's server and X accept pieces of this size). A video bigger than 4 MB (most are) is the real test.
+4. **Processing, then the post.** The row goes Publishing → Done, and the post appears on your X profile **exactly once**.
+5. **The link opens.** **View on X** opens the post.
+6. **What it cost.** In the X developer console, open the usage page *(may be named slightly differently)* and note what this post was charged (expected: about $0.015 for the post; tell the developer if the upload steps or the status checks were charged too).
+7. **Disconnect.** Accounts → Disconnect X, then check on X under **Connected apps** whether Clipy is gone (the server asks X to remove it, but this was never tested).
+8. **A dropped connection mid-upload.** With a video of at least 9 MB, turn on airplane mode at about 50 % of Uploading, wait for the row to offer **Resume**, turn airplane mode off and press Resume. Resume sends the pieces again from the start to the same X upload, so pieces X already has are sent a second time. The row should reach Done with one post. If X refuses instead, tell the developer: Resume must then start a new X upload.
+9. **Resume after X was busy while posting.** If the row ever offers Resume after X said it was busy or too many requests while posting, press Resume: the row should reach Done with one post (Resume asks X to finish the upload a second time, which X's documentation does not describe). If it fails with an X "media" message instead, tell the developer.
