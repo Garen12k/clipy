@@ -1,4 +1,3 @@
-import { theme } from "@/src/theme/theme";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/lib/id", () => ({ newId: () => "st1" }));
@@ -24,7 +23,7 @@ test("picking an emoji adds a selected sticker at the playhead and records it as
 test("shapes tab adds a shape sticker with the chosen color", async () => {
   await render(<StickerSheet visible onClose={() => {}} onAdded={() => {}} />);
   await fireEvent.press(screen.getByRole("button", { name: "Shapes" }));
-  await fireEvent.press(screen.getByLabelText(`Color ${theme.colors.sea}`));
+  await fireEvent.press(screen.getByLabelText("Color #2E86AB"));
   await fireEvent.press(screen.getByRole("button", { name: "Heart" }));
-  expect(useEditorStore.getState().project!.overlays[0]).toMatchObject({ kind: "sticker", emoji: null, shape: "heart", color: theme.colors.sea });
+  expect(useEditorStore.getState().project!.overlays[0]).toMatchObject({ kind: "sticker", emoji: null, shape: "heart", color: "#2E86AB" });
 });

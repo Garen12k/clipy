@@ -8,6 +8,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { SHAPES } from "@/src/editor/effects";
 import { newId } from "@/src/lib/id";
 import { prefs } from "@/src/projects/prefs";
+import { DEFAULT_STICKER_COLOR } from "@/src/editor/components/ColorRow";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { Sheet } from "@/src/ui/Sheet";
@@ -19,7 +20,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
   const [tab, setTab] = useState<Tab>("emoji");
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
-  const [color, setColor] = useState<string>(theme.colors.accent);
+  const [color, setColor] = useState<string>(DEFAULT_STICKER_COLOR);
   const apply = useEditorStore((s) => s.apply);
 
   useEffect(() => {
