@@ -1,0 +1,79 @@
+import { fireEvent, render, screen } from "@testing-library/react-native";
+import { Alert } from "react-native";
+jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn() }, Redirect: () => null }));
+jest.mock("../useSession", () => ({ useSession: jest.fn() }));
+jest.mock("../useAccounts", () => ({ useAccounts: jest.fn() }));
+jest.mock("../supabase", () => ({ signInWithApple: jest.fn(), signOut: jest.fn() }));
+import AccountsScreen from "@/app/accounts";
+import { signOut } from "../supabase";
+import { useAccounts } from "../useAccounts";
+import { useSession } from "../useSession";
+
+const p = (id: string, over = {}) => ({ id, available: false, connected: false, name: null, avatarUrl: null, needsReconnect: false, ...over });
+const hook = (over = {}) => ({ status: "ready", platforms: [p("youtube", { available: true }), p("tiktok"), p("instagram"), p("facebook"), p("x")], error: null, busy: null, refresh: jest.fn(), connect: jest.fn(), disconnect: jest.fn(), ...over });
+const alertSpy = () => jest.spyOn(Alert, "alert");
+afterEach(() => { if (jest.isMockFunction(Alert.alert)) (Alert.alert as jest.Mock).mockRestore(); });
+beforeEach(() => { jest.clearAllMocks();(useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: "me@icloud.com" }); });
+
+test("signed out: sign-in card only, accounts not requested", async () => {
+  (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
+  (useAccounts as jest.Mock).mockReturnValue(hook({ status: "idle", platforms: [] }));
+  await render(<AccountsScreen />);
+  expect(useAccounts).toHaveBeenCalledWith(false);
+  expect(screen.getByLabelText("Sign in with Apple")).toBeTruthy();
+  expect(screen.queryByText("YouTube")).toBeNull();
+});
+
+test("five rows: Connect for available, Not available yet for the rest", async () => {
+  const h = hook(); (useAccounts as jest.Mock).mockReturnValue(h);
+  await render(<AccountsScreen />);
+  for (const label of ["YouTube", "TikTok", "Instagram", "Facebook", "X"]) expect(screen.getByText(label)).toBeTruthy();
+  expect(screen.getAllByText("Not available yet")).toHaveLength(4);
+  await fireEvent.press(screen.getByRole("button", { name: "Connect YouTube" }));
+  expect(h.connect).toHaveBeenCalledWith("youtube");
+});
+
+test("connected row shows the name and disconnects after confirmation", async () => {
+  const h = hook({ platforms: [p("youtube", { available: true, connected: true, name: "My Channel" })] });
+  (useAccounts as jest.Mock).mockReturnValue(h);
+  const alert = alertSpy().mockImplementation((_t, _m, buttons) => { buttons?.find((b) => b.style === "destructive")?.onPress?.(); });
+  await render(<AccountsScreen />);
+  expect(screen.getByText("My Channel")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "Disconnect YouTube" }));
+  expect(alert).toHaveBeenCalledWith("Disconnect YouTube?", expect.any(String), expect.any(Array));
+  expect(h.disconnect).toHaveBeenCalledWith("youtube");
+});
+
+test("expired sign-in offers Reconnect", async () => {
+  const h = hook({ platforms: [p("youtube", { available: true, connected: true, name: "My Channel", needsReconnect: true })] });
+  (useAccounts as jest.Mock).mockReturnValue(h);
+  await render(<AccountsScreen />);
+  expect(screen.getByText("Sign-in expired")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "Reconnect YouTube" }));
+  expect(h.connect).toHaveBeenCalledWith("youtube");
+});
+
+test("busy row shows a spinner instead of its button", async () => {
+  const h = hook({ busy: "youtube" });
+  (useAccounts as jest.Mock).mockReturnValue(h);
+  await render(<AccountsScreen />);
+  expect(screen.queryByRole("button", { name: "Connect YouTube" })).toBeNull();
+  expect(screen.getByLabelText("Working on YouTube")).toBeTruthy();
+});
+
+test("load error offers Try again; footer signs out after confirmation", async () => {
+  const h = hook({ status: "error", platforms: [], error: "Clipy's server is asleep or unreachable." });
+  (useAccounts as jest.Mock).mockReturnValue(h);
+  const alert = alertSpy().mockImplementation(() => {});
+  await render(<AccountsScreen />);
+  expect(screen.getByText("Clipy's server is asleep or unreachable.")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
+  expect(h.refresh).toHaveBeenCalled();
+  expect(screen.getByText(/me@icloud.com/)).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+  expect(alert).toHaveBeenCalledWith("Sign out of Clipy?", expect.any(String), expect.any(Array));
+  expect(signOut).not.toHaveBeenCalled();
+  const buttons = alert.mock.calls[0][2] as { text: string; style?: string; onPress?: () => void }[];
+  await buttons.find((b) => b.style === "destructive")!.onPress!();
+  expect(signOut).toHaveBeenCalled();
+});

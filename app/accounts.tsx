@@ -1,0 +1,62 @@
+import { router } from "expo-router";
+import { ActivityIndicator, Alert, ScrollView, View } from "react-native";
+import { AccountRow } from "@/src/publish/components/AccountRow";
+import { cardStyle, SignInCard } from "@/src/publish/components/SignInCard";
+import { signOut } from "@/src/publish/supabase";
+import { useAccounts } from "@/src/publish/useAccounts";
+import { useSession } from "@/src/publish/useSession";
+import { theme } from "@/src/theme/theme";
+import { IconButton } from "@/src/ui/IconButton";
+import { Screen } from "@/src/ui/Screen";
+import { SecondaryButton } from "@/src/ui/SecondaryButton";
+import { Body, Title } from "@/src/ui/Text";
+import { ToastHost, useToast } from "@/src/ui/Toast";
+
+export default function AccountsScreen() {
+  const session = useSession();
+  const signedIn = session.status === "signedIn";
+  const { status, platforms, error, busy, refresh, connect, disconnect } = useAccounts(signedIn);
+
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
+  const confirmSignOut = () => Alert.alert("Sign out of Clipy?", "Your connected accounts stay connected.", [
+    { text: "Cancel", style: "cancel" },
+    { text: "Sign out", style: "destructive", onPress: async () => {
+      try { await signOut(); } catch (e) { useToast.getState().show(e instanceof Error && e.message ? e.message : "Couldn't sign out."); }
+    } }]);
+
+  const spinner = <ActivityIndicator color={theme.colors.accent} style={{ marginTop: theme.space.xl }} />;
+
+  return (
+    <Screen edges={["top", "bottom"]}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.sm, marginBottom: theme.space.sm }}>
+        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={goBack} />
+        <Title size={26} accessibilityRole="header">Accounts</Title>
+      </View>
+      <ScrollView contentContainerStyle={{ padding: theme.space.lg, gap: theme.space.lg }}>
+        {session.status === "loading" ? spinner : null}
+        <SignInCard />
+        {!signedIn ? null : status === "error" ? (
+          <View style={[cardStyle, { gap: theme.space.md, alignItems: "flex-start" }]}>
+            <Body>{error ?? "Something went wrong."}</Body>
+            <SecondaryButton title="Try again" onPress={refresh} />
+          </View>
+        ) : status !== "ready" ? spinner : (
+          <View style={[cardStyle, { paddingVertical: theme.space.xs }]}>
+            {platforms.map((p, i) => (
+              <View key={p.id} style={i > 0 ? { borderTopWidth: 1, borderTopColor: theme.colors.hairline } : undefined}>
+                <AccountRow status={p} busy={busy === p.id} onConnect={() => connect(p.id)} onDisconnect={() => disconnect(p.id)} />
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+      {signedIn ? (
+        <View style={{ paddingHorizontal: theme.space.lg, paddingTop: theme.space.md, gap: theme.space.md, alignItems: "center" }}>
+          <Body muted style={{ textAlign: "center" }}>{session.email ? `Signed in with Apple · ${session.email}` : "Signed in with Apple"}</Body>
+          <SecondaryButton title="Sign out" onPress={confirmSignOut} />
+        </View>
+      ) : null}
+      <ToastHost />
+    </Screen>
+  );
+}

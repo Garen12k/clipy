@@ -10,6 +10,7 @@ import type { ProjectSummary } from "@/src/projects";
 import { theme } from "@/src/theme/theme";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { haptic } from "@/src/ui/haptics";
+import { IconButton } from "@/src/ui/IconButton";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { Screen } from "@/src/ui/Screen";
 import { Title } from "@/src/ui/Text";
@@ -31,8 +32,9 @@ export default function ProjectsScreen() {
 
   return (
     <Screen>
-      <View style={{ paddingHorizontal: theme.space.lg, marginBottom: theme.space.md }}>
-        <Title size={26}>Your voyages</Title>
+      <View style={{ paddingLeft: theme.space.lg, paddingRight: theme.space.sm, marginBottom: theme.space.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Title size={26} accessibilityRole="header">Your voyages</Title>
+        <IconButton name="person-circle" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
       </View>
       {loading ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 40 }} /> : projects.length === 0 ? (
         <EmptyState emoji="🏝️" title="No clips yet" hint="Pick some videos from your library and start your first edit." />

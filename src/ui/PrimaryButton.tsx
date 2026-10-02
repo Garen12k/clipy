@@ -2,11 +2,11 @@ import { Text } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { PressableScale } from "./PressableScale";
 
-type Props = { title: string; onPress: () => void; disabled?: boolean; icon?: React.ReactNode; compact?: boolean };
+type Props = { title: string; onPress: () => void; disabled?: boolean; icon?: React.ReactNode; compact?: boolean; /** Defaults to `title`; set it when several buttons on a screen share a title. */ accessibilityLabel?: string };
 
-export function PrimaryButton({ title, onPress, disabled, icon, compact }: Props) {
+export function PrimaryButton({ title, onPress, disabled, icon, compact, accessibilityLabel }: Props) {
   return (
-    <PressableScale testID="primary-button" accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled: !!disabled }}
+    <PressableScale testID="primary-button" accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} accessibilityState={{ disabled: !!disabled }}
       disabled={disabled} onPress={onPress}
       style={{ backgroundColor: theme.colors.accent, opacity: disabled ? 0.4 : 1, borderRadius: theme.radius.pill,
         paddingVertical: compact ? theme.space.sm : theme.space.lg, paddingHorizontal: compact ? theme.space.lg : theme.space.xl,

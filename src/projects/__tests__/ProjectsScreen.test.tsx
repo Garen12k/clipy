@@ -33,6 +33,13 @@ test("shows the empty state, then creates a project from picked videos and opens
   expect(mockPush).toHaveBeenCalledWith("/editor/p9");
 });
 
+test("the header's Accounts button opens the Accounts screen", async () => {
+  list.mockResolvedValue([]);
+  await render(<ProjectsScreen />);
+  await fireEvent.press(await screen.findByRole("button", { name: "Accounts" }));
+  expect(mockPush).toHaveBeenCalledWith("/accounts");
+});
+
 test("lists projects with duration and marks broken ones", async () => {
   list.mockResolvedValueOnce([
     { id: "a", name: "Beach", durationSec: 65, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] },
