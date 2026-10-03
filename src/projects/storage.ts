@@ -7,7 +7,8 @@ export interface PickedAsset { uri: string; kind: "video" | "photo"; durationSec
 export interface ProjectSummary { id: string; name: string; durationSec: number; updatedAt: string; thumbUri: string | null; broken: boolean; postedTo: PostPlatform[] }
 export interface StorageDeps { thumbnail(uri: string, timeMs: number): Promise<string>; newId(): string; nowIso(): string }
 
-const ext = (a: PickedAsset) => { const m = /\.([A-Za-z0-9]+)$/.exec(a.fileName ?? a.uri); return (m?.[1] ?? (a.kind === "photo" ? "jpg" : "mp4")).toLowerCase(); };
+const extOf = (s?: string) => /\.([A-Za-z0-9]+)$/.exec(s ?? "")?.[1]?.toLowerCase();
+const ext = (a: PickedAsset) => extOf(a.fileName) ?? extOf(a.uri) ?? (a.kind === "photo" ? "jpg" : "mp4");
 
 export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const root = `${fs.documentDir}projects`;
@@ -48,7 +49,9 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const clips: Clip[] = [];
     let failed = 0;
     for (const a of assets) {
-      if (a.kind === "photo" && !(a.width > 0 && a.height > 0)) { failed++; console.warn("import failed: no size", a.uri); continue; }
+      const badSize = a.kind === "photo" && !(a.width > 0 && a.height > 0);
+      const badDuration = a.kind === "video" && !(a.durationSec > 0);
+      if (badSize || badDuration) { failed++; console.warn("import failed: no size or duration", a.uri); continue; }
       const clipId = deps.newId();
       const dest = `${mediaDir}/${clipId}.${ext(a)}`;
       try {
@@ -56,7 +59,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
         clips.push(a.kind === "photo"
           ? newPhotoClip({ id: clipId, sourceUri: dest, width: a.width, height: a.height })
           : newVideoClip({ id: clipId, sourceUri: dest, sourceDuration: a.durationSec, width: a.width, height: a.height }));
-      } catch (e) { failed++; console.warn("import failed", a.uri, e); }
+      } catch (e) { failed++; console.warn("import failed", a.uri, e); await fs.remove(dest).catch(() => {}); }
     }
     return { clips, failed };
   }
@@ -65,7 +68,8 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const mediaDir = `${projectDir(projectId)}/media`;
     await fs.mkdir(mediaDir);
     const uri = `${mediaDir}/${deps.newId()}.jpg`;
-    await fs.copy(tempUri, uri);
+    try { await fs.copy(tempUri, uri); }
+    catch (e) { await fs.remove(uri).catch(() => {}); throw e; }
     return { uri };
   }
 
@@ -73,6 +77,10 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const id = deps.newId();
     const now = deps.nowIso();
     const { clips, failed } = await importMedia(id, assets);
+    if (assets.length > 0 && clips.length === 0) {
+      await fs.remove(projectDir(id)).catch(() => {});
+      throw new Error("Couldn't import any of the selected items.");
+    }
     const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], schemaVersion: SCHEMA_VERSION };
     await saveProject(project);
     await writeThumb(project);

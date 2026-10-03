@@ -12,6 +12,7 @@ jest.mock("@/src/projects", () => ({
 }));
 
 import { router } from "expo-router";
+import { useToast } from "@/src/ui/Toast";
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { pickVideoForPost } from "@/src/publish/pickVideo";
@@ -33,6 +34,18 @@ test("shows the empty state, then creates a project from picked videos and opens
   await fireEvent.press(screen.getByRole("button", { name: "New clip" }));
   await waitFor(() => expect(storage.createProject).toHaveBeenCalledWith("Project 1", expect.any(Array)));
   expect(mockPush).toHaveBeenCalledWith("/editor/p9");
+});
+
+test("when nothing could be imported, the toast says so and the editor doesn't open", async () => {
+  list.mockResolvedValue([]);
+  (pickMedia as jest.Mock).mockResolvedValueOnce([{ uri: "file:///a.mov", kind: "video", durationSec: 3, width: 1080, height: 1920 }]);
+  (storage.createProject as jest.Mock).mockRejectedValueOnce(new Error("Couldn't import any of the selected items."));
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  await render(<ProjectsScreen />);
+  await fireEvent.press(await screen.findByRole("button", { name: "New clip" }));
+  await waitFor(() => expect(useToast.getState().message).toBe("Couldn't import any of the selected items."));
+  expect(mockPush).not.toHaveBeenCalled();
+  warn.mockRestore();
 });
 
 test("the header's Accounts button opens the Accounts screen", async () => {

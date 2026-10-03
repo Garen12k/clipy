@@ -176,3 +176,38 @@ test("createProject with a photo first uses the photo as the thumbnail, without 
   expect(thumbnail).not.toHaveBeenCalled();
   expect(fs.files.get(`${fs.documentDir}projects/id1/thumb.jpg`)).toBe("P");
 });
+
+test("createProject with every item failing removes the folder and throws; an empty list still works", async () => {
+  const { fs, storage } = setup();
+  await expect(storage.createProject("P", [asset("file:///picked/missing.mov")])).rejects.toThrow("Couldn't import any of the selected items.");
+  expect(await fs.exists(`${fs.documentDir}projects/id1`)).toBe(false);
+  await expect(storage.createProject("P", [])).resolves.toMatchObject({ failed: 0 });
+});
+
+test("a failed copy deletes the partial destination file", async () => {
+  const { fs, storage } = setup();
+  const remove = jest.spyOn(fs, "remove");
+  await storage.importMedia("proj", [asset("file:///picked/missing.mov")]);
+  expect(remove).toHaveBeenCalledWith(`${fs.documentDir}projects/proj/media/id1.mov`);
+  remove.mockClear();
+  await expect(storage.saveStill("proj", "file:///tmp/none.png")).rejects.toThrow();
+  expect(remove).toHaveBeenCalledWith(`${fs.documentDir}projects/proj/media/id2.jpg`);
+});
+
+test("extension: extension-less fileName falls back to the uri; hostile names can't escape", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/a.mp4", "A");
+  fs.files.set("file:///picked/b", "B");
+  const { clips } = await storage.importMedia("proj", [{ ...asset("file:///picked/a.mp4"), fileName: "clip" }, { ...asset("file:///picked/b"), fileName: "x.mo/../v" }]);
+  expect(clips[0].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id1.mp4`);
+  expect(clips[1].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id2.mp4`);
+  expect(clips[1].sourceUri).not.toContain("..");
+});
+
+test("a video with zero or missing duration counts as failed", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/a.mov", "A");
+  const { clips, failed } = await storage.importMedia("proj", [asset("file:///picked/a.mov", 0), asset("file:///picked/a.mov", NaN)]);
+  expect(clips).toHaveLength(0);
+  expect(failed).toBe(2);
+});

@@ -28,7 +28,11 @@ export function useProjects() {
     const name = `Project ${nextNumber}`;
     let created: Awaited<ReturnType<typeof storage.createProject>>;
     try { created = await storage.createProject(name, assets); }
-    catch (e) { console.warn("create failed", e); useToast.getState().show("Couldn't create project"); return null; }
+    catch (e) {
+      console.warn("create failed", e);
+      useToast.getState().show(e instanceof Error && /^Couldn't import any/.test(e.message) ? e.message : "Couldn't create project");
+      return null;
+    }
     const { project, failed } = created;
     if (failed > 0) useToast.getState().show(`${assets.length - failed} of ${assets.length} clips added; ${failed} couldn't be read`);
     await reload();
