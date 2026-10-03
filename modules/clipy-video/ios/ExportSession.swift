@@ -9,6 +9,27 @@ struct ExportTransition: Record {
   @Field var duration: Double = 0                  // seconds, centred on the cut after this clip
 }
 
+struct ExportClipTransform: Record {
+  @Field var scale: Double = 1                     // 1 = the cropped picture just covers the frame
+  @Field var x: Double = 0                         // offset of the centre, fraction of the frame width
+  @Field var y: Double = 0                         // offset of the centre, fraction of the frame height (down)
+  @Field var rotation: Double = 0                  // degrees, clockwise as seen on screen
+  @Field var flipH: Bool = false
+  @Field var flipV: Bool = false
+}
+
+struct ExportCrop: Record {
+  @Field var x: Double = 0                         // fractions of the oriented source, top-left origin
+  @Field var y: Double = 0
+  @Field var w: Double = 1
+  @Field var h: Double = 1
+}
+
+struct ExportBackground: Record {
+  @Field var type: String = "black"                // black | color | blur (unknown → black)
+  @Field var color: String?                        // `#RRGGBB` when type is "color"; JS `null` → nil
+}
+
 struct ExportClip: Record {
   @Field var sourceUri: String = ""
   @Field var trimStart: Double = 0
@@ -18,6 +39,13 @@ struct ExportClip: Record {
   @Field var speed: Double = 1                     // output duration = (trimEnd − trimStart) / speed
   @Field var filter: String?                       // JS `null` → nil (no filter)
   @Field var transition: ExportTransition = ExportTransition()   // into the NEXT clip
+  @Field var kind: String = "video"                // video | photo — accepted, not acted on yet (photo pre-pass: Task 13)
+  @Field var sourceWidth: Double = 0               // oriented (display) size; the compositor uses the actual frame size
+  @Field var sourceHeight: Double = 0
+  @Field var transform: ExportClipTransform = ExportClipTransform()
+  @Field var crop: ExportCrop = ExportCrop()
+  @Field var background: ExportBackground = ExportBackground()   // shown only where the picture leaves the frame
+  @Field var reversed: Bool = false                // accepted, not acted on yet (reverse pre-pass: Task 13)
 }
 
 struct ExportOverlay: Record {
@@ -92,6 +120,7 @@ private struct LoadedClip {
   let srcAudio: AVAssetTrack?
   let audioRange: CMTimeRange?                     // the source audio track's own range
   let transform: CGAffineTransform                 // Core Image aspect-fill transform
+  let orient: CGAffineTransform                    // Core Image: raw frame → upright, y-up, origin (0, 0)
   let start: Double                                // clamped trimStart (source seconds)
   let end: Double                                  // clamped trimEnd (source seconds)
   let sourceEnd: CMTime                            // last source time that can be read (handle limit)
@@ -166,6 +195,17 @@ final class ExportSession {
     let flipSource = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: naturalSize.height)
     let flipRender = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: renderSize.height)
     return flipSource.concatenating(fill).concatenating(flipRender)
+  }
+
+  /// The orientation part of `ciFillTransform` alone: raw pixel buffer (y-up) → upright picture, still y-up, with
+  /// its extent at (0, 0, displayW, displayH). `ciFillTransform` = this, then a uniform cover scale and centring
+  /// (checked in ClipLayoutTests). `ClipLayout.ciPlacement` then places the upright picture.
+  static func ciOrientTransform(preferredTransform t: CGAffineTransform, naturalSize: CGSize) -> CGAffineTransform {
+    let bounds = CGRect(origin: .zero, size: naturalSize).applying(t)
+    let normalise = CGAffineTransform(translationX: -bounds.minX, y: -bounds.minY)
+    let flipSource = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: naturalSize.height)
+    let flipOriented = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: bounds.height)
+    return flipSource.concatenating(t).concatenating(normalise).concatenating(flipOriented)
   }
 
   /// Seconds → CMTime at the timescale every Phase 1–3 computation uses.
@@ -357,6 +397,7 @@ final class ExportSession {
       loaded.append(LoadedClip(
         clip: clip, srcVideo: srcVideo, srcAudio: srcAudio, audioRange: audioRange,
         transform: Self.ciFillTransform(preferredTransform: preferredTransform, naturalSize: naturalSize, renderSize: renderSize),
+        orient: Self.ciOrientTransform(preferredTransform: preferredTransform, naturalSize: naturalSize),
         start: start, end: end, sourceEnd: CMTimeMinimum(duration, videoRange.end),
         speed: speed, outDur: outDur))
     }
@@ -492,7 +533,15 @@ final class ExportSession {
     // 4. Compositor instructions, contiguous over [0, total]: clip i alone on [bodyStart + halfIn, bodyEnd − halfOut),
     //    then the window around cut i, [bodyEnd − half, bodyEnd + half), with the outgoing and incoming layers.
     func spec(_ i: Int) -> LayerSpec {
-      LayerSpec(trackID: placed[i].trackID, transform: loaded[i].transform, filter: loaded[i].clip.filter)
+      let c = loaded[i].clip
+      return LayerSpec(
+        trackID: placed[i].trackID, fill: loaded[i].transform, orient: loaded[i].orient,
+        crop: ClipCrop(x: CGFloat(c.crop.x), y: CGFloat(c.crop.y), w: CGFloat(c.crop.w), h: CGFloat(c.crop.h)),
+        transform: ClipTransform(
+          scale: CGFloat(c.transform.scale), x: CGFloat(c.transform.x), y: CGFloat(c.transform.y),
+          rotation: CGFloat(c.transform.rotation), flipH: c.transform.flipH, flipV: c.transform.flipV),
+        background: LayerBackground(type: c.background.type, color: c.background.color),
+        filter: c.filter)
     }
     var instructions: [AVVideoCompositionInstructionProtocol] = []
     for i in 0..<n {
