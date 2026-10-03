@@ -97,6 +97,32 @@ final class TransitionBlendTests: XCTestCase {
     XCTAssertEqual(corner.b, 0.5, accuracy: 0.05)
   }
 
+  /// The blur transition's radius is continuous: 0 at both ends, the full radius (0.04 × the shorter side) in the
+  /// middle, linear in between and the same on both sides of the middle.
+  func testBlurTransitionRadiusPeaksInTheMiddle() {
+    let full = ClipyCompositor.blurRadiusFactor * 36
+    XCTAssertEqual(ClipyCompositor.blurTransitionRadius(0, size: size), 0, accuracy: 1e-9)
+    XCTAssertEqual(ClipyCompositor.blurTransitionRadius(0.25, size: size), full / 2, accuracy: 1e-9)
+    XCTAssertEqual(ClipyCompositor.blurTransitionRadius(0.5, size: size), full, accuracy: 1e-9)
+    XCTAssertEqual(ClipyCompositor.blurTransitionRadius(0.75, size: size), full / 2, accuracy: 1e-9)
+    XCTAssertEqual(ClipyCompositor.blurTransitionRadius(1, size: size), 0, accuracy: 1e-9)
+    // No jump around the middle (the old recipe switched which frame was blurred there).
+    let before = ClipyCompositor.blurTransitionRadius(0.499, size: size), after = ClipyCompositor.blurTransitionRadius(0.501, size: size)
+    XCTAssertEqual(before, after, accuracy: 1e-9)
+  }
+
+  /// Both frames are blurred in the middle: an outgoing frame with a hard white / black edge no longer shows that
+  /// edge sharply at p = 0.5 (a pixel just on the black side has picked up white), while at p = 0 it is untouched.
+  func testBlurTransitionBlursBothFramesInTheMiddle() {
+    let white = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: CGRect(x: 0, y: 0, width: 32, height: 36))
+    let edged = white.composited(over: CIImage(color: CIColor.black).cropped(to: rect)).cropped(to: rect)
+    let start = ClipyCompositor.blend(type: "blur", from: edged, to: edged, progress: 0, size: size)
+    XCTAssertEqual(redBlue(start, 32, 18).r, 0, accuracy: 0.02)
+    let middle = ClipyCompositor.blend(type: "blur", from: edged, to: edged, progress: 0.5, size: size)
+    XCTAssertGreaterThan(redBlue(middle, 32, 18).r, 0.1)       // radius 1.44 px, half a pixel from the edge
+    XCTAssertEqual(middle.extent, rect)
+  }
+
   /// Solid frames blur to themselves (clamped edges), so the blur transition is a plain mix at any progress.
   func testBlurKeepsTheEdgesOpaqueAndMixes() {
     for p in [0.25, 0.5, 0.75] as [CGFloat] {

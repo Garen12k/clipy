@@ -34,6 +34,9 @@ export const SHAKE_VECTORS: ShakeVector[] = [
 // pulseScale(t, d, k) = 1 + 0.12 k env (0.5 - 0.5 cos(2pi 2 t))
 export const PULSE_VECTORS: ScalarVector[] = [
   { name: "peak at 0.25 s", args: [0.25, 2, 1], expect: 1.12 },     // cos(pi) = -1 -> 1 + 0.12 * 1 * 1 * 1
+  // env(0.1, 2) = 0.1 / 0.15 = 2/3; cos(2pi * 2 * 0.1) = cos(72 deg) = (sqrt(5) - 1) / 4 = 0.3090169944;
+  // 0.5 - 0.5 * 0.3090169944 = 0.3454915028; 0.12 * 2/3 = 0.08; 1 + 0.08 * 0.3454915028 = 1.027639320225
+  { name: "ramping in at 0.1 s", args: [0.1, 2, 1], expect: 1.027639320225 },
 ];
 
 // flashOpacity(t, k) = k max(0, 1 - 4 frac(2t))

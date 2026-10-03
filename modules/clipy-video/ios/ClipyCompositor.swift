@@ -71,8 +71,32 @@ final class LayerSpec {
   }
 }
 
+/// One timeline effect as the compositor uses it: its type (`Effects.effectIds`), its range in seconds of composition
+/// time (= project time; start inclusive, end exclusive) and its intensity (0…1).
+struct ActiveEffectSpec: Equatable {
+  let type: String
+  let start: Double
+  let end: Double
+  let intensity: Double
+
+  /// The effects that can be drawn, in list order: a known type, a finite, non-empty range and a finite intensity
+  /// (clamped to 0…1). Everything else is dropped, so a request without usable effects takes the path it always took.
+  static func usable(_ all: [ActiveEffectSpec]) -> [ActiveEffectSpec] {
+    return all.compactMap { (e: ActiveEffectSpec) -> ActiveEffectSpec? in
+      guard Effects.effectIds.contains(e.type), e.start.isFinite, e.end.isFinite, e.end > e.start, e.intensity.isFinite else { return nil }
+      return ActiveEffectSpec(type: e.type, start: e.start, end: e.end, intensity: min(1, max(0, e.intensity)))
+    }
+  }
+
+  /// True when the effect covers any part of [from, to) (seconds).
+  func overlaps(from: Double, to: Double) -> Bool {
+    return start < to && end > from
+  }
+}
+
 /// A plain range carries one layer; a transition window carries two (outgoing, incoming) plus the window's
-/// type/start/duration, so the compositor computes progress = (t − start) / duration.
+/// type/start/duration, so the compositor computes progress = (t − start) / duration. `effects` are the timeline
+/// effects overlapping the range (usually none).
 final class ClipyInstruction: NSObject, AVVideoCompositionInstructionProtocol {
   let timeRange: CMTimeRange
   let enablePostProcessing: Bool = true          // the Core Animation tool (text/stickers) runs after us
@@ -81,11 +105,13 @@ final class ClipyInstruction: NSObject, AVVideoCompositionInstructionProtocol {
   let passthroughTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
   let layers: [LayerSpec]
   let transition: (type: String, start: CMTime, duration: CMTime)?
+  let effects: [ActiveEffectSpec]
 
-  init(timeRange: CMTimeRange, layers: [LayerSpec], transition: (type: String, start: CMTime, duration: CMTime)?) {
+  init(timeRange: CMTimeRange, layers: [LayerSpec], transition: (type: String, start: CMTime, duration: CMTime)?, effects: [ActiveEffectSpec] = []) {
     self.timeRange = timeRange
     self.layers = layers
     self.transition = transition
+    self.effects = effects
     self.requiredSourceTrackIDs = layers.map { NSNumber(value: $0.trackID) as NSValue }
     super.init()
   }
@@ -158,6 +184,12 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
       }
     } else if let first = inst.layers.first, let a = frame(first) {
       result = a
+    }
+    // Timeline effects on the finished frame, in list order (start inclusive, end exclusive — as `activeEffects`).
+    // With no active effect `result` is not touched.
+    for effect in inst.effects where time >= effect.start && time < effect.end {
+      result = EffectRenderer.apply(type: effect.type, image: result.cropped(to: rect),
+                                    t: time - effect.start, d: effect.end - effect.start, k: effect.intensity, size: size)
     }
     ctx.render(result.cropped(to: rect).composited(over: black), to: out)
     req.finish(withComposedVideoFrame: out)
@@ -258,14 +290,19 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
       let spun = a.transformed(by: turn).composited(over: black).cropped(to: rect)
       return dissolve(from: spun, to: b, progress: p).cropped(to: rect)
     case "blur":
-      // Outgoing blurs up over the first half, incoming blurs down over the second, cross-dissolved throughout.
-      let r = blurRadiusFactor * min(size.width, size.height)
-      let from = p < 0.5 ? blurred(a, radius: r * (p / 0.5), rect: rect) : a
-      let to = p < 0.5 ? b : blurred(b, radius: r * ((1 - p) / 0.5), rect: rect)
-      return dissolve(from: from, to: to, progress: p).cropped(to: rect)
+      // Both frames carry the same blur — none at either end, strongest in the middle — and cross-dissolve
+      // throughout, so the picture never jumps (a sharp frame never meets a fully blurred one).
+      let r = blurTransitionRadius(p, size: size)
+      return dissolve(from: blurred(a, radius: r, rect: rect), to: blurred(b, radius: r, rect: rect), progress: p).cropped(to: rect)
     default:
       return dissolve(from: a, to: b, progress: p).cropped(to: rect)
     }
+  }
+
+  /// The blur transition's radius at progress `p`: `blurRadiusFactor` × the shorter side × (1 − |2p − 1|) — 0 at
+  /// p = 0 and p = 1, the full radius at p = 0.5, linear in between.
+  static func blurTransitionRadius(_ p: CGFloat, size: CGSize) -> CGFloat {
+    return blurRadiusFactor * min(size.width, size.height) * (1 - abs(2 * p - 1))
   }
 
   /// A push: the incoming frame starts displaced by (dx, dy) and travels to the origin while the outgoing frame is

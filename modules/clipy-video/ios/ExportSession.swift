@@ -53,7 +53,7 @@ struct ExportAdjust: Record {
   }
 }
 
-/// A project-time effect range. Decoded here; rendered by the effects pass (not yet).
+/// A project-time effect range. Decoded here; drawn by `ClipyCompositor` through `EffectRenderer`.
 struct ExportEffect: Record {
   @Field var type: String = ""                     // Effects.effectIds (unknown → ignored)
   @Field var start: Double = 0                     // output seconds
@@ -613,18 +613,27 @@ final class ExportSession {
         background: LayerBackground(type: c.background.type, color: c.background.color),
         filter: c.filter, filterIntensity: c.filterIntensity, adjust: c.adjust.values)
     }
+    //    Each instruction also carries the timeline effects overlapping its range (project time = composition time).
+    let usableEffects = ActiveEffectSpec.usable(request.effects.map {
+      ActiveEffectSpec(type: $0.type, start: $0.start, end: $0.end, intensity: $0.intensity)
+    })
+    func effects(in range: CMTimeRange) -> [ActiveEffectSpec] {
+      return usableEffects.filter { $0.overlaps(from: range.start.seconds, to: range.end.seconds) }
+    }
     var instructions: [AVVideoCompositionInstructionProtocol] = []
     for i in 0..<n {
       let soloStart = placed[i].bodyStart + (i > 0 ? halves[i - 1] : CMTime.zero)
       let soloEnd = placed[i].bodyEnd - halves[i]
       if CMTimeCompare(soloEnd, soloStart) > 0 {
-        instructions.append(ClipyInstruction(timeRange: CMTimeRange(start: soloStart, end: soloEnd), layers: [spec(i)], transition: nil))
+        let solo = CMTimeRange(start: soloStart, end: soloEnd)
+        instructions.append(ClipyInstruction(timeRange: solo, layers: [spec(i)], transition: nil, effects: effects(in: solo)))
       }
       if i < n - 1, CMTimeCompare(halves[i], .zero) > 0 {
         let window = CMTimeRange(start: placed[i].bodyEnd - halves[i], end: placed[i].bodyEnd + halves[i])
         instructions.append(ClipyInstruction(
           timeRange: window, layers: [spec(i), spec(i + 1)],
-          transition: (type: loaded[i].clip.transition.type, start: window.start, duration: window.duration)))
+          transition: (type: loaded[i].clip.transition.type, start: window.start, duration: window.duration),
+          effects: effects(in: window)))
       }
     }
 
