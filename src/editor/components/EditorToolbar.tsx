@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { addTextOverlay, defaultOverlayRange, deleteClip, deleteOverlay, duplicateClip, setClipReversed, splitClipAt } from "@/src/editor/model/ops";
 import { isPhoto, isTextOverlay, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useClipMedia } from "@/src/editor/useClipMedia";
 import { TOOL_GROUPS, groupForSelection, type IoniconName, type ToolGroupId, type ToolId } from "@/src/editor/toolGroups";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
@@ -43,6 +44,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const reversed = !!selectedClip?.reversed;
   const reduced = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { replaceMedia, busy: mediaBusy } = useClipMedia();
   const [group, setGroup] = useState<ToolGroupId>("edit");
   const overlayKind = useEditorStore((s) => s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind ?? null);
   useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind }, cur) ?? cur); }, [selectedId, overlayKind]);
@@ -73,8 +75,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     trim: { label: "Trim", icon: "crop", disabled: noSel, onPress: () => setSheet("trim") },
     transform: { label: "Transform", icon: "resize", disabled: noSel, onPress: () => setSheet("transform") },
     crop: { label: "Crop", icon: "crop", disabled: noSel, onPress: () => setSheet("crop") },
-    // Replace and Freeze are wired by later tasks; until then they stay disabled no-ops.
-    replace: { label: "Replace", icon: "sync", disabled: true, onPress: () => {} },
+    // Freeze is wired by a later task; until then it stays a disabled no-op.
+    replace: { label: "Replace", icon: "sync", disabled: noSel || mediaBusy, onPress: () => { if (selectedId) void replaceMedia(selectedId); } },
     reverse: { label: "Reverse", icon: "play-back", disabled: noSel || photoSel, active: reversed, onPress: () => { if (selectedId) { haptic("light"); apply((p) => setClipReversed(p, selectedId, !reversed)); } } },
     freeze: { label: "Freeze", icon: "snow", disabled: true, onPress: () => {} },
     duplicate: { label: "Duplicate", icon: "copy", disabled: noSel, onPress: () => selectedId && apply((p) => duplicateClip(p, selectedId)) },

@@ -14,24 +14,29 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
   const times = thumbTimes(clip, pixelsPerSecond);
   const slotWidth = thumbInterval(pixelsPerSecond) * pixelsPerSecond;
   const [thumbs, setThumbs] = useState<Record<number, string>>({});
+  const photo = isPhoto(clip);
 
   useEffect(() => {
-    if (missing) return;
+    if (missing || photo) return;
     let alive = true;
     times.forEach((t) => getThumb(clip.sourceUri, t).then((uri) => { if (alive) setThumbs((s) => (s[t] ? s : { ...s, [t]: uri })); }).catch(() => {}));
     return () => { alive = false; };
-  }, [clip.sourceUri, missing, times.join(",")]);
+  }, [clip.sourceUri, missing, photo, times.join(",")]);
 
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Clip ${clip.id}`} accessibilityState={{ selected }}
       style={{ width, height: STRIP_HEIGHT, borderRadius: 8, overflow: "hidden", backgroundColor: theme.colors.surfaceAlt,
         borderWidth: 2, borderColor: selected ? theme.colors.accent : "transparent",
         borderRightWidth: 2, borderRightColor: theme.colors.bgDeep, flexDirection: "row" }}>
-      {times.map((t, i) => (
-        <View key={t} style={{ width: Math.min(slotWidth, width - i * slotWidth), height: STRIP_HEIGHT, overflow: "hidden" }}>
-          {thumbs[t] ? <Image source={{ uri: thumbs[t] }} style={{ width: slotWidth, height: STRIP_HEIGHT }} resizeMode="cover" /> : null}
-        </View>
-      ))}
+      {times.map((t, i) => {
+        // A photo is its own thumbnail in every slot.
+        const src = missing ? undefined : photo ? clip.sourceUri : thumbs[t];
+        return (
+          <View key={t} style={{ width: Math.min(slotWidth, width - i * slotWidth), height: STRIP_HEIGHT, overflow: "hidden" }}>
+            {src ? <Image testID="thumb-image" source={{ uri: src }} style={{ width: slotWidth, height: STRIP_HEIGHT }} resizeMode="cover" /> : null}
+          </View>
+        );
+      })}
       {missing && (
         <View style={{ position: "absolute", top: 4, left: 4, backgroundColor: theme.colors.danger, borderRadius: 999, padding: 2 }}>
           <Ionicons name="warning" size={14} color={theme.colors.text} />
@@ -48,7 +53,7 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
             <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>◀</Text>
           </View>
         )}
-        {isPhoto(clip) && (
+        {photo && (
           <View accessibilityLabel="Photo" style={{ backgroundColor: theme.colors.sea, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, justifyContent: "center" }}>
             <Ionicons name="image" size={10} color={theme.colors.text} />
           </View>

@@ -384,6 +384,31 @@ export function setBackgroundForAllClips(p: Project, bg: ClipBackground): Projec
   return touch(p, { clips: p.clips.map((c) => (sameJson(c.background, bg) ? c : { ...c, background: { ...bg } })) });
 }
 
+/**
+ * Swaps a clip's media and keeps its edits (id, filter, transform, crop, background, transition, sound for videos).
+ * The new clip keeps the old one's timeline length where the new media allows it. A video too short for a clip is refused.
+ */
+export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "sourceUri" | "sourceDuration" | "width" | "height" | "kind">): Project {
+  const i = p.clips.findIndex((c) => c.id === clipId);
+  if (i < 0) return p;
+  const old = p.clips[i];
+  const prevOut = clipDuration(old);
+  const base: Clip = { ...old, sourceUri: media.sourceUri, width: media.width, height: media.height, kind: media.kind, trimStart: 0 };
+  let next: Clip;
+  if (media.kind === "photo") {
+    next = { ...base, speed: 1, muted: true, reversed: false, sourceDuration: PHOTO.maxSeconds, trimEnd: clamp(prevOut, [PHOTO.minSeconds, PHOTO.maxSeconds]) };
+  } else if (isPhoto(old)) {
+    // A photo runs at speed 1, so its source length is its output length.
+    next = { ...base, sourceDuration: media.sourceDuration, speed: 1, muted: false, volume: 1, reversed: false, trimEnd: Math.min(media.sourceDuration, prevOut) };
+  } else {
+    // Same speed, so the old source span is exactly the previous output length × speed.
+    next = { ...base, sourceDuration: media.sourceDuration, trimEnd: Math.min(media.sourceDuration, old.trimEnd - old.trimStart) };
+  }
+  if (next.kind === "video" && clipDuration(next) < MIN_CLIP_SECONDS - 1e-9) return p;
+  const clips = p.clips.slice(); clips[i] = next;
+  return touch(p, { clips: normaliseTransitions(clips) });
+}
+
 export function setClipReversed(p: Project, clipId: string, reversed: boolean): Project {
   return updateClip(p, clipId, (c) => (isPhoto(c) || c.reversed === reversed ? c : { ...c, reversed }));
 }

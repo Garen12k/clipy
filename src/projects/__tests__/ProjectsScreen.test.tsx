@@ -30,7 +30,7 @@ test("shows the empty state, then creates a project from picked videos and opens
   await render(<ProjectsScreen />);
   expect(await screen.findByText("Your voyages")).toBeTruthy();
   expect(await screen.findByText("No clips yet")).toBeTruthy();
-  expect(screen.getByText("Pick some videos from your library and start your first edit.")).toBeTruthy();
+  expect(screen.getByText("Pick some photos or videos from your library and start your first edit.")).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "New clip" }));
   await waitFor(() => expect(storage.createProject).toHaveBeenCalledWith("Project 1", expect.any(Array)));
   expect(mockPush).toHaveBeenCalledWith("/editor/p9");
