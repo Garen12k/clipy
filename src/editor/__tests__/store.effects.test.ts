@@ -1,5 +1,5 @@
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { addEffect, deleteEffect, setClipAdjust } from "@/src/editor/model/ops";
+import { addEffect, deleteEffect, setClipAdjust, trimClip } from "@/src/editor/model/ops";
 import { makeClip, makeEffect, makeOverlay, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "../store";
 
@@ -44,4 +44,32 @@ test("one slider drag is one undo step", () => {
   s.undo();
   expect(useEditorStore.getState().project!.clips[0].adjust.brightness).toBe(0);
   expect(useEditorStore.getState().canUndo()).toBe(false);
+});
+
+test("selectEffect clears a real overlay selection; selectOverlay clears a real clip selection", () => {
+  const s = useEditorStore.getState();
+  s.selectOverlay("o1");
+  expect(useEditorStore.getState().selectedOverlayId).toBe("o1");
+  s.selectEffect("e1");
+  expect(useEditorStore.getState()).toMatchObject({ selectedOverlayId: null, selectedEffectId: "e1" });
+  s.select("a");
+  expect(useEditorStore.getState().selectedClipId).toBe("a");
+  s.selectOverlay("o1");
+  expect(useEditorStore.getState()).toMatchObject({ selectedClipId: null, selectedOverlayId: "o1" });
+});
+
+test("setProject clears the effect selection", () => {
+  useEditorStore.getState().selectEffect("e1");
+  useEditorStore.getState().setProject(p);
+  expect(useEditorStore.getState().selectedEffectId).toBeNull();
+});
+
+test("a clip edit that shortens the project leaves effects in place", () => {
+  const s = useEditorStore.getState();
+  s.apply((x) => addEffect(x, "glitch", 3, "e2"));
+  s.selectEffect("e2");
+  s.apply((x) => trimClip(x, "a", 0, 1));
+  const st = useEditorStore.getState();
+  expect(st.project!.effects.map((e) => [e.id, e.start, e.end])).toEqual([["e1", 0, 2], ["e2", 3, 5]]);
+  expect(st.selectedEffectId).toBe("e2");
 });

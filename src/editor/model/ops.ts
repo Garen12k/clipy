@@ -265,6 +265,7 @@ export function setClipFilter(p: Project, clipId: string, filter: FilterId | nul
 }
 
 export function setClipFilterIntensity(p: Project, clipId: string, intensity: number): Project {
+  if (!Number.isFinite(intensity)) return p;
   const v = clamp(intensity, [0, 1]);
   return updateClip(p, clipId, (c) => (c.filterIntensity === v ? c : { ...c, filterIntensity: v }));
 }
@@ -305,13 +306,18 @@ export function replaceCaptions(p: Project, captions: TextOverlay[]): Project {
  */
 export function applyTemplate(p: Project, t: Template, scope: "clip" | "project", clipId: string | null): Project {
   if (p.clips.length === 0) return p;
+  const setsFilter = !!t.filter && t.filter !== "none";   // the none template leaves each clip's filter strength alone
   let next = p;
   if (scope === "clip") {
     if (!clipId || !p.clips.some((c) => c.id === clipId)) return p;
-    next = setClipFilterIntensity(setClipFilter(setClipSpeed(next, clipId, t.speed), clipId, t.filter), clipId, 1);
+    next = setClipFilter(setClipSpeed(next, clipId, t.speed), clipId, t.filter);
+    if (setsFilter) next = setClipFilterIntensity(next, clipId, 1);
     next = setTransition(next, clipId, t.transition);   // no-op on the last clip
   } else {
-    for (const c of p.clips) next = setClipFilterIntensity(setClipFilter(setClipSpeed(next, c.id, t.speed), c.id, t.filter), c.id, 1);
+    for (const c of p.clips) {
+      next = setClipFilter(setClipSpeed(next, c.id, t.speed), c.id, t.filter);
+      if (setsFilter) next = setClipFilterIntensity(next, c.id, 1);
+    }
     for (const c of next.clips.slice(0, -1)) next = setTransition(next, c.id, t.transition);
     const clips = normaliseTransitions(next.clips);
     if (clips !== next.clips) next = touch(next, { clips });
@@ -467,10 +473,10 @@ export function setAdjustForAllClips(p: Project, adjust: ClipAdjust): Project {
 /** Adds a timeline effect at the playhead (default length, clamped to the project end); refused when the project has no room for minDuration. */
 export function addEffect(p: Project, type: EffectId, playhead: number, id: string = newId()): Project {
   const total = totalDuration(p);
-  if (p.clips.length === 0 || total < EFFECT_LIMITS.minDuration) return p;
+  if (!Number.isFinite(playhead) || p.clips.length === 0 || total < EFFECT_LIMITS.minDuration) return p;
   let start = clamp(playhead, [0, total]);
   const end = Math.min(total, start + EFFECT_LIMITS.defaultDuration);
-  if (end - start < EFFECT_LIMITS.minDuration) start = Math.max(0, end - EFFECT_LIMITS.minDuration);
+  if (end - start < EFFECT_LIMITS.minDuration) start = Math.max(0, end - EFFECT_LIMITS.minDuration - 1e-9);   // tiny nudge: end - start must be >= minDuration exactly
   return touch(p, { effects: [...p.effects, makeEffect({ id, type, start, end, intensity: EFFECT_LIMITS.defaultIntensity })] });
 }
 
@@ -484,9 +490,12 @@ function replaceEffect(p: Project, i: number, next: EffectItem): Project {
 export function updateEffect(p: Project, id: string, patch: Partial<Pick<EffectItem, "start" | "end" | "intensity">>): Project {
   const i = p.effects.findIndex((e) => e.id === id);
   if (i < 0) return p;
+  if (Object.values(patch).some((v) => v !== undefined && !Number.isFinite(v))) return p;
   const cur = p.effects[i];
   const total = totalDuration(p);
   const min = EFFECT_LIMITS.minDuration;
+  const intensity = patch.intensity === undefined ? cur.intensity : clamp(patch.intensity, [0, 1]);
+  if (patch.start === undefined && patch.end === undefined) return replaceEffect(p, i, { ...cur, intensity });   // range untouched
   let { start, end } = cur;
   if (patch.end !== undefined) end = clamp(patch.end, [0, total]);
   if (patch.start !== undefined) start = clamp(patch.start, [0, total]);
@@ -495,13 +504,12 @@ export function updateEffect(p: Project, id: string, patch: Partial<Pick<EffectI
   else if (patch.start !== undefined && patch.end !== undefined && end - start < min) start = end - min;
   start = Math.max(0, start); end = Math.min(total, end);
   if (end - start < min - 1e-9) return p;
-  const intensity = patch.intensity === undefined ? cur.intensity : clamp(patch.intensity, [0, 1]);
   return replaceEffect(p, i, { ...cur, start, end, intensity });
 }
 
 export function moveEffect(p: Project, id: string, newStart: number): Project {
   const e = p.effects.find((x) => x.id === id);
-  if (!e) return p;
+  if (!e || !Number.isFinite(newStart)) return p;
   const d = e.end - e.start;
   const start = Math.max(0, Math.min(newStart, totalDuration(p) - d));
   return updateEffect(p, id, { start, end: start + d });

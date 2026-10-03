@@ -167,10 +167,41 @@ describe("clip ops keep strength and deep-copy adjust", () => {
     expect(n.clips[0].adjust.contrast).toBe(0.5);
   });
   test("applyTemplate sets filterIntensity 1 when it sets a filter", () => {
-    const t = Object.values(TEMPLATES).find((x) => x.filter);
+    const t = Object.values(TEMPLATES).find((x) => x.filter && x.filter !== "none");
     expect(t).toBeDefined();
     const dim = setClipFilterIntensity(p, "a", 0.2);
     expect(applyTemplate(dim, t!, "clip", "a").clips[0].filterIntensity).toBe(1);
     expect(applyTemplate(dim, t!, "project", null).clips.map((c) => c.filterIntensity)).toEqual([1, 1]);
+  });
+});
+
+describe("fix round 1", () => {
+  test("none template keeps the clip's filter strength", () => {
+    const dim = setClipFilterIntensity(p, "a", 0.4);
+    expect(TEMPLATES.clean.filter).toBe("none");
+    expect(applyTemplate(dim, TEMPLATES.clean, "clip", "a").clips[0].filterIntensity).toBe(0.4);
+    expect(applyTemplate(dim, TEMPLATES.clean, "project", null).clips[0].filterIntensity).toBe(0.4);
+  });
+  test("non-finite input leaves the project unchanged", () => {
+    const withE = { ...p, effects: [makeEffect({ id: "e", start: 2, end: 5 })] };
+    expect(setClipFilterIntensity(p, "a", NaN)).toBe(p);
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      expect(addEffect(p, "glitch", bad, "x")).toBe(p);
+      expect(updateEffect(withE, "e", { start: bad })).toBe(withE);
+      expect(updateEffect(withE, "e", { end: bad })).toBe(withE);
+      expect(updateEffect(withE, "e", { intensity: bad })).toBe(withE);
+      expect(moveEffect(withE, "e", bad)).toBe(withE);
+    }
+  });
+  test("addEffect shift-back keeps at least minDuration exactly", () => {
+    for (const at of [9.8, 9.9, 9.95, 10]) {
+      const e = addEffect(p, "vhs", at, "e").effects[0];
+      expect(e.end - e.start).toBeGreaterThanOrEqual(EFFECT_LIMITS.minDuration);
+    }
+  });
+  test("intensity-only patch leaves the range alone, even past the project end", () => {
+    const straddle = { ...p, effects: [makeEffect({ id: "e", start: 9, end: 12, intensity: 0.5 })] };
+    const n = updateEffect(straddle, "e", { intensity: 0.9 });
+    expect(n.effects[0]).toMatchObject({ start: 9, end: 12, intensity: 0.9 });
   });
 });
