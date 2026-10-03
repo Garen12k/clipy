@@ -1,16 +1,25 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
-import { clipAt, clipStartTimes, isInTransitionWindow, outputToSource, totalDuration } from "@/src/editor/model/timeline";
-import { aspectRatioValue } from "@/src/editor/model/types";
+import { clipAt, clipStartTimes, outputToSource, totalDuration } from "@/src/editor/model/timeline";
+import { aspectRatioValue, isPhoto } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { usePhotoPlayback } from "@/src/editor/usePhotoPlayback";
 import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { ClipFrame } from "./ClipFrame";
 import { FilterLayer } from "./FilterLayer";
 import { OverlayLayer } from "./OverlayLayer";
-import { PreviewTag } from "./PreviewTag";
+import { needsPreviewTag, PreviewTag } from "./PreviewTag";
 import { TransitionLayer } from "./TransitionLayer";
+
+/** True when the clip under the store's playhead is a photo: the video player must stay paused then. */
+function photoAtPlayhead(): boolean {
+  const s = useEditorStore.getState();
+  const h = s.project ? clipAt(s.project, s.playhead) : null;
+  return !!h && isPhoto(h.clip);
+}
 
 export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: string) => void }) {
   const project = useEditorStore((s) => s.project);
@@ -29,6 +38,9 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
 
   const player = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = false; p.audioMixingMode = "mixWithOthers"; });
 
+  // A photo under the playhead: the player stays paused and a timer moves the playhead instead.
+  usePhotoPlayback(isPlaying && !!hit && isPhoto(hit.clip) && !missing.includes(hit.clip.sourceUri));
+
   // Load the right source and seek while paused.
   useEffect(() => {
     if (!hit || !project) return;
@@ -40,6 +52,13 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         if (next !== null) seek(clipStartTimes(project)[next]);
         else { seek(totalDuration(project)); setPlaying(false); }
       }
+      return;
+    }
+    if (isPhoto(hit.clip)) {
+      // Nothing to load: keep the player paused, and forget the loaded clip so coming back to a video
+      // (even the same one) re-seeks it and resumes playback.
+      player.pause();
+      loadedClipId.current = null;
       return;
     }
     // expo-video caps player.volume at 1; values above 1 are only honoured in the export.
@@ -56,9 +75,13 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       if (hit.clip.sourceUri === loadedSourceUri.current) {
         // Same underlying file as before (e.g. the other half of a split clip): no need to reload it,
         // and expo-video may not emit a fresh readyToPlay for an unchanged source, which would leave
-        // pendingSeek set forever.
-        player.currentTime = sourceTime;
-        if (isPlaying) player.play();
+        // pendingSeek set forever. If that file is still loading, retarget its pending seek instead
+        // (the readyToPlay handler seeks and resumes).
+        if (pendingSeek.current !== null) pendingSeek.current = sourceTime;
+        else {
+          player.currentTime = sourceTime;
+          if (isPlaying) player.play();
+        }
         return;
       }
       loadedSourceUri.current = hit.clip.sourceUri;
@@ -70,9 +93,10 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       if (pendingSeek.current !== null) pendingSeek.current = sourceTime; // land the pending seek where the user scrubbed to
       else player.currentTime = sourceTime;
     }
-  }, [hit?.clip.id, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, hit?.clip.speed, playhead, isPlaying, missing, project, player, seek, setPlaying]);
+  }, [hit?.clip.id, hit?.clip.kind, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, hit?.clip.speed, playhead, isPlaying, missing, project, player, seek, setPlaying]);
 
-  useEffect(() => { if (isPlaying) player.play(); else player.pause(); }, [isPlaying, player]);
+  // Play / pause toggles. Crossing between clips while playing is handled by the effect above.
+  useEffect(() => { if (isPlaying && !photoAtPlayhead()) player.play(); else player.pause(); }, [isPlaying, player]);
 
   // Apply the pending seek once the newly replaced source is ready, then resume playback if needed.
   useEffect(() => {
@@ -80,7 +104,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       if (status === "readyToPlay" && pendingSeek.current !== null) {
         player.currentTime = pendingSeek.current;
         pendingSeek.current = null;
-        if (useEditorStore.getState().isPlaying) player.play();
+        if (useEditorStore.getState().isPlaying && !photoAtPlayhead()) player.play();
       } else if (status === "error") {
         // Unblock timeUpdate handling even though the seek never landed, and surface the failure once.
         pendingSeek.current = null;
@@ -97,7 +121,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       const s = useEditorStore.getState();
       if (!s.isPlaying || !s.project) return;
       const h = clipAt(s.project, s.playhead);
-      if (!h || h.clip.id !== loadedClipId.current) return;
+      if (!h || isPhoto(h.clip) || h.clip.id !== loadedClipId.current) return; // a photo's timer owns the playhead
       const { playhead: next, ended } = nextPlayheadFromPlayer(s.project, h, currentTime, s.missingSourceUris);
       s.seek(next);
       if (ended) s.setPlaying(false);
@@ -123,11 +147,15 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         accessibilityLabel="Preview"
         accessibilityHint="Tap to play or pause"
         style={{ aspectRatio: ratio, maxWidth: "100%", maxHeight: "100%", flex: 1, backgroundColor: theme.colors.surface, borderRadius: 10, overflow: "hidden" }}>
-        {!empty && <VideoView player={player} style={{ width: "100%", height: "100%" }} contentFit="cover" nativeControls={false} />}
+        {hit && frame.w > 0 && (
+          <ClipFrame clip={hit.clip} frameW={frame.w} frameH={frame.h}>
+            <VideoView testID="preview-video" player={player} style={{ width: "100%", height: "100%" }} contentFit="fill" nativeControls={false} />
+          </ClipFrame>
+        )}
         <FilterLayer filter={hit?.clip.filter ?? null} />
         <TransitionLayer />
         {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenPanel?.(id)} />}
-        <PreviewTag visible={!!hit?.clip.filter || isInTransitionWindow(project, playhead)} />
+        <PreviewTag visible={needsPreviewTag(project, playhead)} />
         {!isPlaying && !empty && (
           <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
             <Ionicons name="play" size={48} color={theme.colors.text} />
