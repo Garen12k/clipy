@@ -68,7 +68,8 @@
     "preset": "jest-expo",
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "<rootDir>/supabase/"
+      "<rootDir>/supabase/",
+      "\\.vectors\\.ts$"
     ],
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.ts"
