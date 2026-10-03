@@ -164,6 +164,22 @@ final class ClipLayoutTests: XCTestCase {
     assertPoint(CGPoint(x: 100, y: 50).applying(p.transform), 100, 0, "crop bottom-right → frame bottom-right")
   }
 
+  /// The two-step draw (local: crop centre → origin, flip, scale; then outer: rotate, translate) is the same mapping
+  /// as `transform`, and `localRect` is the unrotated placed box centred on the origin.
+  func testLocalThenOuterEqualsTransform() {
+    var t = ClipTransform.identity
+    t.scale = 1.3; t.x = 0.1; t.y = -0.05; t.rotation = 30; t.flipH = true
+    let crop = ClipCrop(x: 0.1, y: 0.2, w: 0.6, h: 0.5)
+    let p = ClipLayout.ciPlacement(orientedExtent: CGRect(x: 0, y: 0, width: 1920, height: 1080), crop: crop, transform: t, frame: portrait)
+    assertTransform(p.local.concatenating(p.outer), p.transform, "local ∘ outer")
+    XCTAssertEqual(p.localRect.midX, 0, accuracy: 1e-6); XCTAssertEqual(p.localRect.midY, 0, accuracy: 1e-6)
+    XCTAssertEqual(p.localRect.width, p.placed.width, accuracy: 1e-6); XCTAssertEqual(p.localRect.height, p.placed.height, accuracy: 1e-6)
+    // The crop rect lands exactly on localRect in local space (so cropping there is a hard cut of the picture's edge).
+    let mapped = p.cropRect.applying(p.local)
+    XCTAssertEqual(mapped.minX, p.localRect.minX, accuracy: 1e-6); XCTAssertEqual(mapped.maxX, p.localRect.maxX, accuracy: 1e-6)
+    XCTAssertEqual(mapped.minY, p.localRect.minY, accuracy: 1e-6); XCTAssertEqual(mapped.maxY, p.localRect.maxY, accuracy: 1e-6)
+  }
+
   /// Offsets are fractions of the frame, y downwards on screen (so upwards is a larger Core Image y).
   func testOffsetMovesTheCentre() {
     var t = ClipTransform.identity
@@ -176,6 +192,11 @@ final class ClipLayoutTests: XCTestCase {
     if case .blur = LayerBackground(type: "blur", color: nil) {} else { XCTFail("blur") }
     if case .black = LayerBackground(type: "color", color: nil) {} else { XCTFail("colour without a value → black") }
     if case .black = LayerBackground(type: "sparkle", color: "#FF0000") {} else { XCTFail("unknown → black") }
+    for bad in ["", "#", "red", "#FFF", "#GG0000", "#FF00001", "+FF000"] {
+      if case .black = LayerBackground(type: "color", color: bad) {} else { XCTFail("malformed \"\(bad)\" → black") }
+    }
+    XCTAssertTrue(LayerBackground.isHexColor("#1a2B3c"))
+    XCTAssertTrue(LayerBackground.isHexColor(" 1A2B3C "))
     guard case .color(let c) = LayerBackground(type: "color", color: "#FF0000") else { return XCTFail("colour") }
     XCTAssertEqual(c.red, 1, accuracy: 1e-3); XCTAssertEqual(c.green, 0, accuracy: 1e-3); XCTAssertEqual(c.blue, 0, accuracy: 1e-3)
   }

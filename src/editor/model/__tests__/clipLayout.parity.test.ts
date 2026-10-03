@@ -27,6 +27,21 @@ test("ClipLayout.swift uses the same tolerances as clipLayout.ts", () => {
   expect(swiftNumber("coverageEpsilon")).toBe(0.5);
 });
 
+/** The text of one `static func` in ClipLayout.swift, up to the next declaration. */
+const swiftBody = (fn: string): string => {
+  const start = swift.indexOf(`static func ${fn}(`);
+  if (start < 0) throw new Error(`ClipLayout.swift: ${fn} not found`);
+  const next = swift.slice(start + 1).search(/\n\s*(static |\/\/\/|\}\n)/);
+  return next < 0 ? swift.slice(start) : swift.slice(start, start + 1 + next);
+};
+
+test("the tolerances are used where clipLayout.ts uses them", () => {
+  expect(swiftBody("isQuarterTurn")).toMatch(/quarterTurnTolerance/);
+  expect(swiftBody("coversFrame")).toMatch(/straightAngleTolerance/);
+  expect(swiftBody("coversFrame")).toMatch(/coverageEpsilon/);
+  expect(swiftBody("coversFrame")).not.toMatch(/0\.5/);
+});
+
 test("ClipLayout.swift mirrors every clipLayout.ts function (except the TS-only snapping)", () => {
   for (const fn of ["isQuarterTurn", "croppedSize", "coverFactor", "fitScale", "placeClip", "coversFrame"]) {
     expect(swift).toMatch(new RegExp(`static func ${fn}\\(`));

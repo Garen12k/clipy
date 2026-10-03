@@ -99,7 +99,10 @@ enum ClipLayout {
 extension ClipLayout {
   /// Where one oriented frame goes in the export. `orientedExtent` is the frame AFTER the track's preferred transform,
   /// in Core Image space (y-up), normally (0, 0, displayW, displayH); its ACTUAL size is used for the maths.
-  /// Draw it as `oriented.cropped(to: cropRect).transformed(by: transform)`.
+  /// `transform` = `local` then `outer`. The compositor draws in two steps so the crop edge stays hard:
+  /// `oriented.cropped(to: cropRect).clampedToExtent().transformed(by: local).cropped(to: localRect)` (crop centre at
+  /// the origin, flipped, scaled to the placed size; `localRect` is that unrotated placed box), then
+  /// `.transformed(by: outer)` (rotate, move to the placed centre).
   ///
   /// The placement mirrors ClipFrame.tsx (`[{rotate}, {scaleX: ±1}, {scaleY: ±1}]` on a box centred at the placed
   /// centre): crop centre → origin, flip (local space), scale to the placed size, rotate, move to the placed centre.
@@ -108,18 +111,19 @@ extension ClipLayout {
   /// clockwise `rotation` becomes an angle of −rotation. A 90° clockwise turn on screen is therefore a 90° clockwise
   /// turn in the exported video. Flips are mirror images about the picture's own axes, the same in either origin.
   static func ciPlacement(orientedExtent e: CGRect, crop: ClipCrop, transform t: ClipTransform, frame: CGSize)
-    -> (cropRect: CGRect, transform: CGAffineTransform, placed: ClipPlacement) {
+    -> (cropRect: CGRect, local: CGAffineTransform, localRect: CGRect, outer: CGAffineTransform, transform: CGAffineTransform, placed: ClipPlacement) {
     let placed = placeClip(e.size, crop, t, frame.width, frame.height)
     let cropRect = CGRect(
       x: e.minX + crop.x * e.width,
       y: e.minY + (1 - crop.y - crop.h) * e.height,     // top-left fraction → bottom-left y
       width: crop.w * e.width,
       height: crop.h * e.height)
-    let transform = CGAffineTransform(translationX: -cropRect.midX, y: -cropRect.midY)
+    let local = CGAffineTransform(translationX: -cropRect.midX, y: -cropRect.midY)
       .concatenating(CGAffineTransform(scaleX: t.flipH ? -1 : 1, y: t.flipV ? -1 : 1))
       .concatenating(CGAffineTransform(scaleX: placed.width / cropRect.width, y: placed.height / cropRect.height))
-      .concatenating(CGAffineTransform(rotationAngle: -placed.rotation * .pi / 180))
+    let localRect = CGRect(x: -placed.width / 2, y: -placed.height / 2, width: placed.width, height: placed.height)
+    let outer = CGAffineTransform(rotationAngle: -placed.rotation * .pi / 180)
       .concatenating(CGAffineTransform(translationX: placed.centerX, y: frame.height - placed.centerY))
-    return (cropRect: cropRect, transform: transform, placed: placed)
+    return (cropRect: cropRect, local: local, localRect: localRect, outer: outer, transform: local.concatenating(outer), placed: placed)
   }
 }

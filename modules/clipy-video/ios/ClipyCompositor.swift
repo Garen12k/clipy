@@ -10,16 +10,24 @@ enum LayerBackground {
   case color(CIColor)
   case blur
 
-  /// `type` black | color | blur; unknown types and a colour without a value fall back to black.
+  /// `type` black | color | blur; unknown types and a missing or malformed colour fall back to black (as the preview
+  /// shows black), not to `UIColor(hex:)`'s white.
   init(type: String, color: String?) {
     switch type {
     case "color":
-      if let color { self = .color(CIColor(color: UIColor(hex: color))) } else { self = .black }
+      if let color, LayerBackground.isHexColor(color) { self = .color(CIColor(color: UIColor(hex: color))) } else { self = .black }
     case "blur":
       self = .blur
     default:
       self = .black
     }
+  }
+
+  /// Exactly `#RRGGBB` (surrounding whitespace allowed, `#` optional — what `UIColor(hex:)` reads).
+  static func isHexColor(_ s: String) -> Bool {
+    let trimmed = s.trimmingCharacters(in: .whitespaces)
+    let digits = trimmed.hasPrefix("#") ? trimmed.dropFirst() : Substring(trimmed)
+    return digits.count == 6 && digits.allSatisfy { $0.isHexDigit }
   }
 }
 
@@ -111,7 +119,12 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
       } else {
         let oriented = source.transformed(by: spec.orient)
         let p = ClipLayout.ciPlacement(orientedExtent: oriented.extent, crop: spec.crop, transform: spec.transform, frame: size)
-        let picture = oriented.cropped(to: p.cropRect).transformed(by: p.transform)
+        // Hard crop edges: clamp the cropped picture so scaling never samples transparency across the crop border,
+        // cut it back to the placed box while still unrotated, and only then rotate + translate (a rotated picture's
+        // edges are the box's own edges, with no clamped smear in the corners).
+        let picture = oriented.cropped(to: p.cropRect).clampedToExtent()
+          .transformed(by: p.local).cropped(to: p.localRect)
+          .transformed(by: p.outer)
         let covered = ClipLayout.coversFrame(p.placed, size.width, size.height)
         let behind = covered ? black : ClipyCompositor.background(spec, source: source, size: size)
         img = picture.composited(over: behind).cropped(to: rect)
