@@ -2,8 +2,8 @@ jest.mock("@/src/lib/id", () => ({ newId: jest.fn(() => "new-id") }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { DEFAULT_ADJUST, EFFECT_LIMITS, makeClip, makeEffect, makeProject } from "../types";
 import {
-  addEffect, applyTemplate, deleteEffect, duplicateClip, duplicateEffect, insertFreezeFrame, moveEffect, replaceClipMedia, resetClipAdjust,
-  setAdjustForAllClips, setClipAdjust, setClipFilterIntensity, setFilterForAllClips, splitClipAt, updateEffect,
+  addEffect, applyTemplate, deleteClip, deleteEffect, duplicateClip, duplicateEffect, insertFreezeFrame, moveEffect, replaceClipMedia, resetClipAdjust,
+  setAdjustForAllClips, setClipAdjust, setClipFilterIntensity, setFilterForAllClips, setClipSpeed, splitClipAt, trimClip, updateEffect,
 } from "../ops";
 import { TEMPLATES } from "../../templates";
 
@@ -203,5 +203,44 @@ describe("fix round 1", () => {
     const straddle = { ...p, effects: [makeEffect({ id: "e", start: 9, end: 12, intensity: 0.5 })] };
     const n = updateEffect(straddle, "e", { intensity: 0.9 });
     expect(n.effects[0]).toMatchObject({ start: 9, end: 12, intensity: 0.9 });
+  });
+});
+
+describe("effects stranded past the project's end are dropped by clip ops", () => {
+  // a = 0–4 s, b = 4–10 s
+  const fx = [makeEffect({ id: "in", start: 1, end: 3 }), makeEffect({ id: "edge", start: 3.5, end: 9 }), makeEffect({ id: "late", start: 6, end: 8 })];
+  const base = { ...p, effects: fx };
+  const ids = (x: { effects: { id: string }[] }) => x.effects.map((e) => e.id);
+
+  test("deleting a clip drops effects that start at or after the new end; the rest are untouched", () => {
+    const n = deleteClip(base, "b");   // 4 s
+    expect(ids(n)).toEqual(["in", "edge"]);
+    expect(n.effects[0]).toBe(fx[0]);
+    expect(n.effects[1]).toBe(fx[1]);   // end 9 still runs past the end: left alone
+  });
+  test("trimming drops them too", () => {
+    expect(ids(trimClip(base, "b", 0, 1))).toEqual(["in", "edge"]);   // 5 s
+    expect(ids(trimClip(base, "a", 0, 1))).toEqual(["in", "edge", "late"]);   // 7 s: late (6) still inside
+  });
+  test("a speed change drops them too", () => {
+    const fast = setClipSpeed(setClipSpeed(base, "a", 2), "b", 2);   // 5 s
+    expect(ids(fast)).toEqual(["in", "edge"]);
+    expect(ids(setClipSpeed(base, "b", 0.5))).toEqual(["in", "edge", "late"]);   // longer: nothing dropped
+  });
+  test("an effect starting within 0.05 s of the end counts as past it", () => {
+    const near = { ...p, effects: [makeEffect({ id: "x", start: 3.96, end: 6 }), makeEffect({ id: "y", start: 3.94, end: 6 })] };
+    expect(ids(deleteClip(near, "b"))).toEqual(["y"]);
+  });
+  test("deleting every clip drops every effect", () => {
+    expect(deleteClip(deleteClip(base, "a"), "b").effects).toEqual([]);
+  });
+  test("the same effects array is kept when nothing is dropped", () => {
+    expect(setClipAdjust(base, "a", { brightness: 0.2 }).effects).toBe(fx);
+    expect(trimClip(base, "a", 0, 3.5).effects).toBe(fx);
+    expect(duplicateClip(base, "a").effects).toBe(fx);
+  });
+  test("effect ops themselves never drop anything", () => {
+    const straddle = { ...p, effects: [makeEffect({ id: "e", start: 11, end: 12 })] };
+    expect(updateEffect(straddle, "e", { intensity: 0.2 }).effects).toHaveLength(1);
   });
 });

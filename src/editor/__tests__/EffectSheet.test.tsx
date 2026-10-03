@@ -45,7 +45,8 @@ describe("EffectSheet", () => {
     expect(state().project!.effects[0]).toMatchObject({ type: "shake", start: 9.5, end: 10 });
   });
 
-  test("an empty project toasts and keeps the sheet open", async () => {
+  // The sheet is a native Modal, which would cover the toast: it closes first.
+  test("an empty project closes the sheet and toasts", async () => {
     const onClose = jest.fn();
     state().setProject(makeProject());
     await render(<EffectSheet visible onClose={onClose} />);
@@ -54,11 +55,36 @@ describe("EffectSheet", () => {
     expect(state().project!.effects).toEqual([]);
     expect(state().past).toHaveLength(0);
     expect(state().selectedEffectId).toBeNull();
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(Haptics.impactAsync).not.toHaveBeenCalled();
   });
 
-  test("a project too short for an effect toasts that there is no room and keeps the sheet open", async () => {
+  test("the sheet is closed before the refusal toast shows", async () => {
+    state().setProject(makeProject());
+    const order: string[] = [];
+    const unsub = useToast.subscribe((s) => { if (s.message) order.push("toast"); });
+    await render(<EffectSheet visible onClose={() => order.push("close")} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Glow" }));
+    unsub();
+    expect(order).toEqual(["close", "toast"]);
+  });
+
+  test("a second tile pressed before the sheet has closed adds nothing; reopening the sheet allows the next", async () => {
+    const onClose = jest.fn();
+    const view = await render(<EffectSheet visible onClose={onClose} />);
+    // The parent has not closed the sheet yet (still visible) when the second press lands.
+    await fireEvent.press(screen.getByRole("button", { name: "Glow" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Shake" }));
+    expect(state().project!.effects.map((e) => e.type)).toEqual(["glow"]);
+    expect(state().past).toHaveLength(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await view.rerender(<EffectSheet visible={false} onClose={onClose} />);
+    await view.rerender(<EffectSheet visible onClose={onClose} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Shake" }));
+    expect(state().project!.effects.map((e) => e.type)).toEqual(["glow", "shake"]);
+  });
+
+  test("a project too short for an effect closes the sheet and toasts that there is no room", async () => {
     const onClose = jest.fn();
     state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 0.1 })] }));
     await render(<EffectSheet visible onClose={onClose} />);
@@ -66,7 +92,7 @@ describe("EffectSheet", () => {
     expect(useToast.getState().message).toBe("No room for an effect here.");
     expect(state().project!.effects).toEqual([]);
     expect(state().past).toHaveLength(0);
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
 

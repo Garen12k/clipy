@@ -33,8 +33,8 @@ import { TrimSheet } from "./TrimSheet";
 import { VolumeSheet } from "./VolumeSheet";
 
 type PanelFor = { id: string; kind: "text" | "sticker" } | null;
-/** With an effect selected, the Effects group shows these instead of its normal tools. */
-const SELECTED_EFFECT_TOOLS: ToolId[] = ["effectStrength", "effectDuplicate", "effectDelete"];
+/** With an effect selected, the Effects group shows these instead of its normal tools (Effect stays, to add another). */
+const SELECTED_EFFECT_TOOLS: ToolId[] = ["effect", "effectStrength", "effectDuplicate", "effectDelete"];
 
 type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void };
 
@@ -79,6 +79,15 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     onPanelChange(null);
   };
 
+  const duplicateSelectedEffect = () => {
+    if (!selectedEffectId) return;
+    apply((p) => duplicateEffect(p, selectedEffectId));
+    // The copy sits right after the original in the list.
+    const list = useEditorStore.getState().project?.effects ?? [];
+    const dup = list[list.findIndex((e) => e.id === selectedEffectId) + 1];
+    if (dup) useEditorStore.getState().selectEffect(dup.id);
+  };
+
   const TOOLS: Record<ToolId, { label: string; icon: IoniconName; disabled?: boolean; active?: boolean; onPress: () => void }> = {
     split: { label: "Split", icon: "cut", disabled: noSel, onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
     trim: { label: "Trim", icon: "crop", disabled: noSel, onPress: () => setSheet("trim") },
@@ -98,7 +107,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     adjust: { label: "Adjust", icon: "options", disabled: noSel, onPress: () => setSheet("adjust") },
     effect: { label: "Effect", icon: "flash", onPress: () => setSheet("effect") },
     effectStrength: { label: "Strength", icon: "speedometer", disabled: !selectedEffectId, onPress: () => setSheet("effectStrength") },
-    effectDuplicate: { label: "Duplicate", icon: "copy", disabled: !selectedEffectId, onPress: () => selectedEffectId && apply((p) => duplicateEffect(p, selectedEffectId)) },
+    effectDuplicate: { label: "Duplicate", icon: "copy", disabled: !selectedEffectId, onPress: duplicateSelectedEffect },
     effectDelete: { label: "Delete", icon: "trash", disabled: !selectedEffectId, onPress: () => { if (selectedEffectId) { haptic("medium"); apply((p) => deleteEffect(p, selectedEffectId)); } } },
     text: { label: "Text", icon: "text", disabled: !hasClips, onPress: addText },
     captions: { label: "Captions", icon: "chatbox-ellipses", disabled: !hasClips, onPress: () => setSheet("captions") },

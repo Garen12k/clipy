@@ -14,7 +14,7 @@ export function EffectLane() {
   return (
     <View testID="effect-lane" style={{ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP }}>
       {effects.map((e) => (
-        <EffectPill key={e.id} effect={e} selected={e.id === selectedId} onPress={() => selectEffect(e.id)} />
+        <EffectPill key={e.id} effect={e} selected={e.id === selectedId} onPress={() => selectEffect(e.id === selectedId ? null : e.id)} />
       ))}
     </View>
   );

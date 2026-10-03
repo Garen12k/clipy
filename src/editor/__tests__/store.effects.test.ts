@@ -64,12 +64,27 @@ test("setProject clears the effect selection", () => {
   expect(useEditorStore.getState().selectedEffectId).toBeNull();
 });
 
-test("a clip edit that shortens the project leaves effects in place", () => {
+test("a clip edit keeps effects that still start inside the project, untouched", () => {
+  const s = useEditorStore.getState();
+  s.apply((x) => addEffect(x, "glitch", 3, "e2"));
+  s.selectEffect("e2");
+  const before = useEditorStore.getState().project!.effects;
+  s.apply((x) => trimClip(x, "a", 0, 4));
+  const st = useEditorStore.getState();
+  expect(st.project!.effects).toBe(before);   // same array: nothing re-created
+  expect(st.project!.effects.map((e) => [e.id, e.start, e.end])).toEqual([["e1", 0, 2], ["e2", 3, 5]]);   // e2 runs past the new 4 s end
+  expect(st.selectedEffectId).toBe("e2");
+});
+
+test("a clip edit that leaves an effect past the project's end drops it and its selection; undo restores it", () => {
   const s = useEditorStore.getState();
   s.apply((x) => addEffect(x, "glitch", 3, "e2"));
   s.selectEffect("e2");
   s.apply((x) => trimClip(x, "a", 0, 1));
-  const st = useEditorStore.getState();
+  let st = useEditorStore.getState();
+  expect(st.project!.effects.map((e) => [e.id, e.start, e.end])).toEqual([["e1", 0, 2]]);
+  expect(st.selectedEffectId).toBeNull();
+  s.undo();
+  st = useEditorStore.getState();
   expect(st.project!.effects.map((e) => [e.id, e.start, e.end])).toEqual([["e1", 0, 2], ["e2", 3, 5]]);
-  expect(st.selectedEffectId).toBe("e2");
 });

@@ -11,8 +11,20 @@ import {
 import { totalDuration } from "./timeline";
 import type { Template } from "../templates";
 
+/** An effect starting this close to the project's end (or after it) cannot be reached on the timeline. */
+const EFFECT_END_SLACK = 0.05;
+
+/** Drops effects left at or past the project's end; those still starting inside are untouched. Same array when nothing is dropped. */
+function fitEffects(p: Project): EffectItem[] {
+  const limit = totalDuration(p) - EFFECT_END_SLACK;
+  return p.effects.some((e) => e.start >= limit) ? p.effects.filter((e) => e.start < limit) : p.effects;
+}
+
 function touch(p: Project, patch: Partial<Project>): Project {
-  return { ...p, ...patch, updatedAt: nowIso() };
+  const next = { ...p, ...patch, updatedAt: nowIso() };
+  // Only a change to the clips can shorten the project.
+  if (patch.clips) next.effects = fitEffects(next);
+  return next;
 }
 
 export function addClips(p: Project, clips: Clip[]): Project {

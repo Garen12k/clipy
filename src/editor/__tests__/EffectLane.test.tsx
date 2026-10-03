@@ -59,3 +59,21 @@ test("handles show only on the selected pill and trim one edge each, one undo st
   expect(useEditorStore.getState().past).toHaveLength(2);
   expect(effect("e2")).toMatchObject({ start: 6, end: 7 });
 });
+
+test("tapping the already-selected pill deselects it", async () => {
+  await render(<EffectLane />);
+  await fireEvent.press(screen.getByTestId("effect-pill-e1"));
+  expect(useEditorStore.getState().selectedEffectId).toBe("e1");
+  await fireEvent.press(screen.getByTestId("effect-pill-e1"));
+  expect(useEditorStore.getState().selectedEffectId).toBeNull();
+  await fireEvent.press(screen.getByTestId("effect-pill-e2"));
+  await fireEvent.press(screen.getByTestId("effect-pill-e1"));
+  expect(useEditorStore.getState().selectedEffectId).toBe("e1");
+});
+
+test("a very short effect still gets a 28 pt pill, so both handles fit", async () => {
+  useEditorStore.getState().setProject({ ...p, effects: [makeEffect({ id: "s", start: 2, end: 2.2 })] });
+  useEditorStore.getState().setZoom(50);   // 0.2 s = 10 px
+  await render(<EffectLane />);
+  expect(screen.getByTestId("effect-pill-s")).toHaveStyle({ left: 100, width: 28, borderRadius: theme.radius.chip });
+});

@@ -280,7 +280,9 @@ describe("Effects on the timeline", () => {
     effects: [makeEffect({ id: "e1", type: "glow", start: 1, end: 3 })],
   }));
   const effects = () => useEditorStore.getState().project!.effects;
-  const NORMAL = ["Filter", "Adjust", "Effect", "Speed", "Transition", "Templates", "Background"];
+  const NORMAL = ["Filter", "Adjust", "Speed", "Transition", "Templates", "Background"];
+  const SELECTED = ["Strength", "Duplicate", "Delete"];
+  const subRow = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string).filter((l) => ["Effect", ...NORMAL, ...SELECTED].includes(l));
 
   test("Effect is enabled whenever a project is open, even an empty one, and opens the Effects sheet", async () => {
     useEditorStore.getState().setProject(makeProject());
@@ -303,18 +305,27 @@ describe("Effects on the timeline", () => {
     expect(screen.getByRole("button", { name: "Strength" })).toBeEnabled();
   });
 
-  test("selecting an effect jumps to Effects and shows exactly Strength, Duplicate, Delete; deselecting restores the tools", async () => {
+  test("selecting an effect jumps to Effects and shows exactly Effect, Strength, Duplicate, Delete; deselecting restores the tools", async () => {
     withEffect();
     await renderBar();
     expect(screen.queryByRole("button", { name: "Strength" })).toBeNull();
     await act(() => { useEditorStore.getState().selectEffect("e1"); });
     expect(screen.getByRole("tab", { name: "Effects" })).toBeSelected();
-    for (const l of ["Strength", "Duplicate", "Delete"]) expect(screen.getByRole("button", { name: l })).toBeEnabled();
-    for (const l of NORMAL) expect(screen.queryByRole("button", { name: l })).toBeNull();
+    expect(subRow()).toEqual(["Effect", "Strength", "Duplicate", "Delete"]);
+    for (const l of ["Effect", ...SELECTED]) expect(screen.getByRole("button", { name: l })).toBeEnabled();
     await act(() => { useEditorStore.getState().selectEffect(null); });
     expect(screen.getByRole("tab", { name: "Effects" })).toBeSelected();
-    for (const l of NORMAL) expect(screen.getByRole("button", { name: l })).toBeTruthy();
-    for (const l of ["Strength", "Duplicate", "Delete"]) expect(screen.queryByRole("button", { name: l })).toBeNull();
+    expect(subRow()).toEqual(["Filter", "Adjust", "Effect", "Speed", "Transition", "Templates", "Background"]);
+  });
+
+  test("a second effect can be added while one is selected", async () => {
+    withEffect();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectEffect("e1"); useEditorStore.getState().seek(5); });
+    await fireEvent.press(screen.getByRole("button", { name: "Effect" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Shake" }));
+    expect(effects()).toMatchObject([{ id: "e1" }, { id: "dup", type: "shake", start: 5, end: 7 }]);
+    expect(useEditorStore.getState().selectedEffectId).toBe("dup");
   });
 
   test("selecting a clip instead restores the normal Effects tools; other groups are not swapped", async () => {
@@ -341,13 +352,14 @@ describe("Effects on the timeline", () => {
     expect(screen.getByText("Strength 70")).toBeTruthy();
   });
 
-  test("Duplicate copies the effect in one undo step and keeps the sub-row", async () => {
+  test("Duplicate copies the effect in one undo step, selects the copy and keeps the sub-row", async () => {
     withEffect();
     await renderBar();
     await act(() => { useEditorStore.getState().selectEffect("e1"); });
     await fireEvent.press(screen.getByRole("button", { name: "Duplicate" }));
     expect(effects()).toMatchObject([{ id: "e1", start: 1, end: 3 }, { id: "dup", type: "glow", start: 3, end: 5 }]);
     expect(useEditorStore.getState().past).toHaveLength(1);
+    expect(useEditorStore.getState().selectedEffectId).toBe("dup");
     expect(useEditorStore.getState().project!.clips).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Strength" })).toBeTruthy();
   });

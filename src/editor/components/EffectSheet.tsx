@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { View } from "react-native";
 import { EFFECTS } from "@/src/editor/effects";
 import { addEffect } from "@/src/editor/model/ops";
@@ -12,12 +13,18 @@ import { ToolButton } from "@/src/ui/ToolButton";
 
 /** Picker for timeline effects: a tile adds the effect at the playhead, selects it and closes the sheet. */
 export function EffectSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  // One tile per opening: two tiles pressed in the same frame must not add two effects.
+  const done = useRef(false);
+  useEffect(() => { if (visible) done.current = false; }, [visible]);
+
   const add = (type: EffectId) => {
     const { project, playhead, apply, selectEffect } = useEditorStore.getState();
-    if (!project) return;
+    if (!project || done.current) return;
+    done.current = true;
     const id = newId();
-    // The op returns the same project when it refuses: say why and stay open.
+    // The op returns the same project when it refuses. The sheet is a native Modal and would cover the toast: close first.
     if (addEffect(project, type, playhead, id) === project) {
+      onClose();
       useToast.getState().show(project.clips.length === 0 ? "Add a clip first." : "No room for an effect here.");
       return;
     }

@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { EFFECTS } from "@/src/editor/effects";
 import { moveEffect, updateEffect } from "@/src/editor/model/ops";
@@ -7,6 +7,7 @@ import { timeToX, xToTime } from "@/src/editor/model/timeline";
 import type { EffectItem } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { Body } from "@/src/ui/Text";
 import { LANE_HEIGHT } from "../timelineLayout";
 
 const HANDLE_W = 12;
@@ -35,9 +36,9 @@ export function EffectPill({ effect: fx, selected, onPress }: { effect: EffectIt
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`effect-pill-${fx.id}`} onPress={onPress} accessibilityLabel={`Effect ${label}`}
-        style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: theme.colors.laneEffect,
+        style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: theme.radius.chip, backgroundColor: theme.colors.laneEffect,
           borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
-        <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12 }}>{label}</Text>
+        <Body numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12 }}>{label}</Body>
         {selected && (
           <>
             <GestureDetector gesture={gestures.left}><View accessibilityLabel="Effect start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>

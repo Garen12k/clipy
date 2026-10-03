@@ -170,6 +170,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       <Pressable
         onPress={() => {
           if (useEditorStore.getState().selectedOverlayId) { selectOverlay(null); return; }
+          if (useEditorStore.getState().selectedEffectId) { useEditorStore.getState().selectEffect(null); return; }
           if (empty) return;
           if (!isPlaying && playhead >= total) seek(0);
           setPlaying(!isPlaying);

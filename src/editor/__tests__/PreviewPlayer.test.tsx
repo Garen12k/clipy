@@ -385,3 +385,14 @@ describe("look layers (filter strength, adjust, effects)", () => {
     expect(player.replaceAsync).toHaveBeenCalledTimes(1);
   });
 });
+
+test("tapping the preview with an effect selected deselects it without starting playback; the next tap plays", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], effects: [makeEffect({ id: "e1", start: 0, end: 2 })] }));
+  useEditorStore.getState().selectEffect("e1");
+  await render(<PreviewPlayer />);
+  await fireEvent.press(screen.getByLabelText("Preview"));
+  expect(useEditorStore.getState().selectedEffectId).toBeNull();
+  expect(useEditorStore.getState().isPlaying).toBe(false);
+  await fireEvent.press(screen.getByLabelText("Preview"));
+  expect(useEditorStore.getState().isPlaying).toBe(true);
+});
