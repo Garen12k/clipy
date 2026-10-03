@@ -1,0 +1,32 @@
+import { View } from "react-native";
+import { fillClip, fitClip, flipClip, resetClipTransform, rotateClip90 } from "@/src/editor/model/ops";
+import type { Project } from "@/src/editor/model/types";
+import { useEditorStore } from "@/src/editor/store";
+import { theme } from "@/src/theme/theme";
+import { haptic } from "@/src/ui/haptics";
+import { Sheet } from "@/src/ui/Sheet";
+import { ToolButton } from "@/src/ui/ToolButton";
+import type { IoniconName } from "../toolGroups";
+
+type Item = { label: string; icon: IoniconName; run: (p: Project, id: string) => Project };
+const ITEMS: Item[] = [
+  { label: "Rotate 90°", icon: "refresh", run: rotateClip90 },
+  { label: "Flip horizontal", icon: "swap-horizontal", run: (p, id) => flipClip(p, id, "h") },
+  { label: "Flip vertical", icon: "swap-vertical", run: (p, id) => flipClip(p, id, "v") },
+  { label: "Fit", icon: "contract", run: fitClip },
+  { label: "Fill", icon: "expand", run: fillClip },
+  { label: "Reset", icon: "arrow-undo", run: resetClipTransform },
+];
+
+export function TransformSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
+  const exists = useEditorStore((s) => !!clipId && !!s.project?.clips.some((c) => c.id === clipId));
+  const apply = useEditorStore((s) => s.apply);
+  if (!clipId || !exists) return null;
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Transform">
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: theme.space.sm }}>
+        {ITEMS.map((it) => <ToolButton key={it.label} label={it.label} icon={it.icon} onPress={() => { haptic("light"); apply((p) => it.run(p, clipId)); }} />)}
+      </View>
+    </Sheet>
+  );
+}

@@ -1,5 +1,5 @@
 import { migrateProject } from "../migrate";
-import { FILTER_IDS, makeClip, makeProject, makeSticker, SCHEMA_VERSION } from "../types";
+import { CROP_MIN, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeClip, makePhotoClip, makeProject, makeSticker, PHOTO, SCHEMA_VERSION, type Clip } from "../types";
 
 const v1 = {
   id: "p1", name: "Old", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
@@ -66,10 +66,39 @@ test("v3 overlays keep kind; a text overlay without kind gets kind text", () => 
   expect(migrateProject(v3).overlays[0]).toMatchObject({ kind: "text" });
 });
 
+test("v4 → v5 adds the clip defaults", () => {
+  const c = makeClip({ id: "a", sourceDuration: 4 }) as unknown as Record<string, unknown>;
+  for (const k of ["kind", "transform", "crop", "background", "reversed"]) delete c[k];
+  const p = migrateProject({ ...makeProject(), schemaVersion: 4, clips: [c] });
+  expect(p.schemaVersion).toBe(5);
+  expect(p.clips[0]).toMatchObject({ kind: "video", transform: DEFAULT_TRANSFORM, crop: FULL_CROP, background: { type: "black" }, reversed: false });
+});
+
+test("a corrupted v5 clip is repaired exactly; photos are forced to the photo rules; the pass is idempotent", () => {
+  const base = makeClip({ id: "a", sourceDuration: 4 });
+  const bad = makeProject({ clips: [
+    { ...base, kind: "gif", transform: { ...DEFAULT_TRANSFORM, scale: 99 }, crop: { x: 0.9, y: 0, w: 0.5, h: 1 }, background: { type: "color", color: "red" }, reversed: "yes" } as unknown as Clip,
+    { ...base, id: "b", background: { type: "sparkle" } } as unknown as Clip,
+    { ...base, id: "c", background: { type: "color", color: "#12ABef" } },
+    { ...makePhotoClip({ id: "p" }), speed: 2, trimEnd: 500, trimStart: 1, muted: false, reversed: true, sourceDuration: 3 },
+    { ...makePhotoClip({ id: "q" }), trimEnd: 0.01 },
+  ] });
+  const out = migrateProject(bad);
+  expect(out.clips[0]).toMatchObject({ kind: "video", reversed: false, background: { type: "black" } });
+  expect(out.clips[0].transform.scale).toBe(5);
+  expect(out.clips[0].crop.x + out.clips[0].crop.w).toBeLessThanOrEqual(1 + 1e-9);
+  expect(out.clips[0].crop.w).toBeGreaterThanOrEqual(CROP_MIN);
+  expect(out.clips[1].background).toEqual({ type: "black" });
+  expect(out.clips[2].background).toEqual({ type: "color", color: "#12ABef" });
+  expect(out.clips[3]).toMatchObject({ kind: "photo", speed: 1, muted: true, reversed: false, trimStart: 0, trimEnd: PHOTO.maxSeconds, sourceDuration: PHOTO.maxSeconds });
+  expect(out.clips[4].trimEnd).toBe(PHOTO.minSeconds);
+  expect(migrateProject(out)).toEqual(out);
+});
+
 test("v3 → v4 adds an empty posts list; v4 keeps valid records and drops junk", () => {
   const v3 = { ...makeProject(), schemaVersion: 3 } as Record<string, unknown>;
   delete v3.posts;
-  expect(migrateProject(v3)).toMatchObject({ schemaVersion: 4, posts: [] });
+  expect(migrateProject(v3)).toMatchObject({ schemaVersion: SCHEMA_VERSION, posts: [] });
   const good = { platform: "youtube", url: "https://youtu.be/abc", postedAt: "2026-10-02T10:00:00.000Z" };
   const v4 = { ...makeProject(), posts: [good, { platform: "myspace", url: "x", postedAt: "y" }, "nope", { platform: "tiktok", url: null, postedAt: "2026-10-02T11:00:00.000Z" }] };
   expect(migrateProject(v4).posts).toEqual([good, { platform: "tiktok", url: null, postedAt: "2026-10-02T11:00:00.000Z" }]);

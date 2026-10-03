@@ -4,6 +4,17 @@ import type { Clip, Project } from "./types";
 export const clipDuration = (c: Clip): number => (c.trimEnd - c.trimStart) / c.speed;
 /** Source-file seconds for an offset (output seconds) into the clip. */
 export const outputToSource = (c: Clip, offsetInClip: number): number => c.trimStart + offsetInClip * c.speed;
+/** Source-file seconds shown at `offsetInClip`: mirrored inside the trim span when the clip is reversed. Also where a split cuts. */
+export const freezeSourceTime = (c: Clip, offsetInClip: number): number =>
+  c.reversed ? c.trimEnd - offsetInClip * c.speed : outputToSource(c, offsetInClip);
+
+/** Source spans of the two halves of a split at `offsetInClip`: `left` plays first in the output. Reversed clips play their span backwards. */
+export function splitSourceRanges(c: Clip, offsetInClip: number): { left: [number, number]; right: [number, number] } {
+  const cut = freezeSourceTime(c, offsetInClip);
+  return c.reversed
+    ? { left: [cut, c.trimEnd], right: [c.trimStart, cut] }
+    : { left: [c.trimStart, cut], right: [cut, c.trimEnd] };
+}
 /** Output offset (seconds into the clip) for a source-file time. */
 export const sourceToOutput = (c: Clip, sourceTime: number): number => (sourceTime - c.trimStart) / c.speed;
 export const totalDuration = (p: Project): number => p.clips.reduce((s, c) => s + clipDuration(c), 0);

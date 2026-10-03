@@ -7,7 +7,7 @@ jest.mock("@/modules/clipy-video", () => ({
   cancelTranscribe: jest.fn(),
 }));
 import { cancelTranscribe, transcribe } from "@/modules/clipy-video";
-import { makeClip, makeProject } from "@/src/editor/model/types";
+import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { SPEECH_DENIED_MESSAGE, useCaptions } from "../useCaptions";
 
@@ -64,4 +64,45 @@ test("permission denied maps to friendly copy and keeps the code", async () => {
   const { result } = await renderHook(() => useCaptions());
   await act(() => result.current.run());
   expect(result.current.state).toMatchObject({ status: "error", code: "E_SPEECH_DENIED", message: SPEECH_DENIED_MESSAGE });
+});
+
+describe("photos and reversed clips", () => {
+  const seg = [{ text: "hi", start: 0, end: 1 }];
+  test("a photo is not transcribed; the next video's captions are offset by the full timeline", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [
+      makeClip({ id: "a", sourceUri: "file:///a.mov", sourceDuration: 2 }),     // 0-2
+      makePhotoClip({ id: "p", seconds: 3 }),                                   // 2-5
+      makeClip({ id: "a2", sourceUri: "file:///a2.mov", sourceDuration: 4 }),   // 5-9
+    ] }));
+    jest.mocked(transcribe).mockClear();
+    jest.mocked(transcribe).mockResolvedValueOnce([]).mockResolvedValueOnce(seg);
+    const { result } = await renderHook(() => useCaptions());
+    await act(() => result.current.run());
+    expect(jest.mocked(transcribe).mock.calls.map((c) => c[0])).toEqual(["file:///a.mov", "file:///a2.mov"]);
+    expect(result.current.state).toMatchObject({ status: "done", clipCount: 2 });
+    expect(useEditorStore.getState().project!.overlays).toEqual([expect.objectContaining({ kind: "caption", text: "hi", start: 5, end: 6 })]);
+  });
+
+  test("a reversed clip is skipped", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [
+      makeClip({ id: "r", sourceUri: "file:///a.mov", sourceDuration: 2, reversed: true }),
+      makeClip({ id: "b", sourceUri: "file:///b.mov", sourceDuration: 2 }),
+    ] }));
+    jest.mocked(transcribe).mockClear();
+    jest.mocked(transcribe).mockResolvedValueOnce(seg);
+    const { result } = await renderHook(() => useCaptions());
+    await act(() => result.current.run());
+    expect(jest.mocked(transcribe).mock.calls.map((c) => c[0])).toEqual(["file:///b.mov"]);
+    expect(useEditorStore.getState().project!.overlays).toEqual([expect.objectContaining({ text: "hi", start: 2, end: 3 })]);
+  });
+
+  test("a project of only photos finishes with no captions and no error", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makePhotoClip({ id: "p", seconds: 3 })] }));
+    jest.mocked(transcribe).mockClear();
+    const { result } = await renderHook(() => useCaptions());
+    await act(() => result.current.run());
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(result.current.state).toMatchObject({ status: "done", clipCount: 0 });
+    expect(useEditorStore.getState().project!.overlays).toEqual([]);
+  });
 });

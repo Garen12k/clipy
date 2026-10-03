@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { FONTS } from "@/src/editor/fonts";
-import { isSticker, type Align, type AspectRatio, type Overlay } from "@/src/editor/model/types";
+import { isSticker, type Align, type AspectRatio, type Clip, type ClipTransform, type CropRect, type Overlay } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -20,6 +20,20 @@ export interface ExportAudio { sourceUri: string; start: number; trimStart: numb
 export interface ExportClip {
   sourceUri: string; trimStart: number; trimEnd: number; volume: number; muted: boolean;
   speed: number; filter: string | null; transition: { type: string; duration: number };
+  kind: "video" | "photo"; sourceWidth: number; sourceHeight: number;
+  transform: ClipTransform; crop: CropRect;
+  background: { type: "black" | "color" | "blur"; color: string | null };
+  reversed: boolean;
+}
+export function toExportClip(c: Clip): ExportClip {
+  return {
+    sourceUri: c.sourceUri, trimStart: c.trimStart, trimEnd: c.trimEnd, volume: c.volume, muted: c.muted,
+    speed: c.speed, filter: c.filter, transition: { type: c.transitionOut.type, duration: c.transitionOut.duration },
+    kind: c.kind, sourceWidth: c.width, sourceHeight: c.height,
+    transform: { ...c.transform }, crop: { ...c.crop },
+    background: { type: c.background.type, color: c.background.type === "color" ? c.background.color : null },
+    reversed: c.reversed,
+  };
 }
 export interface ExportRequest {
   clips: ExportClip[];

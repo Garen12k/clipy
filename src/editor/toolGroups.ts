@@ -2,12 +2,12 @@ import type { Ionicons } from "@expo/vector-icons";
 
 export type IoniconName = keyof typeof Ionicons.glyphMap;
 export type ToolGroupId = "edit" | "effects" | "text" | "stickers" | "audio";
-export type ToolId = "split" | "trim" | "duplicate" | "delete" | "ratio" | "filter" | "speed" | "transition" | "templates" | "text" | "captions" | "sticker" | "music" | "volume";
+export type ToolId = "split" | "trim" | "transform" | "crop" | "replace" | "reverse" | "freeze" | "duplicate" | "delete" | "ratio" | "filter" | "speed" | "transition" | "templates" | "background" | "text" | "captions" | "sticker" | "music" | "volume";
 
 /** The editor's bottom bar: five always-visible groups; the active group's tools show in the row above. */
 export const TOOL_GROUPS: { id: ToolGroupId; label: string; icon: IoniconName; tools: ToolId[] }[] = [
-  { id: "edit", label: "Edit", icon: "cut", tools: ["split", "trim", "duplicate", "delete", "ratio"] },
-  { id: "effects", label: "Effects", icon: "sparkles", tools: ["filter", "speed", "transition", "templates"] },
+  { id: "edit", label: "Edit", icon: "cut", tools: ["split", "trim", "transform", "crop", "replace", "reverse", "freeze", "duplicate", "delete", "ratio"] },
+  { id: "effects", label: "Effects", icon: "sparkles", tools: ["filter", "speed", "transition", "templates", "background"] },
   { id: "text", label: "Text", icon: "text", tools: ["text", "captions"] },
   { id: "stickers", label: "Stickers", icon: "happy", tools: ["sticker"] },
   { id: "audio", label: "Audio", icon: "musical-notes", tools: ["music", "volume"] },

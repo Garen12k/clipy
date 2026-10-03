@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import { lastFlush } from "@/src/editor/flush";
 import { storage, type ProjectSummary } from "@/src/projects";
 import { useToast } from "@/src/ui/Toast";
-import { pickVideos } from "./pickVideos";
+import { pickMedia } from "./pickMedia";
 
 export function useProjects() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -18,7 +18,7 @@ export function useProjects() {
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
   async function create(): Promise<string | null> {
-    const assets = await pickVideos();
+    const assets = await pickMedia();
     if (!assets || assets.length === 0) return null;
     const used = projects
       .map((p) => /^Project (\d+)$/.exec(p.name)?.[1])
@@ -28,7 +28,11 @@ export function useProjects() {
     const name = `Project ${nextNumber}`;
     let created: Awaited<ReturnType<typeof storage.createProject>>;
     try { created = await storage.createProject(name, assets); }
-    catch (e) { console.warn("create failed", e); useToast.getState().show("Couldn't create project"); return null; }
+    catch (e) {
+      console.warn("create failed", e);
+      useToast.getState().show(e instanceof Error && /^Couldn't import any/.test(e.message) ? e.message : "Couldn't create project");
+      return null;
+    }
     const { project, failed } = created;
     if (failed > 0) useToast.getState().show(`${assets.length - failed} of ${assets.length} clips added; ${failed} couldn't be read`);
     await reload();

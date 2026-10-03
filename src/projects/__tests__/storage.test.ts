@@ -17,7 +17,7 @@ let warn: jest.SpyInstance;
 beforeEach(() => { warn = jest.spyOn(console, "warn").mockImplementation(() => {}); });
 afterEach(() => warn.mockRestore());
 
-const asset = (uri: string, durationSec = 4): PickedAsset => ({ uri, durationSec, width: 1080, height: 1920, fileName: "clip.mov" });
+const asset = (uri: string, durationSec = 4): PickedAsset => ({ uri, kind: "video", durationSec, width: 1080, height: 1920, fileName: "clip.mov" });
 
 test("createProject copies media, writes project.json and a thumbnail", async () => {
   const { fs, storage } = setup();
@@ -127,4 +127,102 @@ test("duplicateProject starts with no posts and leaves the original's records", 
   expect(list.find((p) => p.id === copy.id)!.postedTo).toEqual([]);
   expect(list.find((p) => p.id === project.id)!.postedTo).toEqual(["youtube"]);
   expect((await storage.loadProject(project.id)).project.posts).toEqual([post]);
+});
+
+const photo = (uri: string, over: Partial<PickedAsset> = {}): PickedAsset => ({ uri, kind: "photo", durationSec: 0, width: 4032, height: 3024, fileName: "IMG_1.HEIC", ...over });
+
+test("importMedia copies files into media/ and builds video and photo clips", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/a.mov", "A");
+  fs.files.set("file:///picked/p.heic", "P");
+  const { clips, failed } = await storage.importMedia("proj", [asset("file:///picked/a.mov"), photo("file:///picked/p.heic")]);
+  expect(failed).toBe(0);
+  expect(clips).toHaveLength(2);
+  expect(clips[0]).toMatchObject({ kind: "video", trimStart: 0, trimEnd: 4, sourceDuration: 4, sourceUri: `${fs.documentDir}projects/proj/media/id1.mov` });
+  expect(clips[1]).toMatchObject({ kind: "photo", trimStart: 0, trimEnd: 3, sourceDuration: 60, muted: true, speed: 1, reversed: false, width: 4032, height: 3024,
+    sourceUri: `${fs.documentDir}projects/proj/media/id2.heic` });
+  expect(fs.files.get(clips[1].sourceUri)).toBe("P");
+});
+
+test("importMedia counts unreadable items and photos without a size as failed", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/p.jpg", "P");
+  const { clips, failed } = await storage.importMedia("proj", [
+    asset("file:///picked/missing.mov"), photo("file:///picked/p.jpg", { width: 0 }), photo("file:///picked/p.jpg", { height: 0 }), photo("file:///picked/p.jpg", { fileName: "p.jpg" })]);
+  expect(failed).toBe(3);
+  expect(clips).toHaveLength(1);
+  expect(clips[0].kind).toBe("photo");
+});
+
+test("importMedia throws when the project folder can't be written", async () => {
+  const { fs, storage } = setup();
+  fs.mkdir = async () => { throw new Error("EACCES"); };
+  await expect(storage.importMedia("proj", [asset("file:///picked/a.mov")])).rejects.toThrow("EACCES");
+});
+
+test("saveStill copies a captured frame into media/ as a .jpg", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///tmp/frame.png", "F");
+  const { uri } = await storage.saveStill("proj", "file:///tmp/frame.png");
+  expect(uri).toBe(`${fs.documentDir}projects/proj/media/id1.jpg`);
+  expect(fs.files.get(uri)).toBe("F");
+});
+
+test("createProject with a photo first uses the photo as the thumbnail, without the video thumbnailer", async () => {
+  const { fs, storage, thumbnail } = setup();
+  fs.files.set("file:///picked/p.jpg", "P");
+  const { project } = await storage.createProject("P", [photo("file:///picked/p.jpg", { fileName: "p.jpg" })]);
+  expect(project.clips[0].kind).toBe("photo");
+  expect(thumbnail).not.toHaveBeenCalled();
+  expect(fs.files.get(`${fs.documentDir}projects/id1/thumb.jpg`)).toBe("P");
+});
+
+test("createProject with every item failing removes the folder and throws; an empty list still works", async () => {
+  const { fs, storage } = setup();
+  await expect(storage.createProject("P", [asset("file:///picked/missing.mov")])).rejects.toThrow("Couldn't import any of the selected items.");
+  expect(await fs.exists(`${fs.documentDir}projects/id1`)).toBe(false);
+  await expect(storage.createProject("P", [])).resolves.toMatchObject({ failed: 0 });
+});
+
+test("a failed copy deletes the partial destination file", async () => {
+  const { fs, storage } = setup();
+  const remove = jest.spyOn(fs, "remove");
+  await storage.importMedia("proj", [asset("file:///picked/missing.mov")]);
+  expect(remove).toHaveBeenCalledWith(`${fs.documentDir}projects/proj/media/id1.mov`);
+  remove.mockClear();
+  await expect(storage.saveStill("proj", "file:///tmp/none.png")).rejects.toThrow();
+  expect(remove).toHaveBeenCalledWith(`${fs.documentDir}projects/proj/media/id2.jpg`);
+});
+
+test("extension: extension-less fileName falls back to the uri; hostile names can't escape", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/a.mp4", "A");
+  fs.files.set("file:///picked/b", "B");
+  const { clips } = await storage.importMedia("proj", [{ ...asset("file:///picked/a.mp4"), fileName: "clip" }, { ...asset("file:///picked/b"), fileName: "x.mo/../v" }]);
+  expect(clips[0].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id1.mp4`);
+  expect(clips[1].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id2.mp4`);
+  expect(clips[1].sourceUri).not.toContain("..");
+});
+
+test("a video with zero or missing duration counts as failed", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/a.mov", "A");
+  const { clips, failed } = await storage.importMedia("proj", [asset("file:///picked/a.mov", 0), asset("file:///picked/a.mov", NaN)]);
+  expect(clips).toHaveLength(0);
+  expect(failed).toBe(2);
+});
+
+test("extension: a photo prefers the uri extension (converted JPEG with a .HEIC name); videos keep fileName first", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/conv.jpg", "P");
+  fs.files.set("file:///picked/x.mp4", "V");
+  fs.files.set("file:///picked/noext", "Q");
+  const { clips } = await storage.importMedia("proj", [
+    photo("file:///picked/conv.jpg", { fileName: "IMG_1.HEIC" }),
+    { ...asset("file:///picked/x.mp4"), fileName: "clip.MOV" },
+    photo("file:///picked/noext", { fileName: "IMG_2.heic" }),
+  ]);
+  expect(clips[0].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id1.jpg`);
+  expect(clips[1].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id2.mov`);
+  expect(clips[2].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id3.heic`);
 });

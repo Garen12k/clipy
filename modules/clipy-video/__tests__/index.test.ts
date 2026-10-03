@@ -11,7 +11,8 @@ jest.mock("expo-modules-core", () => {
 });
 
 import { requireOptionalNativeModule } from "expo-modules-core";
-import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, transcribe } from "../index";
+import { makeClip, makePhotoClip } from "@/src/editor/model/types";
+import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportClip, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -38,7 +39,10 @@ describe("export API", () => {
       .mockReturnValueOnce(native as never)
       .mockReturnValueOnce(native as never);
     const req = {
-      clips: [{ sourceUri: "file:///a.mov", trimStart: 0, trimEnd: 2, volume: 1, muted: false, speed: 1, filter: null, transition: { type: "none", duration: 0 } }],
+      clips: [{ sourceUri: "file:///a.mov", trimStart: 0, trimEnd: 2, volume: 1, muted: false, speed: 1, filter: null, transition: { type: "none", duration: 0 },
+        kind: "video" as const, sourceWidth: 1080, sourceHeight: 1920,
+        transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
+        background: { type: "black" as const, color: null }, reversed: false }],
       overlays: [{
         kind: "text" as const, text: "Hi", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#fff",
         backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center" as const, emoji: null, shape: null,
@@ -64,5 +68,46 @@ describe("transcribe API", () => {
     expect(native.transcribe).toHaveBeenCalledWith("file:///a.mov", 1, 3);
     cancelTranscribe();
     expect(native.cancelTranscribe).toHaveBeenCalled();
+  });
+});
+
+describe("toExportClip", () => {
+  const base = { sourceUri: "file:///media/a.mp4", trimStart: 0, trimEnd: 4, volume: 1, muted: false, speed: 1, filter: null, transition: { type: "none", duration: 0 } };
+  it("maps a default video clip", () => {
+    expect(toExportClip(makeClip({ id: "a", sourceDuration: 4 }))).toEqual({
+      ...base, kind: "video", sourceWidth: 1080, sourceHeight: 1920,
+      transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
+      background: { type: "black", color: null }, reversed: false,
+    });
+  });
+  it("maps transform, crop and a colour background", () => {
+    const e = toExportClip(makeClip({
+      id: "a", sourceDuration: 4, width: 1920, height: 1080,
+      transform: { scale: 1.5, x: 0.1, y: -0.2, rotation: 90, flipH: true, flipV: false },
+      crop: { x: 0.1, y: 0.2, w: 0.5, h: 0.6 }, background: { type: "color", color: "#FF2D7A" },
+    }));
+    expect(e).toMatchObject({
+      sourceWidth: 1920, sourceHeight: 1080,
+      transform: { scale: 1.5, x: 0.1, y: -0.2, rotation: 90, flipH: true, flipV: false },
+      crop: { x: 0.1, y: 0.2, w: 0.5, h: 0.6 }, background: { type: "color", color: "#FF2D7A" },
+    });
+  });
+  it("maps a blur background with a null colour", () => {
+    expect(toExportClip(makeClip({ id: "a", sourceDuration: 4, background: { type: "blur" } })).background).toEqual({ type: "blur", color: null });
+  });
+  it("maps a reversed clip", () => {
+    expect(toExportClip(makeClip({ id: "a", sourceDuration: 4, reversed: true })).reversed).toBe(true);
+  });
+  it("maps a photo", () => {
+    const e = toExportClip(makePhotoClip({ id: "p", seconds: 3 }));
+    expect(e).toMatchObject({ kind: "photo", sourceUri: "file:///media/p.jpg", trimStart: 0, trimEnd: 3, speed: 1, muted: true, reversed: false });
+  });
+  it("sends fresh copies, not references into the project", () => {
+    const c = makeClip({ id: "a", sourceDuration: 4 });
+    const e = toExportClip(c);
+    expect(e.transform).not.toBe(c.transform);
+    expect(e.crop).not.toBe(c.crop);
+    expect(e.transition).not.toBe(c.transitionOut);
+    expect(e.background).not.toBe(c.background);
   });
 });

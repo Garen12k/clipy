@@ -1,7 +1,13 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { makeClip, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
+jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn() }));
+jest.mock("@/src/projects", () => ({ storage: { importMedia: jest.fn(), saveStill: jest.fn() } }));
+jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () => ({ uri: "file:///thumb.jpg" })) }));
+import { storage } from "@/src/projects";
+import { pickMedia } from "@/src/projects/pickMedia";
+import { useToast } from "@/src/ui/Toast";
+import { makeClip, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 
@@ -110,4 +116,150 @@ test("selecting a sticker overlay shows Stickers; a text overlay shows Text", as
   expect(screen.getByRole("tab", { name: "Stickers" })).toBeSelected();
   await act(() => { useEditorStore.getState().selectOverlay("t1"); });
   expect(screen.getByRole("tab", { name: "Text" })).toBeSelected();
+});
+
+const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
+
+test("Edit group lists the new tools", async () => {
+  await renderBar();
+  const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel);
+  expect(labels).toEqual(expect.arrayContaining(["Split", "Trim", "Transform", "Crop", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Ratio"]));
+});
+
+test("Transform, Reverse, Crop, Replace and Freeze need a selection; Freeze is enabled for a video clip", async () => {
+  await renderBar();
+  for (const l of ["Transform", "Reverse", "Crop", "Replace"]) expect(screen.getByRole("button", { name: l })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  for (const l of ["Transform", "Reverse", "Crop", "Replace"]) expect(screen.getByRole("button", { name: l })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Freeze" })).toBeEnabled();
+});
+
+test("pressing Freeze runs the freeze capture for the selected clip", async () => {
+  const VT = jest.requireMock("expo-video-thumbnails") as { getThumbnailAsync: jest.Mock };
+  VT.getThumbnailAsync.mockClear();
+  VT.getThumbnailAsync.mockResolvedValueOnce({ uri: "file:///tmp/f.jpg" });
+  (storage as unknown as { saveStill: jest.Mock }).saveStill.mockResolvedValueOnce({ uri: "file:///p/media/s.jpg" });
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("a"); useEditorStore.getState().seek(1); });
+  await fireEvent.press(screen.getByRole("button", { name: "Freeze" }));
+  await waitFor(() => expect(VT.getThumbnailAsync).toHaveBeenCalledWith(expect.any(String), { time: 1000, quality: 1 }));
+  await waitFor(() => expect(useEditorStore.getState().project!.clips).toHaveLength(4));
+});
+
+test("Freeze is disabled without a selection", async () => {
+  await renderBar();
+  expect(screen.getByRole("button", { name: "Freeze" })).toBeDisabled();
+});
+
+test("a photo selection disables Reverse, Freeze, Speed and Volume but keeps Transform and Background", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makePhotoClip({ id: "p" }), makeClip({ id: "a", sourceDuration: 4 })] }));
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("p"); });
+  expect(screen.getByRole("button", { name: "Reverse" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Freeze" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Transform" })).toBeEnabled();
+  await openGroup("Effects");
+  expect(screen.getByRole("button", { name: "Speed" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Background" })).toBeEnabled();
+  await openGroup("Audio");
+  expect(screen.getByRole("button", { name: "Volume" })).toBeDisabled();
+});
+
+test("Background needs a selection", async () => {
+  await renderBar();
+  await openGroup("Effects");
+  expect(screen.getByRole("button", { name: "Background" })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByRole("button", { name: "Background" })).toBeEnabled();
+});
+
+test("Reverse toggles the clip and shows active; one undo step each", async () => {
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("a"); });
+  await fireEvent.press(screen.getByRole("button", { name: "Reverse" }));
+  expect(useEditorStore.getState().project!.clips[0].reversed).toBe(true);
+  expect(screen.getByRole("button", { name: "Reverse" })).toBeSelected();
+  await fireEvent.press(screen.getByRole("button", { name: "Reverse" }));
+  expect(useEditorStore.getState().project!.clips[0].reversed).toBe(false);
+  await act(() => { useEditorStore.getState().undo(); });
+  expect(useEditorStore.getState().project!.clips[0].reversed).toBe(true);
+});
+
+test("Transform and Background open their sheets", async () => {
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("a"); });
+  await fireEvent.press(screen.getByRole("button", { name: "Transform" }));
+  expect(screen.getByRole("button", { name: "Rotate 90°" })).toBeTruthy();
+});
+
+const pick = pickMedia as jest.Mock;
+const importMedia = storage.importMedia as jest.Mock;
+const videoAsset = { uri: "file:///new.mov", kind: "video" as const, durationSec: 9, width: 1920, height: 1080 };
+
+describe("Replace", () => {
+  beforeEach(() => { pick.mockReset(); importMedia.mockReset(); useToast.getState().clear(); });
+
+  test("is enabled for a photo selection too", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makePhotoClip({ id: "p" })] }));
+    await renderBar();
+    await act(() => { useEditorStore.getState().select("p"); });
+    expect(screen.getByRole("button", { name: "Replace" })).toBeEnabled();
+  });
+
+  test("swaps the selected clip's media in one undo step and keeps it selected", async () => {
+    pick.mockResolvedValueOnce([videoAsset]);
+    importMedia.mockResolvedValueOnce({ clips: [makeClip({ id: "imported", sourceDuration: 9, sourceUri: "file:///p1/media/imported.mov", width: 1920, height: 1080 })], failed: 0 });
+    await renderBar();
+    await act(() => { useEditorStore.getState().select("a"); });
+    await fireEvent.press(screen.getByRole("button", { name: "Replace" }));
+    await waitFor(() => expect(useEditorStore.getState().project!.clips[0].sourceUri).toBe("file:///p1/media/imported.mov"));
+    expect(pick).toHaveBeenCalledWith({ multiple: false });
+    expect(importMedia).toHaveBeenCalledWith("p1", [videoAsset]);
+    const s = useEditorStore.getState();
+    expect(s.project!.clips[0]).toMatchObject({ id: "a", sourceDuration: 9, trimStart: 0, trimEnd: 4, width: 1920 });
+    expect(s.selectedClipId).toBe("a");
+    expect(s.past).toHaveLength(1);
+  });
+
+  test("a cancelled pick changes nothing", async () => {
+    pick.mockResolvedValueOnce(null);
+    await renderBar();
+    await act(() => { useEditorStore.getState().select("a"); });
+    await fireEvent.press(screen.getByRole("button", { name: "Replace" }));
+    await waitFor(() => expect(pick).toHaveBeenCalled());
+    expect(importMedia).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().past).toHaveLength(0);
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("a failed import toasts and changes nothing", async () => {
+    pick.mockResolvedValueOnce([videoAsset]);
+    importMedia.mockResolvedValueOnce({ clips: [], failed: 1 });
+    await renderBar();
+    await act(() => { useEditorStore.getState().select("a"); });
+    await fireEvent.press(screen.getByRole("button", { name: "Replace" }));
+    await waitFor(() => expect(useToast.getState().message).toBe("Couldn't replace the clip."));
+    expect(useEditorStore.getState().past).toHaveLength(0);
+  });
+
+  test("a video too short to be a clip is refused with a toast", async () => {
+    pick.mockResolvedValueOnce([videoAsset]);
+    importMedia.mockResolvedValueOnce({ clips: [makeClip({ id: "imported", sourceDuration: 0.05 })], failed: 0 });
+    await renderBar();
+    await act(() => { useEditorStore.getState().select("a"); });
+    await fireEvent.press(screen.getByRole("button", { name: "Replace" }));
+    await waitFor(() => expect(useToast.getState().message).toBe("That video is too short."));
+    expect(useEditorStore.getState().past).toHaveLength(0);
+    expect(useEditorStore.getState().project!.clips[0].sourceUri).toBe("file:///media/a.mp4");
+  });
+});
+
+test("a reversed clip disables Volume (the export is silent)", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "r", sourceDuration: 4, reversed: true }), makeClip({ id: "a", sourceDuration: 4 })] }));
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("r"); });
+  await openGroup("Audio");
+  expect(screen.getByRole("button", { name: "Volume" })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByRole("button", { name: "Volume" })).toBeEnabled();
 });

@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { cancelTranscribe, isNativeAvailable, transcribe } from "@/modules/clipy-video";
 import { linesToCaptions, mergeSegmentsIntoLines, segmentsToOutput, type Segment } from "@/src/editor/model/captions";
 import { replaceCaptions } from "@/src/editor/model/ops";
+import { isPhoto } from "@/src/editor/model/types";
 import { clipStartTimes } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { newId } from "@/src/lib/id";
@@ -21,7 +22,7 @@ export function useCaptions() {
     const p = s.project;
     if (!p || !isNativeAvailable()) return;
     cancelled.current = false;
-    const clips = p.clips.filter((c) => !s.missingSourceUris.includes(c.sourceUri));
+    const clips = p.clips.filter((c) => !s.missingSourceUris.includes(c.sourceUri) && !isPhoto(c) && !c.reversed);
     const starts = clipStartTimes(p);
     setState({ status: "running", clipIndex: 0, clipCount: clips.length, skipped: [] });
     const all: Segment[] = []; const skipped: string[] = [];

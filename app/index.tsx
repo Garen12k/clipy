@@ -51,7 +51,7 @@ export default function ProjectsScreen() {
         </View>
       </View>
       {loading ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 40 }} /> : projects.length === 0 ? (
-        <EmptyState emoji="🏝️" title="No clips yet" hint="Pick some videos from your library and start your first edit." />
+        <EmptyState emoji="🏝️" title="No clips yet" hint="Pick some photos or videos from your library and start your first edit." />
       ) : (
         <FlatList data={projects} numColumns={2} keyExtractor={(p) => p.id} contentContainerStyle={{ padding: theme.space.sm, paddingBottom: 120 + insets.bottom }}
           renderItem={({ item, index }) => <ProjectCard summary={item} index={index} onPress={() => (item.broken ? setActionsFor(item) : router.push(`/editor/${item.id}`))} onLongPress={() => { haptic("light"); setActionsFor(item); }} />} />

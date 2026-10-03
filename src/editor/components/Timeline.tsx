@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
 import { ScrollView, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { clipStartTimes } from "@/src/editor/model/timeline";
+import { clipStartTimes, timeToX, totalDuration } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { CLIP_AREA_HEIGHT, TIMELINE_HEIGHT } from "../timelineLayout";
 import { createScrubController } from "../timelineScroll";
+import { AddClipTile } from "./AddClipTile";
 import { ClipThumbStrip } from "./ClipThumbStrip";
 import { CutMarker } from "./CutMarker";
 import { MusicLane } from "./MusicLane";
@@ -71,6 +72,8 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
                 <CutMarker key={`cut-${clip.id}`} index={i} pixelsPerSecond={pps} onPress={onCutPress} />
               ) : null,
             )}
+            {/* Out of the flow, inside the trailing padding: the scrubbable width still ends at the last clip. */}
+            <AddClipTile left={timeToX(totalDuration(project), pps) + theme.space.sm} />
           </View>
           <OverlayLane />
           <MusicLane />

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { FILTERS } from "@/src/editor/effects";
 import { setClipFilter, setFilterForAllClips } from "@/src/editor/model/ops";
-import { FILTER_IDS } from "@/src/editor/model/types";
+import { FILTER_IDS, isPhoto } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
@@ -22,10 +22,11 @@ export function FilterSheet({ clipId, visible, onClose }: { clipId: string | nul
   useEffect(() => {
     setThumb(null);
     if (!clip) return;
+    if (isPhoto(clip)) { setThumb(clip.sourceUri); return; }
     let alive = true;
     getThumb(clip.sourceUri, clip.trimStart).then((uri) => { if (alive) setThumb(uri); }).catch(() => {});
     return () => { alive = false; };
-  }, [clip?.sourceUri, clip?.trimStart]);
+  }, [clip?.sourceUri, clip?.trimStart, clip?.kind]);
 
   if (!clip) return null;
   const current = clip.filter ?? "none";
@@ -46,7 +47,7 @@ export function FilterSheet({ clipId, visible, onClose }: { clipId: string | nul
               style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}
             >
               <View testID={`filter-tile-${id}`} style={[{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", backgroundColor: theme.colors.surfaceAlt }, selected ? theme.ring : { borderWidth: 2, borderColor: "transparent" }]}>
-                {thumb ? <Image source={{ uri: thumb }} style={{ width: TILE_W, height: TILE_H }} resizeMode="cover" /> : null}
+                {thumb ? <Image testID={`filter-thumb-${id}`} source={{ uri: thumb }} style={{ width: TILE_W, height: TILE_H }} resizeMode="cover" /> : null}
                 <FilterLayer filter={id} />
               </View>
               <Body style={{ fontSize: 12 }}>{def.label}</Body>

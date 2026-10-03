@@ -1,7 +1,7 @@
 # Clipy — CapCut-style tools, Group A: Clip Basics — Design
 
 **Date:** 2026-10-03
-**Status:** Approved in chat (parts 1–2), written spec
+**Status:** Implemented 2026-10-03 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Roadmap:** `docs/superpowers/research/capcut-roadmap.md` (order A → B → C → F → D → E → G)
 **Parent specs:** the master design and the Phase 1–3 / UI-redesign specs (all still apply unless overridden here)
 

@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { xToTime } from "@/src/editor/model/timeline";
 import { trimClip } from "@/src/editor/model/ops";
-import { MIN_CLIP_SECONDS, type Clip } from "@/src/editor/model/types";
+import { clampNum, isPhoto, MIN_CLIP_SECONDS, PHOTO, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { STRIP_HEIGHT } from "../timelineLayout";
@@ -13,6 +13,8 @@ const snap = (t: number) => Math.round(t * 10) / 10;
 export function trimFromDrag(clip: Clip, edge: "start" | "end", startValue: number, translationX: number, pps: number) {
   // SANCTIONED: translationX→xToTime is an output-seconds delta; clip.speed scales it to a source-seconds delta directly.
   const raw = snap(startValue + xToTime(translationX, pps) * clip.speed);
+  // A photo has no start to trim: its end handle sets its length.
+  if (isPhoto(clip)) return { trimStart: 0, trimEnd: clampNum(raw, PHOTO.minSeconds, PHOTO.maxSeconds) };
   if (edge === "start") {
     const trimStart = Math.max(0, Math.min(raw, snap(clip.trimEnd - MIN_CLIP_SECONDS * clip.speed)));
     return { trimStart, trimEnd: clip.trimEnd };
@@ -47,5 +49,5 @@ function Handle({ clip, edge }: { clip: Clip; edge: "start" | "end" }) {
 }
 
 export function TrimHandles({ clip }: { clip: Clip }) {
-  return (<><Handle clip={clip} edge="start" /><Handle clip={clip} edge="end" /></>);
+  return (<>{!isPhoto(clip) && <Handle clip={clip} edge="start" />}<Handle clip={clip} edge="end" /></>);
 }
