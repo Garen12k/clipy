@@ -113,8 +113,9 @@ test("photo rules: split yields two photos summing to the original", () => {
   expect(clipDuration(q.clips[0]) + clipDuration(q.clips[1])).toBeCloseTo(3);
   expect(q.clips[0].trimEnd).toBe(1);
   const tooEarly = makeProject({ clips: [photo] });
-  expect(splitClipAt(tooEarly, 0.05)).toBe(tooEarly);
-  expect(splitClipAt(tooEarly, 2.95)).toBe(tooEarly);
+  expect(splitClipAt(tooEarly, 0.3)).toBe(tooEarly);
+  expect(splitClipAt(tooEarly, 2.7)).toBe(tooEarly);
+  expect(q.clips.map(clipDuration)).toEqual([1, 2]);
 });
 
 test("duplicateClip copies every new field", () => {
@@ -123,6 +124,10 @@ test("duplicateClip copies every new field", () => {
   q = setClipBackground(q, "v", { type: "blur" });
   q = setClipReversed(q, "v", true);
   const d = duplicateClip(q, "v").clips[2];
+  const src = q.clips[1];
+  expect(d.transform).not.toBe(src.transform);
+  expect(d.crop).not.toBe(src.crop);
+  expect(d.background).not.toBe(src.background);
   expect(d).toMatchObject({ kind: "video", transform: q.clips[1].transform, crop: q.clips[1].crop, background: { type: "blur" }, reversed: true });
   expect(duplicateClip(p, "ph").clips[3]).toMatchObject({ kind: "photo", muted: true });
 });

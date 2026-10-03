@@ -3,12 +3,12 @@ import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration, outputToSource } from "./timeline";
 import { fitScale } from "./clipLayout";
 import {
-  aspectRatioValue, clampCrop, clampTransform, DEFAULT_TRANSFORM, isPhoto, normaliseRotation, PHOTO,
-  type ClipBackground, type ClipTransform, type CropRect,
+  AUDIO_LIMITS, aspectRatioValue, clampCrop, clampTransform, CLIP_VOLUME, DEFAULT_TRANSFORM, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  MIN_CLIP_SECONDS, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_LIMITS, TRANSITION_LIMITS,
+  type AspectRatio, type AudioTrack, type Clip, type ClipBackground, type ClipTransform, type CropRect, type FilterId, type Overlay, type Project,
+  type StickerOverlay, type TextOverlay, type TransitionType,
 } from "./types";
-import { MIN_CLIP_SECONDS, SPEED_LIMITS, TRANSITION_LIMITS, type AspectRatio, type Clip, type FilterId, type Project, type TransitionType } from "./types";
 import { totalDuration } from "./timeline";
-import { AUDIO_LIMITS, CLIP_VOLUME, isSticker, isTextOverlay, makeOverlay, makeSticker, OVERLAY_LIMITS, type AudioTrack, type Overlay, type StickerOverlay, type TextOverlay } from "./types";
 import type { Template } from "../templates";
 
 function touch(p: Project, patch: Partial<Project>): Project {
@@ -25,7 +25,8 @@ export function splitClipAt(p: Project, outputTime: number): Project {
   if (!hit) return p;
   const { clip, index, offsetInClip } = hit;
   const d = clipDuration(clip);
-  if (offsetInClip < MIN_CLIP_SECONDS || d - offsetInClip < MIN_CLIP_SECONDS) return p;
+  const min = isPhoto(clip) ? PHOTO.minSeconds : MIN_CLIP_SECONDS;
+  if (offsetInClip < min || d - offsetInClip < min) return p;
   const cut = outputToSource(clip, offsetInClip);
   const left: Clip = { ...clip, trimEnd: cut, transitionOut: NO_TRANSITION };
   const right: Clip = isPhoto(clip) ? { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut } : { ...clip, id: newId(), trimStart: cut };
