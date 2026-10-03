@@ -17,7 +17,7 @@ let warn: jest.SpyInstance;
 beforeEach(() => { warn = jest.spyOn(console, "warn").mockImplementation(() => {}); });
 afterEach(() => warn.mockRestore());
 
-const asset = (uri: string, durationSec = 4): PickedAsset => ({ uri, durationSec, width: 1080, height: 1920, fileName: "clip.mov" });
+const asset = (uri: string, durationSec = 4): PickedAsset => ({ uri, kind: "video", durationSec, width: 1080, height: 1920, fileName: "clip.mov" });
 
 test("createProject copies media, writes project.json and a thumbnail", async () => {
   const { fs, storage } = setup();
@@ -127,4 +127,52 @@ test("duplicateProject starts with no posts and leaves the original's records", 
   expect(list.find((p) => p.id === copy.id)!.postedTo).toEqual([]);
   expect(list.find((p) => p.id === project.id)!.postedTo).toEqual(["youtube"]);
   expect((await storage.loadProject(project.id)).project.posts).toEqual([post]);
+});
+
+const photo = (uri: string, over: Partial<PickedAsset> = {}): PickedAsset => ({ uri, kind: "photo", durationSec: 0, width: 4032, height: 3024, fileName: "IMG_1.HEIC", ...over });
+
+test("importMedia copies files into media/ and builds video and photo clips", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/a.mov", "A");
+  fs.files.set("file:///picked/p.heic", "P");
+  const { clips, failed } = await storage.importMedia("proj", [asset("file:///picked/a.mov"), photo("file:///picked/p.heic")]);
+  expect(failed).toBe(0);
+  expect(clips).toHaveLength(2);
+  expect(clips[0]).toMatchObject({ kind: "video", trimStart: 0, trimEnd: 4, sourceDuration: 4, sourceUri: `${fs.documentDir}projects/proj/media/id1.mov` });
+  expect(clips[1]).toMatchObject({ kind: "photo", trimStart: 0, trimEnd: 3, sourceDuration: 60, muted: true, speed: 1, reversed: false, width: 4032, height: 3024,
+    sourceUri: `${fs.documentDir}projects/proj/media/id2.heic` });
+  expect(fs.files.get(clips[1].sourceUri)).toBe("P");
+});
+
+test("importMedia counts unreadable items and photos without a size as failed", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/p.jpg", "P");
+  const { clips, failed } = await storage.importMedia("proj", [
+    asset("file:///picked/missing.mov"), photo("file:///picked/p.jpg", { width: 0 }), photo("file:///picked/p.jpg", { height: 0 }), photo("file:///picked/p.jpg", { fileName: "p.jpg" })]);
+  expect(failed).toBe(3);
+  expect(clips).toHaveLength(1);
+  expect(clips[0].kind).toBe("photo");
+});
+
+test("importMedia throws when the project folder can't be written", async () => {
+  const { fs, storage } = setup();
+  fs.mkdir = async () => { throw new Error("EACCES"); };
+  await expect(storage.importMedia("proj", [asset("file:///picked/a.mov")])).rejects.toThrow("EACCES");
+});
+
+test("saveStill copies a captured frame into media/ as a .jpg", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///tmp/frame.png", "F");
+  const { uri } = await storage.saveStill("proj", "file:///tmp/frame.png");
+  expect(uri).toBe(`${fs.documentDir}projects/proj/media/id1.jpg`);
+  expect(fs.files.get(uri)).toBe("F");
+});
+
+test("createProject with a photo first uses the photo as the thumbnail, without the video thumbnailer", async () => {
+  const { fs, storage, thumbnail } = setup();
+  fs.files.set("file:///picked/p.jpg", "P");
+  const { project } = await storage.createProject("P", [photo("file:///picked/p.jpg", { fileName: "p.jpg" })]);
+  expect(project.clips[0].kind).toBe("photo");
+  expect(thumbnail).not.toHaveBeenCalled();
+  expect(fs.files.get(`${fs.documentDir}projects/id1/thumb.jpg`)).toBe("P");
 });

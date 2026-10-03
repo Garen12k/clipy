@@ -1,13 +1,13 @@
 import { totalDuration } from "@/src/editor/model/timeline";
 import { migrateProject } from "@/src/editor/model/migrate";
-import { newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AudioTrack, type Clip, type PostPlatform, type Project } from "@/src/editor/model/types";
+import { newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AudioTrack, type Clip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
 
-export interface PickedAsset { uri: string; durationSec: number; width: number; height: number; fileName?: string }
+export interface PickedAsset { uri: string; kind: "video" | "photo"; durationSec: number; width: number; height: number; fileName?: string }
 export interface ProjectSummary { id: string; name: string; durationSec: number; updatedAt: string; thumbUri: string | null; broken: boolean; postedTo: PostPlatform[] }
 export interface StorageDeps { thumbnail(uri: string, timeMs: number): Promise<string>; newId(): string; nowIso(): string }
 
-const ext = (a: PickedAsset) => { const m = /\.([A-Za-z0-9]+)$/.exec(a.fileName ?? a.uri); return (m?.[1] ?? "mp4").toLowerCase(); };
+const ext = (a: PickedAsset) => { const m = /\.([A-Za-z0-9]+)$/.exec(a.fileName ?? a.uri); return (m?.[1] ?? (a.kind === "photo" ? "jpg" : "mp4")).toLowerCase(); };
 
 export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const root = `${fs.documentDir}projects`;
@@ -36,25 +36,43 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const first = p.clips[0];
     if (!first) return;
     try {
+      if (first.kind === "photo") { await fs.copy(first.sourceUri, thumbPath(p.id)); return; }
       const tmp = await deps.thumbnail(first.sourceUri, Math.min(500, Math.max(0, first.sourceDuration * 1000 - 1)));
       await fs.copy(tmp, thumbPath(p.id));
     } catch (e) { console.warn("thumbnail failed", e); }
   }
 
-  async function createProject(name: string, assets: PickedAsset[]) {
-    const id = deps.newId();
-    const now = deps.nowIso();
-    await fs.mkdir(`${projectDir(id)}/media`);
+  async function importMedia(projectId: string, assets: PickedAsset[]): Promise<{ clips: Clip[]; failed: number }> {
+    const mediaDir = `${projectDir(projectId)}/media`;
+    await fs.mkdir(mediaDir);
     const clips: Clip[] = [];
     let failed = 0;
     for (const a of assets) {
+      if (a.kind === "photo" && !(a.width > 0 && a.height > 0)) { failed++; console.warn("import failed: no size", a.uri); continue; }
       const clipId = deps.newId();
-      const dest = `${projectDir(id)}/media/${clipId}.${ext(a)}`;
+      const dest = `${mediaDir}/${clipId}.${ext(a)}`;
       try {
         await fs.copy(a.uri, dest);
-        clips.push(newVideoClip({ id: clipId, sourceUri: dest, sourceDuration: a.durationSec, width: a.width, height: a.height }));
+        clips.push(a.kind === "photo"
+          ? newPhotoClip({ id: clipId, sourceUri: dest, width: a.width, height: a.height })
+          : newVideoClip({ id: clipId, sourceUri: dest, sourceDuration: a.durationSec, width: a.width, height: a.height }));
       } catch (e) { failed++; console.warn("import failed", a.uri, e); }
     }
+    return { clips, failed };
+  }
+
+  async function saveStill(projectId: string, tempUri: string): Promise<{ uri: string }> {
+    const mediaDir = `${projectDir(projectId)}/media`;
+    await fs.mkdir(mediaDir);
+    const uri = `${mediaDir}/${deps.newId()}.jpg`;
+    await fs.copy(tempUri, uri);
+    return { uri };
+  }
+
+  async function createProject(name: string, assets: PickedAsset[]) {
+    const id = deps.newId();
+    const now = deps.nowIso();
+    const { clips, failed } = await importMedia(id, assets);
     const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], schemaVersion: SCHEMA_VERSION };
     await saveProject(project);
     await writeThumb(project);
@@ -114,7 +132,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   return {
     projectDir, createProject, listProjects, loadProject, saveProject,
     deleteProject: async (id: string) => { await fs.remove(projectDir(id)); },
-    duplicateProject, renameProject, importAudio,
+    duplicateProject, renameProject, importAudio, importMedia, saveStill,
   };
 }
 

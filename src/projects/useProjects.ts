@@ -3,7 +3,7 @@ import { useCallback, useState } from "react";
 import { lastFlush } from "@/src/editor/flush";
 import { storage, type ProjectSummary } from "@/src/projects";
 import { useToast } from "@/src/ui/Toast";
-import { pickVideos } from "./pickVideos";
+import { pickMedia } from "./pickMedia";
 
 export function useProjects() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -18,7 +18,7 @@ export function useProjects() {
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
   async function create(): Promise<string | null> {
-    const assets = await pickVideos();
+    const assets = await pickMedia();
     if (!assets || assets.length === 0) return null;
     const used = projects
       .map((p) => /^Project (\d+)$/.exec(p.name)?.[1])
