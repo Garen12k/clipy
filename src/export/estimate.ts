@@ -6,7 +6,9 @@ export const RESOLUTIONS: { value: Resolution; label: string }[] = [{ value: 720
 export const BITRATE_MBPS: Record<Resolution, number> = { 720: 5, 1080: 10, 2160: 35 };
 
 export const estimateBytes = (durationSec: number, res: Resolution): number => (durationSec * BITRATE_MBPS[res] * 1e6) / 8;
-export const canExport4K = (clips: { width: number; height: number }[]): boolean => clips.some((c) => Math.max(c.width, c.height) >= 2160);
+/** Only video clips count: a still photo is never a 4K source. */
+export const canExport4K = (clips: { width: number; height: number; kind?: Clip["kind"] }[]): boolean =>
+  clips.some((c) => c.kind !== "photo" && Math.max(c.width, c.height) >= 2160);
 /** The clips that go into the export: non-empty and with a source file that still exists. */
 export function exportableClips(project: Project, missingSourceUris: string[]): Clip[] {
   return project.clips.filter((c) => c.trimEnd > c.trimStart && !missingSourceUris.includes(c.sourceUri));

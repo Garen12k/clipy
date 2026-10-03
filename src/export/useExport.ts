@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { normaliseTransitions } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportOverlay } from "@/modules/clipy-video";
+import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportClip, toExportOverlay } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
 import { estimateBytes, exportableAudio, exportableClips, type Resolution } from "./estimate";
 
@@ -41,10 +41,7 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
       const outputPath = `${expoFs.cacheDir}exports/${project.id}-${Date.now()}.mp4`;
       const audioTrack = exportableAudio(project, missingSourceUris);
       jobId.current = await exportTimeline({
-        clips: clips.map((c) => ({
-          sourceUri: c.sourceUri, trimStart: c.trimStart, trimEnd: c.trimEnd, volume: c.volume, muted: c.muted,
-          speed: c.speed, filter: c.filter, transition: c.transitionOut,
-        })),
+        clips: clips.map(toExportClip),
         overlays: project.overlays.filter((o) => o.end > o.start).map(toExportOverlay),
         audio: audioTrack ? { sourceUri: audioTrack.sourceUri, start: audioTrack.start, trimStart: audioTrack.trimStart, trimEnd: audioTrack.trimEnd, volume: audioTrack.volume } : null,
         aspectRatio: project.aspectRatio, resolution, outputPath,

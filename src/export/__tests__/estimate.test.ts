@@ -1,3 +1,4 @@
+import { makeClip, makePhotoClip } from "@/src/editor/model/types";
 import { canExport4K, estimateBytes, formatBytes } from "../estimate";
 
 test("estimateBytes = duration × bitrate", () => {
@@ -7,6 +8,12 @@ test("estimateBytes = duration × bitrate", () => {
 test("canExport4K needs a 4K source", () => {
   expect(canExport4K([{ width: 1080, height: 1920 }])).toBe(false);
   expect(canExport4K([{ width: 1080, height: 1920 }, { width: 2160, height: 3840 }])).toBe(true);
+});
+test("canExport4K ignores photo clips", () => {
+  const photo = makePhotoClip({ id: "p", width: 4000, height: 3000 });
+  const video = makeClip({ id: "v", sourceDuration: 2, width: 1080, height: 1920 });
+  expect(canExport4K([photo, video])).toBe(false);
+  expect(canExport4K([photo, makeClip({ id: "w", sourceDuration: 2, width: 2160, height: 3840 })])).toBe(true);
 });
 test("formatBytes", () => {
   expect(formatBytes(340 * 1e6)).toBe("340 MB");

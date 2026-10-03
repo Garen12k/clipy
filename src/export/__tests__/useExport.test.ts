@@ -5,6 +5,7 @@ jest.mock("@/modules/clipy-video", () => ({
   addExportListener: jest.fn(() => ({ remove() {} })),
   cancelExport: jest.fn(),
   toExportOverlay: jest.requireActual("@/modules/clipy-video").toExportOverlay,
+  toExportClip: jest.requireActual("@/modules/clipy-video").toExportClip,
 }));
 jest.mock("@/src/projects/expoFs", () => ({
   expoFs: { cacheDir: "file:///cache/", freeBytes: async () => 1e12, mkdir: async () => {} },
@@ -12,8 +13,8 @@ jest.mock("@/src/projects/expoFs", () => ({
 jest.mock("@/src/lib/id", () => ({ newId: () => "split-right" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { exportTimeline } from "@/modules/clipy-video";
-import { setTransition, splitClipAt } from "@/src/editor/model/ops";
-import { makeAudioTrack, makeClip, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
+import { insertFreezeFrame, setClipReversed, setTransition, splitClipAt } from "@/src/editor/model/ops";
+import { makeAudioTrack, makeClip, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useExport } from "../useExport";
 
 const a = makeClip({ id: "a", sourceDuration: 4, volume: 1.5, muted: true, speed: 2, filter: "warm", transitionOut: { type: "fade", duration: 0.5 } });
@@ -88,4 +89,23 @@ test("clears the last exported clip's transition when a trailing clip's source i
   expect((exportTimeline as jest.Mock).mock.calls[0][0].clips).toEqual([
     expect.objectContaining({ transition: { type: "none", duration: 0 } }),
   ]);
+});
+
+test("a photo, a reversed clip and a freeze frame are sent in order with transitions normalised", async () => {
+  const photo = makePhotoClip({ id: "ph", seconds: 3, transitionOut: { type: "fade", duration: 0.5 } });
+  const vid = makeClip({ id: "v", sourceDuration: 6, transitionOut: { type: "slide", duration: 0.5 } });
+  let p = makeProject({ id: "p3", clips: [photo, vid] });
+  p = setClipReversed(p, "v", true);
+  p = insertFreezeFrame(p, 4, { id: "still", sourceUri: "file:///media/still.jpg", width: 1080, height: 1920 });
+  const { result } = await renderHook(() => useExport(p, []));
+  await act(() => result.current.start(1080));
+  const req = (exportTimeline as jest.Mock).mock.calls[0][0];
+  expect(req.clips.map((c: { kind: string; reversed: boolean; sourceUri: string }) => [c.kind, c.reversed, c.sourceUri])).toEqual([
+    ["photo", false, photo.sourceUri],
+    ["video", true, vid.sourceUri],
+    ["photo", false, "file:///media/still.jpg"],
+    ["video", true, vid.sourceUri],
+  ]);
+  expect(req.clips[0]).toMatchObject({ muted: true, speed: 1, sourceWidth: 1080, sourceHeight: 1920, background: { type: "black", color: null } });
+  expect(req.clips[3].transition).toEqual({ type: "none", duration: 0 });
 });
