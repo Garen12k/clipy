@@ -1,5 +1,7 @@
 import { View } from "react-native";
+import { adjustNeedsTag } from "@/src/editor/model/adjust";
 import { coversFrame, placeClip } from "@/src/editor/model/clipLayout";
+import { activeEffects } from "@/src/editor/model/effectMath";
 import { frameSize } from "@/src/editor/model/ops";
 import { clipAt, isInTransitionWindow } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
@@ -8,13 +10,15 @@ import { Body } from "@/src/ui/Text";
 
 /**
  * Whether the preview only approximates the current frame: the clip has a filter, the playhead is in a
- * transition window, the clip is reversed (the preview plays forwards), or its blur background is visible.
+ * transition window, the clip is reversed (the preview plays forwards), any Adjust value is non-zero, a
+ * timeline effect covers the playhead, or its blur background is visible.
  */
 export function needsPreviewTag(p: Project, playhead: number): boolean {
   const hit = clipAt(p, playhead);
   if (!hit) return false;
   const c = hit.clip;
   if (c.filter || c.reversed || isInTransitionWindow(p, playhead)) return true;
+  if (adjustNeedsTag(c.adjust) || activeEffects(p.effects, playhead).length > 0) return true;
   if (c.background.type !== "blur") return false;
   const f = frameSize(p);
   return !coversFrame(placeClip({ width: c.width, height: c.height }, c.crop, c.transform, f.width, f.height), f.width, f.height);

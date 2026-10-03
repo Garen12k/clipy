@@ -70,4 +70,7 @@ export function adjustPreview(a: ClipAdjust): { layers: PreviewLayer[]; vignette
   return { layers, vignette: 0.6 * a.vignette };
 }
 
+/** The preview's "dark edge frame": each edge fades from black to clear over `strip` of the frame. */
+export const VIGNETTE_PREVIEW = { colors: ["#000000", "#00000000"], strip: "35%" } as const;
+
 export const adjustNeedsTag = (a: ClipAdjust) => !isNeutralAdjust(a);

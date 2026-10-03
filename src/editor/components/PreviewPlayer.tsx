@@ -8,12 +8,17 @@ import { usePhotoPlayback } from "@/src/editor/usePhotoPlayback";
 import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { AdjustLayer } from "./AdjustLayer";
 import { ClipFrame } from "./ClipFrame";
 import { ClipGestures } from "./ClipGestures";
+import { EffectOverlays, useEffectTransform } from "./EffectLayer";
 import { FilterLayer } from "./FilterLayer";
 import { OverlayLayer } from "./OverlayLayer";
 import { needsPreviewTag, PreviewTag } from "./PreviewTag";
 import { TransitionLayer } from "./TransitionLayer";
+
+/** The view the effect transform is applied to: exactly the preview frame, so it scales about the frame's centre. */
+const effectFill = { position: "absolute" as const, left: 0, top: 0, right: 0, bottom: 0 };
 
 /** True when the clip under the store's playhead is a photo: the video player must stay paused then. */
 function photoAtPlayhead(): boolean {
@@ -29,6 +34,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const missing = useEditorStore((s) => s.missingSourceUris);
   const { seek, setPlaying, selectOverlay } = useEditorStore.getState();
   const [frame, setFrame] = useState({ w: 0, h: 0 });
+  const effectTransform = useEffectTransform(frame.w, frame.h);
 
   const hit = useMemo(() => (project ? clipAt(project, playhead) : null), [project, playhead]);
   const loadedClipId = useRef<string | null>(null);
@@ -173,11 +179,17 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         accessibilityHint="Tap to play or pause"
         style={{ aspectRatio: ratio, maxWidth: "100%", maxHeight: "100%", flex: 1, backgroundColor: theme.colors.surface, borderRadius: 10, overflow: "hidden" }}>
         {hit && frame.w > 0 && (
-          <ClipFrame clip={hit.clip} frameW={frame.w} frameH={frame.h}>
-            <VideoView testID="preview-video" player={player} style={{ width: "100%", height: "100%" }} contentFit="fill" nativeControls={false} />
-          </ClipFrame>
+          // Timeline effects shake / zoom only the picture. This view is always there (its transform comes
+          // and goes) so an effect starting or ending never remounts the VideoView; the frame above clips it.
+          <View testID="effect-transform" pointerEvents="none" style={[effectFill, effectTransform]}>
+            <ClipFrame clip={hit.clip} frameW={frame.w} frameH={frame.h}>
+              <VideoView testID="preview-video" player={player} style={{ width: "100%", height: "100%" }} contentFit="fill" nativeControls={false} />
+            </ClipFrame>
+          </View>
         )}
-        <FilterLayer filter={hit?.clip.filter ?? null} />
+        <FilterLayer filter={hit?.clip.filter ?? null} intensity={hit?.clip.filterIntensity} />
+        {hit && <AdjustLayer adjust={hit.clip.adjust} />}
+        <EffectOverlays />
         <TransitionLayer />
         {frame.w > 0 && <ClipGestures frameW={frame.w} frameH={frame.h} />}
         {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenPanel?.(id)} />}
