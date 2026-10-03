@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef } from "react";
 import { ScrollView, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { clipStartTimes, timeToX, xToTime } from "@/src/editor/model/timeline";
+import { clipStartTimes } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { CLIP_AREA_HEIGHT, TIMELINE_HEIGHT } from "../timelineLayout";
+import { createScrubController } from "../timelineScroll";
 import { ClipThumbStrip } from "./ClipThumbStrip";
 import { CutMarker } from "./CutMarker";
 import { MusicLane } from "./MusicLane";
@@ -20,23 +21,21 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const missing = useEditorStore((s) => s.missingSourceUris);
-  const { seek, select, setZoom, setPlaying } = useEditorStore.getState();
+  const { seek, select, setZoom } = useEditorStore.getState();
 
   const scrollRef = useRef<ScrollView>(null);
-  const userScrolling = useRef(false);
   const basePps = useRef(pps);
   const pad = screenW / 2;
+  const scrub = useRef(createScrubController({
+    scrollTo: (x) => scrollRef.current?.scrollTo({ x, animated: false }),
+    seek: (t) => useEditorStore.getState().seek(t),
+    pause: () => useEditorStore.getState().setPlaying(false),
+  })).current;
 
-  // Follow the playhead while playing or when it is changed programmatically.
-  useEffect(() => {
-    if (userScrolling.current) return;
-    scrollRef.current?.scrollTo({ x: timeToX(playhead, pps), animated: false });
-  }, [playhead, pps]);
+  // Follow the playhead while playing or when it is changed programmatically (never while the user scrolls).
+  useEffect(() => { scrub.follow(playhead, pps); }, [playhead, pps, scrub]);
 
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!userScrolling.current) return;
-    seek(xToTime(e.nativeEvent.contentOffset.x, pps));
-  };
+  const offsetX = (e: NativeSyntheticEvent<NativeScrollEvent>) => e.nativeEvent.contentOffset.x;
 
   const pinch = useMemo(
     () =>
@@ -54,17 +53,11 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
     <GestureDetector gesture={pinch}>
       <View style={{ height: TIMELINE_HEIGHT, justifyContent: "center", backgroundColor: theme.colors.bgDeep }}>
         <ScrollView ref={scrollRef} testID="timeline-scroll" horizontal showsHorizontalScrollIndicator={false} scrollEventThrottle={16}
-          onScrollBeginDrag={() => { userScrolling.current = true; setPlaying(false); }}
-          onMomentumScrollBegin={() => { userScrolling.current = true; }}
-          onMomentumScrollEnd={() => {
-            userScrolling.current = false;
-            scrollRef.current?.scrollTo({ x: timeToX(useEditorStore.getState().playhead, pps), animated: false });
-          }}
-          onScrollEndDrag={() => {
-            userScrolling.current = false;
-            scrollRef.current?.scrollTo({ x: timeToX(useEditorStore.getState().playhead, pps), animated: false });
-          }}
-          onScroll={onScroll}
+          onScrollBeginDrag={scrub.onBeginDrag}
+          onMomentumScrollBegin={scrub.onMomentumBegin}
+          onMomentumScrollEnd={(e) => scrub.onEnd(offsetX(e), pps)}
+          onScrollEndDrag={(e) => scrub.onEnd(offsetX(e), pps)}
+          onScroll={(e) => scrub.onScroll(offsetX(e), pps)}
           contentContainerStyle={{ paddingHorizontal: pad, height: TIMELINE_HEIGHT, flexDirection: "column" }}>
           <View style={{ height: CLIP_AREA_HEIGHT, flexDirection: "row", alignItems: "center" }}>
             {project.clips.map((clip, i) => (
