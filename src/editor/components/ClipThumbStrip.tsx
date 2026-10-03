@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
-import type { Clip } from "@/src/editor/model/types";
+import { isPhoto, type Clip } from "@/src/editor/model/types";
 import { formatSpeed } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { STRIP_HEIGHT, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
@@ -41,6 +41,16 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
         {clip.speed !== 1 && (
           <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
             <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>{formatSpeed(clip.speed)}</Text>
+          </View>
+        )}
+        {clip.reversed && (
+          <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+            <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>◀</Text>
+          </View>
+        )}
+        {isPhoto(clip) && (
+          <View accessibilityLabel="Photo" style={{ backgroundColor: theme.colors.sea, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, justifyContent: "center" }}>
+            <Ionicons name="image" size={10} color={theme.colors.text} />
           </View>
         )}
         {clip.filter && (

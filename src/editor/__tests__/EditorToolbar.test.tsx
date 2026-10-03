@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { makeClip, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
+import { makeClip, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 
@@ -110,4 +110,64 @@ test("selecting a sticker overlay shows Stickers; a text overlay shows Text", as
   expect(screen.getByRole("tab", { name: "Stickers" })).toBeSelected();
   await act(() => { useEditorStore.getState().selectOverlay("t1"); });
   expect(screen.getByRole("tab", { name: "Text" })).toBeSelected();
+});
+
+const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
+
+test("Edit group lists the new tools", async () => {
+  await renderBar();
+  const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel);
+  expect(labels).toEqual(expect.arrayContaining(["Split", "Trim", "Transform", "Crop", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Ratio"]));
+});
+
+test("Transform and Reverse need a selection; Crop, Replace and Freeze stay disabled for a video clip", async () => {
+  await renderBar();
+  for (const l of ["Transform", "Reverse"]) expect(screen.getByRole("button", { name: l })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  for (const l of ["Transform", "Reverse"]) expect(screen.getByRole("button", { name: l })).toBeEnabled();
+  for (const l of ["Crop", "Replace", "Freeze"]) {
+    expect(screen.getByRole("button", { name: l })).toBeDisabled();
+    expect(screen.getByRole("button", { name: l }).props.accessibilityState).toMatchObject({ disabled: true });
+  }
+});
+
+test("a photo selection disables Reverse, Freeze, Speed and Volume but keeps Transform and Background", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makePhotoClip({ id: "p" }), makeClip({ id: "a", sourceDuration: 4 })] }));
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("p"); });
+  expect(screen.getByRole("button", { name: "Reverse" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Freeze" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Transform" })).toBeEnabled();
+  await openGroup("Effects");
+  expect(screen.getByRole("button", { name: "Speed" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Background" })).toBeEnabled();
+  await openGroup("Audio");
+  expect(screen.getByRole("button", { name: "Volume" })).toBeDisabled();
+});
+
+test("Background needs a selection", async () => {
+  await renderBar();
+  await openGroup("Effects");
+  expect(screen.getByRole("button", { name: "Background" })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByRole("button", { name: "Background" })).toBeEnabled();
+});
+
+test("Reverse toggles the clip and shows active; one undo step each", async () => {
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("a"); });
+  await fireEvent.press(screen.getByRole("button", { name: "Reverse" }));
+  expect(useEditorStore.getState().project!.clips[0].reversed).toBe(true);
+  expect(screen.getByRole("button", { name: "Reverse" })).toBeSelected();
+  await fireEvent.press(screen.getByRole("button", { name: "Reverse" }));
+  expect(useEditorStore.getState().project!.clips[0].reversed).toBe(false);
+  await act(() => { useEditorStore.getState().undo(); });
+  expect(useEditorStore.getState().project!.clips[0].reversed).toBe(true);
+});
+
+test("Transform and Background open their sheets", async () => {
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("a"); });
+  await fireEvent.press(screen.getByRole("button", { name: "Transform" }));
+  expect(screen.getByRole("button", { name: "Rotate 90°" })).toBeTruthy();
 });

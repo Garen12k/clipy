@@ -2,8 +2,8 @@ import { groupForSelection, TOOL_GROUPS } from "../toolGroups";
 
 test("five groups in order with the spec's tools", () => {
   expect(TOOL_GROUPS.map((g) => [g.id, g.label, g.tools])).toEqual([
-    ["edit", "Edit", ["split", "trim", "duplicate", "delete", "ratio"]],
-    ["effects", "Effects", ["filter", "speed", "transition", "templates"]],
+    ["edit", "Edit", ["split", "trim", "transform", "crop", "replace", "reverse", "freeze", "duplicate", "delete", "ratio"]],
+    ["effects", "Effects", ["filter", "speed", "transition", "templates", "background"]],
     ["text", "Text", ["text", "captions"]],
     ["stickers", "Stickers", ["sticker"]],
     ["audio", "Audio", ["music", "volume"]],
@@ -13,7 +13,7 @@ test("five groups in order with the spec's tools", () => {
 test("every tool appears exactly once", () => {
   const all = TOOL_GROUPS.flatMap((g) => g.tools);
   expect(new Set(all).size).toBe(all.length);
-  expect(all).toHaveLength(14);
+  expect(all).toHaveLength(20);
 });
 
 test("groupForSelection", () => {
