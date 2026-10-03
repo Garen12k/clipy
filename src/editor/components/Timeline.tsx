@@ -9,6 +9,7 @@ import { createScrubController } from "../timelineScroll";
 import { AddClipTile } from "./AddClipTile";
 import { ClipThumbStrip } from "./ClipThumbStrip";
 import { CutMarker } from "./CutMarker";
+import { EffectLane } from "./EffectLane";
 import { MusicLane } from "./MusicLane";
 import { OverlayLane } from "./OverlayLane";
 
@@ -77,6 +78,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           </View>
           <OverlayLane />
           <MusicLane />
+          <EffectLane />
         </ScrollView>
         <View pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: TIMELINE_HEIGHT - 16, backgroundColor: theme.colors.text, borderRadius: 1 }} />
       </View>

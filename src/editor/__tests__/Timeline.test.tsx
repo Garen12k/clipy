@@ -2,11 +2,11 @@ import { Dimensions, StyleSheet } from "react-native";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn(async () => null) }));
-import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { makeClip, makeEffect, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { Timeline } from "../components/Timeline";
-import { stripWidth } from "../timelineLayout";
+import { CLIP_AREA_HEIGHT, LANE_GAP, LANE_HEIGHT, stripWidth, TIMELINE_HEIGHT } from "../timelineLayout";
 
 const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })] });
 beforeEach(() => { useEditorStore.getState().reset(); useEditorStore.getState().setProject(p); });
@@ -17,6 +17,23 @@ test("timeline content container stacks the clip row and lanes vertically", asyn
   expect(scrollView.props.contentContainerStyle).toMatchObject({ flexDirection: "column" });
   expect(screen.getByTestId("overlay-lane")).toBeTruthy();
   expect(screen.getByTestId("music-lane")).toBeTruthy();
+});
+
+test("the effects lane is the third lane and only adds height: paddings and width stand-ins are unchanged", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], effects: [makeEffect({ id: "e1", start: 2, end: 5 })] }));
+  await render(<Timeline />);
+  const scroll = screen.getByTestId("timeline-scroll");
+  expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["overlay-lane", "music-lane", "effect-lane"]);
+  expect(TIMELINE_HEIGHT).toBe(CLIP_AREA_HEIGHT + 3 * (LANE_HEIGHT + LANE_GAP));
+  // Exactly the same container style as before, with the taller height: no width, no extra padding.
+  expect(scroll.props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height: TIMELINE_HEIGHT, flexDirection: "column" });
+  const lane = StyleSheet.flatten(screen.getByTestId("effect-lane").props.style);
+  expect(lane).toEqual(StyleSheet.flatten(screen.getByTestId("overlay-lane").props.style));
+  expect(lane).toEqual({ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP });
+  // The pill is out of the flow, so it cannot widen the scroll content.
+  expect(StyleSheet.flatten(within(scroll).getByTestId("effect-pill-e1").props.style).position).toBe("absolute");
+  // The scroll handlers are the same five, none added.
+  expect(Object.keys(scroll.props).filter((k) => /^on.*Scroll|^onScroll/.test(k)).sort()).toEqual(["onMomentumScrollBegin", "onMomentumScrollEnd", "onScroll", "onScrollBeginDrag", "onScrollEndDrag"]);
 });
 
 // Jest has no layout, so this pins the stand-ins for the content width: the tile is absolutely positioned and the paddings are untouched.

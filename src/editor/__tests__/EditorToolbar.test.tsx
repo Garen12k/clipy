@@ -7,7 +7,7 @@ jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () 
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { useToast } from "@/src/ui/Toast";
-import { makeClip, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 
@@ -272,4 +272,96 @@ test("Adjust is disabled without a selection, enabled for a selected clip, and o
   expect(screen.getByRole("button", { name: "Adjust" })).toBeEnabled();
   await fireEvent.press(screen.getByRole("button", { name: "Adjust" }));
   expect(screen.getByRole("button", { name: "Reset" })).toBeTruthy();
+});
+
+describe("Effects on the timeline", () => {
+  const withEffect = () => useEditorStore.getState().setProject(makeProject({
+    clips: [makeClip({ id: "a", sourceDuration: 10 })],
+    effects: [makeEffect({ id: "e1", type: "glow", start: 1, end: 3 })],
+  }));
+  const effects = () => useEditorStore.getState().project!.effects;
+  const NORMAL = ["Filter", "Adjust", "Effect", "Speed", "Transition", "Templates", "Background"];
+
+  test("Effect is enabled whenever a project is open, even an empty one, and opens the Effects sheet", async () => {
+    useEditorStore.getState().setProject(makeProject());
+    await renderBar();
+    await openGroup("Effects");
+    expect(screen.getByRole("button", { name: "Effect" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Glitch" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Effect" }));
+    expect(screen.getByRole("button", { name: "Glitch" })).toBeTruthy();
+  });
+
+  test("adding from the sheet selects the effect, closes the sheet and swaps the sub-row", async () => {
+    await renderBar();
+    await openGroup("Effects");
+    await fireEvent.press(screen.getByRole("button", { name: "Effect" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Glitch" }));
+    expect(effects()).toHaveLength(1);
+    expect(useEditorStore.getState().selectedEffectId).toBe(effects()[0].id);
+    expect(screen.queryByRole("button", { name: "Glitch" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Strength" })).toBeEnabled();
+  });
+
+  test("selecting an effect jumps to Effects and shows exactly Strength, Duplicate, Delete; deselecting restores the tools", async () => {
+    withEffect();
+    await renderBar();
+    expect(screen.queryByRole("button", { name: "Strength" })).toBeNull();
+    await act(() => { useEditorStore.getState().selectEffect("e1"); });
+    expect(screen.getByRole("tab", { name: "Effects" })).toBeSelected();
+    for (const l of ["Strength", "Duplicate", "Delete"]) expect(screen.getByRole("button", { name: l })).toBeEnabled();
+    for (const l of NORMAL) expect(screen.queryByRole("button", { name: l })).toBeNull();
+    await act(() => { useEditorStore.getState().selectEffect(null); });
+    expect(screen.getByRole("tab", { name: "Effects" })).toBeSelected();
+    for (const l of NORMAL) expect(screen.getByRole("button", { name: l })).toBeTruthy();
+    for (const l of ["Strength", "Duplicate", "Delete"]) expect(screen.queryByRole("button", { name: l })).toBeNull();
+  });
+
+  test("selecting a clip instead restores the normal Effects tools; other groups are not swapped", async () => {
+    withEffect();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectEffect("e1"); });
+    await openGroup("Edit");
+    expect(screen.getByRole("button", { name: "Split" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Strength" })).toBeNull();
+    await openGroup("Effects");
+    expect(screen.getByRole("button", { name: "Strength" })).toBeTruthy();
+    await act(() => { useEditorStore.getState().select("a"); });
+    expect(screen.queryByRole("button", { name: "Strength" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Filter" })).toBeEnabled();
+  });
+
+  test("Strength opens the strength sheet for the selected effect", async () => {
+    withEffect();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectEffect("e1"); });
+    expect(screen.queryByTestId("effect-strength")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Strength" }));
+    expect(screen.getByTestId("effect-strength")).toBeTruthy();
+    expect(screen.getByText("Strength 70")).toBeTruthy();
+  });
+
+  test("Duplicate copies the effect in one undo step and keeps the sub-row", async () => {
+    withEffect();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectEffect("e1"); });
+    await fireEvent.press(screen.getByRole("button", { name: "Duplicate" }));
+    expect(effects()).toMatchObject([{ id: "e1", start: 1, end: 3 }, { id: "dup", type: "glow", start: 3, end: 5 }]);
+    expect(useEditorStore.getState().past).toHaveLength(1);
+    expect(useEditorStore.getState().project!.clips).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Strength" })).toBeTruthy();
+  });
+
+  test("Delete removes the effect in one undo step, clears the selection and restores the tools", async () => {
+    withEffect();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectEffect("e1"); });
+    await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+    expect(effects()).toEqual([]);
+    expect(useEditorStore.getState().project!.clips).toHaveLength(1);
+    expect(useEditorStore.getState().selectedEffectId).toBeNull();
+    expect(useEditorStore.getState().past).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Strength" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Filter" })).toBeTruthy();
+  });
 });

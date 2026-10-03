@@ -4,8 +4,9 @@ import type { Clip } from "@/src/editor/model/types";
 export const CLIP_AREA_HEIGHT = 120;
 export const LANE_HEIGHT = 28;
 export const LANE_GAP = 4;
-export const TIMELINE_HEIGHT = CLIP_AREA_HEIGHT + 2 * (LANE_HEIGHT + LANE_GAP);
-export const laneTop = (index: 0 | 1): number => CLIP_AREA_HEIGHT + index * (LANE_HEIGHT + LANE_GAP);
+export const TIMELINE_HEIGHT = CLIP_AREA_HEIGHT + 3 * (LANE_HEIGHT + LANE_GAP);
+/** Lanes under the clips, top to bottom: 0 text / stickers, 1 music, 2 effects. */
+export const laneTop = (index: 0 | 1 | 2): number => CLIP_AREA_HEIGHT + index * (LANE_HEIGHT + LANE_GAP);
 export const STRIP_HEIGHT = 64;
 export const THUMB_WIDTH = 64;
 export const MIN_THUMB_INTERVAL = 0.5;

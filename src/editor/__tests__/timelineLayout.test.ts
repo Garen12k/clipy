@@ -34,7 +34,12 @@ test("indexFromDrop picks the slot whose centre is nearest the drag centre", () 
 });
 
 test("lanes sit under the clip strip", () => {
-  expect(TIMELINE_HEIGHT).toBe(120 + 2 * (LANE_HEIGHT + LANE_GAP));
+  expect(LANE_HEIGHT).toBe(28);
+  expect(LANE_GAP).toBe(4);
+  expect(TIMELINE_HEIGHT).toBe(120 + 3 * (LANE_HEIGHT + LANE_GAP));
+  expect(TIMELINE_HEIGHT).toBe(216);
+  // The two existing lanes keep their places; the effects lane is the third.
   expect(laneTop(0)).toBe(120);
   expect(laneTop(1)).toBe(120 + LANE_HEIGHT + LANE_GAP);
+  expect(laneTop(2)).toBe(120 + 2 * (LANE_HEIGHT + LANE_GAP));
 });
