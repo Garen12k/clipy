@@ -122,29 +122,45 @@ enum Adjust {
       case .temperatureTint(let neutral, let target): next = filtered(out, "CITemperatureAndTint", ["inputNeutral": vector(neutral), "inputTargetNeutral": vector(target)])
       case .colorControls(let brightness, let contrast, let saturation): next = filtered(out, "CIColorControls", ["inputBrightness": number(brightness), "inputContrast": number(contrast), "inputSaturation": number(saturation)])
       case .toneCurve(let points): next = points.count == 5 ? filtered(out, "CIToneCurve", Dictionary(uniqueKeysWithValues: points.enumerated().map { ("inputPoint\($0.offset)", vector($0.element) as Any) })) : nil
-      case .sharpen(let sharpness): next = filtered(out, "CISharpenLuminance", ["inputSharpness": number(sharpness)])
+      case .sharpen(let sharpness): next = filtered(out.clampedToExtent(), "CISharpenLuminance", ["inputSharpness": number(sharpness)])   // clamped: no transparent border samples
       case .vignette(let intensity, let radius): next = filtered(out, "CIVignette", ["inputIntensity": number(intensity), "inputRadius": number(radius)])
-      case .grain(let opacity): next = grain(out, opacity: opacity, time: time)   // starts from "CIRandomGenerator"
+      case .grain(let opacity): next = grain(over: out, opacity: opacity, time: time)
       }
       if let next { out = next.cropped(to: extent) }
     }
     return out
   }
 
-  /// Monochrome noise blended over the frame at `opacity`: `CIRandomGenerator` (moved by a per-frame offset, cut to
-  /// the frame and made opaque — the generator's alpha is random too) → `CIColorControls` saturation 0 →
-  /// `CIColorMatrix` alpha = opacity → source-over the frame. Any missing piece → the frame unchanged.
-  static func grain(_ image: CIImage, opacity: Double, time: Double) -> CIImage {
+  /// Zero-mean film grain over `image` (also used by the effects renderer): the frame's mean brightness stays the
+  /// same, the picture is neither fogged nor lifted. Returns the image cropped to its own extent; an opacity that is
+  /// ≤ 0 or non-finite, or any missing Core Image piece, returns the image unchanged.
+  ///
+  /// `CIRandomGenerator` (uniform 0…1 per channel, moved by a per-frame offset, cut to the frame and made opaque —
+  /// the generator's alpha is random too) → `CIColorControls` saturation 0 (monochrome, mean still 0.5) →
+  /// `CIColorMatrix` pulling it toward mid-grey: s = 0.5 + (n − 0.5)·opacity, always inside 0…1 → `CIOverlayBlendMode`
+  /// over the frame. Overlay is neutral at s = 0.5 and linear in s for a fixed frame value b:
+  /// b + (s − 0.5)·2b for b ≤ 0.5, b + (s − 0.5)·2(1 − b) above — so with a zero-mean (n − 0.5) the mean stays b, the
+  /// result never leaves 0…1 (nothing to clamp, no negative intermediates), black stays black and white stays white.
+  /// At mid-grey the grain is exactly (n − 0.5)·opacity.
+  static func grain(over image: CIImage, opacity: Double, time: Double) -> CIImage {
     let extent = image.extent
-    guard opacity > 0, !extent.isInfinite, !extent.isEmpty,
+    guard opacity.isFinite, opacity > 0, !extent.isInfinite, !extent.isEmpty,
           let noise = CIFilter(name: "CIRandomGenerator")?.outputImage else { return image }
+    let k = CGFloat(min(1, opacity))
     let offset = grainOffset(time: time)
     let opaque = noise.transformed(by: CGAffineTransform(translationX: offset.x, y: offset.y)).cropped(to: extent)
       .composited(over: CIImage(color: CIColor.black).cropped(to: extent))
+    let lift = 0.5 * (1 - k)
     guard let mono = filtered(opaque, "CIColorControls", ["inputSaturation": number(0)]),
-          let speckle = filtered(mono, "CIColorMatrix", ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(min(1, opacity)))])
+          let centred = filtered(mono, "CIColorMatrix", [
+            "inputRVector": CIVector(x: k, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: k, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: k, w: 0),
+            "inputBiasVector": CIVector(x: lift, y: lift, z: lift, w: 0),
+          ]),
+          let grained = filtered(centred.cropped(to: extent), "CIOverlayBlendMode", [kCIInputBackgroundImageKey: image])
     else { return image }
-    return speckle.cropped(to: extent).composited(over: image).cropped(to: extent)
+    return grained.cropped(to: extent)
   }
 
   /// Where the noise field sits for the frame at `time`: a whole-pixel offset that changes every 1/30 s and is the
