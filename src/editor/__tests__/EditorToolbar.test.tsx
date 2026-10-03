@@ -125,13 +125,17 @@ test("Edit group lists the new tools", async () => {
   expect(labels).toEqual(expect.arrayContaining(["Split", "Trim", "Transform", "Crop", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Ratio"]));
 });
 
-test("Transform, Reverse, Crop and Replace need a selection; Freeze stays disabled for a video clip", async () => {
+test("Transform, Reverse, Crop, Replace and Freeze need a selection; Freeze is enabled for a video clip", async () => {
   await renderBar();
   for (const l of ["Transform", "Reverse", "Crop", "Replace"]) expect(screen.getByRole("button", { name: l })).toBeDisabled();
   await act(() => { useEditorStore.getState().select("a"); });
   for (const l of ["Transform", "Reverse", "Crop", "Replace"]) expect(screen.getByRole("button", { name: l })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Freeze" })).toBeEnabled();
+});
+
+test("Freeze is disabled without a selection", async () => {
+  await renderBar();
   expect(screen.getByRole("button", { name: "Freeze" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Freeze" }).props.accessibilityState).toMatchObject({ disabled: true });
 });
 
 test("a photo selection disables Reverse, Freeze, Speed and Volume but keeps Transform and Background", async () => {

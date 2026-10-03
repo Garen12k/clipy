@@ -6,6 +6,7 @@ import { addTextOverlay, defaultOverlayRange, deleteClip, deleteOverlay, duplica
 import { isPhoto, isTextOverlay, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useClipMedia } from "@/src/editor/useClipMedia";
+import { useFreezeFrame } from "@/src/editor/useFreezeFrame";
 import { TOOL_GROUPS, groupForSelection, type IoniconName, type ToolGroupId, type ToolId } from "@/src/editor/toolGroups";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
@@ -45,6 +46,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const reduced = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { replaceMedia, busy: mediaBusy } = useClipMedia();
+  const { freeze, busy: freezeBusy } = useFreezeFrame();
   const [group, setGroup] = useState<ToolGroupId>("edit");
   const overlayKind = useEditorStore((s) => s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind ?? null);
   useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind }, cur) ?? cur); }, [selectedId, overlayKind]);
@@ -75,10 +77,9 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     trim: { label: "Trim", icon: "crop", disabled: noSel, onPress: () => setSheet("trim") },
     transform: { label: "Transform", icon: "resize", disabled: noSel, onPress: () => setSheet("transform") },
     crop: { label: "Crop", icon: "crop", disabled: noSel, onPress: () => setSheet("crop") },
-    // Freeze is wired by a later task; until then it stays a disabled no-op.
     replace: { label: "Replace", icon: "sync", disabled: noSel || mediaBusy, onPress: () => { if (selectedId) void replaceMedia(selectedId); } },
     reverse: { label: "Reverse", icon: "play-back", disabled: noSel || photoSel, active: reversed, onPress: () => { if (selectedId) { haptic("light"); apply((p) => setClipReversed(p, selectedId, !reversed)); } } },
-    freeze: { label: "Freeze", icon: "snow", disabled: true, onPress: () => {} },
+    freeze: { label: "Freeze", icon: "snow", disabled: noSel || photoSel || freezeBusy, onPress: () => { haptic("light"); void freeze(); } },
     duplicate: { label: "Duplicate", icon: "copy", disabled: noSel, onPress: () => selectedId && apply((p) => duplicateClip(p, selectedId)) },
     delete: { label: "Delete", icon: "trash", disabled: noSel, onPress: () => { if (selectedId) { haptic("medium"); apply((p) => deleteClip(p, selectedId)); } } },
     ratio: { label: "Ratio", icon: "phone-portrait", onPress: () => setSheet("ratio") },

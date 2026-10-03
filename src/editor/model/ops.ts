@@ -4,7 +4,7 @@ import { clipAt, clipDuration, outputToSource } from "./timeline";
 import { fitScale } from "./clipLayout";
 import {
   AUDIO_LIMITS, aspectRatioValue, clampCrop, clampTransform, CLIP_VOLUME, DEFAULT_TRANSFORM, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
-  MIN_CLIP_SECONDS, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_LIMITS, TRANSITION_LIMITS,
+  MIN_CLIP_SECONDS, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_LIMITS, TRANSITION_LIMITS,
   type AspectRatio, type AudioTrack, type Clip, type ClipBackground, type ClipTransform, type CropRect, type FilterId, type Overlay, type Project,
   type StickerOverlay, type TextOverlay, type TransitionType,
 } from "./types";
@@ -411,4 +411,23 @@ export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "
 
 export function setClipReversed(p: Project, clipId: string, reversed: boolean): Project {
   return updateClip(p, clipId, (c) => (isPhoto(c) || c.reversed === reversed ? c : { ...c, reversed }));
+}
+
+/**
+ * Splits the video clip under `outputTime` and puts a still (PHOTO.freezeSeconds long) between the halves. The still copies the clip's
+ * filter, transform, crop and background; the right half keeps the original transition. Refused (same project) on a photo, a missing clip,
+ * or within MIN_CLIP_SECONDS of either end. Overlays and music are not shifted, like every other length-changing op here.
+ */
+export function insertFreezeFrame(p: Project, outputTime: number, still: { id: string; sourceUri: string; width: number; height: number }): Project {
+  const hit = clipAt(p, outputTime);
+  if (!hit || isPhoto(hit.clip)) return p;
+  const split = splitClipAt(p, outputTime);
+  if (split === p) return p;
+  const src = hit.clip;
+  const photo: Clip = {
+    ...newPhotoClip({ ...still, seconds: PHOTO.freezeSeconds }),
+    filter: src.filter, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background },
+  };
+  const at = hit.index + 1;
+  return touch(p, { clips: normaliseTransitions([...split.clips.slice(0, at), photo, ...split.clips.slice(at)]) });
 }
