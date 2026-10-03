@@ -88,6 +88,12 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     transition: { label: "Transition", icon: "swap-horizontal", disabled: noSel || selectedIndex === clipCount - 1, onPress: () => onTransitionChange(selectedIndex) },
     templates: { label: "Templates", icon: "color-wand", disabled: !hasClips, onPress: () => setSheet("templates") },
     background: { label: "Background", icon: "color-palette", disabled: noSel, onPress: () => setSheet("background") },
+    // Placeholders until the Look tasks wire these up (adjust sheet, effect picker, selected-effect sub-row).
+    adjust: { label: "Adjust", icon: "options", disabled: true, onPress: () => {} },
+    effect: { label: "Effect", icon: "flash", disabled: true, onPress: () => {} },
+    effectStrength: { label: "Strength", icon: "speedometer", disabled: true, onPress: () => {} },
+    effectDuplicate: { label: "Duplicate", icon: "copy", disabled: true, onPress: () => {} },
+    effectDelete: { label: "Delete", icon: "trash", disabled: true, onPress: () => {} },
     text: { label: "Text", icon: "text", disabled: !hasClips, onPress: addText },
     captions: { label: "Captions", icon: "chatbox-ellipses", disabled: !hasClips, onPress: () => setSheet("captions") },
     sticker: { label: "Sticker", icon: "happy", disabled: !hasClips, onPress: () => setSheet("sticker") },
