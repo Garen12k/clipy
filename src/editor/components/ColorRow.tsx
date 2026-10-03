@@ -5,6 +5,8 @@ import { theme } from "@/src/theme/theme";
 /** User-content colours (burned into exports): fixed literals, independent of the UI theme. */
 export const DEFAULT_STICKER_COLOR = "#F5C542";
 export const PALETTE = ["#F4F4F5", "#F5C542", "#C8102E", "#2E86AB", "#D9B36A", "#000000", "#FFFFFF", "#00E5A0"] as const;
+/** True black as rendered behind a clip (user content, not a theme token). */
+export const CONTENT_BLACK = "#000000";
 const isHex = (s: string) => /^#[0-9A-Fa-f]{6}$/.test(s);
 
 export function ColorRow({ value, onChange }: { value: string; onChange: (hex: string) => void }) {

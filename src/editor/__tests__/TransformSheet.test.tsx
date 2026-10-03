@@ -20,18 +20,21 @@ test("has the title and six buttons", async () => {
 
 test("each button applies its op as one undo step", async () => {
   await render(<TransformSheet clipId="a" visible onClose={() => {}} />);
-  await fireEvent.press(screen.getByRole("button", { name: "Rotate 90°" }));
-  expect(t().rotation).toBe(90);
-  await fireEvent.press(screen.getByRole("button", { name: "Flip horizontal" }));
-  expect(t().flipH).toBe(true);
-  await fireEvent.press(screen.getByRole("button", { name: "Flip vertical" }));
-  expect(t().flipV).toBe(true);
+  const past = () => useEditorStore.getState().past.length;
+  const press = async (name: string) => { const n = past(); await fireEvent.press(screen.getByRole("button", { name })); expect(past()).toBe(n + 1); };
   const before = useEditorStore.getState().project!;
-  await fireEvent.press(screen.getByRole("button", { name: "Fit" }));
+  await press("Fit");
+  expect(t().scale).toBeLessThan(1);
   expect(t()).toEqual(fitClip(before, "a").clips[0].transform);
-  await fireEvent.press(screen.getByRole("button", { name: "Fill" }));
+  await press("Fill");
   expect(t().scale).toBe(1);
-  await fireEvent.press(screen.getByRole("button", { name: "Reset" }));
+  await press("Rotate 90°");
+  expect(t().rotation).toBe(90);
+  await press("Flip horizontal");
+  expect(t().flipH).toBe(true);
+  await press("Flip vertical");
+  expect(t().flipV).toBe(true);
+  await press("Reset");
   expect(t()).toEqual({ scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false });
   useEditorStore.getState().undo();
   expect(t().scale).toBe(1);
