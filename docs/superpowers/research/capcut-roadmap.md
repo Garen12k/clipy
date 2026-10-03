@@ -31,10 +31,10 @@
 
 | CapCut tool | Clipy | Preview | Effort | Notes |
 |---|---|---|---|---|
-| Filters with intensity slider | Have 8, no intensity | Approx | S | add intensity + ~12 more filters |
-| Adjust: brightness, contrast, saturation, exposure, temperature, tint, highlights, shadows, sharpen, vignette, fade, grain | Missing | Approx | M | Core Image in export; tint layers in preview |
-| Video effects (glitch, shake, blur, zoom, retro, light leaks…) | Missing | Approx / No | L | ~12 hand-built effects, each a Core Image recipe |
-| More transitions (slide directions, wipe, spin, blur…) | Have 4 | Approx | M | |
+| Filters with intensity slider | Have | Approx | S | add intensity + ~12 more filters |
+| Adjust: brightness, contrast, saturation, exposure, temperature, tint, highlights, shadows, sharpen, vignette, fade, grain | Have | Approx | M | Core Image in export; tint layers in preview |
+| Video effects (glitch, shake, blur, zoom, retro, light leaks…) | Have | Approx / No | L | ~12 hand-built effects, each a Core Image recipe |
+| More transitions (slide directions, wipe, spin, blur…) | Have | Approx | M | |
 | HSL / curves / colour wheels, LUT import | Missing | No | L | advanced; low priority |
 | Body effects, retouch / beauty, relight | Missing | No | XL | needs ML |
 

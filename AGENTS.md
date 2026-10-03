@@ -11,6 +11,7 @@ This is an Expo/React Native mobile application. Prioritize mobile-first pattern
 - Fonts and music are bundled assets (`assets/fonts`, `assets/music` + manifest); overlay positions are fractions of the frame — keep `src/editor/model/overlayLayout.ts` and `modules/clipy-video/ios/OverlayLayout.swift` identical.
 - UI: every colour, font, radius and duration comes from src/theme/theme.ts and the kit in src/ui/ — no hex literals in screens (guarded by src/__tests__/noHexLiterals.test.ts). UI fonts (src/theme/uiFonts.ts) are separate from overlay fonts (src/editor/fonts.ts).
 - Clip placement: keep src/editor/model/clipLayout.ts and modules/clipy-video/ios/ClipLayout.swift identical (constants and vectors); no other code computes cover / fit.
+- Look maths: keep src/editor/model/adjust.ts ↔ modules/clipy-video/ios/Adjust.swift and src/editor/model/effectMath.ts ↔ EffectMath.swift identical (constants and vectors).
 - Effects registry: keep `src/editor/effects.ts` and `modules/clipy-video/ios/Effects.swift` identical (ids, shape paths, sticker scales); only `src/editor/model/timeline.ts` may multiply/divide by clip `speed`.
 
 ## Expo has changed — do not trust your training data
