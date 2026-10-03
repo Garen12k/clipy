@@ -4,8 +4,9 @@ import Foundation
 
 /// Mirror of src/editor/effects.ts — ids and shape paths must stay identical.
 enum Effects {
-  static let filterIds = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage"]
-  static let transitionTypes = ["none", "fade", "dissolve", "slide", "zoom"]
+  static let filterIds = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage", "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream"]
+  static let transitionTypes = ["none", "fade", "dissolve", "slide", "zoom", "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur"]
+  static let effectIds = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow"]
 
   /// Core Image recipe per filter id (applied in order). Unknown ids (and nil / "none") → empty chain (no filter).
   static func filterChain(_ id: String?) -> [(name: String, params: [String: Any])] {
@@ -17,6 +18,18 @@ enum Effects {
     case "mono":    return [("CIPhotoEffectMono", [:])]
     case "noir":    return [("CIPhotoEffectNoir", [:])]
     case "vintage": return [("CISepiaTone", ["inputIntensity": 0.5]), ("CIVignette", ["inputIntensity": 1.0, "inputRadius": 1.5])]
+    case "sunset":  return [("CITemperatureAndTint", ["inputNeutral": CIVector(x: 6500, y: 0), "inputTargetNeutral": CIVector(x: 7600, y: 0)]), ("CIColorControls", ["inputSaturation": 1.2])]
+    case "golden":  return [("CITemperatureAndTint", ["inputNeutral": CIVector(x: 6500, y: 0), "inputTargetNeutral": CIVector(x: 7200, y: 0)]), ("CIColorControls", ["inputBrightness": 0.04])]
+    case "teal":    return [("CITemperatureAndTint", ["inputNeutral": CIVector(x: 6500, y: 0), "inputTargetNeutral": CIVector(x: 5600, y: 0)]), ("CIColorControls", ["inputSaturation": 1.1, "inputContrast": 1.05])]
+    case "pastel":  return [("CIColorControls", ["inputSaturation": 0.8, "inputBrightness": 0.06, "inputContrast": 0.9])]
+    case "film":    return [("CIPhotoEffectTransfer", [:])]
+    case "chrome":  return [("CIPhotoEffectChrome", [:])]
+    case "instant": return [("CIPhotoEffectInstant", [:])]
+    case "process": return [("CIPhotoEffectProcess", [:])]
+    case "tonal":   return [("CIPhotoEffectTonal", [:])]
+    case "sepia":   return [("CISepiaTone", ["inputIntensity": 1.0])]
+    case "crisp":   return [("CISharpenLuminance", ["inputSharpness": 0.8]), ("CIColorControls", ["inputContrast": 1.1])]
+    case "dream":   return [("CIBloom", ["inputRadius": 10, "inputIntensity": 0.6]), ("CIColorControls", ["inputSaturation": 1.1])]
     default:        return []
     }
   }

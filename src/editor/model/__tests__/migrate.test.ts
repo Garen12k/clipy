@@ -1,5 +1,5 @@
 import { migrateProject } from "../migrate";
-import { CROP_MIN, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeClip, makePhotoClip, makeProject, makeSticker, PHOTO, SCHEMA_VERSION, type Clip } from "../types";
+import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeClip, makeEffect, makePhotoClip, makeProject, makeSticker, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem } from "../types";
 
 const v1 = {
   id: "p1", name: "Old", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
@@ -27,7 +27,7 @@ test("rejects newer versions and malformed files with readable errors", () => {
 });
 
 test("v2 → v3 normalises effect fields; v1 → v3 chains", () => {
-  const v2 = { ...v1, schemaVersion: 2, overlays: [], audioTracks: [], clips: [{ ...v1.clips[0], muted: false, speed: 7, filter: "sepia", transitionOut: { type: "wipe", duration: 2 } }] };
+  const v2 = { ...v1, schemaVersion: 2, overlays: [], audioTracks: [], clips: [{ ...v1.clips[0], muted: false, speed: 7, filter: "bogus", transitionOut: { type: "bogus", duration: 2 } }] };
   const p = migrateProject(v2);
   expect(p.schemaVersion).toBe(SCHEMA_VERSION);
   expect(p.clips[0]).toMatchObject({ speed: 1, filter: null, transitionOut: { type: "none", duration: 0 } });
@@ -41,7 +41,7 @@ test("a corrupted v3 file loads safely (unknown ids normalised, bad stickers fix
   const bad = {
     ...good,
     clips: [
-      { ...makeClip({ id: "a", sourceDuration: 4 }), filter: "sepia", speed: 9, transitionOut: { type: "spin", duration: 0.5 } },
+      { ...makeClip({ id: "a", sourceDuration: 4 }), filter: "bogus", speed: 9, transitionOut: { type: "bogus", duration: 0.5 } },
       { ...makeClip({ id: "b", sourceDuration: 0.4 }), transitionOut: { type: "fade", duration: 0.5 } },        // last clip → cleared
     ],
     overlays: [
@@ -52,7 +52,7 @@ test("a corrupted v3 file loads safely (unknown ids normalised, bad stickers fix
   };
   const p = migrateProject(bad);
   expect(p.schemaVersion).toBe(SCHEMA_VERSION);
-  expect(p.clips[0]).toMatchObject({ filter: null, speed: 1, transitionOut: { type: "none", duration: 0 } });
+  expect(p.clips[0]).toMatchObject({ filter: null, speed: 1, transitionOut: { type: "none", duration: 0 } });   // unknown type → dissolve, but the 0.4 s next clip caps it below the minimum
   expect(p.clips[1].transitionOut).toEqual({ type: "none", duration: 0 });
   expect(p.overlays.map((o) => o.id)).toEqual(["ok", "blob-emoji"]);
   expect(p.overlays[1]).toMatchObject({ kind: "sticker", emoji: "🔥", shape: null });
@@ -70,7 +70,7 @@ test("v4 → v5 adds the clip defaults", () => {
   const c = makeClip({ id: "a", sourceDuration: 4 }) as unknown as Record<string, unknown>;
   for (const k of ["kind", "transform", "crop", "background", "reversed"]) delete c[k];
   const p = migrateProject({ ...makeProject(), schemaVersion: 4, clips: [c] });
-  expect(p.schemaVersion).toBe(5);
+  expect(p.schemaVersion).toBe(SCHEMA_VERSION);
   expect(p.clips[0]).toMatchObject({ kind: "video", transform: DEFAULT_TRANSFORM, crop: FULL_CROP, background: { type: "black" }, reversed: false });
 });
 
@@ -102,4 +102,71 @@ test("v3 → v4 adds an empty posts list; v4 keeps valid records and drops junk"
   const good = { platform: "youtube", url: "https://youtu.be/abc", postedAt: "2026-10-02T10:00:00.000Z" };
   const v4 = { ...makeProject(), posts: [good, { platform: "myspace", url: "x", postedAt: "y" }, "nope", { platform: "tiktok", url: null, postedAt: "2026-10-02T11:00:00.000Z" }] };
   expect(migrateProject(v4).posts).toEqual([good, { platform: "tiktok", url: null, postedAt: "2026-10-02T11:00:00.000Z" }]);
+});
+
+test("v5 → v6 adds the look defaults", () => {
+  const c = makeClip({ id: "a", sourceDuration: 4 }) as unknown as Record<string, unknown>;
+  delete c.filterIntensity; delete c.adjust;
+  const v5 = { ...makeProject(), schemaVersion: 5, clips: [c] } as Record<string, unknown>;
+  delete v5.effects;
+  const p = migrateProject(v5);
+  expect(p.schemaVersion).toBe(6);
+  expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
+  expect(p.effects).toEqual([]);
+});
+
+test("v1 chain reaches schema 6 with look defaults", () => {
+  const p = migrateProject(v1);
+  expect(p.schemaVersion).toBe(6);
+  expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
+  expect(p.effects).toEqual([]);
+});
+
+test("new filters and transitions are kept as valid", () => {
+  const p = migrateProject(makeProject({ clips: [
+    makeClip({ id: "a", sourceDuration: 4, filter: "dream", transitionOut: { type: "spin", duration: 0.5 } }),
+    makeClip({ id: "b", sourceDuration: 4 }),
+  ] }));
+  expect(p.clips[0]).toMatchObject({ filter: "dream", transitionOut: { type: "spin", duration: 0.5 } });
+});
+
+test("an unknown transition type becomes dissolve and keeps its duration", () => {
+  const p = migrateProject(makeProject({ clips: [
+    { ...makeClip({ id: "a", sourceDuration: 4 }), transitionOut: { type: "bogus", duration: 0.5 } } as unknown as Clip,
+    makeClip({ id: "b", sourceDuration: 4 }),
+  ] }));
+  expect(p.clips[0].transitionOut).toEqual({ type: "dissolve", duration: 0.5 });
+});
+
+test("sanity pass repairs look fields; idempotent", () => {
+  const base = makeClip({ id: "a", sourceDuration: 4 });
+  const bad = makeProject({
+    clips: [
+      { ...base, filterIntensity: 7, adjust: { brightness: 3, sharpen: -2, bogus: 1 } } as unknown as Clip,
+      { ...base, id: "b", filterIntensity: Number.NaN, adjust: "no" } as unknown as Clip,
+      { ...base, id: "c", filterIntensity: -2 },
+    ],
+    effects: [
+      makeEffect({ id: "ok", type: "glow", start: 1, end: 3, intensity: 0.5 }),
+      { ...makeEffect({ id: "unk" }), type: "laser" } as unknown as EffectItem,
+      makeEffect({ id: "short", start: 2, end: 2.05 }),
+      makeEffect({ id: "neg", start: -3, end: -2.9 }),
+      makeEffect({ id: "inten", intensity: 7 }),
+      "junk" as unknown as EffectItem,
+    ],
+  });
+  const p = migrateProject(bad);
+  expect(p.clips[0].filterIntensity).toBe(1);
+  expect(p.clips[0].adjust).toEqual({ ...DEFAULT_ADJUST, brightness: 1 });
+  expect(p.clips[1].filterIntensity).toBe(1);
+  expect(p.clips[1].adjust).toEqual(DEFAULT_ADJUST);
+  expect(p.clips[2].filterIntensity).toBe(0);
+  expect(p.effects.map((e) => e.id)).toEqual(["ok", "short", "neg", "inten"]);
+  expect(p.effects[0]).toEqual({ id: "ok", type: "glow", start: 1, end: 3, intensity: 0.5 });
+  expect(p.effects[1]).toMatchObject({ start: 2 });
+  expect(p.effects[1].end - p.effects[1].start).toBeCloseTo(0.2, 9);
+  expect(p.effects[2]).toMatchObject({ start: 0 });
+  expect(p.effects[2].end - p.effects[2].start).toBeGreaterThanOrEqual(0.2 - 1e-9);
+  expect(p.effects[3].intensity).toBe(1);
+  expect(migrateProject(p)).toEqual(p);
 });

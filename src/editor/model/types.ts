@@ -2,7 +2,7 @@ export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 5 as const;
+export const SCHEMA_VERSION = 6 as const;
 export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
 export type PostPlatform = (typeof POST_PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
@@ -14,9 +14,11 @@ export const OVERLAY_LIMITS = { fontScale: [0.02, 0.25] as const, scale: [0.2, 5
 export const AUDIO_LIMITS = { minDuration: 0.5, volume: [0, 2] as const };
 export const CLIP_VOLUME = [0, 2] as const;
 
-export const FILTER_IDS = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage"] as const;
+export const FILTER_IDS = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage",
+  "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream"] as const;
 export type FilterId = (typeof FILTER_IDS)[number];
-export const TRANSITION_TYPES = ["none", "fade", "dissolve", "slide", "zoom"] as const;
+export const TRANSITION_TYPES = ["none", "fade", "dissolve", "slide", "zoom",
+  "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur"] as const;   // "slide" keeps its id and is labelled "Slide left"
 export type TransitionType = (typeof TRANSITION_TYPES)[number];
 export const SHAPE_IDS = ["circle", "square", "roundedBox", "arrow", "star", "speechBubble", "heart"] as const;
 export type ShapeId = (typeof SHAPE_IDS)[number];
@@ -35,6 +37,25 @@ export const TRANSFORM_LIMITS = { scale: [0.2, 5] as const, offset: [-1, 1] as c
 export const CROP_MIN = 0.1;
 export const PHOTO = { defaultSeconds: 3, minSeconds: 0.5, maxSeconds: 60, freezeSeconds: 2 };
 
+export const ADJUST_KEYS = ["brightness", "contrast", "saturation", "exposure", "temperature", "tint",
+  "highlights", "shadows", "sharpen", "vignette", "fade", "grain"] as const;
+export type AdjustKey = (typeof ADJUST_KEYS)[number];
+export type ClipAdjust = Record<AdjustKey, number>;
+/** Two-sided keys run −1…1, one-sided keys 0…1; 0 always means "no change". */
+export const ADJUST_RANGE: Record<AdjustKey, readonly [number, number]> = {
+  brightness: [-1, 1], contrast: [-1, 1], saturation: [-1, 1], exposure: [-1, 1], temperature: [-1, 1], tint: [-1, 1],
+  highlights: [-1, 1], shadows: [-1, 1], sharpen: [0, 1], vignette: [0, 1], fade: [0, 1], grain: [0, 1],
+};
+export const DEFAULT_ADJUST: ClipAdjust = {
+  brightness: 0, contrast: 0, saturation: 0, exposure: 0, temperature: 0, tint: 0,
+  highlights: 0, shadows: 0, sharpen: 0, vignette: 0, fade: 0, grain: 0,
+};
+
+export const EFFECT_IDS = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow"] as const;
+export type EffectId = (typeof EFFECT_IDS)[number];
+export interface EffectItem { id: string; type: EffectId; start: number; end: number; intensity: number }   // project time, seconds; intensity 0…1
+export const EFFECT_LIMITS = { minDuration: 0.2, defaultDuration: 2, defaultIntensity: 0.7 };
+
 export interface Clip {
   id: string; sourceUri: string; sourceDuration: number; width: number; height: number;
   trimStart: number; trimEnd: number;
@@ -48,6 +69,8 @@ export interface Clip {
   crop: CropRect;
   background: ClipBackground;
   reversed: boolean;
+  filterIntensity: number;       // 0–1, default 1
+  adjust: ClipAdjust;            // default all 0
 }
 export const isPhoto = (c: Clip) => c.kind === "photo";
 
@@ -59,6 +82,17 @@ export function normaliseRotation(deg: number): number {
 }
 export const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const finiteOr = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+
+/** Every key present, in range; missing / non-finite → 0; unknown keys dropped. */
+export function clampAdjust(a: Partial<ClipAdjust> | undefined): ClipAdjust {
+  const out = { ...DEFAULT_ADJUST };
+  for (const k of ADJUST_KEYS) {
+    const [lo, hi] = ADJUST_RANGE[k];
+    out[k] = clampNum(finiteOr(a?.[k], 0), lo, hi);
+  }
+  return out;
+}
+export const isNeutralAdjust = (a: ClipAdjust) => ADJUST_KEYS.every((k) => a[k] === 0);
 
 export function clampTransform(t: ClipTransform): ClipTransform {
   const [sMin, sMax] = TRANSFORM_LIMITS.scale;
@@ -100,14 +134,14 @@ export interface AudioTrack {
 
 export interface Project {
   id: string; name: string; createdAt: string; updatedAt: string; aspectRatio: AspectRatio;
-  clips: Clip[]; overlays: Overlay[]; audioTracks: AudioTrack[]; posts: PostRecord[]; schemaVersion: typeof SCHEMA_VERSION;
+  clips: Clip[]; overlays: Overlay[]; audioTracks: AudioTrack[]; posts: PostRecord[]; effects: EffectItem[]; schemaVersion: typeof SCHEMA_VERSION;
 }
 
 /** Shared factory for real code: a full-length video clip with every default. */
 export function newVideoClip(a: Pick<Clip, "id" | "sourceUri" | "sourceDuration" | "width" | "height">): Clip {
   return { ...a, trimStart: 0, trimEnd: a.sourceDuration, speed: 1, filter: null, volume: 1, muted: false,
     transitionOut: { type: "none", duration: 0 }, kind: "video", transform: { ...DEFAULT_TRANSFORM }, crop: { ...FULL_CROP },
-    background: { ...BLACK_BACKGROUND }, reversed: false };
+    background: { ...BLACK_BACKGROUND }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST } };
 }
 /** A still-image clip: default length, silent, speed 1, never reversed. */
 export function newPhotoClip(a: Pick<Clip, "id" | "sourceUri" | "width" | "height"> & { seconds?: number }): Clip {
@@ -133,10 +167,13 @@ export function makeAudioTrack(partial: Partial<AudioTrack> & Pick<AudioTrack, "
 }
 export function makeProject(partial: Partial<Project> = {}): Project {
   return { id: "p1", name: "Project 1", createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
-    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], posts: [], schemaVersion: SCHEMA_VERSION, ...partial };
+    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], posts: [], effects: [], schemaVersion: SCHEMA_VERSION, ...partial };
 }
 
 export function aspectRatioValue(r: AspectRatio): number {
   const [w, h] = r.split(":").map(Number);
   return w / h;
+}
+export function makeEffect(partial: Partial<EffectItem> & Pick<EffectItem, "id">): EffectItem {
+  return { type: "shake", start: 0, end: EFFECT_LIMITS.defaultDuration, intensity: EFFECT_LIMITS.defaultIntensity, ...partial };
 }
