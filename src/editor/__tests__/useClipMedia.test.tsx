@@ -41,3 +41,21 @@ test("a picker error is reported and releases the lock", async () => {
   expect(result.current.busy).toBe(false);
   (console.warn as jest.Mock).mockRestore();
 });
+
+test("a closed project gets no toast when nothing could be added", async () => {
+  pick.mockResolvedValueOnce([{ uri: "file:///x.mov", kind: "video", durationSec: 3, width: 1080, height: 1920 }]);
+  importMedia.mockImplementationOnce(async () => { useEditorStore.getState().reset(); return { clips: [], failed: 1 }; });
+  const { result } = await renderHook(() => useClipMedia());
+  await act(async () => { await result.current.addMedia(); });
+  expect(importMedia).toHaveBeenCalled();
+  expect(useToast.getState().message).toBeNull();
+});
+
+test("Replace refuses a too-short video before importing it, so no file is copied", async () => {
+  pick.mockResolvedValueOnce([{ uri: "file:///short.mov", kind: "video", durationSec: 0.05, width: 1080, height: 1920 }]);
+  const { result } = await renderHook(() => useClipMedia());
+  await act(async () => { await result.current.replaceMedia("a"); });
+  expect(importMedia).not.toHaveBeenCalled();
+  expect(useToast.getState().message).toBe("That video is too short.");
+  expect(useEditorStore.getState().past).toHaveLength(0);
+});

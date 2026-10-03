@@ -7,19 +7,25 @@ import { theme } from "@/src/theme/theme";
 import { STRIP_HEIGHT, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
 import { getThumb } from "./thumbnails";
 
+const thumbKey = (uri: string, t: number) => `${uri}@${t}`;
+
 type Props = { clip: Clip; pixelsPerSecond: number; selected: boolean; missing: boolean; onPress: () => void; children?: React.ReactNode };
 
 export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPress, children }: Props) {
   const width = stripWidth(clip, pixelsPerSecond);
   const times = thumbTimes(clip, pixelsPerSecond);
   const slotWidth = thumbInterval(pixelsPerSecond) * pixelsPerSecond;
-  const [thumbs, setThumbs] = useState<Record<number, string>>({});
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const photo = isPhoto(clip);
 
   useEffect(() => {
     if (missing || photo) return;
     let alive = true;
-    times.forEach((t) => getThumb(clip.sourceUri, t).then((uri) => { if (alive) setThumbs((s) => (s[t] ? s : { ...s, [t]: uri })); }).catch(() => {}));
+    // Keyed by source as well as time: Replace keeps the clip id (and this component), so old thumbnails must not satisfy the new source.
+    times.forEach((t) => {
+      const key = thumbKey(clip.sourceUri, t);
+      getThumb(clip.sourceUri, t).then((uri) => { if (alive) setThumbs((s) => (s[key] ? s : { ...s, [key]: uri })); }).catch(() => {});
+    });
     return () => { alive = false; };
   }, [clip.sourceUri, missing, photo, times.join(",")]);
 
@@ -30,7 +36,7 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
         borderRightWidth: 2, borderRightColor: theme.colors.bgDeep, flexDirection: "row" }}>
       {times.map((t, i) => {
         // A photo is its own thumbnail in every slot.
-        const src = missing ? undefined : photo ? clip.sourceUri : thumbs[t];
+        const src = missing ? undefined : photo ? clip.sourceUri : thumbs[thumbKey(clip.sourceUri, t)];
         return (
           <View key={t} style={{ width: Math.min(slotWidth, width - i * slotWidth), height: STRIP_HEIGHT, overflow: "hidden" }}>
             {src ? <Image testID="thumb-image" source={{ uri: src }} style={{ width: slotWidth, height: STRIP_HEIGHT }} resizeMode="cover" /> : null}

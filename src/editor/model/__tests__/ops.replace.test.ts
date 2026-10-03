@@ -61,10 +61,11 @@ test("video → photo clamps the length to the photo limits", () => {
 });
 
 test("photo → video turns sound on at volume 1, speed 1, and keeps the photo's length", () => {
-  const ph = makePhotoClip({ id: "ph", seconds: 5, filter: "mono" });
-  const q = makeProject({ clips: [ph] });
+  const ph = makePhotoClip({ id: "ph", seconds: 5, filter: "mono", transform: edits.transform, crop: edits.crop, background: edits.background, transitionOut: edits.transitionOut });
+  const q = makeProject({ clips: [ph, makeClip({ id: "n", sourceDuration: 4 })] });
   const c = replaceClipMedia(q, "ph", newVideo(10)).clips[0];
-  expect(c).toMatchObject({ id: "ph", kind: "video", sourceDuration: 10, trimStart: 0, trimEnd: 5, speed: 1, muted: false, volume: 1, reversed: false, filter: "mono" });
+  expect(c).toMatchObject({ id: "ph", kind: "video", sourceDuration: 10, trimStart: 0, trimEnd: 5, speed: 1, muted: false, volume: 1, reversed: false, filter: "mono",
+    transform: edits.transform, crop: edits.crop, background: edits.background, transitionOut: edits.transitionOut });
   expect(replaceClipMedia(q, "ph", newVideo(3)).clips[0].trimEnd).toBe(3);
 });
 

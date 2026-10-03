@@ -19,6 +19,7 @@ test("timeline content container stacks the clip row and lanes vertically", asyn
   expect(screen.getByTestId("music-lane")).toBeTruthy();
 });
 
+// Jest has no layout, so this pins the stand-ins for the content width: the tile is absolutely positioned and the paddings are untouched.
 test("the + tile sits after the last clip, out of the flow, so the scrubbable width is unchanged", async () => {
   const q = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 3 }), makePhotoClip({ id: "b", seconds: 2 })] });
   useEditorStore.getState().setProject(q);

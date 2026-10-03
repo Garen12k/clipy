@@ -26,9 +26,9 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     const assets = await pickMedia();
     if (!assets || assets.length === 0) return;
     const { clips } = await storage.importMedia(projectId, assets);
-    if (clips.length === 0) { useToast.getState().show("Couldn't add those items."); return; }
     const { project, apply } = useEditorStore.getState();
-    if (project?.id !== projectId) return;
+    if (project?.id !== projectId) return;   // the project was closed meanwhile: say nothing
+    if (clips.length === 0) { useToast.getState().show("Couldn't add those items."); return; }
     apply((p) => addClips(p, clips));
     if (clips.length < assets.length) useToast.getState().show(`${clips.length} of ${assets.length} added`);
   }, "Couldn't add those items.");
@@ -38,11 +38,21 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     if (!projectId) return;
     const assets = await pickMedia({ multiple: false });
     if (!assets || assets.length === 0) return;
-    const { clips } = await storage.importMedia(projectId, assets.slice(0, 1));
+    const picked = assets[0];
+    // Refuse before importing, so a too-short video never gets copied into the project (placeholder uri for the check).
+    const before = useEditorStore.getState().project;
+    if (before?.id !== projectId || !before.clips.some((c) => c.id === clipId)) return;
+    // A video with no duration is left to importMedia, which rejects it ("Couldn't replace the clip.").
+    if (picked.kind === "video" && picked.durationSec > 0) {
+      const probe = { sourceUri: picked.uri, kind: picked.kind, width: picked.width, height: picked.height, sourceDuration: picked.durationSec };
+      if (replaceClipMedia(before, clipId, probe) === before) { useToast.getState().show("That video is too short."); return; }
+    }
+    const { clips } = await storage.importMedia(projectId, [picked]);
     const media = clips[0];
     if (!media) { useToast.getState().show("Couldn't replace the clip."); return; }
     const { project, apply } = useEditorStore.getState();
     if (project?.id !== projectId || !project.clips.some((c) => c.id === clipId)) return;
+    // Still checked after import: the imported duration is the authoritative one.
     if (replaceClipMedia(project, clipId, media) === project) { useToast.getState().show("That video is too short."); return; }
     apply((p) => replaceClipMedia(p, clipId, media));
     useEditorStore.getState().select(clipId);
