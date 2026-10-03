@@ -23,6 +23,12 @@ export function useFreezeFrame(): { freeze(): Promise<void>; busy: boolean } {
     if (isPhoto(hit.clip)) return;
     const { clip, offsetInClip } = hit;
     const projectId = project.id;
+    const outputTime = clipStartTimes(project)[hit.index] + offsetInClip;
+    // Dry run first: a refusal (edge of the clip) must not leave a captured file behind.
+    if (insertFreezeFrame(project, outputTime, { id: "dry-run", sourceUri: "", width: clip.width, height: clip.height }) === project) {
+      useToast.getState().show("Move the playhead away from the clip's edge.");
+      return;
+    }
     useFreezeBusy.setState({ busy: true });
     try {
       const time = Math.max(0, Math.round(freezeSourceTime(clip, offsetInClip) * 1000));
@@ -30,17 +36,14 @@ export function useFreezeFrame(): { freeze(): Promise<void>; busy: boolean } {
       const { uri } = await storage.saveStill(projectId, frame.uri);
       const store = useEditorStore.getState();
       if (store.project?.id !== projectId) return;
-      const id = newId();
-      const still = { id, sourceUri: uri, width: clip.width, height: clip.height };
       const index = store.project.clips.findIndex((c) => c.id === clip.id);
       if (index < 0) return;
-      const outputTime = clipStartTimes(store.project)[index] + offsetInClip;
-      if (insertFreezeFrame(store.project, outputTime, still) === store.project) { useToast.getState().show("Couldn't capture that frame"); return; }
-      store.apply((p) => insertFreezeFrame(p, outputTime, still));
-      const after = useEditorStore.getState();
-      const at = after.project!.clips.findIndex((c) => c.id === id);
+      const id = newId();
+      const next = insertFreezeFrame(store.project, clipStartTimes(store.project)[index] + offsetInClip, { id, sourceUri: uri, width: clip.width, height: clip.height });
+      if (next === store.project) { useToast.getState().show("Couldn't capture that frame"); return; }
+      store.apply(() => next);
       store.select(id);
-      store.seek(clipStartTimes(after.project!)[at]);
+      store.seek(clipStartTimes(next)[next.clips.findIndex((c) => c.id === id)]);
     } catch (e) {
       console.warn(e);
       useToast.getState().show("Couldn't capture that frame");

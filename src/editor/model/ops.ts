@@ -1,6 +1,6 @@
 import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
-import { clipAt, clipDuration, outputToSource } from "./timeline";
+import { clipAt, clipDuration, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
 import {
   AUDIO_LIMITS, aspectRatioValue, clampCrop, clampTransform, CLIP_VOLUME, DEFAULT_TRANSFORM, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
@@ -27,9 +27,15 @@ export function splitClipAt(p: Project, outputTime: number): Project {
   const d = clipDuration(clip);
   const min = isPhoto(clip) ? PHOTO.minSeconds : MIN_CLIP_SECONDS;
   if (offsetInClip < min || d - offsetInClip < min) return p;
-  const cut = outputToSource(clip, offsetInClip);
-  const left: Clip = { ...clip, trimEnd: cut, transitionOut: NO_TRANSITION };
-  const right: Clip = isPhoto(clip) ? { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut } : { ...clip, id: newId(), trimStart: cut };
+  if (isPhoto(clip)) {
+    const cut = offsetInClip;   // photos run at speed 1 from 0
+    const left: Clip = { ...clip, trimEnd: cut, transitionOut: NO_TRANSITION };
+    const right: Clip = { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut };
+    return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
+  }
+  const { left: l, right: r } = splitSourceRanges(clip, offsetInClip);
+  const left: Clip = { ...clip, trimStart: l[0], trimEnd: l[1], transitionOut: NO_TRANSITION };
+  const right: Clip = { ...clip, id: newId(), trimStart: r[0], trimEnd: r[1] };
   return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
 }
 

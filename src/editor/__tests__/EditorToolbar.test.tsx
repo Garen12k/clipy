@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn() }));
-jest.mock("@/src/projects", () => ({ storage: { importMedia: jest.fn() } }));
+jest.mock("@/src/projects", () => ({ storage: { importMedia: jest.fn(), saveStill: jest.fn() } }));
+jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () => ({ uri: "file:///thumb.jpg" })) }));
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { useToast } from "@/src/ui/Toast";
@@ -131,6 +132,18 @@ test("Transform, Reverse, Crop, Replace and Freeze need a selection; Freeze is e
   await act(() => { useEditorStore.getState().select("a"); });
   for (const l of ["Transform", "Reverse", "Crop", "Replace"]) expect(screen.getByRole("button", { name: l })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Freeze" })).toBeEnabled();
+});
+
+test("pressing Freeze runs the freeze capture for the selected clip", async () => {
+  const VT = jest.requireMock("expo-video-thumbnails") as { getThumbnailAsync: jest.Mock };
+  VT.getThumbnailAsync.mockClear();
+  VT.getThumbnailAsync.mockResolvedValueOnce({ uri: "file:///tmp/f.jpg" });
+  (storage as unknown as { saveStill: jest.Mock }).saveStill.mockResolvedValueOnce({ uri: "file:///p/media/s.jpg" });
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("a"); useEditorStore.getState().seek(1); });
+  await fireEvent.press(screen.getByRole("button", { name: "Freeze" }));
+  await waitFor(() => expect(VT.getThumbnailAsync).toHaveBeenCalledWith(expect.any(String), { time: 1000, quality: 1 }));
+  await waitFor(() => expect(useEditorStore.getState().project!.clips).toHaveLength(4));
 });
 
 test("Freeze is disabled without a selection", async () => {

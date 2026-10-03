@@ -43,6 +43,59 @@ test("captures at the playhead in ms, saves the still and inserts it in one undo
   expect(result.current.busy).toBe(false);
 });
 
+test("the still copies crop and background; selection and playhead land on the still even if the user scrubbed meanwhile", async () => {
+  const crop = { x: 0.1, y: 0.1, w: 0.5, h: 0.6 };
+  const background = { type: "color" as const, color: "#112233" };
+  st().setProject(makeProject({ id: "p1", clips: [
+    makeClip({ id: "z", sourceDuration: 3 }),
+    makeClip({ id: "a", sourceDuration: 4, crop, background, sourceUri: "file:///a.mp4" }),
+  ] }));
+  st().select("a");
+  st().seek(4);   // 1 s into a (z is 3 s)
+  thumb.mockImplementationOnce(async () => { st().seek(0); return { uri: "file:///tmp/frame.jpg" }; });
+  const { result } = await renderHook(() => useFreezeFrame());
+  await act(async () => { await result.current.freeze(); });
+  const still = st().project!.clips[2];
+  expect(still.kind).toBe("photo");
+  expect(still.crop).toEqual(crop);
+  expect(still.crop).not.toBe(st().project!.clips[1].crop);
+  expect(still.background).toEqual(background);
+  expect(still.background).not.toBe(st().project!.clips[1].background);
+  expect(st().selectedClipId).toBe(still.id);
+  expect(st().playhead).toBe(4);
+});
+
+test("one undo returns the single original clip", async () => {
+  st().seek(1);
+  const { result } = await renderHook(() => useFreezeFrame());
+  await act(async () => { await result.current.freeze(); });
+  expect(st().project!.clips).toHaveLength(4);
+  await act(async () => { st().undo(); });
+  expect(st().project!.clips.map((c) => c.id)).toEqual(["a", "b"]);
+  expect(st().project!.clips[0]).toMatchObject({ trimStart: 1, trimEnd: 5 });
+});
+
+test("a playhead at the clip's edge is refused before any capture or save", async () => {
+  st().seek(0);
+  const { result } = await renderHook(() => useFreezeFrame());
+  await act(async () => { await result.current.freeze(); });
+  expect(useToast.getState().message).toBe("Move the playhead away from the clip's edge.");
+  expect(thumb).not.toHaveBeenCalled();
+  expect(saveStill).not.toHaveBeenCalled();
+});
+
+test("freezing a reversed clip splits it reversed-aware and captures the cut frame", async () => {
+  st().setProject(makeProject({ id: "p1", clips: [makeClip({ id: "a", sourceDuration: 10, trimStart: 2, trimEnd: 8, reversed: true, sourceUri: "file:///a.mp4" })] }));
+  st().select("a");
+  st().seek(1);
+  const { result } = await renderHook(() => useFreezeFrame());
+  await act(async () => { await result.current.freeze(); });
+  expect(thumb).toHaveBeenCalledWith("file:///a.mp4", { time: 7000, quality: 1 });
+  const [l, , r] = st().project!.clips;
+  expect([l.trimStart, l.trimEnd, l.reversed]).toEqual([7, 8, true]);
+  expect([r.trimStart, r.trimEnd, r.reversed]).toEqual([2, 7, true]);
+});
+
 test("a reversed clip captures the mirrored source time", async () => {
   st().apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "a" ? { ...c, reversed: true } : c)) }));
   const before = st().past.length;

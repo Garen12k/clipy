@@ -1,8 +1,8 @@
 jest.mock("@/src/lib/id", () => ({ newId: jest.fn(() => "right-id") }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { makeClip, makePhotoClip, makeProject, PHOTO } from "../types";
-import { clipDuration, freezeSourceTime, totalDuration } from "../timeline";
-import { insertFreezeFrame } from "../ops";
+import { clipDuration, freezeSourceTime, splitSourceRanges, totalDuration } from "../timeline";
+import { insertFreezeFrame, splitClipAt } from "../ops";
 
 const still = { id: "still", sourceUri: "file:///p/media/still.jpg", width: 720, height: 1280 };
 const edits = {
@@ -64,5 +64,37 @@ describe("freezeSourceTime", () => {
   test("reversed clips mirror inside the trim span", () => {
     expect(freezeSourceTime(makeClip({ id: "x", sourceDuration: 10, trimStart: 2, trimEnd: 6, reversed: true }), 1)).toBe(5);
     expect(freezeSourceTime(makeClip({ id: "x", sourceDuration: 10, trimStart: 2, trimEnd: 6, speed: 2, reversed: true }), 1)).toBe(4);
+  });
+});
+
+describe("reversed-aware split", () => {
+  const rev = (speed: number) => makeClip({ id: "r", sourceDuration: 10, trimStart: 2, trimEnd: 8, speed, reversed: true });
+  const spans = (c: { trimStart: number; trimEnd: number }) => [c.trimStart, c.trimEnd];
+
+  test("speed 1: left [7, 8], right [2, 7], both stay reversed", () => {
+    const out = splitClipAt(makeProject({ clips: [rev(1)] }), 1);
+    expect(spans(out.clips[0])).toEqual([7, 8]);
+    expect(spans(out.clips[1])).toEqual([2, 7]);
+    expect(out.clips.every((c) => c.reversed)).toBe(true);
+  });
+  test("speed 2: left [6, 8], right [2, 6]; output durations sum to the original", () => {
+    const c = rev(2);
+    const out = splitClipAt(makeProject({ clips: [c] }), 1);
+    expect(spans(out.clips[0])).toEqual([6, 8]);
+    expect(spans(out.clips[1])).toEqual([2, 6]);
+    expect(clipDuration(out.clips[0]) + clipDuration(out.clips[1])).toBe(clipDuration(c));
+  });
+  test("forward clips are unchanged", () => {
+    const c = makeClip({ id: "f", sourceDuration: 10, trimStart: 2, trimEnd: 8, speed: 2 });
+    expect(splitSourceRanges(c, 1)).toEqual({ left: [2, 4], right: [4, 8] });
+    const out = splitClipAt(makeProject({ clips: [c] }), 1);
+    expect([spans(out.clips[0]), spans(out.clips[1])]).toEqual([[2, 4], [4, 8]]);
+  });
+  test("freeze on a reversed clip: halves as above and the capture time is the cut", () => {
+    const c = rev(1);
+    const out = insertFreezeFrame(makeProject({ clips: [c] }), 1, still);
+    expect(spans(out.clips[0])).toEqual([7, 8]);
+    expect(spans(out.clips[2])).toEqual([2, 7]);
+    expect(freezeSourceTime(c, 1)).toBe(7);
   });
 });
