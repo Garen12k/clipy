@@ -30,6 +30,37 @@ struct ExportBackground: Record {
   @Field var color: String?                        // `#RRGGBB` when type is "color"; JS `null` → nil
 }
 
+/// The twelve Adjust slider values (`ClipAdjust`, in `ADJUST_KEYS` order); 0 = no change.
+struct ExportAdjust: Record {
+  @Field var brightness: Double = 0
+  @Field var contrast: Double = 0
+  @Field var saturation: Double = 0
+  @Field var exposure: Double = 0
+  @Field var temperature: Double = 0
+  @Field var tint: Double = 0
+  @Field var highlights: Double = 0
+  @Field var shadows: Double = 0
+  @Field var sharpen: Double = 0
+  @Field var vignette: Double = 0
+  @Field var fade: Double = 0
+  @Field var grain: Double = 0
+
+  /// As the compositor's plain value (non-finite values → 0).
+  var values: AdjustValues {
+    AdjustValues(brightness: brightness, contrast: contrast, saturation: saturation, exposure: exposure,
+                 temperature: temperature, tint: tint, highlights: highlights, shadows: shadows,
+                 sharpen: sharpen, vignette: vignette, fade: fade, grain: grain).sanitized
+  }
+}
+
+/// A project-time effect range. Decoded here; drawn by `ClipyCompositor` through `EffectRenderer`.
+struct ExportEffect: Record {
+  @Field var type: String = ""                     // Effects.effectIds (unknown → ignored)
+  @Field var start: Double = 0                     // output seconds
+  @Field var end: Double = 0
+  @Field var intensity: Double = 1                 // 0…1
+}
+
 struct ExportClip: Record {
   @Field var sourceUri: String = ""
   @Field var trimStart: Double = 0
@@ -46,6 +77,8 @@ struct ExportClip: Record {
   @Field var crop: ExportCrop = ExportCrop()
   @Field var background: ExportBackground = ExportBackground()   // shown only where the picture leaves the frame
   @Field var reversed: Bool = false                // MediaPrePass writes a reversed copy (video only — exports silent)
+  @Field var filterIntensity: Double = 1           // 0…1: mix of the unfiltered (0) and the filtered (1) frame
+  @Field var adjust: ExportAdjust = ExportAdjust() // applied after the filter; all 0 = no change
 }
 
 struct ExportOverlay: Record {
@@ -79,6 +112,7 @@ struct ExportAudio: Record {
 struct ExportRequest: Record {
   @Field var clips: [ExportClip] = []
   @Field var overlays: [ExportOverlay] = []
+  @Field var effects: [ExportEffect] = []
   @Field var audio: ExportAudio?               // JS `null` → nil (no music)
   @Field var aspectRatio: String = "9:16"
   @Field var resolution: Int = 1080
@@ -577,20 +611,29 @@ final class ExportSession {
           scale: CGFloat(c.transform.scale), x: CGFloat(c.transform.x), y: CGFloat(c.transform.y),
           rotation: CGFloat(c.transform.rotation), flipH: c.transform.flipH, flipV: c.transform.flipV),
         background: LayerBackground(type: c.background.type, color: c.background.color),
-        filter: c.filter)
+        filter: c.filter, filterIntensity: c.filterIntensity, adjust: c.adjust.values)
+    }
+    //    Each instruction also carries the timeline effects overlapping its range (project time = composition time).
+    let usableEffects = ActiveEffectSpec.usable(request.effects.map {
+      ActiveEffectSpec(type: $0.type, start: $0.start, end: $0.end, intensity: $0.intensity)
+    })
+    func effects(in range: CMTimeRange) -> [ActiveEffectSpec] {
+      return usableEffects.filter { $0.overlaps(from: range.start.seconds, to: range.end.seconds) }
     }
     var instructions: [AVVideoCompositionInstructionProtocol] = []
     for i in 0..<n {
       let soloStart = placed[i].bodyStart + (i > 0 ? halves[i - 1] : CMTime.zero)
       let soloEnd = placed[i].bodyEnd - halves[i]
       if CMTimeCompare(soloEnd, soloStart) > 0 {
-        instructions.append(ClipyInstruction(timeRange: CMTimeRange(start: soloStart, end: soloEnd), layers: [spec(i)], transition: nil))
+        let solo = CMTimeRange(start: soloStart, end: soloEnd)
+        instructions.append(ClipyInstruction(timeRange: solo, layers: [spec(i)], transition: nil, effects: effects(in: solo)))
       }
       if i < n - 1, CMTimeCompare(halves[i], .zero) > 0 {
         let window = CMTimeRange(start: placed[i].bodyEnd - halves[i], end: placed[i].bodyEnd + halves[i])
         instructions.append(ClipyInstruction(
           timeRange: window, layers: [spec(i), spec(i + 1)],
-          transition: (type: loaded[i].clip.transition.type, start: window.start, duration: window.duration)))
+          transition: (type: loaded[i].clip.transition.type, start: window.start, duration: window.duration),
+          effects: effects(in: window)))
       }
     }
 

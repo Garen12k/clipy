@@ -1,4 +1,5 @@
-import type { FilterId, ShapeId, TextOverlay, TransitionType } from "./model/types";
+import type { EffectId, FilterId, ShapeId, TextOverlay, TransitionType } from "./model/types";
+import type { IoniconName } from "./toolGroups";
 
 export interface FilterPreview { tint: string; tintOpacity: number; saturation: number; brightness: number }
 /** Preview approximations only. The real Core Image recipes live in modules/clipy-video/ios/Effects.swift, keyed by the same ids. */
@@ -11,10 +12,38 @@ export const FILTERS: Record<FilterId, { label: string; preview: FilterPreview }
   mono:    { label: "Mono",    preview: { tint: "#000000", tintOpacity: 0,    saturation: 0,   brightness: 0 } },
   noir:    { label: "Noir",    preview: { tint: "#000000", tintOpacity: 0.18, saturation: 0,   brightness: -0.08 } },
   vintage: { label: "Vintage", preview: { tint: "#C8A05A", tintOpacity: 0.22, saturation: 0.6, brightness: -0.03 } },
+  sunset:  { label: "Sunset",  preview: { tint: "#FF8A3C", tintOpacity: 0.2,  saturation: 1.2, brightness: 0 } },
+  golden:  { label: "Golden",  preview: { tint: "#FFC857", tintOpacity: 0.18, saturation: 1.05, brightness: 0.04 } },
+  teal:    { label: "Teal",    preview: { tint: "#2EC4B6", tintOpacity: 0.16, saturation: 1.1, brightness: 0 } },
+  pastel:  { label: "Pastel",  preview: { tint: "#FFFFFF", tintOpacity: 0.1,  saturation: 0.8, brightness: 0.06 } },
+  film:    { label: "Film",    preview: { tint: "#E8A86A", tintOpacity: 0.12, saturation: 1.1, brightness: 0 } },
+  chrome:  { label: "Chrome",  preview: { tint: "#000000", tintOpacity: 0,    saturation: 1.3, brightness: 0 } },
+  instant: { label: "Instant", preview: { tint: "#F2D9A0", tintOpacity: 0.14, saturation: 0.9, brightness: 0.04 } },
+  process: { label: "Process", preview: { tint: "#3C8CFF", tintOpacity: 0.1,  saturation: 1.1, brightness: 0 } },
+  tonal:   { label: "Tonal",   preview: { tint: "#000000", tintOpacity: 0,    saturation: 0,   brightness: 0 } },
+  sepia:   { label: "Sepia",   preview: { tint: "#C8A05A", tintOpacity: 0.3,  saturation: 0,   brightness: 0 } },
+  crisp:   { label: "Crisp",   preview: { tint: "#000000", tintOpacity: 0,    saturation: 1.05, brightness: 0 } },
+  dream:   { label: "Dream",   preview: { tint: "#FFFFFF", tintOpacity: 0.08, saturation: 1.1, brightness: 0.03 } },
 };
 
 export const TRANSITIONS: Record<TransitionType, { label: string }> = {
-  none: { label: "None" }, fade: { label: "Fade" }, dissolve: { label: "Dissolve" }, slide: { label: "Slide" }, zoom: { label: "Zoom" },
+  none: { label: "None" }, fade: { label: "Fade" }, dissolve: { label: "Dissolve" }, slide: { label: "Slide left" }, zoom: { label: "Zoom" },
+  slideRight: { label: "Slide right" }, slideUp: { label: "Slide up" }, slideDown: { label: "Slide down" },
+  wipe: { label: "Wipe" }, spin: { label: "Spin" }, blur: { label: "Blur" },
+};
+
+/** Timeline effects. The preview can only approximate them; the real look is Swift's. */
+export const EFFECTS: Record<EffectId, { label: string; icon: IoniconName }> = {
+  glitch:    { label: "Glitch",     icon: "git-compare-outline" },
+  shake:     { label: "Shake",      icon: "phone-portrait-outline" },
+  zoomPulse: { label: "Zoom pulse", icon: "expand-outline" },
+  blur:      { label: "Blur",       icon: "water-outline" },
+  vhs:       { label: "VHS",        icon: "videocam-outline" },
+  lightLeak: { label: "Light leak", icon: "sunny-outline" },
+  flash:     { label: "Flash",      icon: "flash-outline" },
+  rgbSplit:  { label: "RGB split",  icon: "layers-outline" },
+  oldFilm:   { label: "Old film",   icon: "film-outline" },
+  glow:      { label: "Glow",       icon: "bulb-outline" },
 };
 
 /** 100×100 box, absolute M/L/C/Q/Z only — copied verbatim into Effects.swift. */

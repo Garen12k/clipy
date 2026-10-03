@@ -82,7 +82,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       await fs.remove(projectDir(id)).catch(() => {});
       throw new Error("Couldn't import any of the selected items.");
     }
-    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], schemaVersion: SCHEMA_VERSION };
+    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], effects: [], schemaVersion: SCHEMA_VERSION };
     await saveProject(project);
     await writeThumb(project);
     return { project, failed };

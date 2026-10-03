@@ -3,16 +3,28 @@ import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
 import {
-  AUDIO_LIMITS, aspectRatioValue, clampCrop, clampTransform, CLIP_VOLUME, DEFAULT_TRANSFORM, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  AUDIO_LIMITS, aspectRatioValue, clampAdjust, clampCrop, clampTransform, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   MIN_CLIP_SECONDS, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_LIMITS, TRANSITION_LIMITS,
-  type AspectRatio, type AudioTrack, type Clip, type ClipBackground, type ClipTransform, type CropRect, type FilterId, type Overlay, type Project,
+  type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem, type FilterId, type Overlay, type Project,
   type StickerOverlay, type TextOverlay, type TransitionType,
 } from "./types";
 import { totalDuration } from "./timeline";
 import type { Template } from "../templates";
 
+/**
+ * Drops effects left at or past the end of a project `total` seconds long (within EFFECT_END_SLACK of it: they cannot be reached on
+ * the timeline); those still starting inside are untouched. Same array when nothing is dropped.
+ */
+export function fitEffects(effects: EffectItem[], total: number): EffectItem[] {
+  const limit = total - EFFECT_END_SLACK;
+  return effects.some((e) => e.start >= limit) ? effects.filter((e) => e.start < limit) : effects;
+}
+
 function touch(p: Project, patch: Partial<Project>): Project {
-  return { ...p, ...patch, updatedAt: nowIso() };
+  const next = { ...p, ...patch, updatedAt: nowIso() };
+  // Only a change to the clips can shorten the project.
+  if (patch.clips) next.effects = fitEffects(next.effects, totalDuration(next));
+  return next;
 }
 
 export function addClips(p: Project, clips: Clip[]): Project {
@@ -30,12 +42,12 @@ export function splitClipAt(p: Project, outputTime: number): Project {
   if (isPhoto(clip)) {
     const cut = offsetInClip;   // photos run at speed 1 from 0
     const left: Clip = { ...clip, trimEnd: cut, transitionOut: NO_TRANSITION };
-    const right: Clip = { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut };
+    const right: Clip = { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut, adjust: { ...clip.adjust } };
     return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
   }
   const { left: l, right: r } = splitSourceRanges(clip, offsetInClip);
   const left: Clip = { ...clip, trimStart: l[0], trimEnd: l[1], transitionOut: NO_TRANSITION };
-  const right: Clip = { ...clip, id: newId(), trimStart: r[0], trimEnd: r[1] };
+  const right: Clip = { ...clip, id: newId(), trimStart: r[0], trimEnd: r[1], adjust: { ...clip.adjust } };
   return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
 }
 
@@ -79,7 +91,7 @@ export function duplicateClip(p: Project, clipId: string): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
   if (i < 0) return p;
   const src = p.clips[i];
-  const copy: Clip = { ...src, id: newId(), transitionOut: NO_TRANSITION, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background } };
+  const copy: Clip = { ...src, id: newId(), transitionOut: NO_TRANSITION, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background }, adjust: { ...src.adjust } };
   return touch(p, { clips: [...p.clips.slice(0, i + 1), copy, ...p.clips.slice(i + 1)] });
 }
 
@@ -213,7 +225,8 @@ export function setClipMuted(p: Project, clipId: string, muted: boolean): Projec
 }
 
 const NO_TRANSITION = { type: "none" as const, duration: 0 };
-const r2 = (v: number) => Math.round(v * 100) / 100;
+/** 2 decimals; the `+ 0` turns a rounded −0 into 0, so a slider back at centre stores exactly 0. */
+const r2 = (v: number) => Math.round(v * 100) / 100 + 0;
 
 /** Max transition duration for the cut after clip index `i` within `clips`; 0 when there's no next clip. */
 function capFor(clips: Clip[], i: number): number {
@@ -264,10 +277,19 @@ export function setClipFilter(p: Project, clipId: string, filter: FilterId | nul
   return touch(p, { clips });
 }
 
-export function setFilterForAllClips(p: Project, filter: FilterId | null): Project {
+export function setClipFilterIntensity(p: Project, clipId: string, intensity: number): Project {
+  if (!Number.isFinite(intensity)) return p;
+  const v = r2(clamp(intensity, [0, 1]));
+  return updateClip(p, clipId, (c) => (c.filterIntensity === v ? c : { ...c, filterIntensity: v }));
+}
+
+/** Sets the filter on every clip; `intensity` (when given) is copied too, otherwise each clip keeps its own strength. */
+export function setFilterForAllClips(p: Project, filter: FilterId | null, intensity?: number): Project {
   const f = filter === "none" ? null : filter;
-  if (p.clips.every((c) => c.filter === f)) return p;
-  return touch(p, { clips: p.clips.map((c) => (c.filter === f ? c : { ...c, filter: f })) });
+  const v = intensity === undefined ? undefined : clamp(intensity, [0, 1]);
+  const same = (c: Clip) => c.filter === f && (v === undefined || c.filterIntensity === v);
+  if (p.clips.every(same)) return p;
+  return touch(p, { clips: p.clips.map((c) => (same(c) ? c : { ...c, filter: f, filterIntensity: v ?? c.filterIntensity })) });
 }
 
 export function setTransition(p: Project, clipId: string, t: { type: TransitionType; duration: number }): Project {
@@ -297,13 +319,18 @@ export function replaceCaptions(p: Project, captions: TextOverlay[]): Project {
  */
 export function applyTemplate(p: Project, t: Template, scope: "clip" | "project", clipId: string | null): Project {
   if (p.clips.length === 0) return p;
+  const setsFilter = !!t.filter && t.filter !== "none";   // the none template leaves each clip's filter strength alone
   let next = p;
   if (scope === "clip") {
     if (!clipId || !p.clips.some((c) => c.id === clipId)) return p;
     next = setClipFilter(setClipSpeed(next, clipId, t.speed), clipId, t.filter);
+    if (setsFilter) next = setClipFilterIntensity(next, clipId, 1);
     next = setTransition(next, clipId, t.transition);   // no-op on the last clip
   } else {
-    for (const c of p.clips) next = setClipFilter(setClipSpeed(next, c.id, t.speed), c.id, t.filter);
+    for (const c of p.clips) {
+      next = setClipFilter(setClipSpeed(next, c.id, t.speed), c.id, t.filter);
+      if (setsFilter) next = setClipFilterIntensity(next, c.id, 1);
+    }
     for (const c of next.clips.slice(0, -1)) next = setTransition(next, c.id, t.transition);
     const clips = normaliseTransitions(next.clips);
     if (clips !== next.clips) next = touch(next, { clips });
@@ -432,8 +459,96 @@ export function insertFreezeFrame(p: Project, outputTime: number, still: { id: s
   const src = hit.clip;
   const photo: Clip = {
     ...newPhotoClip({ ...still, seconds: PHOTO.freezeSeconds }),
-    filter: src.filter, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background },
+    filter: src.filter, filterIntensity: src.filterIntensity, adjust: { ...src.adjust },
+    transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background },
   };
   const at = hit.index + 1;
   return touch(p, { clips: normaliseTransitions([...split.clips.slice(0, at), photo, ...split.clips.slice(at)]) });
+}
+
+/** Patched values are rounded to 2 decimals (slider floats: a slider back at centre must store exactly 0). */
+export function setClipAdjust(p: Project, clipId: string, patch: Partial<ClipAdjust>): Project {
+  const rounded: Partial<ClipAdjust> = {};
+  for (const key of Object.keys(patch) as (keyof ClipAdjust)[]) {
+    const v = patch[key];
+    if (typeof v === "number") rounded[key] = r2(v);
+  }
+  return updateClip(p, clipId, (c) => {
+    const next = clampAdjust({ ...c.adjust, ...rounded });
+    return sameJson(next, c.adjust) ? c : { ...c, adjust: next };
+  });
+}
+
+export function resetClipAdjust(p: Project, clipId: string): Project {
+  return updateClip(p, clipId, (c) => (sameJson(c.adjust, DEFAULT_ADJUST) ? c : { ...c, adjust: { ...DEFAULT_ADJUST } }));
+}
+
+export function setAdjustForAllClips(p: Project, adjust: ClipAdjust): Project {
+  const next = clampAdjust(adjust);
+  if (p.clips.every((c) => sameJson(c.adjust, next))) return p;
+  return touch(p, { clips: p.clips.map((c) => (sameJson(c.adjust, next) ? c : { ...c, adjust: { ...next } })) });
+}
+
+/** Adds a timeline effect at the playhead (default length, clamped to the project end); refused when the project has no room for minDuration. */
+export function addEffect(p: Project, type: EffectId, playhead: number, id: string = newId()): Project {
+  const total = totalDuration(p);
+  if (!Number.isFinite(playhead) || p.clips.length === 0 || total < EFFECT_LIMITS.minDuration) return p;
+  let start = clamp(playhead, [0, total]);
+  const end = Math.min(total, start + EFFECT_LIMITS.defaultDuration);
+  if (end - start < EFFECT_LIMITS.minDuration) start = Math.max(0, end - EFFECT_LIMITS.minDuration - 1e-9);   // tiny nudge: end - start must be >= minDuration exactly
+  return touch(p, { effects: [...p.effects, makeEffect({ id, type, start, end, intensity: EFFECT_LIMITS.defaultIntensity })] });
+}
+
+function replaceEffect(p: Project, i: number, next: EffectItem): Project {
+  if (sameJson(next, p.effects[i])) return p;
+  const effects = p.effects.slice(); effects[i] = next;
+  return touch(p, { effects });
+}
+
+/** The edge named in the patch is the one that moves; the other edge never yields. */
+export function updateEffect(p: Project, id: string, patch: Partial<Pick<EffectItem, "start" | "end" | "intensity">>): Project {
+  const i = p.effects.findIndex((e) => e.id === id);
+  if (i < 0) return p;
+  if (Object.values(patch).some((v) => v !== undefined && !Number.isFinite(v))) return p;
+  const cur = p.effects[i];
+  const total = totalDuration(p);
+  const min = EFFECT_LIMITS.minDuration;
+  const intensity = patch.intensity === undefined ? cur.intensity : r2(clamp(patch.intensity, [0, 1]));
+  if (patch.start === undefined && patch.end === undefined) return replaceEffect(p, i, { ...cur, intensity });   // range untouched
+  let { start, end } = cur;
+  if (patch.end !== undefined) end = clamp(patch.end, [0, total]);
+  if (patch.start !== undefined) start = clamp(patch.start, [0, total]);
+  // A yielding edge is nudged 1e-9 further (as addEffect does): `end - (end - min)` can be a hair under `min` in floating point,
+  // and the loader would then move the end (`start + min`), so a saved project would not reload byte-for-byte.
+  if (end - start < min) {
+    if (patch.end !== undefined && patch.start === undefined) end = start + min + 1e-9;
+    else start = end - min - 1e-9;
+  }
+  start = Math.max(0, start); end = Math.min(total, end);
+  if (end - start < min) return p;
+  return replaceEffect(p, i, { ...cur, start, end, intensity });
+}
+
+export function moveEffect(p: Project, id: string, newStart: number): Project {
+  const e = p.effects.find((x) => x.id === id);
+  if (!e || !Number.isFinite(newStart)) return p;
+  const d = e.end - e.start;
+  const start = Math.max(0, Math.min(newStart, totalDuration(p) - d));
+  return updateEffect(p, id, { start, end: start + d });
+}
+
+export function deleteEffect(p: Project, id: string): Project {
+  if (!p.effects.some((e) => e.id === id)) return p;
+  return touch(p, { effects: p.effects.filter((e) => e.id !== id) });
+}
+
+/** The copy sits right after the original when it fits before the project end, otherwise it takes the same range. */
+export function duplicateEffect(p: Project, id: string): Project {
+  const i = p.effects.findIndex((e) => e.id === id);
+  if (i < 0) return p;
+  const src = p.effects[i];
+  const d = src.end - src.start;
+  const fits = src.end + d <= totalDuration(p) + 1e-9;
+  const copy: EffectItem = { ...src, id: newId(), start: fits ? src.end : src.start, end: fits ? src.end + d : src.end };
+  return touch(p, { effects: [...p.effects.slice(0, i + 1), copy, ...p.effects.slice(i + 1)] });
 }

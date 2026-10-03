@@ -35,7 +35,7 @@ export function MusicBar({ track: t, missing }: { track: AudioTrack; missing: bo
   const leftPx = timeToX(t.start, pps), width = Math.max(HANDLE_W * 2 + 4, timeToX(t.trimEnd - t.trimStart, pps));
   return (
     <GestureDetector gesture={gestures.move}>
-      <Pressable testID="music-bar" onPress={() => { useEditorStore.getState().selectOverlay(null); useEditorStore.getState().select(null); }}
+      <Pressable testID="music-bar" onPress={() => { useEditorStore.getState().selectOverlay(null); useEditorStore.getState().select(null); useEditorStore.getState().selectEffect(null); }}
         accessibilityLabel={`Music ${t.title}`}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: theme.colors.laneMusic,
           borderWidth: 2, borderColor: theme.colors.laneMusic, flexDirection: "row", alignItems: "center", paddingHorizontal: HANDLE_W + 2, gap: 4 }}>

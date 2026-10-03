@@ -22,6 +22,21 @@ test("the grey desaturation layer never hides the video (opacity < 1 for every f
     await unmount();
   }
 });
+test("intensity scales every layer's opacity", async () => {
+  const f = FILTERS.vintage.preview;
+  await render(<FilterLayer filter="vintage" intensity={0.5} />);
+  expect(screen.getByTestId("filter-tint")).toHaveStyle({ backgroundColor: f.tint, opacity: f.tintOpacity * 0.5 });
+  expect(screen.getByTestId("filter-desaturate")).toHaveStyle({ opacity: 0.55 * (1 - f.saturation) * 0.5 });
+  expect(screen.getByTestId("filter-brightness")).toHaveStyle({ opacity: Math.abs(f.brightness) * 0.5 });
+});
+test("intensity 1 is the same as leaving it out", async () => {
+  await render(<FilterLayer filter="vintage" intensity={1} />);
+  expect(screen.getByTestId("filter-tint")).toHaveStyle({ opacity: FILTERS.vintage.preview.tintOpacity });
+});
+test("intensity 0 renders nothing", async () => {
+  await render(<FilterLayer filter="vintage" intensity={0} />);
+  expect(screen.toJSON()).toBeNull();
+});
 test("renders nothing for none/null", async () => {
   await render(<FilterLayer filter={null} />);
   expect(screen.queryByTestId("filter-tint")).toBeNull();

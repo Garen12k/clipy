@@ -1,7 +1,8 @@
+import Slider from "@react-native-community/slider";
 import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, View } from "react-native";
 import { FILTERS } from "@/src/editor/effects";
-import { setClipFilter, setFilterForAllClips } from "@/src/editor/model/ops";
+import { setClipFilter, setClipFilterIntensity, setFilterForAllClips } from "@/src/editor/model/ops";
 import { FILTER_IDS, isPhoto } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
@@ -16,7 +17,7 @@ const TILE_H = 96;
 
 export function FilterSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const clip = useEditorStore((s) => s.project?.clips.find((c) => c.id === clipId) ?? null);
-  const { apply } = useEditorStore.getState();
+  const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const [thumb, setThumb] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export function FilterSheet({ clipId, visible, onClose }: { clipId: string | nul
   const current = clip.filter ?? "none";
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Filter" action={{ label: "Apply to all clips", onPress: () => apply((p) => setFilterForAllClips(p, clip.filter)) }}>
+    <Sheet visible={visible} onClose={onClose} title="Filter" action={{ label: "Apply to all clips", onPress: () => apply((p) => setFilterForAllClips(p, clip.filter, clip.filterIntensity)) }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.sm }}>
         {FILTER_IDS.map((id) => {
           const def = FILTERS[id];
@@ -55,6 +56,16 @@ export function FilterSheet({ clipId, visible, onClose }: { clipId: string | nul
           );
         })}
       </ScrollView>
+      <Slider
+        testID="filter-strength"
+        minimumValue={0} maximumValue={1} step={0.01}
+        value={clip.filterIntensity}
+        disabled={current === "none"}
+        onSlidingStart={beginTransaction}
+        onValueChange={(v) => applyTransient((p) => setClipFilterIntensity(p, clip.id, v))}
+        minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent}
+      />
+      <Body muted style={{ fontSize: 12 }}>Strength {Math.round(clip.filterIntensity * 100)}</Body>
     </Sheet>
   );
 }

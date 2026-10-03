@@ -22,3 +22,10 @@ test("last clip shows the no-next-clip message", async () => {
   await render(<TransitionSheet clipIndex={1} visible onClose={() => {}} />);
   expect(screen.getByText("No clip after this one")).toBeTruthy();
 });
+
+test("shows eleven transition chips", async () => {
+  await render(<TransitionSheet clipIndex={0} visible onClose={() => {}} />);
+  for (const label of ["None", "Fade", "Dissolve", "Slide left", "Zoom", "Slide right", "Slide up", "Slide down", "Wipe", "Spin", "Blur"]) {
+    expect(screen.getByRole("button", { name: label })).toBeTruthy();
+  }
+});

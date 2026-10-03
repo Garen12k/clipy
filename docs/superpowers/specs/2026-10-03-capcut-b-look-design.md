@@ -1,7 +1,7 @@
 # CapCut group B — Look: design
 
 **Date:** 2026-10-03
-**Status:** Approved by the user ("yes", all four parts in one build)
+**Status:** Implemented 2026-10-03 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Roadmap:** `docs/superpowers/research/capcut-roadmap.md`, group B
 **Builds on:** group A (`2026-10-03-capcut-a-clip-basics-design.md`, schema v5)
 
@@ -62,7 +62,7 @@ effects: EffectItem[];     // default []
 
 Migration v5 → v6 adds the defaults. The sanity pass (every load): unknown filter id → `null`; unknown transition type → `dissolve` (duration kept); `filterIntensity` clamped 0–1 (non-finite → 1); each adjust key clamped to its range (non-finite / missing → 0, unknown keys dropped); effects with an unknown type dropped, `intensity` clamped, `start ≥ 0`, `end − start ≥ minDuration`. Idempotent. Older files (v1–v5) still load; newer are refused.
 
-Effects are project-time ranges, like overlays: clip edits do not move them. Several effects may overlap; they apply in list order.
+Effects are project-time ranges, like overlays: clip edits do not move them. Several effects may overlap; they apply in list order. When a clip edit shortens the project, effects that would start at or after the new end are removed.
 
 ## 4. Shared maths (TS ↔ Swift mirrors)
 
@@ -105,20 +105,20 @@ Deterministic functions of `t` = seconds since the effect's start, `d` = its dur
 - **glitch**: export — every `1/8` s slice, with probability `0.5·k` (from `hash`), shift a horizontal band (height `0.08–0.2` of the frame, position from `hash`) by up to `0.08·k` of the width and split R/B by `0.01·k`. Preview: none.
 - **rgbSplit**: export — R and B channels offset by `±0.008·k·env` of the width. Preview: none.
 
-`effectPreview(type, t, d, k) → { translateX, translateY, scale, layers: {color, opacity}[], exact: false }` for the preview; `EffectMath.swift` exposes the same scalar functions for the compositor.
+`effectPreview(type, t, d, k) → { translateX, translateY, scale, layers: {color, opacity}[] }` for the preview; `EffectMath.swift` exposes the same scalar functions for the compositor.
 
 ## 5. Filters and transitions
 
 - **New filters** (export recipe; preview tint params in `effects.ts`): sunset (temperature 7600 + saturation 1.2), golden (temperature 7200 + brightness 0.04), teal (temperature 5600 + saturation 1.1 + contrast 1.05), pastel (saturation 0.8, brightness 0.06, contrast 0.9), film (`CIPhotoEffectTransfer`), chrome (`CIPhotoEffectChrome`), instant (`CIPhotoEffectInstant`), process (`CIPhotoEffectProcess`), tonal (`CIPhotoEffectTonal`), sepia (`CISepiaTone` 1.0), crisp (`CISharpenLuminance` 0.8 + contrast 1.1), dream (`CIBloom` radius 10, intensity 0.6 + saturation 1.1).
 - **Strength**: export = mix of the unfiltered and the filtered frame, `result = original·(1 − s) + filtered·s` (`CIDissolveTransition`, time = s); `s = 1` skips the mix. Preview = the existing layers with their opacities multiplied by `s`.
 - **Order on a clip frame**: placement + background → filter (with strength) → adjust. Transitions blend the two finished clip frames. Effects apply to the finished frame after the transition blend (so they cover whichever clips are on screen), before text and stickers.
-- **New transitions** (export): `slideRight` / `slideUp` / `slideDown` (as `slide`, other directions), `wipe` (incoming revealed left→right behind a hard edge, no movement), `spin` (outgoing rotates 0→90° and scales to 0.6 while dissolving), `blur` (outgoing blurs up over the first half, incoming blurs down over the second, cross-dissolved). Unknown type → dissolve, as today.
+- **New transitions** (export): `slideRight` / `slideUp` / `slideDown` (as `slide`, other directions), `wipe` (incoming revealed left→right behind a hard edge, no movement), `spin` (outgoing rotates 0→90° and scales to 0.6 while dissolving), `blur` (both frames blur up to the middle and back down while cross-dissolving, continuous). Unknown type → dissolve, as today.
 
 ## 6. Screens
 
 - **Filter sheet**: 20 tiles (horizontal scroll, as now) + a "Strength" slider (0–100, disabled for None) under them; one undo step per slide; "Apply to all clips" copies filter and strength.
 - **Adjust sheet** (Effects group, new tool `adjust`, needs a selected clip): a row of twelve chips (icon + name, a dot when non-zero); one slider for the chosen key (two-sided keys centred at 0, shows −100…100 / 0…100); `Reset` (all keys → 0) and action "Apply to all". One undo step per slide and per button.
-- **Effects** (Effects group, new tool `effect`, no selection needed): a sheet with ten tiles; tapping one adds the effect at the playhead (`defaultDuration`, clamped to the project's end; refused with a toast when the project is empty) and selects it. A third timeline lane ("effects lane") shows effect pills; a pill can be moved (long-press drag) and trimmed by its two handles, exactly like text pills. With an effect selected the sub-row shows `Strength` (slider sheet), `Duplicate`, `Delete`.
+- **Effects** (Effects group, new tool `effect`, no selection needed): a sheet with ten tiles; tapping one adds the effect at the playhead (`defaultDuration`, clamped to the project's end) and selects it; a refusal (empty project, or no room for `minDuration`) closes the sheet and shows a toast. A third timeline lane ("effects lane") shows effect pills; a pill can be moved (long-press drag) and trimmed by its two handles, exactly like text pills. With an effect selected the sub-row is `Effect · Strength · Duplicate · Delete` (`Effect` opens the picker, `Strength` a slider sheet). Tapping the selected pill, the preview or the music bar deselects the effect.
 - **Transition sheet**: eleven chips (no other change).
 - **Preview tag** additionally shows when: `filterIntensity`/filter present (as now), any adjust value is non-zero, or an effect covers the playhead.
 - Toolbar Effects group: `filter · adjust · effect · speed · transition · templates · background`.

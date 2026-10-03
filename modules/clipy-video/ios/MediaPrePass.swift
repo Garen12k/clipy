@@ -83,6 +83,8 @@ enum MediaPrePass {
     out.crop = clip.crop
     out.background = clip.background
     out.reversed = false
+    out.filterIntensity = clip.filterIntensity
+    out.adjust = clip.adjust
     return out
   }
 

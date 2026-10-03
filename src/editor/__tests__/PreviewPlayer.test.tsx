@@ -24,7 +24,10 @@ jest.mock("expo-video", () => {
   return { __mockPlayer: mockPlayer, useVideoPlayer: () => mockPlayer, VideoView: View };
 });
 import { replaceClipMedia, setClipSpeed, setClipTransform } from "@/src/editor/model/ops";
-import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { StyleSheet } from "react-native";
+import { FILTERS } from "@/src/editor/effects";
+import { shakeOffset } from "@/src/editor/model/effectMath";
+import { DEFAULT_ADJUST, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
 
@@ -303,4 +306,93 @@ test("a reversed clip plays muted (the export is silent); a normal clip does not
   await act(() => { useEditorStore.getState().seek(5); });
   expect(mp.muted).toBe(false);
   expect(mp.volume).toBe(1);
+});
+
+describe("look layers (filter strength, adjust, effects)", () => {
+  type Json = { props: { testID?: string }; children: (Json | string)[] | null };
+  /** Every testID under `node`, depth-first: the paint order (later = on top). */
+  const ids = (node: Json | string | null, out: string[] = []): string[] => {
+    if (!node || typeof node === "string") return out;
+    if (node.props.testID) out.push(node.props.testID);
+    for (const c of node.children ?? []) ids(c, out);
+    return out;
+  };
+  const find = (node: Json | string | null, id: string): Json | null => {
+    if (!node || typeof node === "string") return null;
+    if (node.props.testID === id) return node;
+    for (const c of node.children ?? []) { const hit = find(c, id); if (hit) return hit; }
+    return null;
+  };
+  const tree = () => screen.toJSON() as unknown as Json;
+
+  test("an untouched project renders no filter, adjust or effect nodes, and the wrapper carries no transform", async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    const all = ids(tree());
+    expect(all.filter((id) => /^(filter-|adjust-|effect-layer|effect-overlays)/.test(id))).toEqual([]);
+    expect(screen.queryByTestId("preview-tag")).toBeNull();
+    expect(StyleSheet.flatten(screen.getByTestId("effect-transform").props.style).transform).toBeUndefined();
+  });
+
+  test("the layers stack in order: picture → filter → adjust → effect colours → transition → text", async () => {
+    useEditorStore.getState().setProject(makeProject({
+      clips: [
+        makeClip({ id: "a", sourceDuration: 4, filter: "vintage", filterIntensity: 0.5, adjust: { ...DEFAULT_ADJUST, brightness: 1, vignette: 1 }, transitionOut: { type: "fade", duration: 1 } }),
+        makeClip({ id: "b", sourceDuration: 4 }),
+      ],
+      overlays: [makeOverlay({ id: "t", start: 0, end: 8 })],
+      effects: [makeEffect({ id: "f", type: "flash", start: 3, end: 5, intensity: 1 }), makeEffect({ id: "s", type: "shake", start: 3, end: 5, intensity: 1 })],
+    }));
+    useEditorStore.getState().seek(3.6);
+    await render(<PreviewPlayer />);
+    await layout();
+    const all = ids(tree());
+    const order = ["effect-transform", "preview-video", "filter-tint", "adjust-light", "adjust-vignette", "effect-layer-0", "transition-layer", "overlay-t", "preview-tag"];
+    expect(order.map((id) => all.indexOf(id))).toEqual([...order.map((id) => all.indexOf(id))].sort((x, y) => x - y));
+    expect(order.filter((id) => !all.includes(id))).toEqual([]);
+    // The filter layers carry the clip's strength.
+    expect(screen.getByTestId("filter-tint")).toHaveStyle({ opacity: FILTERS.vintage.preview.tintOpacity * 0.5 });
+    // Only the picture is inside the shaken view.
+    const inside = ids(find(tree(), "effect-transform"));
+    expect(inside).toContain("preview-video");
+    expect(inside.filter((id) => /^(filter-|adjust-|effect-layer|transition-|overlay-|preview-tag|clip-gesture|clip-selection)/.test(id))).toEqual([]);
+    const o = shakeOffset(3.6 - 3, 2, 1);
+    expect(StyleSheet.flatten(screen.getByTestId("effect-transform").props.style).transform).toEqual([{ translateX: o.x * 270 }, { translateY: o.y * 480 }, { scale: 1.06 }]);
+  });
+
+  test("the gold selection frame stays outside the shaken view", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], effects: [makeEffect({ id: "s", type: "shake", start: 0, end: 2 })] }));
+    useEditorStore.getState().seek(1);
+    await render(<PreviewPlayer />);
+    await layout();
+    await act(() => { useEditorStore.getState().select("a"); });
+    expect(ids(tree())).toContain("clip-selection-frame");
+    expect(ids(find(tree(), "effect-transform"))).not.toContain("clip-selection-frame");
+  });
+
+  test("an effect starting and ending never remounts the video view", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], effects: [makeEffect({ id: "s", type: "shake", start: 1, end: 2 })] }));
+    await render(<PreviewPlayer />);
+    await layout();
+    const video = screen.getByTestId("preview-video");
+    await act(() => { useEditorStore.getState().seek(1.5); });
+    expect(StyleSheet.flatten(screen.getByTestId("effect-transform").props.style).transform).toBeDefined();
+    expect(screen.getByTestId("preview-tag")).toBeTruthy();
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    await act(() => { useEditorStore.getState().seek(3); });
+    expect(StyleSheet.flatten(screen.getByTestId("effect-transform").props.style).transform).toBeUndefined();
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    expect(player.replaceAsync).toHaveBeenCalledTimes(1);
+  });
+});
+
+test("tapping the preview with an effect selected deselects it without starting playback; the next tap plays", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], effects: [makeEffect({ id: "e1", start: 0, end: 2 })] }));
+  useEditorStore.getState().selectEffect("e1");
+  await render(<PreviewPlayer />);
+  await fireEvent.press(screen.getByLabelText("Preview"));
+  expect(useEditorStore.getState().selectedEffectId).toBeNull();
+  expect(useEditorStore.getState().isPlaying).toBe(false);
+  await fireEvent.press(screen.getByLabelText("Preview"));
+  expect(useEditorStore.getState().isPlaying).toBe(true);
 });

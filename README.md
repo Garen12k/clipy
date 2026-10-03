@@ -172,3 +172,42 @@ Select a clip, then use the tools under the preview.
 
 Photos and reversed clips only appear in the exported video with the native build (the Swift export
 turns them into ordinary video before composing; this code is uncompiled until an EAS build).
+
+## Look
+
+Filters, Adjust, Effects and Transitions are in the **Effects** group of the toolbar.
+
+- **Filters** — 19 filters plus None. Each has a **Strength** slider (0-100). "Apply to all clips"
+  copies the filter and its strength.
+- **Adjust** — twelve sliders: Brightness, Contrast, Saturation, Exposure, Warmth, Tint, Highlights,
+  Shadows, Sharpen, Vignette, Fade, Grain. **Reset** sets them all back to 0; "Apply to all" copies
+  them to every clip.
+- **Effects** — ten: Glitch, Shake, Zoom pulse, Blur, VHS, Light leak, Flash, RGB split, Old film,
+  Glow. Tap one in the Effects sheet to add it at the playhead. Effects sit on their own lane of the
+  timeline as pills: move them, trim them, duplicate or delete them, and set a **Strength**.
+- **Transitions** — eleven chips: None, Fade, Dissolve, Slide left / right / up / down, Zoom, Wipe,
+  Spin, Blur.
+
+**Preview vs export.** Expo Go cannot change a video's pixels, so the preview only approximates
+with coloured layers and movement, and shows the "Preview" tag. The exported video is the real thing.
+
+- Shown roughly in the preview: filter strength, brightness, exposure, warmth, tint, fade, vignette,
+  lowering saturation; the effects Shake, Zoom pulse, Flash, Light leak, VHS, Old film and Glow.
+- Not shown until a real build: contrast, raising saturation, highlights, shadows, sharpen, grain;
+  the effects Glitch, Blur and RGB split. Every transition shows as a dip to black.
+
+All of the export side is Swift that has never been compiled.
+
+## First native build — things to check
+
+When the first EAS build exists, compare the export against the preview and check these Look items:
+
+1. **Warm / cool direction.** The Adjust "Warmth" slider and the Warm / Cool / Sunset / Golden / Teal
+   filters use `CITemperatureAndTint` in opposite conventions, so one of them is backwards. Compare
+   with the preview and flip the constant that is wrong.
+2. **Strength of Adjust.** Fade, brightness and the tone curve may look stronger in the export than
+   in the preview, because Core Image works in linear light. Tune the constants in
+   `src/editor/model/adjust.ts` and `modules/clipy-video/ios/Adjust.swift` together.
+3. **Grain look.**
+4. **VHS scan lines** (the generator is unverified).
+5. **Spin and slide directions** of the new transitions.

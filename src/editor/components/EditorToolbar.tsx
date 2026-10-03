@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { addTextOverlay, defaultOverlayRange, deleteClip, deleteOverlay, duplicateClip, setClipReversed, splitClipAt } from "@/src/editor/model/ops";
+import { addTextOverlay, defaultOverlayRange, deleteClip, deleteEffect, deleteOverlay, duplicateClip, duplicateEffect, setClipReversed, splitClipAt } from "@/src/editor/model/ops";
 import { isPhoto, isTextOverlay, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useClipMedia } from "@/src/editor/useClipMedia";
@@ -13,9 +13,12 @@ import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { ToolButton } from "@/src/ui/ToolButton";
 import { useReducedMotion } from "@/src/ui/useReducedMotion";
+import { AdjustSheet } from "./AdjustSheet";
 import { BackgroundSheet } from "./BackgroundSheet";
 import { CaptionsSheet } from "./CaptionsSheet";
 import { CropScreen } from "./CropScreen";
+import { EffectSheet } from "./EffectSheet";
+import { EffectStrengthSheet } from "./EffectStrengthSheet";
 import { MusicSheet } from "./MusicSheet";
 import { RatioSheet } from "./RatioSheet";
 import { SpeedSheet } from "./SpeedSheet";
@@ -30,6 +33,9 @@ import { TrimSheet } from "./TrimSheet";
 import { VolumeSheet } from "./VolumeSheet";
 
 type PanelFor = { id: string; kind: "text" | "sticker" } | null;
+/** With an effect selected, the Effects group shows these instead of its normal tools (Effect stays, to add another). */
+const SELECTED_EFFECT_TOOLS: ToolId[] = ["effect", "effectStrength", "effectDuplicate", "effectDelete"];
+
 type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void };
 
 export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransitionChange }: Props) {
@@ -38,7 +44,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useEditorStore((s) => s.project?.clips.find((c) => c.id === s.selectedClipId) ?? null);
   const photoSel = !!selectedClip && isPhoto(selectedClip);
@@ -49,7 +55,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const { freeze, busy: freezeBusy } = useFreezeFrame();
   const [group, setGroup] = useState<ToolGroupId>("edit");
   const overlayKind = useEditorStore((s) => s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind ?? null);
-  useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind }, cur) ?? cur); }, [selectedId, overlayKind]);
+  const selectedEffectId = useEditorStore((s) => s.selectedEffectId);
+  useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind, effectId: selectedEffectId }, cur) ?? cur); }, [selectedId, overlayKind, selectedEffectId]);
 
   const addText = () => {
     const { project, playhead, selectOverlay } = useEditorStore.getState();
@@ -72,6 +79,15 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     onPanelChange(null);
   };
 
+  const duplicateSelectedEffect = () => {
+    if (!selectedEffectId) return;
+    apply((p) => duplicateEffect(p, selectedEffectId));
+    // The copy sits right after the original in the list.
+    const list = useEditorStore.getState().project?.effects ?? [];
+    const dup = list[list.findIndex((e) => e.id === selectedEffectId) + 1];
+    if (dup) useEditorStore.getState().selectEffect(dup.id);
+  };
+
   const TOOLS: Record<ToolId, { label: string; icon: IoniconName; disabled?: boolean; active?: boolean; onPress: () => void }> = {
     split: { label: "Split", icon: "cut", disabled: noSel, onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
     trim: { label: "Trim", icon: "crop", disabled: noSel, onPress: () => setSheet("trim") },
@@ -88,6 +104,11 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     transition: { label: "Transition", icon: "swap-horizontal", disabled: noSel || selectedIndex === clipCount - 1, onPress: () => onTransitionChange(selectedIndex) },
     templates: { label: "Templates", icon: "color-wand", disabled: !hasClips, onPress: () => setSheet("templates") },
     background: { label: "Background", icon: "color-palette", disabled: noSel, onPress: () => setSheet("background") },
+    adjust: { label: "Adjust", icon: "options", disabled: noSel, onPress: () => setSheet("adjust") },
+    effect: { label: "Effect", icon: "flash", onPress: () => setSheet("effect") },
+    effectStrength: { label: "Strength", icon: "speedometer", disabled: !selectedEffectId, onPress: () => setSheet("effectStrength") },
+    effectDuplicate: { label: "Duplicate", icon: "copy", disabled: !selectedEffectId, onPress: duplicateSelectedEffect },
+    effectDelete: { label: "Delete", icon: "trash", disabled: !selectedEffectId, onPress: () => { if (selectedEffectId) { haptic("medium"); apply((p) => deleteEffect(p, selectedEffectId)); } } },
     text: { label: "Text", icon: "text", disabled: !hasClips, onPress: addText },
     captions: { label: "Captions", icon: "chatbox-ellipses", disabled: !hasClips, onPress: () => setSheet("captions") },
     sticker: { label: "Sticker", icon: "happy", disabled: !hasClips, onPress: () => setSheet("sticker") },
@@ -95,13 +116,14 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     volume: { label: "Volume", icon: "volume-high", disabled: noSel || photoSel || !!selectedClip?.reversed, onPress: () => setSheet("volume") },
   };
   const active = TOOL_GROUPS.find((g) => g.id === group)!;
+  const tools = group === "effects" && selectedEffectId ? SELECTED_EFFECT_TOOLS : active.tools;
 
   return (
     <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: Math.max(insets.bottom, theme.space.sm) }}>
       <Animated.View key={group} entering={reduced ? undefined : FadeIn.duration(150)}
         style={{ paddingVertical: theme.space.xs, borderBottomWidth: 1, borderBottomColor: theme.colors.surfaceAlt }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
-          {active.tools.map((id) => <ToolButton key={id} {...TOOLS[id]} />)}
+          {tools.map((id) => <ToolButton key={id} {...TOOLS[id]} />)}
         </ScrollView>
       </Animated.View>
       <View accessibilityRole="tablist" style={{ flexDirection: "row", justifyContent: "space-around", paddingTop: theme.space.xs }}>
@@ -113,6 +135,9 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <FilterSheet clipId={selectedId} visible={sheet === "filter"} onClose={() => setSheet(null)} />
       <TemplateSheet clipId={selectedId} visible={sheet === "templates"} onClose={() => setSheet(null)} />
       <TransformSheet clipId={selectedId} visible={sheet === "transform"} onClose={() => setSheet(null)} />
+      <AdjustSheet clipId={selectedId} visible={sheet === "adjust"} onClose={() => setSheet(null)} />
+      <EffectSheet visible={sheet === "effect"} onClose={() => setSheet(null)} />
+      <EffectStrengthSheet effectId={selectedEffectId} visible={sheet === "effectStrength"} onClose={() => setSheet(null)} />
       <BackgroundSheet clipId={selectedId} visible={sheet === "background"} onClose={() => setSheet(null)} />
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
       <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />

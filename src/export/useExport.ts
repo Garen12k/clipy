@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normaliseTransitions } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
-import type { Project } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportClip, toExportOverlay } from "@/modules/clipy-video";
+import { EFFECT_END_SLACK, type Project } from "@/src/editor/model/types";
+import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportClip, toExportEffect, toExportOverlay } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
 import { estimateBytes, exportableAudio, exportableClips, type Resolution } from "./estimate";
 
@@ -35,7 +35,8 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
     const clips = normaliseTransitions(filtered);
     setState({ status: "exporting", progress: 0 });
     try {
-      const need = estimateBytes(clips.reduce((s, c) => s + clipDuration(c), 0), resolution) * 2;
+      const total = clips.reduce((s, c) => s + clipDuration(c), 0);
+      const need = estimateBytes(total, resolution) * 2;
       if ((await expoFs.freeBytes()) < need) { setState({ status: "error", progress: 0, message: "Not enough free space on this iPhone for the export." }); return; }
       await expoFs.mkdir(`${expoFs.cacheDir}exports`);
       const outputPath = `${expoFs.cacheDir}exports/${project.id}-${Date.now()}.mp4`;
@@ -43,6 +44,10 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
       jobId.current = await exportTimeline({
         clips: clips.map(toExportClip),
         overlays: project.overlays.filter((o) => o.end > o.start).map(toExportOverlay),
+        effects: project.effects
+          .map((e) => ({ ...e, start: Math.max(0, e.start), end: Math.min(total, e.end) }))
+          .filter((e) => e.end - e.start >= EFFECT_END_SLACK)
+          .map(toExportEffect),
         audio: audioTrack ? { sourceUri: audioTrack.sourceUri, start: audioTrack.start, trimStart: audioTrack.trimStart, trimEnd: audioTrack.trimEnd, volume: audioTrack.volume } : null,
         aspectRatio: project.aspectRatio, resolution, outputPath,
       });

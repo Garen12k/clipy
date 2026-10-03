@@ -1,6 +1,7 @@
 import { create } from "zustand";
+import { fitEffects } from "./model/ops";
 import { totalDuration } from "./model/timeline";
-import type { PostRecord, Project } from "./model/types";
+import type { EffectItem, PostRecord, Project } from "./model/types";
 
 export const HISTORY_LIMIT = 50;
 export const MIN_PPS = 20;
@@ -15,6 +16,7 @@ interface EditorState {
   missingSourceUris: string[];
   selectedClipId: string | null;
   selectedOverlayId: string | null;
+  selectedEffectId: string | null;
   playhead: number;
   isPlaying: boolean;
   pixelsPerSecond: number;
@@ -32,6 +34,7 @@ interface EditorState {
   canRedo: () => boolean;
   select: (id: string | null) => void;
   selectOverlay: (id: string | null) => void;
+  selectEffect: (id: string | null) => void;
   seek: (t: number) => void;
   setPlaying: (b: boolean) => void;
   setZoom: (pps: number) => void;
@@ -40,14 +43,31 @@ interface EditorState {
 }
 
 const initial = {
-  project: null, missingSourceUris: [], selectedClipId: null, selectedOverlayId: null, playhead: 0, isPlaying: false,
+  project: null, missingSourceUris: [], selectedClipId: null, selectedOverlayId: null, selectedEffectId: null, playhead: 0, isPlaying: false,
   pixelsPerSecond: DEFAULT_PPS, past: [], future: [], dirty: false,
 };
 
 function afterChange(s: EditorState, next: Project): Partial<EditorState> {
   const selected = s.selectedClipId && next.clips.some((c) => c.id === s.selectedClipId) ? s.selectedClipId : null;
   const selectedOverlay = s.selectedOverlayId && next.overlays.some((o) => o.id === s.selectedOverlayId) ? s.selectedOverlayId : null;
-  return { project: next, dirty: true, selectedClipId: selected, selectedOverlayId: selectedOverlay, playhead: Math.min(s.playhead, totalDuration(next)) };
+  const selectedEffect = s.selectedEffectId && next.effects.some((e) => e.id === s.selectedEffectId) ? s.selectedEffectId : null;
+  return { project: next, dirty: true, selectedClipId: selected, selectedOverlayId: selectedOverlay, selectedEffectId: selectedEffect, playhead: Math.min(s.playhead, totalDuration(next)) };
+}
+
+const sameItems = (a: EffectItem[], b: EffectItem[]) => a === b || (a.length === b.length && a.every((e, i) => e === b[i]));
+
+/**
+ * One frame of a clip drag (trim, speed): clip ops drop effects stranded past the project's end, and every frame is applied to the
+ * result of the one before, so an effect dropped on one frame would stay gone when the drag comes back. The effects are therefore
+ * taken from the transaction's snapshot (`base`, what `beginTransaction` pushed) and fitted to the new length. Left alone when the
+ * clips did not change, or when the op changed the effects itself (an effect drag).
+ */
+function refitEffects(cur: Project, next: Project, base: Project | undefined): Project {
+  if (!base || next.clips === cur.clips) return next;
+  const total = totalDuration(next);
+  if (!sameItems(next.effects, fitEffects(cur.effects, total))) return next;   // the op did more to the effects than drop stranded ones
+  const effects = fitEffects(base.effects, total);
+  return sameItems(effects, next.effects) ? next : { ...next, effects };
 }
 
 /** Post records are not undoable: carry the live list onto a restored snapshot (same object when unchanged). */
@@ -71,9 +91,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   applyTransient: (op) => {
     const s = get();
     if (!s.project) return;
-    const next = op(s.project);
-    if (next === s.project) return;
-    set(afterChange(s, next));
+    const changed = op(s.project);
+    if (changed === s.project) return;
+    set(afterChange(s, refitEffects(s.project, changed, s.past[s.past.length - 1])));
   },
   addPostRecord: (record) => {
     const s = get();
@@ -94,8 +114,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,
-  select: (id) => set(id ? { selectedClipId: id, selectedOverlayId: null } : { selectedClipId: null }),
-  selectOverlay: (id) => set(id ? { selectedOverlayId: id, selectedClipId: null } : { selectedOverlayId: null }),
+  select: (id) => set(id ? { selectedClipId: id, selectedOverlayId: null, selectedEffectId: null } : { selectedClipId: null }),
+  selectOverlay: (id) => set(id ? { selectedOverlayId: id, selectedClipId: null, selectedEffectId: null } : { selectedOverlayId: null }),
+  selectEffect: (id) => set(id ? { selectedEffectId: id, selectedClipId: null, selectedOverlayId: null } : { selectedEffectId: null }),
   seek: (t) => {
     const p = get().project;
     set({ playhead: Math.max(0, Math.min(t, p ? totalDuration(p) : 0)) });

@@ -6,7 +6,7 @@ export const theme = {
     accent: ACCENT, onAccent: "#0A1B33",
     text: "#F6E7C1", textMuted: "#9FB3CC", hairline: "rgba(217,179,106,0.45)",
     sea: "#1C6E9E", seaLight: "#2E86AB", danger: "#E5484D",
-    laneText: "#D9B36A", laneSticker: "#E86A7A", laneMusic: "#3BA7C9",
+    laneText: "#D9B36A", laneSticker: "#E86A7A", laneMusic: "#3BA7C9", laneEffect: "#9A86D6",
     scrim: "rgba(3,10,20,0.55)", scrimStrong: "rgba(3,10,20,0.75)",
   },
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
