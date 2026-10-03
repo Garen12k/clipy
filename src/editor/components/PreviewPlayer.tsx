@@ -9,6 +9,7 @@ import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePr
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { ClipFrame } from "./ClipFrame";
+import { ClipGestures } from "./ClipGestures";
 import { FilterLayer } from "./FilterLayer";
 import { OverlayLayer } from "./OverlayLayer";
 import { needsPreviewTag, PreviewTag } from "./PreviewTag";
@@ -35,6 +36,8 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const loadedSourceUri = useRef<string | null>(null);
   // Source-time to seek to once the pending `replaceAsync` reports `readyToPlay`; null when no seek is pending.
   const pendingSeek = useRef<number | null>(null);
+  // The photo clip the player was last paused for; null while a video is under the playhead.
+  const pausedForPhotoId = useRef<string | null>(null);
 
   const player = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = false; p.audioMixingMode = "mixWithOthers"; });
 
@@ -55,12 +58,13 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       return;
     }
     if (isPhoto(hit.clip)) {
-      // Nothing to load: keep the player paused, and forget the loaded clip so coming back to a video
-      // (even the same one) re-seeks it and resumes playback.
-      player.pause();
+      // Nothing to load: pause the player once on arriving at this photo (not on every playhead tick of its
+      // timer), and forget the loaded clip so coming back to a video (even the same one) re-seeks it and resumes.
+      if (pausedForPhotoId.current !== hit.clip.id) { player.pause(); pausedForPhotoId.current = hit.clip.id; }
       loadedClipId.current = null;
       return;
     }
+    pausedForPhotoId.current = null;
     // expo-video caps player.volume at 1; values above 1 are only honoured in the export.
     player.volume = hit.clip.muted ? 0 : Math.min(1, hit.clip.volume);
     player.muted = hit.clip.muted;
@@ -154,6 +158,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         )}
         <FilterLayer filter={hit?.clip.filter ?? null} />
         <TransitionLayer />
+        {frame.w > 0 && <ClipGestures frameW={frame.w} frameH={frame.h} />}
         {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenPanel?.(id)} />}
         <PreviewTag visible={needsPreviewTag(project, playhead)} />
         {!isPlaying && !empty && (

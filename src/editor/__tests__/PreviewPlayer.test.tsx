@@ -24,7 +24,7 @@ import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
 
-type MockPlayer = { playing: boolean; play: jest.Mock; pause: jest.Mock; replaceAsync: jest.Mock; listeners: Record<string, (e: unknown) => void> };
+type MockPlayer = { playing: boolean; currentTime: number; play: jest.Mock; pause: jest.Mock; replaceAsync: jest.Mock; listeners: Record<string, (e: unknown) => void> };
 const player = (jest.requireMock("expo-video") as { __mockPlayer: MockPlayer }).__mockPlayer;
 const layout = () => fireEvent(screen.getByLabelText("Preview"), "layout", { nativeEvent: { layout: { width: 270, height: 480 } } });
 
@@ -58,6 +58,36 @@ test("playing still plays", async () => {
   expect(player.playing).toBe(true);
 });
 
+describe("moving to another clip of the same file while that file is still loading", () => {
+  // a (speed 2, 0–2 s) and b (2–6 s) share file:///media/a.mp4; b's source time at playhead 3 is 1.
+  test("paused: the pending seek lands on the second clip's source time and nothing plays", async () => {
+    player.currentTime = -1;
+    await render(<PreviewPlayer />);
+    expect(player.replaceAsync).toHaveBeenCalledTimes(1);
+    await act(() => { useEditorStore.getState().seek(3); });
+    expect(player.replaceAsync).toHaveBeenCalledTimes(1); // same file: no reload
+    expect(player.currentTime).toBe(-1); // still loading: no seek yet
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+    expect(player.currentTime).toBe(1);
+    expect(player.play).not.toHaveBeenCalled();
+    expect(player.playing).toBe(false);
+  });
+
+  test("playing: the pending seek lands on the second clip's source time, then plays", async () => {
+    player.currentTime = -1;
+    await render(<PreviewPlayer />);
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    await act(() => { useEditorStore.getState().seek(3); });
+    expect(player.replaceAsync).toHaveBeenCalledTimes(1);
+    expect(player.currentTime).toBe(-1);
+    player.play.mockClear();
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+    expect(player.currentTime).toBe(1);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+  });
+});
+
 describe("photo clips", () => {
   beforeEach(() => {
     useEditorStore.getState().setProject(makeProject({ clips: [
@@ -82,10 +112,13 @@ describe("photo clips", () => {
     await render(<PreviewPlayer />);
     await layout();
     await act(() => { useEditorStore.getState().setPlaying(true); });
+    const pausesAtStart = player.pause.mock.calls.length;
     await act(() => { jest.advanceTimersByTime(500); });
     expect(useEditorStore.getState().playhead).toBeCloseTo(0.5, 5);
     expect(player.play).not.toHaveBeenCalled();
     expect(player.playing).toBe(false);
+    // The photo's playhead ticks do not re-pause the (already paused) player each time.
+    expect(player.pause.mock.calls.length).toBe(pausesAtStart);
     // A stray timeUpdate from the (paused) player must not move the playhead while the photo plays.
     await act(() => { player.listeners.timeUpdate?.({ currentTime: 3 }); });
     expect(useEditorStore.getState().playhead).toBeCloseTo(0.5, 5);
@@ -116,6 +149,15 @@ describe("photo clips", () => {
     expect(player.playing).toBe(false);
     await act(() => { useEditorStore.getState().setPlaying(false); });
   });
+});
+
+test("the selected clip under the playhead gets the gesture layer and gold frame", async () => {
+  await render(<PreviewPlayer />);
+  await layout();
+  expect(screen.queryByTestId("clip-selection-frame")).toBeNull();
+  await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByTestId("clip-selection-frame")).toBeTruthy();
+  expect(screen.getByTestId("clip-gesture-area")).toBeTruthy();
 });
 
 describe("Preview tag", () => {

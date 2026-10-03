@@ -40,8 +40,8 @@ test("stops at the photo's end and moves on to the next clip", async () => {
   useEditorStore.getState().seek(0.9);
   await renderHook(() => usePhotoPlayback(true));
   await act(() => { jest.advanceTimersByTime(200); });
-  expect(useEditorStore.getState().playhead).toBeGreaterThanOrEqual(1);
-  expect(useEditorStore.getState().playhead).toBeLessThan(1.2);
+  // Ticks at 50 / 100 ms: 0.95, then lands exactly on p2's start (1); ticks at 150 / 200 ms move on through p2.
+  expect(useEditorStore.getState().playhead).toBeCloseTo(1.1, 5);
   expect(useEditorStore.getState().isPlaying).toBe(true);
 });
 
