@@ -32,7 +32,8 @@ enum LayerBackground {
 }
 
 /// One source track drawn by a `ClipyInstruction`: which composition track, how to place its frames in the render
-/// rect (Core Image space: bottom-left origin), what fills the uncovered frame, and which filter to apply.
+/// rect (Core Image space: bottom-left origin), what fills the uncovered frame, and its look: which filter to apply,
+/// how strongly (0…1), and the Adjust values that follow it.
 /// `fill` is the cover transform (`ExportSession.ciFillTransform`); `orient` uprights a frame for
 /// `ClipLayout.ciPlacement`. A clip with the default transform and full crop takes the `fill` path unchanged.
 final class LayerSpec {
@@ -43,12 +44,17 @@ final class LayerSpec {
   let transform: ClipTransform
   let background: LayerBackground
   let filter: String?
+  /// 0…1 — the mix of the unfiltered (0) and the filtered (1) frame; a non-finite value counts as 1.
+  let filterIntensity: Double
+  /// Applied after the filter; non-finite values count as 0. Neutral = no adjust pass at all.
+  let adjust: AdjustValues
   /// True for the default clip (scale 1, no offset / rotation / flip, full crop) and for values that cannot be
   /// placed (non-finite, zero scale, empty crop): those frames are drawn exactly as before placement existed.
   let usesFill: Bool
 
   init(trackID: CMPersistentTrackID, fill: CGAffineTransform, orient: CGAffineTransform, crop: ClipCrop,
-       transform: ClipTransform, background: LayerBackground, filter: String?) {
+       transform: ClipTransform, background: LayerBackground, filter: String?,
+       filterIntensity: Double = 1, adjust: AdjustValues = .neutral) {
     self.trackID = trackID
     self.fill = fill
     self.orient = orient
@@ -56,6 +62,8 @@ final class LayerSpec {
     self.transform = transform
     self.background = background
     self.filter = filter
+    self.filterIntensity = Adjust.strength(filterIntensity)
+    self.adjust = adjust.sanitized
     let t = transform, c = crop
     let finite = [t.scale, t.x, t.y, t.rotation, c.x, c.y, c.w, c.h].allSatisfy { $0.isFinite }
     let placeable = finite && t.scale > 0 && c.w > 0 && c.h > 0
@@ -84,8 +92,8 @@ final class ClipyInstruction: NSObject, AVVideoCompositionInstructionProtocol {
 }
 
 /// Custom compositor: renders each source frame with Core Image — placed by `ClipLayout` (crop, flip, scale, rotate,
-/// offset) over its background, then the clip's filter chain — and blends the two frames of a transition window by
-/// type and progress.
+/// offset) over its background, then the clip's filter chain at its strength, then its Adjust values — and blends
+/// the two finished frames of a transition window by type and progress.
 final class ClipyCompositor: NSObject, AVVideoCompositing {
   private let ctx = CIContext(options: [.cacheIntermediates: false])
 
@@ -107,9 +115,12 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
     let size = req.renderContext.size
     let rect = CGRect(origin: .zero, size: size)
 
+    let time = req.compositionTime.seconds              // output seconds (the grain moves with it)
+
     let black = CIImage(color: CIColor.black).cropped(to: rect)
 
-    /// One clip's composed frame (placed picture over its background), then its filter — as the preview draws it.
+    /// One clip's composed frame (placed picture over its background), then its look (filter at its strength, then
+    /// adjust) — as the preview draws it.
     func frame(_ spec: LayerSpec) -> CIImage? {
       guard let pb = req.sourceFrame(byTrackID: spec.trackID) else { return nil }
       let source = CIImage(cvPixelBuffer: pb)
@@ -129,7 +140,7 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
         let behind = covered ? black : ClipyCompositor.background(spec, source: source, size: size)
         img = picture.composited(over: behind).cropped(to: rect)
       }
-      return Effects.apply(Effects.filterChain(spec.filter), to: img)
+      return ClipyCompositor.look(spec, on: img, time: time)
     }
 
     var result = black
@@ -153,6 +164,21 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
   }
 
   func cancelAllPendingVideoCompositionRequests() {}
+
+  /// A composed clip frame's look: the filter chain mixed in at the clip's strength (`original·(1 − s) + filtered·s`;
+  /// s = 1 skips the mix, s = 0 or no filter skips the chain), then the Adjust recipe (skipped when neutral). A clip
+  /// with the defaults (strength 1, neutral adjust) gets exactly `Effects.apply(chain, to: img)`, as before.
+  static func look(_ spec: LayerSpec, on img: CIImage, time: Double) -> CIImage {
+    var out = img
+    let chain = Effects.filterChain(spec.filter)
+    if !chain.isEmpty, spec.filterIntensity > 0 {
+      let filtered = Effects.apply(chain, to: img)
+      out = spec.filterIntensity >= 1
+        ? filtered
+        : dissolve(from: img, to: filtered, progress: CGFloat(spec.filterIntensity)).cropped(to: img.extent)
+    }
+    return spec.adjust.isNeutral ? out : Adjust.apply(spec.adjust, to: out, time: time)
+  }
 
   /// Blur radius as a fraction of the frame's shorter side.
   static let blurRadiusFactor: CGFloat = 0.04

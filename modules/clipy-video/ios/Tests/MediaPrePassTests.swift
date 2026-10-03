@@ -42,6 +42,9 @@ final class MediaPrePassTests: XCTestCase {
     c.crop = crop
     var bg = ExportBackground(); bg.type = "color"; bg.color = "#FF0000"
     c.background = bg
+    c.filterIntensity = 0.4
+    var adjust = ExportAdjust(); adjust.brightness = 0.5; adjust.grain = 0.25
+    c.adjust = adjust
 
     let prepared = URL(fileURLWithPath: "/tmp/clipy-prepass-x/0-photo.mp4")
     let r = MediaPrePass.rewrite(c, preparedURL: prepared, duration: 3)
@@ -58,6 +61,8 @@ final class MediaPrePassTests: XCTestCase {
     XCTAssertEqual(r.transform.rotation, 90); XCTAssertTrue(r.transform.flipH); XCTAssertTrue(r.transform.flipV)
     XCTAssertEqual(r.crop.x, 0.1); XCTAssertEqual(r.crop.y, 0.2); XCTAssertEqual(r.crop.w, 0.5); XCTAssertEqual(r.crop.h, 0.6)
     XCTAssertEqual(r.background.type, "color"); XCTAssertEqual(r.background.color, "#FF0000")
+    XCTAssertEqual(r.filterIntensity, 0.4)
+    XCTAssertEqual(r.adjust.brightness, 0.5); XCTAssertEqual(r.adjust.grain, 0.25); XCTAssertEqual(r.adjust.contrast, 0)
   }
 
   /// `@Field` is a class: the rewrite must build a new record, never write through a copy of the original.
