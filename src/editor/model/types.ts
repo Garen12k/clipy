@@ -55,6 +55,8 @@ export const EFFECT_IDS = ["glitch", "shake", "zoomPulse", "blur", "vhs", "light
 export type EffectId = (typeof EFFECT_IDS)[number];
 export interface EffectItem { id: string; type: EffectId; start: number; end: number; intensity: number }   // project time, seconds; intensity 0…1
 export const EFFECT_LIMITS = { minDuration: 0.2, defaultDuration: 2, defaultIntensity: 0.7 };
+/** Seconds of slack at the project's end: an effect starting this close to it (or after it) cannot be reached, and one this short is not exported. */
+export const EFFECT_END_SLACK = 0.05;
 
 export interface Clip {
   id: string; sourceUri: string; sourceDuration: number; width: number; height: number;

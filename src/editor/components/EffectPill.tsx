@@ -3,7 +3,7 @@ import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { EFFECTS } from "@/src/editor/effects";
 import { moveEffect, updateEffect } from "@/src/editor/model/ops";
-import { timeToX, xToTime } from "@/src/editor/model/timeline";
+import { timeToX, totalDuration, xToTime } from "@/src/editor/model/timeline";
 import type { EffectItem } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
@@ -15,6 +15,7 @@ const HANDLE_W = 12;
 /** One effect on the effects lane: long-press drag moves it, the two handles (shown when selected) trim it. */
 export function EffectPill({ effect: fx, selected, onPress }: { effect: EffectItem; selected: boolean; onPress: () => void }) {
   const pps = useEditorStore((s) => s.pixelsPerSecond);
+  const total = useEditorStore((s) => (s.project ? totalDuration(s.project) : 0));
   const store = useEditorStore.getState();
   // Drag start lives in a ref object: gesture callbacks each get their own copy of captured variables.
   const startRef = useRef({ start: fx.start, end: fx.end });
@@ -32,7 +33,7 @@ export function EffectPill({ effect: fx, selected, onPress }: { effect: EffectIt
   }, [fx.id, pps]);
 
   const label = EFFECTS[fx.type].label;
-  const leftPx = timeToX(fx.start, pps), width = Math.max(HANDLE_W * 2 + 4, timeToX(fx.end - fx.start, pps));
+  const leftPx = timeToX(fx.start, pps), width = Math.max(HANDLE_W * 2 + 4, timeToX(Math.min(fx.end, total) - fx.start, pps));   // drawn only up to the project's end
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`effect-pill-${fx.id}`} onPress={onPress} accessibilityLabel={`Effect ${label}`}

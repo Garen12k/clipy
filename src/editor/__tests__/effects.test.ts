@@ -60,7 +60,7 @@ test("caption style default", () => {
 
 test("effects registry covers every effect id; labels as specified", () => {
   expect(EFFECT_IDS).toHaveLength(10);
-  for (const id of EFFECT_IDS) { expect(EFFECTS[id].label.length).toBeGreaterThan(0); expect(EFFECTS[id].icon.length).toBeGreaterThan(0); expect(EFFECTS[id].previewExact).toBe(false); }
+  for (const id of EFFECT_IDS) { expect(EFFECTS[id].label.length).toBeGreaterThan(0); expect(EFFECTS[id].icon.length).toBeGreaterThan(0); }
   expect(EFFECT_IDS.map((id) => EFFECTS[id].label)).toEqual(["Glitch", "Shake", "Zoom pulse", "Blur", "VHS", "Light leak", "Flash", "RGB split", "Old film", "Glow"]);
   expect(TRANSITIONS.slide.label).toBe("Slide left");
   expect(TRANSITIONS.slideRight.label).toBe("Slide right");

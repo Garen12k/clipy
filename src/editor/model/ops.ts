@@ -3,7 +3,7 @@ import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
 import {
-  AUDIO_LIMITS, aspectRatioValue, clampAdjust, clampCrop, clampTransform, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  AUDIO_LIMITS, aspectRatioValue, clampAdjust, clampCrop, clampTransform, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   MIN_CLIP_SECONDS, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_LIMITS, TRANSITION_LIMITS,
   type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem, type FilterId, type Overlay, type Project,
   type StickerOverlay, type TextOverlay, type TransitionType,
@@ -11,19 +11,19 @@ import {
 import { totalDuration } from "./timeline";
 import type { Template } from "../templates";
 
-/** An effect starting this close to the project's end (or after it) cannot be reached on the timeline. */
-const EFFECT_END_SLACK = 0.05;
-
-/** Drops effects left at or past the project's end; those still starting inside are untouched. Same array when nothing is dropped. */
-function fitEffects(p: Project): EffectItem[] {
-  const limit = totalDuration(p) - EFFECT_END_SLACK;
-  return p.effects.some((e) => e.start >= limit) ? p.effects.filter((e) => e.start < limit) : p.effects;
+/**
+ * Drops effects left at or past the end of a project `total` seconds long (within EFFECT_END_SLACK of it: they cannot be reached on
+ * the timeline); those still starting inside are untouched. Same array when nothing is dropped.
+ */
+export function fitEffects(effects: EffectItem[], total: number): EffectItem[] {
+  const limit = total - EFFECT_END_SLACK;
+  return effects.some((e) => e.start >= limit) ? effects.filter((e) => e.start < limit) : effects;
 }
 
 function touch(p: Project, patch: Partial<Project>): Project {
   const next = { ...p, ...patch, updatedAt: nowIso() };
   // Only a change to the clips can shorten the project.
-  if (patch.clips) next.effects = fitEffects(next);
+  if (patch.clips) next.effects = fitEffects(next.effects, totalDuration(next));
   return next;
 }
 
@@ -225,7 +225,8 @@ export function setClipMuted(p: Project, clipId: string, muted: boolean): Projec
 }
 
 const NO_TRANSITION = { type: "none" as const, duration: 0 };
-const r2 = (v: number) => Math.round(v * 100) / 100;
+/** 2 decimals; the `+ 0` turns a rounded −0 into 0, so a slider back at centre stores exactly 0. */
+const r2 = (v: number) => Math.round(v * 100) / 100 + 0;
 
 /** Max transition duration for the cut after clip index `i` within `clips`; 0 when there's no next clip. */
 function capFor(clips: Clip[], i: number): number {
@@ -278,7 +279,7 @@ export function setClipFilter(p: Project, clipId: string, filter: FilterId | nul
 
 export function setClipFilterIntensity(p: Project, clipId: string, intensity: number): Project {
   if (!Number.isFinite(intensity)) return p;
-  const v = clamp(intensity, [0, 1]);
+  const v = r2(clamp(intensity, [0, 1]));
   return updateClip(p, clipId, (c) => (c.filterIntensity === v ? c : { ...c, filterIntensity: v }));
 }
 
@@ -465,9 +466,15 @@ export function insertFreezeFrame(p: Project, outputTime: number, still: { id: s
   return touch(p, { clips: normaliseTransitions([...split.clips.slice(0, at), photo, ...split.clips.slice(at)]) });
 }
 
+/** Patched values are rounded to 2 decimals (slider floats: a slider back at centre must store exactly 0). */
 export function setClipAdjust(p: Project, clipId: string, patch: Partial<ClipAdjust>): Project {
+  const rounded: Partial<ClipAdjust> = {};
+  for (const key of Object.keys(patch) as (keyof ClipAdjust)[]) {
+    const v = patch[key];
+    if (typeof v === "number") rounded[key] = r2(v);
+  }
   return updateClip(p, clipId, (c) => {
-    const next = clampAdjust({ ...c.adjust, ...patch });
+    const next = clampAdjust({ ...c.adjust, ...rounded });
     return sameJson(next, c.adjust) ? c : { ...c, adjust: next };
   });
 }
@@ -506,16 +513,19 @@ export function updateEffect(p: Project, id: string, patch: Partial<Pick<EffectI
   const cur = p.effects[i];
   const total = totalDuration(p);
   const min = EFFECT_LIMITS.minDuration;
-  const intensity = patch.intensity === undefined ? cur.intensity : clamp(patch.intensity, [0, 1]);
+  const intensity = patch.intensity === undefined ? cur.intensity : r2(clamp(patch.intensity, [0, 1]));
   if (patch.start === undefined && patch.end === undefined) return replaceEffect(p, i, { ...cur, intensity });   // range untouched
   let { start, end } = cur;
   if (patch.end !== undefined) end = clamp(patch.end, [0, total]);
   if (patch.start !== undefined) start = clamp(patch.start, [0, total]);
-  if (patch.start !== undefined && patch.end === undefined) start = Math.min(start, end - min);
-  else if (patch.end !== undefined && patch.start === undefined) end = Math.max(end, start + min);
-  else if (patch.start !== undefined && patch.end !== undefined && end - start < min) start = end - min;
+  // A yielding edge is nudged 1e-9 further (as addEffect does): `end - (end - min)` can be a hair under `min` in floating point,
+  // and the loader would then move the end (`start + min`), so a saved project would not reload byte-for-byte.
+  if (end - start < min) {
+    if (patch.end !== undefined && patch.start === undefined) end = start + min + 1e-9;
+    else start = end - min - 1e-9;
+  }
   start = Math.max(0, start); end = Math.min(total, end);
-  if (end - start < min - 1e-9) return p;
+  if (end - start < min) return p;
   return replaceEffect(p, i, { ...cur, start, end, intensity });
 }
 

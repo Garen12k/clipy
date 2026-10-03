@@ -23,12 +23,13 @@ export function EffectSheet({ visible, onClose }: { visible: boolean; onClose: (
     done.current = true;
     const id = newId();
     // The op returns the same project when it refuses. The sheet is a native Modal and would cover the toast: close first.
-    if (addEffect(project, type, playhead, id) === project) {
+    const next = addEffect(project, type, playhead, id);
+    if (next === project) {
       onClose();
       useToast.getState().show(project.clips.length === 0 ? "Add a clip first." : "No room for an effect here.");
       return;
     }
-    apply((p) => addEffect(p, type, playhead, id));
+    apply(() => next);
     selectEffect(id);
     haptic("light");
     onClose();

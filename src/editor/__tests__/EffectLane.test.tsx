@@ -77,3 +77,12 @@ test("a very short effect still gets a 28 pt pill, so both handles fit", async (
   await render(<EffectLane />);
   expect(screen.getByTestId("effect-pill-s")).toHaveStyle({ left: 100, width: 28, borderRadius: theme.radius.chip });
 });
+
+test("a pill running past the project's end is drawn only up to the end", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 3 })],
+    effects: [makeEffect({ id: "long", start: 1, end: 50 }), makeEffect({ id: "gone", start: 2.9, end: 6 })] }));
+  useEditorStore.getState().setZoom(50);
+  await render(<EffectLane />);
+  expect(screen.getByTestId("effect-pill-long")).toHaveStyle({ left: 50, width: 100 });   // 1–3 s, not 1–50 s
+  expect(screen.getByTestId("effect-pill-gone")).toHaveStyle({ width: 28 });   // the minimum width stays
+});

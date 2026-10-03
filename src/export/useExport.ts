@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normaliseTransitions } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
-import type { Project } from "@/src/editor/model/types";
+import { EFFECT_END_SLACK, type Project } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportClip, toExportEffect, toExportOverlay } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
 import { estimateBytes, exportableAudio, exportableClips, type Resolution } from "./estimate";
-
-const MIN_EFFECT_SECONDS = 0.05;
 
 export type ExportState = { status: "idle" | "unavailable" | "exporting" | "done" | "error"; progress: number; fileUri?: string; message?: string };
 
@@ -48,7 +46,7 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
         overlays: project.overlays.filter((o) => o.end > o.start).map(toExportOverlay),
         effects: project.effects
           .map((e) => ({ ...e, start: Math.max(0, e.start), end: Math.min(total, e.end) }))
-          .filter((e) => e.end - e.start >= MIN_EFFECT_SECONDS)
+          .filter((e) => e.end - e.start >= EFFECT_END_SLACK)
           .map(toExportEffect),
         audio: audioTrack ? { sourceUri: audioTrack.sourceUri, start: audioTrack.start, trimStart: audioTrack.trimStart, trimEnd: audioTrack.trimEnd, volume: audioTrack.volume } : null,
         aspectRatio: project.aspectRatio, resolution, outputPath,

@@ -32,18 +32,18 @@ export const TRANSITIONS: Record<TransitionType, { label: string }> = {
   wipe: { label: "Wipe" }, spin: { label: "Spin" }, blur: { label: "Blur" },
 };
 
-/** Timeline effects. The preview can only approximate them (hence previewExact: false); the real look is Swift's. */
-export const EFFECTS: Record<EffectId, { label: string; icon: IoniconName; previewExact: false }> = {
-  glitch:    { label: "Glitch",     icon: "git-compare-outline",    previewExact: false },
-  shake:     { label: "Shake",      icon: "phone-portrait-outline", previewExact: false },
-  zoomPulse: { label: "Zoom pulse", icon: "expand-outline",         previewExact: false },
-  blur:      { label: "Blur",       icon: "water-outline",          previewExact: false },
-  vhs:       { label: "VHS",        icon: "videocam-outline",       previewExact: false },
-  lightLeak: { label: "Light leak", icon: "sunny-outline",          previewExact: false },
-  flash:     { label: "Flash",      icon: "flash-outline",          previewExact: false },
-  rgbSplit:  { label: "RGB split",  icon: "layers-outline",         previewExact: false },
-  oldFilm:   { label: "Old film",   icon: "film-outline",           previewExact: false },
-  glow:      { label: "Glow",       icon: "bulb-outline",           previewExact: false },
+/** Timeline effects. The preview can only approximate them; the real look is Swift's. */
+export const EFFECTS: Record<EffectId, { label: string; icon: IoniconName }> = {
+  glitch:    { label: "Glitch",     icon: "git-compare-outline" },
+  shake:     { label: "Shake",      icon: "phone-portrait-outline" },
+  zoomPulse: { label: "Zoom pulse", icon: "expand-outline" },
+  blur:      { label: "Blur",       icon: "water-outline" },
+  vhs:       { label: "VHS",        icon: "videocam-outline" },
+  lightLeak: { label: "Light leak", icon: "sunny-outline" },
+  flash:     { label: "Flash",      icon: "flash-outline" },
+  rgbSplit:  { label: "RGB split",  icon: "layers-outline" },
+  oldFilm:   { label: "Old film",   icon: "film-outline" },
+  glow:      { label: "Glow",       icon: "bulb-outline" },
 };
 
 /** 100×100 box, absolute M/L/C/Q/Z only — copied verbatim into Effects.swift. */

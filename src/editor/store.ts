@@ -1,6 +1,7 @@
 import { create } from "zustand";
+import { fitEffects } from "./model/ops";
 import { totalDuration } from "./model/timeline";
-import type { PostRecord, Project } from "./model/types";
+import type { EffectItem, PostRecord, Project } from "./model/types";
 
 export const HISTORY_LIMIT = 50;
 export const MIN_PPS = 20;
@@ -53,6 +54,22 @@ function afterChange(s: EditorState, next: Project): Partial<EditorState> {
   return { project: next, dirty: true, selectedClipId: selected, selectedOverlayId: selectedOverlay, selectedEffectId: selectedEffect, playhead: Math.min(s.playhead, totalDuration(next)) };
 }
 
+const sameItems = (a: EffectItem[], b: EffectItem[]) => a === b || (a.length === b.length && a.every((e, i) => e === b[i]));
+
+/**
+ * One frame of a clip drag (trim, speed): clip ops drop effects stranded past the project's end, and every frame is applied to the
+ * result of the one before, so an effect dropped on one frame would stay gone when the drag comes back. The effects are therefore
+ * taken from the transaction's snapshot (`base`, what `beginTransaction` pushed) and fitted to the new length. Left alone when the
+ * clips did not change, or when the op changed the effects itself (an effect drag).
+ */
+function refitEffects(cur: Project, next: Project, base: Project | undefined): Project {
+  if (!base || next.clips === cur.clips) return next;
+  const total = totalDuration(next);
+  if (!sameItems(next.effects, fitEffects(cur.effects, total))) return next;   // the op did more to the effects than drop stranded ones
+  const effects = fitEffects(base.effects, total);
+  return sameItems(effects, next.effects) ? next : { ...next, effects };
+}
+
 /** Post records are not undoable: carry the live list onto a restored snapshot (same object when unchanged). */
 const withPosts = (p: Project, posts: PostRecord[]): Project => (p.posts === posts ? p : { ...p, posts });
 
@@ -74,9 +91,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   applyTransient: (op) => {
     const s = get();
     if (!s.project) return;
-    const next = op(s.project);
-    if (next === s.project) return;
-    set(afterChange(s, next));
+    const changed = op(s.project);
+    if (changed === s.project) return;
+    set(afterChange(s, refitEffects(s.project, changed, s.past[s.past.length - 1])));
   },
   addPostRecord: (record) => {
     const s = get();

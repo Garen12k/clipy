@@ -37,8 +37,10 @@ test("an effect needs the tag only while it covers the playhead", () => {
   expect(needsPreviewTag(p, 1.9)).toBe(true);
   expect(needsPreviewTag(p, 2)).toBe(false); // end is exclusive
 });
-test("a filter at strength 0 still needs the tag only through the filter rule (unchanged)", () => {
-  expect(needsPreviewTag(one({ filter: "vintage", filterIntensity: 0 }), 1)).toBe(true);
+test("a filter counts only while its strength is above 0", () => {
+  expect(needsPreviewTag(one({ filter: "vintage", filterIntensity: 0 }), 1)).toBe(false);
+  expect(needsPreviewTag(one({ filter: "vintage", filterIntensity: 0.01 }), 1)).toBe(true);
+  expect(needsPreviewTag(one({ filter: "vintage", filterIntensity: 0, reversed: true }), 1)).toBe(true);
 });
 test("a photo at the default fill needs no tag", () => {
   expect(needsPreviewTag(makeProject({ clips: [makePhotoClip({ id: "p" })] }), 1)).toBe(false);

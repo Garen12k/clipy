@@ -1,8 +1,9 @@
 jest.mock("@/src/lib/id", () => ({ newId: jest.fn(() => "new-id") }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { DEFAULT_ADJUST, EFFECT_LIMITS, makeClip, makeEffect, makeProject } from "../types";
+import { DEFAULT_ADJUST, EFFECT_END_SLACK, EFFECT_LIMITS, makeClip, makeEffect, makeProject } from "../types";
+import { migrateProject } from "../migrate";
 import {
-  addEffect, applyTemplate, deleteClip, deleteEffect, duplicateClip, duplicateEffect, insertFreezeFrame, moveEffect, replaceClipMedia, resetClipAdjust,
+  addEffect, applyTemplate, deleteClip, deleteEffect, duplicateClip, duplicateEffect, fitEffects, insertFreezeFrame, moveEffect, replaceClipMedia, resetClipAdjust,
   setAdjustForAllClips, setClipAdjust, setClipFilterIntensity, setFilterForAllClips, setClipSpeed, splitClipAt, trimClip, updateEffect,
 } from "../ops";
 import { TEMPLATES } from "../../templates";
@@ -242,5 +243,66 @@ describe("effects stranded past the project's end are dropped by clip ops", () =
   test("effect ops themselves never drop anything", () => {
     const straddle = { ...p, effects: [makeEffect({ id: "e", start: 11, end: 12 })] };
     expect(updateEffect(straddle, "e", { intensity: 0.2 }).effects).toHaveLength(1);
+  });
+});
+
+describe("final review", () => {
+  test("fitEffects drops effects starting within the slack of the given total; same array when none do", () => {
+    const fx = [makeEffect({ id: "x", start: 1, end: 3 }), makeEffect({ id: "y", start: 8, end: 10 })];
+    expect(EFFECT_END_SLACK).toBe(0.05);
+    expect(fitEffects(fx, 10)).toBe(fx);
+    expect(fitEffects(fx, 8.04).map((e) => e.id)).toEqual(["x"]);
+    expect(fitEffects(fx, 8.06)).toBe(fx);
+    expect(fitEffects(fx, 0)).toEqual([]);
+  });
+
+  test("slider values are rounded to 2 decimals, so a slider back at centre is exactly 0", () => {
+    const moved = setClipAdjust(p, "a", { brightness: 0.5, tint: 0.3349 });
+    expect(moved.clips[0].adjust.tint).toBe(0.33);
+    const back = setClipAdjust(moved, "a", { brightness: -2e-8 });
+    expect(Object.is(back.clips[0].adjust.brightness, 0)).toBe(true);
+    expect(setClipAdjust(p, "a", { contrast: -2e-8 })).toBe(p);
+    expect(setClipAdjust(p, "a", { contrast: 1e-7 })).toBe(p);
+    expect(setClipAdjust(p, "a", { saturation: -0.3351 }).clips[0].adjust.saturation).toBe(-0.34);
+  });
+  test("filter strength is rounded to 2 decimals", () => {
+    expect(setClipFilterIntensity(p, "a", 0.3349).clips[0].filterIntensity).toBe(0.33);
+    expect(Object.is(setClipFilterIntensity(p, "a", -2e-8).clips[0].filterIntensity, 0)).toBe(true);
+    expect(setClipFilterIntensity(p, "a", 0.999999)).toBe(p);
+  });
+  test("effect intensity is rounded to 2 decimals", () => {
+    const base = { ...p, effects: [makeEffect({ id: "e", start: 2, end: 5, intensity: 0.5 })] };
+    expect(updateEffect(base, "e", { intensity: 0.3349 }).effects[0].intensity).toBe(0.33);
+    expect(Object.is(updateEffect(base, "e", { intensity: 2e-8 }).effects[0].intensity, 0)).toBe(true);
+    expect(updateEffect(base, "e", { intensity: 0.5000001 })).toBe(base);
+  });
+
+  describe("a yielding edge leaves at least minDuration exactly, so save and reload is byte-stable", () => {
+    // The loader leaves the saved numbers exactly as they are (toEqual compares numbers exactly; key order is the factory's).
+    const stable = (x: typeof p) => expect(migrateProject(JSON.parse(JSON.stringify(x))).effects).toEqual(x.effects);
+    test.each([[10, 9.95], [10, 9.9], [7.3, 7.25], [5.1, 5.1], [0.7, 0.65], [3.33, 3.2]])("end %d, start dragged to %d", (end, to) => {
+      const base = { ...p, effects: [makeEffect({ id: "e", start: Math.max(0, end - 2), end })] };
+      const n = updateEffect(base, "e", { start: to });
+      const e = n.effects[0];
+      expect(e.end).toBe(end);
+      expect(e.end - e.start).toBeGreaterThanOrEqual(EFFECT_LIMITS.minDuration);
+      expect(e.start).toBeCloseTo(end - EFFECT_LIMITS.minDuration, 6);
+      stable(n);
+    });
+    test.each([[9.7, 9.75],[0.1, 0.15], [7.3, 7.3], [3.33, 3.4], [5.9, 5.9]])("start %d, end dragged to %d", (start, to) => {
+      const base = { ...p, effects: [makeEffect({ id: "e", start, end: Math.min(10, start + 2) })] };
+      const n = updateEffect(base, "e", { end: to });
+      const e = n.effects[0];
+      expect(e.start).toBe(start);
+      expect(e.end - e.start).toBeGreaterThanOrEqual(EFFECT_LIMITS.minDuration);
+      expect(e.end).toBeCloseTo(start + EFFECT_LIMITS.minDuration, 6);
+      stable(n);
+    });
+    test("both edges given and too close: the start gives way, exactly", () => {
+      const base = { ...p, effects: [makeEffect({ id: "e", start: 2, end: 5 })] };
+      const e = updateEffect(base, "e", { start: 9.95, end: 10 }).effects[0];
+      expect(e.end).toBe(10);
+      expect(e.end - e.start).toBeGreaterThanOrEqual(EFFECT_LIMITS.minDuration);
+    });
   });
 });
