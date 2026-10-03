@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { FONTS } from "@/src/editor/fonts";
-import { isSticker, type Align, type AspectRatio, type Clip, type ClipTransform, type CropRect, type Overlay } from "@/src/editor/model/types";
+import { isSticker, type Align, type AspectRatio, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Overlay } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -24,6 +24,7 @@ export interface ExportClip {
   transform: ClipTransform; crop: CropRect;
   background: { type: "black" | "color" | "blur"; color: string | null };
   reversed: boolean;
+  filterIntensity: number; adjust: ClipAdjust;
 }
 export function toExportClip(c: Clip): ExportClip {
   return {
@@ -33,11 +34,17 @@ export function toExportClip(c: Clip): ExportClip {
     transform: { ...c.transform }, crop: { ...c.crop },
     background: { type: c.background.type, color: c.background.type === "color" ? c.background.color : null },
     reversed: c.reversed,
+    filterIntensity: c.filterIntensity, adjust: { ...c.adjust },
   };
+}
+export interface ExportEffect { type: string; start: number; end: number; intensity: number }
+export function toExportEffect(e: EffectItem): ExportEffect {
+  return { type: e.type, start: e.start, end: e.end, intensity: e.intensity };
 }
 export interface ExportRequest {
   clips: ExportClip[];
   overlays: ExportOverlay[];
+  effects: ExportEffect[];
   audio: ExportAudio | null;
   aspectRatio: AspectRatio;
   resolution: Resolution;

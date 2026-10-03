@@ -6,6 +6,7 @@ jest.mock("@/modules/clipy-video", () => ({
   cancelExport: jest.fn(),
   toExportOverlay: jest.requireActual("@/modules/clipy-video").toExportOverlay,
   toExportClip: jest.requireActual("@/modules/clipy-video").toExportClip,
+  toExportEffect: jest.requireActual("@/modules/clipy-video").toExportEffect,
 }));
 jest.mock("@/src/projects/expoFs", () => ({
   expoFs: { cacheDir: "file:///cache/", freeBytes: async () => 1e12, mkdir: async () => {} },
@@ -14,7 +15,7 @@ jest.mock("@/src/lib/id", () => ({ newId: () => "split-right" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { exportTimeline } from "@/modules/clipy-video";
 import { insertFreezeFrame, setClipReversed, setTransition, splitClipAt } from "@/src/editor/model/ops";
-import { makeAudioTrack, makeClip, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useExport } from "../useExport";
 
 const a = makeClip({ id: "a", sourceDuration: 4, volume: 1.5, muted: true, speed: 2, filter: "warm", transitionOut: { type: "fade", duration: 0.5 } });
@@ -108,4 +109,36 @@ test("a photo, a reversed clip and a freeze frame are sent in order with transit
   ]);
   expect(req.clips[0]).toMatchObject({ muted: true, speed: 1, sourceWidth: 1080, sourceHeight: 1920, background: { type: "black", color: null } });
   expect(req.clips[3].transition).toEqual({ type: "none", duration: 0 });
+});
+
+test("sends timeline effects in order, clipped to the exported duration, dropping ones outside", async () => {
+  const p = makeProject({
+    id: "p4", clips: [makeClip({ id: "x", sourceDuration: 4 })],   // exports 4 s
+    effects: [
+      makeEffect({ id: "e1", type: "glitch", start: 0.5, end: 1.5, intensity: 0.3 }),
+      makeEffect({ id: "e2", type: "vhs", start: 3, end: 6, intensity: 0.8 }),
+      makeEffect({ id: "e3", type: "blur", start: 4.5, end: 6 }),
+      makeEffect({ id: "e4", type: "flash", start: 3.97, end: 5 }),
+    ],
+  });
+  const { result } = await renderHook(() => useExport(p, []));
+  await act(() => result.current.start(1080));
+  expect((exportTimeline as jest.Mock).mock.calls[0][0].effects).toEqual([
+    { type: "glitch", start: 0.5, end: 1.5, intensity: 0.3 },
+    { type: "vhs", start: 3, end: 4, intensity: 0.8 },
+  ]);
+});
+
+test("effects clip to the clips actually exported, and a project with none sends []", async () => {
+  const p = makeProject({
+    id: "p5", clips: [makeClip({ id: "x", sourceDuration: 4 }), makeClip({ id: "y", sourceDuration: 6 })],
+    effects: [makeEffect({ id: "e", type: "glow", start: 3, end: 8 })],
+  });
+  const { result } = await renderHook(() => useExport(p, ["file:///media/y.mp4"]));
+  await act(() => result.current.start(1080));
+  expect((exportTimeline as jest.Mock).mock.calls[0][0].effects).toEqual([{ type: "glow", start: 3, end: 4, intensity: 0.7 }]);
+  jest.clearAllMocks();
+  const { result: r2 } = await renderHook(() => useExport(project, []));
+  await act(() => r2.current.start(1080));
+  expect((exportTimeline as jest.Mock).mock.calls[0][0].effects).toEqual([]);
 });

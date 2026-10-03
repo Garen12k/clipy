@@ -11,8 +11,8 @@ jest.mock("expo-modules-core", () => {
 });
 
 import { requireOptionalNativeModule } from "expo-modules-core";
-import { makeClip, makePhotoClip } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportClip, transcribe } from "../index";
+import { DEFAULT_ADJUST, makeClip, makeEffect, makePhotoClip } from "@/src/editor/model/types";
+import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportClip, toExportEffect, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -42,7 +42,8 @@ describe("export API", () => {
       clips: [{ sourceUri: "file:///a.mov", trimStart: 0, trimEnd: 2, volume: 1, muted: false, speed: 1, filter: null, transition: { type: "none", duration: 0 },
         kind: "video" as const, sourceWidth: 1080, sourceHeight: 1920,
         transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
-        background: { type: "black" as const, color: null }, reversed: false }],
+        background: { type: "black" as const, color: null }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST } }],
+      effects: [{ type: "glitch", start: 0, end: 1, intensity: 0.7 }],
       overlays: [{
         kind: "text" as const, text: "Hi", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#fff",
         backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center" as const, emoji: null, shape: null,
@@ -78,7 +79,19 @@ describe("toExportClip", () => {
       ...base, kind: "video", sourceWidth: 1080, sourceHeight: 1920,
       transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
       background: { type: "black", color: null }, reversed: false,
+      filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
     });
+  });
+  it("maps filter strength and adjust values", () => {
+    const adjust = { ...DEFAULT_ADJUST, brightness: 0.3, grain: 0.5, tint: -0.2 };
+    const e = toExportClip(makeClip({ id: "a", sourceDuration: 4, filter: "warm", filterIntensity: 0.4, adjust }));
+    expect(e.filterIntensity).toBe(0.4);
+    expect(e.adjust).toEqual(adjust);
+    expect(e.adjust).not.toBe(adjust);
+  });
+  it("maps an effect", () => {
+    expect(toExportEffect(makeEffect({ id: "e", type: "glitch", start: 1, end: 2.5, intensity: 0.6 })))
+      .toEqual({ type: "glitch", start: 1, end: 2.5, intensity: 0.6 });
   });
   it("maps transform, crop and a colour background", () => {
     const e = toExportClip(makeClip({
@@ -109,5 +122,6 @@ describe("toExportClip", () => {
     expect(e.crop).not.toBe(c.crop);
     expect(e.transition).not.toBe(c.transitionOut);
     expect(e.background).not.toBe(c.background);
+    expect(e.adjust).not.toBe(c.adjust);
   });
 });
