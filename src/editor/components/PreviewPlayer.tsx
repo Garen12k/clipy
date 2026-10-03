@@ -85,7 +85,8 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     if (rateChanged) player.playbackRate = hit.clip.speed;
     if (!isPlaying && (rateChanged || player.playing)) player.pause();
     const sourceTime = outputToSource(hit.clip, hit.offsetInClip);
-    if (loadedClipId.current !== hit.clip.id) {
+    // Keyed on the file too: Replace (and its undo / redo) keeps the clip id but swaps the file.
+    if (loadedClipId.current !== hit.clip.id || loadedSourceUri.current !== hit.clip.sourceUri) {
       loadedClipId.current = hit.clip.id;
       if (hit.clip.sourceUri === loadedSourceUri.current) {
         // Same underlying file as before (e.g. the other half of a split clip): no need to reload it,
@@ -95,7 +96,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         if (pendingSeek.current !== null) pendingSeek.current = sourceTime;
         else {
           seekPlayer(sourceTime);
-          if (isPlaying) player.play();
+          if (isPlaying) { player.play(); lastSeek.current = null; } // it moves on from here
         }
         return;
       }

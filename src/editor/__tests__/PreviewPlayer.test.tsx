@@ -23,7 +23,7 @@ jest.mock("expo-video", () => {
   };
   return { __mockPlayer: mockPlayer, useVideoPlayer: () => mockPlayer, VideoView: View };
 });
-import { setClipSpeed, setClipTransform } from "@/src/editor/model/ops";
+import { replaceClipMedia, setClipSpeed, setClipTransform } from "@/src/editor/model/ops";
 import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
@@ -35,6 +35,8 @@ const layout = () => fireEvent(screen.getByLabelText("Preview"), "layout", { nat
 beforeEach(() => {
   jest.clearAllMocks();
   player.playing = false;
+  player.currentTime = 0;
+  player.seeks.length = 0;
   useEditorStore.getState().reset();
   useEditorStore.getState().setProject(makeProject({ clips: [
     makeClip({ id: "a", sourceDuration: 4, speed: 2 }),
@@ -212,6 +214,15 @@ describe("no redundant native writes while paused", () => {
     expect(player.seeks).toEqual([1]);
   });
 
+  test("crossing onto another clip of the same file while playing, then pausing at once, still seeks", async () => {
+    await ready();
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    await act(() => { useEditorStore.getState().seek(2.5); }); // clip b, same file: source 0.5, then play
+    expect(player.seeks).toEqual([0.5]);
+    await act(() => { useEditorStore.getState().setPlaying(false); }); // before any timeUpdate
+    expect(player.seeks).toEqual([0.5, 0.5]);
+  });
+
   test("a timeUpdate while playing forgets the remembered seek", async () => {
     await ready();
     await act(() => { useEditorStore.getState().seek(0.5); }); // source 1
@@ -220,6 +231,38 @@ describe("no redundant native writes while paused", () => {
     await act(() => { useEditorStore.getState().setPlaying(false); });
     player.seeks.length = 0;
     await act(() => { useEditorStore.getState().seek(0.5); });
+    expect(player.seeks).toEqual([1]);
+  });
+});
+
+describe("replacing a clip's media (same clip id, new file)", () => {
+  const newMedia = { sourceUri: "file:///media/new.mp4", sourceDuration: 8, width: 1080, height: 1920, kind: "video" as const };
+
+  test("paused: the new file is loaded and seeked to the clip's source time; undo reloads the old file", async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+    await act(() => { useEditorStore.getState().seek(0.5); }); // clip a (speed 2): source 1
+    player.replaceAsync.mockClear(); player.seeks.length = 0;
+
+    await act(() => { useEditorStore.getState().apply((p) => replaceClipMedia(p, "a", newMedia)); });
+    expect(player.replaceAsync).toHaveBeenCalledWith({ uri: "file:///media/new.mp4" });
+    expect(player.seeks).toEqual([]); // not seeking inside the old file
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+    expect(player.seeks).toEqual([1]);
+    expect(player.play).not.toHaveBeenCalled();
+
+    player.replaceAsync.mockClear(); player.seeks.length = 0;
+    await act(() => { useEditorStore.getState().undo(); });
+    expect(player.replaceAsync).toHaveBeenCalledWith({ uri: "file:///media/a.mp4" });
+    expect(player.seeks).toEqual([]);
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+    expect(player.seeks).toEqual([1]);
+
+    player.replaceAsync.mockClear(); player.seeks.length = 0;
+    await act(() => { useEditorStore.getState().redo(); });
+    expect(player.replaceAsync).toHaveBeenCalledWith({ uri: "file:///media/new.mp4" });
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
     expect(player.seeks).toEqual([1]);
   });
 });
