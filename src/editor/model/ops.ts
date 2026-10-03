@@ -405,7 +405,7 @@ export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "
     next = { ...base, speed: 1, muted: true, reversed: false, sourceDuration: PHOTO.maxSeconds, trimEnd: clamp(prevOut, [PHOTO.minSeconds, PHOTO.maxSeconds]) };
   } else if (isPhoto(old)) {
     // A photo runs at speed 1, so its source length is its output length.
-    next = { ...base, sourceDuration: media.sourceDuration, speed: 1, muted: false, volume: 1, reversed: false, trimEnd: Math.min(media.sourceDuration, prevOut) };
+    next = { ...base, sourceDuration: media.sourceDuration, speed: 1, muted: false, reversed: false, trimEnd: Math.min(media.sourceDuration, prevOut) };
   } else {
     // Same speed, so the old source span is exactly the previous output length × speed.
     next = { ...base, sourceDuration: media.sourceDuration, trimEnd: Math.min(media.sourceDuration, old.trimEnd - old.trimStart) };

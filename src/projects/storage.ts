@@ -8,7 +8,8 @@ export interface ProjectSummary { id: string; name: string; durationSec: number;
 export interface StorageDeps { thumbnail(uri: string, timeMs: number): Promise<string>; newId(): string; nowIso(): string }
 
 const extOf = (s?: string) => /\.([A-Za-z0-9]+)$/.exec(s ?? "")?.[1]?.toLowerCase();
-const ext = (a: PickedAsset) => extOf(a.fileName) ?? extOf(a.uri) ?? (a.kind === "photo" ? "jpg" : "mp4");
+// A picked photo may be a converted JPEG whose fileName still says .HEIC, so photos trust the uri first.
+const ext = (a: PickedAsset) => (a.kind === "photo" ? extOf(a.uri) ?? extOf(a.fileName) : extOf(a.fileName) ?? extOf(a.uri)) ?? (a.kind === "photo" ? "jpg" : "mp4");
 
 export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const root = `${fs.documentDir}projects`;

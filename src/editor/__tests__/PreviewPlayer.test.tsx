@@ -293,3 +293,14 @@ describe("Preview tag", () => {
     expect(screen.queryByTestId("preview-tag")).toBeNull();
   });
 });
+
+test("a reversed clip plays muted (the export is silent); a normal clip does not", async () => {
+  const mp = player as unknown as { muted: boolean; volume: number };
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "r", sourceDuration: 4, reversed: true }), makeClip({ id: "n", sourceDuration: 4 })] }));
+  await render(<PreviewPlayer />);
+  expect(mp.muted).toBe(true);
+  expect(mp.volume).toBe(0);
+  await act(() => { useEditorStore.getState().seek(5); });
+  expect(mp.muted).toBe(false);
+  expect(mp.volume).toBe(1);
+});

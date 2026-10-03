@@ -253,3 +253,13 @@ describe("Replace", () => {
     expect(useEditorStore.getState().project!.clips[0].sourceUri).toBe("file:///media/a.mp4");
   });
 });
+
+test("a reversed clip disables Volume (the export is silent)", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "r", sourceDuration: 4, reversed: true }), makeClip({ id: "a", sourceDuration: 4 })] }));
+  await renderBar();
+  await act(() => { useEditorStore.getState().select("r"); });
+  await openGroup("Audio");
+  expect(screen.getByRole("button", { name: "Volume" })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByRole("button", { name: "Volume" })).toBeEnabled();
+});

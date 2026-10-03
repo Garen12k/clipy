@@ -92,7 +92,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     captions: { label: "Captions", icon: "chatbox-ellipses", disabled: !hasClips, onPress: () => setSheet("captions") },
     sticker: { label: "Sticker", icon: "happy", disabled: !hasClips, onPress: () => setSheet("sticker") },
     music: { label: "Music", icon: "musical-notes", onPress: () => setSheet("music") },
-    volume: { label: "Volume", icon: "volume-high", disabled: noSel || photoSel, onPress: () => setSheet("volume") },
+    volume: { label: "Volume", icon: "volume-high", disabled: noSel || photoSel || !!selectedClip?.reversed, onPress: () => setSheet("volume") },
   };
   const active = TOOL_GROUPS.find((g) => g.id === group)!;
 

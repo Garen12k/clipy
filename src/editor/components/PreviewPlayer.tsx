@@ -76,9 +76,11 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     // This effect also re-runs for edits that don't concern the player (e.g. every frame of a transform
     // gesture replaces `project`), so each native write below is skipped when it would change nothing.
     // expo-video caps player.volume at 1; values above 1 are only honoured in the export.
-    const volume = hit.clip.muted ? 0 : Math.min(1, hit.clip.volume);
+    // A reversed clip is silent in the export, so it plays muted here too.
+    const muted = hit.clip.muted || hit.clip.reversed;
+    const volume = muted ? 0 : Math.min(1, hit.clip.volume);
     if (appliedVolume.current !== volume) { player.volume = volume; appliedVolume.current = volume; }
-    if (appliedMuted.current !== hit.clip.muted) { player.muted = hit.clip.muted; appliedMuted.current = hit.clip.muted; }
+    if (appliedMuted.current !== muted) { player.muted = muted; appliedMuted.current = muted; }
     // expo-video's playbackRate setter assigns AVPlayer.rate, and a non-zero rate starts playback: only
     // assign it when it changes, and re-assert the paused state so a paused scrub never starts the player.
     const rateChanged = player.playbackRate !== hit.clip.speed;
@@ -110,7 +112,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       if (pendingSeek.current !== null) pendingSeek.current = sourceTime; // land the pending seek where the user scrubbed to
       else if (lastSeek.current !== sourceTime) seekPlayer(sourceTime);
     }
-  }, [hit?.clip.id, hit?.clip.kind, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, hit?.clip.speed, playhead, isPlaying, missing, project, player, seek, setPlaying]);
+  }, [hit?.clip.id, hit?.clip.kind, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, hit?.clip.reversed, hit?.clip.speed, playhead, isPlaying, missing, project, player, seek, setPlaying]);
 
   // Play / pause toggles. Crossing between clips while playing is handled by the effect above.
   useEffect(() => {

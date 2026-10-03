@@ -163,3 +163,19 @@ test("a second freeze while one is running is ignored", async () => {
   expect(thumb).toHaveBeenCalledTimes(1);
   await act(async () => { resolve({ uri: "file:///tmp/f.jpg" }); await run; });
 });
+
+test("a Replace during capture drops the result silently", async () => {
+  let resolve: (v: unknown) => void = () => {};
+  thumb.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+  st().seek(1);
+  const { result } = await renderHook(() => useFreezeFrame());
+  let run: Promise<void> = Promise.resolve();
+  await act(async () => { run = result.current.freeze(); });
+  await act(async () => {
+    st().apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "a" ? { ...c, sourceUri: "file:///new.mp4" } : c)) }));
+    resolve({ uri: "file:///tmp/f.jpg" });
+    await run;
+  });
+  expect(st().project!.clips.map((c) => c.id)).toEqual(["a", "b"]);
+  expect(useToast.getState().message).toBeFalsy();
+});

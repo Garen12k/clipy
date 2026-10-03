@@ -37,7 +37,7 @@ export function useFreezeFrame(): { freeze(): Promise<void>; busy: boolean } {
       const store = useEditorStore.getState();
       if (store.project?.id !== projectId) return;
       const index = store.project.clips.findIndex((c) => c.id === clip.id);
-      if (index < 0) return;
+      if (index < 0 || store.project.clips[index].sourceUri !== clip.sourceUri) return; // removed or Replaced meanwhile
       const id = newId();
       const next = insertFreezeFrame(store.project, clipStartTimes(store.project)[index] + offsetInClip, { id, sourceUri: uri, width: clip.width, height: clip.height });
       if (next === store.project) { useToast.getState().show("Couldn't capture that frame"); return; }

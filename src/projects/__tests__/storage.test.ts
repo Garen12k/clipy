@@ -211,3 +211,18 @@ test("a video with zero or missing duration counts as failed", async () => {
   expect(clips).toHaveLength(0);
   expect(failed).toBe(2);
 });
+
+test("extension: a photo prefers the uri extension (converted JPEG with a .HEIC name); videos keep fileName first", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/conv.jpg", "P");
+  fs.files.set("file:///picked/x.mp4", "V");
+  fs.files.set("file:///picked/noext", "Q");
+  const { clips } = await storage.importMedia("proj", [
+    photo("file:///picked/conv.jpg", { fileName: "IMG_1.HEIC" }),
+    { ...asset("file:///picked/x.mp4"), fileName: "clip.MOV" },
+    photo("file:///picked/noext", { fileName: "IMG_2.heic" }),
+  ]);
+  expect(clips[0].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id1.jpg`);
+  expect(clips[1].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id2.mov`);
+  expect(clips[2].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id3.heic`);
+});

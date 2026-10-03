@@ -60,11 +60,11 @@ test("video → photo clamps the length to the photo limits", () => {
   expect(replaceClipMedia(long, "l", newPhoto).clips[0].trimEnd).toBe(PHOTO.maxSeconds);
 });
 
-test("photo → video turns sound on at volume 1, speed 1, and keeps the photo's length", () => {
+test("photo → video turns sound on, speed 1, and keeps the photo's length", () => {
   const ph = makePhotoClip({ id: "ph", seconds: 5, filter: "mono", transform: edits.transform, crop: edits.crop, background: edits.background, transitionOut: edits.transitionOut });
   const q = makeProject({ clips: [ph, makeClip({ id: "n", sourceDuration: 4 })] });
   const c = replaceClipMedia(q, "ph", newVideo(10)).clips[0];
-  expect(c).toMatchObject({ id: "ph", kind: "video", sourceDuration: 10, trimStart: 0, trimEnd: 5, speed: 1, muted: false, volume: 1, reversed: false, filter: "mono",
+  expect(c).toMatchObject({ id: "ph", kind: "video", sourceDuration: 10, trimStart: 0, trimEnd: 5, speed: 1, muted: false, reversed: false, filter: "mono",
     transform: edits.transform, crop: edits.crop, background: edits.background, transitionOut: edits.transitionOut });
   expect(replaceClipMedia(q, "ph", newVideo(3)).clips[0].trimEnd).toBe(3);
 });
@@ -79,4 +79,11 @@ test("transitions are re-capped when the clip gets shorter", () => {
   const q = makeProject({ clips: [a, makeClip({ id: "b", sourceDuration: 4 })] });
   const out = replaceClipMedia(q, "a", newVideo(1));
   expect(out.clips[0].transitionOut).toEqual({ type: "fade", duration: 0.5 });
+});
+
+test("a video's volume survives video to photo to video; sound is on again", () => {
+  const q = makeProject({ clips: [makeClip({ id: "v", sourceDuration: 8, volume: 0.3 }), makeClip({ id: "n", sourceDuration: 4 })] });
+  const asPhoto = replaceClipMedia(q, "v", newPhoto);
+  const back = replaceClipMedia(asPhoto, "v", newVideo(10)).clips[0];
+  expect(back).toMatchObject({ kind: "video", volume: 0.3, muted: false });
 });
