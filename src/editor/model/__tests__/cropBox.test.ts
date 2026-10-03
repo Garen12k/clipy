@@ -1,4 +1,4 @@
-import { applyPreset, CROP_PRESETS, dragCorner, moveBox } from "../cropBox";
+import { applyPreset, CROP_PRESETS, dragCorner, moveBox, panToCorner, panToMove } from "../cropBox";
 import { CROP_MIN, FULL_CROP, type CropRect } from "../types";
 
 const LANDSCAPE = 16 / 9;
@@ -103,5 +103,49 @@ describe("applyPreset", () => {
   });
   test("an extreme source that cannot meet the minimum returns the crop unchanged", () => {
     expect(applyPreset(box, 9 / 16, 40)).toBe(box);
+  });
+});
+
+describe("unusable inputs leave the crop unchanged", () => {
+  const BAD = [0, -1, NaN, Infinity];
+  test("applyPreset with a source aspect of 0, negative, NaN or Infinity", () => {
+    for (const a of BAD) expect(applyPreset(box, 1, a)).toBe(box);
+  });
+  test("dragCorner with a source aspect of 0, negative, NaN or Infinity, free or locked", () => {
+    for (const a of BAD) for (const r of [null, 1]) expect(dragCorner(box, "br", 0.1, 0.1, r, a)).toBe(box);
+  });
+  test("non-finite deltas", () => {
+    for (const d of [NaN, Infinity, -Infinity]) {
+      expect(moveBox(box, d, 0)).toBe(box);
+      expect(moveBox(box, 0, d)).toBe(box);
+      expect(dragCorner(box, "tl", d, 0, null, LANDSCAPE)).toBe(box);
+      expect(dragCorner(box, "tl", 0, d, 1, LANDSCAPE)).toBe(box);
+    }
+  });
+  test("an unusable ratio", () => {
+    expect(applyPreset(box, NaN, LANDSCAPE)).toBe(box);
+    expect(dragCorner(box, "br", 0.1, 0.1, 0, LANDSCAPE)).toBe(box);
+  });
+});
+
+describe("pan handlers", () => {
+  test("panToMove converts points to fractions of the drawn picture", () => {
+    close(panToMove(box, 40, -30, 400, 300), { x: 0.3, y: 0.2, w: 0.4, h: 0.4 });
+  });
+  test("panToCorner converts points to fractions and passes the lock through", () => {
+    close(panToCorner(box, "br", 40, 60, 400, 300, null, LANDSCAPE), { x: 0.2, y: 0.3, w: 0.5, h: 0.6 });
+    const r = panToCorner(box, "br", 40, 60, 400, 300, 1, LANDSCAPE);
+    expect(pixelRatio(r, LANDSCAPE)).toBeCloseTo(1, 6);
+  });
+  test("successive updates from the same start do not stack", () => {
+    // Translations are cumulative from the touch-down, so the second update replaces the first.
+    panToMove(box, 40, 0, 400, 300);
+    close(panToMove(box, 80, 0, 400, 300), { x: 0.4, y: 0.3, w: 0.4, h: 0.4 });
+    panToCorner(box, "br", 40, 0, 400, 300, null, LANDSCAPE);
+    close(panToCorner(box, "br", 80, 0, 400, 300, null, LANDSCAPE), { x: 0.2, y: 0.3, w: 0.6, h: 0.4 });
+  });
+  test("an unmeasured picture leaves the start", () => {
+    expect(panToMove(box, 10, 10, 0, 300)).toBe(box);
+    expect(panToCorner(box, "tl", 10, 10, 400, 0, null, LANDSCAPE)).toBe(box);
   });
 });

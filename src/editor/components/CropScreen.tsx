@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Image, Modal, ScrollView, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import { applyPreset, CROP_PRESETS, dragCorner, moveBox, type CropCorner, type CropPresetId } from "@/src/editor/model/cropBox";
+import { applyPreset, CROP_PRESETS, panToCorner, panToMove, type CropCorner, type CropPresetId } from "@/src/editor/model/cropBox";
 import { setClipCrop } from "@/src/editor/model/ops";
 import { clipAt, outputToSource } from "@/src/editor/model/timeline";
 import { FULL_CROP, isPhoto, type Clip, type CropRect } from "@/src/editor/model/types";
@@ -26,7 +26,8 @@ const CORNERS: { id: CropCorner; label: string }[] = [
 
 const THIRDS = ["33.333%", "66.667%"] as const;
 
-type Rect ={ left: number; top: number; width: number; height: number };
+type GesturePart = "move" | CropCorner;
+type Rect = { left: number; top: number; width: number; height: number };
 
 /** The source picture drawn `contain` inside `area`, inset by the handle margin. */
 function drawnRect(area: { width: number; height: number }, sourceAspect: number): Rect | null {
@@ -62,13 +63,21 @@ function useStill(clip: Clip): string | null {
  */
 export function CropScreen({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const clip = useEditorStore((s) => (clipId ? s.project?.clips.find((c) => c.id === clipId) ?? null : null));
+  // A new editor per opening (key bumped while rendering, so the first frame is already fresh): the working
+  // crop always starts from the clip's current crop. The content itself stays mounted while the Modal
+  // slides away — the Modal keeps rendering it until the native dismissal finishes.
+  const [session, setSession] = useState(0);
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setSession((n) => n + 1);
+  }
   if (!clip) return null;
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       {/* A Modal is a separate native root: give its gestures their own root view. */}
       <GestureHandlerRootView style={{ flex: 1 }}>
-        {/* Mounted per opening, so the working crop always starts from the clip's current crop. */}
-        {visible ? <CropEditor clip={clip} onClose={onClose} /> : null}
+        <CropEditor key={session} clip={clip} onClose={onClose} />
       </GestureHandlerRootView>
     </Modal>
   );
@@ -86,28 +95,33 @@ function CropEditor({ clip, onClose }: { clip: Clip; onClose: () => void }) {
 
   const cropRef = useRef(crop);
   cropRef.current = crop;
+  const startsRef = useRef<Partial<Record<GesturePart, CropRect>>>({});
   const picW = pic?.width ?? 0, picH = pic?.height ?? 0;
 
   const gestures = useMemo(() => {
     if (picW <= 0 || picH <= 0) return null;
-    // Each gesture recomputes from the crop it started with, so updates never compound.
-    let start: CropRect = cropRef.current;
-    const begin = () => { start = cropRef.current; };
-    const move = Gesture.Pan().maxPointers(1).minDistance(1)
-      .onStart(begin)
-      .onUpdate((e) => setCrop(moveBox(start, e.translationX / picW, e.translationY / picH)))
-      .runOnJS(true);
-    const corner = (id: CropCorner) => Gesture.Pan().maxPointers(1).minDistance(1)
-      .onStart(begin)
-      .onUpdate((e) => setCrop(dragCorner(start, id, e.translationX / picW, e.translationY / picH, ratio, sourceAspect)))
-      .runOnJS(true);
-    return { move, tl: corner("tl"), tr: corner("tr"), bl: corner("bl"), br: corner("br") };
+    // Each gesture keeps its own snapshot of the crop it started with and recomputes from it, so updates never
+    // compound and a second finger on another part never overwrites this one's starting point. The snapshot is a
+    // property of a ref'd object, never a reassigned local: the worklets Babel plugin copies the captured
+    // variables of gesture callbacks, so a reassigned `let` would not be seen by the other callback.
+    const pan = (part: GesturePart, next: (start: CropRect, tx: number, ty: number) => CropRect) => {
+      const starts = startsRef.current;
+      return Gesture.Pan().maxPointers(1).minDistance(1)
+        .onStart(() => { starts[part] = cropRef.current; })
+        .onUpdate((e) => setCrop(next(starts[part] ?? cropRef.current, e.translationX, e.translationY)))
+        .runOnJS(true);
+    };
+    const corner = (id: CropCorner) => pan(id, (s, tx, ty) => panToCorner(s, id, tx, ty, picW, picH, ratio, sourceAspect));
+    return { move: pan("move", (s, tx, ty) => panToMove(s, tx, ty, picW, picH)), tl: corner("tl"), tr: corner("tr"), bl: corner("bl"), br: corner("br") };
   }, [picW, picH, ratio, sourceAspect]);
 
   const choose = (id: CropPresetId, r: number | null) => {
     haptic("light");
+    const next = applyPreset(crop, r, sourceAspect);
+    // A shape this picture cannot hold comes back as the same object: stay Free rather than lock to it.
+    if (r !== null && next === crop) { setPreset("free"); return; }
     setPreset(id);
-    setCrop((c) => applyPreset(c, r, sourceAspect));
+    setCrop(next);
   };
   const reset = () => { haptic("light"); setPreset("free"); setCrop({ ...FULL_CROP }); };
   const done = () => { apply((p) => setClipCrop(p, clip.id, crop)); onClose(); };
