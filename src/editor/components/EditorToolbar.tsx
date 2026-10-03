@@ -13,6 +13,7 @@ import { ToolButton } from "@/src/ui/ToolButton";
 import { useReducedMotion } from "@/src/ui/useReducedMotion";
 import { BackgroundSheet } from "./BackgroundSheet";
 import { CaptionsSheet } from "./CaptionsSheet";
+import { CropScreen } from "./CropScreen";
 import { MusicSheet } from "./MusicSheet";
 import { RatioSheet } from "./RatioSheet";
 import { SpeedSheet } from "./SpeedSheet";
@@ -35,7 +36,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useEditorStore((s) => s.project?.clips.find((c) => c.id === s.selectedClipId) ?? null);
   const photoSel = !!selectedClip && isPhoto(selectedClip);
@@ -71,8 +72,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     split: { label: "Split", icon: "cut", disabled: noSel, onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
     trim: { label: "Trim", icon: "crop", disabled: noSel, onPress: () => setSheet("trim") },
     transform: { label: "Transform", icon: "resize", disabled: noSel, onPress: () => setSheet("transform") },
-    // Crop, Replace and Freeze are wired by later tasks; until then they stay disabled no-ops.
-    crop: { label: "Crop", icon: "crop", disabled: true, onPress: () => {} },
+    crop: { label: "Crop", icon: "crop", disabled: noSel, onPress: () => setSheet("crop") },
+    // Replace and Freeze are wired by later tasks; until then they stay disabled no-ops.
     replace: { label: "Replace", icon: "sync", disabled: true, onPress: () => {} },
     reverse: { label: "Reverse", icon: "play-back", disabled: noSel || photoSel, active: reversed, onPress: () => { if (selectedId) { haptic("light"); apply((p) => setClipReversed(p, selectedId, !reversed)); } } },
     freeze: { label: "Freeze", icon: "snow", disabled: true, onPress: () => {} },
@@ -110,6 +111,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <TemplateSheet clipId={selectedId} visible={sheet === "templates"} onClose={() => setSheet(null)} />
       <TransformSheet clipId={selectedId} visible={sheet === "transform"} onClose={() => setSheet(null)} />
       <BackgroundSheet clipId={selectedId} visible={sheet === "background"} onClose={() => setSheet(null)} />
+      <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
       <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />
       <VolumeSheet clipId={selectedId} visible={sheet === "volume"} onClose={() => setSheet(null)} />
       <StickerSheet visible={sheet === "sticker"} onClose={() => setSheet(null)} onAdded={() => {}} />

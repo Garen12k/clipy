@@ -120,12 +120,12 @@ test("Edit group lists the new tools", async () => {
   expect(labels).toEqual(expect.arrayContaining(["Split", "Trim", "Transform", "Crop", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Ratio"]));
 });
 
-test("Transform and Reverse need a selection; Crop, Replace and Freeze stay disabled for a video clip", async () => {
+test("Transform, Reverse and Crop need a selection; Replace and Freeze stay disabled for a video clip", async () => {
   await renderBar();
-  for (const l of ["Transform", "Reverse"]) expect(screen.getByRole("button", { name: l })).toBeDisabled();
+  for (const l of ["Transform", "Reverse", "Crop"]) expect(screen.getByRole("button", { name: l })).toBeDisabled();
   await act(() => { useEditorStore.getState().select("a"); });
-  for (const l of ["Transform", "Reverse"]) expect(screen.getByRole("button", { name: l })).toBeEnabled();
-  for (const l of ["Crop", "Replace", "Freeze"]) {
+  for (const l of ["Transform", "Reverse", "Crop"]) expect(screen.getByRole("button", { name: l })).toBeEnabled();
+  for (const l of ["Replace", "Freeze"]) {
     expect(screen.getByRole("button", { name: l })).toBeDisabled();
     expect(screen.getByRole("button", { name: l }).props.accessibilityState).toMatchObject({ disabled: true });
   }
