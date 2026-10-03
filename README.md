@@ -152,8 +152,22 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and a f
   speed (`scaleTimeRange`), sticker rendering, and a `Transcriber`. This native code only compiles
   on EAS Build — it is reviewed by reading, not yet verified by a real build.
 
-## Photos and reverse in the export
+## Clip tools
 
-- Reversed clips export without sound: the reversed copy is video only.
-- Photos and reversed clips need the native build to appear in the exported video (the Swift
-  export turns them into ordinary video before composing; this code is uncompiled until EAS Build).
+Select a clip, then use the tools under the preview.
+
+- **Transform** — pinch, drag or twist the clip on the preview (it snaps gently to the centre,
+  straight angles, Fit and Fill). The Transform sheet has Rotate 90°, Flip horizontal / vertical,
+  Fit, Fill and Reset. Exact in the preview.
+- **Crop** — a draggable box with Free, 9:16, 1:1, 4:5 and 16:9. Exact in the preview.
+- **Background** — per clip: Black, a colour, or Blur, with "Apply to all". Colour is exact; blur is
+  approximate in Expo Go (it shows the "Preview" tag).
+- **Photos** — add photos as clips (3 s by default, 0.5-60 s by dragging the end handle). The "+" tile
+  at the end of the timeline adds photos and videos.
+- **Replace** — swap a clip's media and keep its edits.
+- **Freeze** — inserts a 2 s still of the frame at the playhead.
+- **Reverse** — the clip gets a badge and the preview plays forward with the "Preview" tag. The
+  exported video is reversed and has no sound.
+
+Photos and reversed clips only appear in the exported video with the native build (the Swift export
+turns them into ordinary video before composing; this code is uncompiled until an EAS build).

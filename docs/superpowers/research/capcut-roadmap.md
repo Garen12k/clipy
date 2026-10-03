@@ -15,15 +15,15 @@
 | CapCut tool | Clipy | Preview | Effort | Notes |
 |---|---|---|---|---|
 | Split, trim, delete, duplicate, reorder | Have | Yes | — | |
-| Add more clips to a project ("+") | Missing | Yes | S | |
-| Photos as clips (duration by dragging) | Missing | Yes | M | |
-| Transform by gesture (zoom / move / rotate) | Missing | Yes | M | |
-| Rotate 90°, mirror / flip | Missing | Yes | S | |
-| Crop with presets | Missing | Yes | M | |
-| Canvas background: colour / blur | Missing | Approx (blur) | M | |
-| Freeze frame | Missing | Yes | S | becomes a photo clip |
-| Reverse | Missing | Approx | M | export only |
-| Replace a clip (keep its edits) | Missing | Yes | S | |
+| Add more clips to a project ("+") | Have | Yes | S | |
+| Photos as clips (duration by dragging) | Have | Yes | M | |
+| Transform by gesture (zoom / move / rotate) | Have | Yes | M | |
+| Rotate 90°, mirror / flip | Have | Yes | S | |
+| Crop with presets | Have | Yes | M | |
+| Canvas background: colour / blur | Have | Approx (blur) | M | |
+| Freeze frame | Have | Yes | S | becomes a photo clip |
+| Reverse | Have | Approx | M | export only |
+| Replace a clip (keep its edits) | Have | Yes | S | |
 | Extract audio from a clip | Missing | Approx | M | see D |
 | Auto reframe (follow the subject) | Missing | No | XL | needs ML |
 
