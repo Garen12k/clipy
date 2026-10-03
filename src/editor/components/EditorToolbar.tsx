@@ -13,6 +13,7 @@ import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { ToolButton } from "@/src/ui/ToolButton";
 import { useReducedMotion } from "@/src/ui/useReducedMotion";
+import { AdjustSheet } from "./AdjustSheet";
 import { BackgroundSheet } from "./BackgroundSheet";
 import { CaptionsSheet } from "./CaptionsSheet";
 import { CropScreen } from "./CropScreen";
@@ -38,7 +39,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useEditorStore((s) => s.project?.clips.find((c) => c.id === s.selectedClipId) ?? null);
   const photoSel = !!selectedClip && isPhoto(selectedClip);
@@ -88,8 +89,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     transition: { label: "Transition", icon: "swap-horizontal", disabled: noSel || selectedIndex === clipCount - 1, onPress: () => onTransitionChange(selectedIndex) },
     templates: { label: "Templates", icon: "color-wand", disabled: !hasClips, onPress: () => setSheet("templates") },
     background: { label: "Background", icon: "color-palette", disabled: noSel, onPress: () => setSheet("background") },
-    // Placeholders until the Look tasks wire these up (adjust sheet, effect picker, selected-effect sub-row).
-    adjust: { label: "Adjust", icon: "options", disabled: true, onPress: () => {} },
+    // Placeholders until the Look tasks wire these up (effect picker, selected-effect sub-row).
+    adjust: { label: "Adjust", icon: "options", disabled: noSel, onPress: () => setSheet("adjust") },
     effect: { label: "Effect", icon: "flash", disabled: true, onPress: () => {} },
     effectStrength: { label: "Strength", icon: "speedometer", disabled: true, onPress: () => {} },
     effectDuplicate: { label: "Duplicate", icon: "copy", disabled: true, onPress: () => {} },
@@ -119,6 +120,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <FilterSheet clipId={selectedId} visible={sheet === "filter"} onClose={() => setSheet(null)} />
       <TemplateSheet clipId={selectedId} visible={sheet === "templates"} onClose={() => setSheet(null)} />
       <TransformSheet clipId={selectedId} visible={sheet === "transform"} onClose={() => setSheet(null)} />
+      <AdjustSheet clipId={selectedId} visible={sheet === "adjust"} onClose={() => setSheet(null)} />
       <BackgroundSheet clipId={selectedId} visible={sheet === "background"} onClose={() => setSheet(null)} />
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
       <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />

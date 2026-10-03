@@ -263,3 +263,13 @@ test("a reversed clip disables Volume (the export is silent)", async () => {
   await act(() => { useEditorStore.getState().select("a"); });
   expect(screen.getByRole("button", { name: "Volume" })).toBeEnabled();
 });
+
+test("Adjust is disabled without a selection, enabled for a selected clip, and opens the sheet", async () => {
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
+  await openGroup("Effects");
+  expect(screen.getByRole("button", { name: "Adjust" })).toBeDisabled();
+  await act(() => { useEditorStore.getState().select("a"); });
+  expect(screen.getByRole("button", { name: "Adjust" })).toBeEnabled();
+  await fireEvent.press(screen.getByRole("button", { name: "Adjust" }));
+  expect(screen.getByRole("button", { name: "Reset" })).toBeTruthy();
+});
