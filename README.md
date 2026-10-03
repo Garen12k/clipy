@@ -151,3 +151,9 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and a f
 - The Swift export is further extended with a custom Core Image compositor (filters, transitions),
   speed (`scaleTimeRange`), sticker rendering, and a `Transcriber`. This native code only compiles
   on EAS Build — it is reviewed by reading, not yet verified by a real build.
+
+## Photos and reverse in the export
+
+- Reversed clips export without sound: the reversed copy is video only.
+- Photos and reversed clips need the native build to appear in the exported video (the Swift
+  export turns them into ordinary video before composing; this code is uncompiled until EAS Build).

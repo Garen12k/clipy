@@ -39,13 +39,13 @@ struct ExportClip: Record {
   @Field var speed: Double = 1                     // output duration = (trimEnd − trimStart) / speed
   @Field var filter: String?                       // JS `null` → nil (no filter)
   @Field var transition: ExportTransition = ExportTransition()   // into the NEXT clip
-  @Field var kind: String = "video"                // video | photo — accepted, not acted on yet (photo pre-pass: Task 13)
+  @Field var kind: String = "video"                // video | photo — a photo is turned into video by MediaPrePass
   @Field var sourceWidth: Double = 0               // oriented (display) size; the compositor uses the actual frame size
   @Field var sourceHeight: Double = 0
   @Field var transform: ExportClipTransform = ExportClipTransform()
   @Field var crop: ExportCrop = ExportCrop()
   @Field var background: ExportBackground = ExportBackground()   // shown only where the picture leaves the frame
-  @Field var reversed: Bool = false                // accepted, not acted on yet (reverse pre-pass: Task 13)
+  @Field var reversed: Bool = false                // MediaPrePass writes a reversed copy (video only — exports silent)
 }
 
 struct ExportOverlay: Record {
@@ -86,12 +86,14 @@ struct ExportRequest: Record {
 }
 
 enum ExportError: Error, LocalizedError {
-  case noVideoTrack(String), badOutputPath, sessionFailed(String)
+  case noVideoTrack(String), badOutputPath, sessionFailed(String), photoPrepFailed, reversePrepFailed
   var errorDescription: String? {
     switch self {
     case .noVideoTrack(let uri): return "No video track in \(uri)"
     case .badOutputPath: return "Invalid output path"
     case .sessionFailed(let m): return m
+    case .photoPrepFailed: return "Couldn't prepare a photo for export."
+    case .reversePrepFailed: return "Couldn't reverse a clip for export."
     }
   }
 }
@@ -375,9 +377,43 @@ final class ExportSession {
     guard !request.clips.isEmpty else { throw ExportError.sessionFailed("Nothing to export") }
     let renderSize = Self.renderSize(aspect: request.aspectRatio, resolution: request.resolution)
 
+    // 0. Pre-pass: photos → video, reversed clips → reversed copies, in a per-export temp folder. The folder is
+    //    removed when this function exits (failure, cancel) unless the export was handed off, in which case the
+    //    export's completion handler removes it once AVAssetExportSession has finished reading the files.
+    let jobs = MediaPrePass.plan(request.clips)
+    let hasJobs = !jobs.isEmpty
+    var clips = request.clips
+    var prepFolder: URL? = nil
+    var handedOff = false
+    defer { if !handedOff, let prepFolder { MediaPrePass.removeFolder(prepFolder) } }
+    if hasJobs {
+      let folder: URL
+      do { folder = try MediaPrePass.makeFolder(exportId: id) } catch { throw MediaPrePass.failure(for: jobs[0].kind) }
+      prepFolder = folder
+      for (j, job) in jobs.enumerated() {
+        if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
+        let prepared = folder.appendingPathComponent("\(j)-\(job.kind == .photo ? "photo" : "reverse").mp4")
+        var lastSent = -1.0
+        let report: (Double) -> Void = { fraction in
+          let p = MediaPrePass.prePassProgress(job: j, jobCount: jobs.count, fraction: fraction)
+          guard p - lastSent >= 0.005 else { return }   // at most ~40 progress events for the whole pre-pass
+          lastSent = p
+          self.onEvent(["jobId": self.id, "type": "progress", "progress": p])
+        }
+        do {
+          let seconds = try await MediaPrePass.run(job, clip: clips[job.clipIndex], to: prepared, renderSize: renderSize,
+                                                   isCancelled: { self.cancelledFlag }, progress: report)
+          clips[job.clipIndex] = MediaPrePass.rewrite(clips[job.clipIndex], preparedURL: prepared, duration: seconds)
+        } catch is PrePassCancelled {
+          onEvent(["jobId": id, "type": "cancelled"]); return
+        }
+      }
+    }
+
     // 1. Load every clip first: a transition window is clamped against the NEXT clip's output duration.
+    //    A prepared clip has no audio track; that is handled like any silent source (no audio inserted).
     var loaded: [LoadedClip] = []
-    for clip in request.clips {
+    for clip in clips {
       if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
       guard let url = URL(string: clip.sourceUri) else { throw ExportError.noVideoTrack(clip.sourceUri) }
       let asset = AVURLAsset(url: url)
@@ -610,10 +646,14 @@ final class ExportSession {
         guard let self else { return }
         self.lock.lock(); let s = self.session; self.lock.unlock()
         guard let s, s.status == .waiting || s.status == .exporting else { return }
-        self.onEvent(["jobId": jobId, "type": "progress", "progress": Double(s.progress)])
+        self.onEvent(["jobId": jobId, "type": "progress", "progress": MediaPrePass.exportProgress(Double(s.progress), hasJobs: hasJobs)])
       }
     }
+    // From here the export reads the prepared files asynchronously: its completion handler removes the folder.
+    let folderToRemove = prepFolder
+    handedOff = true
     session.exportAsynchronously { [weak self] in
+      if let folderToRemove { MediaPrePass.removeFolder(folderToRemove) }
       guard let self else { return }
       DispatchQueue.main.async { self.timer?.invalidate(); self.timer = nil }
       switch session.status {
