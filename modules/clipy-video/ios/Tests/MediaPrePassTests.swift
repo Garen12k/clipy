@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreMedia
 import XCTest
 @testable import ClipyVideo
 
@@ -92,11 +93,85 @@ final class MediaPrePassTests: XCTestCase {
     XCTAssertEqual(MediaPrePass.reverseWindows(start: 2, end: 2, window: 2), [])
   }
 
-  func testReverseWindowIsOneSecondWhenTwoWouldHoldMoreThanSixty4KFrames() {
-    XCTAssertEqual(MediaPrePass.reverseWindowSeconds(width: 1920, height: 1080, fps: 60), 2)
-    XCTAssertEqual(MediaPrePass.reverseWindowSeconds(width: 3840, height: 2160, fps: 30), 2)
-    XCTAssertEqual(MediaPrePass.reverseWindowSeconds(width: 3840, height: 2160, fps: 60), 1)
-    XCTAssertEqual(MediaPrePass.reverseWindowSeconds(width: 3840, height: 2160, fps: 0), 2, "unknown rate → 30 fps")
+  /// Window + look-back holds at most ~300 MB of decoded 420v frames (w × h × 1.5 bytes) and at most 2 s.
+  func testReverseWindowingIsBoundedByBytes() {
+    let cases: [(w: Double, h: Double, fps: Double, window: Double, lookBack: Double)] = [
+      (3840, 2160, 30, 0.7037551, 0.1),     // 4K30: 24.1 frames fit
+      (3840, 2160, 60, 0.3018776, 0.1),     // 4K60
+      (1920, 1080, 240, 0.3018776, 0.1),    // 1080p240 slow motion
+      (1280, 720, 30, 1.9, 0.1),            // 720p30: the 2 s cap wins
+      (1280, 720, 10, 1.8, 0.2),            // slow rate: look-back is two frame lengths
+    ]
+    for c in cases {
+      let r = MediaPrePass.reverseWindowing(width: c.w, height: c.h, fps: c.fps)
+      let label = "\(Int(c.w))x\(Int(c.h))@\(Int(c.fps))"
+      XCTAssertEqual(r.window, c.window, accuracy: 1e-6, label)
+      XCTAssertEqual(r.lookBack, c.lookBack, accuracy: 1e-9, label)
+      XCTAssertLessThanOrEqual(r.window + r.lookBack, MediaPrePass.reverseWindowMaxSeconds + 1e-9, label)
+      let bytes = (r.window + r.lookBack) * c.fps * c.w * c.h * 1.5
+      XCTAssertLessThanOrEqual(bytes, MediaPrePass.reverseWindowByteBudget + 1, label)
+    }
+    XCTAssertEqual(MediaPrePass.reverseWindowing(width: 1280, height: 720, fps: 0).window, 1.9, accuracy: 1e-9, "unknown rate → 30 fps")
+    XCTAssertEqual(MediaPrePass.reverseWindowing(width: 7680, height: 4320, fps: 240).window, 3.0 / 240, accuracy: 1e-9, "never below 3 frames")
+  }
+
+  private func frameTimes(_ range: Range<Int>, fps: Int32 = 30) -> [CMTime] {
+    range.map { CMTime(value: CMTimeValue($0), timescale: fps) }
+  }
+
+  /// Runs the schedule over every window like makeReversedCopy does, feeding each window extra frames around its
+  /// edges (as a reader might return). Returns the appended source times and output times, in append order.
+  private func reverseAll(frames: [CMTime], start: Double, end: Double, window: Double) -> (source: [Double], out: [Double]) {
+    let windows = MediaPrePass.reverseWindows(start: start, end: end, window: window)
+    let e = ExportSession.time(end)
+    var later = e
+    var source: [Double] = [], out: [Double] = []
+    for (w, win) in windows.enumerated() {
+      let lo = ExportSession.time(win.start), hi = ExportSession.time(win.end)
+      let fed = frames.filter { $0.seconds >= win.start - 0.2 && $0.seconds < win.end + 0.1 }
+      let s = MediaPrePass.reverseSchedule(pts: fed, windowStart: lo, windowEnd: hi, isEarliest: w == windows.count - 1, end: e, later: later)
+      for step in s.steps { source.append(fed[step.index].seconds); out.append(step.time.seconds) }
+      later = s.later
+    }
+    return (source, out)
+  }
+
+  func testReverseScheduleHasNoDuplicatesOrGapsAndRisesFromZero() {
+    // 30 fps frames over 0–3 s; trim [0.51, 2.0]: frame 15 (0.5 s) is on screen at S, frame 59 is the last before E.
+    let r = reverseAll(frames: frameTimes(0..<90), start: 0.51, end: 2.0, window: 0.7)
+    let expected = (15...59).reversed().map { Double($0) / 30 }
+    XCTAssertEqual(r.source.count, expected.count)
+    for (a, b) in zip(r.source, expected) { XCTAssertEqual(a, b, accuracy: 1e-9) }
+    XCTAssertEqual(r.out.first ?? -1, 0, accuracy: 1e-9)
+    for (a, b) in zip(r.out, r.out.dropFirst()) { XCTAssertLessThan(a, b) }
+    // Each frame keeps its source spacing: frame i (below the last) starts at E − (i + 1) / 30.
+    for (src, t) in zip(r.source.dropFirst(), r.out.dropFirst()) { XCTAssertEqual(t, 2.0 - (src + 1.0 / 30), accuracy: 1e-3) }
+    // The covering frame is last and lasts from E − 16/30 until E − S (where the session ends).
+    let last = r.out.last ?? 0
+    XCTAssertLessThan(last, 2.0 - 0.51)
+    XCTAssertEqual((2.0 - 0.51) - last, 16.0 / 30 - 0.51, accuracy: 1e-3)
+  }
+
+  func testReverseScheduleTakesTheFrameExactlyAtStartWithoutTheOneBefore() {
+    let r = reverseAll(frames: frameTimes(0..<90), start: 0.5, end: 1.0, window: 2)
+    XCTAssertEqual(r.source.last ?? -1, 0.5, accuracy: 1e-9)
+    XCTAssertEqual(r.source.count, 15)                       // frames 15...29
+  }
+
+  func testReverseScheduleSkipsARepeatedStartTime() {
+    let pts = [CMTime(value: 3, timescale: 30), CMTime(value: 4, timescale: 30), CMTime(value: 4, timescale: 30)]
+    let e = CMTime(value: 5, timescale: 30)
+    let s = MediaPrePass.reverseSchedule(pts: pts, windowStart: .zero, windowEnd: e, isEarliest: false, end: e, later: e)
+    XCTAssertEqual(s.steps.map { pts[$0.index].value }, [4, 3])
+    XCTAssertEqual(s.steps.map { $0.time.seconds }, [0, 1.0 / 30])
+    XCTAssertEqual(s.later.value, 3)
+  }
+
+  func testCancellationErrorIsACancelNotAFailure() {
+    XCTAssertTrue(MediaPrePass.outcome(of: CancellationError(), for: .reverse) is PrePassCancelled)
+    XCTAssertTrue(MediaPrePass.outcome(of: PrePassCancelled(), for: .photo) is PrePassCancelled)
+    XCTAssertEqual((MediaPrePass.outcome(of: URLError(.unknown), for: .photo) as? ExportError)?.errorDescription,
+                   "Couldn't prepare a photo for export.")
   }
 
   func testPhotoDecodeCapIsTwiceTheExportLongSideUpTo4096() {

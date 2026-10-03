@@ -16,6 +16,18 @@ struct TimeWindow: Equatable {
   let end: Double
 }
 
+/// How a reversed clip is read: windows of `window` seconds; the earliest also reads `lookBack` seconds before it.
+struct ReverseWindowing: Equatable {
+  let window: Double
+  let lookBack: Double
+}
+
+/// Append frame `index` (into the window's decoded frames) at output time `time`.
+struct ReverseStep {
+  let index: Int
+  let time: CMTime
+}
+
 /// Thrown when the export is cancelled during the pre-pass; ExportSession turns it into a `cancelled` event.
 struct PrePassCancelled: Error {}
 
@@ -32,8 +44,12 @@ enum MediaPrePass {
   static let maxPhotoPixels = 4096
   /// H.264 level 5.1 / 5.2 frame-size limit (MaxFS), in 16×16 macroblocks (= 4096 × 2304).
   static let maxMacroblocks = 36_864
-  /// Decoded pixels one reverse window may hold: 60 frames at 4K UHD.
-  static let reverseWindowPixelBudget = 60.0 * 3840 * 2160
+  /// Bytes of decoded 420v frames (width × height × 1.5 each) one reverse window may hold, look-back included.
+  static let reverseWindowByteBudget = 300_000_000.0
+  /// Longest reverse read, window plus look-back, in seconds.
+  static let reverseWindowMaxSeconds = 2.0
+  /// Shortest reverse window, in frames (used even if it overshoots the budget, for enormous frames).
+  static let reverseWindowMinFrames = 3.0
 
   // MARK: - Pure planning
 
@@ -95,10 +111,41 @@ enum MediaPrePass {
     return out
   }
 
-  /// 2 s windows, or 1 s when 2 s of decoded frames would exceed ~60 frames at 4K. An unknown rate counts as 30 fps.
-  static func reverseWindowSeconds(width: Double, height: Double, fps: Double) -> Double {
+  /// Window length and look-back for reversing a `width` × `height` source at `fps` (unknown rate → 30 fps).
+  /// The look-back (about two frame lengths, at least 0.1 s) lets the earliest window find the frame on screen at
+  /// the trim start. Window + look-back holds at most `reverseWindowByteBudget` of decoded 420v frames and at most
+  /// `reverseWindowMaxSeconds`; the window is never shorter than `reverseWindowMinFrames` frames.
+  static func reverseWindowing(width: Double, height: Double, fps: Double) -> ReverseWindowing {
     let rate = fps.isFinite && fps > 0 ? fps : 30
-    return 2 * rate * width * height > reverseWindowPixelBudget ? 1 : 2
+    let lookBack = max(2 / rate, 0.1)
+    let frameBytes = max(1, width) * max(1, height) * 1.5
+    let budgetSeconds = reverseWindowByteBudget / frameBytes / rate
+    let window = max(reverseWindowMinFrames / rate, min(reverseWindowMaxSeconds, budgetSeconds) - lookBack)
+    return ReverseWindowing(window: window, lookBack: lookBack)
+  }
+
+  /// One window of the reverse, given the start times of the frames decoded for it (any order):
+  /// - a frame belongs to the window holding its start time, `[lo, hi)`, so windows never repeat or skip a frame;
+  /// - the earliest window also takes the frame on screen at `lo` (= the trim start S) when none starts exactly there;
+  /// - frames are appended latest first, each at `end − (start of the next later frame)` (`later`, initially E):
+  ///   times rise from 0 and every frame keeps its source spacing. The caller ends the session at E − S, so the
+  ///   last frame lasts until then.
+  /// Returns the steps (index into `pts`, output time) and the `later` to carry into the next (earlier) window.
+  static func reverseSchedule(pts: [CMTime], windowStart lo: CMTime, windowEnd hi: CMTime, isEarliest: Bool,
+                              end: CMTime, later: CMTime) -> (steps: [ReverseStep], later: CMTime) {
+    var kept = pts.indices.filter { CMTimeCompare(pts[$0], lo) >= 0 && CMTimeCompare(pts[$0], hi) < 0 }
+    if isEarliest, !kept.contains(where: { CMTimeCompare(pts[$0], lo) == 0 }),
+       let covering = pts.indices.filter({ CMTimeCompare(pts[$0], lo) < 0 }).max(by: { CMTimeCompare(pts[$0], pts[$1]) < 0 }) {
+      kept.append(covering)
+    }
+    kept.sort { CMTimeCompare(pts[$0], pts[$1]) > 0 }      // latest first
+    var steps: [ReverseStep] = []
+    var next = later
+    for i in kept where CMTimeCompare(pts[i], next) < 0 {  // also drops a repeated start time
+      steps.append(ReverseStep(index: i, time: CMTimeSubtract(end, next)))
+      next = pts[i]
+    }
+    return (steps, next)
   }
 
   /// Photo decode cap: twice the export's long side (room to zoom in), never above 4096.
@@ -150,11 +197,16 @@ enum MediaPrePass {
       case .photo: return try await makePhotoVideo(clip, to: output, renderSize: renderSize, isCancelled: isCancelled, progress: progress)
       case .reverse: return try await makeReversedCopy(clip, to: output, isCancelled: isCancelled, progress: progress)
       }
-    } catch is PrePassCancelled {
-      throw PrePassCancelled()
     } catch {
-      throw failure(for: job.kind)
+      throw outcome(of: error, for: job.kind)
     }
+  }
+
+  /// What a job's error becomes: a cancel (ours, or Swift's `CancellationError` from `Task.sleep`) stays a cancel;
+  /// anything else is the job's readable `ExportError`.
+  static func outcome(of error: Error, for kind: PrePassJob.Kind) -> Error {
+    if error is PrePassCancelled || error is CancellationError { return PrePassCancelled() }
+    return failure(for: kind)
   }
 
   static func videoSettings(width: Int, height: Int, fps: Double) -> [String: Any] {
@@ -289,8 +341,8 @@ enum MediaPrePass {
     let total = end - start
 
     let size = encodableSize(naturalSize)
-    let windows = reverseWindows(start: startSeconds, end: endSeconds,
-                                 window: reverseWindowSeconds(width: Double(naturalSize.width), height: Double(naturalSize.height), fps: fps))
+    let windowing = reverseWindowing(width: Double(naturalSize.width), height: Double(naturalSize.height), fps: fps)
+    let windows = reverseWindows(start: startSeconds, end: endSeconds, window: windowing.window)
     let (writer, input, adaptor) = try makeWriter(output, width: size.width, height: size.height, fps: fps, transform: preferredTransform)
     do {
       var later = end                                   // source start of the frame appended just before
@@ -300,21 +352,17 @@ enum MediaPrePass {
         let lo = ExportSession.time(window.start), hi = ExportSession.time(window.end)
         let isEarliest = w == windows.count - 1
         // The earliest window reads a little earlier so the frame on screen at S (which may start before S) is found.
-        let readFrom = isEarliest ? CMTimeMaximum(trackRange.start, lo - ExportSession.time(0.5)) : lo
-        let frames = try readFrames(asset, track, range: CMTimeRange(start: readFrom, end: hi), isCancelled: isCancelled)
-        // Each frame belongs to the window holding its start time, so windows never repeat or skip a frame.
-        var kept = frames.filter { CMTimeCompare($0.pts, lo) >= 0 && CMTimeCompare($0.pts, hi) < 0 }
-        if isEarliest, !kept.contains(where: { CMTimeCompare($0.pts, lo) == 0 }),
-           let covering = frames.filter({ CMTimeCompare($0.pts, lo) < 0 }).max(by: { CMTimeCompare($0.pts, $1.pts) < 0 }) {
-          kept.append(covering)
-        }
-        kept.sort { CMTimeCompare($0.pts, $1.pts) > 0 }   // latest first
-        for f in kept where CMTimeCompare(f.pts, later) < 0 {
+        let readFrom = isEarliest ? CMTimeMaximum(trackRange.start, lo - ExportSession.time(windowing.lookBack)) : lo
+        let frames = try readFrames(asset, track, range: CMTimeRange(start: readFrom, end: hi), keepFrom: lo,
+                                    keepOneBefore: isEarliest, isCancelled: isCancelled)
+        let schedule = reverseSchedule(pts: frames.map { $0.pts }, windowStart: lo, windowEnd: hi, isEarliest: isEarliest,
+                                       end: end, later: later)
+        for step in schedule.steps {
           try await waitUntilReady(input, writer, isCancelled)
-          guard adaptor.append(f.buffer, withPresentationTime: end - later) else { throw PrePassFailure() }
+          guard adaptor.append(frames[step.index].buffer, withPresentationTime: step.time) else { throw PrePassFailure() }
           appended += 1
-          later = f.pts
         }
+        later = schedule.later
         progress(Double(w + 1) / Double(windows.count))
       }
       guard appended > 0 else { throw PrePassFailure() }
@@ -327,8 +375,11 @@ enum MediaPrePass {
   }
 
   /// Decodes the frames of `track` within `range` (a fresh reader per window: an AVAssetReader cannot restart).
-  private static func readFrames(_ asset: AVAsset, _ track: AVAssetTrack, range: CMTimeRange,
-                                 isCancelled: () -> Bool) throws -> [(pts: CMTime, buffer: CVPixelBuffer)] {
+  /// Holds only frames starting in `[keepFrom, range.end)`, plus — when `keepOneBefore` — the latest frame starting
+  /// before `keepFrom` (the candidate for the frame on screen at the trim start); everything else is released at
+  /// once, so memory stays within the window budget whatever the reader returns around the range edges.
+  private static func readFrames(_ asset: AVAsset, _ track: AVAssetTrack, range: CMTimeRange, keepFrom: CMTime,
+                                 keepOneBefore: Bool, isCancelled: () -> Bool) throws -> [(pts: CMTime, buffer: CVPixelBuffer)] {
     let reader = try AVAssetReader(asset: asset)
     let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
       kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
@@ -338,12 +389,19 @@ enum MediaPrePass {
     reader.timeRange = range
     guard reader.startReading() else { throw PrePassFailure() }
     var frames: [(pts: CMTime, buffer: CVPixelBuffer)] = []
+    var before: (pts: CMTime, buffer: CVPixelBuffer)? = nil
     while let sample = output.copyNextSampleBuffer() {
       if isCancelled() { reader.cancelReading(); throw PrePassCancelled() }
-      guard let buffer = CMSampleBufferGetImageBuffer(sample) else { continue }
-      frames.append((pts: CMSampleBufferGetPresentationTimeStamp(sample), buffer: buffer))
+      let pts = CMSampleBufferGetPresentationTimeStamp(sample)
+      guard CMTimeCompare(pts, range.end) < 0, let buffer = CMSampleBufferGetImageBuffer(sample) else { continue }
+      if CMTimeCompare(pts, keepFrom) >= 0 {
+        frames.append((pts: pts, buffer: buffer))
+      } else if keepOneBefore, before.map({ CMTimeCompare(pts, $0.pts) > 0 }) ?? true {
+        before = (pts: pts, buffer: buffer)
+      }
     }
     guard reader.status == .completed else { throw PrePassFailure() }
+    if let before { frames.append(before) }
     return frames
   }
 }

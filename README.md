@@ -168,6 +168,7 @@ Select a clip, then use the tools under the preview.
 - **Freeze** — inserts a 2 s still of the frame at the playhead.
 - **Reverse** — the clip gets a badge and the preview plays forward with the "Preview" tag. The
   exported video is reversed and has no sound.
+  A transition next to a reversed clip holds that clip's edge frame (no extra footage beyond the trim).
 
 Photos and reversed clips only appear in the exported video with the native build (the Swift export
 turns them into ordinary video before composing; this code is uncompiled until an EAS build).
