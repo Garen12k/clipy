@@ -57,7 +57,7 @@ export function normaliseRotation(deg: number): number {
   const m = ((deg % 360) + 360) % 360;   // [0, 360)
   return m > 180 ? m - 360 : m;
 }
-const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+export const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const finiteOr = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
 
 export function clampTransform(t: ClipTransform): ClipTransform {
@@ -112,7 +112,7 @@ export function newVideoClip(a: Pick<Clip, "id" | "sourceUri" | "sourceDuration"
 /** A still-image clip: default length, silent, speed 1, never reversed. */
 export function newPhotoClip(a: Pick<Clip, "id" | "sourceUri" | "width" | "height"> & { seconds?: number }): Clip {
   const { seconds, ...rest } = a;
-  return { ...newVideoClip({ ...rest, sourceDuration: PHOTO.maxSeconds }), kind: "photo", trimEnd: seconds ?? PHOTO.defaultSeconds, muted: true };
+  return { ...newVideoClip({ ...rest, sourceDuration: PHOTO.maxSeconds }), kind: "photo", trimEnd: clampNum(seconds ?? PHOTO.defaultSeconds, PHOTO.minSeconds, PHOTO.maxSeconds), muted: true };
 }
 export function makeClip(partial: Partial<Clip> & Pick<Clip, "id" | "sourceDuration">): Clip {
   return { ...newVideoClip({ sourceUri: `file:///media/${partial.id}.mp4`, width: 1080, height: 1920, ...partial }), ...partial };

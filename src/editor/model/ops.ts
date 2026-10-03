@@ -1,6 +1,11 @@
 import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration, outputToSource } from "./timeline";
+import { fitScale } from "./clipLayout";
+import {
+  aspectRatioValue, clampCrop, clampTransform, DEFAULT_TRANSFORM, isPhoto, normaliseRotation, PHOTO,
+  type ClipBackground, type ClipTransform, type CropRect,
+} from "./types";
 import { MIN_CLIP_SECONDS, SPEED_LIMITS, TRANSITION_LIMITS, type AspectRatio, type Clip, type FilterId, type Project, type TransitionType } from "./types";
 import { totalDuration } from "./timeline";
 import { AUDIO_LIMITS, CLIP_VOLUME, isSticker, isTextOverlay, makeOverlay, makeSticker, OVERLAY_LIMITS, type AudioTrack, type Overlay, type StickerOverlay, type TextOverlay } from "./types";
@@ -23,7 +28,7 @@ export function splitClipAt(p: Project, outputTime: number): Project {
   if (offsetInClip < MIN_CLIP_SECONDS || d - offsetInClip < MIN_CLIP_SECONDS) return p;
   const cut = outputToSource(clip, offsetInClip);
   const left: Clip = { ...clip, trimEnd: cut, transitionOut: NO_TRANSITION };
-  const right: Clip = { ...clip, id: newId(), trimStart: cut };
+  const right: Clip = isPhoto(clip) ? { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut } : { ...clip, id: newId(), trimStart: cut };
   return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
 }
 
@@ -31,6 +36,13 @@ export function trimClip(p: Project, clipId: string, trimStart: number, trimEnd:
   const i = p.clips.findIndex((c) => c.id === clipId);
   if (i < 0) return p;
   const c = p.clips[i];
+  if (isPhoto(c)) {
+    const len = Math.max(PHOTO.minSeconds, Math.min(trimEnd, PHOTO.maxSeconds));
+    if (c.trimStart === 0 && c.trimEnd === len) return p;
+    const clips = p.clips.slice();
+    clips[i] = { ...c, trimStart: 0, trimEnd: len };
+    return touch(p, { clips: normaliseTransitions(clips) });
+  }
   const start = Math.max(0, Math.min(trimStart, c.sourceDuration));
   const end = Math.max(0, Math.min(trimEnd, c.sourceDuration));
   if (end - start < MIN_CLIP_SECONDS * c.speed - 1e-9) return p;
@@ -59,7 +71,8 @@ export function deleteClip(p: Project, clipId: string): Project {
 export function duplicateClip(p: Project, clipId: string): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
   if (i < 0) return p;
-  const copy: Clip = { ...p.clips[i], id: newId(), transitionOut: NO_TRANSITION };
+  const src = p.clips[i];
+  const copy: Clip = { ...src, id: newId(), transitionOut: NO_TRANSITION, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background } };
   return touch(p, { clips: [...p.clips.slice(0, i + 1), copy, ...p.clips.slice(i + 1)] });
 }
 
@@ -178,7 +191,7 @@ export function removeAudioTrack(p: Project): Project {
 
 export function setClipVolume(p: Project, clipId: string, volume: number): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0) return p;
+  if (i < 0 || isPhoto(p.clips[i])) return p;
   const v = clamp(volume, CLIP_VOLUME);
   if (v === p.clips[i].volume) return p;
   const clips = p.clips.slice(); clips[i] = { ...clips[i], volume: v };
@@ -187,7 +200,7 @@ export function setClipVolume(p: Project, clipId: string, volume: number): Proje
 
 export function setClipMuted(p: Project, clipId: string, muted: boolean): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0 || p.clips[i].muted === muted) return p;
+  if (i < 0 || isPhoto(p.clips[i]) || p.clips[i].muted === muted) return p;
   const clips = p.clips.slice(); clips[i] = { ...clips[i], muted };
   return touch(p, { clips });
 }
@@ -225,6 +238,7 @@ export function setClipSpeed(p: Project, clipId: string, speed: number): Project
   const i = p.clips.findIndex((c) => c.id === clipId);
   if (i < 0) return p;
   const c = p.clips[i];
+  if (isPhoto(c)) return p;
   let s = clamp(speed, SPEED_LIMITS);
   const maxForMin = (c.trimEnd - c.trimStart) / MIN_CLIP_SECONDS;   // speed at which output hits 0.1 s
   // Round the cap DOWN so rounding never pushes output under 0.1 s; the 1e-9 absorbs float noise (0.3 / 0.1 = 2.9999…).
@@ -304,4 +318,71 @@ export function setCaptionStyleForAll(p: Project, style: Partial<Pick<TextOverla
     return o;
   });
   return changed ? touch(p, { overlays }) : p;
+}
+
+/** The 1080-wide reference frame for the project's aspect ratio (what clipLayout works in). */
+export function frameSize(p: Project): { width: number; height: number } {
+  return { width: 1080, height: 1080 / aspectRatioValue(p.aspectRatio) };
+}
+
+/** Replaces one clip with `fn(clip)`; returns the same project when the clip is missing or `fn` returns the same object. */
+function updateClip(p: Project, clipId: string, fn: (c: Clip) => Clip): Project {
+  const i = p.clips.findIndex((c) => c.id === clipId);
+  if (i < 0) return p;
+  const next = fn(p.clips[i]);
+  if (next === p.clips[i]) return p;
+  const clips = p.clips.slice(); clips[i] = next;
+  return touch(p, { clips });
+}
+
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+function withTransform(c: Clip, t: ClipTransform): Clip {
+  return sameJson(t, c.transform) ? c : { ...c, transform: t };
+}
+
+export function setClipTransform(p: Project, clipId: string, patch: Partial<ClipTransform>): Project {
+  return updateClip(p, clipId, (c) => withTransform(c, clampTransform({ ...c.transform, ...patch })));
+}
+
+export function resetClipTransform(p: Project, clipId: string): Project {
+  return updateClip(p, clipId, (c) => withTransform(c, { ...DEFAULT_TRANSFORM }));
+}
+
+export function rotateClip90(p: Project, clipId: string): Project {
+  return updateClip(p, clipId, (c) => withTransform(c, clampTransform({ ...c.transform, rotation: normaliseRotation(c.transform.rotation + 90) })));
+}
+
+export function flipClip(p: Project, clipId: string, axis: "h" | "v"): Project {
+  return updateClip(p, clipId, (c) => withTransform(c, axis === "h" ? { ...c.transform, flipH: !c.transform.flipH } : { ...c.transform, flipV: !c.transform.flipV }));
+}
+
+export function fitClip(p: Project, clipId: string): Project {
+  const { width, height } = frameSize(p);
+  return updateClip(p, clipId, (c) =>
+    withTransform(c, clampTransform({ ...c.transform, scale: fitScale(c, c.crop, c.transform.rotation, width, height), x: 0, y: 0 })));
+}
+
+export function fillClip(p: Project, clipId: string): Project {
+  return updateClip(p, clipId, (c) => withTransform(c, { ...c.transform, scale: 1, x: 0, y: 0 }));
+}
+
+export function setClipCrop(p: Project, clipId: string, crop: CropRect): Project {
+  return updateClip(p, clipId, (c) => {
+    const next = clampCrop(crop);
+    return sameJson(next, c.crop) ? c : { ...c, crop: next };
+  });
+}
+
+export function setClipBackground(p: Project, clipId: string, bg: ClipBackground): Project {
+  return updateClip(p, clipId, (c) => (sameJson(bg, c.background) ? c : { ...c, background: { ...bg } }));
+}
+
+export function setBackgroundForAllClips(p: Project, bg: ClipBackground): Project {
+  if (p.clips.every((c) => sameJson(c.background, bg))) return p;
+  return touch(p, { clips: p.clips.map((c) => (sameJson(c.background, bg) ? c : { ...c, background: { ...bg } })) });
+}
+
+export function setClipReversed(p: Project, clipId: string, reversed: boolean): Project {
+  return updateClip(p, clipId, (c) => (isPhoto(c) || c.reversed === reversed ? c : { ...c, reversed }));
 }

@@ -1,11 +1,10 @@
 import { normaliseTransitions } from "./ops";
 import {
-  clampCrop, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
+  clampCrop, clampNum, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
   type Clip, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type Overlay, type PostRecord, type Project, type ShapeId,
 } from "./types";
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 type Raw = Record<string, unknown> & { clips: unknown[] };
 
