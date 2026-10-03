@@ -69,3 +69,16 @@ test("effects registry covers every effect id; labels as specified", () => {
 test("every non-none filter id has a recipe case in Effects.swift filterChain", () => {
   for (const id of FILTER_IDS) if (id !== "none") expect(swift).toContain(`case "${id}":`);
 });
+
+test("every transition type except none / dissolve has its own case inside ClipyCompositor.blend", () => {
+  const compositor = readFileSync(join(__dirname, "../../../modules/clipy-video/ios/ClipyCompositor.swift"), "utf8");
+  // Only the body of `blend`: from its declaration to the next `static func`, so a case elsewhere cannot satisfy this.
+  const start = compositor.indexOf("static func blend(");
+  expect(start).toBeGreaterThanOrEqual(0);
+  const next = compositor.indexOf("static func ", start + 1);
+  const body = compositor.slice(start, next === -1 ? undefined : next);
+  const cases = [...body.matchAll(/case "(\w+)":/g)].map((m) => m[1]);
+  const expected = TRANSITION_TYPES.filter((t) => t !== "none" && t !== "dissolve");
+  expect([...cases].sort()).toEqual([...expected].sort());   // no missing, duplicate or unknown case
+  expect(body).toMatch(/default:\s*\n\s*return dissolve\(/);   // unknown types (and "dissolve") still dissolve
+});

@@ -228,9 +228,61 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
         .concatenating(CGAffineTransform(translationX: -size.width * (s - 1) / 2, y: -size.height * (s - 1) / 2))
       let scaled = a.transformed(by: zoom).cropped(to: rect)
       return dissolve(from: scaled, to: b, progress: p).cropped(to: rect)
+    case "slideRight":
+      // Mirror of "slide": incoming enters from the left (x from −width to 0), outgoing leaves to the right.
+      return push(from: a, to: b, progress: p, dx: -size.width, dy: 0).cropped(to: rect)
+    case "slideUp":
+      // ON SCREEN the incoming frame enters from the bottom edge and moves up; the outgoing leaves through the top.
+      // Core Image is y-up, so the bottom of the screen is y = 0 and "below the screen" is NEGATIVE y: the incoming
+      // starts at y = −height and rises to 0, while the outgoing moves from 0 to +height.
+      return push(from: a, to: b, progress: p, dx: 0, dy: -size.height).cropped(to: rect)
+    case "slideDown":
+      // The opposite: on screen the incoming enters from the top edge (y-up: starts at +height, falls to 0) and the
+      // outgoing leaves through the bottom (0 → −height).
+      return push(from: a, to: b, progress: p, dx: 0, dy: size.height).cropped(to: rect)
+    case "wipe":
+      // Nothing moves: the incoming frame is revealed behind a hard edge travelling left → right.
+      let edge = p * size.width
+      if edge <= 0 { return a.cropped(to: rect) }                 // nothing revealed yet (no empty-rect crop)
+      return b.cropped(to: CGRect(x: 0, y: 0, width: edge, height: size.height)).composited(over: a).cropped(to: rect)
+    case "spin":
+      // Outgoing turns 0 → 90° clockwise ON SCREEN about the frame centre and shrinks 1 → 0.6, over black, while
+      // dissolving into the incoming frame. Core Image is y-up with counter-clockwise positive angles, so a clockwise
+      // on-screen turn is a NEGATIVE angle (the convention of `ClipLayout.ciPlacement`).
+      let s = 1 - 0.4 * p
+      let turn = CGAffineTransform(translationX: -size.width / 2, y: -size.height / 2)
+        .concatenating(CGAffineTransform(rotationAngle: -p * .pi / 2))
+        .concatenating(CGAffineTransform(scaleX: s, y: s))
+        .concatenating(CGAffineTransform(translationX: size.width / 2, y: size.height / 2))
+      let black = CIImage(color: CIColor.black).cropped(to: rect)
+      let spun = a.transformed(by: turn).composited(over: black).cropped(to: rect)
+      return dissolve(from: spun, to: b, progress: p).cropped(to: rect)
+    case "blur":
+      // Outgoing blurs up over the first half, incoming blurs down over the second, cross-dissolved throughout.
+      let r = blurRadiusFactor * min(size.width, size.height)
+      let from = p < 0.5 ? blurred(a, radius: r * (p / 0.5), rect: rect) : a
+      let to = p < 0.5 ? b : blurred(b, radius: r * ((1 - p) / 0.5), rect: rect)
+      return dissolve(from: from, to: to, progress: p).cropped(to: rect)
     default:
       return dissolve(from: a, to: b, progress: p).cropped(to: rect)
     }
+  }
+
+  /// A push: the incoming frame starts displaced by (dx, dy) and travels to the origin while the outgoing frame is
+  /// pushed out ahead of it by the same amount (at p = 0 only `a` is in the frame, at p = 1 only `b`). Not cropped.
+  static func push(from a: CIImage, to b: CIImage, progress p: CGFloat, dx: CGFloat, dy: CGFloat) -> CIImage {
+    let incoming = b.transformed(by: CGAffineTransform(translationX: (1 - p) * dx, y: (1 - p) * dy))
+    let outgoing = a.transformed(by: CGAffineTransform(translationX: -p * dx, y: -p * dy))
+    return incoming.composited(over: outgoing)
+  }
+
+  /// `img` Gaussian-blurred by `radius` pixels — clamped first so the blur has no transparent edges, then cropped back
+  /// to `rect`. A radius of 0 (or less, or non-finite) returns the image untouched.
+  static func blurred(_ img: CIImage, radius: CGFloat, rect: CGRect) -> CIImage {
+    guard radius.isFinite, radius > 0 else { return img }
+    return img.clampedToExtent()
+      .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: NSNumber(value: Double(radius))])
+      .cropped(to: rect)
   }
 
   static func dissolve(from a: CIImage, to b: CIImage, progress p: CGFloat) -> CIImage {
