@@ -5,7 +5,8 @@ import XCTest
 @testable import ClipyVideo
 
 /// The vectors of src/editor/model/__tests__/effectMath.vectors.ts. The tables below are checked against the TS
-/// vectors by src/editor/model/__tests__/effectMath.parity.test.ts — keep the literals identical.
+/// vectors by src/editor/model/__tests__/effectMath.parity.test.ts — keep the literals identical. `fn` is the Swift
+/// function name (`leakAlpha` = TS `leakOpacity`, `flickerAlpha` = TS `filmFlicker`).
 struct EffectScalarVector {
   let fn: String
   let name: String
@@ -53,9 +54,9 @@ let effectScalarVectors: [EffectScalarVector] = [
   EffectScalarVector(fn: "flashOpacity", name: "t = 0.25", args: [0.25, 1], expect: 0),
   EffectScalarVector(fn: "flashOpacity", name: "t = 0.5 (second flash)", args: [0.5, 1], expect: 1),
   EffectScalarVector(fn: "flashOpacity", name: "half intensity", args: [0.1, 0.5], expect: 0.1),
-  EffectScalarVector(fn: "leakOpacity", name: "t = 1, k = 1", args: [1, 2, 1], expect: 0.21),
-  EffectScalarVector(fn: "leakOpacity", name: "t = 0.5, k = 0.5", args: [0.5, 2, 0.5], expect: 0.175),
-  EffectScalarVector(fn: "filmFlicker", name: "t = 0.25 (frame 3)", args: [0.25, 1], expect: 0.06698671062971698),
+  EffectScalarVector(fn: "leakAlpha", name: "t = 1, k = 1", args: [1, 2, 1], expect: 0.21),
+  EffectScalarVector(fn: "leakAlpha", name: "t = 0.5, k = 0.5", args: [0.5, 2, 0.5], expect: 0.175),
+  EffectScalarVector(fn: "flickerAlpha", name: "t = 0.25 (frame 3)", args: [0.25, 1], expect: 0.06698671062971698),
 ]
 
 let effectShakeVectors: [EffectShakeVector] = [
@@ -82,8 +83,8 @@ final class EffectMathTests: XCTestCase {
     case ("envelope", 2): return EffectMath.envelope(t: a[0], d: a[1])
     case ("pulseScale", 3): return EffectMath.pulseScale(t: a[0], d: a[1], k: a[2])
     case ("flashOpacity", 2): return EffectMath.flashOpacity(t: a[0], k: a[1])
-    case ("leakOpacity", 3): return EffectMath.leakOpacity(t: a[0], d: a[1], k: a[2])
-    case ("filmFlicker", 2): return EffectMath.filmFlicker(t: a[0], k: a[1])
+    case ("leakAlpha", 3): return EffectMath.leakAlpha(t: a[0], d: a[1], k: a[2])
+    case ("flickerAlpha", 2): return EffectMath.flickerAlpha(t: a[0], k: a[1])
     default: return nil
     }
   }
@@ -183,7 +184,7 @@ final class EffectMathTests: XCTestCase {
   }
 
   /// A solid frame has no edges to pull apart: shake, zoom, blur and the channel split leave it as it was, opaque to
-  /// the corners (clamped edges, and the three channels add back to the original).
+  /// the corners (clamped edges; the per-channel maximum of the three isolated channels is the original, alpha 1).
   func testGeometryAndSplitKeepASolidFrame() {
     for id in ["shake", "zoomPulse", "blur", "rgbSplit"] {
       let out = EffectRenderer.apply(type: id, image: grey, t: 1.03, d: 2, k: 1, size: size)

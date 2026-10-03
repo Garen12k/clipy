@@ -97,6 +97,24 @@ final class TransitionBlendTests: XCTestCase {
     XCTAssertEqual(corner.b, 0.5, accuracy: 0.05)
   }
 
+  /// The turn is CLOCKWISE on screen. At p = 0.5 the outgoing frame is scaled 0.8 and rotated −45° in Core Image
+  /// (y-up, counter-clockwise positive) about the centre (32, 18). A point q is inside it when
+  /// u = R(+45°)(q − centre) / 0.8 has |u.x| ≤ 32 and |u.y| ≤ 18, i.e. with v = q − centre:
+  /// u.x = (v.x − v.y)·0.8839, u.y = (v.x + v.y)·0.8839.
+  ///  - pixel (44, 6), centre (44.5, 6.5): v = (12.5, −11.5) → u = (21.2, 0.9): inside → half red.
+  ///  - pixel (44, 30), centre (44.5, 30.5): v = (12.5, 12.5) → u = (0, 22.1): outside (22.1 > 18) → no red.
+  /// With the wrong sign (+45°) u.x = (v.x + v.y)·0.8839, u.y = (v.y − v.x)·0.8839, and the two swap:
+  /// (44, 6) → (0.9, −21.2) outside, (44, 30) → (22.1, 0) inside.
+  func testSpinTurnsClockwiseOnScreen() {
+    let half = blend("spin", 0.5)
+    let lowerRight = redBlue(half, 44, 6)       // low y in Core Image = lower on screen
+    XCTAssertEqual(lowerRight.r, 0.5, accuracy: 0.05)
+    XCTAssertEqual(lowerRight.b, 0.5, accuracy: 0.05)
+    let upperRight = redBlue(half, 44, 30)
+    XCTAssertEqual(upperRight.r, 0, accuracy: 0.02)
+    XCTAssertEqual(upperRight.b, 0.5, accuracy: 0.05)
+  }
+
   /// The blur transition's radius is continuous: 0 at both ends, the full radius (0.04 × the shorter side) in the
   /// middle, linear in between and the same on both sides of the middle.
   func testBlurTransitionRadiusPeaksInTheMiddle() {

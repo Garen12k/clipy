@@ -29,7 +29,7 @@ enum EffectRenderer {
     case "flash":
       return colorLayer(EffectMath.flashColor, opacity: EffectMath.flashOpacity(t: t, k: k), over: image, rect: rect)
     case "lightLeak":
-      return colorLayer(EffectMath.lightLeakColor, opacity: EffectMath.leakOpacity(t: t, d: d, k: k), over: image, rect: rect)
+      return colorLayer(EffectMath.lightLeakColor, opacity: EffectMath.leakAlpha(t: t, d: d, k: k), over: image, rect: rect)
     case "vhs":
       // Red / blue pulled apart, scan lines, then the tint the preview shows.
       let shifted = splitChannels(image: image.cropped(to: rect), dx: CGFloat(EffectMath.vhsShift * k * w))
@@ -39,17 +39,17 @@ enum EffectRenderer {
       let amount = k * env
       var out = image.cropped(to: rect)
       if amount > 0 {
-        if let sepia = filtered(out, "CISepiaTone", ["inputIntensity": number(min(1, amount))]) { out = sepia.cropped(to: rect) }
-        if let dark = filtered(out, "CIVignette", ["inputIntensity": number(amount), "inputRadius": number(Double(filmVignetteRadius))]) {
+        if let sepia = Adjust.filtered(out, "CISepiaTone", ["inputIntensity": number(min(1, amount))]) { out = sepia.cropped(to: rect) }
+        if let dark = Adjust.filtered(out, "CIVignette", ["inputIntensity": number(amount), "inputRadius": number(Double(filmVignetteRadius))]) {
           out = dark.cropped(to: rect)
         }
       }
-      out = colorLayer(EffectMath.flickerColor, opacity: EffectMath.filmFlicker(t: t, k: k), over: out, rect: rect)
+      out = colorLayer(EffectMath.flickerColor, opacity: EffectMath.flickerAlpha(t: t, k: k), over: out, rect: rect)
       return amount > 0 ? Adjust.grain(over: out, opacity: Adjust.grainOpacity * amount, time: t).cropped(to: rect) : out
     case "glow":
       let radius = EffectMath.glowRadius * k * shorter, intensity = EffectMath.glowIntensity * k * env
       guard radius > 0, intensity > 0,
-            let bloom = filtered(image.clampedToExtent(), "CIBloom", ["inputRadius": number(radius), "inputIntensity": number(intensity)])
+            let bloom = Adjust.filtered(image.clampedToExtent(), "CIBloom", ["inputRadius": number(radius), "inputIntensity": number(intensity)])
       else { return image }
       return bloom.cropped(to: rect)
     case "blur":
@@ -95,27 +95,28 @@ enum EffectRenderer {
   }
 
   /// Red moved `dx` pixels to the right, blue `dx` to the left, green in place: each channel is isolated with
-  /// `CIColorMatrix` (on a clamped image, so a moved channel has no empty edge) and the three are added back together
-  /// with `CIAdditionCompositing`. The sum is laid over opaque black so the result is opaque whatever alpha the
-  /// addition gives. `image` must have a finite extent (the frame); the result keeps it. dx 0 → `image` unchanged.
+  /// `CIColorMatrix` (on a clamped image, so a moved channel has no empty edge; alpha is left as it is) and the three
+  /// are put back together with `CIMaximumCompositing`, the per-component maximum: (r, 0, 0, a) max (0, g, 0, a) max
+  /// (0, 0, b, a) = (r, g, b, a) — alpha is never summed, so an opaque frame stays exactly opaque.
+  /// `image` must have a finite extent (the frame); the result keeps it. dx 0 → `image` unchanged.
   private static func splitChannels(image: CIImage, dx: CGFloat) -> CIImage {
     let rect = image.extent
     guard dx.isFinite, dx != 0, !rect.isInfinite, !rect.isEmpty else { return image }
     let base = image.clampedToExtent()
     func channel(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, shift: CGFloat) -> CIImage? {
-      return filtered(base, "CIColorMatrix", [
+      return Adjust.filtered(base, "CIColorMatrix", [
         "inputRVector": CIVector(x: r, y: 0, z: 0, w: 0),
         "inputGVector": CIVector(x: 0, y: g, z: 0, w: 0),
         "inputBVector": CIVector(x: 0, y: 0, z: b, w: 0),
       ])?.transformed(by: CGAffineTransform(translationX: shift, y: 0)).cropped(to: rect)
     }
-    func add(_ top: CIImage, _ bottom: CIImage) -> CIImage? {
-      return filtered(top, "CIAdditionCompositing", ["inputBackgroundImage": bottom])
+    func maximum(_ top: CIImage, _ bottom: CIImage) -> CIImage? {
+      return Adjust.filtered(top, "CIMaximumCompositing", ["inputBackgroundImage": bottom])
     }
     guard let red = channel(1, 0, 0, shift: dx), let green = channel(0, 1, 0, shift: 0), let blue = channel(0, 0, 1, shift: -dx),
-          let redGreen = add(red, green), let sum = add(blue, redGreen)
+          let redGreen = maximum(red, green), let all = maximum(blue, redGreen)
     else { return image }
-    return sum.cropped(to: rect).composited(over: CIImage(color: CIColor.black).cropped(to: rect)).cropped(to: rect)
+    return all.cropped(to: rect)
   }
 
   /// Thin horizontal dark lines over `image`: `CIStripesGenerator` draws VERTICAL stripes (they alternate along x),
@@ -137,19 +138,7 @@ enum EffectRenderer {
 
   private static func number(_ v: Double) -> NSNumber { return NSNumber(value: v) }
 
-  /// One Core Image filter on `image`. Nil (→ the step is skipped) when Core Image has no such filter, the filter
-  /// takes no input image, or it does not declare one of the keys — `setValue(_:forKey:)` is never called with a key
-  /// the filter does not list, so a wrong name cannot raise.
-  private static func filtered(_ image: CIImage, _ name: String, _ params: [String: Any]) -> CIImage? {
-    guard let f = CIFilter(name: name) else { return nil }
-    let keys = f.inputKeys
-    guard keys.contains(kCIInputImageKey), params.keys.allSatisfy({ keys.contains($0) }) else { return nil }
-    f.setValue(image, forKey: kCIInputImageKey)
-    for (key, value) in params { f.setValue(value, forKey: key) }
-    return f.outputImage
-  }
-
-  /// A Core Image generator's output (no input image), with the same key guard as `filtered`.
+  /// A Core Image generator's output (no input image), with the same key guard as `Adjust.filtered`.
   private static func generated(_ name: String, _ params: [String: Any]) -> CIImage? {
     guard let f = CIFilter(name: name) else { return nil }
     let keys = f.inputKeys

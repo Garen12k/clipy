@@ -175,8 +175,8 @@ enum Adjust {
 
   /// One Core Image filter on `image`. Nil (→ the step is skipped) when Core Image has no such filter, the filter
   /// takes no input image, or it does not declare one of the keys — `setValue(_:forKey:)` is never called with a key
-  /// the filter does not list, so a wrong name cannot raise.
-  private static func filtered(_ image: CIImage, _ name: String, _ params: [String: Any]) -> CIImage? {
+  /// the filter does not list, so a wrong name cannot raise. Shared with `EffectRenderer`.
+  static func filtered(_ image: CIImage, _ name: String, _ params: [String: Any]) -> CIImage? {
     guard let f = CIFilter(name: name) else { return nil }
     let keys = f.inputKeys
     guard keys.contains(kCIInputImageKey), params.keys.allSatisfy({ keys.contains($0) }) else { return nil }

@@ -93,14 +93,15 @@ enum EffectMath {
     return k * max(0, 1 - EffectMath.flashDecay * frac(EffectMath.flashHz * t))
   }
 
-  static func leakOpacity(t: Double, d: Double, k: Double) -> Double {
-    let peak: Double = EffectMath.leakOpacity
-    return peak * k * envelope(t: t, d: d) * (0.6 + 0.4 * sin(tau * EffectMath.leakHz * t))
+  /// `leakOpacity(t, d, k)` in effectMath.ts. Named differently here: Swift does not allow a `static let` and a
+  /// `static func` with the same base name in one type.
+  static func leakAlpha(t: Double, d: Double, k: Double) -> Double {
+    return EffectMath.leakOpacity * k * envelope(t: t, d: d) * (0.6 + 0.4 * sin(tau * EffectMath.leakHz * t))
   }
 
-  static func filmFlicker(t: Double, k: Double) -> Double {
-    let depth: Double = EffectMath.filmFlicker
-    return depth * k * hash((EffectMath.filmFps * t).rounded(.down))
+  /// `filmFlicker(t, k)` in effectMath.ts (renamed for the same reason as `leakAlpha`).
+  static func flickerAlpha(t: Double, k: Double) -> Double {
+    return EffectMath.filmFlicker * k * hash((EffectMath.filmFps * t).rounded(.down))
   }
 
   /// One glitch slice (1/glitchHz s).

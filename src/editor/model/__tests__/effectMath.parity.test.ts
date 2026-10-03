@@ -31,10 +31,11 @@ const inOrder = (body: string, parts: string[]) => {
   expect([...at].sort((a, b) => a - b)).toEqual(at);
 };
 
-/** Every scalar vector with the EffectMath function it checks (the `fn` of its Swift table entry). */
+/** Every scalar vector with the Swift EffectMath function it checks (the `fn` of its Swift table entry). TS `leakOpacity` is
+ *  Swift `leakAlpha` and TS `filmFlicker` is Swift `flickerAlpha`: in Swift a constant and a function cannot share a base name. */
 const SCALARS: [string, ScalarVector[]][] = [
   ["hash", HASH_VECTORS], ["envelope", ENVELOPE_VECTORS], ["pulseScale", PULSE_VECTORS], ["flashOpacity", FLASH_VECTORS],
-  ["leakOpacity", LEAK_VECTORS], ["filmFlicker", FLICKER_VECTORS],
+  ["leakAlpha", LEAK_VECTORS], ["flickerAlpha", FLICKER_VECTORS],
 ];
 
 test("EffectMath.swift declares exactly the EFFECT constants, with the same values", () => {
@@ -50,9 +51,17 @@ test("EffectMath.swift declares exactly the EFFECT_COLORS colours", () => {
 });
 
 test("EffectMath.swift mirrors every scalar function of effectMath.ts", () => {
-  for (const fn of ["hash", "envelope", "shakeOffset", "pulseScale", "flashOpacity", "leakOpacity", "filmFlicker", "glitchSlice"]) {
+  for (const fn of ["hash", "envelope", "shakeOffset", "pulseScale", "flashOpacity", "leakAlpha", "flickerAlpha", "glitchSlice"]) {
     expect(swift).toMatch(new RegExp(`static func ${fn}\\(`));
   }
+  // No constant shares its base name with a function (Swift rejects `static let x` next to `static func x(...)`).
+  const lets = [...swift.matchAll(/static let (\w+)/g)].map((m) => m[1]);
+  const funcs = [...swift.matchAll(/static func (\w+)\(/g)].map((m) => m[1]);
+  expect(lets.filter((n) => funcs.includes(n))).toEqual([]);
+  expect(renderer).toMatch(/EffectMath\.leakAlpha\(t: t, d: d, k: k\)/);
+  expect(renderer).toMatch(/EffectMath\.flickerAlpha\(t: t, k: k\)/);
+  expect(table).toMatch(/EffectMath\.leakAlpha\(t: a\[0\], d: a\[1\], k: a\[2\]\)/);
+  expect(table).toMatch(/EffectMath\.flickerAlpha\(t: a\[0\], k: a\[1\]\)/);
   // frac(x) = x − floor(x) (right for negative numbers too), never a truncating remainder.
   expect(between(swift, "static func frac(", "\n  }\n")).toMatch(/x - x\.rounded\(\.down\)/);
   expect(swift).not.toMatch(/truncatingRemainder/);
@@ -71,7 +80,12 @@ test("the three channel-offset effects share one split helper", () => {
     expect(branch).toContain("splitChannels(image:");
   }
   expect([...renderer.matchAll(/func splitChannels\(/g)]).toHaveLength(1);
-  expect([...renderer.matchAll(/"CIAdditionCompositing"/g)]).toHaveLength(1);
+  // The isolated channels are recombined per-channel-maximum: (r, 0, 0, a) max (0, g, 0, a) max (0, 0, b, a) = (r, g, b, a).
+  expect([...renderer.matchAll(/"CIMaximumCompositing"/g)]).toHaveLength(1);
+  expect(renderer).not.toMatch(/CIAdditionCompositing/);
+  // One shared guarded-filter helper (Adjust's); the renderer has no copy of its own.
+  expect([...renderer.matchAll(/func filtered\(/g)]).toHaveLength(0);
+  expect([...read("Adjust.swift").matchAll(/\n  static func filtered\(/g)]).toHaveLength(1);
 });
 
 describe("the Swift test table embeds every EFFECT_VECTORS number", () => {
