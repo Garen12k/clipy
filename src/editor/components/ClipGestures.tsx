@@ -47,8 +47,13 @@ export function createClipGestureSession(clipId: string, frameW: number, frameH:
   };
 
   return {
+    /** A gesture of `kind` begins receiving touches. If that kind is still marked active, its finalize never
+     * arrived: the old sequence is stale, so drop it (the next `start` snapshots afresh). */
+    begin(kind: ClipGestureKind) {
+      if (active.has(kind)) { active.clear(); start = null; }
+    },
     start(kind: ClipGestureKind) {
-      if (active.has(kind)) return;
+      if (active.has(kind)) { active.clear(); start = null; } // stale sequence (see `begin`): start a new one
       if (active.size === 0) {
         const clip = clipNow();
         if (!clip) return;
@@ -92,16 +97,19 @@ export function ClipGestures({ frameW, frameH }: { frameW: number; frameH: numbe
     if (!clipId) return null;
     const session = createClipGestureSession(clipId, frameW, frameH);
     const pan = Gesture.Pan().maxPointers(1).minDistance(2)
+      .onBegin(() => session.begin("pan"))
       .onStart(() => session.start("pan"))
       .onUpdate((e) => session.update("pan", { dx: e.translationX, dy: e.translationY }))
       .onFinalize(() => session.finish("pan"))
       .runOnJS(true);
     const pinch = Gesture.Pinch()
+      .onBegin(() => session.begin("pinch"))
       .onStart(() => session.start("pinch"))
       .onUpdate((e) => session.update("pinch", { scale: e.scale }))
       .onFinalize(() => session.finish("pinch"))
       .runOnJS(true);
     const rotate = Gesture.Rotation()
+      .onBegin(() => session.begin("rotate"))
       .onStart(() => session.start("rotate"))
       .onUpdate((e) => session.update("rotate", { rotation: e.rotation }))
       .onFinalize(() => session.finish("rotate"))

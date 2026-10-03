@@ -31,21 +31,30 @@ jest.mock("react-native-svg", () => {
   const PathPassthrough = (props: unknown) => createElement(View, props as object);
   return Object.assign({}, real, { Path: PathPassthrough, __esModule: true });
 });
+// Gesture objects chain like the real builders and record their callbacks in `handlers` (composed gestures
+// keep their parts in `gestures`); GestureDetector passes its gesture to its single child as a `gesture` prop,
+// so a test can read it off the rendered host and drive the callbacks.
 jest.mock("react-native-gesture-handler", () => {
-  const View = require("react-native").View;
+  const { View } = require("react-native");
+  const { cloneElement, isValidElement } = require("react");
+  const compose = (...gestures: unknown[]) => Object.assign(chain(), { gestures });
   return {
     GestureHandlerRootView: View,
-    GestureDetector: ({ children }: { children: unknown }) => children,
+    GestureDetector: ({ gesture, children }: { gesture: unknown; children: unknown }) =>
+      (isValidElement(children) ? cloneElement(children, { gesture }) : children),
     Gesture: {
       Pan: () => chain(), Pinch: () => chain(), LongPress: () => chain(), Native: () => chain(),
-      Simultaneous: () => chain(), Race: () => chain(), Rotation: () => chain(), Tap: () => chain(),
+      Simultaneous: compose, Race: compose, Rotation: () => chain(), Tap: () => chain(),
     },
   };
-  function chain(): Record<string, () => unknown> {
-    const g: Record<string, () => unknown> = {};
-    for (const k of ["onBegin", "onStart", "onUpdate", "onEnd", "onFinalize", "activeOffsetX", "minDistance",
-      "activateAfterLongPress", "simultaneousWithExternalGesture", "blocksExternalGesture", "enabled", "hitSlop", "runOnJS",
-      "numberOfTaps", "maxPointers"]) {
+  function chain() {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const g: Record<string, unknown> = { handlers };
+    for (const k of ["onBegin", "onStart", "onUpdate", "onEnd", "onFinalize"]) {
+      g[k] = (fn: (...args: unknown[]) => unknown) => { handlers[k] = fn; return g; };
+    }
+    for (const k of ["activeOffsetX", "minDistance", "activateAfterLongPress", "simultaneousWithExternalGesture",
+      "blocksExternalGesture", "enabled", "hitSlop", "runOnJS", "numberOfTaps", "maxPointers"]) {
       g[k] = () => g;
     }
     return g;

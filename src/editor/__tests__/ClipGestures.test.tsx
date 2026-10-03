@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { act, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import * as Haptics from "expo-haptics";
 import { placeClip } from "@/src/editor/model/clipLayout";
@@ -36,6 +36,27 @@ describe("ClipGestures frame", () => {
     });
     expect(frame.props.pointerEvents).toBe("none");
     expect(screen.getByTestId("clip-gesture-area")).toBeTruthy();
+  });
+
+  test("a pan driven through the rendered gesture moves the clip by the dragged fraction, as one undo step", async () => {
+    store().select("a");
+    await render(<ClipGestures frameW={W} frameH={H} />);
+    type Mock = { handlers: Record<string, (...a: unknown[]) => void>; gestures?: Mock[] };
+    const composed = screen.getByTestId("clip-gesture-area").props.gesture as Mock;
+    const [pan, pinch, rotate] = composed.gestures!;
+    expect(pinch.handlers.onUpdate).toBeDefined();
+    expect(rotate.handlers.onUpdate).toBeDefined();
+    await act(() => {
+      pan.handlers.onBegin({});
+      pan.handlers.onStart({ translationX: 0, translationY: 0 });
+      pan.handlers.onUpdate({ translationX: 54, translationY: -48 });
+      pan.handlers.onFinalize({}, true);
+    });
+    expect(tf().x).toBeCloseTo(54 / W, 10);
+    expect(tf().y).toBeCloseTo(-48 / H, 10);
+    expect(store().past).toHaveLength(1);
+    // The gold frame follows the moved picture.
+    expect(screen.getByTestId("clip-selection-frame")).toHaveStyle({ left: 54 });
   });
 
   test("nothing when no clip is selected", async () => {
@@ -157,6 +178,37 @@ describe("createClipGestureSession", () => {
     s.start("pan"); s.update("pan", { dx: 54, dy: 0 }); s.finish("pan");
     expect(tf().x).toBeCloseTo(0.4, 10);
     expect(store().past).toHaveLength(2);
+  });
+
+  test("a begin for a kind still marked active drops the stale sequence: the next touch snapshots afresh", () => {
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 54, dy: 0 }); // its finalize never arrives
+    s.begin("pan");
+    s.start("pan"); s.update("pan", { dx: 27, dy: 0 });
+    expect(tf().x).toBeCloseTo(0.3, 10); // the 0.2 already applied, plus 27 px from the new snapshot
+    expect(store().past).toHaveLength(2); // the new sequence is its own undo step
+  });
+
+  test("a start for a kind already active resets the session the same way", () => {
+    const s = createClipGestureSession("a", W, H);
+    s.start("pinch"); s.update("pinch", { scale: 2 });
+    s.start("pan"); s.update("pan", { dx: 54, dy: 0 });
+    s.start("pan"); // stale: pan never finalized
+    s.update("pan", { dx: 27, dy: 0 });
+    expect(tf().x).toBeCloseTo(0.3, 10);
+    expect(tf().scale).toBe(2);
+    s.update("pinch", { scale: 3 }); // the old pinch no longer belongs to the session
+    expect(tf().scale).toBe(2);
+    expect(store().past).toHaveLength(2);
+  });
+
+  test("a begin for a kind that is not active does not disturb a sequence in progress", () => {
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 54, dy: 0 });
+    s.begin("pinch"); s.start("pinch"); s.update("pinch", { scale: 2 });
+    expect(tf().x).toBeCloseTo(0.2, 10);
+    expect(tf().scale).toBe(2);
+    expect(store().past).toHaveLength(1);
   });
 
   test("updates and finishes from a gesture that never started are ignored", () => {

@@ -38,8 +38,16 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const pendingSeek = useRef<number | null>(null);
   // The photo clip the player was last paused for; null while a video is under the playhead.
   const pausedForPhotoId = useRef<string | null>(null);
+  // The last values written to the player, so redundant writes can be skipped. `lastSeek` is the source time
+  // the player was last seeked to while it stood still; null once it may have moved (playing, a timeUpdate,
+  // a new source), so the next paused seek always lands.
+  const lastSeek = useRef<number | null>(null);
+  const appliedVolume = useRef<number | null>(null);
+  const appliedMuted = useRef<boolean | null>(null);
 
-  const player = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = false; p.audioMixingMode = "mixWithOthers"; });
+  // preservesPitch is stored on the player and applied by expo-video to every item it loads: set it once.
+  const player = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = false; p.audioMixingMode = "mixWithOthers"; p.preservesPitch = true; });
+  const seekPlayer = (t: number) => { player.currentTime = t; lastSeek.current = t; };
 
   // A photo under the playhead: the player stays paused and a timer moves the playhead instead.
   usePhotoPlayback(isPlaying && !!hit && isPhoto(hit.clip) && !missing.includes(hit.clip.sourceUri));
@@ -65,14 +73,17 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       return;
     }
     pausedForPhotoId.current = null;
+    // This effect also re-runs for edits that don't concern the player (e.g. every frame of a transform
+    // gesture replaces `project`), so each native write below is skipped when it would change nothing.
     // expo-video caps player.volume at 1; values above 1 are only honoured in the export.
-    player.volume = hit.clip.muted ? 0 : Math.min(1, hit.clip.volume);
-    player.muted = hit.clip.muted;
+    const volume = hit.clip.muted ? 0 : Math.min(1, hit.clip.volume);
+    if (appliedVolume.current !== volume) { player.volume = volume; appliedVolume.current = volume; }
+    if (appliedMuted.current !== hit.clip.muted) { player.muted = hit.clip.muted; appliedMuted.current = hit.clip.muted; }
     // expo-video's playbackRate setter assigns AVPlayer.rate, and a non-zero rate starts playback: only
     // assign it when it changes, and re-assert the paused state so a paused scrub never starts the player.
-    if (player.playbackRate !== hit.clip.speed) player.playbackRate = hit.clip.speed;
-    if (!isPlaying) player.pause();
-    player.preservesPitch = true;
+    const rateChanged = player.playbackRate !== hit.clip.speed;
+    if (rateChanged) player.playbackRate = hit.clip.speed;
+    if (!isPlaying && (rateChanged || player.playing)) player.pause();
     const sourceTime = outputToSource(hit.clip, hit.offsetInClip);
     if (loadedClipId.current !== hit.clip.id) {
       loadedClipId.current = hit.clip.id;
@@ -83,32 +94,36 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         // (the readyToPlay handler seeks and resumes).
         if (pendingSeek.current !== null) pendingSeek.current = sourceTime;
         else {
-          player.currentTime = sourceTime;
+          seekPlayer(sourceTime);
           if (isPlaying) player.play();
         }
         return;
       }
       loadedSourceUri.current = hit.clip.sourceUri;
       pendingSeek.current = sourceTime;
+      lastSeek.current = null;
       player.replaceAsync({ uri: hit.clip.sourceUri });
       return;
     }
     if (!isPlaying) {
       if (pendingSeek.current !== null) pendingSeek.current = sourceTime; // land the pending seek where the user scrubbed to
-      else player.currentTime = sourceTime;
+      else if (lastSeek.current !== sourceTime) seekPlayer(sourceTime);
     }
   }, [hit?.clip.id, hit?.clip.kind, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, hit?.clip.speed, playhead, isPlaying, missing, project, player, seek, setPlaying]);
 
   // Play / pause toggles. Crossing between clips while playing is handled by the effect above.
-  useEffect(() => { if (isPlaying && !photoAtPlayhead()) player.play(); else player.pause(); }, [isPlaying, player]);
+  useEffect(() => {
+    if (isPlaying && !photoAtPlayhead()) { lastSeek.current = null; player.play(); } else player.pause();
+  }, [isPlaying, player]);
 
   // Apply the pending seek once the newly replaced source is ready, then resume playback if needed.
   useEffect(() => {
     const sub = player.addListener("statusChange", ({ status, error }) => {
       if (status === "readyToPlay" && pendingSeek.current !== null) {
         player.currentTime = pendingSeek.current;
+        lastSeek.current = pendingSeek.current;
         pendingSeek.current = null;
-        if (useEditorStore.getState().isPlaying && !photoAtPlayhead()) player.play();
+        if (useEditorStore.getState().isPlaying && !photoAtPlayhead()) { lastSeek.current = null; player.play(); }
       } else if (status === "error") {
         // Unblock timeUpdate handling even though the seek never landed, and surface the failure once.
         pendingSeek.current = null;
@@ -121,8 +136,11 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   // Drive the playhead from the player while playing.
   useEffect(() => {
     const sub = player.addListener("timeUpdate", ({ currentTime }) => {
-      if (pendingSeek.current !== null) return; // the source hasn't been seeked into place yet
       const s = useEditorStore.getState();
+      // A playing player has moved on from where we last seeked it. (Not while paused: a paused player reports
+      // the time our own seek landed on, and forgetting it then would re-seek on every gesture frame.)
+      if (s.isPlaying) lastSeek.current = null;
+      if (pendingSeek.current !== null) return; // the source hasn't been seeked into place yet
       if (!s.isPlaying || !s.project) return;
       const h = clipAt(s.project, s.playhead);
       if (!h || isPhoto(h.clip) || h.clip.id !== loadedClipId.current) return; // a photo's timer owns the playhead

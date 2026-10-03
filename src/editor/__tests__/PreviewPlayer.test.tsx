@@ -6,10 +6,14 @@ jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async
 jest.mock("expo-video", () => {
   const { View } = require("react-native");
   let rate = 1;
+  let time = 0;
   const listeners: Record<string, (e: unknown) => void> = {};
   const mockPlayer = {
     listeners,
-    playing: false, loop: false, timeUpdateEventInterval: 0, muted: false, audioMixingMode: "auto", volume: 1, preservesPitch: true, currentTime: 0,
+    seeks: [] as number[], // every currentTime write, in order
+    playing: false, loop: false, timeUpdateEventInterval: 0, muted: false, audioMixingMode: "auto", volume: 1, preservesPitch: true,
+    get currentTime() { return time; },
+    set currentTime(v: number) { time = v; mockPlayer.seeks.push(v); },
     get playbackRate() { return rate; },
     set playbackRate(v: number) { rate = v; if (v !== 0) mockPlayer.playing = true; },
     play: jest.fn(() => { mockPlayer.playing = true; }),
@@ -19,12 +23,12 @@ jest.mock("expo-video", () => {
   };
   return { __mockPlayer: mockPlayer, useVideoPlayer: () => mockPlayer, VideoView: View };
 });
-import { setClipSpeed } from "@/src/editor/model/ops";
+import { setClipSpeed, setClipTransform } from "@/src/editor/model/ops";
 import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
 
-type MockPlayer = { playing: boolean; currentTime: number; play: jest.Mock; pause: jest.Mock; replaceAsync: jest.Mock; listeners: Record<string, (e: unknown) => void> };
+type MockPlayer = { playing: boolean; currentTime: number; seeks: number[]; play: jest.Mock; pause: jest.Mock; replaceAsync: jest.Mock; listeners: Record<string, (e: unknown) => void> };
 const player = (jest.requireMock("expo-video") as { __mockPlayer: MockPlayer }).__mockPlayer;
 const layout = () => fireEvent(screen.getByLabelText("Preview"), "layout", { nativeEvent: { layout: { width: 270, height: 480 } } });
 
@@ -148,6 +152,75 @@ describe("photo clips", () => {
     await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
     expect(player.playing).toBe(false);
     await act(() => { useEditorStore.getState().setPlaying(false); });
+  });
+});
+
+describe("no redundant native writes while paused", () => {
+  // Clip a: speed 2, file a.mp4. Playhead t → a's source time 2t.
+  const ready = async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+    player.seeks.length = 0;
+    player.pause.mockClear();
+  };
+
+  test("changing only the clip's transform writes nothing to the player", async () => {
+    await ready();
+    const volumeSet = jest.fn();
+    let volume = 1;
+    Object.defineProperty(player, "volume", { configurable: true, get: () => volume, set: (v: number) => { volume = v; volumeSet(v); } });
+    for (const x of [0.1, 0.2, 0.3]) {
+      await act(() => { useEditorStore.getState().applyTransient((p) => setClipTransform(p, "a", { x })); });
+    }
+    expect(player.seeks).toEqual([]);
+    expect(player.pause).not.toHaveBeenCalled();
+    expect(volumeSet).not.toHaveBeenCalled();
+    Object.defineProperty(player, "volume", { configurable: true, writable: true, value: 1 });
+  });
+
+  test("changing the playhead still seeks; seeking to the same time twice writes once", async () => {
+    await ready();
+    await act(() => { useEditorStore.getState().seek(1); });
+    await act(() => { useEditorStore.getState().applyTransient((p) => setClipTransform(p, "a", { x: 0.2 })); });
+    await act(() => { useEditorStore.getState().seek(0.5); });
+    expect(player.seeks).toEqual([2, 1]);
+  });
+
+  test("a trim or speed change that moves the source time still seeks", async () => {
+    await ready();
+    await act(() => { useEditorStore.getState().seek(0.5); }); // source 1
+    await act(() => { useEditorStore.getState().apply((p) => setClipSpeed(p, "a", 1)); }); // same playhead, source 0.5
+    expect(player.seeks).toEqual([1, 0.5]);
+  });
+
+  test("play → pause → scrub back to the earlier time still seeks", async () => {
+    await ready();
+    await act(() => { useEditorStore.getState().seek(0.5); }); // source 1
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    player.currentTime = 1.6; player.seeks.length = 0; // the player moved on by itself while playing
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    await act(() => { useEditorStore.getState().seek(0.5); });
+    expect(player.seeks[player.seeks.length - 1]).toBe(1);
+  });
+
+  test("a timeUpdate from the paused player (reporting our own seek) does not make the next gesture frame re-seek", async () => {
+    await ready();
+    await act(() => { useEditorStore.getState().seek(0.5); }); // source 1
+    await act(() => { player.listeners.timeUpdate?.({ currentTime: 1 }); });
+    await act(() => { useEditorStore.getState().applyTransient((p) => setClipTransform(p, "a", { x: 0.1 })); });
+    expect(player.seeks).toEqual([1]);
+  });
+
+  test("a timeUpdate while playing forgets the remembered seek", async () => {
+    await ready();
+    await act(() => { useEditorStore.getState().seek(0.5); }); // source 1
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    await act(() => { player.listeners.timeUpdate?.({ currentTime: 1.4 }); }); // playhead → 0.7
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    player.seeks.length = 0;
+    await act(() => { useEditorStore.getState().seek(0.5); });
+    expect(player.seeks).toEqual([1]);
   });
 });
 
