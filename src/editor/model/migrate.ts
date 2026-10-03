@@ -1,6 +1,11 @@
 import { normaliseTransitions } from "./ops";
-import { FILTER_IDS, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES, type Clip, type Overlay, type PostRecord, type Project, type ShapeId } from "./types";
+import {
+  clampCrop, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
+  type Clip, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type Overlay, type PostRecord, type Project, type ShapeId,
+} from "./types";
 
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 type Raw = Record<string, unknown> & { clips: unknown[] };
 
@@ -20,8 +25,9 @@ function normaliseSticker(o: Record<string, unknown>): Overlay | null {
 }
 
 /**
- * Brings a v2, v3 or v4 file to a safe v4 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
- * null, unknown transition → none, transitions re-capped (last clip cleared), overlays get a kind, bad stickers fixed/dropped.
+ * Brings a v2–v5 file to a safe v5 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
+ * null, unknown transition → none, transitions re-capped (last clip cleared), overlays get a kind, bad stickers fixed/dropped,
+ * clips get kind/transform/crop/background/reversed defaults or repairs, photos forced to the photo rules.
  */
 function normaliseCurrent(raw: Raw): Raw {
   const mapped = (raw.clips as Clip[]).map((c) => {
@@ -30,7 +36,18 @@ function normaliseCurrent(raw: Raw): Raw {
     const t = c.transitionOut;
     const transitionOut = t && (TRANSITION_TYPES as readonly string[]).includes(t.type) && t.type !== "none" && typeof t.duration === "number" && t.duration > 0
       ? { type: t.type, duration: t.duration } : { type: "none" as const, duration: 0 };
-    return { ...c, speed, filter, transitionOut } as Clip;
+    const kind: ClipKind = (CLIP_KINDS as readonly string[]).includes(c.kind as string) ? c.kind : "video";
+    const transform = clampTransform(isObj(c.transform) ? (c.transform as ClipTransform) : DEFAULT_TRANSFORM);
+    const crop = clampCrop(isObj(c.crop) ? (c.crop as CropRect) : FULL_CROP);
+    const bg = c.background as Record<string, unknown> | undefined;
+    const background: ClipBackground = isObj(bg) && bg.type === "blur" ? { type: "blur" }
+      : isObj(bg) && bg.type === "color" && typeof bg.color === "string" && HEX_COLOR.test(bg.color) ? { type: "color", color: bg.color }
+      : { type: "black" };
+    const reversed = c.reversed === true;
+    const base = { ...c, speed, filter, transitionOut, kind, transform, crop, background, reversed } as Clip;
+    if (kind !== "photo") return base;
+    const trimEnd = clampNum(typeof c.trimEnd === "number" && Number.isFinite(c.trimEnd) ? c.trimEnd : PHOTO.defaultSeconds, PHOTO.minSeconds, PHOTO.maxSeconds);
+    return { ...base, speed: 1, muted: true, reversed: false, trimStart: 0, sourceDuration: PHOTO.maxSeconds, trimEnd };
   });
   const clips = normaliseTransitions(mapped);
   const overlays = ((raw.overlays as Array<Record<string, unknown>> | undefined) ?? []).flatMap((o): Overlay[] => {

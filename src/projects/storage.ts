@@ -1,6 +1,6 @@
 import { totalDuration } from "@/src/editor/model/timeline";
 import { migrateProject } from "@/src/editor/model/migrate";
-import { POST_PLATFORMS, SCHEMA_VERSION, type AudioTrack, type Clip, type PostPlatform, type Project } from "@/src/editor/model/types";
+import { newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AudioTrack, type Clip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
 
 export interface PickedAsset { uri: string; durationSec: number; width: number; height: number; fileName?: string }
@@ -52,8 +52,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       const dest = `${projectDir(id)}/media/${clipId}.${ext(a)}`;
       try {
         await fs.copy(a.uri, dest);
-        clips.push({ id: clipId, sourceUri: dest, sourceDuration: a.durationSec, width: a.width, height: a.height,
-          trimStart: 0, trimEnd: a.durationSec, speed: 1, filter: null, volume: 1, muted: false, transitionOut: { type: "none", duration: 0 } });
+        clips.push(newVideoClip({ id: clipId, sourceUri: dest, sourceDuration: a.durationSec, width: a.width, height: a.height }));
       } catch (e) { failed++; console.warn("import failed", a.uri, e); }
     }
     const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], schemaVersion: SCHEMA_VERSION };

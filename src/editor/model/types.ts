@@ -2,7 +2,7 @@ export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 4 as const;
+export const SCHEMA_VERSION = 5 as const;
 export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
 export type PostPlatform = (typeof POST_PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
@@ -23,6 +23,18 @@ export type ShapeId = (typeof SHAPE_IDS)[number];
 export const SPEED_LIMITS = [0.25, 4] as const;
 export const TRANSITION_LIMITS = { min: 0.3, max: 1.0 };
 
+export const CLIP_KINDS = ["video", "photo"] as const;
+export type ClipKind = (typeof CLIP_KINDS)[number];
+export interface ClipTransform { scale: number; x: number; y: number; rotation: number; flipH: boolean; flipV: boolean }
+export interface CropRect { x: number; y: number; w: number; h: number }
+export type ClipBackground = { type: "black" } | { type: "color"; color: string } | { type: "blur" };
+export const DEFAULT_TRANSFORM: ClipTransform = { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false };
+export const FULL_CROP: CropRect = { x: 0, y: 0, w: 1, h: 1 };
+export const BLACK_BACKGROUND: ClipBackground = { type: "black" };
+export const TRANSFORM_LIMITS = { scale: [0.2, 5] as const, offset: [-1, 1] as const };
+export const CROP_MIN = 0.1;
+export const PHOTO = { defaultSeconds: 3, minSeconds: 0.5, maxSeconds: 60, freezeSeconds: 2 };
+
 export interface Clip {
   id: string; sourceUri: string; sourceDuration: number; width: number; height: number;
   trimStart: number; trimEnd: number;
@@ -31,6 +43,41 @@ export interface Clip {
   volume: number;   // 0–2
   muted: boolean;
   transitionOut: { type: TransitionType; duration: number };
+  kind: ClipKind;
+  transform: ClipTransform;
+  crop: CropRect;
+  background: ClipBackground;
+  reversed: boolean;
+}
+export const isPhoto = (c: Clip) => c.kind === "photo";
+
+/** Rotation in degrees, wrapped into (−180, 180]. */
+export function normaliseRotation(deg: number): number {
+  if (!Number.isFinite(deg)) return 0;
+  const m = ((deg % 360) + 360) % 360;   // [0, 360)
+  return m > 180 ? m - 360 : m;
+}
+const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const finiteOr = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+
+export function clampTransform(t: ClipTransform): ClipTransform {
+  const [sMin, sMax] = TRANSFORM_LIMITS.scale;
+  const [oMin, oMax] = TRANSFORM_LIMITS.offset;
+  return {
+    scale: clampNum(finiteOr(t.scale, DEFAULT_TRANSFORM.scale), sMin, sMax),
+    x: clampNum(finiteOr(t.x, DEFAULT_TRANSFORM.x), oMin, oMax),
+    y: clampNum(finiteOr(t.y, DEFAULT_TRANSFORM.y), oMin, oMax),
+    rotation: normaliseRotation(finiteOr(t.rotation, DEFAULT_TRANSFORM.rotation)),
+    flipH: t.flipH === true, flipV: t.flipV === true,
+  };
+}
+
+/** Keeps the rect inside the 0–1 frame with both sides >= CROP_MIN; a non-finite rect becomes the full frame. */
+export function clampCrop(c: CropRect): CropRect {
+  if (![c?.x, c?.y, c?.w, c?.h].every((v) => typeof v === "number" && Number.isFinite(v))) return { ...FULL_CROP };
+  const w = clampNum(c.w, CROP_MIN, 1);
+  const h = clampNum(c.h, CROP_MIN, 1);
+  return { x: clampNum(c.x, 0, 1 - w), y: clampNum(c.y, 0, 1 - h), w, h };
 }
 
 export interface TextOverlay {
@@ -56,9 +103,23 @@ export interface Project {
   clips: Clip[]; overlays: Overlay[]; audioTracks: AudioTrack[]; posts: PostRecord[]; schemaVersion: typeof SCHEMA_VERSION;
 }
 
+/** Shared factory for real code: a full-length video clip with every default. */
+export function newVideoClip(a: Pick<Clip, "id" | "sourceUri" | "sourceDuration" | "width" | "height">): Clip {
+  return { ...a, trimStart: 0, trimEnd: a.sourceDuration, speed: 1, filter: null, volume: 1, muted: false,
+    transitionOut: { type: "none", duration: 0 }, kind: "video", transform: { ...DEFAULT_TRANSFORM }, crop: { ...FULL_CROP },
+    background: { ...BLACK_BACKGROUND }, reversed: false };
+}
+/** A still-image clip: default length, silent, speed 1, never reversed. */
+export function newPhotoClip(a: Pick<Clip, "id" | "sourceUri" | "width" | "height"> & { seconds?: number }): Clip {
+  const { seconds, ...rest } = a;
+  return { ...newVideoClip({ ...rest, sourceDuration: PHOTO.maxSeconds }), kind: "photo", trimEnd: seconds ?? PHOTO.defaultSeconds, muted: true };
+}
 export function makeClip(partial: Partial<Clip> & Pick<Clip, "id" | "sourceDuration">): Clip {
-  return { sourceUri: `file:///media/${partial.id}.mp4`, width: 1080, height: 1920, trimStart: 0, trimEnd: partial.sourceDuration,
-    speed: 1, filter: null, volume: 1, muted: false, transitionOut: { type: "none", duration: 0 }, ...partial };
+  return { ...newVideoClip({ sourceUri: `file:///media/${partial.id}.mp4`, width: 1080, height: 1920, ...partial }), ...partial };
+}
+export function makePhotoClip(partial: Partial<Clip> & Pick<Clip, "id"> & { seconds?: number }): Clip {
+  const { seconds, ...rest } = partial;
+  return { ...newPhotoClip({ sourceUri: `file:///media/${partial.id}.jpg`, width: 1080, height: 1920, seconds, ...rest }), ...rest };
 }
 export function makeOverlay(partial: Partial<TextOverlay> & Pick<TextOverlay, "id">): TextOverlay {
   return { kind: "text", text: "Your text", fontId: "bangers", fontScale: 0.07, color: "#F4F4F5", background: null, outline: true,
