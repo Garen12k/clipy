@@ -13,8 +13,8 @@ jest.mock("expo-modules-core", () => {
 import { requireOptionalNativeModule } from "expo-modules-core";
 import { resolveClipMotion, sampleKeyframes } from "@/src/editor/model/motion";
 import { curveSteps, outputOffsetOf } from "@/src/editor/model/timeline";
-import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportOverlay, transcribe } from "../index";
+import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -45,7 +45,8 @@ describe("export API", () => {
         kind: "video" as const, sourceWidth: 1080, sourceHeight: 1920,
         transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
         background: { type: "black" as const, color: null }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
-        animIn: null, animOut: null, animCombo: null, keyframes: [], speedSpans: [], gain: [{ time: 0, gain: 1 }, { time: 2, gain: 1 }] }],
+        animIn: null, animOut: null, animCombo: null, keyframes: [], speedSpans: [], gain: [{ time: 0, gain: 1 }, { time: 2, gain: 1 }], opacity: 1, mask: "none" as const }],
+      layers: [],
       effects: [{ type: "glitch", start: 0, end: 1, intensity: 0.7 }],
       overlays: [{
         kind: "text" as const, text: "Hi", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#fff",
@@ -88,7 +89,13 @@ describe("toExportClip", () => {
       filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
       animIn: null, animOut: null, animCombo: null, keyframes: [], speedSpans: [],
       gain: [{ time: 0, gain: 1 }, { time: 4, gain: 1 }],
+      opacity: 1, mask: "none",
     });
+  });
+  it("sends the static opacity and mask id (keyframe opacity travels separately)", () => {
+    const e = toExportClip(makeClip({ id: "a", sourceDuration: 4, opacity: 0.4, mask: "circle", keyframes: [makeKeyframe({ t: 1, opacity: 0.5 })] }));
+    expect(e).toMatchObject({ opacity: 0.4, mask: "circle" });
+    expect(e.keyframes.map((k) => k.opacity)).toEqual([0.5]);
   });
   describe("gain", () => {
     it("sends the clip's own-sound gain curve in clip-local output seconds: fades at speed 2", () => {
@@ -340,5 +347,32 @@ describe("toExportAudioTrack", () => {
     const a = toExportAudioTrack(makeProject({ audioTracks: [music] }), music, 20)!;
     const b = toExportAudioTrack(makeProject({ audioTracks: [music] }), music, 20)!;
     expect(a.gain).not.toBe(b.gain);
+  });
+});
+
+describe("toExportLayer", () => {
+  it("maps a default layer: a clip plus start, transition none, black background", () => {
+    expect(toExportLayer(makeLayer({ id: "l", sourceDuration: 4, start: 1.5 }))).toEqual({
+      ...toExportClip(makeClip({ id: "l", sourceDuration: 4 })),
+      sourceUri: "file:///media/l.mp4", start: 1.5, transition: { type: "none", duration: 0 }, background: { type: "black", color: null },
+    });
+  });
+  it("ignores the layer's transition and background; carries opacity, mask and motion", () => {
+    const l = makeLayer({
+      id: "l", sourceDuration: 4, start: 2, opacity: 0.5, mask: "rounded", speed: 2,
+      transitionOut: { type: "fade", duration: 0.5 }, background: { type: "color", color: "#ff0000" },
+      keyframes: [makeKeyframe({ t: 0, x: 0.1 }), makeKeyframe({ t: 2, x: 0.3, opacity: 0.2 })],
+    });
+    const e = toExportLayer(l);
+    expect(e).toMatchObject({ start: 2, opacity: 0.5, mask: "rounded", speed: 2, transition: { type: "none", duration: 0 }, background: { type: "black", color: null } });
+    expect(e.keyframes).toEqual(toExportClip(l).keyframes);
+    expect(e.keyframes[1]).toMatchObject({ t: 1, opacity: 0.2 });
+    expect(e.gain).toEqual(toExportClip(l).gain);
+  });
+  it("returns fresh copies", () => {
+    const l = makeLayer({ id: "l", sourceDuration: 4 });
+    const e = toExportLayer(l);
+    expect(e.transform).not.toBe(l.transform);
+    expect(e.crop).not.toBe(l.crop);
   });
 });

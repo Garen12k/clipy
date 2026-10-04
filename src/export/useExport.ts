@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { normaliseTransitions } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
 import { EFFECT_END_SLACK, type Project } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
+import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
-import { estimateBytes, exportableAudio, exportableClips, type Resolution } from "./estimate";
+import { estimateBytes, exportableAudio, exportableClips, exportableLayers, type Resolution } from "./estimate";
 
 export type ExportState = { status: "idle" | "unavailable" | "exporting" | "done" | "error"; progress: number; fileUri?: string; message?: string };
 
@@ -46,6 +46,8 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
       const audioTracks = mixed.audioTracks.map((t) => toExportAudioTrack(mixed, t, total)).filter((t): t is ExportAudioTrack => t !== null);
       jobId.current = await exportTimeline({
         clips: clips.map(toExportClip),
+        // A layer running past the end is sent whole (the native side clips it); one starting at the end is dropped.
+        layers: exportableLayers(project, missingSourceUris, total).map(toExportLayer),
         overlays: project.overlays.filter((o) => o.end > o.start).map(toExportOverlay),
         effects: project.effects
           .map((e) => ({ ...e, start: Math.max(0, e.start), end: Math.min(total, e.end) }))

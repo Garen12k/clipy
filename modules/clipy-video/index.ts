@@ -4,7 +4,7 @@ import { clipGainCurve, exportTrackCurve, type GainPoint } from "@/src/editor/mo
 import { trackEnd } from "@/src/editor/model/audioSync";
 import { edgeDurations } from "@/src/editor/model/motion";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
-import { DEFAULT_TEXT_STYLE, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
+import { DEFAULT_TEXT_STYLE, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -74,7 +74,11 @@ export interface ExportClip {
   keyframes: ExportKeyframe[];   // clip-local OUTPUT seconds, ascending; the pins inside the clip plus the nearest one each side
   speedSpans: ExportSpeedSpan[]; // a speed curve as constant-speed spans in PLAYBACK order; [] = constant speed (`speed`)
   gain: ExportGainPoint[];       // the clip's own sound: clip-local OUTPUT seconds; volume, mute and fades included (the export mixes with this)
+  opacity: number;               // the clip's STATIC opacity 0–1; keyframe opacity travels in `keyframes` and the native side multiplies the two
+  mask: MaskId;
 }
+/** A layer as the export draws it: a clip placed on the timeline at `start` (composition seconds). */
+export type ExportLayer = ExportClip & { start: number };
 /** Pins converted to output-local seconds, sorted, trimmed to [0, length] plus the last one before 0 and the first one after length. */
 function outputKeyframes(c: Clip, length: number): ExportKeyframe[] {
   const pins = c.keyframes.map((k) => ({ ...copyKeyframe(k), t: outputOffsetOf(c, k.t) })).sort((a, b) => a.t - b.t);
@@ -98,7 +102,12 @@ export function toExportClip(c: Clip): ExportClip {
     keyframes: outputKeyframes(c, length),
     speedSpans: hasSpeedCurve(c) ? playbackSpans(c) : [],
     gain: clipGainCurve(c),
+    opacity: c.opacity, mask: c.mask,
   };
+}
+/** A layer has no transition or background of its own (both are ignored by the native side), so they are sent neutral. */
+export function toExportLayer(l: LayerClip): ExportLayer {
+  return { ...toExportClip(l), start: l.start, transition: { type: "none", duration: 0 }, background: { type: "black", color: null } };
 }
 export interface ExportEffect { type: string; start: number; end: number; intensity: number }
 export function toExportEffect(e: EffectItem): ExportEffect {
@@ -106,6 +115,7 @@ export function toExportEffect(e: EffectItem): ExportEffect {
 }
 export interface ExportRequest {
   clips: ExportClip[];
+  layers: ExportLayer[];   // drawn in list order (later = on top)
   overlays: ExportOverlay[];
   effects: ExportEffect[];
   audioTracks: ExportAudioTrack[];

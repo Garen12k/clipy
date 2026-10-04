@@ -7,6 +7,7 @@ jest.mock("@/modules/clipy-video", () => ({
   toExportOverlay: jest.requireActual("@/modules/clipy-video").toExportOverlay,
   toExportClip: jest.requireActual("@/modules/clipy-video").toExportClip,
   toExportEffect: jest.requireActual("@/modules/clipy-video").toExportEffect,
+  toExportLayer: jest.requireActual("@/modules/clipy-video").toExportLayer,
   toExportAudioTrack: jest.requireActual("@/modules/clipy-video").toExportAudioTrack,
 }));
 jest.mock("@/src/projects/expoFs", () => ({
@@ -16,7 +17,8 @@ jest.mock("@/src/lib/id", () => ({ newId: () => "split-right" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { exportTimeline } from "@/modules/clipy-video";
 import { insertFreezeFrame, setClipReversed, setTransition, splitClipAt } from "@/src/editor/model/ops";
-import { makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { toExportLayer as toLayer } from "@/modules/clipy-video";
 import { useExport } from "../useExport";
 
 const a = makeClip({ id: "a", sourceDuration: 4, volume: 1.5, muted: true, speed: 2, filter: "warm", transitionOut: { type: "fade", duration: 0.5 } });
@@ -207,5 +209,46 @@ describe("audio in the export request", () => {
     expect(req.clips[0].gain).toEqual([{ time: 0, gain: 0 }, { time: 4, gain: 0 }]);
     expect(req.clips[1].gain).toEqual([{ time: 0, gain: 0 }, { time: 1, gain: 1.5 }, { time: 2, gain: 1.5 }, { time: 4, gain: 0 }]);
     expect(req.audioTracks).toEqual([]);
+  });
+});
+
+describe("layers", () => {
+  const run = async (p: ReturnType<typeof makeProject>, missing: string[] = []) => {
+    const { result } = await renderHook(() => useExport(p, missing));
+    await act(() => result.current.start(1080));
+    return (exportTimeline as jest.Mock).mock.calls[0][0];
+  };
+  const main = makeClip({ id: "x", sourceDuration: 4 });   // exports 4 s
+
+  test("a project without layers sends []", async () => {
+    expect((await run(makeProject({ id: "pl0", clips: [main] }))).layers).toEqual([]);
+  });
+  test("sends layers in order with their start, whole even when running past the end", async () => {
+    const l1 = makeLayer({ id: "l1", sourceDuration: 2, start: 1 });
+    const l2 = makeLayer({ id: "l2", sourceDuration: 9, start: 3, opacity: 0.5, mask: "circle" });
+    const req = await run(makeProject({ id: "pl1", clips: [main], layers: [l1, l2] }));
+    expect(req.layers).toEqual([toLayer(l1), toLayer(l2)]);
+    expect(req.layers.map((l: { start: number }) => l.start)).toEqual([1, 3]);
+    expect(req.layers[1]).toMatchObject({ opacity: 0.5, mask: "circle", transition: { type: "none", duration: 0 }, background: { type: "black", color: null } });
+  });
+  test("drops layers with a missing source and layers starting at or after the end (within 0.05 s)", async () => {
+    const gone = makeLayer({ id: "gone", sourceDuration: 2, start: 0 });
+    const late = makeLayer({ id: "late", sourceDuration: 2, start: 4 });
+    const nearly = makeLayer({ id: "nearly", sourceDuration: 2, start: 3.97 });
+    const ok = makeLayer({ id: "ok", sourceDuration: 2, start: 3.9 });
+    const req = await run(makeProject({ id: "pl2", clips: [main], layers: [gone, late, nearly, ok] }), [gone.sourceUri]);
+    expect(req.layers.map((l: { sourceUri: string }) => l.sourceUri)).toEqual([ok.sourceUri]);
+  });
+  test("the exported duration is the exportable clips (a missing main clip shortens it)", async () => {
+    const y = makeClip({ id: "y", sourceDuration: 6 });
+    const l = makeLayer({ id: "l", sourceDuration: 2, start: 5 });
+    const req = await run(makeProject({ id: "pl3", clips: [main, y], layers: [l] }), [y.sourceUri]);
+    expect(req.layers).toEqual([]);
+  });
+  test("a keyframed, masked, half-opaque layer keeps its motion in layer-local output time", async () => {
+    const l = makeLayer({ id: "k", sourceDuration: 4, start: 1, opacity: 0.5, mask: "rounded", keyframes: [makeKeyframe({ t: 0, x: 0.1 }), makeKeyframe({ t: 2, x: 0.3, opacity: 0.2 })] });
+    const req = await run(makeProject({ id: "pl4", clips: [main], layers: [l] }));
+    expect(req.layers[0]).toEqual(toLayer(l));
+    expect(req.layers[0].keyframes.map((k: { t: number }) => k.t)).toEqual([0, 2]);
   });
 });
