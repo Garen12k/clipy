@@ -108,7 +108,7 @@ export const CAPTION_STYLE: Pick<TextOverlay, "fontId" | "fontScale" | "color" |
 export const STICKER_EMOJI_SCALE = 0.12;   // emoji font size = STICKER_EMOJI_SCALE × frameH × scale
 export const STICKER_SHAPE_SCALE = 0.2;    // shape box      = STICKER_SHAPE_SCALE × frameH × scale
 
-/** Layer blend modes (export only; the preview shows the picture untouched).. */
+/** Layer blend modes (export only; the preview shows the picture untouched). */
 export const BLENDS: Record<BlendId, { label: string }> = {
   normal: { label: "Normal" }, screen: { label: "Screen" }, multiply: { label: "Multiply" },
   overlay: { label: "Overlay" }, lighten: { label: "Lighten" }, darken: { label: "Darken" },

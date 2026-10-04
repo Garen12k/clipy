@@ -99,6 +99,11 @@ describe("toExportClip", () => {
     expect(e).toEqual({ ...toExportClip(makeClip({ id: "l", sourceDuration: 4 })), sourceUri: "file:///media/l.mp4", start: 1, transition: { type: "none", duration: 0 }, background: { type: "black", color: null }, blend: "screen", chroma: { color: "#00ff00", strength: 0.6 } });
     expect(e.chroma).not.toBe(chroma);
   });
+  it("always sends a MAIN clip with the normal blend, whatever the stored project says; a layer sends its own", () => {
+    const broken = { ...makeClip({ id: "a", sourceDuration: 4 }), blend: "multiply" as const };   // the model never stores this on a main clip
+    expect(toExportClip(broken).blend).toBe("normal");
+    expect(toExportLayer(makeLayer({ id: "l", sourceDuration: 4, start: 0, blend: "multiply" })).blend).toBe("multiply");
+  });
   it("sends the static opacity and mask id (keyframe opacity travels separately)", () => {
     const e = toExportClip(makeClip({ id: "a", sourceDuration: 4, opacity: 0.4, mask: "circle", keyframes: [makeKeyframe({ t: 1, opacity: 0.5 })] }));
     expect(e).toMatchObject({ opacity: 0.4, mask: "circle" });
@@ -140,6 +145,11 @@ describe("toExportClip", () => {
     const x = toExportEffect(e);
     expect(x).toEqual({ type: "blurBox", start: 0, end: 2, intensity: e.intensity, rect: { x: 0.1, y: 0.2, w: 0.5, h: 0.4 } });
     expect(x.rect).not.toBe(e.rect);
+  });
+  it("sends a rectangle only for a blur / mosaic box, even if another effect carries one", () => {
+    const broken = { ...makeEffect({ id: "e", type: "glitch", start: 0, end: 2 }), rect: { x: 0.1, y: 0.2, w: 0.5, h: 0.4 } };   // the model never stores this
+    expect(toExportEffect(broken).rect).toBeNull();
+    expect(toExportEffect(makeEffect({ id: "m", type: "mosaicBox", start: 0, end: 2, rect: { x: 0, y: 0, w: 0.5, h: 0.5 } })).rect).toEqual({ x: 0, y: 0, w: 0.5, h: 0.5 });
   });
   it("maps transform, crop and a colour background", () => {
     const e = toExportClip(makeClip({

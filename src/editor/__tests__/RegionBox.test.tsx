@@ -243,6 +243,18 @@ describe("the selected box", () => {
     expect(store().past).toHaveLength(0);
   });
 
+  test("a pinch-out on a box already as wide as the frame leaves no undo step", async () => {
+    store().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], effects: [makeEffect({ id: "wide", type: "blurBox", start: 0, end: 4, rect: { x: 0, y: 0.02, w: 1, h: 0.21 } })] }));   // 0.02 + 0.105 − 0.105 is not exactly 0.02
+    store().selectEffect("wide");
+    await render(<RegionBoxes frameW={W} frameH={H} />);
+    const before = store().project;
+    const pastBefore = store().past.length;
+    const [, pinch] = gestureOf("region-box-wide").gestures!;
+    await act(() => { pinch.handlers.onBegin({}); pinch.handlers.onStart({ scale: 1 }); pinch.handlers.onUpdate({ scale: 1.4 }); pinch.handlers.onUpdate({ scale: 2 }); pinch.handlers.onFinalize({}, true); });
+    expect(store().past.length).toBe(pastBefore);
+    expect(store().project).toBe(before);
+  });
+
   test("only the selected box is written", async () => {
     store().seek(2.5);
     store().selectEffect("mosaic");

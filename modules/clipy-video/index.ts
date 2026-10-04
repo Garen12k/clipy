@@ -4,7 +4,7 @@ import { clipGainCurve, exportTrackCurve, type GainPoint } from "@/src/editor/mo
 import { trackEnd } from "@/src/editor/model/audioSync";
 import { edgeDurations } from "@/src/editor/model/motion";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
-import { DEFAULT_TEXT_STYLE, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
+import { DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -105,16 +105,18 @@ export function toExportClip(c: Clip): ExportClip {
     speedSpans: hasSpeedCurve(c) ? playbackSpans(c) : [],
     gain: clipGainCurve(c),
     opacity: c.opacity, mask: c.mask,
-    blend: c.blend, chroma: c.chroma ? { color: c.chroma.color, strength: c.chroma.strength } : null,
+    // Only a layer has a blend mode (`toExportLayer` sends it); a main clip is sent as normal whatever the project holds.
+    blend: "normal", chroma: c.chroma ? { color: c.chroma.color, strength: c.chroma.strength } : null,
   };
 }
 /** A layer has no transition or background of its own (both are ignored by the native side), so they are sent neutral. */
 export function toExportLayer(l: LayerClip): ExportLayer {
-  return { ...toExportClip(l), start: l.start, transition: { type: "none", duration: 0 }, background: { type: "black", color: null } };
+  return { ...toExportClip(l), start: l.start, transition: { type: "none", duration: 0 }, background: { type: "black", color: null }, blend: l.blend };
 }
 export interface ExportEffect { type: string; start: number; end: number; intensity: number; rect: { x: number; y: number; w: number; h: number } | null }
+/** The rectangle is sent only for a blur / mosaic box, whatever the project holds. */
 export function toExportEffect(e: EffectItem): ExportEffect {
-  return { type: e.type, start: e.start, end: e.end, intensity: e.intensity, rect: e.rect ? { ...e.rect } : null };
+  return { type: e.type, start: e.start, end: e.end, intensity: e.intensity, rect: isRegionEffect(e.type) && e.rect ? { ...e.rect } : null };
 }
 export interface ExportRequest {
   clips: ExportClip[];

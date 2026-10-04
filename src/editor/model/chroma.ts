@@ -42,7 +42,10 @@ export function hexToRgb(hex: string): { r: number; g: number; b: number } | nul
   return { r, g, b };
 }
 
-/** The shortest way round the hue circle between two hues in degrees: 0…180. */
+/**
+ * The shortest way round the hue circle between two hues in degrees: 0…180. Finite input is the caller's job — a non-finite hue
+ * gives NaN here. `chromaAlpha` never passes one: both hues come from `rgbToHsv`, which clamps its input.
+ */
 export function hueDistance(a: number, b: number): number {
   const d = Math.abs(a - b) % 360;
   return d > 180 ? 360 - d : d;

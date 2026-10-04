@@ -24,7 +24,9 @@ export function BlendSheet({ clipId, visible, onClose }: { clipId: string | null
   const apply = useEditorStore((s) => s.apply);
   if (!clip) return null;
   const pick = (id: BlendId) => {
-    if (clip.blend === id) return;   // already the blend: no buzz, no undo step
+    const project = useEditorStore.getState().project;
+    // Already the blend, or refused (a main clip has none): no buzz, no undo step.
+    if (!project || setClipBlend(project, clip.id, id) === project) return;
     haptic("light");
     apply((p) => setClipBlend(p, clip.id, id));
   };

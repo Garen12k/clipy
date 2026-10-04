@@ -40,6 +40,7 @@ describe("BlendSheet", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Multiply" }));
     expect(state().project!.clips[0].blend).toBe("normal");
     expect(state().past).toHaveLength(0);
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();   // a refused pick does not buzz
   });
 
   test("renders nothing without an item", async () => {
@@ -87,6 +88,28 @@ describe("ChromaSheet", () => {
     await fireEvent.press(screen.getByLabelText("Color #C8102E"));
     expect(layer().chroma).toEqual({ color: "#C8102E", strength: 0.8 });
     expect(screen.getByRole("button", { name: "Blue" })).not.toBeSelected();
+  });
+
+  test("a stored lower-case colour still shows its chip selected", async () => {
+    state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [makeLayer({ id: "L", sourceDuration: 2, start: 1, chroma: { color: "#00ff00", strength: 0.5 } })] }));
+    await render(<ChromaSheet clipId="L" visible onClose={() => {}} />);
+    expect(screen.getByRole("button", { name: "Green" })).toBeSelected();
+    expect(screen.getByRole("button", { name: "Blue" })).not.toBeSelected();
+  });
+
+  test("off then on returns to the first preset at the default strength, even after a custom colour and strength", async () => {
+    await render(<ChromaSheet clipId="L" visible onClose={() => {}} />);
+    await fireEvent(sw(), "valueChange", true);
+    await fireEvent.press(screen.getByRole("button", { name: "Blue" }));
+    await fireEvent(screen.getByTestId("chroma-strength"), "slidingStart");
+    await fireEvent(screen.getByTestId("chroma-strength"), "valueChange", 0.9);
+    expect(layer().chroma).toEqual({ color: "#0000FF", strength: 0.9 });
+    await fireEvent(sw(), "valueChange", false);
+    expect(layer().chroma).toBeNull();
+    await fireEvent(sw(), "valueChange", true);
+    expect(layer().chroma).toEqual({ color: "#00FF00", strength: 0.5 });
+    expect(screen.getByText("Strength 50 %")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Green" })).toBeSelected();
   });
 
   test("a slider drag is one undo step", async () => {

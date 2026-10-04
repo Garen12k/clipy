@@ -16,6 +16,12 @@ describe("moveRect", () => {
   test("stops at the right and bottom edges", () => close(moveRect(box, 1, 1), { x: 0.6, y: 0.8, w: 0.4, h: 0.2 }));
   test("a full-frame box cannot move", () => close(moveRect({ x: 0, y: 0, w: 1, h: 1 }, 0.3, -0.2), { x: 0, y: 0, w: 1, h: 1 }));
   test("no movement returns the same rect", () => expect(moveRect(box, 0, 0)).toBe(box));
+  test("a move that the edges stop completely returns the same rect", () => {
+    const corner: EffectRect = { x: 0, y: 0.79, w: 0.37, h: 0.21 };
+    expect(moveRect(corner, -0.2, 0)).toBe(corner);
+    const full: EffectRect = { x: 0, y: 0, w: 1, h: 1 };
+    expect(moveRect(full, 0.3, -0.2)).toBe(full);
+  });
   test("non-finite deltas leave the rect", () => {
     expect(moveRect(box, NaN, 0)).toBe(box);
     expect(moveRect(box, 0, Infinity)).toBe(box);
@@ -41,6 +47,12 @@ describe("scaleRect", () => {
     inside(r);
   });
   test("a factor of 1 returns the same rect", () => expect(scaleRect(box, 1)).toBe(box));
+  test("a factor the limits hold at exactly 1 returns the same rect (no rounding drift in x / y)", () => {
+    const wide: EffectRect = { x: 0, y: 0.37, w: 1, h: 0.21 };   // already as wide as the frame
+    expect(scaleRect(wide, 2)).toBe(wide);
+    const small: EffectRect = { x: 0.37, y: 0.41, w: MIN, h: 0.21 };   // the shorter side is already the minimum
+    expect(scaleRect(small, 0.5)).toBe(small);
+  });
   test("a zero or negative factor gives the smallest box of that shape", () => {
     close(scaleRect(box, 0), scaleRect(box, 0.001));
     close(scaleRect(box, -3), scaleRect(box, 0.001));
@@ -70,6 +82,18 @@ describe("resizeRectCorner", () => {
     const r = resizeRectCorner(box, "tl", 5, 5);
     close(r, { x: 0.7 - MIN, y: 0.6 - MIN, w: MIN, h: MIN });
     inside(r);
+  });
+  test("a drag inward on a minimum-size box returns the same rect", () => {
+    const tiny: EffectRect = { x: 0.37, y: 0.41, w: MIN, h: MIN };
+    expect(resizeRectCorner(tiny, "tl", 0.1, 0.1)).toBe(tiny);
+    expect(resizeRectCorner(tiny, "br", -0.1, -0.1)).toBe(tiny);
+  });
+  test("tl keeps the exact x (or y) of a side that cannot shrink", () => {
+    const thin: EffectRect = { x: 0.1, y: 0.41, w: MIN, h: 0.3 };   // 0.1 + 0.05 − 0.05 is not exactly 0.1
+    const r = resizeRectCorner(thin, "tl", 0.1, 0.1);
+    expect(r.x).toBe(0.1);
+    expect(r.w).toBe(MIN);
+    close(r, { x: 0.1, y: 0.51, w: MIN, h: 0.2 });
   });
   test("no movement returns the same rect", () => {
     expect(resizeRectCorner(box, "tl", 0, 0)).toBe(box);

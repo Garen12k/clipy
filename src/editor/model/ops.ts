@@ -698,7 +698,7 @@ function replacedMedia(old: Clip, media: Pick<Clip, "sourceUri" | "sourceDuratio
   // Pins sit on the old pictures (source time), so they go; the animation stays. The placement they showed at the clip's first frame
   // becomes the static transform (without pins it already is).
   const transform = old.keyframes.length > 0 ? transformAt(old, 0) : old.transform;
-  const base: Clip = { ...old, sourceUri: media.sourceUri, width: media.width, height: media.height, kind: media.kind, trimStart: 0, transform, keyframes: [] };
+  const base: Clip = { ...old, sourceUri: media.sourceUri, width: media.width, height: media.height, kind: media.kind, trimStart: 0, transform, keyframes: [], chroma: copyChroma(old.chroma) };
   let next: Clip;
   if (media.kind === "photo") {
     next = { ...base, speed: 1, speedCurve: null, muted: true, reversed: false, fadeIn: 0, fadeOut: 0, sourceDuration: PHOTO.maxSeconds, trimEnd: clamp(prevOut, [PHOTO.minSeconds, PHOTO.maxSeconds]) };
