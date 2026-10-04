@@ -14,6 +14,7 @@ import { CutMarker } from "./CutMarker";
 import { EffectLane } from "./EffectLane";
 import { LayerLane } from "./LayerLane";
 import { OverlayLane } from "./OverlayLane";
+import { SnapGuide } from "./SnapGuide";
 
 type Props = { renderStripExtras?: (clipId: string, index: number) => React.ReactNode; onCutPress?: (index: number) => void };
 
@@ -89,6 +90,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           <OverlayLane />
           {audioLanes.map((kind) => <AudioLane key={kind} kind={kind} />)}
           <EffectLane />
+          <SnapGuide left={pad} height={height} />
         </ScrollView>
         <View testID="timeline-playhead" pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: height - 16, backgroundColor: theme.colors.text, borderRadius: 1 }} />
       </View>
