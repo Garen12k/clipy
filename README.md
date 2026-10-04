@@ -299,7 +299,7 @@ on older phones. The export is Swift that has never been compiled.
   characters), then **Done**; **Reset** goes back to the first frame. **Save to Photos** saves the picture (1080 px
   wide, a screen capture of the cover frame, so filters and layers are not on it); it is disabled while you type
   the title. The drafts list shows the cover and its title once you leave the editor (the picture is written when
-  the editor closes; if the app is killed inside the editor the old picture shows until the next close).
+  the editor closes; if the app is killed inside the editor the first frame shows until the next close).
   The cover is sent to **Instagram only**, as the Reel's thumbnail.
 - **Snapping** - while you move or trim a bar on the timeline (text, caption, sticker, effect, audio, layer, or a
   clip's trim handles), its edges click onto the playhead, clip cuts, other bars' edges and beat marks, with a thin
@@ -307,7 +307,7 @@ on older phones. The export is Swift that has never been compiled.
   (no guide, no buzz). A clip trim snaps the clip's end on the timeline.
 - **Multi-select** (main clips only) - **Edit** -> **Select**, then tap clips to choose them. The bar then offers
   Filter, Speed, Volume, Duplicate and Delete for all chosen clips in one undo step. Delete does not ask. Keyframe
-  dots are hidden in the mode so a tap always toggles. Leave with the bar's close button or by tapping a layer,
+  dots are hidden in the mode so a tap always toggles. Leave with the bar's Done button or by tapping a layer,
   text, audio bar or effect. (Long-press on a clip is the reorder gesture, so it is not used for selecting.)
   In a multi-clip Speed change, effects are refitted once against the final length.
 

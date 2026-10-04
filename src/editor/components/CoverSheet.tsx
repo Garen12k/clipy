@@ -2,7 +2,6 @@ import Slider from "@react-native-community/slider";
 import { requestPermissionsAsync, saveToLibraryAsync } from "expo-media-library/legacy";
 import { useEffect, useRef, useState } from "react";
 import { PixelRatio, TextInput, useWindowDimensions, View } from "react-native";
-import { captureRef, releaseCapture } from "react-native-view-shot";
 import { frameUriAt } from "@/src/editor/coverFrame";
 import { setCover } from "@/src/editor/model/ops";
 import { coverTimeOf, totalDuration } from "@/src/editor/model/timeline";
@@ -78,7 +77,8 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
   };
   const done = () => {
     // An untouched sheet on a project without a cover stays without one (no cover, no undo step).
-    if (!(project.cover === null && isBlank({ time, title }))) apply((p) => setCover(p, { time, title }));
+    if (isBlank({ time, title })) { if (project.cover !== null) apply((p) => setCover(p, null)); }   // a blank cover is no cover
+    else apply((p) => setCover(p, { time, title }));
     onClose();
   };
   // The saved picture is this sheet's frame view scaled up (not an export render). Whatever happens is said in the
@@ -90,6 +90,8 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
     setSaving(true);
     setNote("");
     try {
+      // Loaded here, not at the top of the file: the package looks its native module up on import, and the editor must open without it.
+      const { captureRef, releaseCapture } = require("react-native-view-shot") as typeof import("react-native-view-shot");
       const perm = await requestPermissionsAsync(true);   // add-only access
       if (!perm.granted) { setNote("Allow Photos access in Settings to save."); return; }
       // view-shot takes the size in points and renders at the screen's scale: divide, so the file is SAVE_WIDTH pixels wide.

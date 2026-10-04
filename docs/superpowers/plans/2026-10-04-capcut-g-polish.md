@@ -1047,4 +1047,4 @@ export function MultiSelectBar(): React.JSX.Element | null
 7. Pull the text bar's left and right handles near the playhead: the edge clicks onto it.
 8. Add two beat marks (Audio → Beats), tap a clip and pull its right trim handle near a beat mark: it clicks onto it.
 9. Open **Edit** → **Select** (not a long-press — long-press on a clip reorders it). Tap two clips: the bar says "2 selected". Tap **Filter** → pick one: both clips get it. Tap **Volume** → drag: both change. Tap **Duplicate**: each gets a copy next to it. Tap **Delete** (it does not ask): the selected clips go and the normal toolbar comes back.
-10. Tap undo until everything is back; close and reopen the project — the frame rate, quality and cover are remembered.
+10. Close and reopen the project — the frame rate, quality and cover are remembered.

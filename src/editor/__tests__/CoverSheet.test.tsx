@@ -112,11 +112,11 @@ test("without a cover, a title alone or a time alone is a cover", async () => {
   expect(state().project!.cover).toEqual({ time: 3, title: "" });
 });
 
-test("Done on the first frame without a title keeps a cover the project already has at 0 as it is, and can clear its title", async () => {
+test("Done on the first frame with the title cleared removes the cover (a blank cover is no cover), as one undo step", async () => {
   await open({ time: 0, title: "Trip" });
   await fireEvent.changeText(field(), "");
   await press("Done");
-  expect(state().project!.cover).toEqual({ time: 0, title: "" });
+  expect(state().project!.cover).toBeNull();
   expect(state().past).toHaveLength(1);
 });
 
