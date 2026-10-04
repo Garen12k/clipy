@@ -65,6 +65,7 @@ Details per platform:
 - YouTube videos arrive **private** until Google audits the app; open the video from the Done screen and make it Public in YouTube yourself.
 - TikTok works as **"send to TikTok inbox"**: the video arrives in TikTok as a draft, and you open TikTok to add the caption and post it. Clipy does this because TikTok keeps apps it has not audited to private-only posts on private accounts. Clipy's caption is not sent to TikTok, TikTok has no options on the Post screen, and the row ends with "Sent to TikTok — open TikTok to finish posting." (no link). TikTok allows **at most 5 unfinished drafts a day**. TikTok setup is in `supabase/README.md` (section 11).
 - Instagram and Facebook both post as **Reels**. They need a **Facebook Page**; Instagram also needs a **professional (Business or Creator) Instagram account linked to that Page**. Setup is in `supabase/README.md` (section 12).
+- The cover frame chosen in the editor is sent to Instagram as the Reel's thumbnail (`thumb_offset`, in milliseconds, pulled back 0.05 s from the very end); no cover image is uploaded to any platform, and the other platforms pick their own.
 - Instagram Reels: 3 seconds to 15 minutes, up to 300 MB, captions up to 2200 characters. Instagram processes the video before it can be published, which can take a few minutes: keep the Post screen open. Clipy waits up to 10 minutes; if Instagram is still processing, the row says so and offers **Resume Instagram**, which finishes the post without uploading the video again.
 - Facebook Reels must be **3 to 90 seconds** (longer videos are held back with that reason while the other platforms still post), up to 1 GB. While Clipy's Meta app is in Development mode, a Facebook Reel may be visible only to you.
 - During an Instagram or Facebook upload the phone is given your Page's access token. This token does not expire on its own: it stays valid until you remove Clipy in Facebook's settings. Clipy keeps it in memory only, drops it once the upload is done, and never saves it. Clipy only ever sends it to Meta's upload address. The iPhone follows web redirects automatically, so Clipy relies on that address not redirecting elsewhere.
@@ -287,6 +288,29 @@ Everything here is in the **Edit** group of the toolbar.
 **Preview vs export.** Each video layer is a separate video player in the preview, so playback may hitch
 on older phones. The export is Swift that has never been compiled.
 
+## Polish
+
+- **Export options** - the export screen has three rows: Resolution, Frame rate (24 / 30 / 60 fps) and Quality
+  (High / Smaller file). They are remembered per project. **30 fps + High is exactly the export as it always was.**
+  **Smaller file** asks the engine to keep the file under a size limit (`fileLengthLimit`); this is a ceiling, not a
+  target, and it is untested until the first native build. 24 fps from 30 fps sources may judder slightly;
+  text and sticker animations are still sampled 30 times a second at every frame rate.
+- **Cover** - **Edit** -> **Cover** (last tool). Drag the slider to pick a frame, type a short title (up to 40
+  characters), then **Done**; **Reset** goes back to the first frame. **Save to Photos** saves the picture (1080 px
+  wide, a screen capture of the cover frame, so filters and layers are not on it); it is disabled while you type
+  the title. The drafts list shows the cover and its title once you leave the editor (the picture is written when
+  the editor closes; if the app is killed inside the editor the old picture shows until the next close).
+  The cover is sent to **Instagram only**, as the Reel's thumbnail.
+- **Snapping** - while you move or trim a bar on the timeline (text, caption, sticker, effect, audio, layer, or a
+  clip's trim handles), its edges click onto the playhead, clip cuts, other bars' edges and beat marks, with a thin
+  gold guide line and a light buzz. Always on. A snap that the bar's own rules would refuse or clamp is not a snap
+  (no guide, no buzz). A clip trim snaps the clip's end on the timeline.
+- **Multi-select** (main clips only) - **Edit** -> **Select**, then tap clips to choose them. The bar then offers
+  Filter, Speed, Volume, Duplicate and Delete for all chosen clips in one undo step. Delete does not ask. Keyframe
+  dots are hidden in the mode so a tap always toggles. Leave with the bar's close button or by tapping a layer,
+  text, audio bar or effect. (Long-press on a clip is the reorder gesture, so it is not used for selecting.)
+  In a multi-clip Speed change, effects are refitted once against the final length.
+
 ## First native build — things to check
 
 When the first EAS build exists, compare the export against the preview and check these Look items:
@@ -341,3 +365,11 @@ Blend, green screen and blur / mosaic box items:
 33. **Blur box** has no dark rim at its edges.
 34. **Box position.** A blur / mosaic box lands where the preview rectangle was (top-left fractions vs Core Image bottom-left).
 35. **Optional records.** The optional nested records (`chroma`, `rect`) decode from JS null.
+
+Polish items:
+
+36. **Frame rate.** A 24 and a 60 fps export are really written at that rate and play smoothly; text and sticker animations still move. `static let frameRate` beside `static func frameRate(for:)` in `ExportSession.swift` compiles (if not, rename the function and update its parity test).
+37. **Smaller file.** A "Smaller file" export plays to the END, is smaller than the same export at High and not far above its estimate. If it is cut short or fails, set `ExportSession.limitsFileLength` to false; a High export is unaffected either way.
+38. **60 fps export time** (and heat) on a long project.
+39. **Cover on Instagram.** The Reel's cover is the chosen frame; `thumb_offset` is in milliseconds, and Instagram accepts an offset 0.05 s before the end.
+40. **Deprecation warning** on `composition.duration` in the export code: expected, harmless.

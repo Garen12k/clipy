@@ -98,9 +98,9 @@
 | CapCut tool | Clipy | Preview | Effort | Notes |
 |---|---|---|---|---|
 | Export 720p / 1080p / 4K | Have | — | — | |
-| Frame-rate and quality choice | Missing | — | S | |
-| Cover / thumbnail editor | Missing | Yes | M | |
-| Timeline snapping, multi-select | Missing | Yes | M | |
+| Frame-rate and quality choice | Have | — | — | 24 / 30 / 60 fps; High / Smaller file (unverified until the first build) |
+| Cover / thumbnail editor | Have | Yes | — | frame + title, Save to Photos, drafts list; Instagram thumbnail only |
+| Timeline snapping, multi-select | Have | Yes | — | multi-select: main clips |
 | Drafts list | Have | Yes | — | |
 | Templates (replace clips in a ready-made edit) | Have 8 "looks" | Yes | L | CapCut's are full edits |
 | Cloud sync of projects | Missing | — | L | Supabase storage; later |

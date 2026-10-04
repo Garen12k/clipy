@@ -1,7 +1,7 @@
 # CapCut group G — Polish (export options, cover, snapping, multi-select): design
 
 **Date:** 2026-10-04
-**Status:** Approved by the user 2026-10-04
+**Status:** Implemented 2026-10-04 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Builds on:** schema v12 (blend, green screen, region effects)
 
 ## 1. What the user gets
@@ -101,6 +101,17 @@ One light haptic when a snap is entered (not while it is held, not when it is le
 - **Edit tools:** `…, duplicate, delete, select, ratio, cover`.
 - **Timeline:** the snap guide line; clips toggle in select mode.
 - **Drafts list card:** cover frame and cover title.
+
+**As built:**
+- Multi-select is entered with the "Select" tool, not long-press (long-press is the reorder gesture). Main clips only; keyframe dots are hidden in the mode; Delete does not ask. In a multi-clip Speed change, effects are refitted once against the final length.
+- The default export (30 fps, High) is exactly the previous export. "Smaller file" sets `fileLengthLimit` (a ceiling, unverified); `ExportSession.limitsFileLength` is the off switch. A guard stops an absurd bitrate from overflowing `Int64`.
+- 24 fps from 30 fps sources may judder slightly; text / sticker animations are still sampled 30 times a second at every frame rate.
+- The cover offset goes to Instagram only (`thumb_offset`, milliseconds, unverified against the live service), pulled back 0.05 s from the very end; the server accepts an offset below the duration only. No cover image is uploaded to any platform.
+- `clampCover` upper bound is `floor(total * 1000) / 1000` (idempotent); the export chips read the clamped settings.
+- Snapping: a snap that the bar's own rules would refuse or clamp is not a snap (no guide, no haptic), which supersedes the guide-on-a-clamped-bar risk below; a gesture that starts already on a target holds it silently. Always on. A clip trim snaps the clip's end on the timeline (snapped trim values are stored unrounded). One snapper per gesture; the guide is owned by the snapper that showed it. Existing test expectations changed: `EditorToolbar.layers.test.tsx` (Edit row gains Select) and the `clampCover` idempotence test.
+- The cover picture on the drafts list is written when the editor closes; if the app is killed inside the editor the old picture shows until the next close. The file name carries the cover time, clip id and source stem, so a changed frame gets a new file.
+- The saved cover picture is 1080 px wide (`captureRef` is given a size in points; `releaseCapture` is called afterwards). Save to Photos is disabled while the title field is focused. Done on an untouched sheet with no cover makes no cover and no undo step.
+- `react-native-view-shot` 5.1.0 was added with `expo install` (bundled in Expo Go; no config plugin).
 
 ## 8. Testing
 

@@ -1038,13 +1038,13 @@ export function MultiSelectBar(): React.JSX.Element | null
 
 **Device checklist (user, Expo Go)** — start with `npx expo start --go --port 8090`, open the app on the iPhone, open a project with at least three clips, one text and one song.
 
-1. Tap **Export**. You should see three rows: Resolution, Frame rate, Quality — **30 fps** and **High** are chosen. Tap **60 fps**: the estimated size grows. Tap **Smaller file**: it shrinks. Close the export sheet, open it again: 60 fps and Smaller file are still chosen.
+1. Tap **Export**. You should see three rows: Resolution, Frame rate, Quality — **30 fps** and **High** are chosen. Tap **60 fps**: the estimated size grows. Tap **Smaller file** (Quality row: **High** / **Smaller file**): it shrinks. Close the export sheet, open it again: 60 fps and Smaller file are still chosen.
 2. In the editor open **Edit** and scroll the tool row to the end. Tap **Cover**.
-3. Drag the slider — the picture changes. Type a title — it appears on the picture. Tap **Save to Photos** and allow access: the picture with the title is in the Photos app.
-4. Tap **Done**. Go back to the list of projects: the card shows the cover picture and the title.
+3. Drag the slider — the picture changes. Type a title — it appears on the picture (Save to Photos is greyed out while you are typing; tap the return key first). Tap **Save to Photos** and allow access: the picture with the title is in the Photos app.
+4. Tap **Done**, then leave the editor and go back to the list of projects (the picture is written when the editor closes): the card shows the cover picture and the title.
 5. Open the project again, tap **Cover**, tap **Reset**: the card goes back to the first frame.
 6. Tap the text bar on the timeline, hold it and drag it slowly towards the white playhead line: it clicks onto it with a small buzz and a thin gold line shows. Try the same against the edge between two clips and the end of the song.
 7. Pull the text bar's left and right handles near the playhead: the edge clicks onto it.
 8. Add two beat marks (Audio → Beats), tap a clip and pull its right trim handle near a beat mark: it clicks onto it.
-9. Open **Edit** → **Select**. Tap two clips: the bar says "2 selected". Tap **Filter** → pick one: both clips get it. Tap **Volume** → drag: both change. Tap **Duplicate**: each gets a copy next to it. Tap **Delete**: the selected clips go and the normal toolbar comes back.
+9. Open **Edit** → **Select** (not a long-press — long-press on a clip reorders it). Tap two clips: the bar says "2 selected". Tap **Filter** → pick one: both clips get it. Tap **Volume** → drag: both change. Tap **Duplicate**: each gets a copy next to it. Tap **Delete** (it does not ask): the selected clips go and the normal toolbar comes back.
 10. Tap undo until everything is back; close and reopen the project — the frame rate, quality and cover are remembered.
