@@ -364,7 +364,8 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
   /// `setValue(_:forKey:)` is never called with a key the filter does not list, so a wrong name cannot raise;
   /// otherwise the shape is drawn with Core Graphics. Nil when there is nothing to draw.
   static func roundedShape(rect: CGRect, radius: CGFloat) -> CIImage? {
-    guard radius.isFinite, !rect.isEmpty, !rect.isInfinite else { return nil }
+    // The sides are checked too: the Core Graphics fallback turns them into Ints, which traps on a non-finite value.
+    guard radius.isFinite, !rect.isEmpty, !rect.isInfinite, rect.width.isFinite, rect.height.isFinite else { return nil }
     let r = min(radius, min(rect.width, rect.height) / 2)
     guard r > 0 else { return nil }
     if let f = CIFilter(name: "CIRoundedRectangleGenerator") {

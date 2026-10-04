@@ -172,6 +172,21 @@ describe("the compositor", () => {
     expect(shape).toContain("return drawnRoundedShape(rect: rect, radius: r)");
     expect(between(all, "static func drawnRoundedShape(", "\n  }\n")).toContain("CGPath(roundedRect:");
   });
+  it("a mask box with a non-finite side is refused before the Core Graphics fallback can turn it into an Int", () => {
+    const shape = code(between(compositor, "static func roundedShape(", "\n  }\n"));
+    inOrder(shape, ["guard radius.isFinite, !rect.isEmpty, !rect.isInfinite, rect.width.isFinite, rect.height.isFinite else { return nil }", "drawnRoundedShape("]);
+  });
+  it("a pre-pass folder that cannot be made fails the export only when a main clip needs it; layers are left out instead", () => {
+    const body = code(between(session, "if hasJobs {", "// 1. Load every clip first"));
+    inOrder(body, [
+      "var folder: URL? = nil", "do { folder = try MediaPrePass.makeFolder(exportId: id) } catch {",
+      "guard jobs.allSatisfy({ $0.layer }) else { throw MediaPrePass.failure(for: jobs[0].kind) }",
+      "for job in jobs { unpreparedLayers.insert(job.clipIndex) }", "prepFolder = folder", "if let folder {", "for (j, job) in jobs.enumerated() {",
+    ]);
+  });
+  it("a layer with a negative (or non-finite) start is left out", () => {
+    expect(code(session)).toContain("guard !unpreparedLayers.contains(i), layerStarts[i].isFinite, layerStarts[i] >= 0 else { continue }");
+  });
   it("the mask ids are the ones ClipLayout.maskRadius knows", () => {
     const body = between(layout, "static func maskRadius(", "\n  }\n");
     const cases = [...body.matchAll(/case "(\w+)":/g)].map((m) => m[1]);

@@ -799,30 +799,37 @@ final class ExportSession {
     var handedOff = false
     defer { if !handedOff, let prepFolder { MediaPrePass.removeFolder(prepFolder) } }
     if hasJobs {
-      let folder: URL
-      do { folder = try MediaPrePass.makeFolder(exportId: id) } catch { throw MediaPrePass.failure(for: jobs[0].kind) }
+      // The folder cannot be made: a clip that needs it fails the export, as before. When only layers need it they
+      // are left out of the video (like any layer that cannot be prepared) and the export goes on without a folder.
+      var folder: URL? = nil
+      do { folder = try MediaPrePass.makeFolder(exportId: id) } catch {
+        guard jobs.allSatisfy({ $0.layer }) else { throw MediaPrePass.failure(for: jobs[0].kind) }
+        for job in jobs { unpreparedLayers.insert(job.clipIndex) }
+      }
       prepFolder = folder
-      for (j, job) in jobs.enumerated() {
-        if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
-        let prepared = folder.appendingPathComponent("\(j)-\(job.kind == .photo ? "photo" : "reverse").mp4")
-        var lastSent = -1.0
-        let report: (Double) -> Void = { fraction in
-          let p = MediaPrePass.prePassProgress(job: j, jobCount: jobs.count, fraction: fraction)
-          guard p - lastSent >= 0.005 else { return }   // at most ~40 progress events for the whole pre-pass
-          lastSent = p
-          self.onEvent(["jobId": self.id, "type": "progress", "progress": p])
-        }
-        let input = job.layer ? layers[job.clipIndex] : clips[job.clipIndex]
-        do {
-          let seconds = try await MediaPrePass.run(job, clip: input, to: prepared, renderSize: renderSize,
-                                                   isCancelled: { self.cancelledFlag }, progress: report)
-          let rewritten = MediaPrePass.rewrite(input, preparedURL: prepared, duration: seconds)
-          if job.layer { layers[job.clipIndex] = rewritten } else { clips[job.clipIndex] = rewritten }
-        } catch is PrePassCancelled {
-          onEvent(["jobId": id, "type": "cancelled"]); return
-        } catch {
-          guard job.layer else { throw error }
-          unpreparedLayers.insert(job.clipIndex)
+      if let folder {
+        for (j, job) in jobs.enumerated() {
+          if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
+          let prepared = folder.appendingPathComponent("\(j)-\(job.kind == .photo ? "photo" : "reverse").mp4")
+          var lastSent = -1.0
+          let report: (Double) -> Void = { fraction in
+            let p = MediaPrePass.prePassProgress(job: j, jobCount: jobs.count, fraction: fraction)
+            guard p - lastSent >= 0.005 else { return }   // at most ~40 progress events for the whole pre-pass
+            lastSent = p
+            self.onEvent(["jobId": self.id, "type": "progress", "progress": p])
+          }
+          let input = job.layer ? layers[job.clipIndex] : clips[job.clipIndex]
+          do {
+            let seconds = try await MediaPrePass.run(job, clip: input, to: prepared, renderSize: renderSize,
+                                                     isCancelled: { self.cancelledFlag }, progress: report)
+            let rewritten = MediaPrePass.rewrite(input, preparedURL: prepared, duration: seconds)
+            if job.layer { layers[job.clipIndex] = rewritten } else { clips[job.clipIndex] = rewritten }
+          } catch is PrePassCancelled {
+            onEvent(["jobId": id, "type": "cancelled"]); return
+          } catch {
+            guard job.layer else { throw error }
+            unpreparedLayers.insert(job.clipIndex)
+          }
         }
       }
     }
@@ -1039,13 +1046,14 @@ final class ExportSession {
     // Layers (picture in picture), in draw order: each on a video track of its own, placed at its `start` with no
     // transition handles, retimed with the clips' helper (a constant speed is a single span, so `insertRetimed`
     // then does what `insertScaled` does) and cut at the end of the video — a layer may run past it. A layer whose
-    // file cannot be used, or that starts at / after the end of the video, is left out. Its sound goes on an audio
+    // file cannot be used, or that starts before 0 or at / after the end of the video, is left out. Its sound goes on an audio
     // track of its own, cut at the same points, with its gain curve counted from the layer's start (a prepared
     // photo / reversed file has no sound). Without layers nothing here runs.
     var placedLayers: [PlacedOverlay] = []
     for (i, layer) in layers.enumerated() {
       if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
-      guard !unpreparedLayers.contains(i), layerStarts[i].isFinite else { continue }
+      // A start before 0 is never sent (the editor keeps starts at 0 or later): such a layer is left out rather than moved.
+      guard !unpreparedLayers.contains(i), layerStarts[i].isFinite, layerStarts[i] >= 0 else { continue }
       let at = Self.time(max(0, layerStarts[i]))
       guard CMTimeCompare(at, total) < 0, let c = try? await Self.load(layer, renderSize: renderSize) else { continue }
       let length = CMTimeMinimum(c.outDur, total - at)
