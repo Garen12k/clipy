@@ -364,4 +364,43 @@ final class ExportSessionTests: XCTestCase {
     let duration = try await asset.load(.duration).seconds
     XCTAssertEqual(duration, 4.5, accuracy: 0.2)
   }
+
+  /// The rates the app offers map to themselves; anything else exports at the default rate.
+  func testFrameRateForARequest() {
+    XCTAssertEqual(ExportSession.frameRates, [24, 30, 60])
+    XCTAssertEqual(ExportSession.frameRate(for: 24), 24)
+    XCTAssertEqual(ExportSession.frameRate(for: 30), 30)
+    XCTAssertEqual(ExportSession.frameRate(for: 60), 60)
+    for other in [25, 0, -1, 1000, Int.max, Int.min] {
+      XCTAssertEqual(ExportSession.frameRate(for: other), 30, "\(other)")
+    }
+  }
+
+  /// The default request (no `fps`, no `bitrate` — also a request from before they existed) takes the path the
+  /// export always took: 30 frames per second and no file-length limit.
+  func testTheDefaultRequestKeepsTheDefaultRateAndHasNoFileLengthLimit() {
+    let request = ExportRequest()
+    XCTAssertEqual(request.fps, 30)
+    XCTAssertEqual(request.bitrate, 0)
+    XCTAssertEqual(ExportSession.frameRate(for: request.fps), ExportSession.frameRate)
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: request.bitrate, seconds: 8))
+  }
+
+  /// "Smaller file": (video bitrate + audio allowance) × seconds / 8 bytes; no limit for a bitrate or a length that
+  /// is 0, negative or not finite.
+  func testFileLengthLimit() {
+    XCTAssertEqual(ExportSession.audioAllowance, 256_000)
+    XCTAssertEqual(ExportSession.fileLengthLimit(bitrate: 6_000_000, seconds: 8), 6_256_000)
+    XCTAssertEqual(ExportSession.fileLengthLimit(bitrate: 6_000_000, seconds: 0.5), 391_000)
+    XCTAssertEqual(ExportSession.fileLengthLimit(bitrate: 1, seconds: 1), 32_001)   // 256 001 / 8 = 32 000.125, rounded up
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: 6_000_000, seconds: 0))
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: 6_000_000, seconds: -1))
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: 0, seconds: 8))
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: -6_000_000, seconds: 8))
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: .nan, seconds: 8))
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: .infinity, seconds: 8))
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: 6_000_000, seconds: .nan))
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: 6_000_000, seconds: .infinity))
+    XCTAssertNil(ExportSession.fileLengthLimit(bitrate: .greatestFiniteMagnitude, seconds: 8))   // too large for Int64
+  }
 }
