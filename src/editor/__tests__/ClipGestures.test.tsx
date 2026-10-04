@@ -288,6 +288,52 @@ describe("clips with motion", () => {
     expect(pins()[1].rotation).toBeCloseTo(750, 8);
   });
 
+  test("a pure vertical drag keeps the interpolated x and rotation, even inside their magnet zones", () => {
+    keyed([pin(0, { x: 0.01, rotation: 2 }), pin(2, { x: 0.01, rotation: 2 })]);
+    store().seek(1);
+    const impact = Haptics.impactAsync as jest.Mock;
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 0, dy: 48 }); s.finish("pan");
+    expect(pins()).toHaveLength(3);
+    expect(pins()[1]).toMatchObject({ t: 1, x: 0.01, rotation: 2, scale: 1 });
+    expect(pins()[1].y).toBeCloseTo(0.1, 10);
+    expect(impact).not.toHaveBeenCalled(); // no magnet engaged: x and rotation were not snapped
+  });
+
+  test("a pinch alone keeps an interpolated scale's neighbours: x, y and rotation are untouched", () => {
+    keyed([pin(0, { x: 0.01, y: -0.015, rotation: 88 }), pin(2, { x: 0.01, y: -0.015, rotation: 88 })]);
+    store().seek(1);
+    const s = createClipGestureSession("a", W, H);
+    s.start("pinch"); s.update("pinch", { scale: 2 }); s.finish("pinch");
+    expect(pins()[1]).toMatchObject({ t: 1, x: 0.01, y: -0.015, rotation: 88, scale: 2 });
+  });
+
+  test("a twist of more than half a turn accumulates: the pin does not flip to the short way round", () => {
+    keyed([pin(0, { rotation: 10 }), pin(2, { rotation: 10 })]);
+    store().seek(1);
+    const s = createClipGestureSession("a", W, H);
+    s.start("rotate"); s.update("rotate", { rotation: (200 * Math.PI) / 180 }); s.finish("rotate");
+    expect(pins()[1].rotation).toBeCloseTo(210, 8);
+    expect(pins()[1].x).toBe(0);
+  });
+
+  test("a twist on a keyframed clip still snaps to the nearest right angle, without wrapping", () => {
+    keyed([pin(0), pin(2)]);
+    store().seek(1);
+    const s = createClipGestureSession("a", W, H);
+    s.start("rotate"); s.update("rotate", { rotation: (268.5 * Math.PI) / 180 }); s.finish("rotate");
+    expect(pins()[1].rotation).toBe(270);
+  });
+
+  test("without keyframes a pure vertical drag still snaps x and rotation, and a 200° twist is normalised (as before)", () => {
+    store().apply((p) => setClipTransform(p, "a", { x: 0.01, rotation: 2 }));
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 0, dy: 48 }); s.finish("pan");
+    expect(tf()).toMatchObject({ x: 0, rotation: 0 });
+    s.start("rotate"); s.update("rotate", { rotation: (200 * Math.PI) / 180 }); s.finish("rotate");
+    expect(tf().rotation).toBeCloseTo(-160, 8);
+  });
+
   test("the gold frame follows the base (keyframed) placement as the playhead moves", async () => {
     keyed();
     store().select("a");

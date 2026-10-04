@@ -2,11 +2,11 @@ import { useMemo } from "react";
 import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { gestureTransform, restingMagnets, type GestureValues, type Magnet } from "@/src/editor/model/clipGesture";
-import { fitScale, placeClip } from "@/src/editor/model/clipLayout";
+import { fitScale, placeClip, SNAP } from "@/src/editor/model/clipLayout";
 import { clipBaseAt } from "@/src/editor/model/motion";
 import { editClipTransformAt } from "@/src/editor/model/ops";
 import { clipAt } from "@/src/editor/model/timeline";
-import { normaliseRotation, type ClipTransform } from "@/src/editor/model/types";
+import type { ClipTransform } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
@@ -15,9 +15,6 @@ export type ClipGestureKind = "pan" | "pinch" | "rotate";
 const FRAME_BORDER = 1;
 const fill = { position: "absolute" as const, left: 0, top: 0, right: 0, bottom: 0 };
 const NONE: GestureValues = { dx: 0, dy: 0, scale: 1, rotation: 0 };
-
-/** `degrees` as the nearest equivalent turn in −180…180 (a twist never goes the long way round). */
-const shortTurn = (degrees: number): number => ((degrees % 360) + 540) % 360 - 180;
 
 /**
  * One touch sequence of pan / pinch / twist on clip `clipId`, however many of the three run at once.
@@ -48,11 +45,24 @@ export function createClipGestureSession(clipId: string, frameW: number, frameH:
     const from = start, at = offset;
     const v = { dx: base.dx + live.dx, dy: base.dy + live.dy, scale: base.scale * live.scale, rotation: base.rotation + live.rotation };
     const r = gestureTransform(from, v, { width: clip.width, height: clip.height }, clip.crop, frameW, frameH);
-    if (r.engaged.some((m) => !engaged.includes(m))) haptic("light");
-    engaged = r.engaged;
-    // A pin may hold whole turns (720°) that the gesture maths normalises away: keep them, and turn the short way.
-    const rotation = clip.keyframes.length === 0 ? r.transform.rotation : from.rotation + shortTurn(r.transform.rotation - normaliseRotation(from.rotation));
-    const patch = { x: r.transform.x, y: r.transform.y, scale: r.transform.scale, rotation };
+    let patch = { x: r.transform.x, y: r.transform.y, scale: r.transform.scale, rotation: r.transform.rotation };
+    let now = r.engaged;
+    if (clip.keyframes.length > 0) {
+      // A pin's values are interpolated, so they may sit inside a magnet zone or hold whole turns (720°). What the
+      // gesture did not touch stays exactly as it was (no snap, no jump on the first frame); a twist adds its raw
+      // angle to the snapshot — never wrapped, so more than half a turn keeps its direction — and snaps to the
+      // nearest right angle.
+      let rotation = from.rotation;
+      if (v.rotation !== 0) {
+        rotation = from.rotation + (v.rotation * 180) / Math.PI;
+        const nearest = Math.round(rotation / 90) * 90;
+        if (Math.abs(rotation - nearest) <= SNAP.rotationDeg) rotation = nearest;
+      }
+      patch = { x: v.dx === 0 ? from.x : patch.x, y: v.dy === 0 ? from.y : patch.y, scale: v.scale === 1 ? from.scale : patch.scale, rotation };
+      now = restingMagnets({ ...from, ...patch }, fitScale({ width: clip.width, height: clip.height }, clip.crop, rotation, frameW, frameH));
+    }
+    if (now.some((m) => !engaged.includes(m))) haptic("light");
+    engaged = now;
     // Nothing moved yet: write nothing (with keyframes even an unchanged value would add a pin).
     if (!begun && patch.x === from.x && patch.y === from.y && patch.scale === from.scale && patch.rotation === from.rotation) return;
     if (editClipTransformAt(s.project, clipId, at, patch) === s.project) return;

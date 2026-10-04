@@ -114,6 +114,16 @@ describe("motion overrides (transform / opacity)", () => {
     expect(style("clip-box").opacity).toBe(1);
   });
 
+  test("a covering blur-background clip with motion fetches its still before the fade starts, so the first faded frame is not black", async () => {
+    const clip = makeClip({ id: "a", sourceDuration: 4, background: { type: "blur" }, trimStart: 0.5 });
+    const view = await render(<ClipFrame clip={clip} frameW={W} frameH={H} opacity={1} />);
+    expect(getThumb).toHaveBeenCalledWith(clip.sourceUri, 0.5);
+    expect(screen.queryByTestId("clip-background")).toBeNull(); // still covered and opaque: nothing drawn yet
+    await view.rerender(<ClipFrame clip={clip} frameW={W} frameH={H} opacity={0.9} />);
+    expect(screen.getByTestId("clip-background-blur").props.source).toEqual({ uri: "file:///thumb.jpg" }); // at once, no wait
+    expect(getThumb).toHaveBeenCalledTimes(1);
+  });
+
   test("without overrides the picture box carries no opacity (the tree is as before)", async () => {
     const clip = makeClip({ id: "a", sourceDuration: 4 });
     const plain = await render(<ClipFrame clip={clip} frameW={W} frameH={H}><Text>video</Text></ClipFrame>);

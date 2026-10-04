@@ -38,7 +38,8 @@ export function ClipFrame({ clip, frameW, frameH, transform, opacity, children }
   const placed = placeClip({ width: clip.width, height: clip.height }, clip.crop, transform ?? clip.transform, frameW, frameH);
   // A see-through picture shows the clip's own background behind it, as the export does.
   const showBackground = !coversFrame(placed, frameW, frameH) || (opacity !== undefined && opacity < 1);
-  const blurStill = useBlurStill(clip, showBackground && clip.background.type === "blur");
+  // A clip with motion asks for its blur still up front, so the first faded frames are not black while it loads.
+  const blurStill = useBlurStill(clip, (showBackground || opacity !== undefined) && clip.background.type === "blur");
   const contentW = placed.width / clip.crop.w, contentH = placed.height / clip.crop.h;
 
   return (

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
+import * as Haptics from "expo-haptics";
 import { fitClip } from "@/src/editor/model/ops";
 import { makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -84,5 +85,18 @@ describe("a clip with keyframes", () => {
     for (const name of ["Fit", "Fill", "Reset"]) await fireEvent.press(screen.getByRole("button", { name }));
     expect(pins(1)).toEqual(start);
     expect(pins(0)).toEqual(start);
+  });
+
+  test("no haptic and no undo step when a button changes nothing; a haptic when it does", async () => {
+    const impact = Haptics.impactAsync as jest.Mock;
+    impact.mockClear();
+    useEditorStore.getState().seek(1); // on clip a
+    await render(<TransformSheet clipId="b" visible onClose={() => {}} />);
+    for (const name of ["Fit", "Fill", "Reset"]) await fireEvent.press(screen.getByRole("button", { name }));
+    expect(impact).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().past).toHaveLength(0);
+    await fireEvent.press(screen.getByRole("button", { name: "Flip horizontal" }));
+    expect(impact).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState().past).toHaveLength(1);
   });
 });

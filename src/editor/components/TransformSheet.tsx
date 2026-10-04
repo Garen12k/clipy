@@ -29,10 +29,17 @@ export function TransformSheet({ clipId, visible, onClose }: { clipId: string | 
   const exists = useEditorStore((s) => !!clipId && !!s.project?.clips.some((c) => c.id === clipId));
   const apply = useEditorStore((s) => s.apply);
   if (!clipId || !exists) return null;
+  const press = (it: Item) => {
+    const project = useEditorStore.getState().project;
+    const offset = offsetAtPlayhead(clipId);
+    if (!project || it.run(project, clipId, offset) === project) return; // nothing to change: no buzz, no undo step
+    haptic("light");
+    apply((p) => it.run(p, clipId, offset));
+  };
   return (
     <Sheet visible={visible} onClose={onClose} title="Transform">
       <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: theme.space.sm }}>
-        {ITEMS.map((it) => <ToolButton key={it.label} label={it.label} icon={it.icon} onPress={() => { haptic("light"); const offset = offsetAtPlayhead(clipId); apply((p) => it.run(p, clipId, offset)); }} />)}
+        {ITEMS.map((it) => <ToolButton key={it.label} label={it.label} icon={it.icon} onPress={() => press(it)} />)}
       </View>
     </Sheet>
   );
