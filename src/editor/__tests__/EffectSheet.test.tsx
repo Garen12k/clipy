@@ -123,3 +123,12 @@ describe("EffectStrengthSheet", () => {
     expect(screen.queryByTestId("effect-strength")).toBeNull();
   });
 });
+
+describe("EffectSheet region tiles", () => {
+  test("Blur box adds a region effect with the default rectangle", async () => {
+    await render(<EffectSheet visible onClose={() => {}} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Blur box" }));
+    expect(state().project!.effects).toEqual([{ id: "new", type: "blurBox", start: 0, end: 2, intensity: 0.7, rect: { x: 0.3, y: 0.4, w: 0.4, h: 0.2 } }]);
+    expect(state().selectedEffectId).toBe("new");
+  });
+});

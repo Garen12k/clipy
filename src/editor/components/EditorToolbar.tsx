@@ -21,8 +21,10 @@ import { AdjustSheet } from "./AdjustSheet";
 import { AudioFadeSheet } from "./AudioFadeSheet";
 import { AudioVolumeSheet } from "./AudioVolumeSheet";
 import { BackgroundSheet } from "./BackgroundSheet";
+import { BlendSheet } from "./BlendSheet";
 import { BeatsSheet } from "./BeatsSheet";
 import { CaptionsSheet } from "./CaptionsSheet";
+import { ChromaSheet } from "./ChromaSheet";
 import { ClipAnimationSheet } from "./ClipAnimationSheet";
 import { CropScreen } from "./CropScreen";
 import { EffectSheet } from "./EffectSheet";
@@ -61,7 +63,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | "opacity" | "mask" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | "opacity" | "mask" | "blend" | "chroma" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useItemClip(selectedId);
   /** A layer is selected: the main-track tools (Split, Freeze, Ratio, Transition, Background) do not apply. */
@@ -191,6 +193,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     overlay: { label: "Overlay", icon: "layers", disabled: !hasClips || mediaBusy, onPress: () => { void addOverlay(); } },
     opacity: { label: "Opacity", icon: "contrast", disabled: noSel, onPress: () => setSheet("opacity") },
     mask: { label: "Mask", icon: "ellipse-outline", disabled: noSel, onPress: () => setSheet("mask") },
+    blend: { label: "Blend", icon: "layers-outline", disabled: !layerSel, onPress: () => setSheet("blend") },
+    chroma: { label: "Green screen", icon: "leaf-outline", disabled: noSel, onPress: () => setSheet("chroma") },
     layerForward: { label: "Forward", icon: "arrow-up", disabled: !layerSel, onPress: () => reorderSelected("forward") },
     layerBack: { label: "Back", icon: "arrow-down", disabled: !layerSel, onPress: () => reorderSelected("back") },
     replace: { label: "Replace", icon: "sync", disabled: noSel || mediaBusy, onPress: () => { if (selectedId) void replaceMedia(selectedId); } },
@@ -252,6 +256,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
       <OpacitySheet clipId={selectedId} visible={sheet === "opacity"} onClose={() => setSheet(null)} />
       <MaskSheet clipId={selectedId} visible={sheet === "mask"} onClose={() => setSheet(null)} />
+      <BlendSheet clipId={selectedId} visible={sheet === "blend"} onClose={() => setSheet(null)} />
+      <ChromaSheet clipId={selectedId} visible={sheet === "chroma"} onClose={() => setSheet(null)} />
       <AddAudioSheet visible={sheet === "addAudio"} onClose={() => setSheet(null)} />
       <BeatsSheet visible={sheet === "beats"} onClose={() => setSheet(null)} />
       <AudioVolumeSheet trackId={selectedAudioId} visible={sheet === "audioVolume"} onClose={() => setSheet(null)} />

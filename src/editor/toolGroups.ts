@@ -2,14 +2,14 @@ import type { Ionicons } from "@expo/vector-icons";
 
 export type IoniconName = keyof typeof Ionicons.glyphMap;
 export type ToolGroupId = "edit" | "effects" | "text" | "stickers" | "audio";
-export type ToolId = "split" | "trim" | "transform" | "animate" | "keyframe" | "crop" | "overlay" | "opacity" | "mask" | "layerForward" | "layerBack" | "replace" | "reverse" | "freeze" | "duplicate" | "delete" | "ratio" | "filter" | "adjust" | "effect" | "effectStrength" | "effectDuplicate" | "effectDelete" | "speed" | "transition" | "templates" | "background" | "text" | "captions" | "sticker" | "addAudio" | "volume" | "ducking" | "beats" | "audioVolume" | "audioFade" | "audioDuplicate" | "audioDelete";
+export type ToolId = "split" | "trim" | "transform" | "animate" | "keyframe" | "crop" | "overlay" | "opacity" | "mask" | "blend" | "chroma" | "layerForward" | "layerBack" | "replace" | "reverse" | "freeze" | "duplicate" | "delete" | "ratio" | "filter" | "adjust" | "effect" | "effectStrength" | "effectDuplicate" | "effectDelete" | "speed" | "transition" | "templates" | "background" | "text" | "captions" | "sticker" | "addAudio" | "volume" | "ducking" | "beats" | "audioVolume" | "audioFade" | "audioDuplicate" | "audioDelete";
 
 /** The editor's bottom bar: five always-visible groups; the active group's tools show in the row above.
  *  `animate` and `keyframe` sit in Edit (the selected clip), Text (the selected text) and Stickers (the selected sticker).
  *  `selectedClipId` holds a main clip's or a layer's id: the clip tools act on either.
  *  The `effect*`, `audio*` and `layer*` ids are sub-row tools (shown for a selected effect / audio track / layer): they are in no group. */
 export const TOOL_GROUPS: { id: ToolGroupId; label: string; icon: IoniconName; tools: ToolId[] }[] = [
-  { id: "edit", label: "Edit", icon: "cut", tools: ["split", "trim", "transform", "animate", "keyframe", "crop", "overlay", "opacity", "mask", "replace", "reverse", "freeze", "duplicate", "delete", "ratio"] },
+  { id: "edit", label: "Edit", icon: "cut", tools: ["split", "trim", "transform", "animate", "keyframe", "crop", "overlay", "opacity", "mask", "blend", "chroma", "replace", "reverse", "freeze", "duplicate", "delete", "ratio"] },
   { id: "effects", label: "Effects", icon: "sparkles", tools: ["filter", "adjust", "effect", "speed", "transition", "templates", "background"] },
   { id: "text", label: "Text", icon: "text", tools: ["text", "captions", "animate", "keyframe"] },
   { id: "stickers", label: "Stickers", icon: "happy", tools: ["sticker", "animate", "keyframe"] },

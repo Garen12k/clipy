@@ -20,7 +20,7 @@ const openGroup = async (name: string) => { await fireEvent.press(screen.getByRo
 const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
 const select = (id: string | null) => act(() => { state().select(id); });
 const photoLayer = (id: string, start = 0): LayerClip => ({ ...makePhotoClip({ id }), start });
-const EDIT = ["Split", "Trim", "Transform", "Animate", "Keyframe", "Crop", "Overlay", "Opacity", "Mask", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Ratio"];
+const EDIT = ["Split", "Trim", "Transform", "Animate", "Keyframe", "Crop", "Overlay", "Opacity", "Mask", "Blend", "Green screen", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Ratio"];
 
 beforeEach(() => {
   pick.mockReset(); importMedia.mockReset();
@@ -210,4 +210,30 @@ test("Opacity, Mask and Trim open their sheets on the selected layer", async () 
   await fireEvent.changeText(screen.getByLabelText("Trim end"), "1.5");
   await fireEvent.press(btn("Apply"));
   expect(state().project!.layers[0]).toMatchObject({ trimEnd: 1.5, start: 1 });
+});
+
+test("Blend is enabled only for a layer; Green screen for any clip or layer", async () => {
+  await renderBar();
+  expect(btn("Blend")).toBeDisabled();
+  expect(btn("Green screen")).toBeDisabled();
+  await select("a");
+  expect(btn("Blend")).toBeDisabled();
+  expect(btn("Green screen")).toBeEnabled();
+  await select("L");
+  expect(btn("Blend")).toBeEnabled();
+  expect(btn("Green screen")).toBeEnabled();
+  await select("P");
+  expect(btn("Blend")).toBeEnabled();
+  expect(btn("Green screen")).toBeEnabled();
+});
+
+test("Blend and Green screen open their sheets on the selected layer", async () => {
+  await renderBar();
+  await select("L");
+  await fireEvent.press(btn("Blend"));
+  await fireEvent.press(btn("Multiply"));
+  expect(state().project!.layers[0].blend).toBe("multiply");
+  await fireEvent.press(btn("Green screen"));
+  await fireEvent(screen.getAllByLabelText("Green screen").find((n) => typeof n.props.value === "boolean")!, "valueChange", true);
+  expect(state().project!.layers[0].chroma).toEqual({ color: "#00FF00", strength: 0.5 });
 });
