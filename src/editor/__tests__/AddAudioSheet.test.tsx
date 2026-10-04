@@ -2,7 +2,12 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("expo-document-picker", () => ({ getDocumentAsync: jest.fn() }));
 const mockPlayer = { play: jest.fn(), pause: jest.fn(), playing: false, replace: jest.fn() };
-jest.mock("expo-audio", () => ({ useAudioPlayer: () => mockPlayer, createAudioPlayer: jest.fn() }));
+const mockRecorder = { currentTime: 0, uri: "file:///cache/rec.m4a", prepareToRecordAsync: jest.fn(async () => {}), record: jest.fn(), stop: jest.fn(async () => {}), getStatus: jest.fn(() => ({ durationMillis: 0 })) };
+jest.mock("expo-audio", () => ({
+  useAudioPlayer: () => mockPlayer, createAudioPlayer: jest.fn(),
+  useAudioRecorder: () => mockRecorder, RecordingPresets: { HIGH_QUALITY: {} },
+  requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true })), setAudioModeAsync: jest.fn(async () => {}),
+}));
 const mockDownload = jest.fn(async () => {});
 jest.mock("expo-asset", () => ({ Asset: { fromModule: (file: number) => ({ downloadAsync: () => mockDownload(), localUri: `file:///bundled/${file}.wav`, uri: `file:///bundled/${file}.wav` }) } }));
 jest.mock("@/src/editor/music", () => ({ BUNDLED_TRACKS: [{ id: "t1", title: "Sunny Loop", durationSec: 30, license: "CC0", source: "https://x", file: 1 }] }));
@@ -25,16 +30,17 @@ const fullProject = () => useEditorStore.getState().apply((p) => ({ ...p, audioT
 
 beforeEach(() => {
   mockN = 0;
+  mockRecorder.currentTime = 0; mockRecorder.stop.mockClear(); mockRecorder.record.mockClear();
   importAudio.mockClear(); mockPlayer.play.mockClear(); mockPlayer.pause.mockClear(); mockPlayer.replace.mockClear();
   useToast.getState().clear();
   useEditorStore.getState().reset();
   useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })] }));
 });
 
-test("three tabs: Music, Files, Effects; Music is open first", async () => {
+test("four tabs: Music, Files, Effects, Record; Music is open first", async () => {
   await render(<AddAudioSheet visible onClose={() => {}} />);
   expect(screen.getByRole("header", { name: "Add audio" })).toBeTruthy();
-  for (const l of ["Music", "Files", "Effects"]) expect(btn(l)).toBeTruthy();
+  for (const l of ["Music", "Files", "Effects", "Record"]) expect(btn(l)).toBeTruthy();
   expect(btn("Music")).toBeSelected();
   expect(screen.getByText("Sunny Loop")).toBeTruthy();
 });
@@ -193,4 +199,61 @@ test("Choose a file is disabled while the picked file's duration is being measur
   await fireEvent.press(btn("Choose a file"));
   await waitFor(() => expect(tracks()[0]).toMatchObject({ title: "b.m4a", sourceDuration: 7 }));
   expect(disabledWhileMeasuring).toBe(true);
+});
+
+describe("Record tab", () => {
+  const record = async (onClose: () => void, at: number) => {
+    await render(<AddAudioSheet visible onClose={onClose} />);
+    await act(() => { useEditorStore.getState().seek(at); });
+    await fireEvent.press(btn("Record"));
+    await fireEvent.press(btn("Start recording"));
+    await waitFor(() => expect(btn("Stop recording")).toBeEnabled());
+    mockRecorder.currentTime = 2.5;
+  };
+
+  test("records while the video plays with its sound muted; stopping adds a voice track where recording began and closes the sheet", async () => {
+    const onClose = jest.fn();
+    await record(onClose, 1.5);
+    expect(useEditorStore.getState()).toMatchObject({ recording: true, isPlaying: true });
+    expect(screen.getByText("Recording…")).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(tracks()).toHaveLength(1));
+    expect(importAudio).toHaveBeenCalledWith("p1", { uri: "file:///cache/rec.m4a", title: "Voice-over", durationSec: 2.5 }, "voice");
+    expect(tracks()[0]).toMatchObject({ kind: "voice", title: "Voice-over", start: 1.5, trimEnd: 2.5 });
+    expect(useEditorStore.getState()).toMatchObject({ recording: false, isPlaying: false, selectedAudioId: tracks()[0].id });
+    expect(useEditorStore.getState().past).toHaveLength(1);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  test("closing the sheet while recording stops and saves, then closes", async () => {
+    const onClose = jest.fn();
+    await record(onClose, 0);
+    await fireEvent.press(screen.getByLabelText("Close sheet"));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(mockRecorder.stop).toHaveBeenCalledTimes(1);
+    expect(tracks()).toHaveLength(1);
+    expect(tracks()[0]).toMatchObject({ kind: "voice", start: 0 });
+    expect(useEditorStore.getState().recording).toBe(false);
+  });
+
+  test("switching tab while recording stops and saves instead of dropping the recording", async () => {
+    const onClose = jest.fn();
+    await record(onClose, 0);
+    await fireEvent.press(btn("Music"));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(tracks()).toHaveLength(1);
+    expect(tracks()[0].kind).toBe("voice");
+  });
+
+  test("a recording that is too short: the sheet closes first, then the toast shows", async () => {
+    const order: string[] = [];
+    const onClose = jest.fn(() => { order.push(`close:${useToast.getState().message}`); });
+    await record(onClose, 0);
+    mockRecorder.currentTime = 0.2;
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(useToast.getState().message).toBe("That recording was too short."));
+    expect(order).toEqual(["close:null"]);
+    expect(tracks()).toEqual([]);
+  });
 });

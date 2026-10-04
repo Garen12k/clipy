@@ -389,6 +389,19 @@ describe("Audio tools", () => {
   const past = () => useEditorStore.getState().past.length;
   beforeEach(() => { useToast.getState().clear(); });
 
+  test("Beats opens the beat markers sheet, whose Tap adds a marker at the playhead", async () => {
+    await renderBar();
+    await openGroup("Audio");
+    expect(btn("Beats")).toBeEnabled();
+    expect(screen.queryByRole("header", { name: "Beat markers" })).toBeNull();
+    await fireEvent.press(btn("Beats"));
+    expect(screen.getByRole("header", { name: "Beat markers" })).toBeTruthy();
+    await act(() => { useEditorStore.getState().seek(2); });
+    await fireEvent.press(btn("Tap"));
+    expect(useEditorStore.getState().project!.beatMarkers).toEqual([2]);
+    expect(past()).toBe(1);
+  });
+
   test("the Audio group lists Add audio, Volume, Ducking, Beats; Add audio opens the sheet", async () => {
     await renderBar();
     await openGroup("Audio");

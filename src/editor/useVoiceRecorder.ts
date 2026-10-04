@@ -1,0 +1,180 @@
+import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, type AudioRecorder } from "expo-audio";
+import { useEffect, useRef, useState } from "react";
+import { RECORDING_AUDIO_MODE, restorePlaybackAudioMode } from "@/src/editor/audioMode";
+import { addAudioTrack } from "@/src/editor/model/ops";
+import { totalDuration } from "@/src/editor/model/timeline";
+import { AUDIO_LIMITS } from "@/src/editor/model/types";
+import { useEditorStore } from "@/src/editor/store";
+import { storage } from "@/src/projects";
+import { haptic } from "@/src/ui/haptics";
+import { useToast } from "@/src/ui/Toast";
+
+export type VoiceRecorderState = "idle" | "starting" | "recording" | "saving";
+export type VoiceRecorder = { state: VoiceRecorderState; elapsed: number; start(): Promise<void>; stop(): Promise<void>; cancel(): Promise<void> };
+
+const ELAPSED_TICK_MS = 200;
+const LIMIT_MESSAGE = "You've reached the audio track limit.";
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** One recording, from the moment the preview is muted until the session is released. */
+type Session = { projectId: string; startAt: number; startedMs: number };
+
+/** What the recorder says it has recorded, in seconds; 0 when it says nothing (or has been released). */
+function recordedSeconds(recorder: AudioRecorder): number {
+  try {
+    const t = recorder.currentTime;
+    if (Number.isFinite(t) && t > 0) return t;
+    const ms = recorder.getStatus().durationMillis;
+    if (Number.isFinite(ms) && ms > 0) return ms / 1000;
+  } catch { /* released */ }
+  return 0;
+}
+
+/**
+ * Records a voice-over onto the timeline while the video plays: `start` mutes the preview (the store's `recording` flag), allows
+ * recording in the audio session, starts the recorder and then playback; `stop` saves the file into the project as a `voice` track
+ * beginning where recording began. Playback ending (the project's end, or anything else pausing it) stops the recording too.
+ * Every way out — stop, cancel, an error, unmount — un-mutes the preview and puts the audio session back to its playback mode.
+ *
+ * `onDismiss` is called before any toast and after a successful save, so that a hosting sheet (a native Modal, which would cover
+ * the toast) can close.
+ */
+export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRecorder {
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [state, setState] = useState<VoiceRecorderState>("idle");
+  const [elapsed, setElapsed] = useState(0);
+  // The state, readable synchronously: re-entry guards cannot wait for a re-render.
+  const phase = useRef<VoiceRecorderState>("idle");
+  const session = useRef<Session | null>(null);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mounted = useRef(true);
+  const onDismiss = useRef(opts.onDismiss);
+  onDismiss.current = opts.onDismiss;
+
+  const setPhase = (next: VoiceRecorderState) => { phase.current = next; if (mounted.current) setState(next); };
+  const stopTimer = () => { if (timer.current) { clearInterval(timer.current); timer.current = null; } };
+  const notify = (message: string) => { onDismiss.current?.(); useToast.getState().show(message); };
+
+  /** Ends the session: recorder stopped if asked (it may already be released), preview sound back on, playback mode restored. Never throws. */
+  const release = async (stopRecorder: boolean) => {
+    stopTimer();
+    session.current = null;
+    if (stopRecorder) { try { await recorder.stop(); } catch { /* released, or never started */ } }
+    useEditorStore.getState().setRecording(false);
+    await restorePlaybackAudioMode();
+  };
+
+  const start = async () => {
+    if (phase.current !== "idle") return;
+    const before = useEditorStore.getState().project;
+    if (!before) return;
+    if (totalDuration(before) <= 0) { notify("Add a clip before recording."); return; }
+    if (before.audioTracks.length >= AUDIO_LIMITS.maxTracks) { notify(LIMIT_MESSAGE); return; }   // before recording something nobody can keep
+    setPhase("starting");
+    let started = false;
+    let message: string | null = null;
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) { message = "Microphone access is needed to record."; return; }
+      const s = useEditorStore.getState();
+      if (!mounted.current || !s.project || s.project.id !== before.id) return;
+      let startAt = s.playhead;
+      if (startAt >= totalDuration(s.project)) { s.seek(0); startAt = 0; }
+      const mine: Session = { projectId: before.id, startAt, startedMs: Date.now() };
+      session.current = mine;
+      s.setRecording(true);
+      await setAudioModeAsync(RECORDING_AUDIO_MODE);
+      await recorder.prepareToRecordAsync();
+      if (session.current !== mine) return;   // unmounted meanwhile: the cleanup has already restored everything
+      recorder.record();
+      mine.startedMs = Date.now();
+      started = true;
+      setElapsed(0);
+      setPhase("recording");
+      timer.current = setInterval(() => { if (mounted.current) setElapsed((Date.now() - mine.startedMs) / 1000); }, ELAPSED_TICK_MS);
+      useEditorStore.getState().setPlaying(true);
+    } catch (e) {
+      console.warn(e);
+      message = "Couldn't start recording.";
+    } finally {
+      if (!started) {
+        if (session.current) await release(true);
+        setPhase("idle");
+        if (message) notify(message);
+      }
+    }
+  };
+
+  const finish = async (save: boolean) => {
+    const ses = session.current;
+    if (phase.current !== "recording" || !ses) return;
+    setPhase("saving");   // before pausing playback: the subscription below must not call back in
+    let message: string | null = null;
+    let saved = false;
+    try {
+      let uri: string | null = null;
+      let seconds = 0;
+      try {
+        useEditorStore.getState().setPlaying(false);
+        const wallClock = (Date.now() - ses.startedMs) / 1000;
+        const reported = recordedSeconds(recorder);   // read first: the native recorder zeroes its clock when it stops
+        await recorder.stop();
+        uri = recorder.uri;
+        seconds = Math.max(reported, recordedSeconds(recorder)) || wallClock;
+      } finally {
+        await release(false);
+      }
+      if (!save) return;
+      if (useEditorStore.getState().project?.id !== ses.projectId) return;   // the editor moved on while recording
+      if (!uri) throw new Error("The recorder returned no file");
+      if (seconds < AUDIO_LIMITS.minDuration) { message = "That recording was too short."; return; }
+      const imported = await storage.importAudio(ses.projectId, { uri, title: "Voice-over", durationSec: r3(seconds) }, "voice");
+      const { project, apply, selectAudio } = useEditorStore.getState();
+      if (!project || project.id !== ses.projectId) return;   // …or while the file was copied
+      // The op returns the same project when it refuses.
+      const next = addAudioTrack(project, { ...imported, start: r3(ses.startAt) });
+      if (next === project) { message = LIMIT_MESSAGE; return; }
+      apply(() => next);
+      selectAudio(imported.id);
+      haptic("light");
+      saved = true;
+    } catch (e) {
+      console.warn(e);
+      if (save) message = "Couldn't save that recording.";
+    } finally {
+      setPhase("idle");
+      if (message) notify(message);
+      else if (saved) onDismiss.current?.();
+    }
+  };
+  const stop = () => finish(true);
+  const cancel = () => finish(false);
+
+  // Playback stopping by itself (the project's end) ends the recording. `finish` flips the phase before it pauses playback, so its
+  // own pause never lands here; nothing in this effect sets state.
+  const stopRef = useRef(stop);
+  stopRef.current = stop;
+  useEffect(() => useEditorStore.subscribe((s, prev) => {
+    if (prev.isPlaying && !s.isPlaying && phase.current === "recording") void stopRef.current();
+  }), []);
+
+  // Unmount with a session open (starting or recording): nothing is saved, everything is put back. useAudioRecorder releases the
+  // native recorder in its own cleanup, which runs before this one — stopping a released recorder throws, so swallow it.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      stopTimer();
+      if (!session.current) return;
+      session.current = null;
+      phase.current = "idle";
+      const s = useEditorStore.getState();
+      s.setPlaying(false);
+      try { recorder.stop().catch(() => {}); } catch { /* released */ }
+      s.setRecording(false);
+      void restorePlaybackAudioMode();
+    };
+  }, [recorder]);
+
+  return { state, elapsed, start, stop, cancel };
+}

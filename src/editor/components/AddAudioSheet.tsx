@@ -19,6 +19,7 @@ import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
+import { RecordTab, type RecordCloseGuard } from "./RecordTab";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 /** How long after a preview's nominal end its button flips back to "play" (the player needs a moment to start). */
@@ -29,6 +30,7 @@ const TABS = [
   { id: "music", label: "Music" },
   { id: "files", label: "Files" },
   { id: "effects", label: "Effects" },
+  { id: "record", label: "Record" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -36,8 +38,9 @@ type Picked = { uri: string; title: string; durationSec: number };
 const ROW = { flexDirection: "row", alignItems: "center", gap: theme.space.md, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, padding: theme.space.md } as const;
 
 /**
- * Adds audio to the project: bundled music, a file, or a built-in sound effect. Every path copies the file into the project, adds a
- * track starting at the playhead, selects it and closes the sheet. The track's own controls are the selected-track tools in the toolbar.
+ * Adds audio to the project: bundled music, a file, a built-in sound effect, or a voice-over recorded on the spot. Every path
+ * copies the file into the project, adds a track starting at the playhead (a recording: where it began), selects it and closes
+ * the sheet. The track's own controls are the selected-track tools in the toolbar.
  */
 export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<TabId>("music");
@@ -46,6 +49,8 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   const [previewId, setPreviewId] = useState<string | null>(null);
   const preview = useAudioPlayer(null);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set by the Record tab while it is mounted: leaving it mid-recording stops and saves first (it then closes the sheet itself).
+  const recordGuard = useRef<(() => boolean) | null>(null) as RecordCloseGuard;
 
   const stopPreview = () => {
     if (previewTimer.current) { clearTimeout(previewTimer.current); previewTimer.current = null; }
@@ -65,7 +70,8 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   // useAudioPlayer releases the native player in its own unmount cleanup, which runs before this one.
   useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current); try { preview.pause(); } catch {} }, [preview]);
 
-  const close = () => { stopPreview(); onClose(); };
+  const closeNow = () => { stopPreview(); onClose(); };
+  const close = () => { if (recordGuard.current?.()) return; closeNow(); };
   // The sheet is a native Modal and would cover the toast: close first.
   const refuse = () => { close(); useToast.getState().show("You've reached the audio track limit."); };
 
@@ -118,7 +124,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   return (
     <Sheet visible={visible} onClose={close} title="Add audio" height="60%">
       <View style={{ flexDirection: "row", gap: theme.space.md }}>
-        {TABS.map((t) => <Chip key={t.id} label={t.label} selected={tab === t.id} onPress={() => { if (t.id !== tab) stopPreview(); setTab(t.id); }} />)}
+        {TABS.map((t) => <Chip key={t.id} label={t.label} selected={tab === t.id} onPress={() => { if (t.id === tab || recordGuard.current?.()) return; stopPreview(); setTab(t.id); }} />)}
       </View>
       {tab === "music" && (BUNDLED_TRACKS.length === 0 ? (
         <Body muted>No bundled tracks yet — use Files.</Body>
@@ -133,6 +139,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
           {SFX_IDS.map((id) => row({ id: `sfx:${id}`, title: SFX[id].label, detail: `${SFX[id].durationSec.toFixed(1)} s`, file: SFX[id].file, durationSec: SFX[id].durationSec, addLabel: "Add", onAdd: () => addSfx(id) }))}
         </ScrollView>
       )}
+      {tab === "record" && <RecordTab onDone={closeNow} closeGuard={recordGuard} />}
     </Sheet>
   );
 }

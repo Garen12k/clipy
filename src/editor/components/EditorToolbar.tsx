@@ -20,6 +20,7 @@ import { AdjustSheet } from "./AdjustSheet";
 import { AudioFadeSheet } from "./AudioFadeSheet";
 import { AudioVolumeSheet } from "./AudioVolumeSheet";
 import { BackgroundSheet } from "./BackgroundSheet";
+import { BeatsSheet } from "./BeatsSheet";
 import { CaptionsSheet } from "./CaptionsSheet";
 import { ClipAnimationSheet } from "./ClipAnimationSheet";
 import { CropScreen } from "./CropScreen";
@@ -52,7 +53,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "clipAnimation" | "overlayAnimation" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useEditorStore((s) => s.project?.clips.find((c) => c.id === s.selectedClipId) ?? null);
   const photoSel = !!selectedClip && isPhoto(selectedClip);
@@ -179,8 +180,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     volume: { label: "Volume", icon: "volume-high", disabled: noSel || photoSel || !!selectedClip?.reversed, onPress: () => setSheet("volume") },
     // A preference, not an action on a track: enabled even before there is a voice-over.
     ducking: { label: "Ducking", icon: "volume-low", active: ducking, onPress: () => { haptic("light"); apply((p) => setDucking(p, !ducking)); } },
-    // Placeholder until the beats screen exists: listed so the map stays exhaustive, disabled and without an action.
-    beats: { label: "Beats", icon: "pulse", disabled: true, onPress: () => {} },
+    beats: { label: "Beats", icon: "pulse", disabled: !hasClips, onPress: () => setSheet("beats") },
     audioVolume: { label: "Volume", icon: "volume-medium", disabled: !selectedAudioId, onPress: () => setSheet("audioVolume") },
     audioFade: { label: "Fade", icon: "trending-up", disabled: !selectedAudioId, onPress: () => setSheet("audioFade") },
     audioDuplicate: { label: "Duplicate", icon: "copy", disabled: !selectedAudioId, onPress: duplicateSelectedAudio },
@@ -214,6 +214,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <BackgroundSheet clipId={selectedId} visible={sheet === "background"} onClose={() => setSheet(null)} />
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
       <AddAudioSheet visible={sheet === "addAudio"} onClose={() => setSheet(null)} />
+      <BeatsSheet visible={sheet === "beats"} onClose={() => setSheet(null)} />
       <AudioVolumeSheet trackId={selectedAudioId} visible={sheet === "audioVolume"} onClose={() => setSheet(null)} />
       <AudioFadeSheet target={selectedAudioId ? { type: "track", id: selectedAudioId } : null} visible={sheet === "audioFade"} onClose={() => setSheet(null)} />
       <VolumeSheet clipId={selectedId} visible={sheet === "volume"} onClose={() => setSheet(null)} />

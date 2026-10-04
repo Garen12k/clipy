@@ -10,6 +10,10 @@ jest.mock("expo-audio", () => ({
   useAudioPlayer: () => ({ play: () => {}, pause: () => {}, playing: false, replace: () => {}, seekTo: async () => {}, currentTime: 0, volume: 1 }),
   createAudioPlayer: () => ({ addListener: () => ({ remove: () => {} }), release: () => {} }),
   setAudioModeAsync: jest.fn(async () => {}),
+  // Voice-over recording (the Add audio sheet's Record tab): a recorder that records nothing, permission granted.
+  useAudioRecorder: () => ({ currentTime: 0, uri: null, isRecording: false, prepareToRecordAsync: async () => {}, record: () => {}, stop: async () => {}, getStatus: () => ({ canRecord: false, isRecording: false, durationMillis: 0, mediaServicesDidReset: false, url: null }) }),
+  RecordingPresets: { HIGH_QUALITY: {}, LOW_QUALITY: {} },
+  requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: "granted", canAskAgain: true, expires: "never" })),
 }));
 jest.mock("expo-document-picker", () => ({ getDocumentAsync: async () => ({ canceled: true }) }));
 jest.mock("expo-asset", () => ({ Asset: { fromModule: () => ({ downloadAsync: async () => {}, localUri: null, uri: "" }) } }));

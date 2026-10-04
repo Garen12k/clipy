@@ -1,5 +1,6 @@
-import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
+import { useAudioPlayer } from "expo-audio";
 import { useEffect, useRef } from "react";
+import { restorePlaybackAudioMode } from "@/src/editor/audioMode";
 import { trackGainAt } from "@/src/editor/model/audioMix";
 import { songTimeAt } from "@/src/editor/model/audioSync";
 import type { AudioTrack, Project } from "@/src/editor/model/types";
@@ -65,12 +66,8 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
 export function AudioPreview() {
   const project = useEditorStore((s) => s.project);
 
-  // Mix with the video's own audio session instead of taking exclusive focus or
-  // deactivating the shared session when a player pauses (which would otherwise
-  // either pause expo-video's playback or silence it mid-scene).
-  useEffect(() => {
-    setAudioModeAsync({ interruptionMode: "mixWithOthers", playsInSilentMode: true }).catch(() => {});
-  }, []);
+  // The editor's playback mode (see audioMode.ts), set once; a voice-over recording changes it and puts it back.
+  useEffect(() => { void restorePlaybackAudioMode(); }, []);
 
   if (!project) return null;
   return <>{project.audioTracks.map((track) => <TrackPlayer key={track.id} project={project} track={track} />)}</>;
