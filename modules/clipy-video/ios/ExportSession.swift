@@ -122,7 +122,7 @@ struct ExportOverlay: Record {
   @Field var rotation: Double = 0
   @Field var start: Double = 0
   @Field var end: Double = 0
-  // Motion: decoded here; not drawn yet (the overlay layers are still static).
+  // Motion: drawn by `ExportSession.addMotion` (sampled Core Animation keyframes); none → the static layer.
   @Field var animIn: ExportAnimEdge?
   @Field var animOut: ExportAnimEdge?
   @Field var animLoop: String?                     // one of `ANIM_LOOP_IDS`
@@ -362,7 +362,7 @@ final class ExportSession {
 
     let container = CALayer()
     container.bounds = CGRect(x: 0, y: 0, width: w + 2 * pad, height: h + 2 * pad)
-    container.position = CGPoint(x: l.centerX, y: renderSize.height - l.centerY)
+    container.position = overlayPosition(x: o.x, y: o.y, renderSize: renderSize)   // = (l.centerX, H − l.centerY)
     if let bg = o.backgroundColor {
       container.backgroundColor = UIColor(hex: bg).withAlphaComponent(CGFloat(o.backgroundOpacity)).cgColor
       container.cornerRadius = pad / 2
@@ -377,9 +377,23 @@ final class ExportSession {
     textLayer.frame = CGRect(x: pad, y: pad, width: w, height: h)
     container.addSublayer(textLayer)
 
-    container.transform = CATransform3DMakeRotation(-l.rotation * .pi / 180, 0, 0, 1)
-    addVisibility(container, start: o.start, end: o.end)
+    container.transform = overlayTransform(scale: 1, rotation: l.rotation)
+    if !addMotion(container, o, renderSize: renderSize) { addVisibility(container, start: o.start, end: o.end) }
     return container
+  }
+
+  /// A point given as fractions of the frame (top-left origin, y down — as the preview and `OverlayLayout` have it)
+  /// in the export's layer space: render pixels with a BOTTOM-LEFT origin. The one place the overlays' y is flipped.
+  static func overlayPosition(x: Double, y: Double, renderSize: CGSize) -> CGPoint {
+    return CGPoint(x: CGFloat(x) * renderSize.width, y: renderSize.height - CGFloat(y) * renderSize.height)
+  }
+
+  /// An overlay layer's transform about its centre: `rotation` in degrees clockwise as seen on screen (negated,
+  /// because the layer space is y-up) and a uniform `scale` on top of the size the layer was built at. Scale 1 is
+  /// the rotation alone, exactly as the static layers always had it.
+  static func overlayTransform(scale: CGFloat, rotation: CGFloat) -> CATransform3D {
+    let turn = CATransform3DMakeRotation(-rotation * .pi / 180, 0, 0, 1)
+    return scale == 1 ? turn : CATransform3DScale(turn, scale, scale, 1)
   }
 
   /// Hidden by default; the animation (opacity 1) only runs during [start, end) and is removed afterwards.
@@ -393,6 +407,57 @@ final class ExportSession {
     anim.fillMode = .removed
     anim.isRemovedOnCompletion = true
     layer.add(anim, forKey: "visible")
+  }
+
+  /// Motion for a text / sticker container built by the static path (same content, bounds and anchor): instead of
+  /// the visibility animation, three keyframe animations — position, transform (scale + rotation) and opacity —
+  /// sampled from `Motion.resolveOverlay` 30 times per second over [start, end). False (nothing added, the caller
+  /// uses `addVisibility`) when the overlay has no animation and no pins, or its samples cannot be used.
+  /// Timing mirrors `addVisibility`: the model opacity is 0 and the fill mode is `.removed`, so the layer shows
+  /// only while the animations are active. `isRemovedOnCompletion` is false, as AVFoundation asks of animations
+  /// given to the video composition's animation tool; with `.removed` a finished animation has no effect.
+  /// Scale: the overlay's own scale is baked into the layer's font size / box, so each sample applies the RATIO
+  /// `sample.scale / o.scale`; the content sublayers are drawn at the largest ratio (`contentsScale`) so scaling up
+  /// stays sharp without changing the layout.
+  static func addMotion(_ layer: CALayer, _ o: ExportOverlay, renderSize: CGSize) -> Bool {
+    guard OverlayMotion.hasMotion(o) else { return false }
+    let samples = OverlayMotion.samples(start: o.start, end: o.end, fps: OverlayMotion.fps, resolve: OverlayMotion.resolver(o))
+    guard samples.count >= 2, OverlayMotion.allFinite(samples) else { return false }
+    let length = o.end - o.start
+    let keyTimes: [NSNumber] = samples.map { (s: (time: Double, values: KeyValues)) -> NSNumber in
+      NSNumber(value: min(1, max(0, s.time / length)))
+    }
+    let positions: [Any] = samples.map { (s: (time: Double, values: KeyValues)) -> Any in
+      NSValue(cgPoint: overlayPosition(x: s.values.x, y: s.values.y, renderSize: renderSize))
+    }
+    let transforms: [Any] = samples.map { (s: (time: Double, values: KeyValues)) -> Any in
+      NSValue(caTransform3D: overlayTransform(scale: CGFloat(OverlayMotion.scaleRatio(s.values.scale, base: o.scale)), rotation: CGFloat(s.values.rotation)))
+    }
+    let opacities: [Any] = samples.map { (s: (time: Double, values: KeyValues)) -> Any in
+      NSNumber(value: s.values.opacity)
+    }
+
+    let sharp = CGFloat(OverlayMotion.contentScale(samples, base: o.scale))
+    if sharp > 1 {
+      for content in layer.sublayers ?? [] { content.contentsScale = sharp }
+    }
+
+    layer.opacity = 0
+    func add(_ keyPath: String, _ values: [Any]) {
+      let anim = CAKeyframeAnimation(keyPath: keyPath)
+      anim.values = values
+      anim.keyTimes = keyTimes
+      anim.calculationMode = .linear
+      anim.beginTime = max(o.start, AVCoreAnimationBeginTimeAtZero)   // 0 would mean "now", not the video's start
+      anim.duration = o.end - o.start
+      anim.fillMode = .removed
+      anim.isRemovedOnCompletion = false
+      layer.add(anim, forKey: "motion." + keyPath)
+    }
+    add("position", positions)
+    add("transform", transforms)
+    add("opacity", opacities)
+    return true
   }
 
   /// One sticker centred on (x·W, y·H), rotated about its centre, visible during [start, end) — like a text
@@ -440,13 +505,14 @@ final class ExportSession {
     } else {
       return nil
     }
-    container.position = CGPoint(x: CGFloat(o.x) * renderSize.width, y: renderSize.height - CGFloat(o.y) * renderSize.height)
-    container.transform = CATransform3DMakeRotation(-CGFloat(o.rotation) * .pi / 180, 0, 0, 1)
-    addVisibility(container, start: o.start, end: o.end)
+    container.position = overlayPosition(x: o.x, y: o.y, renderSize: renderSize)
+    container.transform = overlayTransform(scale: 1, rotation: CGFloat(o.rotation))
+    if !addMotion(container, o, renderSize: renderSize) { addVisibility(container, start: o.start, end: o.end) }
     return container
   }
 
-  /// Text and captions use the Phase 2 text path unchanged; stickers use `stickerLayer`. Empty ones are skipped.
+  /// Text and captions use the Phase 2 text path; stickers use `stickerLayer`. Empty ones are skipped. A text or
+  /// sticker with an animation or pins gets `addMotion` in place of the visibility animation.
   static func overlayLayers(_ overlays: [ExportOverlay], renderSize: CGSize) -> [CALayer] {
     overlays.compactMap { o -> CALayer? in
       guard o.end > o.start else { return nil }
