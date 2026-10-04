@@ -2,7 +2,7 @@ import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration, sourceTimeAt, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
-import { clipBaseAt, overlayBaseAt } from "./motion";
+import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_LIMITS, aspectRatioValue, clampAdjust, clampAnimEdge, clampClipAnimation, clampClipKeyframes, clampCrop, clampOverlayAnimation, clampOverlayKeyframes, clampTransform,
   CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
@@ -48,13 +48,27 @@ export function splitClipAt(p: Project, outputTime: number): Project {
   if (isPhoto(clip)) {
     const cut = offsetInClip;   // photos run at speed 1 from 0
     const left: Clip = { ...clip, trimEnd: cut, transitionOut: NO_TRANSITION, ...leftMotion };
-    const right: Clip = { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut, adjust: { ...clip.adjust }, ...rightMotion };
+    // The right half restarts at 0, so its pins move back by the cut; those before it become one pin holding the value at the cut.
+    const head = sampleKeyframes(clip.keyframes, cut);
+    const keyframes = head ? rebasePins(clip.keyframes, cut, () => head, clampClipKeyframes) : [];
+    const right: Clip = { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut, adjust: { ...clip.adjust }, ...rightMotion, keyframes };
     return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
   }
   const { left: l, right: r } = splitSourceRanges(clip, offsetInClip);
   const left: Clip = { ...clip, trimStart: l[0], trimEnd: l[1], transitionOut: NO_TRANSITION, ...leftMotion };
   const right: Clip = { ...clip, id: newId(), trimStart: r[0], trimEnd: r[1], adjust: { ...clip.adjust }, ...rightMotion };
   return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
+}
+
+/**
+ * Pins moved `by` seconds earlier. Those that land before 0 are replaced by ONE pin at t = 0 holding `head(thosePins)`; the rest are
+ * kept. The result goes through the sanity rule (`clampPins`), so it is sorted, spaced and reloads unchanged.
+ */
+function rebasePins(pins: Keyframe[], by: number, head: (before: Keyframe[]) => Omit<Keyframe, "t">, clampPins: (k: unknown) => Keyframe[]): Keyframe[] {
+  const shifted = pins.map((k) => ({ ...k, t: k.t - by }));
+  const before = shifted.filter((k) => k.t < 0);
+  if (before.length === 0) return clampPins(shifted);
+  return clampPins([{ ...head(before), t: 0 }, ...shifted.filter((k) => k.t >= 0)]);
 }
 
 const copyEdge = (e: AnimEdge | null): AnimEdge | null => (e ? { ...e } : null);
@@ -162,8 +176,8 @@ export function updateOverlay(p: Project, id: string, patch: Partial<Omit<TextOv
 
 /**
  * A patch that names `start` trims the start: the pins (seconds from the start) are shifted by the same amount so they stay at the same
- * project time, then go through the sanity rule (`clampOverlayKeyframes`: a pin left before the new start lands on t = 0, and of several
- * landing there the earliest stays) — so what is stored always reloads unchanged. `moveOverlay` moves the pins with the overlay instead.
+ * project time. Of the pins left before the new start only the LAST stays (the value in effect there), placed at t = 0; the result goes
+ * through the sanity rule (`clampOverlayKeyframes`), so what is stored always reloads unchanged. `moveOverlay` moves the pins with the overlay instead.
  */
 export function updateOverlayShared(p: Project, id: string, patch: SharedPatch): Project {
   return patchOverlayShared(p, id, patch, patch.start !== undefined);
@@ -176,7 +190,7 @@ function patchOverlayShared(p: Project, id: string, patch: SharedPatch, shiftPin
   let next = normaliseOverlay(p, { ...cur, ...patch } as Overlay);
   const by = next.start - cur.start;
   if (shiftPins && by !== 0 && cur.keyframes.length > 0) {
-    next = { ...next, keyframes: clampOverlayKeyframes(cur.keyframes.map((k) => ({ ...k, t: k.t - by }))) };
+    next = { ...next, keyframes: rebasePins(cur.keyframes, by, (before) => before[before.length - 1], clampOverlayKeyframes) };
   }
   return replaceOverlay(p, i, next);
 }
@@ -629,8 +643,9 @@ export function setClipAnimation(p: Project, clipId: string, patch: Partial<Clip
   });
 }
 
-/** Every clip gets its own copy of `a` (clamped; a combo wins over edges). Keyframes are not touched. */
+/** Every clip gets its own copy of `a` (clamped; a combo wins over edges). Keyframes are not touched. Unknown id / non-finite duration → unchanged. */
 export function setAnimationForAllClips(p: Project, a: ClipAnimation): Project {
+  if (!edgesOk(a) || (a.combo != null && !(ANIM_COMBO_IDS as readonly string[]).includes(a.combo))) return p;
   const same = (c: Clip) => sameJson(c.animation, clampClipAnimation(a));
   if (p.clips.every(same)) return p;
   return touch(p, { clips: p.clips.map((c) => (same(c) ? c : { ...c, animation: clampClipAnimation(a) })) });
@@ -738,6 +753,7 @@ export function editClipTransformAt(p: Project, clipId: string, offsetInClip: nu
     delete values.opacity;
     return Object.keys(values).length === 0 ? p : setClipTransform(p, clipId, values);
   }
+  if (Object.keys(values).length === 0) return p;   // nothing to write: never add a pin
   const m = pinMoment(c, offsetInClip);
   const keyframes = upsertPin(c.keyframes, m.t, () => clipBaseAt(c, m.offset), values, clampClipKeyframes);
   return keyframes === c.keyframes ? p : updateClip(p, clipId, (x) => ({ ...x, keyframes }));
@@ -783,6 +799,7 @@ export function editOverlayAt(p: Project, overlayId: string, time: number,
     delete values.opacity;
     return Object.keys(values).length === 0 ? p : updateOverlayShared(p, overlayId, values);
   }
+  if (Object.keys(values).length === 0) return p;   // nothing to write: never add a pin
   const t = overlayLocal(o, time);
   const keyframes = upsertPin(o.keyframes, t, () => overlayBaseAt(o, o.start + t), values, clampOverlayKeyframes);
   return keyframes === o.keyframes ? p : replaceOverlay(p, idx, { ...o, keyframes });

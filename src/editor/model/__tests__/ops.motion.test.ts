@@ -2,6 +2,7 @@ jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }
 import { useEditorStore } from "@/src/editor/store";
 import { fitScale } from "../clipLayout";
 import { clipBaseAt, overlayBaseAt } from "../motion";
+import { clipDuration } from "../timeline";
 import {
   applyTemplate, clipKeyframeAt, duplicateClip, duplicateOverlay, editClipTransformAt, editOverlayAt, fillClip, fitClip, frameSize, insertFreezeFrame,
   moveOverlay, overlayKeyframeAt, replaceClipMedia, resetClipTransform, rotateClip90, setAnimationForAllClips, setClipAnimation, setClipTransform,
@@ -76,6 +77,12 @@ describe("setAnimationForAllClips", () => {
     expect(clip(p, "a").animation.in).not.toBe(clip(p, "b").animation.in);
     expect(clip(p, "a").animation.out).not.toBe(pop);
     expect(setAnimationForAllClips(p, a)).toBe(p);
+  });
+  test("bad input is refused: non-finite duration, unknown ids", () => {
+    expect(setAnimationForAllClips(base, { in: { id: "fade", duration: Number.NaN }, out: null, combo: null })).toBe(base);
+    expect(setAnimationForAllClips(base, { in: null, out: { id: "fade", duration: Number.POSITIVE_INFINITY }, combo: null })).toBe(base);
+    expect(setAnimationForAllClips(base, { in: { id: "bogus", duration: 1 } as never, out: null, combo: null })).toBe(base);
+    expect(setAnimationForAllClips(base, { in: null, out: null, combo: "bogus" as never })).toBe(base);
   });
   test("a combo wins over edges; untouched keyframes", () => {
     const keyed = withClip({ keyframes: [kf({ t: 1 })] });
@@ -207,6 +214,22 @@ describe("editClipTransformAt", () => {
     expect(clip(p).keyframes).toEqual([pins[0], { ...pins[1], x: 0.6, opacity: 0.5 }, pins[2]]);
     expect(clip(p).keyframes[0]).toBe(pins[0]);
   });
+  test("an empty patch adds no pin", () => {
+    const keyed = withClip({ keyframes: [kf({ t: 1 }), kf({ t: 3, x: 0.8 })] });
+    expect(editClipTransformAt(keyed, "a", 2, {})).toBe(keyed);
+    expect(editClipTransformAt(keyed, "a", 2, { x: undefined })).toBe(keyed);
+    expect(editClipTransformAt(keyed, "a", 1, {})).toBe(keyed);
+  });
+  test("reversed clip at speed 2 with a trim: the pin lands at the mirrored source time", () => {
+    const rev = withClip({ trimStart: 2, trimEnd: 10, speed: 2, reversed: true, keyframes: [kf({ t: 3, x: 0.2 })] });   // 4 s long; offset 1 shows source 8
+    const p = editClipTransformAt(rev, "a", 1, { x: 0.5 });
+    expect(clip(p).keyframes).toEqual([kf({ t: 3, x: 0.2 }), kf({ t: 8, x: 0.5 })]);
+    expect(clipKeyframeAt(clip(p), 1)).toBe(clip(p).keyframes[1]);
+    expect(clipKeyframeAt(clip(p), 3.5)).toBe(clip(p).keyframes[0]);   // source 3 shows at (10 − 3) / 2
+    expect(clipBaseAt(clip(p), 1).x).toBe(0.5);
+    const again = editClipTransformAt(p, "a", 1.01, { x: 0.6 });       // 0.02 s of source away: the same pin
+    expect(clip(again).keyframes.map((k) => [k.t, k.x])).toEqual([[3, 0.2], [8, 0.6]]);
+  });
   test("values are clamped like the sanity pass; rotation is not normalised", () => {
     const keyed = withClip({ keyframes: [kf({ t: 1 })] });
     const p = editClipTransformAt(keyed, "a", 1, { x: 7, y: -7, scale: 100, rotation: 725, opacity: 3 });
@@ -298,12 +321,29 @@ describe("split / duplicate / replace / freeze / template", () => {
     expect(p.clips[0].animation).toEqual({ in: null, out: null, combo: "sway" });
     expect(p.clips[1].animation).toEqual({ in: null, out: null, combo: "sway" });
     expect(p.clips[1].animation).not.toBe(p.clips[0].animation);
-    const photo = makeProject({ clips: [makePhotoClip({ id: "a", seconds: 4, animation: { in: fade, out: pop, combo: null }, keyframes: [kf({ t: 1 })] })] });
+    const photo = makeProject({ clips: [makePhotoClip({ id: "a", seconds: 4, animation: { in: fade, out: pop, combo: null } })] });
     const q = splitClipAt(photo, 2);
     expect(q.clips[0].animation).toEqual({ in: fade, out: null, combo: null });
     expect(q.clips[1].animation).toEqual({ in: null, out: pop, combo: null });
-    expect(q.clips[1].keyframes).toEqual([kf({ t: 1 })]);
-    expect(q.clips[1].keyframes).not.toBe(q.clips[0].keyframes);
+    expect(q.clips[1].keyframes).toEqual([]);
+  });
+  test("split photo: the right half restarts at 0, so its pins are rebased and the motion is continuous at the cut", () => {
+    const ppins = [kf({ t: 0, x: 0 }), kf({ t: 4, x: 1 })];
+    const photo = makeProject({ clips: [makePhotoClip({ id: "a", seconds: 4, keyframes: ppins })] });
+    const [l, r] = splitClipAt(photo, 2).clips;
+    expect(l.keyframes).toEqual(ppins);                         // the pin after the cut still shapes the left half
+    expect(r.keyframes).not.toBe(l.keyframes);
+    expect(r.keyframes.map((k) => k.t)).toEqual([0, 2]);
+    expect(clipBaseAt(l, clipDuration(l)).x).toBe(0.5);
+    expect(clipBaseAt(r, 0)).toEqual(clipBaseAt(l, clipDuration(l)));
+    expect(clipBaseAt(r, clipDuration(r)).x).toBe(1);
+    expect(clampClipKeyframes(r.keyframes)).toEqual(r.keyframes);
+    const split = (keyframes: ReturnType<typeof kf>[], at: number) =>
+      splitClipAt(makeProject({ clips: [makePhotoClip({ id: "a", seconds: 4, keyframes })] }), at).clips[1].keyframes;
+    // Several pins before the cut become one; no pin before the cut: only shifted; every pin before the cut: one pin with the last value.
+    expect(split([kf({ t: 0, x: 0 }), kf({ t: 1, x: 0.1 }), kf({ t: 4, x: 1 })], 2).map((k) => k.t)).toEqual([0, 2]);
+    expect(split([kf({ t: 2, x: 0.2 }), kf({ t: 3, x: 0.3 })], 2)).toEqual([kf({ t: 0, x: 0.2 }), kf({ t: 1, x: 0.3 })]);
+    expect(split([kf({ t: 0.5, x: 0.2 }), kf({ t: 1, x: 0.3 })], 2)).toEqual([kf({ t: 0, x: 0.3 })]);
   });
   test("duplicateClip deep-copies animation and keyframes", () => {
     const p = duplicateClip(moving, "a");
@@ -423,6 +463,7 @@ describe("overlay keyframes", () => {
     expect(editOverlayAt(base, "cap", 1, { x: 0.1 })).toBe(base);
     expect(editOverlayAt(base, "nope", 1, { x: 0.1 })).toBe(base);
     expect(editOverlayAt(keyed, "t", 2, { x: 0.2 })).toBe(keyed);
+    expect(editOverlayAt(keyed, "t", 3, {})).toBe(keyed);   // off a pin: an empty patch adds nothing
     expect(editOverlayAt(keyed, "t", 2, { x: Number.NaN })).toBe(keyed);
     expect(editOverlayAt(keyed, "t", Number.NaN, { x: 0.3 })).toBe(keyed);
     expect(editOverlayAt(base, "t", 2, { x: Number.NaN })).toBe(base);
@@ -447,7 +488,7 @@ describe("overlay keyframes", () => {
     const later = withOverlay("t", { keyframes: [kf({ t: 0, x: 0.1, y: 0.1 }), kf({ t: 1, x: 0.2, y: 0.2 }), kf({ t: 3, x: 0.8, y: 0.8 })] });
     const p = updateOverlayShared(later, "t", { start: 4 });   // shift −2: pins at −2, −1, 1
     const got = ov(p, "t").keyframes;
-    expect(got).toEqual([kf({ t: 0, x: 0.1, y: 0.1 }), kf({ t: 1, x: 0.8, y: 0.8 })]);   // the sanity rule: clamped to 0, the earliest of the collapsed pins stays
+    expect(got).toEqual([kf({ t: 0, x: 0.2, y: 0.2 }), kf({ t: 1, x: 0.8, y: 0.8 })]);   // of the pins before the new start only the LAST stays, at 0
     expect(clampOverlayKeyframes(got)).toEqual(got);
   });
 });
