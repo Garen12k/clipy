@@ -92,7 +92,7 @@ export function effectPreview(type: EffectId, t: number, d: number, k: number): 
       layer(EFFECT_COLORS.flicker, filmFlicker(t, k));
       break;
     case "glow": layer(EFFECT_COLORS.glow, EFFECT.glowLayer * k * env); break;
-    case "blur": case "glitch": case "rgbSplit": break;   // export only
+    case "blur": case "glitch": case "rgbSplit": case "blurBox": case "mosaicBox": break;   // export only (the box itself is drawn by the preview, not here)
   }
   return out;
 }

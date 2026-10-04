@@ -6,7 +6,7 @@ import Foundation
 enum Effects {
   static let filterIds = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage", "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream"]
   static let transitionTypes = ["none", "fade", "dissolve", "slide", "zoom", "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur"]
-  static let effectIds = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow"]
+  static let effectIds = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow", "blurBox", "mosaicBox"]
 
   /// Core Image recipe per filter id (applied in order). Unknown ids (and nil / "none") → empty chain (no filter).
   static func filterChain(_ id: String?) -> [(name: String, params: [String: Any])] {

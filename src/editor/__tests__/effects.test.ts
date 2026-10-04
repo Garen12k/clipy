@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { ANIM_COMBO, ANIM_IN, ANIM_LOOP, CAPTION_STYLE, EFFECTS, FILTERS, SHAPES, SPEED_CURVES, STICKER_EMOJI_SCALE, STICKER_SHAPE_SCALE, TRANSITIONS } from "../effects";
-import { ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, EFFECT_IDS, FILTER_IDS, SHAPE_IDS, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_TYPES } from "../model/types";
+import { ANIM_COMBO, ANIM_IN, ANIM_LOOP, BLENDS, CAPTION_STYLE, EFFECTS, FILTERS, SHAPES, SPEED_CURVES, STICKER_EMOJI_SCALE, STICKER_SHAPE_SCALE, TRANSITIONS } from "../effects";
+import { ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, BLEND_IDS, EFFECT_IDS, FILTER_IDS, SHAPE_IDS, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_TYPES } from "../model/types";
 
 const swift = readFileSync(join(__dirname, "../../../modules/clipy-video/ios/Effects.swift"), "utf8");
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -59,9 +59,9 @@ test("caption style default", () => {
 });
 
 test("effects registry covers every effect id; labels as specified", () => {
-  expect(EFFECT_IDS).toHaveLength(10);
+  expect(EFFECT_IDS).toHaveLength(12);
   for (const id of EFFECT_IDS) { expect(EFFECTS[id].label.length).toBeGreaterThan(0); expect(EFFECTS[id].icon.length).toBeGreaterThan(0); }
-  expect(EFFECT_IDS.map((id) => EFFECTS[id].label)).toEqual(["Glitch", "Shake", "Zoom pulse", "Blur", "VHS", "Light leak", "Flash", "RGB split", "Old film", "Glow"]);
+  expect(EFFECT_IDS.map((id) => EFFECTS[id].label)).toEqual(["Glitch", "Shake", "Zoom pulse", "Blur", "VHS", "Light leak", "Flash", "RGB split", "Old film", "Glow", "Blur box", "Mosaic box"]);
   expect(TRANSITIONS.slide.label).toBe("Slide left");
   expect(TRANSITIONS.slideRight.label).toBe("Slide right");
 });
@@ -108,4 +108,9 @@ test("speed curve presets: six of them, eight speeds each inside the speed limit
   expect(SPEED_CURVES.jumpCut.shape).toEqual([1, 4, 1, 4, 1, 4, 1, 4]);
   expect(SPEED_CURVES.flashIn.shape).toEqual([4, 3, 2, 1.5, 1, 1, 1, 1]);
   expect(SPEED_CURVES.flashOut.shape).toEqual([1, 1, 1, 1, 1.5, 2, 3, 4]);
+});
+
+test("blend registry covers every blend id with the specified labels", () => {
+  expect(BLEND_IDS).toHaveLength(6);
+  expect(BLEND_IDS.map((id) => BLENDS[id].label)).toEqual(["Normal", "Screen", "Multiply", "Overlay", "Lighten", "Darken"]);
 });

@@ -3,7 +3,7 @@ import {
   newPhotoClip, newVideoClip, normaliseRotation, PHOTO, SCHEMA_VERSION,
 } from "../types";
 
-test("schema is v11", () => expect(SCHEMA_VERSION).toBe(11));
+test("schema is v12", () => expect(SCHEMA_VERSION).toBe(12));
 
 test("normaliseRotation maps into (-180, 180]", () => {
   expect(normaliseRotation(0)).toBe(0);

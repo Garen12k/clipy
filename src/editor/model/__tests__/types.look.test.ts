@@ -4,10 +4,10 @@ import {
 } from "../types";
 
 test("registries have the spec sizes", () => {
-  expect(SCHEMA_VERSION).toBe(11);
+  expect(SCHEMA_VERSION).toBe(12);
   expect(FILTER_IDS).toHaveLength(20);
   expect(TRANSITION_TYPES).toHaveLength(11);
-  expect(EFFECT_IDS).toHaveLength(10);
+  expect(EFFECT_IDS).toHaveLength(12);
   expect(ADJUST_KEYS).toHaveLength(12);
   expect(EFFECT_LIMITS).toEqual({ minDuration: 0.2, defaultDuration: 2, defaultIntensity: 0.7 });
 });
@@ -43,6 +43,6 @@ test("factories carry fresh look defaults (no shared adjust object)", () => {
 });
 
 test("makeEffect defaults", () => {
-  expect(makeEffect({ id: "e" })).toEqual({ id: "e", type: "shake", start: 0, end: 2, intensity: 0.7 });
+  expect(makeEffect({ id: "e" })).toEqual({ id: "e", type: "shake", start: 0, end: 2, intensity: 0.7, rect: null });
   expect(makeEffect({ id: "e", type: "glow", end: 3 })).toMatchObject({ type: "glow", end: 3 });
 });

@@ -1,7 +1,7 @@
 import { normaliseTransitions } from "./ops";
 import {
-  AUDIO_KINDS, AUDIO_LIMITS, clampOpacity, LAYER_LIMITS, MASK_IDS, captionLength, clampBeatMarkers, clampFade, clampAdjust, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, FONT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, isHexColor, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
-  type AudioKind, type AudioTrack, type Clip, type ClipAdjust, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type EffectItem, type LayerClip, type MaskId, type Overlay, type PostRecord, type Project, type ShapeId,
+  AUDIO_KINDS, AUDIO_LIMITS, BLEND_IDS, clampChroma, clampEffectRect, isRegionEffect, clampOpacity, LAYER_LIMITS, MASK_IDS, captionLength, clampBeatMarkers, clampFade, clampAdjust, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, FONT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, isHexColor, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
+  type AudioKind, type AudioTrack, type BlendId, type Clip, type ClipAdjust, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type EffectItem, type LayerClip, type MaskId, type Overlay, type PostRecord, type Project, type ShapeId,
 } from "./types";
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
@@ -40,7 +40,7 @@ function withTextStyle(o: Overlay): Overlay {
 }
 
 /** One clip repaired (used for main clips and layers): every field present and in range, photos forced to the photo rules. */
-function normaliseClip(c: Clip): Clip {
+function normaliseClip(c: Clip, isLayer = false): Clip {
   const kind: ClipKind = (CLIP_KINDS as readonly string[]).includes(c.kind as string) ? c.kind : "video";
   const speedCurve = clampSpeedCurve(c.speedCurve, { kind });
   const speed = !speedCurve && typeof c.speed === "number" && c.speed >= SPEED_LIMITS[0] && c.speed <= SPEED_LIMITS[1] ? c.speed : 1;
@@ -56,12 +56,13 @@ function normaliseClip(c: Clip): Clip {
     : isObj(bg) && bg.type === "color" && isHexColor(bg.color) ? { type: "color", color: bg.color }
     : { type: "black" };
   const mask: MaskId = (MASK_IDS as readonly unknown[]).includes(c.mask) ? c.mask : "none";
+  const blend: BlendId = isLayer && (BLEND_IDS as readonly unknown[]).includes(c.blend) ? c.blend : "normal";   // main clips are always normal
   const reversed = c.reversed === true;
   const filterIntensity = typeof c.filterIntensity === "number" && Number.isFinite(c.filterIntensity) ? clampNum(c.filterIntensity, 0, 1) : 1;
   const adjust = clampAdjust(isObj(c.adjust) ? (c.adjust as Partial<ClipAdjust>) : undefined);
   const animation = clampClipAnimation(c.animation);
   const keyframes = clampClipKeyframes(c.keyframes);
-  const base = { ...c, speed, filter, transitionOut, kind, transform, crop, background, reversed, filterIntensity, adjust, animation, keyframes, speedCurve, fadeIn: clampFade(c.fadeIn), fadeOut: clampFade(c.fadeOut), opacity: clampOpacity(c.opacity), mask } as Clip;
+  const base = { ...c, speed, filter, transitionOut, kind, transform, crop, background, reversed, filterIntensity, adjust, animation, keyframes, speedCurve, fadeIn: clampFade(c.fadeIn), fadeOut: clampFade(c.fadeOut), opacity: clampOpacity(c.opacity), mask, blend, chroma: clampChroma(c.chroma) } as Clip;
   if (kind !== "photo") return base;
   const trimEnd = clampNum(typeof c.trimEnd === "number" && Number.isFinite(c.trimEnd) ? c.trimEnd : PHOTO.defaultSeconds, PHOTO.minSeconds, PHOTO.maxSeconds);
   return { ...base, fadeIn: 0, fadeOut: 0, speed: 1, muted: true, reversed: false, trimStart: 0, sourceDuration: PHOTO.maxSeconds, trimEnd };
@@ -76,21 +77,22 @@ function normaliseLayers(v: unknown, taken: Set<string>): LayerClip[] {
     if (!isObj(e) || Array.isArray(e) || typeof e.id !== "string" || seen.has(e.id)) continue;
     const start = typeof e.start === "number" && Number.isFinite(e.start) ? Math.max(0, e.start) : 0;
     seen.add(e.id);
-    out.push({ ...normaliseClip(e as unknown as Clip), start, transitionOut: { type: "none", duration: 0 } });
+    out.push({ ...normaliseClip(e as unknown as Clip, true), start, transitionOut: { type: "none", duration: 0 } });
     if (out.length === LAYER_LIMITS.max) break;
   }
   return out;
 }
 
 /**
- * Brings a v2–v11 file to a safe v11 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
+ * Brings a v2–v12 file to a safe v12 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
  * null, unknown transition → dissolve (duration kept), transitions re-capped (last clip cleared), overlays get a kind, bad stickers fixed/dropped,
  * clips get kind/transform/crop/background/reversed defaults or repairs, photos forced to the photo rules, look fields (strength, adjust) clamped, effects repaired,
  * speed curves repaired (a curve forces speed 1; photos never have one), audio tracks get a known kind and clamped fades (at most maxTracks kept), clips get clamped fades (photos 0), clips get opacity / mask repaired, layers are repaired like clips with a start (see normaliseLayers),
+ * layers keep a known blend (main clips are forced to normal), green screens are valid or null, region effects always have a clamped rect (other effects none),
  * ducking is a boolean and beat markers are sorted, spaced and capped.
  */
 function normaliseCurrent(raw: Raw): Raw {
-  const mapped = (raw.clips as Clip[]).map(normaliseClip);
+  const mapped = (raw.clips as Clip[]).map((c) => normaliseClip(c));
   const clips = normaliseTransitions(mapped);
   const layers = normaliseLayers(raw.layers, new Set(clips.map((c) => c.id)));
   const overlays = ((raw.overlays as Array<Record<string, unknown>> | undefined) ?? []).flatMap((o): Overlay[] => {
@@ -105,7 +107,8 @@ function normaliseCurrent(raw: Raw): Raw {
     const start = typeof e.start === "number" && Number.isFinite(e.start) ? Math.max(0, e.start) : 0;
     const end = typeof e.end === "number" && Number.isFinite(e.end) ? e.end : start + EFFECT_LIMITS.defaultDuration;
     const intensity = typeof e.intensity === "number" && Number.isFinite(e.intensity) ? clampNum(e.intensity, 0, 1) : EFFECT_LIMITS.defaultIntensity;
-    return [{ id: e.id, type: e.type as EffectItem["type"], start, end: Math.max(end, start + EFFECT_LIMITS.minDuration), intensity }];
+    const type = e.type as EffectItem["type"];
+    return [{ id: e.id, type, start, end: Math.max(end, start + EFFECT_LIMITS.minDuration), intensity, rect: isRegionEffect(type) ? clampEffectRect(e.rect) : null }];
   });
   const audioTracks = (Array.isArray(raw.audioTracks) ? raw.audioTracks : []).filter((a): a is Record<string, unknown> => isObj(a) && !Array.isArray(a)).slice(0, AUDIO_LIMITS.maxTracks).map((a): AudioTrack => ({
     ...(a as unknown as AudioTrack),
@@ -123,6 +126,6 @@ export function migrateProject(raw: unknown): Project {
   if (version < 1) throw new Error("Project file is missing required fields");
   let cur = raw as Raw;
   if (version === 1) cur = v1to2(cur);
-  // v2 → v11 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
+  // v2 → v12 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
   return normaliseCurrent(cur) as unknown as Project;
 }

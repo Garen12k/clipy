@@ -17,10 +17,10 @@ beforeEach(() => {
 });
 
 describe("EffectSheet", () => {
-  test("is titled Effects and shows ten tiles", async () => {
+  test("is titled Effects and shows twelve tiles", async () => {
     await render(<EffectSheet visible onClose={() => {}} />);
     expect(screen.getByRole("header", { name: "Effects" })).toBeTruthy();
-    expect(EFFECT_IDS).toHaveLength(10);
+    expect(EFFECT_IDS).toHaveLength(12);
     for (const id of EFFECT_IDS) expect(screen.getByRole("button", { name: EFFECTS[id].label })).toBeTruthy();
   });
 
@@ -29,7 +29,7 @@ describe("EffectSheet", () => {
     state().select("a"); state().seek(3);
     await render(<EffectSheet visible onClose={onClose} />);
     await fireEvent.press(screen.getByRole("button", { name: "Glow" }));
-    expect(state().project!.effects).toEqual([{ id: "new", type: "glow", start: 3, end: 5, intensity: 0.7 }]);
+    expect(state().project!.effects).toEqual([{ id: "new", type: "glow", start: 3, end: 5, intensity: 0.7, rect: null }]);
     expect(state().selectedEffectId).toBe("new");
     expect(state().selectedClipId).toBeNull();
     expect(state().past).toHaveLength(1);

@@ -112,7 +112,7 @@ test("v5 → v6 adds the look defaults", () => {
   const v5 = { ...makeProject(), schemaVersion: 5, clips: [c] } as Record<string, unknown>;
   delete v5.effects;
   const p = migrateProject(v5);
-  expect(p.schemaVersion).toBe(11);
+  expect(p.schemaVersion).toBe(12);
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
 });
@@ -123,7 +123,7 @@ test("v6 → v7 adds animation / keyframe defaults to clips and every overlay", 
   const t = makeOverlay({ id: "t" }) as unknown as Record<string, unknown>; delete t.animation; delete t.keyframes;
   const s = makeSticker({ id: "s" }) as unknown as Record<string, unknown>; delete s.animation; delete s.keyframes;
   const p = migrateProject({ ...makeProject(), schemaVersion: 6, clips: [c], overlays: [t, s] });
-  expect(p.schemaVersion).toBe(11);
+  expect(p.schemaVersion).toBe(12);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.overlays[0]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
   expect(p.overlays[1]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
@@ -156,7 +156,7 @@ test("sanity pass repairs motion fields; idempotent", () => {
 
 test("v1 chain reaches schema 9 with look, motion and speed-curve defaults", () => {
   const p = migrateProject(v1);
-  expect(p.schemaVersion).toBe(11);
+  expect(p.schemaVersion).toBe(12);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
@@ -187,7 +187,7 @@ test("sanity pass repairs look fields; idempotent", () => {
       { ...base, id: "c", filterIntensity: -2 },
     ],
     effects: [
-      makeEffect({ id: "ok", type: "glow", start: 1, end: 3, intensity: 0.5 }),
+      makeEffect({ id: "ok", type: "glow", start: 1, end: 3, intensity: 0.5, rect: null }),
       { ...makeEffect({ id: "unk" }), type: "laser" } as unknown as EffectItem,
       makeEffect({ id: "short", start: 2, end: 2.05 }),
       makeEffect({ id: "neg", start: -3, end: -2.9 }),
@@ -202,7 +202,7 @@ test("sanity pass repairs look fields; idempotent", () => {
   expect(p.clips[1].adjust).toEqual(DEFAULT_ADJUST);
   expect(p.clips[2].filterIntensity).toBe(0);
   expect(p.effects.map((e) => e.id)).toEqual(["ok", "short", "neg", "inten"]);
-  expect(p.effects[0]).toEqual({ id: "ok", type: "glow", start: 1, end: 3, intensity: 0.5 });
+  expect(p.effects[0]).toEqual({ id: "ok", type: "glow", start: 1, end: 3, intensity: 0.5, rect: null });
   expect(p.effects[1]).toMatchObject({ start: 2 });
   expect(p.effects[1].end - p.effects[1].start).toBeCloseTo(0.2, 9);
   expect(p.effects[2]).toMatchObject({ start: 0 });
@@ -217,7 +217,7 @@ test("v7 → v8 adds speedCurve: null to every clip", () => {
   const ph = makePhotoClip({ id: "p" }) as unknown as Record<string, unknown>;
   delete ph.speedCurve;
   const p = migrateProject({ ...makeProject(), schemaVersion: 7, clips: [c, ph] });
-  expect(p.schemaVersion).toBe(11);
+  expect(p.schemaVersion).toBe(12);
   expect(p.clips[0]).toMatchObject({ speedCurve: null, speed: 2 });
   expect(p.clips[1]).toMatchObject({ speedCurve: null, speed: 1 });
   expect(migrateProject(v1).clips[0].speedCurve).toBeNull();
@@ -250,7 +250,7 @@ test("v8 → v9 adds style, words and highlightColor to text and captions; stick
   const c = makeOverlay({ id: "c", kind: "caption" }) as unknown as Record<string, unknown>; delete c.style; delete c.words; delete c.highlightColor;
   const s = makeSticker({ id: "s" });
   const p = migrateProject({ ...makeProject(), schemaVersion: 8, overlays: [t, c, s] });
-  expect(p.schemaVersion).toBe(11);
+  expect(p.schemaVersion).toBe(12);
   expect(p.overlays[0]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
   expect(p.overlays[1]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
   expect(p.overlays[2]).toEqual(s);
@@ -316,7 +316,7 @@ test("v9 → v10: the single track becomes music with no fades; clips fades 0; d
   const raw = { ...makeProject(), schemaVersion: 9, clips: [clip], audioTracks: [track] } as Record<string, unknown>;
   delete raw.ducking; delete raw.beatMarkers;
   const p = migrateProject(raw);
-  expect(p.schemaVersion).toBe(11);
+  expect(p.schemaVersion).toBe(12);
   expect(p.audioTracks[0]).toMatchObject({ id: "a", kind: "music", fadeIn: 0, fadeOut: 0, volume: 1 });
   expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
   expect(p.ducking).toBe(false);
@@ -354,9 +354,9 @@ test("an audio track that is an array (or not an object at all) is dropped", () 
   expect(p.audioTracks.map((t) => t.id)).toEqual(["ok"]);
 });
 
-test("a v1 file reaches v11 with the audio defaults", () => {
+test("a v1 file reaches v12 with the audio defaults", () => {
   const p = migrateProject(v1);
-  expect(p).toMatchObject({ schemaVersion: 11, ducking: false, beatMarkers: [], audioTracks: [] });
+  expect(p).toMatchObject({ schemaVersion: 12, ducking: false, beatMarkers: [], audioTracks: [] });
   expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
 });
 
@@ -366,7 +366,7 @@ describe("v11 — layers, opacity, mask", () => {
 
   test("v10 gets opacity 1, mask none and no layers", () => {
     const p = migrateProject(raw({ clips: [strip(makeClip({ id: "a", sourceDuration: 5 }))], layers: undefined }));
-    expect(p.schemaVersion).toBe(11);
+    expect(p.schemaVersion).toBe(12);
     expect(p.layers).toEqual([]);
     expect(p.clips[0]).toMatchObject({ opacity: 1, mask: "none" });
   });
@@ -410,7 +410,71 @@ describe("v11 — layers, opacity, mask", () => {
     expect(migrateProject(JSON.parse(JSON.stringify(once)))).toEqual(once);
   });
 
-  test("a v1 file reaches v11 with no layers", () => {
+  test("a v1 file reaches v12 with no layers", () => {
     expect(migrateProject(v1).layers).toEqual([]);
+  });
+});
+
+describe("v11 to v12 (blend, green screen, region effects)", () => {
+  const raw = (over: Record<string, unknown> = {}) => ({ ...makeProject(), schemaVersion: 11, ...over }) as Record<string, unknown>;
+  const strip = (c: unknown) => { const o = { ...(c as Record<string, unknown>) }; delete o.blend; delete o.chroma; return o; };
+  const key = { color: "#00FF00", strength: 0.4 };
+
+  test("adds the defaults to clips, layers and effects", () => {
+    const eff = { id: "e", type: "shake", start: 0, end: 2, intensity: 0.5 };
+    const p = migrateProject(raw({ clips: [strip(makeClip({ id: "c", sourceDuration: 5 }))], layers: [strip(makeLayer({ id: "l", sourceDuration: 5 }))], effects: [eff] }));
+    expect(p.schemaVersion).toBe(12);
+    expect(p.clips[0]).toMatchObject({ blend: "normal", chroma: null });
+    expect(p.layers[0]).toMatchObject({ blend: "normal", chroma: null });
+    expect(p.effects[0].rect).toBeNull();
+  });
+
+  test("a layer keeps its blend and key; an unknown blend becomes normal", () => {
+    const layers = [{ ...makeLayer({ id: "a", sourceDuration: 5 }), blend: "screen", chroma: key }, { ...makeLayer({ id: "b", sourceDuration: 5 }), blend: "dodge" }];
+    const p = migrateProject(raw({ layers }));
+    expect(p.layers[0]).toMatchObject({ blend: "screen", chroma: key });
+    expect(p.layers[1].blend).toBe("normal");
+  });
+
+  test("a main clip is forced to normal but keeps its green screen", () => {
+    const p = migrateProject(raw({ clips: [{ ...makeClip({ id: "c", sourceDuration: 5 }), blend: "multiply", chroma: key }] }));
+    expect(p.clips[0]).toMatchObject({ blend: "normal", chroma: key });
+  });
+
+  test("bad chroma colour becomes null; strength is clamped", () => {
+    const layers = [{ ...makeLayer({ id: "a", sourceDuration: 5 }), chroma: { color: "green", strength: 1 } },
+      { ...makeLayer({ id: "b", sourceDuration: 5 }), chroma: { color: "#0000FF", strength: 9 } }];
+    const p = migrateProject(raw({ layers }));
+    expect(p.layers[0].chroma).toBeNull();
+    expect(p.layers[1].chroma).toEqual({ color: "#0000FF", strength: 1 });
+  });
+
+  test("effects: a region without a rect gets the default; a rect on another type is removed; a rect is clamped", () => {
+    const base = { start: 0, end: 2, intensity: 0.5 };
+    const effects = [
+      { id: "a", type: "blurBox", ...base },
+      { id: "b", type: "shake", ...base, rect: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 } },
+      { id: "c", type: "mosaicBox", ...base, rect: { x: 0.9, y: 0.9, w: 0.5, h: 0.01 } },
+      { id: "d", type: "blurBox", ...base, rect: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 } },
+    ];
+    const p = migrateProject(raw({ effects }));
+    expect(p.effects[0].rect).toEqual({ x: 0.3, y: 0.4, w: 0.4, h: 0.2 });
+    expect(p.effects[1].rect).toBeNull();
+    expect(p.effects[2].rect).toMatchObject({ w: 0.5, h: 0.05 });
+    expect(p.effects[2].rect!.x).toBeCloseTo(0.5, 12);
+    expect(p.effects[2].rect!.y).toBeCloseTo(0.9, 12);
+    expect(p.effects[3].rect).toEqual({ x: 0.1, y: 0.2, w: 0.3, h: 0.4 });
+  });
+
+  test("is idempotent", () => {
+    const once = migrateProject(raw({
+      layers: [{ ...makeLayer({ id: "a", sourceDuration: 5 }), blend: "overlay", chroma: key }],
+      effects: [{ id: "a", type: "blurBox", start: 0, end: 2, intensity: 0.5 }],
+    }));
+    expect(migrateProject(JSON.parse(JSON.stringify(once)))).toEqual(once);
+  });
+
+  test("a v1 file reaches v12 with defaults", () => {
+    expect(migrateProject(v1).clips[0]).toMatchObject({ blend: "normal", chroma: null });
   });
 });

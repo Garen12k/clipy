@@ -68,6 +68,10 @@ enum EffectRenderer {
       return splitChannels(image: torn, dx: CGFloat(g.split * w))
     case "rgbSplit":
       return splitChannels(image: image.cropped(to: rect), dx: CGFloat(EffectMath.rgbSplit * k * env * w))
+    case "blurBox":
+      return image   // implemented in a later task (needs the effect's rectangle)
+    case "mosaicBox":
+      return image   // implemented in a later task (needs the effect's rectangle)
     default:
       return image
     }
