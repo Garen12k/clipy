@@ -76,6 +76,8 @@ export const NO_OVERLAY_ANIMATION: OverlayAnimation = { in: null, out: null, loo
  *  through trim, split and speed changes. Overlays: `t` is seconds from the overlay's start. */
 export interface Keyframe { t: number; x: number; y: number; scale: number; rotation: number; opacity: number }
 export const KEYFRAME_LIMITS = { minGap: 0.05, max: 50, opacity: [0, 1] as const };
+/** Two pin times closer than `minGap` are the same pin. The 1e-9 makes pins exactly `minGap` apart distinct despite float noise (0.15 − 0.1 < 0.05). */
+export const isSamePinTime = (a: number, b: number): boolean => Math.abs(a - b) < KEYFRAME_LIMITS.minGap - 1e-9;
 
 export interface Clip {
   id: string; sourceUri: string; sourceDuration: number; width: number; height: number;
@@ -174,7 +176,7 @@ function clampKeyframes(k: unknown, lim: KeyframeLimits): Keyframe[] {
   clean.sort((a, b) => a.t - b.t);
   const out: Keyframe[] = [];
   for (const e of clean) {
-    if (out.length > 0 && e.t - out[out.length - 1].t < KEYFRAME_LIMITS.minGap) continue;
+    if (out.length > 0 && isSamePinTime(e.t, out[out.length - 1].t)) continue;
     out.push(e);
     if (out.length === KEYFRAME_LIMITS.max) break;
   }

@@ -69,6 +69,8 @@ test("clampClipKeyframes: drops non-finite, clamps, keeps rotation un-normalised
 test("keyframes: min gap drops the later entry; at most max kept", () => {
   const gap = clampClipKeyframes([makeKeyframe({ t: 1 }), makeKeyframe({ t: 1.03, x: 1 }), makeKeyframe({ t: 1.05, x: 0.5 })]);
   expect(gap.map((k) => k.t)).toEqual([1, 1.05]);
+  // Exactly minGap apart counts as apart, whatever the float noise (0.15 − 0.1 is a hair under 0.05).
+  expect(clampClipKeyframes([makeKeyframe({ t: 0.1 }), makeKeyframe({ t: 0.15 })]).map((k) => k.t)).toEqual([0.1, 0.15]);
   const many = Array.from({ length: 80 }, (_, i) => makeKeyframe({ t: i }));
   const kept = clampClipKeyframes(many);
   expect(kept).toHaveLength(KEYFRAME_LIMITS.max);
