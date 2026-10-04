@@ -130,9 +130,23 @@ test("sends timeline effects in order, clipped to the exported duration, droppin
   const { result } = await renderHook(() => useExport(p, []));
   await act(() => result.current.start(1080));
   expect((exportTimeline as jest.Mock).mock.calls[0][0].effects).toEqual([
-    { type: "glitch", start: 0.5, end: 1.5, intensity: 0.3 },
-    { type: "vhs", start: 3, end: 4, intensity: 0.8 },
+    { type: "glitch", start: 0.5, end: 1.5, intensity: 0.3, rect: null },
+    { type: "vhs", start: 3, end: 4, intensity: 0.8, rect: null },
   ]);
+});
+
+test("sends a region effect's rectangle and a layer's blend and green-screen key", async () => {
+  const p = makeProject({
+    id: "p6", clips: [makeClip({ id: "x", sourceDuration: 4 })],
+    effects: [makeEffect({ id: "b", type: "mosaicBox", start: 0, end: 2, rect: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 } })],
+    layers: [makeLayer({ id: "l", sourceDuration: 4, start: 0, blend: "multiply", chroma: { color: "#00ff00", strength: 0.5 } })],
+  });
+  const { result } = await renderHook(() => useExport(p, []));
+  await act(() => result.current.start(1080));
+  const req = (exportTimeline as jest.Mock).mock.calls[0][0];
+  expect(req.effects[0].rect).toEqual({ x: 0.1, y: 0.2, w: 0.3, h: 0.4 });
+  expect(req.layers[0]).toMatchObject({ blend: "multiply", chroma: { color: "#00ff00", strength: 0.5 } });
+  expect(req.clips[0]).toMatchObject({ blend: "normal", chroma: null });
 });
 
 test("effects clip to the clips actually exported, and a project with none sends []", async () => {
@@ -142,7 +156,7 @@ test("effects clip to the clips actually exported, and a project with none sends
   });
   const { result } = await renderHook(() => useExport(p, ["file:///media/y.mp4"]));
   await act(() => result.current.start(1080));
-  expect((exportTimeline as jest.Mock).mock.calls[0][0].effects).toEqual([{ type: "glow", start: 3, end: 4, intensity: 0.7 }]);
+  expect((exportTimeline as jest.Mock).mock.calls[0][0].effects).toEqual([{ type: "glow", start: 3, end: 4, intensity: 0.7, rect: null }]);
   jest.clearAllMocks();
   const { result: r2 } = await renderHook(() => useExport(project, []));
   await act(() => r2.current.start(1080));

@@ -87,3 +87,14 @@ test("a video's volume survives video to photo to video; sound is on again", () 
   const back = replaceClipMedia(asPhoto, "v", newVideo(10)).clips[0];
   expect(back).toMatchObject({ kind: "video", volume: 0.3, muted: false });
 });
+
+test("the replaced clip gets its own copy of the green screen", () => {
+  const chroma = { color: "#00FF00", strength: 0.7 };
+  const q = makeProject({ clips: [makeClip({ id: "k", sourceDuration: 6, chroma }), makeClip({ id: "n", sourceDuration: 4 })] });
+  for (const media of [newVideo(10), newPhoto]) {
+    const c = replaceClipMedia(q, "k", media).clips[0];
+    expect(c.chroma).toEqual(chroma);
+    expect(c.chroma).not.toBe(q.clips[0].chroma);
+  }
+  expect(replaceClipMedia(makeProject({ clips: [makeClip({ id: "k", sourceDuration: 6 })] }), "k", newVideo(10)).clips[0].chroma).toBeNull();
+});

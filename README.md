@@ -278,6 +278,11 @@ Everything here is in the **Edit** group of the toolbar.
 - **Tools on a layer** - Trim, Transform, Animate, Keyframe, Crop, Replace, Reverse, Duplicate, Delete,
   Filter, Adjust, Speed and Volume. Split, Freeze, Ratio, Transition and Background do not apply to layers.
 - **Opacity** (0 to 100 %) and **Mask** (None, Rounded, Circle) work on layers and on normal clips.
+- **Blend** (layers only) - Normal, Multiply, Screen, Overlay, and more. **Green screen** (clips and layers) -
+  pick Green, Blue or another colour and a strength. Blend and green screen show **only in the exported video**;
+  the preview shows the "Preview" tag and the picture does not change.
+- **Blur box / Mosaic box** (Effects) - a rectangle added at the playhead that blurs or pixelates what is under it.
+  Drag, pinch or pull a corner on the preview; move and trim its pill on the timeline.
 
 **Preview vs export.** Each video layer is a separate video player in the preview, so playback may hitch
 on older phones. The export is Swift that has never been compiled.
@@ -326,3 +331,13 @@ Layers, opacity and masks items:
 26. **Layer sound** is heard and stays in sync.
 27. **Two video layers at once** export correctly.
 28. **A layer running past the end** of the video is cut cleanly.
+
+Blend, green screen and blur / mosaic box items:
+
+29. **Green screen cube.** The colour-cube entry order (red fastest) and premultiplied entries are right; `CIColorCubeWithColorSpace` with sRGB keys removes mid-dark greens as the maths expects. Try a real green-screen clip and check edge quality.
+30. **Blend modes** are computed in Core Image's linear working space, so Overlay / Multiply / Screen may look different from other apps.
+31. **Blend keys.** `CIBlendWithAlphaMask` and `CIColorMatrix` input keys are accepted; the soft edges of a blended, masked layer look right.
+32. **Mosaic box.** `CIPixellate` blocks are aligned to the box corner.
+33. **Blur box** has no dark rim at its edges.
+34. **Box position.** A blur / mosaic box lands where the preview rectangle was (top-left fractions vs Core Image bottom-left).
+35. **Optional records.** The optional nested records (`chroma`, `rect`) decode from JS null.

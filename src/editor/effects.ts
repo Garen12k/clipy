@@ -1,4 +1,4 @@
-import type { AnimComboId, AnimInId, AnimLoopId, EffectId, FilterId, ShapeId, SpeedCurveId, TextOverlay, TransitionType } from "./model/types";
+import type { AnimComboId, AnimInId, AnimLoopId, BlendId, EffectId, FilterId, ShapeId, SpeedCurveId, TextOverlay, TransitionType } from "./model/types";
 import type { IoniconName } from "./toolGroups";
 
 export interface FilterPreview { tint: string; tintOpacity: number; saturation: number; brightness: number }
@@ -44,6 +44,8 @@ export const EFFECTS: Record<EffectId, { label: string; icon: IoniconName }> = {
   rgbSplit:  { label: "RGB split",  icon: "layers-outline" },
   oldFilm:   { label: "Old film",   icon: "film-outline" },
   glow:      { label: "Glow",       icon: "bulb-outline" },
+  blurBox:   { label: "Blur box",   icon: "scan-outline" },
+  mosaicBox: { label: "Mosaic box", icon: "grid-outline" },
 };
 
 /** Entry / exit animations (clips, text, stickers). The motion maths lives in model/motion.ts. */
@@ -105,3 +107,9 @@ export const CAPTION_STYLE: Pick<TextOverlay, "fontId" | "fontScale" | "color" |
 
 export const STICKER_EMOJI_SCALE = 0.12;   // emoji font size = STICKER_EMOJI_SCALE × frameH × scale
 export const STICKER_SHAPE_SCALE = 0.2;    // shape box      = STICKER_SHAPE_SCALE × frameH × scale
+
+/** Layer blend modes (export only; the preview shows the picture untouched). */
+export const BLENDS: Record<BlendId, { label: string }> = {
+  normal: { label: "Normal" }, screen: { label: "Screen" }, multiply: { label: "Multiply" },
+  overlay: { label: "Overlay" }, lighten: { label: "Lighten" }, darken: { label: "Darken" },
+};

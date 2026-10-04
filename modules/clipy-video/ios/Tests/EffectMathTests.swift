@@ -151,7 +151,7 @@ final class EffectMathTests: XCTestCase {
   /// Every effect id, half way through a 2 s effect at full strength (and inside an active glitch slice), gives a
   /// frame-sized image.
   func testEveryEffectKeepsTheFrameExtent() {
-    XCTAssertEqual(Effects.effectIds.count, 10)
+    XCTAssertEqual(Effects.effectIds.count, 12)
     for id in Effects.effectIds {
       XCTAssertEqual(EffectRenderer.apply(type: id, image: grey, t: 1, d: 2, k: 1, size: size).extent, rect, id)
       XCTAssertEqual(EffectRenderer.apply(type: id, image: grey, t: 0.3, d: 2, k: 1, size: size).extent, rect, id)

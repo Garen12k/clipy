@@ -2,7 +2,7 @@ export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 11 as const;
+export const SCHEMA_VERSION = 12 as const;
 export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
 export type PostPlatform = (typeof POST_PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
@@ -45,6 +45,12 @@ export type MaskId = (typeof MASK_IDS)[number];
 export const LAYER_LIMITS = { max: 8, maxVideoAtOnce: 2, defaultScale: 0.4, minDuration: 0.3 };
 export const MASK = { roundedRadius: 0.12 };   // corner radius as a fraction of the picture box's shorter side
 
+export const BLEND_IDS = ["normal", "screen", "multiply", "overlay", "lighten", "darken"] as const;
+export type BlendId = (typeof BLEND_IDS)[number];
+export interface ChromaKey { color: string; strength: number }   // #RRGGBB, 0–1
+export const CHROMA = { hueBase: 12, hueRange: 48, soft: 10, minSat: 0.25, minVal: 0.2, defaultStrength: 0.5, cube: 32 } as const;
+export const CHROMA_PRESETS = ["#00FF00", "#0000FF"] as const;   // green, blue
+
 export const CLIP_KINDS = ["video", "photo"] as const;
 export type ClipKind = (typeof CLIP_KINDS)[number];
 export interface ClipTransform { scale: number; x: number; y: number; rotation: number; flipH: boolean; flipV: boolean }
@@ -71,9 +77,16 @@ export const DEFAULT_ADJUST: ClipAdjust = {
   highlights: 0, shadows: 0, sharpen: 0, vignette: 0, fade: 0, grain: 0,
 };
 
-export const EFFECT_IDS = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow"] as const;
+export const EFFECT_IDS = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow", "blurBox", "mosaicBox"] as const;
 export type EffectId = (typeof EFFECT_IDS)[number];
-export interface EffectItem { id: string; type: EffectId; start: number; end: number; intensity: number }   // project time, seconds; intensity 0…1
+/** Fractions of the frame, top-left origin. */
+export interface EffectRect { x: number; y: number; w: number; h: number }
+export const REGION_LIMITS = { min: 0.05, default: { x: 0.3, y: 0.4, w: 0.4, h: 0.2 } };
+export const isRegionEffect = (t: EffectId): boolean => t === "blurBox" || t === "mosaicBox";
+export interface EffectItem {
+  id: string; type: EffectId; start: number; end: number; intensity: number;   // project time, seconds; intensity 0…1
+  rect: EffectRect | null;   // non-null exactly for blurBox / mosaicBox
+}
 export const EFFECT_LIMITS = { minDuration: 0.2, defaultDuration: 2, defaultIntensity: 0.7 };
 /** Seconds of slack at the project's end: an effect starting this close to it (or after it) cannot be reached, and one this short is not exported. */
 export const EFFECT_END_SLACK = 0.05;
@@ -121,6 +134,8 @@ export interface Clip {
   fadeOut: number;               // same
   opacity: number;               // 0–1, default 1
   mask: MaskId;                  // default "none"
+  blend: BlendId;                // default "normal"; layers only — main clips are always "normal"
+  chroma: ChromaKey | null;      // default null; layers and main clips
 }
 /** A layer is a clip with a place on the project timeline. */
 export interface LayerClip extends Clip { start: number }   // project seconds
@@ -134,6 +149,18 @@ export function normaliseRotation(deg: number): number {
 }
 /** A finite number clamped to 0–1; anything else → 1. */
 export const clampOpacity = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1);
+/** A `#RRGGBB` key with strength clamped to 0–1 (non-finite → the default); anything else → null. The colour string is kept as given. */
+export function clampChroma(v: unknown): ChromaKey | null {
+  if (!isRec(v) || !isHexColor(v.color)) return null;
+  return { color: v.color, strength: isNum(v.strength) ? clampNum(v.strength, 0, 1) : CHROMA.defaultStrength };
+}
+/** Sides in [REGION_LIMITS.min, 1], origin inside the frame; invalid → a fresh copy of the default. Values are not rounded. */
+export function clampEffectRect(v: unknown): EffectRect {
+  if (!isRec(v) || !isNum(v.x) || !isNum(v.y) || !isNum(v.w) || !isNum(v.h)) return { ...REGION_LIMITS.default };
+  const w = clampNum(v.w, REGION_LIMITS.min, 1);
+  const h = clampNum(v.h, REGION_LIMITS.min, 1);
+  return { x: clampNum(v.x, 0, 1 - w), y: clampNum(v.y, 0, 1 - h), w, h };
+}
 export const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const finiteOr = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
 
@@ -365,7 +392,7 @@ export function newVideoClip(a: Pick<Clip, "id" | "sourceUri" | "sourceDuration"
   return { ...a, trimStart: 0, trimEnd: a.sourceDuration, speed: 1, filter: null, volume: 1, muted: false,
     transitionOut: { type: "none", duration: 0 }, kind: "video", transform: { ...DEFAULT_TRANSFORM }, crop: { ...FULL_CROP },
     background: { ...BLACK_BACKGROUND }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
-    animation: { ...NO_CLIP_ANIMATION }, keyframes: [], speedCurve: null, fadeIn: 0, fadeOut: 0, opacity: 1, mask: "none" };
+    animation: { ...NO_CLIP_ANIMATION }, keyframes: [], speedCurve: null, fadeIn: 0, fadeOut: 0, opacity: 1, mask: "none", blend: "normal", chroma: null };
 }
 /** A still-image clip: default length, silent, speed 1, never reversed. */
 export function newPhotoClip(a: Pick<Clip, "id" | "sourceUri" | "width" | "height"> & { seconds?: number }): Clip {
@@ -392,6 +419,7 @@ export function newLayer(clip: Clip, start: number): LayerClip {
     animation: { in: edge(clip.animation.in), out: edge(clip.animation.out), combo: clip.animation.combo },
     keyframes: clip.keyframes.map((k) => ({ ...k })),
     speedCurve: clip.speedCurve ? { ...clip.speedCurve, steps: clip.speedCurve.steps.map((s) => ({ ...s })) } : null,
+    chroma: clip.chroma ? { ...clip.chroma } : null,
     transitionOut: { type: "none", duration: 0 },
     start: Math.round(Math.max(0, start) * 1000) / 1000,
   };
@@ -418,5 +446,7 @@ export function aspectRatioValue(r: AspectRatio): number {
   return w / h;
 }
 export function makeEffect(partial: Partial<EffectItem> & Pick<EffectItem, "id">): EffectItem {
-  return { type: "shake", start: 0, end: EFFECT_LIMITS.defaultDuration, intensity: EFFECT_LIMITS.defaultIntensity, ...partial };
+  const type = partial.type ?? "shake";
+  return { type, start: 0, end: EFFECT_LIMITS.defaultDuration, intensity: EFFECT_LIMITS.defaultIntensity,
+    rect: isRegionEffect(type) ? { ...REGION_LIMITS.default } : null, ...partial };
 }

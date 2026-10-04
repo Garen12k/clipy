@@ -13,7 +13,8 @@ import { backgroundShows, clipFrameMotion } from "./ClipFrame";
  * Whether the preview only approximates the current frame: the clip has a filter (at a strength above 0), the playhead is in a
  * transition window, the clip is reversed (the preview plays forwards), the clip has a speed curve (the rate
  * switches step by step, which can hitch, and the sound changes pitch in steps), any Adjust value is non-zero, a
- * timeline effect covers the playhead, or its blur background is visible — the picture, placed where its motion puts it at the
+ * timeline effect (a blur / mosaic box included) covers the playhead, a layer at the playhead has a blend mode other than Normal,
+ * the clip or a layer at the playhead has a green screen, or its blur background is visible — the picture, placed where its motion puts it at the
  * playhead, does not cover the frame, is not fully opaque (its own opacity × its motion's) or has a mask: `backgroundShows`, the
  * rule `ClipFrame` draws the background by.
  */
@@ -25,6 +26,9 @@ export function needsPreviewTag(p: Project, playhead: number): boolean {
   if (adjustNeedsTag(c.adjust) || activeEffects(p.effects, playhead).length > 0) return true;
   // A layer on screen whose own look or timing the preview only approximates (the same rules as for the clip above).
   if (layersAt(p, playhead).some((l) => (l.filter && l.filterIntensity > 0) || adjustNeedsTag(l.adjust) || l.reversed || hasSpeedCurve(l))) return true;
+  // Shown only in the export: a layer's blend mode, and a green screen on the clip or on a layer. (A blur / mosaic box is a
+  // timeline effect: `activeEffects` above already counts it.)
+  if (c.chroma || layersAt(p, playhead).some((l) => l.blend !== "normal" || l.chroma)) return true;
   if (c.background.type !== "blur") return false;
   const f = frameSize(p);
   const motion = clipFrameMotion(c, hit.offsetInClip);   // what PreviewPlayer hands the clip's ClipFrame

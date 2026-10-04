@@ -102,7 +102,7 @@ describe("a clip drag does not lose end-of-project effects", () => {
     s.applyTransient((x) => trimClip(x, "b", 0, 3));   // 7 s: the effect starts past the end
     expect(effects()).toEqual([]);
     s.applyTransient((x) => trimClip(x, "b", 0, 6));   // back to 10 s
-    expect(effects()).toEqual([{ id: "late", type: "glow", start: 8, end: 10, intensity: 0.4 }]);
+    expect(effects()).toEqual([{ id: "late", type: "glow", start: 8, end: 10, intensity: 0.4, rect: null }]);
     expect(effects()[0]).toBe(fx);
     expect(useEditorStore.getState().past).toHaveLength(1);
     s.undo();

@@ -107,3 +107,7 @@ describe("activeEffects / combinedEffectPreview", () => {
     expect(combinedEffectPreview([], 1)).toEqual(IDENTITY);
   });
 });
+
+test("the region effects have an identity preview", () => {
+  for (const id of ["blurBox", "mosaicBox"] as const) expect(effectPreview(id, 1, 2, 0.7)).toEqual({ translateX: 0, translateY: 0, scale: 1, layers: [] });
+});

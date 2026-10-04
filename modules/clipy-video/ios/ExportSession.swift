@@ -53,12 +53,27 @@ struct ExportAdjust: Record {
   }
 }
 
+/// A blur / mosaic box's rectangle: fractions of the frame, top-left origin.
+struct ExportEffectRect: Record {
+  @Field var x: Double = 0
+  @Field var y: Double = 0
+  @Field var w: Double = 0
+  @Field var h: Double = 0
+}
+
+/// A green screen: the key colour and how wide a band of hues around it is removed.
+struct ExportChroma: Record {
+  @Field var color: String = ""                    // `#RRGGBB` (anything else keys nothing)
+  @Field var strength: Double = 0.5                // 0…1
+}
+
 /// A project-time effect range. Decoded here; drawn by `ClipyCompositor` through `EffectRenderer`.
 struct ExportEffect: Record {
   @Field var type: String = ""                     // Effects.effectIds (unknown → ignored)
   @Field var start: Double = 0                     // output seconds
   @Field var end: Double = 0
   @Field var intensity: Double = 1                 // 0…1
+  @Field var rect: ExportEffectRect?               // blurBox / mosaicBox only; JS `null` → nil
 }
 
 /// An In or Out animation: `id` is one of `ANIM_IN_IDS` (unknown → no movement); `duration` in seconds, already
@@ -117,6 +132,8 @@ struct ExportClip: Record {
   @Field var gain: [ExportGainPoint] = []          // the clip's own sound over its output time (volume, mute, fades); empty → flat `volume` / `muted`
   @Field var opacity: Double = 1                   // the picture's STATIC opacity 0…1; multiplied with the motion (keyframe / animation) opacity
   @Field var mask: String = "none"                 // none | rounded | circle (unknown → none): the picture box's corners
+  @Field var blend: String = "normal"              // normal | screen | multiply | overlay | lighten | darken (unknown → normal); layers only
+  @Field var chroma: ExportChroma?                 // green screen; JS `null` → nil (none)
 }
 
 /// A picture-in-picture layer: a clip (every `ExportClip` field, same names and defaults) placed on the timeline at
@@ -149,6 +166,8 @@ struct ExportLayer: Record {
   @Field var gain: [ExportGainPoint] = []
   @Field var opacity: Double = 1
   @Field var mask: String = "none"
+  @Field var blend: String = "normal"
+  @Field var chroma: ExportChroma?
   @Field var start: Double = 0                     // composition seconds; the layer may run past the end of the video
 }
 
@@ -382,6 +401,18 @@ final class ExportSession {
     let motion = ClipMotionSpec(keyframes: motionKeyframes(c.keyframes), animIn: motionEdge(c.animIn),
                                 animOut: motionEdge(c.animOut), animCombo: combo)
     return motion.isEmpty ? nil : motion
+  }
+
+  /// A request green screen as the compositor uses it; nil for none (`LayerSpec` also drops a key that cannot key).
+  static func chromaKey(_ c: ExportChroma?) -> ChromaKey? {
+    guard let c else { return nil }
+    return ChromaKey(color: c.color, strength: c.strength)
+  }
+
+  /// A request effect rectangle as the renderer uses it; nil for none.
+  static func effectRegion(_ r: ExportEffectRect?) -> RegionRect? {
+    guard let r else { return nil }
+    return RegionRect(x: r.x, y: r.y, w: r.w, h: r.h)
   }
 
   /// Seconds → CMTime at the timescale every Phase 1–3 computation uses.
@@ -1106,6 +1137,7 @@ final class ExportSession {
         background: .black,
         filter: l.filter, filterIntensity: l.filterIntensity, adjust: l.adjust.values,
         opacity: l.opacity, mask: l.mask, transparent: true,
+        blend: l.blend, chroma: ExportSession.chromaKey(l.chroma),
         motion: ExportSession.clipMotion(l), clipStart: at.seconds, clipLength: c.outDur.seconds)
       placedLayers.append(PlacedOverlay(spec: spec, range: CMTimeRange(start: at, end: end)))
     }
@@ -1125,11 +1157,12 @@ final class ExportSession {
         background: LayerBackground(type: c.background.type, color: c.background.color),
         filter: c.filter, filterIntensity: c.filterIntensity, adjust: c.adjust.values,
         opacity: c.opacity, mask: c.mask,
+        chroma: ExportSession.chromaKey(c.chroma),
         motion: ExportSession.clipMotion(c), clipStart: placed[i].bodyStart.seconds, clipLength: loaded[i].outDur.seconds)
     }
     //    Each instruction also carries the timeline effects overlapping its range (project time = composition time).
     let usableEffects = ActiveEffectSpec.usable(request.effects.map {
-      ActiveEffectSpec(type: $0.type, start: $0.start, end: $0.end, intensity: $0.intensity)
+      ActiveEffectSpec(type: $0.type, start: $0.start, end: $0.end, intensity: $0.intensity, rect: ExportSession.effectRegion($0.rect))
     })
     func effects(in range: CMTimeRange) -> [ActiveEffectSpec] {
       return usableEffects.filter { $0.overlaps(from: range.start.seconds, to: range.end.seconds) }

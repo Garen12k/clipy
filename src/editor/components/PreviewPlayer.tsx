@@ -20,6 +20,7 @@ import { FilterLayer } from "./FilterLayer";
 import { LayerStack } from "./LayerStack";
 import { OverlayLayer } from "./OverlayLayer";
 import { needsPreviewTag, PreviewTag } from "./PreviewTag";
+import { RegionBoxes } from "./RegionBox";
 import { TransitionLayer } from "./TransitionLayer";
 
 /** The view the effect transform is applied to: exactly the preview frame, so it scales about the frame's centre. */
@@ -251,6 +252,9 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
             transform (so they shake / zoom with it) in a view of their own: the main VideoView's place in the tree does not depend on them. */}
         {hit && frame.w > 0 && <LayerStack frameW={frame.w} frameH={frame.h} style={effectTransform} />}
         <EffectOverlays />
+        {/* Blur / mosaic boxes: above the picture, the layers and the effect colours, below text and stickers. Only the selected box
+            takes touches, and no clip is selected then (selection is exclusive), so it never competes with the clip gestures. */}
+        {frame.w > 0 && <RegionBoxes frameW={frame.w} frameH={frame.h} />}
         {frame.w > 0 && <ClipGestures frameW={frame.w} frameH={frame.h} />}
         {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenPanel?.(id)} />}
         <PreviewTag visible={needsPreviewTag(project, playhead)} />

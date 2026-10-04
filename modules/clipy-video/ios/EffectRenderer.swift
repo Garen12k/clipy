@@ -3,6 +3,14 @@ import CoreImage
 import Foundation
 import UIKit
 
+/// A blur / mosaic box's rectangle as the request gives it: fractions of the frame, TOP-LEFT origin (y down).
+struct RegionRect: Equatable {
+  let x: Double
+  let y: Double
+  let w: Double
+  let h: Double
+}
+
 /// Draws one timeline effect on a finished frame (after the transition blend, before text and stickers) with Core
 /// Image, driven by `EffectMath` — the same deterministic maths the preview uses. Every result is cropped to the
 /// frame. A filter (or one of its keys) Core Image does not know is skipped, so the worst case is "no change".
@@ -11,10 +19,17 @@ enum EffectRenderer {
   static let scanLineOpacity: CGFloat = 0.18          // darkness of a VHS scan line at full strength
   static let scanLinePairs: CGFloat = 240             // dark + clear line pairs over the frame height
   static let filmVignetteRadius: CGFloat = 1.5        // as the "vintage" filter's vignette
+  /// The blur / mosaic boxes (spec section 4): radius and block as fractions of the frame's shorter side at full
+  /// strength, and the smallest block in pixels.
+  static let blurBoxRadius: Double = 0.06
+  static let mosaicBoxBlock: Double = 0.08
+  static let mosaicBoxMinBlock: Double = 4
 
   /// `image` with the effect `type` at local time `t` (seconds since the effect's start) of its duration `d`, at
   /// intensity `k`; `size` is the frame. Unknown types, non-finite input and times outside [0, d] → `image` unchanged.
-  static func apply(type: String, image: CIImage, t: Double, d: Double, k: Double, size: CGSize) -> CIImage {
+  /// `region` is the rectangle of a blur / mosaic box (nil for every other effect; a box without a usable one
+  /// leaves `image` unchanged).
+  static func apply(type: String, image: CIImage, t: Double, d: Double, k: Double, size: CGSize, region: RegionRect? = nil) -> CIImage {
     let rect = CGRect(origin: .zero, size: size)
     guard t.isFinite, d.isFinite, k.isFinite, d > 0, t >= 0, t <= d, k > 0, !rect.isEmpty, !rect.isInfinite else { return image }
     let w = Double(size.width), h = Double(size.height), shorter = min(w, h)
@@ -68,9 +83,42 @@ enum EffectRenderer {
       return splitChannels(image: torn, dx: CGFloat(g.split * w))
     case "rgbSplit":
       return splitChannels(image: image.cropped(to: rect), dx: CGFloat(EffectMath.rgbSplit * k * env * w))
+    case "blurBox":
+      // The box hides something, so its strength is constant while the effect is active (no fade in / out). Only
+      // the box's own pixels are blurred (clamped first, so nothing from outside the box bleeds in and its edge
+      // stays hard), cut back to the box and laid over the untouched frame.
+      guard let region, let box = regionRect(region, in: size) else { return image }
+      let radius = blurBoxRadius * k * shorter
+      guard radius.isFinite, radius > 0 else { return image }
+      return ClipyCompositor.blurred(image.cropped(to: box), radius: CGFloat(radius), rect: box)
+        .composited(over: image).cropped(to: rect)
+    case "mosaicBox":
+      // As the blur box, with square blocks whose grid starts at the box's bottom-left corner.
+      guard let region, let box = regionRect(region, in: size) else { return image }
+      let block = max(mosaicBoxMinBlock, mosaicBoxBlock * k * shorter)
+      guard block.isFinite, block > 0,
+            let tiles = Adjust.filtered(image.cropped(to: box).clampedToExtent(), "CIPixellate", [
+              "inputScale": number(block),
+              "inputCenter": CIVector(x: box.minX, y: box.minY),
+            ])
+      else { return image }
+      return tiles.cropped(to: box).composited(over: image).cropped(to: rect)
     default:
       return image
     }
+  }
+
+  /// A box given as fractions of the frame with a TOP-LEFT origin, in Core Image's pixels (BOTTOM-LEFT origin, y
+  /// up): the box's lower edge is at height × (1 − y − h). The part outside the frame is cut off. Nil when a number
+  /// is not finite, a side is not positive, or nothing of the box is inside the frame.
+  static func regionRect(_ region: RegionRect, in size: CGSize) -> CGRect? {
+    let w = Double(size.width), h = Double(size.height)
+    guard [region.x, region.y, region.w, region.h, w, h].allSatisfy({ $0.isFinite }),
+          region.w > 0, region.h > 0, w > 0, h > 0 else { return nil }
+    let box = CGRect(x: region.x * w, y: (1 - region.y - region.h) * h, width: region.w * w, height: region.h * h)
+      .intersection(CGRect(x: 0, y: 0, width: w, height: h))
+    if box.isNull || box.isEmpty || box.isInfinite { return nil }
+    return box
   }
 
   /// `image` scaled by `scale` about the frame centre, then moved by (dx, dy) pixels (Core Image space, y-up). The

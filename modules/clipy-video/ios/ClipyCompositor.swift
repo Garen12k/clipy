@@ -69,7 +69,13 @@ final class LayerSpec {
   /// A picture-in-picture layer: drawn over what is beneath it, with no background of its own, and its look
   /// (filter, adjust) applied to its picture alone.
   let transparent: Bool
-  /// True for the default clip (scale 1, no offset / rotation / flip, full crop, opaque, no mask) and for values
+  /// How a picture-in-picture layer is mixed with what is beneath it: normal (source-over) or one of
+  /// `ClipyCompositor.blendFilters`; anything else counts as normal. A main clip is always drawn normally.
+  let blend: String
+  /// The green screen; nil for none — also for a key colour that cannot key (not `#RRGGBB`, or grey).
+  let chroma: ChromaKey?
+  /// True for the default clip (scale 1, no offset / rotation / flip, full crop, opaque, no mask, no green screen)
+  /// and for values
   /// that cannot be placed (non-finite, zero scale, empty crop): those frames are drawn exactly as before placement
   /// existed.
   let usesFill: Bool
@@ -83,7 +89,7 @@ final class LayerSpec {
   init(trackID: CMPersistentTrackID, fill: CGAffineTransform, orient: CGAffineTransform, crop: ClipCrop,
        transform: ClipTransform, background: LayerBackground, filter: String?,
        filterIntensity: Double = 1, adjust: AdjustValues = .neutral,
-       opacity: Double = 1, mask: String = "none", transparent: Bool = false,
+       opacity: Double = 1, mask: String = "none", transparent: Bool = false, blend: String = "normal", chroma: ChromaKey? = nil,
        motion: ClipMotionSpec? = nil, clipStart: Double = 0, clipLength: Double = 0) {
     self.motion = motion
     self.clipStart = clipStart
@@ -101,11 +107,14 @@ final class LayerSpec {
     self.opacity = shown
     self.mask = mask
     self.transparent = transparent
+    self.blend = ClipyCompositor.blendFilters[blend] != nil ? blend : "normal"
+    let key: ChromaKey? = chroma.flatMap { (c: ChromaKey) -> ChromaKey? in Chroma.usableKey(c.color) != nil ? c : nil }
+    self.chroma = key
     let t = transform, c = crop
     let finite = [t.scale, t.x, t.y, t.rotation, c.x, c.y, c.w, c.h].allSatisfy { $0.isFinite }
     let placeable = finite && t.scale > 0 && c.w > 0 && c.h > 0
-    // A see-through or masked picture shows what is behind it, so it is placed even at the default transform.
-    let plain = shown >= 1 && mask != "rounded" && mask != "circle" && !transparent
+    // A see-through, masked or keyed picture shows what is behind it, so it is placed even at the default transform.
+    let plain = shown >= 1 && mask != "rounded" && mask != "circle" && !transparent && key == nil
     self.usesFill = !placeable || (t == .identity && c == .full && plain)
   }
 
@@ -130,13 +139,15 @@ struct ActiveEffectSpec: Equatable {
   let start: Double
   let end: Double
   let intensity: Double
+  /// A blur / mosaic box's rectangle (fractions of the frame, top-left origin); nil for every other effect.
+  var rect: RegionRect? = nil
 
   /// The effects that can be drawn, in list order: a known type, a finite, non-empty range and a finite intensity
   /// (clamped to 0…1). Everything else is dropped, so a request without usable effects takes the path it always took.
   static func usable(_ all: [ActiveEffectSpec]) -> [ActiveEffectSpec] {
     return all.compactMap { (e: ActiveEffectSpec) -> ActiveEffectSpec? in
       guard Effects.effectIds.contains(e.type), e.start.isFinite, e.end.isFinite, e.end > e.start, e.intensity.isFinite else { return nil }
-      return ActiveEffectSpec(type: e.type, start: e.start, end: e.end, intensity: min(1, max(0, e.intensity)))
+      return ActiveEffectSpec(type: e.type, start: e.start, end: e.end, intensity: min(1, max(0, e.intensity)), rect: e.rect)
     }
   }
 
@@ -244,7 +255,7 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
     // With no active effect `result` is not touched.
     for effect in inst.effects where time >= effect.start && time < effect.end {
       result = EffectRenderer.apply(type: effect.type, image: result.cropped(to: rect),
-                                    t: time - effect.start, d: effect.end - effect.start, k: effect.intensity, size: size)
+                                    t: time - effect.start, d: effect.end - effect.start, k: effect.intensity, size: size, region: effect.rect)
     }
     ctx.render(result.cropped(to: rect).composited(over: black), to: out)
     req.finish(withComposedVideoFrame: out)
@@ -318,6 +329,11 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
   /// so the mask turns with the picture; radius 0 (no mask) leaves the chain exactly as it was.
   /// Look: a transparent layer's filter and adjust are applied to its own picture box (at `time`, for the grain),
   /// before the mask; a main clip's look is applied to its whole composed frame by the caller, as before.
+  /// Green screen (`spec.chroma`): the key colour is made see-through after the look and before the mask, so what
+  /// is behind the picture shows through — the running frame for a layer, the clip's own background for a main
+  /// clip (drawn even when the picture covers the frame). Without a key the chain is exactly as it was.
+  /// Blend (`spec.blend`, layers only): any mode but normal replaces the source-over step (`blended`); the opacity
+  /// then mixes between the running frame and that result, as it does for a normal layer.
   static func placedFrame(_ spec: LayerSpec, transform: ClipTransform, opacity: Double, source: CIImage, size: CGSize, over running: CIImage? = nil, time: Double = 0) -> CIImage {
     let rect = CGRect(origin: .zero, size: size)
     let opacity = opacity * spec.opacity             // the spec's own opacity is 1 unless the picture is see-through
@@ -330,7 +346,11 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
       .transformed(by: p.local).cropped(to: p.localRect)
     let radius = ClipLayout.maskRadius(p.placed.width, p.placed.height, spec.mask)
     let looked = spec.transparent ? look(spec, on: boxed, time: time) : boxed
-    let picture = (radius > 0 ? rounded(looked, rect: p.localRect, radius: radius) : looked)
+    var keyed = looked
+    if let chroma = spec.chroma {
+      keyed = Chroma.apply(to: looked, key: chroma.color, strength: chroma.strength)
+    }
+    let picture = (radius > 0 ? rounded(keyed, rect: p.localRect, radius: radius) : keyed)
       .transformed(by: p.outer)
     let covered = opacity >= 1 && ClipLayout.coversFrame(p.placed, size.width, size.height)
     let behind: CIImage
@@ -339,12 +359,54 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
     } else if spec.transparent {
       behind = CIImage(color: CIColor.clear).cropped(to: rect)
     } else {
-      behind = covered && radius <= 0 ? CIImage(color: CIColor.black).cropped(to: rect) : background(spec, source: source, size: size)
+      behind = covered && radius <= 0 && spec.chroma == nil ? CIImage(color: CIColor.black).cropped(to: rect) : background(spec, source: source, size: size)
     }
     guard opacity > 0 else { return behind }
+    if running != nil, spec.blend != "normal", let mixed = blended(picture, over: behind, mode: spec.blend, rect: rect) {
+      // A layer with a blend mode: `mixed` stands where the source-over picture would, then the same opacity mix.
+      return opacity < 1 ? dissolve(from: behind, to: mixed, progress: CGFloat(opacity)).cropped(to: rect) : mixed
+    }
     let over = picture.composited(over: behind).cropped(to: rect)
     guard opacity < 1 else { return over }
     return dissolve(from: behind, to: over, progress: CGFloat(opacity)).cropped(to: rect)
+  }
+
+  /// The Core Image filter of each blend mode other than normal (`BLEND_IDS` in src/editor/model/types.ts).
+  static let blendFilters: [String: String] = [
+    "screen": "CIScreenBlendMode", "multiply": "CIMultiplyBlendMode", "overlay": "CIOverlayBlendMode",
+    "lighten": "CILightenBlendMode", "darken": "CIDarkenBlendMode",
+  ]
+
+  /// The layer `picture` blended onto `running` (an opaque full frame) with `mode`, cropped to the frame `rect`.
+  /// With the picture's colour Cs and alpha αs and the running frame B, the result is
+  /// `αs · Blend(Cs, B) + (1 − αs) · B` — the picture's alpha counts ONCE:
+  ///  1. `solid`: the picture made opaque, its colour kept (`CIColorMatrix` with the alpha row zeroed and an alpha
+  ///     bias of 1). `picture` is premultiplied (Cs·αs, αs); `CIColorMatrix` is one of the filters that work on
+  ///     unpremultiplied colour — it divides by alpha, applies the matrix and multiplies by the NEW alpha — so the
+  ///     output is (Cs, 1), not the darkened (Cs·αs, 1). Where αs is 0 there is no colour to recover (black), and
+  ///     step 3 gives that pixel no weight. The bias makes the result opaque everywhere, hence the crop.
+  ///     UNVERIFIED until first build: that `CIColorMatrix` unpremultiplies first. If it did not, soft edges of a
+  ///     blended layer would be too dark (never wrong where the picture is opaque).
+  ///  2. `mixed`: the blend filter with `solid` as its input and the running frame as its background — both
+  ///     opaque, so this is plain Blend(Cs, B).
+  ///  3. `mixed` kept in proportion to the picture's own alpha (`CIBlendWithAlphaMask`, the mask being the picture
+  ///     itself), with the running frame for the rest — so nothing outside the picture can change either.
+  /// (Handing the blend filter the picture with its alpha, as before, weighted soft edges by αs twice.)
+  /// Nil (the caller draws the picture source-over, as for normal) for an unknown mode or a missing filter / key.
+  static func blended(_ picture: CIImage, over running: CIImage, mode: String, rect: CGRect) -> CIImage? {
+    let top = picture.cropped(to: rect)
+    guard let name = blendFilters[mode],
+          let solid = Adjust.filtered(top, "CIColorMatrix", [
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+          ]),
+          let mixed = Adjust.filtered(solid.cropped(to: rect), name, [kCIInputBackgroundImageKey: running]),
+          let inside = Adjust.filtered(mixed.cropped(to: rect), "CIBlendWithAlphaMask", [
+            kCIInputBackgroundImageKey: running,
+            "inputMaskImage": top,
+          ])
+    else { return nil }
+    return inside.cropped(to: rect)
   }
 
   /// `image` — the unrotated picture box, filling `rect` — cut to a rounded rectangle with corners of `radius`:

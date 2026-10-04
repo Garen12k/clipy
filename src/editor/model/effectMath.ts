@@ -1,7 +1,7 @@
 import type { EffectId, EffectItem } from "./types";
 
 /**
- * Deterministic time functions behind the ten timeline effects (spec 4.2). Mirrored by EffectMath.swift:
+ * Deterministic time functions behind the timeline effects (spec 4.2). Mirrored by EffectMath.swift:
  * keep constants and formulas identical. `t` = seconds since the effect's start, `d` = its duration, `k` = intensity.
  */
 export const EFFECT = {
@@ -92,7 +92,7 @@ export function effectPreview(type: EffectId, t: number, d: number, k: number): 
       layer(EFFECT_COLORS.flicker, filmFlicker(t, k));
       break;
     case "glow": layer(EFFECT_COLORS.glow, EFFECT.glowLayer * k * env); break;
-    case "blur": case "glitch": case "rgbSplit": break;   // export only
+    case "blur": case "glitch": case "rgbSplit": case "blurBox": case "mosaicBox": break;   // export only (the box itself is drawn by the preview, not here)
   }
   return out;
 }

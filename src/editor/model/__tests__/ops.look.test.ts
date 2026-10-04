@@ -63,7 +63,7 @@ describe("adjust", () => {
 describe("addEffect", () => {
   test("default range from the playhead, default intensity, appended", () => {
     const n = addEffect(p, "glitch", 3, "e1");
-    expect(n.effects).toEqual([{ id: "e1", type: "glitch", start: 3, end: 5, intensity: EFFECT_LIMITS.defaultIntensity }]);
+    expect(n.effects).toEqual([{ id: "e1", type: "glitch", start: 3, end: 5, intensity: EFFECT_LIMITS.defaultIntensity, rect: null }]);
     const m = addEffect(n, "blur", 0, "e2");
     expect(m.effects.map((e) => e.id)).toEqual(["e1", "e2"]);
   });

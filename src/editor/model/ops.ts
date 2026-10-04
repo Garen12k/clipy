@@ -4,10 +4,11 @@ import { clipAt, clipDuration, curveSteps, findItem, layerEnd, sourceAfter, sour
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
-  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
-  clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
+  clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
-  type AnimEdge, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem, type FilterId,
+  type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem,
+  type EffectRect, type FilterId,
   type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
 } from "./types";
 import { totalDuration } from "./timeline";
@@ -53,13 +54,13 @@ export function splitClipAt(p: Project, outputTime: number): Project {
     // The right half restarts at 0, so its pins move back by the cut; those before it become one pin holding the value at the cut.
     const head = sampleKeyframes(clip.keyframes, cut);
     const keyframes = head ? rebasePins(clip.keyframes, cut, () => head, clampClipKeyframes) : [];
-    const right: Clip = { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut, adjust: { ...clip.adjust }, ...rightMotion, keyframes };
+    const right: Clip = { ...clip, id: newId(), trimStart: 0, trimEnd: clip.trimEnd - cut, adjust: { ...clip.adjust }, chroma: copyChroma(clip.chroma), ...rightMotion, keyframes };
     return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
   }
   const { left: l, right: r } = splitSourceRanges(clip, offsetInClip);
   // A speed curve is in absolute source time: each half keeps the whole curve (its own copy) and plays the part its trim covers.
   const left: Clip = { ...clip, trimStart: l[0], trimEnd: l[1], transitionOut: NO_TRANSITION, ...leftMotion, speedCurve: copyCurve(clip.speedCurve) };
-  const right: Clip = { ...clip, id: newId(), trimStart: r[0], trimEnd: r[1], adjust: { ...clip.adjust }, ...rightMotion, speedCurve: copyCurve(clip.speedCurve) };
+  const right: Clip = { ...clip, id: newId(), trimStart: r[0], trimEnd: r[1], adjust: { ...clip.adjust }, chroma: copyChroma(clip.chroma), ...rightMotion, speedCurve: copyCurve(clip.speedCurve) };
   return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
 }
 
@@ -76,6 +77,7 @@ function rebasePins(pins: Keyframe[], by: number, head: (before: Keyframe[]) => 
 
 const copyEdge = (e: AnimEdge | null): AnimEdge | null => (e ? { ...e } : null);
 const copyPins = (k: Keyframe[]): Keyframe[] => k.map((e) => ({ ...e }));
+const copyChroma = (k: ChromaKey | null): ChromaKey | null => (k ? { ...k } : null);
 const copyCurve = (v: SpeedCurve | null): SpeedCurve | null => (v ? { id: v.id, steps: v.steps.map((s) => ({ ...s })) } : null);
 const copyClipAnimation = (a: ClipAnimation): ClipAnimation => ({ in: copyEdge(a.in), out: copyEdge(a.out), combo: a.combo });
 const copyOverlayAnimation = (a: OverlayAnimation): OverlayAnimation => ({ in: copyEdge(a.in), out: copyEdge(a.out), loop: a.loop });
@@ -121,7 +123,7 @@ export function duplicateClip(p: Project, clipId: string): Project {
   if (i < 0) return duplicateLayer(p, clipId);   // a layer's id: the layer is copied
   const src = p.clips[i];
   const copy: Clip = { ...src, id: newId(), transitionOut: NO_TRANSITION, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background }, adjust: { ...src.adjust },
-    animation: copyClipAnimation(src.animation), keyframes: copyPins(src.keyframes), speedCurve: copyCurve(src.speedCurve) };
+    animation: copyClipAnimation(src.animation), keyframes: copyPins(src.keyframes), speedCurve: copyCurve(src.speedCurve), chroma: copyChroma(src.chroma) };
   return touch(p, { clips: [...p.clips.slice(0, i + 1), copy, ...p.clips.slice(i + 1)] });
 }
 
@@ -683,7 +685,7 @@ export function setBackgroundForAllClips(p: Project, bg: ClipBackground): Projec
 }
 
 /**
- * Swaps a clip's media and keeps its edits (id, filter, transform, crop, background, transition, sound and its fades for videos).
+ * Swaps a clip's media and keeps its edits (id, filter, transform, crop, background, transition, blend, green screen, sound and its fades for videos).
  * The new clip keeps the old one's timeline length where the new media allows it. A video too short for a clip is refused.
  */
 export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "sourceUri" | "sourceDuration" | "width" | "height" | "kind">): Project {
@@ -696,7 +698,7 @@ function replacedMedia(old: Clip, media: Pick<Clip, "sourceUri" | "sourceDuratio
   // Pins sit on the old pictures (source time), so they go; the animation stays. The placement they showed at the clip's first frame
   // becomes the static transform (without pins it already is).
   const transform = old.keyframes.length > 0 ? transformAt(old, 0) : old.transform;
-  const base: Clip = { ...old, sourceUri: media.sourceUri, width: media.width, height: media.height, kind: media.kind, trimStart: 0, transform, keyframes: [] };
+  const base: Clip = { ...old, sourceUri: media.sourceUri, width: media.width, height: media.height, kind: media.kind, trimStart: 0, transform, keyframes: [], chroma: copyChroma(old.chroma) };
   let next: Clip;
   if (media.kind === "photo") {
     next = { ...base, speed: 1, speedCurve: null, muted: true, reversed: false, fadeIn: 0, fadeOut: 0, sourceDuration: PHOTO.maxSeconds, trimEnd: clamp(prevOut, [PHOTO.minSeconds, PHOTO.maxSeconds]) };
@@ -877,9 +879,30 @@ export function setClipMask(p: Project, id: string, mask: MaskId): Project {
   return updateClip(p, id, (c) => (c.mask === mask ? c : { ...c, mask }));
 }
 
+/** A LAYER's blend mode. Same project for a main clip's id (a main clip is always "normal"), an unknown id or an unknown blend. */
+export function setClipBlend(p: Project, id: string, blend: BlendId): Project {
+  if (!(BLEND_IDS as readonly string[]).includes(blend) || !findItem(p, id)?.layer) return p;
+  return updateClip(p, id, (c) => (c.blend === blend ? c : { ...c, blend }));
+}
+
+/**
+ * A clip's or layer's green screen; `null` removes it. The key goes through `clampChroma` (strength clamped to 0–1) and the strength
+ * is rounded to 2 decimals; the stored key is always its own object. Same project when the value is unchanged (compared by value), and
+ * for a key that would not be stored as given: a colour that is not #RRGGBB or a non-finite strength.
+ */
+export function setClipChroma(p: Project, id: string, chroma: ChromaKey | null): Project {
+  let next: ChromaKey | null = null;
+  if (chroma !== null) {
+    const clean = clampChroma(chroma);
+    if (clean === null || !Number.isFinite(chroma.strength)) return p;
+    next = { color: clean.color, strength: r2(clean.strength) };
+  }
+  return updateClip(p, id, (c) => (sameJson(next, c.chroma) ? c : { ...c, chroma: next }));
+}
+
 /**
  * Splits the video clip under `outputTime` and puts a still (PHOTO.freezeSeconds long) between the halves. The still copies the clip's
- * filter, crop, background, opacity and mask, and its transform — of a keyframed clip the placement shown at the freeze moment; the right half keeps the original transition. Refused (same project) on a photo, a missing clip,
+ * filter, crop, background, opacity, mask and green screen (its blend is normal: it is a main-track clip), and its transform — of a keyframed clip the placement shown at the freeze moment; the right half keeps the original transition. Refused (same project) on a photo, a missing clip,
  * or within MIN_CLIP_SECONDS of either end. Overlays and music are not shifted, like every other length-changing op here.
  */
 export function insertFreezeFrame(p: Project, outputTime: number, still: { id: string; sourceUri: string; width: number; height: number }): Project {
@@ -892,7 +915,7 @@ export function insertFreezeFrame(p: Project, outputTime: number, still: { id: s
     ...newPhotoClip({ ...still, seconds: PHOTO.freezeSeconds }),
     filter: src.filter, filterIntensity: src.filterIntensity, adjust: { ...src.adjust },
     transform: src.keyframes.length > 0 ? transformAt(src, hit.offsetInClip) : { ...src.transform },
-    crop: { ...src.crop }, background: { ...src.background }, opacity: src.opacity, mask: src.mask,
+    crop: { ...src.crop }, background: { ...src.background }, opacity: src.opacity, mask: src.mask, blend: "normal", chroma: copyChroma(src.chroma),
   };
   const at = hit.index + 1;
   return touch(p, { clips: normaliseTransitions([...split.clips.slice(0, at), photo, ...split.clips.slice(at)]) });
@@ -921,7 +944,7 @@ export function setAdjustForAllClips(p: Project, adjust: ClipAdjust): Project {
   return touch(p, { clips: p.clips.map((c) => (sameJson(c.adjust, next) ? c : { ...c, adjust: { ...next } })) });
 }
 
-/** Adds a timeline effect at the playhead (default length, clamped to the project end); refused when the project has no room for minDuration. */
+/** Adds a timeline effect at the playhead (default length, clamped to the project end; a region effect with the default rectangle — `makeEffect`); refused when the project has no room for minDuration. */
 export function addEffect(p: Project, type: EffectId, playhead: number, id: string = newId()): Project {
   const total = totalDuration(p);
   if (!Number.isFinite(playhead) || p.clips.length === 0 || total < EFFECT_LIMITS.minDuration) return p;
@@ -974,14 +997,25 @@ export function deleteEffect(p: Project, id: string): Project {
   return touch(p, { effects: p.effects.filter((e) => e.id !== id) });
 }
 
-/** The copy sits right after the original when it fits before the project end, otherwise it takes the same range. */
+/**
+ * The rectangle of a region effect (blur box / mosaic box), through `clampEffectRect` (inside the frame, sides ≥ REGION_LIMITS.min; not
+ * rounded). Same project for an unknown id, an effect that is not a region effect, a non-finite value or an unchanged rectangle.
+ */
+export function setEffectRect(p: Project, effectId: string, rect: EffectRect): Project {
+  const i = p.effects.findIndex((e) => e.id === effectId);
+  if (i < 0 || !isRegionEffect(p.effects[i].type)) return p;
+  if (typeof rect !== "object" || rect === null || ![rect.x, rect.y, rect.w, rect.h].every(Number.isFinite)) return p;
+  return replaceEffect(p, i, { ...p.effects[i], rect: clampEffectRect(rect) });
+}
+
+/** The copy (its own rectangle, for a region effect) sits right after the original when it fits before the project end, otherwise it takes the same range. */
 export function duplicateEffect(p: Project, id: string): Project {
   const i = p.effects.findIndex((e) => e.id === id);
   if (i < 0) return p;
   const src = p.effects[i];
   const d = src.end - src.start;
   const fits = src.end + d <= totalDuration(p) + 1e-9;
-  const copy: EffectItem = { ...src, id: newId(), start: fits ? src.end : src.start, end: fits ? src.end + d : src.end };
+  const copy: EffectItem = { ...src, id: newId(), start: fits ? src.end : src.start, end: fits ? src.end + d : src.end, rect: src.rect ? { ...src.rect } : null };
   return touch(p, { effects: [...p.effects.slice(0, i + 1), copy, ...p.effects.slice(i + 1)] });
 }
 
