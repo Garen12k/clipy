@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Image, View } from "react-native";
-import { coversFrame, maskRadius, placeClip } from "@/src/editor/model/clipLayout";
+import { coversFrame, maskRadius, placeClip, type PlacedClip } from "@/src/editor/model/clipLayout";
 import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
 import { isPhoto, type Clip, type ClipTransform } from "@/src/editor/model/types";
 import { getThumb } from "./thumbnails";
@@ -40,6 +40,15 @@ export function clipFrameMotion(clip: Clip, offsetInClip: number): { transform?:
 }
 
 /**
+ * Whether a main clip's background can be seen behind its picture (`placed`, with the opacity `clipFrameMotion` gives — undefined for
+ * an opaque clip): the picture leaves part of the frame uncovered, is see-through, or has a mask (its cut-off corners). The one rule
+ * `ClipFrame` draws the background by and the Preview tag goes by.
+ */
+export function backgroundShows(clip: Clip, placed: PlacedClip, opacity: number | undefined, frameW: number, frameH: number): boolean {
+  return !coversFrame(placed, frameW, frameH) || (opacity !== undefined && opacity < 1) || clip.mask !== "none";
+}
+
+/**
  * Draws one clip in a frame of `frameW`×`frameH`: its background (only where the picture leaves the frame
  * uncovered), then the cropped picture placed by `placeClip`. A video's picture is `children` (the single
  * `VideoView`, `contentFit="fill"`); a photo's picture is an `Image` and `children` are ignored.
@@ -55,7 +64,7 @@ export function ClipFrame({ clip, frameW, frameH, transform, opacity, transparen
   const placed = placeClip({ width: clip.width, height: clip.height }, clip.crop, transform ?? clip.transform, frameW, frameH);
   const masked = clip.mask !== "none";
   // A see-through picture shows the clip's own background behind it, as the export does; so do a mask's cut-off corners.
-  const showBackground = !transparent && (!coversFrame(placed, frameW, frameH) || (opacity !== undefined && opacity < 1) || masked);
+  const showBackground = !transparent && backgroundShows(clip, placed, opacity, frameW, frameH);
   // A clip with motion asks for its blur still up front, so the first faded frames are not black while it loads.
   const blurStill = useBlurStill(clip, !transparent && (showBackground || opacity !== undefined) && clip.background.type === "blur");
   const contentW = placed.width / clip.crop.w, contentH = placed.height / clip.crop.h;

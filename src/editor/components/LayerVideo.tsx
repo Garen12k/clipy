@@ -6,7 +6,7 @@ import type { LayerClip } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
 import { useEditorStore } from "@/src/editor/store";
 
-const DRIFT_TOLERANCE = 0.25; // seconds of source time before a playing layer is re-seeked
+const DRIFT_TOLERANCE = 0.25; // seconds of REAL time (source drift ÷ the playback rate) before a playing layer is re-seeked
 const videoFill = { width: "100%" as const, height: "100%" as const };
 
 /**
@@ -14,7 +14,8 @@ const videoFill = { width: "100%" as const, height: "100%" as const };
  * Mounted only while the layer is on screen (see LayerStack), so the player lives and dies with the layer's visibility.
  *
  * The rules are AudioPreview's `TrackPlayer`'s: paused → seek to the layer's source time, once per target; playing → seek and
- * `play()` once on entry, then re-seek only when the player has drifted more than DRIFT_TOLERANCE; `pause()` once. Everything
+ * `play()` once on entry, then re-seek only when the player has drifted more than DRIFT_TOLERANCE of real time (so a 4× layer is
+ * not re-seeked on jitter, and a slow one not left behind); `pause()` once. Everything
  * written to the player goes through a "last applied" ref, so a re-render that changes nothing for the player (every frame of a
  * gesture replaces the project) writes nothing. No effect here sets React state. A reversed layer previews forwards and silent, as
  * a reversed clip does.
@@ -59,7 +60,7 @@ export function LayerVideo({ layer, offset }: { layer: LayerClip; offset: number
     const rate = rateAt(l.reversed ? { ...l, reversed: false } : l, at);
     if (appliedRate.current !== rate) { player.playbackRate = rate; appliedRate.current = rate; }
     if (!started.current) { player.play(); started.current = true; return; }
-    if (Math.abs(player.currentTime - t) > DRIFT_TOLERANCE) player.currentTime = t;
+    if (Math.abs(player.currentTime - t) / rate > DRIFT_TOLERANCE) player.currentTime = t;
   };
 
   useEffect(() => { latest.current = { layer, offset: local, isPlaying }; });

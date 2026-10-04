@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
-import { layersAt } from "@/src/editor/model/timeline";
+import { itemOffsetAt, layersAt } from "@/src/editor/model/timeline";
 import { isPhoto } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { AdjustLayer } from "./AdjustLayer";
@@ -12,7 +12,8 @@ const fill = { position: "absolute" as const, left: 0, top: 0, right: 0, bottom:
 
 /**
  * The layers on screen at the playhead, drawn in list order (later = on top) over the main picture in a frame of
- * `frameW`×`frameH`. Each is a see-through `ClipFrame` placed by its own motion at `playhead − layer.start`, holding a photo or
+ * `frameW`×`frameH`. Each is a see-through `ClipFrame` placed by its own motion at its offset under the playhead (`itemOffsetAt` —
+ * the one formula the preview's hit test uses too, so a layer is tapped where it is drawn), holding a photo or
  * a `LayerVideo` (its own player); its filter / adjust layers sit inside its picture box, so its mask and opacity apply to them.
  * Keyed by layer id: a layer entering or leaving the playhead mounts / unmounts only itself. Nothing here takes touches.
  * `style` is the timeline-effect transform of the picture, so the layers shake / zoom with it. Renders nothing without layers.
@@ -27,7 +28,7 @@ export function LayerStack({ frameW, frameH, style }: { frameW: number; frameH: 
   return (
     <View testID="layer-stack" pointerEvents="none" style={[fill, style]}>
       {layers.map((layer) => {
-        const offset = playhead - layer.start;
+        const offset = (project && itemOffsetAt(project, layer.id, playhead)) ?? 0;
         const motion = clipFrameMotion(layer, offset);
         return (
           <View key={layer.id} testID={`layer-${layer.id}`} pointerEvents="none" style={fill}>

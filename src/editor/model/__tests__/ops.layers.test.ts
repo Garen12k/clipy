@@ -8,7 +8,7 @@ import {
   reorderLayer, replaceClipMedia, resetClipAdjust, resetClipTransform, rotateClip90, setAdjustForAllClips, setAnimationForAllClips, setBackgroundForAllClips,
   setClipAdjust, setClipAnimation, setClipBackground, setClipCrop, setClipFade, setClipFilter, setClipFilterIntensity, setClipMask, setClipMuted, setClipOpacity,
   setClipReversed, setClipSpeed, setClipSpeedCurve, setClipTransform, setClipVolume, setFilterForAllClips, setTransition, splitClipAt, toggleClipKeyframe,
-  trimClip, trimLayer, videoLayerOverlap,
+  duplicateLayerRefusal, trimClip, trimLayer, videoLayerOverlap,
 } from "../ops";
 
 const photoLayer = (id: string, start: number, seconds = 3): LayerClip => ({ ...makePhotoClip({ id, seconds }), start });
@@ -97,6 +97,33 @@ describe("videoLayerOverlap", () => {
   });
 });
 
+describe("float edges never count as an overlap", () => {
+  const v = (id: string, start: number, len: number) => makeLayer({ id, sourceDuration: len, start });
+
+  test("an end within 1e-6 s of a start ends first", () => {
+    expect(videoLayerOverlap([v("x", 0, 4), v("y", 4 - 5e-7, 4), v("z", 2, 4)])).toBe(2);
+    expect(videoLayerOverlap([v("x", 0, 4), v("y", 4 - 1e-4, 4), v("z", 2, 4)])).toBe(3);
+  });
+
+  test("a copy of a 3.604 s layer starting at 3.802 is accepted with a third video layer across the boundary", () => {
+    const x = makeProject({ clips: [a, b], layers: [v("s", 3.802, 3.604), v("z", 6, 3)] });
+    const next = duplicateLayer(x, "s");
+    expect(next).not.toBe(x);
+    expect(layer(next, "new-id").start).toBe(7.406);
+    expect(videoLayerOverlap(next.layers)).toBe(2);
+  });
+
+  test("head trims that keep the end are accepted next to a layer starting at that end, with a third across it", () => {
+    let x = makeProject({ clips: [makeClip({ id: "long", sourceDuration: 20 })], layers: [v("s", 2.7, 5.1), v("z", 6.8, 4)] });
+    x = { ...x, layers: [...x.layers, v("y", layerEnd(x.layers[0]), 2)] };
+    for (let i = 1; i <= 20; i++) {
+      const next = trimLayer(x, "s", i * 0.1, 5.1, "start");   // each step keeps the end — up to one float step off
+      expect(next).not.toBe(x);
+      x = next;
+    }
+  });
+});
+
 describe("addLayer", () => {
   const clip = makeClip({ id: "n", sourceDuration: 3, transform: { scale: 2, x: 0.3, y: 0.1, rotation: 20, flipH: true, flipV: false }, transitionOut: { type: "fade", duration: 0.5 } });
 
@@ -157,6 +184,13 @@ describe("moveLayer", () => {
     expect(layer(moveLayer(near, "z", 2), "z").start).toBe(2);   // touches x's end, overlaps only y
     const withPhoto = { ...x, layers: [...x.layers, photoLayer("i", 6)] };
     expect(layer(moveLayer(withPhoto, "i", 1.2), "i").start).toBe(1.2);   // a photo is never refused
+  });
+
+  test("a layer shorter than the minimum (an older file) can still be moved; the overlap rule still applies", () => {
+    const tiny = makeLayer({ id: "t", sourceDuration: 3, trimEnd: 0.1, start: 1 });
+    const x = makeProject({ clips: [a, b], layers: [tiny, makeLayer({ id: "y", sourceDuration: 2, start: 4 }), makeLayer({ id: "z", sourceDuration: 2, start: 4 })] });
+    expect(layer(moveLayer(x, "t", 2), "t").start).toBe(2);
+    expect(moveLayer(x, "t", 4.5)).toBe(x);
   });
 
   test("one drag = one undo step", () => {
@@ -260,6 +294,23 @@ describe("deleteLayer / duplicateLayer / reorderLayer", () => {
     expect(duplicateLayer(p, "zzz")).toBe(p);
   });
 
+  test("duplicateLayer refused when the copy would start at or after the project's end (it would never show)", () => {
+    expect(duplicateLayer(p, "v2")).toBe(p);                                             // v2 ends at 13, the project at 10
+    expect(duplicateLayerRefusal(p, "v2")).toBe("noRoom");
+    const flush = makeProject({ clips: [a], layers: [makeLayer({ id: "f", sourceDuration: 3, start: 3 })] });   // ends with the project
+    expect(duplicateLayer(flush, "f")).toBe(flush);
+    expect(duplicateLayerRefusal(flush, "f")).toBe("noRoom");
+  });
+
+  test("duplicateLayerRefusal names the cause; null when the copy is accepted", () => {
+    const full = makeProject({ clips: [a], layers: Array.from({ length: LAYER_LIMITS.max }, (_, i) => photoLayer(`l${i}`, 0)) });
+    expect(duplicateLayerRefusal(full, "l0")).toBe("limit");
+    const x = makeProject({ clips: [a, b], layers: [makeLayer({ id: "x", sourceDuration: 2, start: 0 }), makeLayer({ id: "y", sourceDuration: 3, start: 2 }), makeLayer({ id: "z", sourceDuration: 3, start: 2.5 })] });
+    expect(duplicateLayerRefusal(x, "x")).toBe("overlap");
+    expect(duplicateLayerRefusal(p, "ph")).toBeNull();
+    expect(duplicateLayerRefusal(p, "zzz")).toBeNull();
+  });
+
   test("reorderLayer swaps with the neighbour; same project at the ends", () => {
     const fwd = reorderLayer(p, "v1", "forward");
     expectLayerOnly(fwd);
@@ -350,6 +401,19 @@ describe("per-clip ops on a layer id", () => {
     const short = makeProject({ clips: [a], layers: [makeLayer({ id: "s", sourceDuration: 1, start: 0 })] });
     expect(setClipSpeed(short, "s", 4)).toBe(short);                     // 0.25 s < the layer minimum
     expect(layer(setClipSpeed(short, "s", 3), "s").speed).toBe(3);
+  });
+
+  test('"None" always works on a short curved layer: the constant speed is capped so the layer keeps the layer minimum', () => {
+    // 0.6 s of source under a curve; at speed 1 it would be fine, so take a piece whose constant speed must drop below 1.
+    const curved = layer(setClipSpeedCurve(makeProject({ clips: [a], layers: [makeLayer({ id: "s", sourceDuration: 8, start: 0 })] }), "s", "montage"), "s");
+    const short: LayerClip = { ...curved, trimStart: 0, trimEnd: 0.2 };                    // 0.2 s of source: under 0.3 s at speed 1
+    const x = makeProject({ clips: [a], layers: [short] });
+    const next = setClipSpeedCurve(x, "s", null);
+    expect(next).not.toBe(x);
+    const l = layer(next, "s");
+    expect(l.speedCurve).toBeNull();
+    expect(l.speed).toBe(0.66);
+    expect(clipDuration(l)).toBeGreaterThanOrEqual(LAYER_LIMITS.minDuration);
   });
 
   test("replaceClipMedia on a layer keeps the start (and no transition); refused when the overlap rule would break", () => {

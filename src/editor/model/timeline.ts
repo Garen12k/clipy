@@ -174,12 +174,15 @@ export function findItem(p: Project, id: string): { clip: Clip; layer: boolean }
 /** Project time at which a layer ends: start + its output length (it may be past the project's end). */
 export const layerEnd = (l: LayerClip): number => l.start + clipDuration(l);
 
+/** How far (seconds) before the project's end its last frame is taken: at and past the end, layers are looked up at `total − this`. */
+const LAST_FRAME_EPSILON = 1e-6;
+
 /**
  * A layer is on screen from its start up to (not including) its end. At and past the project's end the project's LAST frame is
  * shown (as `clipAt` keeps showing the last main clip): a layer still running there stays on screen; its rest is never shown.
  */
 const layerShowsAt = (l: LayerClip, time: number, total: number): boolean => {
-  const t = time >= total ? total - 1e-6 : time;
+  const t = time >= total ? total - LAST_FRAME_EPSILON : time;
   return l.start <= t && t < layerEnd(l);
 };
 

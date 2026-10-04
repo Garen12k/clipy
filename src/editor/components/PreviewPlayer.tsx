@@ -211,6 +211,8 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       <Pressable
         onPress={(e?: GestureResponderEvent) => {
           // A tap on a layer's picture (the topmost one there) selects it; with a layer selected, a tap anywhere else deselects it.
+          // A tap on the layer that is already selected is an ordinary tap on the preview (play / pause): a layer filling the
+          // frame must not swallow every tap.
           // Texts and stickers sit above with their own Pressables, so a tap on one of them never gets here.
           const s = useEditorStore.getState();
           if (s.project && frame.w > 0 && frame.h > 0) {
@@ -218,8 +220,8 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
             // Relative to the view the touch landed in: this frame, or the gesture area that covers it exactly.
             const point = { x: e?.nativeEvent?.locationX ?? NaN, y: e?.nativeEvent?.locationY ?? NaN };
             const layerId = layerHit(layersAt(p, at), point, frame.w, frame.h, (l) => resolveClipMotion(l, itemOffsetAt(p, l.id, at) ?? 0));
-            if (layerId) { s.select(layerId); return; }
-            if (s.selectedClipId && findItem(p, s.selectedClipId)?.layer) { s.select(null); return; }
+            if (layerId && layerId !== s.selectedClipId) { s.select(layerId); return; }
+            if (!layerId && s.selectedClipId && findItem(p, s.selectedClipId)?.layer) { s.select(null); return; }
           }
           if (useEditorStore.getState().selectedOverlayId) { selectOverlay(null); return; }
           if (useEditorStore.getState().selectedEffectId) { useEditorStore.getState().selectEffect(null); return; }
@@ -243,11 +245,12 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         )}
         <FilterLayer filter={hit?.clip.filter ?? null} intensity={hit?.clip.filterIntensity} />
         {hit && <AdjustLayer adjust={hit.clip.adjust} />}
-        {/* Layers sit above the main clip's look layers and below everything else. They take the picture's effect transform (so they
-            shake / zoom with it) in a view of their own: the main VideoView's place in the tree does not depend on them. */}
+        {/* The transition's dip covers the main picture only: the export draws the layers over the already-transitioned main frame. */}
+        <TransitionLayer />
+        {/* Layers sit above the main clip's look layers and its transition, and below everything else. They take the picture's effect
+            transform (so they shake / zoom with it) in a view of their own: the main VideoView's place in the tree does not depend on them. */}
         {hit && frame.w > 0 && <LayerStack frameW={frame.w} frameH={frame.h} style={effectTransform} />}
         <EffectOverlays />
-        <TransitionLayer />
         {frame.w > 0 && <ClipGestures frameW={frame.w} frameH={frame.h} />}
         {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenPanel?.(id)} />}
         <PreviewTag visible={needsPreviewTag(project, playhead)} />

@@ -466,7 +466,7 @@ describe("look layers (filter strength, adjust, effects)", () => {
     expect(StyleSheet.flatten(screen.getByTestId("effect-transform").props.style).transform).toBeUndefined();
   });
 
-  test("the layers stack in order: picture → filter → adjust → effect colours → transition → text", async () => {
+  test("the layers stack in order: picture → filter → adjust → transition → effect colours → text", async () => {
     useEditorStore.getState().setProject(makeProject({
       clips: [
         makeClip({ id: "a", sourceDuration: 4, filter: "vintage", filterIntensity: 0.5, adjust: { ...DEFAULT_ADJUST, brightness: 1, vignette: 1 }, transitionOut: { type: "fade", duration: 1 } }),
@@ -479,7 +479,7 @@ describe("look layers (filter strength, adjust, effects)", () => {
     await render(<PreviewPlayer />);
     await layout();
     const all = ids(tree());
-    const order = ["effect-transform", "preview-video", "filter-tint", "adjust-light", "adjust-vignette", "effect-layer-0", "transition-layer", "overlay-t", "preview-tag"];
+    const order = ["effect-transform", "preview-video", "filter-tint", "adjust-light", "adjust-vignette", "transition-layer", "effect-layer-0", "overlay-t", "preview-tag"];
     expect(order.map((id) => all.indexOf(id))).toEqual([...order.map((id) => all.indexOf(id))].sort((x, y) => x - y));
     expect(order.filter((id) => !all.includes(id))).toEqual([]);
     // The filter layers carry the clip's strength.
@@ -546,7 +546,8 @@ describe("layers, opacity and masks", () => {
     expect(Object.keys(mainBox()).sort()).toEqual(["height", "left", "overflow", "position", "top", "transform", "width"]);
   });
 
-  test("draw order: main picture → its filter / adjust → layers in list order → effect colours → transition → text", async () => {
+  test("draw order: main picture → its filter / adjust → transition → layers in list order → effect colours → text", async () => {
+    // The export draws the layers over the already-transitioned main frame: the transition's dip must not dim them.
     useEditorStore.getState().setProject(makeProject({
       clips: [
         makeClip({ id: "a", sourceDuration: 4, filter: "vintage", filterIntensity: 0.5, adjust: { ...DEFAULT_ADJUST, brightness: 1 }, transitionOut: { type: "fade", duration: 1 } }),
@@ -560,7 +561,7 @@ describe("layers, opacity and masks", () => {
     await render(<PreviewPlayer />);
     await layout();
     const all = ids(tree());
-    const order = ["effect-transform", "preview-video", "filter-tint", "adjust-light", "layer-stack", "layer-one", "layer-two", "layer-video-two", "effect-layer-0", "transition-layer", "overlay-t", "preview-tag"];
+    const order = ["effect-transform", "preview-video", "filter-tint", "adjust-light", "transition-layer", "layer-stack", "layer-one", "layer-two", "layer-video-two", "effect-layer-0", "overlay-t", "preview-tag"];
     expect(order.filter((id) => !all.includes(id))).toEqual([]);
     expect(order.map((id) => all.indexOf(id))).toEqual([...order.map((id) => all.indexOf(id))].sort((x, y) => x - y));
     // The layers shake with the picture: their stack carries the same transform. The main clip's look layers stay off the layers.
@@ -704,11 +705,26 @@ describe("tapping layers on the preview", () => {
     expect(st().isPlaying).toBe(false);
   });
 
-  test("with a layer selected: a tap on it changes nothing more, a tap elsewhere deselects it without playing, the next one plays", async () => {
+  test("a tap on the already-selected layer plays / pauses and keeps it selected (a full-frame layer does not block the preview tap)", async () => {
+    await mount([photo("full", 0, 0, { transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false } })]);
+    await tap(20, 20);
+    expect(st().selectedClipId).toBe("full");
+    expect(st().isPlaying).toBe(false);
+    await tap(20, 20);
+    expect(st().selectedClipId).toBe("full");
+    expect(st().isPlaying).toBe(true);
+    await tap(200, 400);
+    expect(st().selectedClipId).toBe("full");
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("with a layer selected: a tap on it toggles play and keeps it, a tap elsewhere deselects it without playing, the next one plays", async () => {
     await mount([photo("one", 0)]);
     await tap(135, 240);
     await tap(150, 250);
     expect(st().selectedClipId).toBe("one");
+    expect(st().isPlaying).toBe(true);
+    await tap(150, 250);
     expect(st().isPlaying).toBe(false);
     await tap(20, 20);
     expect(st().selectedClipId).toBeNull();

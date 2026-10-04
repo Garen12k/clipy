@@ -1,20 +1,21 @@
 import { View } from "react-native";
 import { adjustNeedsTag } from "@/src/editor/model/adjust";
-import { coversFrame, placeClip } from "@/src/editor/model/clipLayout";
+import { placeClip } from "@/src/editor/model/clipLayout";
 import { activeEffects } from "@/src/editor/model/effectMath";
-import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
 import { frameSize } from "@/src/editor/model/ops";
 import { clipAt, hasSpeedCurve, isInTransitionWindow, layersAt } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
 import { theme } from "@/src/theme/theme";
 import { Body } from "@/src/ui/Text";
+import { backgroundShows, clipFrameMotion } from "./ClipFrame";
 
 /**
  * Whether the preview only approximates the current frame: the clip has a filter (at a strength above 0), the playhead is in a
  * transition window, the clip is reversed (the preview plays forwards), the clip has a speed curve (the rate
  * switches step by step, which can hitch, and the sound changes pitch in steps), any Adjust value is non-zero, a
  * timeline effect covers the playhead, or its blur background is visible — the picture, placed where its motion puts it at the
- * playhead, does not cover the frame or is not fully opaque (the rule `ClipFrame` draws the background by).
+ * playhead, does not cover the frame, is not fully opaque (its own opacity × its motion's) or has a mask: `backgroundShows`, the
+ * rule `ClipFrame` draws the background by.
  */
 export function needsPreviewTag(p: Project, playhead: number): boolean {
   const hit = clipAt(p, playhead);
@@ -26,9 +27,8 @@ export function needsPreviewTag(p: Project, playhead: number): boolean {
   if (layersAt(p, playhead).some((l) => (l.filter && l.filterIntensity > 0) || adjustNeedsTag(l.adjust) || l.reversed || hasSpeedCurve(l))) return true;
   if (c.background.type !== "blur") return false;
   const f = frameSize(p);
-  const motion = hasClipMotion(c) ? resolveClipMotion(c, hit.offsetInClip) : null;
-  if (motion && motion.opacity < 1) return true;
-  return !coversFrame(placeClip({ width: c.width, height: c.height }, c.crop, motion ? motion.transform : c.transform, f.width, f.height), f.width, f.height);
+  const motion = clipFrameMotion(c, hit.offsetInClip);   // what PreviewPlayer hands the clip's ClipFrame
+  return backgroundShows(c, placeClip({ width: c.width, height: c.height }, c.crop, motion.transform ?? c.transform, f.width, f.height), motion.opacity, f.width, f.height);
 }
 
 /** Small chip shown over the preview when the current frame is an approximation of the export (see `needsPreviewTag`). */

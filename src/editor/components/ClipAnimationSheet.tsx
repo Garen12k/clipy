@@ -4,7 +4,7 @@ import { ANIM_COMBO, ANIM_IN } from "@/src/editor/effects";
 import { setAnimationForAllClips, setClipAnimation } from "@/src/editor/model/ops";
 import { ANIM_COMBO_IDS, ANIM_IN_IDS, type AnimComboId, type AnimInId } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { useItemClip } from "@/src/editor/useItem";
+import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
@@ -17,6 +17,7 @@ const TABS: { id: Tab; label: string }[] = [{ id: "in", label: "In" }, { id: "ou
 /** A clip's In / Out or Combo animation. The op keeps edges and combo exclusive; the tabs only show what the clip holds. */
 export function ClipAnimationSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const clip = useItemClip(clipId);
+  const layer = useIsLayer(clipId);
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const [tab, setTab] = useState<Tab>("in");
   if (!clip) return null;
@@ -35,7 +36,9 @@ export function ClipAnimationSheet({ clipId, visible, onClose }: { clipId: strin
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Animation" action={{ label: "Apply to all clips", onPress: () => { haptic("light"); apply((p) => setAnimationForAllClips(p, clip.animation)); } }}>
+    <Sheet visible={visible} onClose={onClose} title="Animation"
+      // "Apply to all" writes the main clips: it is not offered for a layer.
+      action={layer ? undefined : { label: "Apply to all clips", onPress: () => { haptic("light"); apply((p) => setAnimationForAllClips(p, clip.animation)); } }}>
       <View style={{ flexDirection: "row", gap: theme.space.sm }}>
         {TABS.map((t) => <Chip key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}
       </View>

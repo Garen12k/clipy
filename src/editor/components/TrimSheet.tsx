@@ -18,6 +18,9 @@ function differs(clip: Clip, start: number, end: number): boolean {
   return clampNum(start, 0, clip.sourceDuration) !== clip.trimStart || clampNum(end, 0, clip.sourceDuration) !== clip.trimEnd;
 }
 
+const TRIM_TOO_SHORT = "That trim is too short or outside the clip.";
+const TRIM_OVERLAP = "That trim doesn't fit — only two video layers can play at the same time.";
+
 /** Trim by numbers, for a main clip or a layer (a layer keeps its start: the range is applied through `trimLayer`, anchored at its end handle). */
 export function TrimSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const clip = useItemClip(clipId);
@@ -34,7 +37,13 @@ export function TrimSheet({ clipId, visible, onClose }: { clipId: string | null;
     onClose();
     if (!project || !next) return;
     // The same project for a range that is not the current one: the layer rules refused it. The toast lives under this sheet's Modal, so the sheet closes first.
-    if (next === project) { if (differs(clip, from, to)) useToast.getState().show("That trim doesn't fit — only two video layers can play at the same time."); return; }
+    if (next === project) {
+      if (!differs(clip, from, to)) return;
+      // The real cause: the same trim with no other layer around. Still refused → the range itself; accepted → the overlap rule.
+      const alone = { ...project, layers: project.layers.filter((l) => l.id === clip.id) };
+      useToast.getState().show(trimLayer(alone, clip.id, from, to, "end") === alone ? TRIM_TOO_SHORT : TRIM_OVERLAP);
+      return;
+    }
     apply(() => next);
   };
 

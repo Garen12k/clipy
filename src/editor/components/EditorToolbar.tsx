@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { addTextOverlay, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, duplicateAudioTrack, duplicateClip, duplicateEffect, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
+import { addTextOverlay, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
 import { findItem, itemOffsetAt } from "@/src/editor/model/timeline";
-import { isPhoto, isTextOverlay, LAYER_LIMITS, makeOverlay } from "@/src/editor/model/types";
+import { isPhoto, isTextOverlay, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useClipMedia } from "@/src/editor/useClipMedia";
 import { useIsLayer, useItemClip } from "@/src/editor/useItem";
@@ -47,8 +47,10 @@ type PanelFor = { id: string; kind: "text" | "sticker" } | null;
 const SELECTED_EFFECT_TOOLS: ToolId[] = ["effect", "effectStrength", "effectDuplicate", "effectDelete"];
 /** With an audio track selected, the Audio group shows that track's tools instead of its normal ones (Add audio stays: a second sound can be added without deselecting). */
 const SELECTED_AUDIO_TOOLS: ToolId[] = ["addAudio", "audioVolume", "audioFade", "audioDuplicate", "audioDelete"];
-/** With a layer selected, the Edit group shows these after its normal tools. */
+/** With a layer selected, the Edit group shows these before its normal tools (first, so they are reachable without scrolling the row). */
 const SELECTED_LAYER_TOOLS: ToolId[] = ["layerForward", "layerBack"];
+/** Why a layer was not copied (`duplicateLayerRefusal`). */
+const DUPLICATE_REFUSED = { limit: "You've reached the layer limit.", overlap: "Only two video layers can play at the same time.", noRoom: "There's no room after this layer." } as const;
 
 type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void };
 
@@ -162,10 +164,12 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const duplicateSelected = () => {
     const project = useEditorStore.getState().project;
     if (!project || !selectedId) return;
-    // The op returns the same project when it refuses: only a layer can be refused (the layer limit, or a third video at once).
+    // The op returns the same project when it refuses: only a layer can be refused (the layer limit, a third video at once, or no
+    // room before the video's end).
     const next = duplicateClip(project, selectedId);
     if (next === project) {
-      if (layerSel) useToast.getState().show(project.layers.length >= LAYER_LIMITS.max ? "You've reached the layer limit." : "Only two video layers can play at the same time.");
+      const why = duplicateLayerRefusal(project, selectedId);
+      if (why) useToast.getState().show(DUPLICATE_REFUSED[why]);
       return;
     }
     apply(() => next);
@@ -220,7 +224,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   };
   const active = TOOL_GROUPS.find((g) => g.id === group)!;
   const tools = group === "effects" && selectedEffectId ? SELECTED_EFFECT_TOOLS : group === "audio" && selectedAudioId ? SELECTED_AUDIO_TOOLS
-    : group === "edit" && layerSel ? [...active.tools, ...SELECTED_LAYER_TOOLS] : active.tools;
+    : group === "edit" && layerSel ? [...SELECTED_LAYER_TOOLS, ...active.tools] : active.tools;
 
   return (
     <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: Math.max(insets.bottom, theme.space.sm) }}>

@@ -51,13 +51,14 @@ export function layerTrimFromDrag(layer: LayerClip, handle: "left" | "right", fr
   return { trimStart: layer.trimStart, trimEnd: Math.min(layer.sourceDuration, Math.max(raw, sourceAfter(layer, layer.trimStart, min))), anchor };
 }
 
-type Props = { layer: LayerClip; selected: boolean; overlapping?: boolean; onPress: () => void };
+type Props = { layer: LayerClip; missing?: boolean; selected: boolean; overlapping?: boolean; onPress: () => void };
 
 /**
  * One layer on the layers lane: tap selects, long-press drag moves it, the handles (shown when selected) trim it — a photo has
  * only the end handle. The selected bar is drawn above its neighbours, so a bar overlapping it never covers its handles.
+ * `missing` (its file is gone): the warning badge the audio bar shows.
  */
-export function LayerBar({ layer: l, selected, overlapping = false, onPress }: Props) {
+export function LayerBar({ layer: l, missing = false, selected, overlapping = false, onPress }: Props) {
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const store = useEditorStore.getState();
   // Drag state lives in a ref object: gesture callbacks each get their own copy of captured variables.
@@ -118,6 +119,11 @@ export function LayerBar({ layer: l, selected, overlapping = false, onPress }: P
             <Ionicons name={photo ? "image" : "videocam"} size={14} color={theme.colors.onAccent} />
             <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12, flex: 1 }}>Layer</Text>
           </>
+        )}
+        {missing && (
+          <View testID={`layer-bar-${l.id}-missing`} style={{ position: "absolute", top: 4, right: roomy ? HANDLE_W + 2 : 0, backgroundColor: theme.colors.danger, borderRadius: theme.radius.pill, padding: 2 }}>
+            <Ionicons name="warning" size={12} color={theme.colors.onAccent} />
+          </View>
         )}
         {selected && (
           <>

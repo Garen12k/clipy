@@ -5,7 +5,7 @@ import { FILTERS } from "@/src/editor/effects";
 import { setClipFilter, setClipFilterIntensity, setFilterForAllClips } from "@/src/editor/model/ops";
 import { FILTER_IDS, isPhoto } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { useItemClip } from "@/src/editor/useItem";
+import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { Sheet } from "@/src/ui/Sheet";
@@ -18,6 +18,7 @@ const TILE_H = 96;
 
 export function FilterSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const clip = useItemClip(clipId);
+  const layer = useIsLayer(clipId);
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const [thumb, setThumb] = useState<string | null>(null);
 
@@ -34,7 +35,9 @@ export function FilterSheet({ clipId, visible, onClose }: { clipId: string | nul
   const current = clip.filter ?? "none";
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Filter" action={{ label: "Apply to all clips", onPress: () => apply((p) => setFilterForAllClips(p, clip.filter, clip.filterIntensity)) }}>
+    <Sheet visible={visible} onClose={onClose} title="Filter"
+      // "Apply to all" writes the main clips: it is not offered for a layer.
+      action={layer ? undefined : { label: "Apply to all clips", onPress: () => apply((p) => setFilterForAllClips(p, clip.filter, clip.filterIntensity)) }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.sm }}>
         {FILTER_IDS.map((id) => {
           const def = FILTERS[id];

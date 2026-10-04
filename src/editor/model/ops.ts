@@ -416,9 +416,9 @@ export function normaliseTransitions(clips: Clip[]): Clip[] {
   return changed ? out : clips;
 }
 
-/** `speed` (2 decimals), lowered where needed so the clip's source span still plays for MIN_CLIP_SECONDS. */
-function cappedSpeed(c: Clip, speed: number): number {
-  const maxForMin = (c.trimEnd - c.trimStart) / MIN_CLIP_SECONDS;   // speed at which output hits 0.1 s
+/** `speed` (2 decimals), lowered where needed so the clip's source span still plays for `min` seconds (MIN_CLIP_SECONDS; a layer's own minimum). */
+function cappedSpeed(c: Clip, speed: number, min = MIN_CLIP_SECONDS): number {
+  const maxForMin = (c.trimEnd - c.trimStart) / min;   // speed at which output hits the minimum
   // Round the cap DOWN so rounding never pushes output under 0.1 s; the 1e-9 absorbs float noise (0.3 / 0.1 = 2.9999…).
   return Math.min(r2(speed), Math.floor(maxForMin * 100 + 1e-9) / 100);
 }
@@ -439,13 +439,15 @@ export function setClipSpeed(p: Project, clipId: string, speed: number): Project
  */
 export function setClipSpeedCurve(p: Project, clipId: string, id: SpeedCurveId | null): Project {
   if (id !== null && !(SPEED_CURVE_IDS as readonly string[]).includes(id)) return p;
+  const min = findItem(p, clipId)?.layer ? LAYER_LIMITS.minDuration : MIN_CLIP_SECONDS;
   return updateClip(p, clipId, (c) => {
     if (isPhoto(c)) return c;
     if (id === null) {
       if (c.speedCurve === null) return c;
-      // "None" always works. A short piece of a slow part of the curve would be under MIN_CLIP_SECONDS at speed 1, so it gets the
-      // highest constant speed that keeps the minimum (the cap `setClipSpeed` applies), never under the slowest speed there is.
-      return { ...c, speedCurve: null, speed: clamp(cappedSpeed(c, 1), SPEED_LIMITS) };
+      // "None" always works. A short piece of a slow part of the curve would be under the minimum (MIN_CLIP_SECONDS; a layer's is
+      // LAYER_LIMITS.minDuration) at speed 1, so it gets the highest constant speed that keeps it (the cap `setClipSpeed` applies),
+      // never under the slowest speed there is.
+      return { ...c, speedCurve: null, speed: clamp(cappedSpeed(c, 1, min), SPEED_LIMITS) };
     }
     const speedCurve = presetCurve(c, id, c.trimStart, c.trimEnd);
     if (!speedCurve) return c;
@@ -726,30 +728,42 @@ export function setClipReversed(p: Project, clipId: string, reversed: boolean): 
 // are the ones only a layer has. Layers sit in project time and are never moved or dropped by main-track edits (same rule as overlays
 // and audio): one left past the project's end is kept and shows again if the project grows.
 
-/** The largest number of VIDEO layers on screen at once (photo layers are not counted; a layer ending where another starts does not overlap it). */
+/**
+ * How far (seconds) a layer's end may reach past another layer's start and still count as ending first. A copy starts where its
+ * original ends and a head trim keeps the end, but `start + length` can land one float step past that time.
+ */
+const LAYER_TOUCH_EPSILON = 1e-6;
+
+/**
+ * The largest number of VIDEO layers on screen at once (photo layers are not counted; a layer ending where another starts — or within
+ * LAYER_TOUCH_EPSILON after it — does not overlap it).
+ */
 export function videoLayerOverlap(layers: LayerClip[]): number {
   const edges: [number, number][] = [];
-  for (const l of layers) if (!isPhoto(l)) edges.push([l.start, 1], [layerEnd(l), -1]);
+  for (const l of layers) if (!isPhoto(l)) edges.push([l.start, 1], [layerEnd(l) - LAYER_TOUCH_EPSILON, -1]);
   edges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);   // at the same time the end comes first: touching is not overlapping
   let now = 0, most = 0;
   for (const [, step] of edges) { now += step; most = Math.max(most, now); }
   return most;
 }
 
-/** The rules a layer list must keep after `layer` (one of its entries) was added, moved or changed length: the minimum length and the overlap limit. */
+const overlapOk = (layers: LayerClip[]): boolean => videoLayerOverlap(layers) <= LAYER_LIMITS.maxVideoAtOnce;
+
+/** The rules a layer list must keep after `layer` (one of its entries) was added or changed length: the minimum length and the overlap limit. */
 function layersOk(layers: LayerClip[], layer: LayerClip): boolean {
-  return clipDuration(layer) >= LAYER_LIMITS.minDuration - 1e-9 && videoLayerOverlap(layers) <= LAYER_LIMITS.maxVideoAtOnce;
+  return clipDuration(layer) >= LAYER_LIMITS.minDuration - 1e-9 && overlapOk(layers);
 }
 
 /**
  * Writes `next` over the layer at index `j`. When its place in time or what counts for the overlap rule changed (start, length,
  * photo / video) the layer rules are re-checked and the edit is refused (same project) if they would break. Only `layers` changes.
+ * `moved` (the edit only moves the layer): the minimum length is not re-checked — a short layer from an older file can still be moved.
  */
-function putLayer(p: Project, j: number, next: LayerClip): Project {
+function putLayer(p: Project, j: number, next: LayerClip, moved = false): Project {
   const cur = p.layers[j];
   const layers = p.layers.slice(); layers[j] = next;
   const retimed = next.start !== cur.start || next.kind !== cur.kind || clipDuration(next) !== clipDuration(cur);
-  if (retimed && !layersOk(layers, next)) return p;
+  if (retimed && !(moved ? overlapOk(layers) : layersOk(layers, next))) return p;
   return touch(p, { layers });
 }
 
@@ -770,7 +784,7 @@ export function moveLayer(p: Project, id: string, newStart: number): Project {
   const j = p.layers.findIndex((l) => l.id === id);
   if (j < 0 || !Number.isFinite(newStart)) return p;
   const start = Math.max(0, r3(newStart));
-  return start === p.layers[j].start ? p : putLayer(p, j, { ...p.layers[j], start });
+  return start === p.layers[j].start ? p : putLayer(p, j, { ...p.layers[j], start }, true);
 }
 
 /**
@@ -806,17 +820,38 @@ export function deleteLayer(p: Project, id: string): Project {
   return touch(p, { layers: p.layers.filter((l) => l.id !== id) });
 }
 
+/** Why a layer cannot be copied: the layer limit, no room (the copy would start at or after the project's end), or the overlap rule. */
+export type DuplicateLayerRefusal = "limit" | "noRoom" | "overlap";
+
+/** The layer list with a copy of the layer at index `j` (see `duplicateLayer`), or why the copy is refused. */
+function layersWithCopy(p: Project, j: number): LayerClip[] | DuplicateLayerRefusal {
+  if (p.layers.length >= LAYER_LIMITS.max) return "limit";
+  const src = p.layers[j];
+  const start = Math.ceil(layerEnd(src) * 1000 - 1e-6) / 1000;
+  if (start >= totalDuration(p)) return "noRoom";
+  const copy: LayerClip = { ...newLayer(src, 0), id: newId(), transform: { ...src.transform }, start };
+  const layers = [...p.layers.slice(0, j + 1), copy, ...p.layers.slice(j + 1)];
+  return layersOk(layers, copy) ? layers : "overlap";
+}
+
+/** Why `duplicateLayer` would refuse this layer; null when it would copy it (or the id is not a layer's). */
+export function duplicateLayerRefusal(p: Project, id: string): DuplicateLayerRefusal | null {
+  const j = p.layers.findIndex((l) => l.id === id);
+  if (j < 0) return null;
+  const out = layersWithCopy(p, j);
+  return typeof out === "string" ? out : null;
+}
+
 /**
  * The copy (new id, every nested value its own, the transform KEPT) starts where the original ends — rounded up to 3 decimals, so it
- * never overlaps its original — and sits right above it in the list. Refused at LAYER_LIMITS.max or when the overlap rule would break.
+ * never overlaps its original — and sits right above it in the list. Refused (same project) at LAYER_LIMITS.max, when the copy would
+ * start at or after the project's end (it would never show), or when the overlap rule would break.
  */
 export function duplicateLayer(p: Project, id: string): Project {
   const j = p.layers.findIndex((l) => l.id === id);
-  if (j < 0 || p.layers.length >= LAYER_LIMITS.max) return p;
-  const src = p.layers[j];
-  const copy: LayerClip = { ...newLayer(src, 0), id: newId(), transform: { ...src.transform }, start: Math.ceil(layerEnd(src) * 1000 - 1e-6) / 1000 };
-  const layers = [...p.layers.slice(0, j + 1), copy, ...p.layers.slice(j + 1)];
-  return layersOk(layers, copy) ? touch(p, { layers }) : p;
+  if (j < 0) return p;
+  const layers = layersWithCopy(p, j);
+  return typeof layers === "string" ? p : touch(p, { layers });
 }
 
 /** Bring forward / send back: swaps the layer with its neighbour in draw order (later = on top). Same project at the ends. */
@@ -844,7 +879,7 @@ export function setClipMask(p: Project, id: string, mask: MaskId): Project {
 
 /**
  * Splits the video clip under `outputTime` and puts a still (PHOTO.freezeSeconds long) between the halves. The still copies the clip's
- * filter, crop and background, and its transform — of a keyframed clip the placement shown at the freeze moment; the right half keeps the original transition. Refused (same project) on a photo, a missing clip,
+ * filter, crop, background, opacity and mask, and its transform — of a keyframed clip the placement shown at the freeze moment; the right half keeps the original transition. Refused (same project) on a photo, a missing clip,
  * or within MIN_CLIP_SECONDS of either end. Overlays and music are not shifted, like every other length-changing op here.
  */
 export function insertFreezeFrame(p: Project, outputTime: number, still: { id: string; sourceUri: string; width: number; height: number }): Project {
@@ -857,7 +892,7 @@ export function insertFreezeFrame(p: Project, outputTime: number, still: { id: s
     ...newPhotoClip({ ...still, seconds: PHOTO.freezeSeconds }),
     filter: src.filter, filterIntensity: src.filterIntensity, adjust: { ...src.adjust },
     transform: src.keyframes.length > 0 ? transformAt(src, hit.offsetInClip) : { ...src.transform },
-    crop: { ...src.crop }, background: { ...src.background },
+    crop: { ...src.crop }, background: { ...src.background }, opacity: src.opacity, mask: src.mask,
   };
   const at = hit.index + 1;
   return touch(p, { clips: normaliseTransitions([...split.clips.slice(0, at), photo, ...split.clips.slice(at)]) });

@@ -77,6 +77,24 @@ describe("a blur background behind a clip with motion", () => {
   });
 });
 
+describe("a blur background shown by a mask or the clip's own opacity (the rule ClipFrame draws it by)", () => {
+  const blur = { background: { type: "blur" as const } };
+  test("a mask shows the blur around the picture", () => {
+    expect(needsPreviewTag(one({ ...blur, mask: "circle" }), 1)).toBe(true);
+    expect(needsPreviewTag(one({ ...blur, mask: "rounded" }), 1)).toBe(true);
+    expect(needsPreviewTag(one({ ...blur, mask: "none" }), 1)).toBe(false);
+    expect(needsPreviewTag(one({ background: { type: "color", color: "#FF0000" }, mask: "circle" }), 1)).toBe(false);
+  });
+  test("a static opacity below 1 shows the blur through the picture", () => {
+    expect(needsPreviewTag(one({ ...blur, opacity: 0.5 }), 1)).toBe(true);
+    expect(needsPreviewTag(one({ ...blur, opacity: 1 }), 1)).toBe(false);
+    expect(needsPreviewTag(one({ background: { type: "color", color: "#FF0000" }, opacity: 0.5 }), 1)).toBe(false);
+  });
+  test("the resolved opacity counts: a pin at full opacity on a see-through clip still shows the blur", () => {
+    expect(needsPreviewTag(one({ ...blur, opacity: 0.5, keyframes: [makeKeyframe({ t: 0 })] }), 1)).toBe(true);
+  });
+});
+
 test("a clip with a speed curve needs the tag; clearing the curve drops it", () => {
   const curved = setClipSpeedCurve(one({}), "a", "hero");
   expect(needsPreviewTag(curved, 0)).toBe(true);

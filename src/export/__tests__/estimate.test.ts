@@ -1,5 +1,13 @@
 import { makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
-import { canExport4K, estimateBytes, exportableClips, formatBytes } from "../estimate";
+import { canExport4K, estimateBytes, exportableClips, exportableLayers, formatBytes } from "../estimate";
+
+test("exportableLayers skips an empty layer (trimEnd <= trimStart), as exportableClips skips an empty clip", () => {
+  const ok = makeLayer({ id: "ok", sourceDuration: 3, start: 0 });
+  const empty = makeLayer({ id: "empty", sourceDuration: 3, trimStart: 2, trimEnd: 2, start: 0 });
+  const inverted = makeLayer({ id: "inv", sourceDuration: 3, trimStart: 2, trimEnd: 1, start: 0 });
+  const p = makeProject({ id: "p", clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [empty, ok, inverted] });
+  expect(exportableLayers(p, [], 4)).toEqual([ok]);
+});
 
 test("estimateBytes = duration × bitrate", () => {
   expect(estimateBytes(60, 1080)).toBe(60 * 10e6 / 8);

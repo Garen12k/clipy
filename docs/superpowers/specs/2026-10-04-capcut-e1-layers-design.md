@@ -68,11 +68,15 @@ Every existing op that edits one clip by id (transform, crop, filter, adjust, an
 - **Opacity sheet:** one slider 0–100 %. **Mask sheet:** three tiles.
 
 **As built:**
-- An overlay added with the playhead at the very end is placed 2 s before the end so it is visible.
+- An overlay added with the playhead at the very end (or within 2 s of it) is placed 2 s before the end so it is visible.
 - "Apply to all" in the Filter / Adjust / Animation sheets is hidden when the sheet is opened on a layer.
 - Tapping a layer selects it even while playing.
 - The tap area of a masked layer is its full rectangle.
 - Layers stay visible on the last frame.
+- Layers are drawn above the main transition: a transition between two main clips never dims or covers a layer (preview and export).
+- Tapping the layer that is already selected plays / pauses, like a tap on the preview (so a full-frame layer does not block the preview tap).
+- A layer left beyond the end of the video after main clips are deleted stays in the project but cannot be reached until the video is long enough again. It still counts toward the 8-layer limit.
+- Duplicating a layer whose copy would start at or after the end of the video is refused ("There's no room after this layer.").
 
 ## 6. Preview playback
 

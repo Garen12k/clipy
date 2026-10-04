@@ -2,9 +2,11 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { getThumb } from "@/src/editor/components/thumbnails";
-import { ANIM_IN } from "@/src/editor/effects";
+import { ANIM_IN, SPEED_CURVES } from "@/src/editor/effects";
+import { setClipSpeedCurve } from "@/src/editor/model/ops";
+import { clipDuration } from "@/src/editor/model/timeline";
 import { maskRadius } from "@/src/editor/model/clipLayout";
-import { FULL_CROP, makeClip, makeLayer, makePhotoClip, makeProject, type LayerClip } from "@/src/editor/model/types";
+import { FULL_CROP, makeClip, makeLayer, makePhotoClip, makeProject, type LayerClip, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useToast } from "@/src/ui/Toast";
 import { AdjustSheet } from "../components/AdjustSheet";
@@ -19,7 +21,9 @@ import { TrimSheet } from "../components/TrimSheet";
 import { VolumeSheet } from "../components/VolumeSheet";
 
 const state = () => useEditorStore.getState();
-const layer = (id = "L") => state().project!.layers.find((l) => l.id === id)!;
+const layerNow = (id = "L") => state().project!.layers.find((l) => l.id === id)!;
+const layer = (idOrProject: string | Project = "L", id = "L") =>
+  typeof idOrProject === "string" ? layerNow(idOrProject) : idOrProject.layers.find((l) => l.id === id)!;
 const main = () => state().project!.clips[0];
 const past = () => state().past.length;
 const drag = async (testID: string, ...values: number[]) => {
@@ -42,6 +46,25 @@ beforeEach(() => {
     clips: [makeClip({ id: "a", sourceDuration: 8 })],
     layers: [makeLayer({ id: "L", sourceDuration: 4, start: 1, crop: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } }), photoLayer("P")],
   }));
+});
+
+test('"Apply to all" is a main-clip action: hidden when the sheet\'s item is a layer', async () => {
+  const sheets: [string, (id: string) => React.JSX.Element][] = [
+    ["Apply to all clips", (id) => <FilterSheet clipId={id} visible onClose={() => {}} />],
+    ["Apply to all", (id) => <AdjustSheet clipId={id} visible onClose={() => {}} />],
+    ["Apply to all clips", (id) => <ClipAnimationSheet clipId={id} visible onClose={() => {}} />],
+  ];
+  for (const [name, sheet] of sheets) {
+    const onLayer = await render(sheet("L"));
+    expect(screen.queryByRole("button", { name })).toBeNull();
+    await onLayer.unmount();
+    const onPhotoLayer = await render(sheet("P"));
+    expect(screen.queryByRole("button", { name })).toBeNull();
+    await onPhotoLayer.unmount();
+    const onClip = await render(sheet("a"));
+    expect(screen.getByRole("button", { name })).toBeTruthy();
+    await onClip.unmount();
+  }
 });
 
 test("Filter: a tile and the strength slider write to the layer", async () => {
@@ -120,20 +143,20 @@ test("Speed: a change the layer rules refuse closes the sheet and says so", asyn
 });
 
 test("Speed: re-picking the current speed is silent; a refused curve gets the layer message", async () => {
-  state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], layers: [makeLayer({ id: "L", sourceDuration: 4, trimEnd: 0.35 })] }));
+  crowded();
   const onClose = jest.fn();
   await render(<SpeedSheet clipId="L" visible onClose={onClose} />);
   await fireEvent.press(screen.getByRole("button", { name: "1×" }));
   expect(onClose).not.toHaveBeenCalled();
   expect(useToast.getState().message).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "Curve" }));
-  const tiles = screen.getAllByRole("button").filter((b) => !["Normal", "Curve", "None", "Close sheet"].includes(b.props.accessibilityLabel));
-  for (const t of tiles) {
-    if (layer().speedCurve || useToast.getState().message) break;
-    await fireEvent.press(t);
-  }
-  // Every preset either fits (and is stored) or is refused with the layer's message — never the main clip's.
-  if (!layer().speedCurve) expect(useToast.getState().message).toBe("That speed doesn't fit this layer.");
+  // Bullet over L's 2 s of source plays for about 2.1 s (its slow middle): past 2 s it would be a third video at once.
+  expect(clipDuration(layer(setClipSpeedCurve(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], layers: [layerNow()] }), "L", "bullet"), "L"))).toBeGreaterThan(2);
+  await fireEvent.press(screen.getByRole("button", { name: SPEED_CURVES.bullet.label }));
+  expect(layerNow().speedCurve).toBeNull();
+  expect(past()).toBe(0);
+  expect(onClose).toHaveBeenCalled();
+  expect(useToast.getState().message).toBe("That speed doesn't fit this layer.");
 });
 
 test("Volume: the slider and Mute write to the layer", async () => {
@@ -175,6 +198,26 @@ describe("Trim on a layer", () => {
     expect(layer().trimEnd).toBe(2);
     expect(past()).toBe(0);
     expect(useToast.getState().message).toBe("That trim doesn't fit — only two video layers can play at the same time.");
+  });
+
+  test("a trim refused for the layer itself (too short) gets its own message, not the overlap one", async () => {
+    await render(<TrimSheet clipId="L" visible onClose={() => {}} />);
+    await fireEvent.changeText(screen.getByLabelText("Trim start"), "3");
+    await fireEvent.changeText(screen.getByLabelText("Trim end"), "3.1");   // 0.1 s: under the layer minimum
+    await fireEvent.press(screen.getByRole("button", { name: "Apply" }));
+    expect(layerNow()).toMatchObject({ trimStart: 0, trimEnd: 4 });
+    expect(past()).toBe(0);
+    expect(useToast.getState().message).toBe("That trim is too short or outside the clip.");
+  });
+
+  test("too short wins even where the layer is crowded", async () => {
+    crowded();
+    await render(<TrimSheet clipId="L" visible onClose={() => {}} />);
+    await fireEvent.changeText(screen.getByLabelText("Trim start"), "5");
+    await fireEvent.changeText(screen.getByLabelText("Trim end"), "9");     // outside the 4 s source
+    await fireEvent.press(screen.getByRole("button", { name: "Apply" }));
+    expect(past()).toBe(0);
+    expect(useToast.getState().message).toBe("That trim is too short or outside the clip.");
   });
 
   test("applying the current values is silent", async () => {

@@ -80,6 +80,25 @@ describe("addOverlay", () => {
     expect(useToast.getState().message).toBeNull();
   });
 
+  test.each([[3, 2], [4, 2], [2.5, 2], [1.9, 1.9]])("a playhead within 2 s of the end (%s of 4 s) starts the layer at %s, so it is visible", async (playhead, start) => {
+    state().seek(playhead);
+    pick.mockResolvedValueOnce([video]);
+    importMedia.mockResolvedValueOnce({ clips: [makeClip({ id: "new", sourceDuration: 3 })], failed: 0 });
+    const { result } = await renderHook(() => useClipMedia());
+    await act(async () => { await result.current.addOverlay(); });
+    expect(state().project!.layers[0]).toMatchObject({ id: "new", start });
+  });
+
+  test("a project shorter than 2 s: the layer starts at 0", async () => {
+    state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 1.5 })] }));
+    state().seek(1.5);
+    pick.mockResolvedValueOnce([video]);
+    importMedia.mockResolvedValueOnce({ clips: [makeClip({ id: "new", sourceDuration: 3 })], failed: 0 });
+    const { result } = await renderHook(() => useClipMedia());
+    await act(async () => { await result.current.addOverlay(); });
+    expect(state().project!.layers[0]).toMatchObject({ id: "new", start: 0 });
+  });
+
   test("a photo becomes a photo layer", async () => {
     pick.mockResolvedValueOnce([{ uri: "file:///x.jpg", kind: "photo", durationSec: 0, width: 1080, height: 1920 }]);
     importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "ph" })], failed: 0 });

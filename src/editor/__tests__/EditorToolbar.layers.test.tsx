@@ -40,7 +40,7 @@ test("Edit lists Overlay, Opacity and Mask; Forward / Back only show for a selec
   expect(screen.queryByRole("button", { name: "Forward" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
   await select("L");
-  expect(row().slice(0, EDIT.length + 2)).toEqual([...EDIT, "Forward", "Back"]);
+  expect(row().slice(0, EDIT.length + 2)).toEqual(["Forward", "Back", ...EDIT]);   // first: reachable without scrolling the row
   await openGroup("Effects");
   expect(screen.queryByRole("button", { name: "Forward" })).toBeNull();
 });
@@ -158,6 +158,27 @@ test("Duplicate at the layer limit toasts and changes nothing", async () => {
   expect(state().project!.layers).toHaveLength(LAYER_LIMITS.max);
   expect(state().past).toHaveLength(0);
   expect(useToast.getState().message).toBe("You've reached the layer limit.");
+});
+
+test("Duplicate refused by the overlap rule says so", async () => {
+  await act(() => { state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })],
+    layers: [makeLayer({ id: "x", sourceDuration: 2, start: 0 }), makeLayer({ id: "y", sourceDuration: 3, start: 2 }), makeLayer({ id: "z", sourceDuration: 3, start: 2.5 })] })); });
+  await renderBar();
+  await select("x");
+  await fireEvent.press(btn("Duplicate"));
+  expect(state().project!.layers).toHaveLength(3);
+  expect(state().past).toHaveLength(0);
+  expect(useToast.getState().message).toBe("Only two video layers can play at the same time.");
+});
+
+test("Duplicate with no room after the layer (the copy would start at the video's end) says so", async () => {
+  await act(() => { state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [makeLayer({ id: "end", sourceDuration: 2, start: 2 })] })); });
+  await renderBar();
+  await select("end");
+  await fireEvent.press(btn("Duplicate"));
+  expect(state().project!.layers).toHaveLength(1);
+  expect(state().past).toHaveLength(0);
+  expect(useToast.getState().message).toBe("There's no room after this layer.");
 });
 
 test("Overlay picks one item and adds it as a selected layer at the playhead", async () => {

@@ -146,6 +146,15 @@ describe("what is drawn", () => {
     expect(box("p").opacity).toBeCloseTo(0.75 * 0.5, 10);
   });
 
+  test("past the project's end the layer is placed at the project's last frame (itemOffsetAt, as the hit test is)", async () => {
+    // 8 – 14 in a 10 s project; x goes 0 → 0.4 over its first 4 s. The last frame shown is 2 s into the layer.
+    load([photoLayer("late", { start: 8, trimEnd: 6, keyframes: [makeKeyframe({ t: 0, x: 0, scale: 0.4 }), makeKeyframe({ t: 4, x: 0.4, scale: 0.4 })] })]);
+    useEditorStore.setState({ playhead: 12 }); // a playhead left past the end (the project got shorter)
+    await render(<LayerStack frameW={W} frameH={H} />);
+    const left0 = W / 2 - (W * 0.4) / 2;
+    expect(box("late").left).toBeCloseTo(left0 + 0.2 * W, 10); // offset 2 of 4: smooth(0.5) = 0.5
+  });
+
   test("a layer's own filter and adjust sit inside its picture box (so its mask clips them), above the picture", async () => {
     load([photoLayer("p", { mask: "rounded", filter: "vintage", filterIntensity: 0.5, adjust: { ...DEFAULT_ADJUST, brightness: 1 } })]);
     const view = await render(<LayerStack frameW={W} frameH={H} />);
@@ -278,6 +287,33 @@ describe("a video layer's player", () => {
     p.calls.length = 0;
     await seek(2.75);
     expect(p.calls).toEqual([["seek", 1.75]]); // paused scrubbing: no second pause
+  });
+
+  test("drift is measured in real time: a 4× layer is not re-seeked on jitter", async () => {
+    const { p } = await mount({ speed: 4 }); // source 1–4 over 0.75 s: playhead t → source 1 + (t − 2) × 4
+    await ready(p);
+    await setPlaying(true);
+    p.currentTime = 1; p.calls.length = 0;
+    await seek(2.2); // 0.8 s of source ahead = 0.2 s of real time: inside the tolerance
+    expect(p.calls).toEqual([]);
+    await seek(2.3); // 1.2 s of source = 0.3 s of real time
+    expect(of(p, "seek")).toHaveLength(1);
+    expect((of(p, "seek") as number[])[0]).toBeCloseTo(2.2, 9);
+    await setPlaying(false);
+  });
+
+  test("drift is measured in real time: a 0.25× layer is re-seeked after 0.25 s of real time", async () => {
+    const { p } = await mount({ speed: 0.25 }); // playhead t → source 1 + (t − 2) × 0.25
+    await ready(p);
+    await setPlaying(true);
+    p.currentTime = 1; p.calls.length = 0;
+    await seek(2.8); // 0.2 s of source = 0.8 s of real time
+    expect(of(p, "seek")).toHaveLength(1);
+    expect((of(p, "seek") as number[])[0]).toBeCloseTo(1.2, 9);
+    p.calls.length = 0;
+    await seek(2.9); // 0.025 s of source = 0.1 s of real time
+    expect(p.calls).toEqual([]);
+    await setPlaying(false);
   });
 
   test("play pressed while the file is still loading starts it once it is ready", async () => {

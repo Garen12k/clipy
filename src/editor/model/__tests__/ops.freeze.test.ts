@@ -29,6 +29,12 @@ test("the still is a silent photo that inherits filter, transform, crop and back
   expect(s.transform).not.toBe(vid.transform);
 });
 
+test("the still copies the clip's opacity and mask", () => {
+  const masked = makeProject({ clips: [{ ...vid, opacity: 0.4, mask: "circle" as const }, next] });
+  expect(insertFreezeFrame(masked, 2, still).clips[1]).toMatchObject({ opacity: 0.4, mask: "circle" });
+  expect(insertFreezeFrame(p, 2, still).clips[1]).toMatchObject({ opacity: 1, mask: "none" });
+});
+
 test("no transition into the still; the right half keeps the original transition", () => {
   const out = insertFreezeFrame(p, 2, still);
   expect(out.clips[0].transitionOut.type).toBe("none");

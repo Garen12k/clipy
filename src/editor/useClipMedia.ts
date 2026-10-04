@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { addClips, addLayer, replaceClipMedia } from "@/src/editor/model/ops";
-import { clipDuration, findItem } from "@/src/editor/model/timeline";
+import { clipDuration, findItem, totalDuration } from "@/src/editor/model/timeline";
 import { LAYER_LIMITS, newVideoClip, type Clip, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { newId } from "@/src/lib/id";
@@ -14,6 +14,16 @@ const useMediaBusy = create<{ busy: boolean }>(() => ({ busy: false }));
 const LAYER_LIMIT = "You've reached the layer limit.";
 const LAYER_OVERLAP = "Only two video layers can play at the same time.";
 const TOO_SHORT = "That video is too short.";
+/** A new layer shows for at least this long (seconds) before the video ends, where the video is long enough. */
+const NEW_LAYER_ROOM = 2;
+
+/**
+ * Where a new layer starts: at the playhead, but never closer than NEW_LAYER_ROOM to the project's end (a layer starting at the end
+ * would be invisible) — there it starts at `max(0, total − NEW_LAYER_ROOM)`.
+ */
+export function newLayerStart(p: Project, playhead: number): number {
+  return Math.min(playhead, Math.max(0, totalDuration(p) - NEW_LAYER_ROOM));
+}
 
 async function withLock(run: () => Promise<void>, failMessage: string): Promise<void> {
   if (useMediaBusy.getState().busy) return;
@@ -88,12 +98,12 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     useEditorStore.getState().select(clipId);
   }, "Couldn't replace the clip.");
 
-  /** The Overlay tool: one picked photo or video becomes a layer starting at the playhead (as it was when the tool was pressed), selected. */
+  /** The Overlay tool: one picked photo or video becomes a layer starting at the playhead (as it was when the tool was pressed; see `newLayerStart`), selected. */
   const addOverlay = () => withLock(async () => {
     const pressed = useEditorStore.getState();
     const projectId = pressed.project?.id;
     if (!pressed.project || !projectId || pressed.project.clips.length === 0) return;
-    const start = pressed.playhead;
+    const start = newLayerStart(pressed.project, pressed.playhead);
     if (pressed.project.layers.length >= LAYER_LIMITS.max) { useToast.getState().show(LAYER_LIMIT); return; }
     const assets = await pickMedia({ multiple: false });
     if (!assets || assets.length === 0) return;

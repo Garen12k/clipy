@@ -12,11 +12,12 @@ export function LayerLane() {
   const layers = useEditorStore((s) => s.project?.layers ?? NONE);
   // A layer is selected through the same id as a clip.
   const selectedId = useEditorStore((s) => s.selectedClipId);
+  const missing = useEditorStore((s) => s.missingSourceUris);
   const { select } = useEditorStore.getState();
   return (
     <View testID="layer-lane" style={{ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP }}>
       {layers.map((l, i) => (
-        <LayerBar key={l.id} layer={l} selected={l.id === selectedId}
+        <LayerBar key={l.id} layer={l} missing={missing.includes(l.sourceUri)} selected={l.id === selectedId}
           // Later layers draw on top (the selected one above them all — see LayerBar); one that covers part of an earlier bar is see-through so both stay visible.
           overlapping={layers.slice(0, i).some((o) => l.start < layerEnd(o) && o.start < layerEnd(l))}
           onPress={() => select(l.id === selectedId ? null : l.id)} />

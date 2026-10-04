@@ -119,6 +119,32 @@ test("handles show only on the selected bar; each trims its own end, one undo st
   expect(layer("v1").trimEnd).toBe(8);
 });
 
+test("a trim handle survives its own drag: the layer stays selected and the handle is still there, without selecting again", async () => {
+  await render(<LayerLane />);
+  await act(() => { st().select("v1"); });
+  await drag(gestureOf(screen.getByLabelText("Layer start handle")), 25, 50);
+  expect(layer("v1")).toMatchObject({ trimStart: 3, start: 2 });
+  expect(st().selectedClipId).toBe("v1");
+  expect(screen.getAllByLabelText("Layer start handle")).toHaveLength(1);
+  // The handle now on screen carries on from the new edge.
+  await drag(gestureOf(screen.getByLabelText("Layer start handle")), 50);
+  expect(layer("v1")).toMatchObject({ trimStart: 4, start: 3 });
+  await drag(gestureOf(screen.getByLabelText("Layer end handle")), -50);
+  expect(layer("v1").trimEnd).toBe(5);
+  expect(st().selectedClipId).toBe("v1");
+  expect(screen.getAllByLabelText("Layer end handle")).toHaveLength(1);
+  expect(st().past).toHaveLength(3);
+});
+
+test("a layer whose file is missing shows the warning badge the audio bar shows", async () => {
+  await render(<LayerLane />);
+  expect(screen.queryByTestId("layer-bar-v1-missing")).toBeNull();
+  await act(() => { useEditorStore.setState({ missingSourceUris: [layer("v1").sourceUri] }); });
+  expect(screen.getByTestId("layer-bar-v1-missing")).toHaveStyle({ position: "absolute", backgroundColor: theme.colors.danger });
+  expect(screen.queryByTestId("layer-bar-v2-missing")).toBeNull();
+  expect(screen.queryByTestId("layer-bar-ph-missing")).toBeNull();
+});
+
 test("trims stop at the source, at project time 0 and at the minimum length — none of them is a refusal", async () => {
   st().select("v1");
   await render(<LayerLane />);

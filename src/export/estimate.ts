@@ -18,9 +18,9 @@ export function exportableClips(project: Project, missingSourceUris: string[]): 
 }
 /** Layers closer than this to the end of the exported video are dropped (nothing visible would be drawn). */
 export const LAYER_END_SLACK = 0.05;
-/** The layers that go into the export, order preserved: source file present and starting before the exported `total` seconds end. */
+/** The layers that go into the export, order preserved: non-empty (as `exportableClips`), source file present and starting before the exported `total` seconds end. */
 export const exportableLayers = (project: Project, missingSourceUris: string[], total: number): LayerClip[] =>
-  project.layers.filter((l) => !missingSourceUris.includes(l.sourceUri) && l.start < total - LAYER_END_SLACK);
+  project.layers.filter((l) => l.trimEnd > l.trimStart && !missingSourceUris.includes(l.sourceUri) && l.start < total - LAYER_END_SLACK);
 /** Length of the exported video in seconds (what the finish screen shows and the Post screen receives). */
 export const exportDuration = (project: Project, missingSourceUris: string[]): number => exportableClips(project, missingSourceUris).reduce((s, c) => s + clipDuration(c), 0);
 /** The audio tracks that go into the export, in order: every track whose source file still exists. */
