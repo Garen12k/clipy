@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FlatList, Pressable, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { searchEmoji, type EmojiEntry } from "@/src/editor/emoji";
 import { addSticker, defaultOverlayRange } from "@/src/editor/model/ops";
@@ -53,13 +53,14 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
   const results = searchEmoji(query);
 
   return (
+    // The panel has a maximum height, not a fixed one: its content sizes itself and shrinks to fit (a `flex: 1` child would collapse to nothing).
     <Sheet visible={visible} onClose={onClose} title="Sticker" height="60%">
       <View style={{ flexDirection: "row", gap: theme.space.sm }}>
         <Chip label="Emoji" selected={tab === "emoji"} onPress={() => setTab("emoji")} />
         <Chip label="Shapes" selected={tab === "shapes"} onPress={() => setTab("shapes")} />
       </View>
       {tab === "emoji" ? (
-        <View style={{ flex: 1, gap: theme.space.sm }}>
+        <View style={{ flexShrink: 1, gap: theme.space.sm }}>
           <TextInput accessibilityLabel="Search emoji" value={query} onChangeText={setQuery}
             placeholder="Search" placeholderTextColor={theme.colors.textMuted}
             style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 8 }} />
@@ -80,7 +81,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
             )} />
         </View>
       ) : (
-        <View style={{ flex: 1, gap: theme.space.md }}>
+        <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ gap: theme.space.md }}>
           <ColorRow value={color} onChange={setColor} />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.md }}>
             {SHAPE_IDS.map((id) => (
@@ -91,7 +92,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               </Pressable>
             ))}
           </View>
-        </View>
+        </ScrollView>
       )}
     </Sheet>
   );
