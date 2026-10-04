@@ -95,6 +95,7 @@ final class CaptionWordsTests: XCTestCase {
     XCTAssertEqual(rich.sublayers?[1].opacity ?? 0, 0.6, accuracy: 1e-6)
     XCTAssertEqual(rich.sublayers?[2].shadowOpacity, 0)
     XCTAssertEqual((rich.animation(forKey: "visible") as? CABasicAnimation)?.fromValue as? Double, 0.5)
+    XCTAssertTrue(rich.allowsGroupOpacity)                         // the layers fade as one picture
 
     var caption = text()
     caption.kind = "caption"; caption.highlightColor = "#FFE600"; caption.start = 2; caption.end = 4
@@ -107,5 +108,6 @@ final class CaptionWordsTests: XCTestCase {
     XCTAssertEqual(sung.sublayers?[1].animation(forKey: "visible")?.duration, 1)
     XCTAssertEqual(sung.sublayers?[2].animation(forKey: "visible")?.beginTime, 3)
     XCTAssertEqual(sung.sublayers?[1].opacity, 0)
+    XCTAssertTrue(sung.allowsGroupOpacity)
   }
 }

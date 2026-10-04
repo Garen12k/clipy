@@ -112,6 +112,20 @@ test("the default path adds no extra sublayer: every addition sits inside one of
   expect(rest).not.toMatch(/shadowColor|shadowRadius|shadowOffset|shadowOpacity/);
 });
 
+test("group opacity is switched on only off the default path: with a glow / shadow copy, word layers, or a see-through style", () => {
+  const on = "container.allowsGroupOpacity = true";
+  let rest = layer;
+  for (const from of ["if let glow = l.glow", "if let shadow = l.shadow", "if o.kind == \"caption\""]) {
+    const block = between(layer, from, "\n    }\n");
+    expect(block.split(on)).toHaveLength(2);
+    rest = rest.replace(block, "");
+  }
+  // Outside the three guards: once, behind the opacity check.
+  expect(rest.split(on)).toHaveLength(2);
+  expect(rest).toContain(`if shown < 1 { ${on} }`);
+  expect(session.split("allowsGroupOpacity")).toHaveLength(5);
+});
+
 test("text opacity multiplies what the overlay shows: the visibility value and every motion opacity sample", () => {
   expect(session).toContain("static func addVisibility(_ layer: CALayer, start: Double, end: Double, opacity: Double = 1) {");
   const visibility = between(session, "static func addVisibility(", "\n  }\n");
@@ -130,7 +144,10 @@ test("text opacity multiplies what the overlay shows: the visibility value and e
 
 test("the XCTests cover the word spans: ranges, times, clamping and skipped words", () => {
   expect(tests).toContain("@testable import ClipyVideo");
-  for (const name of ["testRangesAndCompositionTimes", "testRepeatedWordsAreFoundInOrder", "testUTF16Ranges", "testTimesAreClampedIntoTheCaption", "testSkipsMissingAndEmptyWords", "testNoWords"]) {
+  for (const name of ["testRangesAndCompositionTimes", "testRepeatedWordsAreFoundInOrder", "testUTF16Ranges", "testTimesAreClampedIntoTheCaption", "testSkipsMissingAndEmptyWords", "testNoWords", "testLayerTree"]) {
     expect(tests).toContain(`func ${name}()`);
   }
+  const tree = between(tests, "func testLayerTree()", "\n  }\n");
+  expect(tree).toContain("XCTAssertTrue(rich.allowsGroupOpacity)");
+  expect(tree).toContain("XCTAssertTrue(sung.allowsGroupOpacity)");
 });

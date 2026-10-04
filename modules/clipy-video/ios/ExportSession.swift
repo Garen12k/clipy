@@ -482,7 +482,10 @@ final class ExportSession {
     // glow / shadow colour, below the fill (bottom to top: glow, shadow, fill, as the preview stacks them).
     // `shadowRadius` is the blur's standard deviation, about half of a blur given as a radius, hence the `/ 2`
     // (to be tuned against the preview on the first build).
+    // Off the default path the container holds several layers that overlap; group opacity makes a see-through or
+    // fading text fade as ONE picture (the copies do not show through each other). A default text never sets it.
     if let glow = l.glow, glow.radius > 0 {
+      container.allowsGroupOpacity = true
       let halo = textCopy(tinted(glow.color))
       halo.shadowColor = UIColor(hex: glow.color).cgColor
       halo.shadowOpacity = 1
@@ -491,6 +494,7 @@ final class ExportSession {
       container.insertSublayer(halo, below: textLayer)
     }
     if let shadow = l.shadow, shadow.opacity > 0 {
+      container.allowsGroupOpacity = true
       // The layer's own opacity carries the shadow's strength: it fades the copy's glyphs and the shadow they cast
       // together. The layout's offset is y-down (top-left origin); this layer space is y-up, so `dy` is negated.
       let cast = textCopy(tinted(shadow.color))
@@ -506,6 +510,7 @@ final class ExportSession {
     // the fill, shown only while the word is spoken (composition time). The caption itself stays underneath.
     // Captions never have motion, so the visibility animation is all a word layer needs.
     if o.kind == "caption", let highlight = o.highlightColor, !o.words.isEmpty {
+      container.allowsGroupOpacity = true
       let spans = CaptionWords.spans(text: o.text, words: o.words.map { (text: $0.text, start: $0.start, end: $0.end) }, start: o.start, end: o.end)
       for span in spans {
         let lit = NSMutableAttributedString(attributedString: string)
@@ -518,6 +523,7 @@ final class ExportSession {
 
     container.transform = overlayTransform(scale: 1, rotation: l.rotation)
     let shown = Double(l.opacity)                     // the text style's opacity, on top of visibility / motion
+    if shown < 1 { container.allowsGroupOpacity = true }   // a see-through text over its own background bar
     if !addMotion(container, o, renderSize: renderSize, opacity: shown) { addVisibility(container, start: o.start, end: o.end, opacity: shown) }
     return container
   }
