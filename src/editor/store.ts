@@ -20,6 +20,8 @@ interface EditorState {
   selectedAudioId: string | null;
   playhead: number;
   isPlaying: boolean;
+  /** A voice-over is being recorded: the preview's audio players and the video are silent. Transient — not saved, not undoable. */
+  recording: boolean;
   pixelsPerSecond: number;
   past: Project[];
   future: Project[];
@@ -39,13 +41,14 @@ interface EditorState {
   selectAudio: (id: string | null) => void;
   seek: (t: number) => void;
   setPlaying: (b: boolean) => void;
+  setRecording: (v: boolean) => void;
   setZoom: (pps: number) => void;
   markSaved: () => void;
   reset: () => void;
 }
 
 const initial = {
-  project: null, missingSourceUris: [], selectedClipId: null, selectedOverlayId: null, selectedEffectId: null, selectedAudioId: null, playhead: 0, isPlaying: false,
+  project: null, missingSourceUris: [], selectedClipId: null, selectedOverlayId: null, selectedEffectId: null, selectedAudioId: null, playhead: 0, isPlaying: false, recording: false,
   pixelsPerSecond: DEFAULT_PPS, past: [], future: [], dirty: false,
 };
 
@@ -127,6 +130,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ playhead: Math.max(0, Math.min(t, p ? totalDuration(p) : 0)) });
   },
   setPlaying: (b) => set({ isPlaying: b }),
+  setRecording: (v) => set({ recording: v }),
   setZoom: (pps) => set({ pixelsPerSecond: Math.max(MIN_PPS, Math.min(MAX_PPS, pps)) }),
   markSaved: () => set({ dirty: false }),
   reset: () => set({ ...initial }),

@@ -313,6 +313,127 @@ test("a reversed clip plays muted (the export is silent); a normal clip does not
   expect(mp.volume).toBe(1);
 });
 
+describe("the video's own sound follows the clip's fades", () => {
+  // One 4 s clip fading in over 2 s and out over 1 s, at volume 0.8.
+  const faded = (over: Partial<Clip> = {}) =>
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "f", sourceDuration: 4, volume: 0.8, fadeIn: 2, fadeOut: 1, ...over })] }));
+  /** Records every `volume` / `muted` write from here on; `restore` puts the plain properties back. */
+  const watch = () => {
+    const mp = player as unknown as { volume: number; muted: boolean };
+    let volume = mp.volume;
+    let muted = mp.muted;
+    const volumes: number[] = [];
+    const mutes: boolean[] = [];
+    Object.defineProperty(player, "volume", { configurable: true, get: () => volume, set: (v: number) => { volume = v; volumes.push(v); } });
+    Object.defineProperty(player, "muted", { configurable: true, get: () => muted, set: (v: boolean) => { muted = v; mutes.push(v); } });
+    return { volumes, mutes, restore: () => {
+      Object.defineProperty(player, "volume", { configurable: true, writable: true, value: 1 });
+      Object.defineProperty(player, "muted", { configurable: true, writable: true, value: false });
+    } };
+  };
+  const ready = async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+  };
+  const tick = (currentTime: number) => act(() => { player.listeners.timeUpdate?.({ currentTime }); });
+
+  test("paused: the volume is the clip's gain at the playhead", async () => {
+    faded();
+    const w = watch();
+    await ready();
+    expect(w.volumes).toEqual([0]); // the very start of the fade-in
+    await act(() => { useEditorStore.getState().seek(1); });
+    await act(() => { useEditorStore.getState().seek(2.5); });
+    await act(() => { useEditorStore.getState().seek(3.5); });
+    expect(w.volumes).toHaveLength(4);
+    expect(w.volumes[1]).toBeCloseTo(0.4, 10); // fade-in midpoint
+    expect(w.volumes[2]).toBeCloseTo(0.8, 10);
+    expect(w.volumes[3]).toBeCloseTo(0.4, 10); // fade-out midpoint
+    expect(w.mutes).toEqual([false]);
+    w.restore();
+  });
+
+  test("playing through the fade writes the volume only: no seek, no pause, no play, no rate, no mute", async () => {
+    faded();
+    await ready();
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    const w = watch();
+    player.seeks.length = 0; player.rates.length = 0; player.pause.mockClear(); player.play.mockClear();
+    for (const t of [0.5, 1, 1.5]) await tick(t);
+    expect(w.volumes).toHaveLength(3);
+    [0.2, 0.4, 0.6].forEach((v, i) => expect(w.volumes[i]).toBeCloseTo(v, 10));
+    expect(w.mutes).toEqual([]);
+    expect(player.seeks).toEqual([]);
+    expect(player.rates).toEqual([]);
+    expect(player.pause).not.toHaveBeenCalled();
+    expect(player.play).not.toHaveBeenCalled();
+    expect(player.playing).toBe(true);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    w.restore();
+  });
+
+  test("volume writes are throttled: only a change above 0.01, or arriving at exactly 0 or 1, is written", async () => {
+    faded({ volume: 1 });
+    await ready();
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    await tick(1);
+    const w = watch();
+    for (const t of [1.01, 1.016, 0.99]) await tick(t); // 0.505, 0.508, 0.495 against the 0.5 already written
+    expect(w.volumes).toEqual([]);
+    await tick(1.03);
+    expect(w.volumes).toEqual([0.515]);
+    await tick(1.99);
+    await tick(2); // exactly the cap: written although it is within 0.01 of 0.995
+    await tick(2.5);
+    expect(w.volumes).toEqual([0.515, 0.995, 1]);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    w.restore();
+  });
+
+  test("an un-faded clip keeps its one volume write, capped at 1", async () => {
+    faded({ fadeIn: 0, fadeOut: 0, volume: 1.5 });
+    const w = watch();
+    await ready();
+    for (const t of [0.5, 2, 3.9, 4]) await act(() => { useEditorStore.getState().seek(t); });
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    await tick(1);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    expect(w.volumes).toEqual([1]);
+    expect(w.mutes).toEqual([false]);
+    w.restore();
+  });
+
+  test("a muted or reversed faded clip stays at 0", async () => {
+    faded({ muted: true });
+    const w = watch();
+    await ready();
+    await act(() => { useEditorStore.getState().seek(2.5); });
+    await act(() => { useEditorStore.getState().apply((p) => ({ ...p, clips: p.clips.map((c) => ({ ...c, muted: false, reversed: true })) })); });
+    expect(w.volumes).toEqual([0]);
+    expect(w.mutes).toEqual([true]);
+    w.restore();
+  });
+
+  test("recording mutes the video and un-mutes it afterwards, without a seek, a pause or a play", async () => {
+    faded({ fadeIn: 0, fadeOut: 0 });
+    await ready();
+    await act(() => { useEditorStore.getState().seek(1); });
+    const w = watch();
+    player.seeks.length = 0; player.pause.mockClear(); player.play.mockClear();
+    await act(() => { useEditorStore.getState().setRecording(true); });
+    expect(w.volumes).toEqual([0]);
+    expect(w.mutes).toEqual([true]);
+    await act(() => { useEditorStore.getState().setRecording(false); });
+    expect(w.volumes).toEqual([0, 0.8]);
+    expect(w.mutes).toEqual([true, false]);
+    expect(player.seeks).toEqual([]);
+    expect(player.pause).not.toHaveBeenCalled();
+    expect(player.play).not.toHaveBeenCalled();
+    w.restore();
+  });
+});
+
 describe("look layers (filter strength, adjust, effects)", () => {
   type Json = { props: { testID?: string }; children: (Json | string)[] | null };
   /** Every testID under `node`, depth-first: the paint order (later = on top). */
