@@ -106,7 +106,7 @@ The Swift twin holds the same constants and functions; a Jest parity test compar
 
 ## 6. Export
 
-`ExportClip` gains `animation` (`in` / `out` as `{ id, duration } | null`, `combo` as `string | null`), `keyframes` (converted to **clip-local output seconds**, only those needed to reproduce the motion inside the trimmed range plus one on each side), and `outputDuration`. `ExportOverlay` gains `animation` and `keyframes`. Swift:
+`ExportClip` gains `animation` (`in` / `out` as `{ id, duration } | null`, `combo` as `string | null`), `keyframes` (converted to **clip-local output seconds**, only those needed to reproduce the motion inside the trimmed range plus one on each side). `ExportOverlay` gains `animation` and `keyframes`. Swift:
 
 - `Motion.swift` mirrors §4.
 - Compositor: each `LayerSpec` knows its clip's composition start and length; per frame it resolves the motion at `clamp(compositionTime − start, 0, length)` and places the picture with the resolved transform; opacity multiplies the picture's alpha before it is laid over the background. A clip with no animation and no keyframes takes exactly today's path.
