@@ -4,6 +4,7 @@ import { ANIM_COMBO, ANIM_IN } from "@/src/editor/effects";
 import { setAnimationForAllClips, setClipAnimation } from "@/src/editor/model/ops";
 import { ANIM_COMBO_IDS, ANIM_IN_IDS, type AnimComboId, type AnimInId } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
@@ -15,7 +16,7 @@ const TABS: { id: Tab; label: string }[] = [{ id: "in", label: "In" }, { id: "ou
 
 /** A clip's In / Out or Combo animation. The op keeps edges and combo exclusive; the tabs only show what the clip holds. */
 export function ClipAnimationSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
-  const clip = useEditorStore((s) => s.project?.clips.find((c) => c.id === clipId) ?? null);
+  const clip = useItemClip(clipId);
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const [tab, setTab] = useState<Tab>("in");
   if (!clip) return null;

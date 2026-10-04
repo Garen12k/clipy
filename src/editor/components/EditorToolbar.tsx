@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { addTextOverlay, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, duplicateAudioTrack, duplicateClip, duplicateEffect, overlayKeyframeAt, setClipReversed, setDucking, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
-import { clipAt } from "@/src/editor/model/timeline";
-import { isPhoto, isTextOverlay, makeOverlay } from "@/src/editor/model/types";
+import { addTextOverlay, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, duplicateAudioTrack, duplicateClip, duplicateEffect, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
+import { findItem, itemOffsetAt } from "@/src/editor/model/timeline";
+import { isPhoto, isTextOverlay, LAYER_LIMITS, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useClipMedia } from "@/src/editor/useClipMedia";
+import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { useFreezeFrame } from "@/src/editor/useFreezeFrame";
 import { TOOL_GROUPS, groupForSelection, type IoniconName, type ToolGroupId, type ToolId } from "@/src/editor/toolGroups";
 import { newId } from "@/src/lib/id";
@@ -30,6 +31,8 @@ import { OverlayAnimationSheet } from "./OverlayAnimationSheet";
 import { RatioSheet } from "./RatioSheet";
 import { SpeedSheet } from "./SpeedSheet";
 import { FilterSheet } from "./FilterSheet";
+import { MaskSheet } from "./MaskSheet";
+import { OpacitySheet } from "./OpacitySheet";
 import { StickerPanel } from "./StickerPanel";
 import { StickerSheet } from "./StickerSheet";
 import { TemplateSheet } from "./TemplateSheet";
@@ -44,23 +47,28 @@ type PanelFor = { id: string; kind: "text" | "sticker" } | null;
 const SELECTED_EFFECT_TOOLS: ToolId[] = ["effect", "effectStrength", "effectDuplicate", "effectDelete"];
 /** With an audio track selected, the Audio group shows that track's tools instead of its normal ones (Add audio stays: a second sound can be added without deselecting). */
 const SELECTED_AUDIO_TOOLS: ToolId[] = ["addAudio", "audioVolume", "audioFade", "audioDuplicate", "audioDelete"];
+/** With a layer selected, the Edit group shows these after its normal tools. */
+const SELECTED_LAYER_TOOLS: ToolId[] = ["layerForward", "layerBack"];
 
 type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void };
 
 export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransitionChange }: Props) {
+  // `selectedClipId` holds a main clip's or a layer's id. `selectedIndex` is the place on the main track (-1 for a layer): transitions only.
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const selectedIndex = useEditorStore((s) => s.project?.clips.findIndex((c) => c.id === s.selectedClipId) ?? -1);
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | "opacity" | "mask" | null>(null);
   const noSel = !selectedId;
-  const selectedClip = useEditorStore((s) => s.project?.clips.find((c) => c.id === s.selectedClipId) ?? null);
+  const selectedClip = useItemClip(selectedId);
+  /** A layer is selected: the main-track tools (Split, Freeze, Ratio, Transition, Background) do not apply. */
+  const layerSel = useIsLayer(selectedId);
   const photoSel = !!selectedClip && isPhoto(selectedClip);
   const reversed = !!selectedClip?.reversed;
   const reduced = useReducedMotion();
   const insets = useSafeAreaInsets();
-  const { replaceMedia, busy: mediaBusy } = useClipMedia();
+  const { replaceMedia, addOverlay, busy: mediaBusy } = useClipMedia();
   const { freeze, busy: freezeBusy } = useFreezeFrame();
   const [group, setGroup] = useState<ToolGroupId>("edit");
   const overlayKind = useEditorStore((s) => s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind ?? null);
@@ -79,9 +87,10 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     const p = s.project;
     if (!p) return "off";
     if (group === "edit") {
-      const hit = s.selectedClipId ? clipAt(p, s.playhead) : null;
-      if (!hit || hit.clip.id !== s.selectedClipId) return "off";
-      return clipKeyframeAt(hit.clip, hit.offsetInClip) ? "remove" : "add";
+      const item = s.selectedClipId ? findItem(p, s.selectedClipId) : null;
+      const offset = item ? itemOffsetAt(p, item.clip.id, s.playhead) : null;
+      if (!item || offset === null) return "off";
+      return clipKeyframeAt(item.clip, offset) ? "remove" : "add";
     }
     const o = motionOverlayKind ? p.overlays.find((x) => x.id === s.selectedOverlayId) : undefined;
     if (!o || o.kind !== motionOverlayKind || s.playhead < o.start || s.playhead > o.end) return "off";
@@ -91,10 +100,10 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     const { project, playhead } = useEditorStore.getState();
     if (!project || pin === "off") return;
     if (group === "edit") {
-      const hit = clipAt(project, playhead);
-      if (!hit || hit.clip.id !== selectedId) return;
+      const offset = selectedId ? itemOffsetAt(project, selectedId, playhead) : null;
+      if (!selectedId || offset === null) return;
       haptic("light");
-      apply((p) => toggleClipKeyframe(p, hit.clip.id, hit.offsetInClip));
+      apply((p) => toggleClipKeyframe(p, selectedId, offset));
     } else if (motionOverlayId) {
       haptic("light");
       apply((p) => toggleOverlayKeyframe(p, motionOverlayId, playhead));
@@ -150,24 +159,47 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     useEditorStore.getState().selectAudio(null);
   };
 
+  const duplicateSelected = () => {
+    const project = useEditorStore.getState().project;
+    if (!project || !selectedId) return;
+    // The op returns the same project when it refuses: only a layer can be refused (the layer limit, or a third video at once).
+    const next = duplicateClip(project, selectedId);
+    if (next === project) {
+      if (layerSel) useToast.getState().show(project.layers.length >= LAYER_LIMITS.max ? "You've reached the layer limit." : "Only two video layers can play at the same time.");
+      return;
+    }
+    apply(() => next);
+  };
+  const reorderSelected = (direction: "forward" | "back") => {
+    const project = useEditorStore.getState().project;
+    if (!project || !selectedId || reorderLayer(project, selectedId, direction) === project) return;   // already at that end: no buzz, no undo step
+    haptic("light");
+    apply((p) => reorderLayer(p, selectedId, direction));
+  };
+
   const TOOLS: Record<ToolId, { label: string; icon: IoniconName; disabled?: boolean; active?: boolean; onPress: () => void }> = {
-    split: { label: "Split", icon: "cut", disabled: noSel, onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
+    split: { label: "Split", icon: "cut", disabled: noSel || layerSel, onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
     trim: { label: "Trim", icon: "crop", disabled: noSel, onPress: () => setSheet("trim") },
     transform: { label: "Transform", icon: "resize", disabled: noSel, onPress: () => setSheet("transform") },
     animate: { label: "Animate", icon: "play-forward-outline", disabled: !canAnimate, onPress: () => setSheet(group === "edit" ? "clipAnimation" : "overlayAnimation") },
     keyframe: { label: "Keyframe", icon: pin === "remove" ? "diamond" : "diamond-outline", disabled: pin === "off", active: pin === "remove", onPress: toggleKeyframe },
     crop: { label: "Crop", icon: "crop", disabled: noSel, onPress: () => setSheet("crop") },
+    overlay: { label: "Overlay", icon: "layers", disabled: !hasClips || mediaBusy, onPress: () => { void addOverlay(); } },
+    opacity: { label: "Opacity", icon: "contrast", disabled: noSel, onPress: () => setSheet("opacity") },
+    mask: { label: "Mask", icon: "ellipse-outline", disabled: noSel, onPress: () => setSheet("mask") },
+    layerForward: { label: "Forward", icon: "arrow-up", disabled: !layerSel, onPress: () => reorderSelected("forward") },
+    layerBack: { label: "Back", icon: "arrow-down", disabled: !layerSel, onPress: () => reorderSelected("back") },
     replace: { label: "Replace", icon: "sync", disabled: noSel || mediaBusy, onPress: () => { if (selectedId) void replaceMedia(selectedId); } },
     reverse: { label: "Reverse", icon: "play-back", disabled: noSel || photoSel, active: reversed, onPress: () => { if (selectedId) { haptic("light"); apply((p) => setClipReversed(p, selectedId, !reversed)); } } },
-    freeze: { label: "Freeze", icon: "snow", disabled: noSel || photoSel || freezeBusy, onPress: () => { haptic("light"); void freeze(); } },
-    duplicate: { label: "Duplicate", icon: "copy", disabled: noSel, onPress: () => selectedId && apply((p) => duplicateClip(p, selectedId)) },
+    freeze: { label: "Freeze", icon: "snow", disabled: noSel || layerSel || photoSel || freezeBusy, onPress: () => { haptic("light"); void freeze(); } },
+    duplicate: { label: "Duplicate", icon: "copy", disabled: noSel, onPress: duplicateSelected },
     delete: { label: "Delete", icon: "trash", disabled: noSel, onPress: () => { if (selectedId) { haptic("medium"); apply((p) => deleteClip(p, selectedId)); } } },
-    ratio: { label: "Ratio", icon: "phone-portrait", onPress: () => setSheet("ratio") },
+    ratio: { label: "Ratio", icon: "phone-portrait", disabled: layerSel, onPress: () => setSheet("ratio") },
     filter: { label: "Filter", icon: "color-filter", disabled: noSel, onPress: () => setSheet("filter") },
     speed: { label: "Speed", icon: "speedometer", disabled: noSel || photoSel, onPress: () => setSheet("speed") },
-    transition: { label: "Transition", icon: "swap-horizontal", disabled: noSel || selectedIndex === clipCount - 1, onPress: () => onTransitionChange(selectedIndex) },
+    transition: { label: "Transition", icon: "swap-horizontal", disabled: noSel || layerSel || selectedIndex === clipCount - 1, onPress: () => onTransitionChange(selectedIndex) },
     templates: { label: "Templates", icon: "color-wand", disabled: !hasClips, onPress: () => setSheet("templates") },
-    background: { label: "Background", icon: "color-palette", disabled: noSel, onPress: () => setSheet("background") },
+    background: { label: "Background", icon: "color-palette", disabled: noSel || layerSel, onPress: () => setSheet("background") },
     adjust: { label: "Adjust", icon: "options", disabled: noSel, onPress: () => setSheet("adjust") },
     effect: { label: "Effect", icon: "flash", onPress: () => setSheet("effect") },
     effectStrength: { label: "Strength", icon: "speedometer", disabled: !selectedEffectId, onPress: () => setSheet("effectStrength") },
@@ -187,7 +219,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     audioDelete: { label: "Delete", icon: "trash", disabled: !selectedAudioId, onPress: deleteSelectedAudio },
   };
   const active = TOOL_GROUPS.find((g) => g.id === group)!;
-  const tools = group === "effects" && selectedEffectId ? SELECTED_EFFECT_TOOLS : group === "audio" && selectedAudioId ? SELECTED_AUDIO_TOOLS : active.tools;
+  const tools = group === "effects" && selectedEffectId ? SELECTED_EFFECT_TOOLS : group === "audio" && selectedAudioId ? SELECTED_AUDIO_TOOLS
+    : group === "edit" && layerSel ? [...active.tools, ...SELECTED_LAYER_TOOLS] : active.tools;
 
   return (
     <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: Math.max(insets.bottom, theme.space.sm) }}>
@@ -213,6 +246,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <EffectStrengthSheet effectId={selectedEffectId} visible={sheet === "effectStrength"} onClose={() => setSheet(null)} />
       <BackgroundSheet clipId={selectedId} visible={sheet === "background"} onClose={() => setSheet(null)} />
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
+      <OpacitySheet clipId={selectedId} visible={sheet === "opacity"} onClose={() => setSheet(null)} />
+      <MaskSheet clipId={selectedId} visible={sheet === "mask"} onClose={() => setSheet(null)} />
       <AddAudioSheet visible={sheet === "addAudio"} onClose={() => setSheet(null)} />
       <BeatsSheet visible={sheet === "beats"} onClose={() => setSheet(null)} />
       <AudioVolumeSheet trackId={selectedAudioId} visible={sheet === "audioVolume"} onClose={() => setSheet(null)} />

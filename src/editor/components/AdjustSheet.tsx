@@ -4,6 +4,7 @@ import { ScrollView } from "react-native";
 import { resetClipAdjust, setAdjustForAllClips, setClipAdjust } from "@/src/editor/model/ops";
 import { ADJUST_KEYS, ADJUST_RANGE, isNeutralAdjust, type AdjustKey } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
@@ -17,7 +18,7 @@ export const ADJUST_LABELS: Record<AdjustKey, string> = {
 };
 
 export function AdjustSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
-  const clip = useEditorStore((s) => s.project?.clips.find((c) => c.id === clipId) ?? null);
+  const clip = useItemClip(clipId);
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const [key, setKey] = useState<AdjustKey>("brightness");
   if (!clip) return null;

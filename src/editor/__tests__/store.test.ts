@@ -1,6 +1,6 @@
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { makeClip, makeProject } from "@/src/editor/model/types";
-import { deleteClip, setAspectRatio } from "@/src/editor/model/ops";
+import { makeClip, makeLayer, makeProject } from "@/src/editor/model/types";
+import { deleteClip, setAspectRatio, setClipOpacity } from "@/src/editor/model/ops";
 import { HISTORY_LIMIT, useEditorStore } from "../store";
 
 const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })] });
@@ -46,6 +46,17 @@ test("deleting the selected clip clears selection and clamps the playhead", () =
   s.apply((x) => deleteClip(x, "b"));
   expect(useEditorStore.getState().selectedClipId).toBeNull();
   expect(useEditorStore.getState().playhead).toBe(4);
+});
+
+test("a selected layer stays selected through edits and is cleared when the layer goes", () => {
+  const s = useEditorStore.getState();
+  s.setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [makeLayer({ id: "L", sourceDuration: 2 })] }));
+  s.select("L");
+  s.apply((x) => setClipOpacity(x, "L", 0.5));
+  expect(useEditorStore.getState().selectedClipId).toBe("L");
+  s.apply((x) => deleteClip(x, "L"));
+  expect(useEditorStore.getState().project!.layers).toHaveLength(0);
+  expect(useEditorStore.getState().selectedClipId).toBeNull();
 });
 
 test("transactions record one undo step for many transient updates", () => {

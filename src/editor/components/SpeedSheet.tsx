@@ -7,6 +7,7 @@ import { setClipSpeed, setClipSpeedCurve } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
 import { SPEED_CURVE_IDS, SPEED_LIMITS, type Clip, type SpeedCurveId } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
@@ -62,19 +63,22 @@ function CurveTile({ id, label, shape, selected, onPress }: { id: string; label:
   );
 }
 
-/** A clip's speed: one constant speed (Normal) or a speed-curve preset (Curve). The ops keep the two exclusive. */
+const LAYER_REFUSED = "That speed doesn't fit this layer.";
+
+/** A clip's or layer's speed: one constant speed (Normal) or a speed-curve preset (Curve). The ops keep the two exclusive. */
 export function SpeedSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
-  const clip = useEditorStore((s) => s.project?.clips.find((c) => c.id === clipId) ?? null);
+  const clip = useItemClip(clipId);
+  const layer = useIsLayer(clipId);
   if (!clip) return null;
   return (
     <Sheet visible={visible} onClose={onClose} title="Speed">
       {/* Mounted only while the sheet is open (and per clip), so it opens on the tab the clip's speed lives on. */}
-      <SpeedBody key={clip.id} clip={clip} onClose={onClose} />
+      <SpeedBody key={clip.id} clip={clip} layer={layer} onClose={onClose} />
     </Sheet>
   );
 }
 
-function SpeedBody({ clip, onClose }: { clip: Clip; onClose: () => void }) {
+function SpeedBody({ clip, layer, onClose }: { clip: Clip; layer: boolean; onClose: () => void }) {
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const curveId = clip.speedCurve?.id ?? null;
   const [tab, setTab] = useState<Tab>(curveId ? "curve" : "normal");
@@ -88,11 +92,21 @@ function SpeedBody({ clip, onClose }: { clip: Clip; onClose: () => void }) {
     if (next === project) {
       // The same project for the tile that is already selected: nothing to change — silently.
       if (id === curveId) return;
-      // Otherwise the op refused: the preset would leave the clip shorter than a clip may be.
+      // Otherwise the op refused: the preset would leave the clip shorter than a clip may be (a layer: or break the layer rules).
       // The toast lives on the screen under this sheet's Modal, so the sheet closes first.
-      onClose(); useToast.getState().show("This clip is too short for a speed curve."); return;
+      onClose(); useToast.getState().show(layer ? LAYER_REFUSED : "This clip is too short for a speed curve."); return;
     }
     haptic("light");
+    apply(() => next);
+  };
+
+  const pickSpeed = (speed: number) => {
+    const project = useEditorStore.getState().project;
+    if (!project) return;
+    const next = setClipSpeed(project, clip.id, speed);
+    // A layer whose new length would break the layer rules (too short, or a third video at once) is refused: the same project for
+    // a speed that is not the current one. A main clip is never refused here (its speed is capped instead).
+    if (next === project) { if (layer && (curveId !== null || speed !== clip.speed)) { onClose(); useToast.getState().show(LAYER_REFUSED); } return; }
     apply(() => next);
   };
 
@@ -107,7 +121,7 @@ function SpeedBody({ clip, onClose }: { clip: Clip; onClose: () => void }) {
             ? <Body muted>A curve is active — moving this slider removes it.</Body>
             : <Body muted>Current speed: {formatSpeed(clip.speed)}</Body>}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.sm }}>
-            {PRESETS.map((s) => <Chip key={s} label={formatSpeed(s)} selected={!curveId && clip.speed === s} onPress={() => apply((p) => setClipSpeed(p, clip.id, s))} />)}
+            {PRESETS.map((s) => <Chip key={s} label={formatSpeed(s)} selected={!curveId && clip.speed === s} onPress={() => pickSpeed(s)} />)}
           </View>
           {/* With a curve the clip's constant speed is 1, so the slider rests at 1× (muted); setClipSpeed clears the curve. */}
           <Slider testID="speed-slider" minimumValue={SPEED_LIMITS[0]} maximumValue={SPEED_LIMITS[1]} step={0.05} value={clip.speed}

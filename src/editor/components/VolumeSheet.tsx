@@ -4,13 +4,14 @@ import { setClipFade, setClipMuted, setClipVolume } from "@/src/editor/model/ops
 import { clipDuration } from "@/src/editor/model/timeline";
 import { CLIP_VOLUME, isPhoto } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 import { FadeSliders } from "./AudioFadeSheet";
 
 export function VolumeSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
-  const clip = useEditorStore((s) => s.project?.clips.find((c) => c.id === clipId) ?? null);
+  const clip = useItemClip(clipId);
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   if (!clip) return null;
   return (

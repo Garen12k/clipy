@@ -1,12 +1,19 @@
 import { create } from "zustand";
-import { addClips, replaceClipMedia } from "@/src/editor/model/ops";
+import { addClips, addLayer, replaceClipMedia } from "@/src/editor/model/ops";
+import { clipDuration, findItem } from "@/src/editor/model/timeline";
+import { LAYER_LIMITS, newVideoClip, type Clip, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { newId } from "@/src/lib/id";
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { useToast } from "@/src/ui/Toast";
 
-/** One picker at a time, shared by the "+" tile and the Replace tool, so a double tap never opens a second pick. */
+/** One picker at a time, shared by the "+" tile, the Replace tool and the Overlay tool, so a double tap never opens a second pick. */
 const useMediaBusy = create<{ busy: boolean }>(() => ({ busy: false }));
+
+const LAYER_LIMIT = "You've reached the layer limit.";
+const LAYER_OVERLAP = "Only two video layers can play at the same time.";
+const TOO_SHORT = "That video is too short.";
 
 async function withLock(run: () => Promise<void>, failMessage: string): Promise<void> {
   if (useMediaBusy.getState().busy) return;
@@ -16,8 +23,30 @@ async function withLock(run: () => Promise<void>, failMessage: string): Promise<
   finally { useMediaBusy.setState({ busy: false }); }
 }
 
-/** Adds picked photos and videos to the open project, or swaps one clip's media. Playhead and selection are left alone. */
-export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId: string): Promise<void>; busy: boolean } {
+type Media = Pick<Clip, "sourceUri" | "sourceDuration" | "width" | "height" | "kind">;
+
+/**
+ * Why `replaceClipMedia` refused. A main clip is only ever refused for a video too short to be a clip. A layer may also be refused by
+ * the overlap rule (a photo layer becoming a video, or a longer one): that is the case when the same swap is accepted with the layer alone.
+ */
+function replaceRefusal(p: Project, id: string, media: Media): string {
+  const layer = p.layers.find((l) => l.id === id);
+  if (!layer) return TOO_SHORT;
+  const alone = { ...p, layers: [layer] };
+  return replaceClipMedia(alone, id, media) === alone ? TOO_SHORT : LAYER_OVERLAP;
+}
+
+/** Why `addLayer` refused this clip (called only when it did). */
+function addLayerRefusal(p: Project, clip: Clip): string {
+  if (p.layers.length >= LAYER_LIMITS.max) return LAYER_LIMIT;
+  return clipDuration(clip) < LAYER_LIMITS.minDuration ? TOO_SHORT : LAYER_OVERLAP;
+}
+
+/**
+ * Adds picked photos and videos to the open project, swaps one clip's or layer's media, or puts one picked item on top as a layer.
+ * Add and Replace leave the playhead and the selection alone; a new layer is selected.
+ */
+export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId: string): Promise<void>; addOverlay(): Promise<void>; busy: boolean } {
   const busy = useMediaBusy((s) => s.busy);
 
   const addMedia = () => withLock(async () => {
@@ -33,30 +62,60 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     if (clips.length < assets.length) useToast.getState().show(`${clips.length} of ${assets.length} added`);
   }, "Couldn't add those items.");
 
+  /** `clipId`: a main clip's or a layer's id. */
   const replaceMedia = (clipId: string) => withLock(async () => {
     const projectId = useEditorStore.getState().project?.id;
     if (!projectId) return;
     const assets = await pickMedia({ multiple: false });
     if (!assets || assets.length === 0) return;
     const picked = assets[0];
-    // Refuse before importing, so a too-short video never gets copied into the project (placeholder uri for the check).
+    // Refuse before importing, so a video that cannot be used never gets copied into the project (placeholder uri for the check).
     const before = useEditorStore.getState().project;
-    if (before?.id !== projectId || !before.clips.some((c) => c.id === clipId)) return;
+    if (before?.id !== projectId || !findItem(before, clipId)) return;
     // A video with no duration is left to importMedia, which rejects it ("Couldn't replace the clip.").
     if (picked.kind === "video" && picked.durationSec > 0) {
       const probe = { sourceUri: picked.uri, kind: picked.kind, width: picked.width, height: picked.height, sourceDuration: picked.durationSec };
-      if (replaceClipMedia(before, clipId, probe) === before) { useToast.getState().show("That video is too short."); return; }
+      if (replaceClipMedia(before, clipId, probe) === before) { useToast.getState().show(replaceRefusal(before, clipId, probe)); return; }
     }
     const { clips } = await storage.importMedia(projectId, [picked]);
     const media = clips[0];
     if (!media) { useToast.getState().show("Couldn't replace the clip."); return; }
     const { project, apply } = useEditorStore.getState();
-    if (project?.id !== projectId || !project.clips.some((c) => c.id === clipId)) return;
+    if (project?.id !== projectId || !findItem(project, clipId)) return;
     // Still checked after import: the imported duration is the authoritative one.
-    if (replaceClipMedia(project, clipId, media) === project) { useToast.getState().show("That video is too short."); return; }
+    if (replaceClipMedia(project, clipId, media) === project) { useToast.getState().show(replaceRefusal(project, clipId, media)); return; }
     apply((p) => replaceClipMedia(p, clipId, media));
     useEditorStore.getState().select(clipId);
   }, "Couldn't replace the clip.");
 
-  return { addMedia, replaceMedia, busy };
+  /** The Overlay tool: one picked photo or video becomes a layer starting at the playhead (as it was when the tool was pressed), selected. */
+  const addOverlay = () => withLock(async () => {
+    const pressed = useEditorStore.getState();
+    const projectId = pressed.project?.id;
+    if (!pressed.project || !projectId || pressed.project.clips.length === 0) return;
+    const start = pressed.playhead;
+    if (pressed.project.layers.length >= LAYER_LIMITS.max) { useToast.getState().show(LAYER_LIMIT); return; }
+    const assets = await pickMedia({ multiple: false });
+    if (!assets || assets.length === 0) return;
+    const picked = assets[0];
+    // Refuse before importing, so a video that cannot be a layer there never gets copied into the project (placeholder clip for the check).
+    const before = useEditorStore.getState().project;
+    if (before?.id !== projectId) return;
+    if (picked.kind === "video" && picked.durationSec > 0) {
+      const probe = newVideoClip({ id: newId(), sourceUri: picked.uri, width: picked.width, height: picked.height, sourceDuration: picked.durationSec });
+      if (addLayer(before, probe, start) === before) { useToast.getState().show(addLayerRefusal(before, probe)); return; }
+    }
+    const { clips } = await storage.importMedia(projectId, [picked]);
+    const clip = clips[0];
+    const { project, apply, select } = useEditorStore.getState();
+    if (project?.id !== projectId || project.clips.length === 0) return;   // the project was closed (or emptied) meanwhile: say nothing
+    if (!clip) { useToast.getState().show("Couldn't add that item."); return; }
+    // Still checked after import: the imported duration is the authoritative one, and layers may have changed meanwhile.
+    const next = addLayer(project, clip, start);
+    if (next === project) { useToast.getState().show(addLayerRefusal(project, clip)); return; }
+    apply(() => next);
+    select(clip.id);
+  }, "Couldn't add that item.");
+
+  return { addMedia, replaceMedia, addOverlay, busy };
 }

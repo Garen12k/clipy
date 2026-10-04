@@ -5,6 +5,7 @@ import { FILTERS } from "@/src/editor/effects";
 import { setClipFilter, setClipFilterIntensity, setFilterForAllClips } from "@/src/editor/model/ops";
 import { FILTER_IDS, isPhoto } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { Sheet } from "@/src/ui/Sheet";
@@ -16,7 +17,7 @@ const TILE_W = 72;
 const TILE_H = 96;
 
 export function FilterSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
-  const clip = useEditorStore((s) => s.project?.clips.find((c) => c.id === clipId) ?? null);
+  const clip = useItemClip(clipId);
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const [thumb, setThumb] = useState<string | null>(null);
 
