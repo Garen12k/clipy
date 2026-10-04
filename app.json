@@ -33,8 +33,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Clipy needs access to your videos to import clips.",
-          "cameraPermission": false,
-          "microphonePermission": false
+          "cameraPermission": false
         }
       ],
       [
@@ -68,12 +67,7 @@
           ]
         }
       ],
-      [
-        "expo-audio",
-        {
-          "microphonePermission": false
-        }
-      ],
+      "expo-audio",
       "expo-document-picker",
       "expo-asset",
       "expo-sqlite",
