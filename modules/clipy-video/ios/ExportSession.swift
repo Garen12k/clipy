@@ -61,6 +61,24 @@ struct ExportEffect: Record {
   @Field var intensity: Double = 1                 // 0…1
 }
 
+/// An In or Out animation: `id` is one of `ANIM_IN_IDS` (unknown → no movement); `duration` in seconds, already
+/// scaled by the app so that In + Out fit inside the item.
+struct ExportAnimEdge: Record {
+  @Field var id: String = ""
+  @Field var duration: Double = 0
+}
+
+/// One pin. `t` is in seconds of OUTPUT time: clip-local for a clip (ascending; may include one pin before 0 and one
+/// after the clip's end), seconds since its start for a text / sticker.
+struct ExportKeyframe: Record {
+  @Field var t: Double = 0
+  @Field var x: Double = 0
+  @Field var y: Double = 0
+  @Field var scale: Double = 1
+  @Field var rotation: Double = 0
+  @Field var opacity: Double = 1
+}
+
 struct ExportClip: Record {
   @Field var sourceUri: String = ""
   @Field var trimStart: Double = 0
@@ -79,6 +97,11 @@ struct ExportClip: Record {
   @Field var reversed: Bool = false                // MediaPrePass writes a reversed copy (video only — exports silent)
   @Field var filterIntensity: Double = 1           // 0…1: mix of the unfiltered (0) and the filtered (1) frame
   @Field var adjust: ExportAdjust = ExportAdjust() // applied after the filter; all 0 = no change
+  @Field var animIn: ExportAnimEdge?               // JS `null` → nil (no In animation)
+  @Field var animOut: ExportAnimEdge?
+  @Field var animCombo: String?                    // one of `ANIM_COMBO_IDS`; set → In / Out are not played
+  @Field var keyframes: [ExportKeyframe] = []      // non-empty → they give x / y / scale / rotation / opacity
+  @Field var outputDuration: Double = 0            // (trimEnd − trimStart) / speed as the app computed it (informational)
 }
 
 struct ExportOverlay: Record {
@@ -99,6 +122,11 @@ struct ExportOverlay: Record {
   @Field var rotation: Double = 0
   @Field var start: Double = 0
   @Field var end: Double = 0
+  // Motion: decoded here; not drawn yet (the overlay layers are still static).
+  @Field var animIn: ExportAnimEdge?
+  @Field var animOut: ExportAnimEdge?
+  @Field var animLoop: String?                     // one of `ANIM_LOOP_IDS`
+  @Field var keyframes: [ExportKeyframe] = []      // t = seconds since the overlay's start
 }
 
 struct ExportAudio: Record {
@@ -242,6 +270,32 @@ final class ExportSession {
     let flipSource = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: naturalSize.height)
     let flipOriented = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: bounds.height)
     return flipSource.concatenating(t).concatenating(normalise).concatenating(flipOriented)
+  }
+
+  /// A request edge as the maths uses it; nil for none or one that cannot play (no id, non-finite or ≤ 0 length).
+  static func motionEdge(_ e: ExportAnimEdge?) -> MotionEdge? {
+    guard let e, !e.id.isEmpty, e.duration.isFinite, e.duration > 0 else { return nil }
+    return MotionEdge(id: e.id, duration: e.duration)
+  }
+
+  /// Request pins as the maths uses them: pins with a non-finite number are dropped, the rest are in time order.
+  static func motionKeyframes(_ keyframes: [ExportKeyframe]) -> [MotionKeyframe] {
+    let pins: [MotionKeyframe] = keyframes.map { (k: ExportKeyframe) -> MotionKeyframe in
+      MotionKeyframe(t: k.t, x: k.x, y: k.y, scale: k.scale, rotation: k.rotation, opacity: k.opacity)
+    }
+    let finite: [MotionKeyframe] = pins.filter { (k: MotionKeyframe) -> Bool in
+      k.t.isFinite && k.x.isFinite && k.y.isFinite && k.scale.isFinite && k.rotation.isFinite && k.opacity.isFinite
+    }
+    return finite.sorted { (a: MotionKeyframe, b: MotionKeyframe) -> Bool in a.t < b.t }
+  }
+
+  /// The clip's animation and pins for the compositor; nil when it has neither (such a clip is drawn exactly as
+  /// before motion existed).
+  static func clipMotion(_ c: ExportClip) -> ClipMotionSpec? {
+    let combo: String? = (c.animCombo ?? "").isEmpty ? nil : c.animCombo
+    let motion = ClipMotionSpec(keyframes: motionKeyframes(c.keyframes), animIn: motionEdge(c.animIn),
+                                animOut: motionEdge(c.animOut), animCombo: combo)
+    return motion.isEmpty ? nil : motion
   }
 
   /// Seconds → CMTime at the timescale every Phase 1–3 computation uses.
@@ -602,6 +656,8 @@ final class ExportSession {
 
     // 4. Compositor instructions, contiguous over [0, total]: clip i alone on [bodyStart + halfIn, bodyEnd − halfOut),
     //    then the window around cut i, [bodyEnd − half, bodyEnd + half), with the outgoing and incoming layers.
+    //    A layer also knows where its clip's own range sits in composition time — `bodyStart` (the cursor before the
+    //    clip: no transition handle) and `outDur` (its length after speed) — so motion is resolved at clip-local time.
     func spec(_ i: Int) -> LayerSpec {
       let c = loaded[i].clip
       return LayerSpec(
@@ -611,7 +667,8 @@ final class ExportSession {
           scale: CGFloat(c.transform.scale), x: CGFloat(c.transform.x), y: CGFloat(c.transform.y),
           rotation: CGFloat(c.transform.rotation), flipH: c.transform.flipH, flipV: c.transform.flipV),
         background: LayerBackground(type: c.background.type, color: c.background.color),
-        filter: c.filter, filterIntensity: c.filterIntensity, adjust: c.adjust.values)
+        filter: c.filter, filterIntensity: c.filterIntensity, adjust: c.adjust.values,
+        motion: ExportSession.clipMotion(c), clipStart: placed[i].bodyStart.seconds, clipLength: loaded[i].outDur.seconds)
     }
     //    Each instruction also carries the timeline effects overlapping its range (project time = composition time).
     let usableEffects = ActiveEffectSpec.usable(request.effects.map {

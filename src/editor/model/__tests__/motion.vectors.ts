@@ -110,3 +110,45 @@ export const OFFSET_VECTORS: { name: string; trimStart: number; trimEnd: number;
   { name: "forward, speed 2", trimStart: 1, trimEnd: 9, speed: 2, reversed: false, sourceTime: 3, expect: 1 },   // (3 - 1) / 2
   { name: "reversed, speed 2", trimStart: 1, trimEnd: 9, speed: 2, reversed: true, sourceTime: 3, expect: 3 },   // (9 - 3) / 2
 ];
+
+// A reversed clip at speed 2 trimmed to 1…9 s (4 s of output). TS only — Swift has no source-time maths: its pins arrive
+// already converted. outputOffsetOf(pin.t) = (9 - t) / 2 -> 7 -> 1 and 3 -> 3, so the exported pins are exactly KEY_PINS.
+export const REVERSED_CLIP = {
+  trimStart: 1, trimEnd: 9, speed: 2, reversed: true, sourceDuration: 10,
+  sourcePins: [
+    { t: 3, x: 0.4, y: -0.2, scale: 2, rotation: 90, opacity: 0.5 },   // shown at output 3
+    { t: 7, x: 0, y: 0.2, scale: 1, rotation: 0, opacity: 1 },         // shown at output 1
+  ],
+  offsets: [3, 1],        // outputOffsetOf of each source pin, in sourcePins order
+  at: 1.5, x: 0.0625,     // source 9 - 1.5 * 2 = 6: u = (6 - 3) / 4 = 0.75, s = 0.84375 -> 0.4 - 0.4 * 0.84375
+};
+
+export interface ResolveClipVector {
+  name: string;
+  base: { x: number; y: number; scale: number; rotation: number; opacity: number };
+  keyframes: { t: number; x: number; y: number; scale: number; rotation: number; opacity: number }[];   // output-local seconds
+  animIn: { id: string; duration: number } | null; animOut: { id: string; duration: number } | null; animCombo: string | null;
+  local: number; length: number;
+  x: number; y: number; scale: number; rotation: number; opacity: number;
+}
+// Motion.resolveClip (Swift) / resolveClipMotion (TS): base (pins, else the static values) + In / Out or Combo. Edge
+// durations are the already-scaled ones the request carries.
+export const RESOLVE_CLIP_VECTORS: ResolveClipVector[] = [
+  // REVERSED_CLIP as exported (pins = KEY_PINS) with a 3 s zoomIn, at 1.5 s: base = the "quarter" key vector;
+  // In p = 0.5 -> scale * 0.95, opacity * 0.875 -> 1.15625 * 0.95 = 1.0984375, 0.921875 * 0.875 = 0.806640625
+  { name: "pins + In (the reversed clip as exported)", base: { x: 0.9, y: 0.9, scale: 3, rotation: 10, opacity: 1 }, keyframes: KEY_PINS,
+    animIn: { id: "zoomIn", duration: 3 }, animOut: null, animCombo: null, local: 1.5, length: 4,
+    x: 0.0625, y: 0.1375, scale: 1.0984375, rotation: 14.0625, opacity: 0.806640625 },
+  // static base, 0.5 s into a 1 s slideLeft: dx = 0.125 * slideClip
+  { name: "static + In", base: { x: 0.1, y: -0.3, scale: 2, rotation: 90, opacity: 1 }, keyframes: [],
+    animIn: { id: "slideLeft", duration: 1 }, animOut: { id: "fade", duration: 2 }, animCombo: null, local: 0.5, length: 10,
+    x: 0.225, y: -0.3, scale: 2, rotation: 90, opacity: 1 },
+  // the same clip 1 s into its 2 s fade Out: Out p = 0.5 = In at 0.5 -> opacity 0.875
+  { name: "static + Out", base: { x: 0.1, y: -0.3, scale: 2, rotation: 90, opacity: 1 }, keyframes: [],
+    animIn: { id: "slideLeft", duration: 1 }, animOut: { id: "fade", duration: 2 }, animCombo: null, local: 9, length: 10,
+    x: 0.1, y: -0.3, scale: 2, rotation: 90, opacity: 0.875 },
+  // a Combo wins over In / Out: zoomInSlow a quarter through an 8 s clip -> scale 1 + 0.15 * 0.25
+  { name: "Combo", base: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 }, keyframes: [],
+    animIn: { id: "fade", duration: 2 }, animOut: { id: "fade", duration: 2 }, animCombo: "zoomInSlow", local: 2, length: 8,
+    x: 0, y: 0, scale: 1.0375, rotation: 0, opacity: 1 },
+];

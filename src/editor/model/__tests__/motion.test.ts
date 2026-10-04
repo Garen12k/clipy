@@ -8,7 +8,9 @@ import {
   hasClipMotion, hasOverlayMotion, overlayBaseAt, resolveClipMotion, resolveOverlayMotion, sampleKeyframes, smooth,
   type KeyValues, type MotionDelta,
 } from "../motion";
-import { COMBO_VECTORS, EDGE_VECTORS, IN_VECTORS, KEY_PINS, KEY_VECTORS, LOOP_VECTORS, OFFSET_VECTORS, OUT_VECTORS } from "./motion.vectors";
+import {
+  COMBO_VECTORS, EDGE_VECTORS, IN_VECTORS, KEY_PINS, KEY_VECTORS, LOOP_VECTORS, OFFSET_VECTORS, OUT_VECTORS, RESOLVE_CLIP_VECTORS, REVERSED_CLIP,
+} from "./motion.vectors";
 
 const FIELDS = ["dx", "dy", "scale", "rotation", "opacity"] as const;
 function expectDelta(d: MotionDelta, v: Record<(typeof FIELDS)[number], number>) {
@@ -271,6 +273,37 @@ describe("resolveClipMotion", () => {
   test("photo clips resolve like any other", () => {
     const c = makePhotoClip({ id: "ph", seconds: 4, animation: { in: null, out: null, combo: "zoomOutSlow" } });
     expect(resolveClipMotion(c, 1).transform.scale).toBeCloseTo(1.1125, 9);
+  });
+});
+
+describe("shared resolve vectors (mirrored by Motion.resolveClip in Swift)", () => {
+  const R = REVERSED_CLIP;
+  const reversed = makeClip({ id: "r", sourceDuration: R.sourceDuration, trimStart: R.trimStart, trimEnd: R.trimEnd, speed: R.speed, reversed: R.reversed, keyframes: R.sourcePins });
+
+  test("a reversed clip at speed 2 with a trim: pins land at their output offsets, x follows the source time", () => {
+    expect(clipDuration(reversed)).toBe(4);
+    expect(R.sourcePins.map((k) => outputOffsetOf(reversed, k.t))).toEqual(R.offsets);
+    // As exported (output-local seconds, ascending) the pins are exactly KEY_PINS.
+    const exported = R.sourcePins.map((k) => ({ ...k, t: outputOffsetOf(reversed, k.t) })).sort((a, b) => a.t - b.t);
+    expect(exported).toEqual(KEY_PINS);
+    expect(resolveClipMotion(reversed, R.at).transform.x).toBeCloseTo(R.x, 9);
+  });
+
+  /** A forward speed-1 clip whose source time equals its output time, so the vector's output-local pins are its pins. */
+  test.each(RESOLVE_CLIP_VECTORS)("$name", (v) => {
+    const c = makeClip({ id: "c", sourceDuration: v.length, keyframes: v.keyframes,
+      transform: { scale: v.base.scale, x: v.base.x, y: v.base.y, rotation: v.base.rotation, flipH: false, flipV: false },
+      animation: { in: v.animIn as { id: AnimInId; duration: number } | null, out: v.animOut as { id: AnimInId; duration: number } | null, combo: v.animCombo as AnimComboId | null } });
+    expect(clipDuration(c)).toBe(v.length);
+    const r = resolveClipMotion(c, v.local);
+    expectValues({ x: r.transform.x, y: r.transform.y, scale: r.transform.scale, rotation: r.transform.rotation, opacity: r.opacity }, v);
+  });
+
+  test("the first resolve vector is the reversed clip itself with its In", () => {
+    const v = RESOLVE_CLIP_VECTORS[0];
+    const c = { ...reversed, animation: { in: { id: "zoomIn" as const, duration: 3 }, out: null, combo: null } };
+    const r = resolveClipMotion(c, v.local);
+    expectValues({ x: r.transform.x, y: r.transform.y, scale: r.transform.scale, rotation: r.transform.rotation, opacity: r.opacity }, v);
   });
 });
 

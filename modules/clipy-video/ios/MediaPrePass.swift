@@ -85,6 +85,12 @@ enum MediaPrePass {
     out.reversed = false
     out.filterIntensity = clip.filterIntensity
     out.adjust = clip.adjust
+    // Motion is in the clip's OUTPUT time (pins already converted), so it is the same for the prepared file.
+    out.animIn = clip.animIn
+    out.animOut = clip.animOut
+    out.animCombo = clip.animCombo
+    out.keyframes = clip.keyframes
+    out.outputDuration = clip.outputDuration
     return out
   }
 

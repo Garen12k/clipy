@@ -31,6 +31,18 @@ enum LayerBackground {
   }
 }
 
+/// A clip's animation and pins as the compositor resolves them for every frame (`Motion.resolveClip`). Pin times are
+/// clip-local output seconds; edge durations are the request's already-scaled ones.
+struct ClipMotionSpec: Equatable {
+  let keyframes: [MotionKeyframe]
+  let animIn: MotionEdge?
+  let animOut: MotionEdge?
+  let animCombo: String?
+
+  /// Nothing to play: no pins, no In, no Out, no Combo.
+  var isEmpty: Bool { keyframes.isEmpty && animIn == nil && animOut == nil && animCombo == nil }
+}
+
 /// One source track drawn by a `ClipyInstruction`: which composition track, how to place its frames in the render
 /// rect (Core Image space: bottom-left origin), what fills the uncovered frame, and its look: which filter to apply,
 /// how strongly (0…1), and the Adjust values that follow it.
@@ -51,10 +63,20 @@ final class LayerSpec {
   /// True for the default clip (scale 1, no offset / rotation / flip, full crop) and for values that cannot be
   /// placed (non-finite, zero scale, empty crop): those frames are drawn exactly as before placement existed.
   let usesFill: Bool
+  /// The clip's animation and pins; nil for a clip with neither — such a layer is drawn exactly as before.
+  let motion: ClipMotionSpec?
+  /// Composition seconds where the clip's OWN range starts (the transition handle before it is not included).
+  let clipStart: Double
+  /// The clip's length in the composition, in seconds (after speed).
+  let clipLength: Double
 
   init(trackID: CMPersistentTrackID, fill: CGAffineTransform, orient: CGAffineTransform, crop: ClipCrop,
        transform: ClipTransform, background: LayerBackground, filter: String?,
-       filterIntensity: Double = 1, adjust: AdjustValues = .neutral) {
+       filterIntensity: Double = 1, adjust: AdjustValues = .neutral,
+       motion: ClipMotionSpec? = nil, clipStart: Double = 0, clipLength: Double = 0) {
+    self.motion = motion
+    self.clipStart = clipStart
+    self.clipLength = clipLength
     self.trackID = trackID
     self.fill = fill
     self.orient = orient
@@ -68,6 +90,19 @@ final class LayerSpec {
     let finite = [t.scale, t.x, t.y, t.rotation, c.x, c.y, c.w, c.h].allSatisfy { $0.isFinite }
     let placeable = finite && t.scale > 0 && c.w > 0 && c.h > 0
     self.usesFill = !placeable || (t == .identity && c == .full)
+  }
+
+  /// The clip's resolved placement and opacity for the frame at composition time `time`; nil without motion.
+  /// Clip-local time is clamped to the clip's own range, so inside a transition window (before the clip's start /
+  /// after its end) the clip shows its first / last moment. The base is the static transform with opacity 1 (pins,
+  /// when there are any, replace it inside `Motion.resolveClip`).
+  func values(at time: Double) -> KeyValues? {
+    guard let motion = self.motion else { return nil }
+    let local = min(max(time - clipStart, 0), clipLength)
+    let base = KeyValues(x: Double(transform.x), y: Double(transform.y), scale: Double(transform.scale),
+                         rotation: Double(transform.rotation), opacity: 1)
+    return Motion.resolveClip(base: base, keyframes: motion.keyframes, animIn: motion.animIn, animOut: motion.animOut,
+                              animCombo: motion.animCombo, local: local, length: clipLength)
   }
 }
 
@@ -151,7 +186,10 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
       guard let pb = req.sourceFrame(byTrackID: spec.trackID) else { return nil }
       let source = CIImage(cvPixelBuffer: pb)
       let img: CIImage
-      if spec.usesFill {
+      if let motion = spec.motion {
+        // Animated / keyframed clip: the resolved transform replaces the static one (never the `usesFill` shortcut).
+        img = ClipyCompositor.movingFrame(spec, motion: motion, source: source, time: time, size: size)
+      } else if spec.usesFill {
         img = source.transformed(by: spec.fill).cropped(to: rect)       // unchanged pre-placement path
       } else {
         let oriented = source.transformed(by: spec.orient)
@@ -210,6 +248,39 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
         : dissolve(from: img, to: filtered, progress: CGFloat(spec.filterIntensity)).cropped(to: img.extent)
     }
     return spec.adjust.isNeutral ? out : Adjust.apply(spec.adjust, to: out, time: time)
+  }
+
+  /// One frame of a clip with motion: the picture placed by the transform resolved for `time` (flips from the static
+  /// transform), its alpha multiplied by the resolved opacity, over the clip's background. The background is drawn
+  /// when the picture does not cover the frame OR is not fully opaque. A picture that cannot be seen (scale ≤ 0 or
+  /// opacity ≤ 0) leaves just the background; values that cannot be placed (non-finite, empty crop) fall back to the
+  /// plain cover (`fill`) frame, as for a clip without motion.
+  static func movingFrame(_ spec: LayerSpec, motion: ClipMotionSpec, source: CIImage, time: Double, size: CGSize) -> CIImage {
+    let rect = CGRect(origin: .zero, size: size)
+    let plain = source.transformed(by: spec.fill).cropped(to: rect)
+    guard let v = spec.values(at: time) else { return plain }
+    let t = ClipTransform(scale: CGFloat(v.scale), x: CGFloat(v.x), y: CGFloat(v.y), rotation: CGFloat(v.rotation),
+                          flipH: spec.transform.flipH, flipV: spec.transform.flipV)
+    let c = spec.crop
+    let finite = [t.scale, t.x, t.y, t.rotation, c.x, c.y, c.w, c.h].allSatisfy { $0.isFinite } && v.opacity.isFinite
+    guard finite, c.w > 0, c.h > 0 else { return plain }
+    guard t.scale > 0, v.opacity > 0 else { return background(spec, source: source, size: size) }
+    let oriented = source.transformed(by: spec.orient)
+    let p = ClipLayout.ciPlacement(orientedExtent: oriented.extent, crop: spec.crop, transform: t, frame: size)
+    // Same hard-edged drawing as the static placement in `startRequest`.
+    let picture = oriented.cropped(to: p.cropRect).clampedToExtent()
+      .transformed(by: p.local).cropped(to: p.localRect)
+      .transformed(by: p.outer)
+    let covered = v.opacity >= 1 && ClipLayout.coversFrame(p.placed, size.width, size.height)
+    let behind = covered ? CIImage(color: CIColor.black).cropped(to: rect) : background(spec, source: source, size: size)
+    return faded(picture, opacity: v.opacity).composited(over: behind).cropped(to: rect)
+  }
+
+  /// `image` with its alpha multiplied by `opacity` (`CIColorMatrix`: A vector (0, 0, 0, opacity); the colour vectors
+  /// keep their identity defaults). Fully opaque (≥ 1) skips the filter; so does a missing filter.
+  static func faded(_ image: CIImage, opacity: Double) -> CIImage {
+    guard opacity < 1 else { return image }
+    return Adjust.filtered(image, "CIColorMatrix", ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(opacity))]) ?? image
   }
 
   /// Blur radius as a fraction of the frame's shorter side.
