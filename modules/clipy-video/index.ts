@@ -2,7 +2,7 @@ import { requireOptionalNativeModule, type EventSubscription } from "expo-module
 import { FONTS } from "@/src/editor/fonts";
 import { edgeDurations } from "@/src/editor/model/motion";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
-import { isSticker, type AnimEdge, type Align, type AspectRatio, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type Overlay } from "@/src/editor/model/types";
+import { DEFAULT_TEXT_STYLE, isSticker, type AnimEdge, type Align, type AspectRatio, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type Overlay, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -18,6 +18,19 @@ export interface ExportKeyframe { t: number; x: number; y: number; scale: number
 const copyKeyframe = (k: Keyframe): ExportKeyframe => ({ t: k.t, x: k.x, y: k.y, scale: k.scale, rotation: k.rotation, opacity: k.opacity });
 const toEdge = (e: AnimEdge | null, duration: number): ExportAnimEdge | null => (e && duration > 0 ? { id: e.id, duration } : null);
 
+/** `TextStyle` as the native record has it: shadow / glow flattened, a null colour = that feature is off (its numbers are 0). */
+export interface ExportTextStyle {
+  opacity: number; letterSpacing: number; lineSpacing: number; outlineColor: string | null; outlineWidth: number;
+  shadowColor: string | null; shadowOpacity: number; shadowDistance: number; shadowBlur: number;
+  glowColor: string | null; glowSize: number;
+}
+export interface ExportCaptionWord { text: string; start: number; end: number }   // seconds since the caption's start
+const toExportStyle = (s: TextStyle): ExportTextStyle => ({
+  opacity: s.opacity, letterSpacing: s.letterSpacing, lineSpacing: s.lineSpacing, outlineColor: s.outlineColor, outlineWidth: s.outlineWidth,
+  shadowColor: s.shadow?.color ?? null, shadowOpacity: s.shadow?.opacity ?? 0, shadowDistance: s.shadow?.distance ?? 0, shadowBlur: s.shadow?.blur ?? 0,
+  glowColor: s.glow?.color ?? null, glowSize: s.glow?.size ?? 0,
+});
+
 export interface ExportOverlay {
   kind: "text" | "caption" | "sticker";
   text: string; fontPostScriptName: string; fontScale: number; color: string;
@@ -25,6 +38,9 @@ export interface ExportOverlay {
   emoji: string | null; shape: string | null;
   x: number; y: number; scale: number; rotation: number; start: number; end: number;
   animIn: ExportAnimEdge | null; animOut: ExportAnimEdge | null; animLoop: string | null; keyframes: ExportKeyframe[];
+  style: ExportTextStyle;
+  words: ExportCaptionWord[];      // captions only; [] otherwise
+  highlightColor: string | null;   // captions only; null = no word highlight
 }
 export interface ExportAudio { sourceUri: string; start: number; trimStart: number; trimEnd: number; volume: number }
 export interface ExportClip {
@@ -89,12 +105,17 @@ export function toExportOverlay(o: Overlay): ExportOverlay {
       kind: "sticker", text: "", fontPostScriptName: "", fontScale: 0, color: o.color,
       backgroundColor: null, backgroundOpacity: 0, outline: false, align: "center",
       emoji: o.emoji, shape: o.shape, ...shared, ...motion,
+      style: toExportStyle(DEFAULT_TEXT_STYLE), words: [], highlightColor: null,
     };
   }
   return {
     kind: o.kind, text: o.text, fontPostScriptName: FONTS[o.fontId].postScriptName, fontScale: o.fontScale, color: o.color,
     backgroundColor: o.background?.color ?? null, backgroundOpacity: o.background?.opacity ?? 0, outline: o.outline, align: o.align,
     emoji: null, shape: null, ...shared, ...motion,
+    style: toExportStyle(o.style),
+    // Only captions have spoken words and a highlight.
+    words: o.kind === "caption" ? o.words.map((w) => ({ text: w.text, start: w.start, end: w.end })) : [],
+    highlightColor: o.kind === "caption" ? o.highlightColor : null,
   };
 }
 

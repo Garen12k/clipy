@@ -75,15 +75,17 @@ test("the static path and the animated path share one position and one transform
     const body = between(session, fn, "\n  }\n");
     expect(body).toContain("container.position = overlayPosition(x: o.x, y: o.y, renderSize: renderSize)");
     expect(body).toMatch(/container\.transform = overlayTransform\(scale: 1, rotation: [^\n]+\)\n/);
-    // Motion when there is some, else today's visibility animation.
-    expect(body).toContain("if !addMotion(container, o, renderSize: renderSize) { addVisibility(container, start: o.start, end: o.end) }");
+    // Motion when there is some, else the visibility animation (a text passes its style's opacity to both: textExport.swift.test.ts).
+    expect(body).toMatch(/if !addMotion\(container, o, renderSize: renderSize(, opacity: shown)?\) \{ addVisibility\(container, start: o\.start, end: o\.end(, opacity: shown)?\) \}\n/);
   }
 });
 
 test("the visibility animation of an overlay without motion is as it was", () => {
+  // The shown opacity is 1 unless a caller passes a text style's opacity.
+  expect(session).toContain("static func addVisibility(_ layer: CALayer, start: Double, end: Double, opacity: Double = 1) {");
   const body = between(session, "static func addVisibility(", "\n  }\n");
   for (const line of [
-    "layer.opacity = 0", 'CABasicAnimation(keyPath: "opacity")', "anim.fromValue = 1.0", "anim.toValue = 1.0",
+    "layer.opacity = 0", 'CABasicAnimation(keyPath: "opacity")', "anim.fromValue = opacity", "anim.toValue = opacity",
     "anim.beginTime = max(start, AVCoreAnimationBeginTimeAtZero)", "anim.duration = end - start", "anim.fillMode = .removed",
     "anim.isRemovedOnCompletion = true", 'layer.add(anim, forKey: "visible")',
   ]) expect(body).toContain(line);

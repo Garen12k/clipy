@@ -52,6 +52,8 @@ describe("export API", () => {
         backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center" as const, emoji: null, shape: null,
         x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 2,
         animIn: null, animOut: null, animLoop: null, keyframes: [],
+        style: { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadowColor: null, shadowOpacity: 0, shadowDistance: 0, shadowBlur: 0, glowColor: null, glowSize: 0 },
+        words: [], highlightColor: null,
       }],
       audio: null, aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4",
     };
@@ -208,12 +210,15 @@ describe("toExportClip", () => {
 });
 
 describe("toExportOverlay", () => {
+  /** The neutral style as the native record has it: shadow / glow flattened, a null colour = off. */
+  const neutral = { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadowColor: null, shadowOpacity: 0, shadowDistance: 0, shadowBlur: 0, glowColor: null, glowSize: 0 };
   it("maps a default text overlay, whole", () => {
     expect(toExportOverlay(makeOverlay({ id: "o", fontId: "anton" }))).toEqual({
       kind: "text", text: "Your text", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#F4F4F5",
       backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center", emoji: null, shape: null,
       x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 3,
       animIn: null, animOut: null, animLoop: null, keyframes: [],
+      style: neutral, words: [], highlightColor: null,
     });
   });
   it("maps a default sticker, whole", () => {
@@ -222,6 +227,7 @@ describe("toExportOverlay", () => {
       backgroundColor: null, backgroundOpacity: 0, outline: false, align: "center", emoji: "⭐", shape: null,
       x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 3,
       animIn: null, animOut: null, animLoop: null, keyframes: [],
+      style: neutral, words: [], highlightColor: null,
     });
   });
   it("sends overlay animation scaled to its length and keyframes as stored", () => {
@@ -236,5 +242,41 @@ describe("toExportOverlay", () => {
     const e = toExportOverlay(makeOverlay({ id: "c", kind: "caption", fontId: "anton", keyframes: [makeKeyframe({ t: 0 })],
       animation: { in: { id: "fade", duration: 0.5 }, out: null, loop: "pulse" } }));
     expect(e).toMatchObject({ animIn: null, animOut: null, animLoop: null, keyframes: [] });
+  });
+  it("maps a styled text, whole: shadow and glow flattened", () => {
+    const style = { opacity: 0.8, letterSpacing: 0.1, lineSpacing: 1.5, outlineColor: "#FF2D7A", outlineWidth: 2,
+      shadow: { color: "#101010", opacity: 0.6, distance: 0.06, blur: 0.1 }, glow: { color: "#00E5FF", size: 0.25 } };
+    const o = makeOverlay({ id: "o", fontId: "anton", style, words: [{ text: "Your", start: 0, end: 1 }], highlightColor: "#FFE600" });
+    const e = toExportOverlay(o);
+    expect(e).toEqual({
+      kind: "text", text: "Your text", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#F4F4F5",
+      backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center", emoji: null, shape: null,
+      x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 3,
+      animIn: null, animOut: null, animLoop: null, keyframes: [],
+      style: { opacity: 0.8, letterSpacing: 0.1, lineSpacing: 1.5, outlineColor: "#FF2D7A", outlineWidth: 2,
+        shadowColor: "#101010", shadowOpacity: 0.6, shadowDistance: 0.06, shadowBlur: 0.1, glowColor: "#00E5FF", glowSize: 0.25 },
+      words: [], highlightColor: null,   // a plain text never sends words or a highlight
+    });
+  });
+  it("maps a shadow without a glow and a glow without a shadow", () => {
+    const base = makeOverlay({ id: "o", fontId: "anton" }).style;
+    const shadowOnly = toExportOverlay(makeOverlay({ id: "o", fontId: "anton", style: { ...base, shadow: { color: "#000000", opacity: 0.5, distance: 0.1, blur: 0.2 } } }));
+    expect(shadowOnly.style).toEqual({ ...neutral, shadowColor: "#000000", shadowOpacity: 0.5, shadowDistance: 0.1, shadowBlur: 0.2 });
+    const glowOnly = toExportOverlay(makeOverlay({ id: "o", fontId: "anton", style: { ...base, glow: { color: "#FFFFFF", size: 0.3 } } }));
+    expect(glowOnly.style).toEqual({ ...neutral, glowColor: "#FFFFFF", glowSize: 0.3 });
+  });
+  it("maps a caption with words and a highlight, whole, as fresh copies", () => {
+    const words = [{ text: "Hello", start: 0, end: 0.4 }, { text: "there", start: 0.5, end: 1 }];
+    const o = makeOverlay({ id: "c", kind: "caption", fontId: "anton", text: "Hello there", start: 2, end: 3, y: 0.8, words, highlightColor: "#FFE600" });
+    const e = toExportOverlay(o);
+    expect(e).toEqual({
+      kind: "caption", text: "Hello there", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#F4F4F5",
+      backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center", emoji: null, shape: null,
+      x: 0.5, y: 0.8, scale: 1, rotation: 0, start: 2, end: 3,
+      animIn: null, animOut: null, animLoop: null, keyframes: [],
+      style: neutral, words: [{ text: "Hello", start: 0, end: 0.4 }, { text: "there", start: 0.5, end: 1 }], highlightColor: "#FFE600",
+    });
+    expect(e.words).not.toBe(words);
+    expect(e.words[0]).not.toBe(words[0]);
   });
 });
