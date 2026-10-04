@@ -4,10 +4,12 @@ import CoreVideo
 import ImageIO
 
 /// One piece of work before composing: a photo clip becomes a short video, a reversed clip becomes a reversed copy.
+/// `clipIndex` is the index in the request's clips — or, when `layer` is true, in its layers.
 struct PrePassJob: Equatable {
   enum Kind: Equatable { case photo, reverse }
   let clipIndex: Int
   let kind: Kind
+  var layer: Bool = false
 }
 
 /// A source-time window `[start, end)` in seconds.
@@ -34,8 +36,43 @@ struct PrePassCancelled: Error {}
 /// Any AVFoundation / ImageIO failure inside a job; `run` turns it into the job's readable `ExportError`.
 private struct PrePassFailure: Error {}
 
+extension ExportLayer {
+  /// The layer as a clip record, so the pre-pass and the loading treat it exactly like a clip. A NEW record is built
+  /// field by field (`@Field` is a class), as `MediaPrePass.rewrite` does. Keep this list in step with `ExportClip`.
+  var clip: ExportClip {
+    var out = ExportClip()
+    out.sourceUri = sourceUri
+    out.trimStart = trimStart
+    out.trimEnd = trimEnd
+    out.volume = volume
+    out.muted = muted
+    out.speed = speed
+    out.filter = filter
+    out.transition = transition
+    out.kind = kind
+    out.sourceWidth = sourceWidth
+    out.sourceHeight = sourceHeight
+    out.transform = transform
+    out.crop = crop
+    out.background = background
+    out.reversed = reversed
+    out.filterIntensity = filterIntensity
+    out.adjust = adjust
+    out.animIn = animIn
+    out.animOut = animOut
+    out.animCombo = animCombo
+    out.keyframes = keyframes
+    out.speedSpans = speedSpans
+    out.gain = gain
+    out.opacity = opacity
+    out.mask = mask
+    return out
+  }
+}
+
 /// The pre-pass: before the composition is built, every photo clip is turned into an ordinary H.264 video and every
 /// reversed clip into a reversed copy of its trimmed range, so the rest of the export only ever sees forward video.
+/// Picture-in-picture layers are prepared the same way (a layer is a clip record plus its start).
 /// The planning, rewrite, progress and size maths are pure (MediaPrePassTests); the AVFoundation work is below them.
 enum MediaPrePass {
   /// Share of the reported progress the pre-pass takes when it has any job.
@@ -53,12 +90,17 @@ enum MediaPrePass {
 
   // MARK: - Pure planning
 
-  /// Which clips need preparing, in clip order. A photo is only turned into video (a still reversed is the same still).
-  static func plan(_ clips: [ExportClip]) -> [PrePassJob] {
+  /// Which clips need preparing, in clip order, then which layers (as clip records), in layer order. A photo is only
+  /// turned into video (a still reversed is the same still). Without layers the jobs are the clips' alone.
+  static func plan(_ clips: [ExportClip], layers: [ExportClip] = []) -> [PrePassJob] {
     var jobs: [PrePassJob] = []
     for (i, c) in clips.enumerated() {
       if c.kind == "photo" { jobs.append(PrePassJob(clipIndex: i, kind: .photo)) }
       else if c.reversed { jobs.append(PrePassJob(clipIndex: i, kind: .reverse)) }
+    }
+    for (i, l) in layers.enumerated() {
+      if l.kind == "photo" { jobs.append(PrePassJob(clipIndex: i, kind: .photo, layer: true)) }
+      else if l.reversed { jobs.append(PrePassJob(clipIndex: i, kind: .reverse, layer: true)) }
     }
     return jobs
   }
@@ -94,6 +136,9 @@ enum MediaPrePass {
     out.speedSpans = clip.speedSpans
     // The gain curve is in the clip's OUTPUT time too (a prepared file has no sound; carried so the record stays whole).
     out.gain = clip.gain
+    // Opacity and mask belong to the picture, whichever file it is read from.
+    out.opacity = clip.opacity
+    out.mask = clip.mask
     return out
   }
 

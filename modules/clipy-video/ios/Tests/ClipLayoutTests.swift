@@ -52,6 +52,25 @@ let placeVectors: [PlaceVector] = [
     expect: ClipPlacement(width: 2160, height: 3840, centerX: 540, centerY: 960, rotation: 30, flipH: false, flipV: false)),
 ]
 
+/// One case of `MASK_VECTORS` (same file, same parity test): the placed box's size, the mask, the corner radius.
+struct MaskVector {
+  let name: String
+  let width: CGFloat
+  let height: CGFloat
+  let mask: String
+  let expect: CGFloat
+}
+
+let maskVectors: [MaskVector] = [
+  MaskVector(name: "none is square-cornered", width: 1080, height: 1920, mask: "none", expect: 0),
+  MaskVector(name: "rounded on a portrait box", width: 1080, height: 1920, mask: "rounded", expect: 129.6),
+  MaskVector(name: "rounded on a landscape box", width: 1080, height: 607.5, mask: "rounded", expect: 72.9),
+  MaskVector(name: "circle on a square box", width: 400, height: 400, mask: "circle", expect: 200),
+  MaskVector(name: "circle on a portrait box is a pill", width: 432, height: 768, mask: "circle", expect: 216),
+  MaskVector(name: "circle on a landscape box", width: 1080, height: 607.5, mask: "circle", expect: 303.75),
+  MaskVector(name: "an empty box has no radius", width: 0, height: 300, mask: "circle", expect: 0),
+]
+
 final class ClipLayoutTests: XCTestCase {
   private let portrait = CGSize(width: 1080, height: 1920)
   private let landscape = CGSize(width: 1920, height: 1080)
@@ -78,6 +97,23 @@ final class ClipLayoutTests: XCTestCase {
       XCTAssertEqual(p.flipH, v.expect.flipH, v.name)
       XCTAssertEqual(p.flipV, v.expect.flipV, v.name)
     }
+  }
+
+  func testMaskVectors() {
+    for v in maskVectors {
+      XCTAssertEqual(ClipLayout.maskRadius(v.width, v.height, v.mask), v.expect, accuracy: 1e-6, v.name)
+    }
+  }
+
+  /// An unknown mask and a box whose size is not a number have no radius (as `maskRadius` in clipLayout.ts).
+  func testMaskRadiusOfUnusableInputIsZero() {
+    XCTAssertEqual(ClipLayout.maskRadius(400, 400, "star"), 0)
+    XCTAssertEqual(ClipLayout.maskRadius(400, 400, ""), 0)
+    XCTAssertEqual(ClipLayout.maskRadius(.nan, 400, "circle"), 0)
+    XCTAssertEqual(ClipLayout.maskRadius(400, .nan, "rounded"), 0)
+    XCTAssertEqual(ClipLayout.maskRadius(.infinity, .infinity, "circle"), 0)
+    XCTAssertEqual(ClipLayout.maskRadius(.infinity, 400, "circle"), 200)   // the shorter side decides, as in the TS
+    XCTAssertEqual(ClipLayout.maskRadius(-10, 400, "circle"), 0)
   }
 
   func testFitScaleAndCoverFactor() {

@@ -34,7 +34,7 @@ struct ClipPlacement: Equatable {
 }
 
 /// Mirror of src/editor/model/clipLayout.ts — keep the functions and constants identical (`SNAP` / `snapTransform`
-/// are preview-only and have no twin here). Reference vectors: `PLACE_VECTORS` in
+/// are preview-only and have no twin here). Reference vectors: `PLACE_VECTORS` and `MASK_VECTORS` in
 /// src/editor/model/__tests__/clipLayout.vectors.ts, embedded in Tests/ClipLayoutTests.swift.
 /// Everything here is in the frame's coordinate space with a TOP-LEFT origin (like the preview); the only
 /// conversion to Core Image's bottom-left origin is `ciPlacement` at the bottom of this file.
@@ -45,6 +45,8 @@ enum ClipLayout {
   static let straightAngleTolerance: CGFloat = 0.5
   /// `coversFrame`: the picture's edges may fall short of the frame's edges by this many pixels.
   static let coverageEpsilon: CGFloat = 0.5
+  /// `MASK.roundedRadius` (types.ts): a rounded mask's corner radius as a fraction of the picture box's shorter side.
+  static let maskRoundedRadius: CGFloat = 0.12
 
   /// True when the picture is turned on its side (within 1° of ±90°), so its width and height swap for cover / fit.
   static func isQuarterTurn(_ rotation: CGFloat) -> Bool {
@@ -82,6 +84,20 @@ enum ClipLayout {
       width: c.width * k, height: c.height * k,
       centerX: frameW / 2 + t.x * frameW, centerY: frameH / 2 + t.y * frameH,
       rotation: t.rotation, flipH: t.flipH, flipV: t.flipV)
+  }
+
+  /// Corner radius (pixels) of the placed picture box for a mask: none → 0, rounded → `maskRoundedRadius` × the
+  /// shorter side, circle → half the shorter side (a square box becomes a circle, any other a pill). An unknown mask
+  /// or a box without a size → 0.
+  static func maskRadius(_ width: CGFloat, _ height: CGFloat, _ mask: String) -> CGFloat {
+    guard !width.isNaN, !height.isNaN else { return 0 }          // JS `Math.min` of a NaN is NaN
+    let side = min(width, height)
+    guard side > 0, side.isFinite else { return 0 }
+    switch mask {
+    case "rounded": return maskRoundedRadius * side
+    case "circle": return side / 2
+    default: return 0
+    }
   }
 
   /// Whether the picture hides the whole frame (only decidable cheaply for upright / quarter-turned pictures; anything

@@ -25,6 +25,71 @@ final class MediaPrePassTests: XCTestCase {
     XCTAssertEqual(MediaPrePass.plan([]), [])
   }
 
+  /// Layers are planned after the clips, by their own index, and marked as layers.
+  func testPlanListsLayersAfterTheClips() {
+    let jobs = MediaPrePass.plan([clip(), clip(reversed: true)], layers: [clip(kind: "photo"), clip(), clip(reversed: true)])
+    XCTAssertEqual(jobs, [
+      PrePassJob(clipIndex: 1, kind: .reverse),
+      PrePassJob(clipIndex: 0, kind: .photo, layer: true),
+      PrePassJob(clipIndex: 2, kind: .reverse, layer: true),
+    ])
+    XCTAssertFalse(jobs[0].layer)
+    XCTAssertEqual(MediaPrePass.plan([clip()], layers: [clip()]), [])
+    XCTAssertEqual(MediaPrePass.plan([clip(reversed: true)], layers: []), MediaPrePass.plan([clip(reversed: true)]))
+  }
+
+  /// A layer record turns into a clip record with every field, and its start stays on the layer.
+  func testALayerBecomesAClipRecordWithEveryField() {
+    var l = ExportLayer()
+    l.sourceUri = "file:///layer.mov"; l.trimStart = 1; l.trimEnd = 4; l.volume = 0.5; l.muted = true; l.speed = 2
+    l.filter = "warm"; l.kind = "photo"; l.sourceWidth = 1080; l.sourceHeight = 1920; l.reversed = true
+    var t = ExportClipTransform(); t.scale = 0.4; t.x = 0.2; t.rotation = 30; t.flipH = true
+    l.transform = t
+    var crop = ExportCrop(); crop.x = 0.1; crop.w = 0.5
+    l.crop = crop
+    l.filterIntensity = 0.4
+    var adjust = ExportAdjust(); adjust.contrast = 0.5
+    l.adjust = adjust
+    var animIn = ExportAnimEdge(); animIn.id = "pop"; animIn.duration = 0.5
+    l.animIn = animIn; l.animCombo = "sway"
+    var pin = ExportKeyframe(); pin.t = 1; pin.opacity = 0.5
+    l.keyframes = [pin]
+    var s = ExportSpeedSpan(); s.duration = 3; s.speed = 2
+    l.speedSpans = [s]
+    var g = ExportGainPoint(); g.time = 0; g.gain = 0.25
+    l.gain = [g]
+    l.opacity = 0.6; l.mask = "circle"; l.start = 2.5
+
+    let c = l.clip
+    XCTAssertEqual(c.sourceUri, "file:///layer.mov")
+    XCTAssertEqual(c.trimStart, 1); XCTAssertEqual(c.trimEnd, 4); XCTAssertEqual(c.volume, 0.5); XCTAssertTrue(c.muted)
+    XCTAssertEqual(c.speed, 2); XCTAssertEqual(c.filter, "warm"); XCTAssertEqual(c.kind, "photo"); XCTAssertTrue(c.reversed)
+    XCTAssertEqual(c.sourceWidth, 1080); XCTAssertEqual(c.sourceHeight, 1920)
+    XCTAssertEqual(c.transform.scale, 0.4); XCTAssertEqual(c.transform.x, 0.2); XCTAssertEqual(c.transform.rotation, 30); XCTAssertTrue(c.transform.flipH)
+    XCTAssertEqual(c.crop.x, 0.1); XCTAssertEqual(c.crop.w, 0.5)
+    XCTAssertEqual(c.filterIntensity, 0.4); XCTAssertEqual(c.adjust.contrast, 0.5)
+    XCTAssertEqual(c.animIn?.id, "pop"); XCTAssertNil(c.animOut); XCTAssertEqual(c.animCombo, "sway")
+    XCTAssertEqual(c.keyframes.count, 1); XCTAssertEqual(c.keyframes.first?.opacity, 0.5)
+    XCTAssertEqual(c.speedSpans.count, 1); XCTAssertEqual(c.speedSpans.first?.speed, 2)
+    XCTAssertEqual(c.gain.count, 1); XCTAssertEqual(c.gain.first?.gain, 0.25)
+    XCTAssertEqual(c.opacity, 0.6); XCTAssertEqual(c.mask, "circle")
+    XCTAssertEqual(c.transition.type, "none")
+    // The layer itself is untouched, and a prepared layer keeps the look of its picture.
+    XCTAssertEqual(l.start, 2.5); XCTAssertEqual(l.kind, "photo")
+    let r = MediaPrePass.rewrite(c, preparedURL: URL(fileURLWithPath: "/tmp/l.mp4"), duration: 3)
+    XCTAssertEqual(r.kind, "video"); XCTAssertFalse(r.reversed)
+    XCTAssertEqual(r.opacity, 0.6); XCTAssertEqual(r.mask, "circle")
+    XCTAssertEqual(c.kind, "photo")
+  }
+
+  func testNewRecordsHaveTheNeutralOpacityAndMask() {
+    XCTAssertEqual(ExportClip().opacity, 1); XCTAssertEqual(ExportClip().mask, "none")
+    XCTAssertEqual(ExportLayer().opacity, 1); XCTAssertEqual(ExportLayer().mask, "none"); XCTAssertEqual(ExportLayer().start, 0)
+    XCTAssertTrue(ExportRequest().layers.isEmpty)
+    let r = MediaPrePass.rewrite(clip(reversed: true), preparedURL: URL(fileURLWithPath: "/tmp/r.mp4"), duration: 3)
+    XCTAssertEqual(r.opacity, 1); XCTAssertEqual(r.mask, "none")
+  }
+
   /// A still reversed is the same still: a photo is only ever turned into video, never reversed as well.
   func testPhotoMarkedReversedIsOnlyAPhotoJob() {
     XCTAssertEqual(MediaPrePass.plan([clip(kind: "photo", reversed: true)]), [PrePassJob(clipIndex: 0, kind: .photo)])
@@ -53,6 +118,7 @@ final class MediaPrePassTests: XCTestCase {
     var quiet = ExportGainPoint(); quiet.time = 0; quiet.gain = 0
     var loud = ExportGainPoint(); loud.time = 1.5; loud.gain = 0.5
     c.gain = [quiet, loud]
+    c.opacity = 0.4; c.mask = "rounded"
 
     let prepared = URL(fileURLWithPath: "/tmp/clipy-prepass-x/0-photo.mp4")
     let r = MediaPrePass.rewrite(c, preparedURL: prepared, duration: 3)
@@ -86,6 +152,8 @@ final class MediaPrePassTests: XCTestCase {
     XCTAssertEqual(r.gain.first?.time, 0); XCTAssertEqual(r.gain.first?.gain, 0)
     XCTAssertEqual(r.gain.last?.time, 1.5); XCTAssertEqual(r.gain.last?.gain, 0.5)
     XCTAssertEqual(ExportSession.clipGain(r), [GainPoint(time: 0, gain: 0), GainPoint(time: 1.5, gain: 0.5)])
+    // Opacity and mask belong to the picture: carried as they are.
+    XCTAssertEqual(r.opacity, 0.4); XCTAssertEqual(r.mask, "rounded")
   }
 
   /// A curve's spans are in playback order — the order the prepared (reversed) file runs in — so they are kept as is.

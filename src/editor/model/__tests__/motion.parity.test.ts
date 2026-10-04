@@ -238,7 +238,8 @@ test("the compositor: one placement chain for still and moving clips; a fade is 
   expect(all.match(/ClipLayout\.ciPlacement\(/g)).toHaveLength(1);
   expect(all.match(/\.clampedToExtent\(\)\n\s*\.transformed\(by: p\.local\)/g)).toHaveLength(1);
   const placed = code(between(compositor, "static func placedFrame(", "\n  }\n"));
-  expect(placed).toContain("static func placedFrame(_ spec: LayerSpec, transform: ClipTransform, opacity: Double, source: CIImage, size: CGSize) -> CIImage {");
+  // The two trailing parameters are for picture-in-picture layers; their defaults keep the clip call sites as they were.
+  expect(placed).toContain("static func placedFrame(_ spec: LayerSpec, transform: ClipTransform, opacity: Double, source: CIImage, size: CGSize, over running: CIImage? = nil, time: Double = 0) -> CIImage {");
   expect(placed).toContain("ClipLayout.ciPlacement(orientedExtent: oriented.extent, crop: spec.crop, transform: transform, frame: size)");
   for (const step of ["oriented.cropped(to: p.cropRect).clampedToExtent()", ".transformed(by: p.local).cropped(to: p.localRect)", ".transformed(by: p.outer)"]) expect(placed).toContain(step);
   // The background shows when the picture does not cover the frame OR it is not fully opaque.

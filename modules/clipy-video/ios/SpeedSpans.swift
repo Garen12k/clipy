@@ -74,6 +74,22 @@ enum SpeedSpans {
     return total
   }
 
+  /// Source seconds played during the first `output` seconds of the spans (usable, in playback order): what is left
+  /// of a layer that runs past the end of the video. Never more than the spans hold; no output, or one that is not a
+  /// positive finite number → 0.
+  static func sourceSeconds(_ spans: [SpeedSpan], output: Double) -> Double {
+    guard output.isFinite, output > 0 else { return 0 }
+    var left = output
+    var source = 0.0
+    for s in spans {
+      let lasts = s.duration / s.speed
+      if lasts >= left { return source + left * s.speed }
+      source += s.duration
+      left -= lasts
+    }
+    return source
+  }
+
   /// The ranges to retime for `spans` (usable, in playback order) with `head` / `tail` source seconds of transition
   /// handle before / after the clip's own range. The first range is extended by the head and the last by the tail,
   /// so a handle plays at the speed of the nearest edge span. Negative or non-finite handles count as 0.

@@ -24,6 +24,30 @@ final class SpeedSpansTests: XCTestCase {
     XCTAssertEqual(SpeedSpans.fitted([span(1, 4), span(1, 3), span(2, 0.5)], to: 3.5), [span(1, 4), span(1, 3), span(1.5, 0.5)])
   }
 
+  /// A layer cut by the end of the video: the source seconds its first `output` seconds play, span by span.
+  func testSourceSecondsOfAnOutputLength() {
+    let spans = [span(1, 2), span(2, 0.5), span(1, 4)]           // output 0.5 + 4 + 0.25 = 4.75 s
+    XCTAssertEqual(SpeedSpans.sourceSeconds(spans, output: 0.25), 0.5, accuracy: 1e-9)    // inside the ×2 span
+    XCTAssertEqual(SpeedSpans.sourceSeconds(spans, output: 0.5), 1, accuracy: 1e-9)       // exactly at the first cut
+    XCTAssertEqual(SpeedSpans.sourceSeconds(spans, output: 2.5), 2, accuracy: 1e-9)       // 2 s into the ×0.5 span
+    XCTAssertEqual(SpeedSpans.sourceSeconds(spans, output: 4.6), 3.4, accuracy: 1e-9)     // 0.1 s into the ×4 span
+    XCTAssertEqual(SpeedSpans.sourceSeconds(spans, output: 4.75), 4, accuracy: 1e-9)
+    XCTAssertEqual(SpeedSpans.sourceSeconds(spans, output: 99), 4, accuracy: 1e-9)        // never more than there is
+    XCTAssertEqual(SpeedSpans.sourceSeconds([span(3, 1.5)], output: 1), 1.5, accuracy: 1e-9)   // a constant speed is one span
+    for none in [0, -1, Double.nan, Double.infinity] { XCTAssertEqual(SpeedSpans.sourceSeconds(spans, output: none), 0) }
+    XCTAssertEqual(SpeedSpans.sourceSeconds([], output: 2), 0)
+  }
+
+  /// The spans kept for a cut layer play for exactly the length that is left.
+  func testSpansFittedToACutLayerLastTheLengthLeft() {
+    let spans = [span(1, 2), span(2, 0.5), span(1, 4)]
+    let kept = SpeedSpans.fitted(spans, to: SpeedSpans.sourceSeconds(spans, output: 2.5))
+    XCTAssertEqual(kept, [span(1, 2), span(1, 0.5)])
+    XCTAssertEqual(SpeedSpans.outputSeconds(kept), 2.5, accuracy: 1e-9)
+    let constant = [span(3, 1.5)]
+    XCTAssertEqual(SpeedSpans.fitted(constant, to: SpeedSpans.sourceSeconds(constant, output: 1)), [span(1.5, 1.5)])
+  }
+
   /// Much shorter: spans wholly beyond the length go, and the one crossing it becomes the (shortened) last span.
   func testFittedDropsSpansBeyondTheLength() {
     XCTAssertEqual(SpeedSpans.fitted([span(1, 4), span(1, 3), span(2, 0.5)], to: 1.25), [span(1, 4), span(0.25, 3)])

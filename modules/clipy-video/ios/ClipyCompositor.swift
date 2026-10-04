@@ -48,6 +48,8 @@ struct ClipMotionSpec: Equatable {
 /// how strongly (0…1), and the Adjust values that follow it.
 /// `fill` is the cover transform (`ExportSession.ciFillTransform`); `orient` uprights a frame for
 /// `ClipLayout.ciPlacement`. A clip with the default transform and full crop takes the `fill` path unchanged.
+/// The same type describes a picture-in-picture layer (`transparent`): it is drawn over the finished main frame
+/// instead of over a background of its own (`ClipyInstruction.overlays`).
 final class LayerSpec {
   let trackID: CMPersistentTrackID
   let fill: CGAffineTransform
@@ -60,8 +62,16 @@ final class LayerSpec {
   let filterIntensity: Double
   /// Applied after the filter; non-finite values count as 0. Neutral = no adjust pass at all.
   let adjust: AdjustValues
-  /// True for the default clip (scale 1, no offset / rotation / flip, full crop) and for values that cannot be
-  /// placed (non-finite, zero scale, empty crop): those frames are drawn exactly as before placement existed.
+  /// The picture's own (static) opacity, 0…1; multiplied with the motion opacity. A non-finite value counts as 1.
+  let opacity: Double
+  /// none | rounded | circle — the picture box's corners (`ClipLayout.maskRadius`); anything else counts as none.
+  let mask: String
+  /// A picture-in-picture layer: drawn over what is beneath it, with no background of its own, and its look
+  /// (filter, adjust) applied to its picture alone.
+  let transparent: Bool
+  /// True for the default clip (scale 1, no offset / rotation / flip, full crop, opaque, no mask) and for values
+  /// that cannot be placed (non-finite, zero scale, empty crop): those frames are drawn exactly as before placement
+  /// existed.
   let usesFill: Bool
   /// The clip's animation and pins; nil for a clip with neither — such a layer is drawn exactly as before.
   let motion: ClipMotionSpec?
@@ -73,6 +83,7 @@ final class LayerSpec {
   init(trackID: CMPersistentTrackID, fill: CGAffineTransform, orient: CGAffineTransform, crop: ClipCrop,
        transform: ClipTransform, background: LayerBackground, filter: String?,
        filterIntensity: Double = 1, adjust: AdjustValues = .neutral,
+       opacity: Double = 1, mask: String = "none", transparent: Bool = false,
        motion: ClipMotionSpec? = nil, clipStart: Double = 0, clipLength: Double = 0) {
     self.motion = motion
     self.clipStart = clipStart
@@ -86,10 +97,16 @@ final class LayerSpec {
     self.filter = filter
     self.filterIntensity = Adjust.strength(filterIntensity)
     self.adjust = adjust.sanitized
+    let shown = opacity.isFinite ? min(1, max(0, opacity)) : 1
+    self.opacity = shown
+    self.mask = mask
+    self.transparent = transparent
     let t = transform, c = crop
     let finite = [t.scale, t.x, t.y, t.rotation, c.x, c.y, c.w, c.h].allSatisfy { $0.isFinite }
     let placeable = finite && t.scale > 0 && c.w > 0 && c.h > 0
-    self.usesFill = !placeable || (t == .identity && c == .full)
+    // A see-through or masked picture shows what is behind it, so it is placed even at the default transform.
+    let plain = shown >= 1 && mask != "rounded" && mask != "circle" && !transparent
+    self.usesFill = !placeable || (t == .identity && c == .full && plain)
   }
 
   /// The clip's resolved placement and opacity for the frame at composition time `time`; nil without motion.
@@ -130,7 +147,8 @@ struct ActiveEffectSpec: Equatable {
 }
 
 /// A plain range carries one layer; a transition window carries two (outgoing, incoming) plus the window's
-/// type/start/duration, so the compositor computes progress = (t − start) / duration. `effects` are the timeline
+/// type/start/duration, so the compositor computes progress = (t − start) / duration. `overlays` are the
+/// picture-in-picture layers shown during the whole range, in draw order (usually none); `effects` are the timeline
 /// effects overlapping the range (usually none).
 final class ClipyInstruction: NSObject, AVVideoCompositionInstructionProtocol {
   let timeRange: CMTimeRange
@@ -140,21 +158,24 @@ final class ClipyInstruction: NSObject, AVVideoCompositionInstructionProtocol {
   let passthroughTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
   let layers: [LayerSpec]
   let transition: (type: String, start: CMTime, duration: CMTime)?
+  let overlays: [LayerSpec]
   let effects: [ActiveEffectSpec]
 
-  init(timeRange: CMTimeRange, layers: [LayerSpec], transition: (type: String, start: CMTime, duration: CMTime)?, effects: [ActiveEffectSpec] = []) {
+  init(timeRange: CMTimeRange, layers: [LayerSpec], transition: (type: String, start: CMTime, duration: CMTime)?, overlays: [LayerSpec] = [], effects: [ActiveEffectSpec] = []) {
     self.timeRange = timeRange
     self.layers = layers
     self.transition = transition
+    self.overlays = overlays
     self.effects = effects
-    self.requiredSourceTrackIDs = layers.map { NSNumber(value: $0.trackID) as NSValue }
+    self.requiredSourceTrackIDs = (layers + overlays).map { NSNumber(value: $0.trackID) as NSValue }
     super.init()
   }
 }
 
 /// Custom compositor: renders each source frame with Core Image — placed by `ClipLayout` (crop, flip, scale, rotate,
 /// offset) over its background, then the clip's filter chain at its strength, then its Adjust values — and blends
-/// the two finished frames of a transition window by type and progress.
+/// the two finished frames of a transition window by type and progress. Picture-in-picture layers are then drawn
+/// over that frame in order, and the timeline effects go over everything.
 final class ClipyCompositor: NSObject, AVVideoCompositing {
   private let ctx = CIContext(options: [.cacheIntermediates: false])
 
@@ -213,6 +234,12 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
     } else if let first = inst.layers.first, let a = frame(first) {
       result = a
     }
+    // Picture-in-picture layers over the main frame, in draw order (later = on top). A layer with no frame at this
+    // time is left out. With no overlays `result` is not touched.
+    for overlay in inst.overlays {
+      guard let pb = req.sourceFrame(byTrackID: overlay.trackID) else { continue }
+      result = ClipyCompositor.overlayFrame(overlay, source: CIImage(cvPixelBuffer: pb), over: result.cropped(to: rect), time: time, size: size)
+    }
     // Timeline effects on the finished frame, in list order (start inclusive, end exclusive — as `activeEffects`).
     // With no active effect `result` is not touched.
     for effect in inst.effects where time >= effect.start && time < effect.end {
@@ -257,30 +284,121 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
     return placedFrame(spec, transform: t, opacity: v.opacity, source: source, size: size)
   }
 
+  /// One picture-in-picture layer drawn over `running` (the finished frame beneath it) at composition time `time`:
+  /// always placed (`placedFrame`, never the cover shortcut), by its static transform or — with an animation or
+  /// pins — the one resolved for `time` (flips from the static transform), and faded by the resolved opacity. A
+  /// layer that cannot be seen or placed (scale ≤ 0, opacity ≤ 0, non-finite values, empty crop) leaves `running`
+  /// as it is.
+  static func overlayFrame(_ spec: LayerSpec, source: CIImage, over running: CIImage, time: Double, size: CGSize) -> CIImage {
+    var t = spec.transform
+    var fade = 1.0
+    if let v = spec.values(at: time) {
+      t = ClipTransform(scale: CGFloat(v.scale), x: CGFloat(v.x), y: CGFloat(v.y), rotation: CGFloat(v.rotation),
+                        flipH: spec.transform.flipH, flipV: spec.transform.flipV)
+      fade = v.opacity
+    }
+    let c = spec.crop
+    let finite = [t.scale, t.x, t.y, t.rotation, c.x, c.y, c.w, c.h].allSatisfy { $0.isFinite } && fade.isFinite
+    guard finite, c.w > 0, c.h > 0, t.scale > 0, fade > 0, spec.opacity > 0 else { return running }
+    return placedFrame(spec, transform: t, opacity: fade, source: source, size: size, over: running, time: time)
+  }
+
   /// A clip's picture placed by `transform` (`ClipLayout.ciPlacement`: crop, flip, scale, rotate, offset) over its
-  /// background, cropped to the frame — the one drawing chain of a still placed clip (`opacity` 1) and of a clip
-  /// with motion. `transform` must be placeable (finite, scale > 0) and the crop non-empty: the callers check.
-  /// The background (black / colour / blur) is drawn when the picture does not cover the frame OR is not fully
-  /// opaque; a covering, opaque picture gets plain black behind it (never seen, and no blur is computed).
-  /// Opacity: ≥ 1 → the picture over its background, no dissolve; ≤ 0 → the background only; in between → a
-  /// dissolve FROM the background TO the picture-over-background at `opacity`. Both ends are opaque full frames, so
-  /// the result is `background·(1 − opacity) + picture·opacity` whatever alpha convention the picture carries.
-  static func placedFrame(_ spec: LayerSpec, transform: ClipTransform, opacity: Double, source: CIImage, size: CGSize) -> CIImage {
+  /// background, cropped to the frame — the one drawing chain of a still placed clip (`opacity` 1), of a clip
+  /// with motion and of a picture-in-picture layer. `transform` must be placeable (finite, scale > 0) and the crop
+  /// non-empty: the callers check.
+  /// The background (black / colour / blur) is drawn when the picture does not cover the frame, is not fully
+  /// opaque OR is masked; a covering, opaque, unmasked picture gets plain black behind it (never seen, and no blur
+  /// is computed). A layer (`running` given) has no background: it is drawn over `running`.
+  /// Opacity (`opacity` × the spec's own): ≥ 1 → the picture over what is behind it, no dissolve; ≤ 0 → what is
+  /// behind it only; in between → a dissolve FROM that TO the picture-over-it at the opacity. Both ends are opaque
+  /// full frames, so the result is `behind·(1 − opacity) + picture·opacity` whatever alpha convention the picture
+  /// carries.
+  /// Mask: the unrotated picture box is cut to a rounded rectangle (`ClipLayout.maskRadius`) BEFORE the rotation,
+  /// so the mask turns with the picture; radius 0 (no mask) leaves the chain exactly as it was.
+  /// Look: a transparent layer's filter and adjust are applied to its own picture box (at `time`, for the grain),
+  /// before the mask; a main clip's look is applied to its whole composed frame by the caller, as before.
+  static func placedFrame(_ spec: LayerSpec, transform: ClipTransform, opacity: Double, source: CIImage, size: CGSize, over running: CIImage? = nil, time: Double = 0) -> CIImage {
     let rect = CGRect(origin: .zero, size: size)
+    let opacity = opacity * spec.opacity             // the spec's own opacity is 1 unless the picture is see-through
     let oriented = source.transformed(by: spec.orient)
     let p = ClipLayout.ciPlacement(orientedExtent: oriented.extent, crop: spec.crop, transform: transform, frame: size)
     // Hard crop edges: clamp the cropped picture so scaling never samples transparency across the crop border,
     // cut it back to the placed box while still unrotated, and only then rotate + translate (a rotated picture's
     // edges are the box's own edges, with no clamped smear in the corners).
-    let picture = oriented.cropped(to: p.cropRect).clampedToExtent()
+    let boxed = oriented.cropped(to: p.cropRect).clampedToExtent()
       .transformed(by: p.local).cropped(to: p.localRect)
+    let radius = ClipLayout.maskRadius(p.placed.width, p.placed.height, spec.mask)
+    let looked = spec.transparent ? look(spec, on: boxed, time: time) : boxed
+    let picture = (radius > 0 ? rounded(looked, rect: p.localRect, radius: radius) : looked)
       .transformed(by: p.outer)
     let covered = opacity >= 1 && ClipLayout.coversFrame(p.placed, size.width, size.height)
-    let behind = covered ? CIImage(color: CIColor.black).cropped(to: rect) : background(spec, source: source, size: size)
+    let behind: CIImage
+    if let running {
+      behind = running.cropped(to: rect)
+    } else if spec.transparent {
+      behind = CIImage(color: CIColor.clear).cropped(to: rect)
+    } else {
+      behind = covered && radius <= 0 ? CIImage(color: CIColor.black).cropped(to: rect) : background(spec, source: source, size: size)
+    }
     guard opacity > 0 else { return behind }
     let over = picture.composited(over: behind).cropped(to: rect)
     guard opacity < 1 else { return over }
     return dissolve(from: behind, to: over, progress: CGFloat(opacity)).cropped(to: rect)
+  }
+
+  /// `image` — the unrotated picture box, filling `rect` — cut to a rounded rectangle with corners of `radius`:
+  /// kept inside the shape, transparent outside it (`CIBlendWithMask` with a white-on-black mask and a clear
+  /// background). When no shape can be made the picture is returned unmasked.
+  static func rounded(_ image: CIImage, rect: CGRect, radius: CGFloat) -> CIImage {
+    guard let shape = roundedShape(rect: rect, radius: radius) else { return image }
+    let mask = shape.composited(over: CIImage(color: CIColor.black).cropped(to: rect)).cropped(to: rect)
+    return image.applyingFilter("CIBlendWithMask", parameters: [
+      "inputBackgroundImage": CIImage(color: CIColor.clear).cropped(to: rect),
+      "inputMaskImage": mask,
+    ]).cropped(to: rect)
+  }
+
+  /// A white rounded rectangle filling `rect` (transparent outside its corners), the radius capped at half the
+  /// shorter side. Core Image's generator is used when it is there and declares the three keys set here —
+  /// `setValue(_:forKey:)` is never called with a key the filter does not list, so a wrong name cannot raise;
+  /// otherwise the shape is drawn with Core Graphics. Nil when there is nothing to draw.
+  static func roundedShape(rect: CGRect, radius: CGFloat) -> CIImage? {
+    guard radius.isFinite, !rect.isEmpty, !rect.isInfinite else { return nil }
+    let r = min(radius, min(rect.width, rect.height) / 2)
+    guard r > 0 else { return nil }
+    if let f = CIFilter(name: "CIRoundedRectangleGenerator") {
+      let keys = f.inputKeys
+      if keys.contains("inputExtent"), keys.contains("inputRadius"), keys.contains("inputColor") {
+        f.setValue(CIVector(cgRect: rect), forKey: "inputExtent")
+        f.setValue(NSNumber(value: Double(r)), forKey: "inputRadius")
+        f.setValue(CIColor.white, forKey: "inputColor")
+        if let shape = f.outputImage { return shape.cropped(to: rect) }
+      }
+    }
+    return drawnRoundedShape(rect: rect, radius: r)
+  }
+
+  /// Largest side, in pixels, of a mask drawn with Core Graphics (the fallback): a bigger box is left unmasked.
+  static let drawnMaskMaxSide = 8192
+
+  /// The fallback shape: the rounded rectangle filled white on black in an 8-bit grey bitmap of the box's size,
+  /// wrapped as an image and moved to `rect`'s origin. `radius` must be at most half the shorter side (the caller
+  /// caps it). Nil when the box is too large or the bitmap cannot be made.
+  static func drawnRoundedShape(rect: CGRect, radius: CGFloat) -> CIImage? {
+    let w = Int(rect.width.rounded(.up)), h = Int(rect.height.rounded(.up))
+    guard w > 0, h > 0, w <= drawnMaskMaxSide, h <= drawnMaskMaxSide,
+          let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)
+    else { return nil }
+    ctx.setFillColor(gray: 0, alpha: 1)
+    ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+    ctx.setFillColor(gray: 1, alpha: 1)
+    ctx.addPath(CGPath(roundedRect: CGRect(x: 0, y: 0, width: rect.width, height: rect.height),
+                       cornerWidth: radius, cornerHeight: radius, transform: nil))
+    ctx.fillPath()
+    guard let drawn = ctx.makeImage() else { return nil }
+    return CIImage(cgImage: drawn).transformed(by: CGAffineTransform(translationX: rect.minX, y: rect.minY))
   }
 
   /// Blur radius as a fraction of the frame's shorter side.
