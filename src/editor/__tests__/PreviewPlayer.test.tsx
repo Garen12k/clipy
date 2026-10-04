@@ -6,24 +6,36 @@ jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async
 // reading it back rounds (0.3 comes back as 0.30000001…).
 jest.mock("expo-video", () => {
   const { View } = require("react-native");
-  let rate = 1;
-  let time = 0;
-  const listeners: Record<string, (e: unknown) => void> = {};
-  const mockPlayer = {
-    listeners,
-    seeks: [] as number[], // every currentTime write, in order
-    rates: [] as number[], // every playbackRate write, in order
-    playing: false, loop: false, timeUpdateEventInterval: 0, muted: false, audioMixingMode: "auto", volume: 1, preservesPitch: true,
-    get currentTime() { return time; },
-    set currentTime(v: number) { time = v; mockPlayer.seeks.push(v); },
-    get playbackRate() { return Math.fround(rate); },
-    set playbackRate(v: number) { rate = v; mockPlayer.rates.push(v); if (v !== 0) mockPlayer.playing = true; },
-    play: jest.fn(() => { mockPlayer.playing = true; }),
-    pause: jest.fn(() => { mockPlayer.playing = false; }),
-    replaceAsync: jest.fn(async () => {}),
-    addListener: jest.fn((event: string, fn: (e: unknown) => void) => { listeners[event] = fn; return { remove: () => {} }; }),
+  const { useState } = require("react");
+  const make = () => {
+    let rate = 1;
+    let time = 0;
+    const listeners: Record<string, (e: unknown) => void> = {};
+    const mockPlayer = {
+      listeners,
+      released: false, // true: every teardown call throws, as on a native player the hook has already released
+      setup: {} as Record<string, unknown>, // what the hook's setup callback wrote (kept apart, so tests that watch writes see the component's only)
+      seeks: [] as number[], // every currentTime write, in order
+      rates: [] as number[], // every playbackRate write, in order
+      playing: false, loop: false, timeUpdateEventInterval: 0, muted: false, audioMixingMode: "auto", volume: 1, preservesPitch: true,
+      get currentTime() { return time; },
+      set currentTime(v: number) { time = v; mockPlayer.seeks.push(v); },
+      get playbackRate() { return Math.fround(rate); },
+      set playbackRate(v: number) { rate = v; mockPlayer.rates.push(v); if (v !== 0) mockPlayer.playing = true; },
+      play: jest.fn(() => { mockPlayer.playing = true; }),
+      pause: jest.fn(() => { if (mockPlayer.released) throw new Error("released"); mockPlayer.playing = false; }),
+      replaceAsync: jest.fn(async () => {}),
+      addListener: jest.fn((event: string, fn: (e: unknown) => void) => { listeners[event] = fn; return { remove: () => { if (mockPlayer.released) throw new Error("released"); } }; }),
+    };
+    return mockPlayer;
   };
-  return { __mockPlayer: mockPlayer, useVideoPlayer: () => mockPlayer, VideoView: View };
+  // PreviewPlayer creates two players (the one on screen and the one preloading the next clip): the first hook call of a mount
+  // gets the first fake, the second the other. Each records what its setup callback wrote.
+  const mockPlayers = [make(), make()];
+  let created = 0;
+  const useVideoPlayer = (_source: unknown, setup?: (p: unknown) => void) =>
+    useState(() => { const p = mockPlayers[created++ % 2]; p.setup = {}; setup?.(p.setup); return p; })[0];
+  return { __mockPlayer: mockPlayers[0], __mockPlayers: mockPlayers, useVideoPlayer, VideoView: View };
 });
 // A video layer's own player is covered by LayerStack.test.tsx; here the fake above is the main player alone, so a layer's video is
 // a plain view (the shared fake would otherwise take the layer's writes as the main player's).
@@ -39,18 +51,23 @@ import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeLayer, makeOv
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
 
-type MockPlayer = { playing: boolean; currentTime: number; playbackRate: number; seeks: number[]; rates: number[]; play: jest.Mock; pause: jest.Mock; replaceAsync: jest.Mock; listeners: Record<string, (e: unknown) => void> };
-const player = (jest.requireMock("expo-video") as { __mockPlayer: MockPlayer }).__mockPlayer;
+type MockPlayer = { playing: boolean; released: boolean; setup: Record<string, unknown>; muted: boolean; volume: number; currentTime: number; playbackRate: number; seeks: number[]; rates: number[]; play: jest.Mock; pause: jest.Mock; replaceAsync: jest.Mock; listeners: Record<string, (e: unknown) => void> };
+const players = (jest.requireMock("expo-video") as { __mockPlayers: MockPlayer[] }).__mockPlayers;
+// The player that starts out on screen; the other one (`players[1]`) preloads the next clip.
+const player = players[0];
 const layout = () => fireEvent(screen.getByLabelText("Preview"), "layout", { nativeEvent: { layout: { width: 270, height: 480 } } });
 
 beforeEach(() => {
   jest.clearAllMocks();
-  player.playing = false;
-  player.currentTime = 0;
-  player.playbackRate = 1; // as on a fresh player
-  player.playing = false;
-  player.seeks.length = 0;
-  player.rates.length = 0;
+  for (const p of players) {
+    p.released = false;
+    p.playing = false;
+    p.currentTime = 0;
+    p.playbackRate = 1; // as on a fresh player
+    p.playing = false;
+    p.seeks.length = 0;
+    p.rates.length = 0;
+  }
   useEditorStore.getState().reset();
   useEditorStore.getState().setProject(makeProject({ clips: [
     makeClip({ id: "a", sourceDuration: 4, speed: 2 }),
@@ -1162,5 +1179,439 @@ describe("constant-speed clips: the rate is written exactly as before", () => {
     await act(() => { player.listeners.timeUpdate?.({ currentTime: 3.7 }); });
     await act(() => { useEditorStore.getState().setPlaying(false); });
     expect(player.rates).toEqual([]);
+  });
+});
+
+describe("the next clip is preloaded in a second player and takes over at the cut", () => {
+  // x (x.mp4, 0–4 s), y (y.mp4, source 1–3 at 0.5× → 4–8 s, volume 0.5), z (z.mp4, 8–12 s).
+  const [A, B] = players;
+  const X = "file:///media/x.mp4", Y = "file:///media/y.mp4", Z = "file:///media/z.mp4";
+  const st = () => useEditorStore.getState();
+  const view = () => screen.getByTestId("preview-video");
+  const readyUp = (p: MockPlayer) => act(() => { p.listeners.statusChange?.({ status: "readyToPlay" }); });
+  const tick = (p: MockPlayer, currentTime: number) => act(() => { p.listeners.timeUpdate?.({ currentTime }); });
+  const mount = async () => {
+    const r = await render(<PreviewPlayer />);
+    await layout();
+    return r;
+  };
+  /** Mounted, both files loaded: A shows x, B stands by at y's first frame. */
+  const bothReady = async () => {
+    const r = await mount();
+    await readyUp(A);
+    await readyUp(B);
+    return r;
+  };
+
+  beforeEach(() => {
+    st().setProject(makeProject({ clips: [
+      makeClip({ id: "x", sourceDuration: 4 }),
+      makeClip({ id: "y", sourceDuration: 4, trimStart: 1, trimEnd: 3, speed: 0.5, volume: 0.5 }),
+      makeClip({ id: "z", sourceDuration: 4 }),
+    ] }));
+    // As the players' setup callbacks leave them (the fake records those apart): the first audible, the standby one silent.
+    A.muted = false; A.volume = 1;
+    B.muted = true; B.volume = 0;
+  });
+  afterAll(() => { B.muted = false; B.volume = 1; });
+
+  test("both players are configured alike; the standby one is set up silent, loads the next clip's file, seeks to its first frame once ready, and stays paused", async () => {
+    await mount();
+    expect(view().props.player).toBe(A);
+    const common = { loop: false, timeUpdateEventInterval: 0.05, audioMixingMode: "mixWithOthers", preservesPitch: true };
+    expect(A.setup).toEqual({ ...common, muted: false });
+    expect(B.setup).toEqual({ ...common, muted: true, volume: 0 });
+    expect(A.replaceAsync.mock.calls).toEqual([[{ uri: X }]]);
+    expect(B.replaceAsync.mock.calls).toEqual([[{ uri: Y }]]);
+    expect(B.seeks).toEqual([]); // nothing before it is ready
+    await readyUp(B);
+    expect(B.seeks).toEqual([1]);
+    expect(B.play).not.toHaveBeenCalled();
+    expect(B.playing).toBe(false);
+    expect(B.rates).toEqual([]); // a rate write would start it
+    expect(st().playhead).toBe(0);
+  });
+
+  test("the standby player is never written redundantly: scrubbing, gestures and playing inside the clip write nothing more to it", async () => {
+    await bothReady();
+    B.seeks.length = 0; B.pause.mockClear();
+    for (const t of [0.5, 3.9, 2]) await act(() => { st().seek(t); }); // into the last 0.22 s and back out
+    for (const x of [0.1, 0.2]) await act(() => { st().applyTransient((p) => setClipTransform(p, "x", { x })); });
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 3.5); // still outside the last 0.22 s
+    await act(() => { st().setPlaying(false); });
+    expect(B.replaceAsync).toHaveBeenCalledTimes(1);
+    expect(B.seeks).toEqual([]);
+    expect(B.rates).toEqual([]);
+    expect(B.play).not.toHaveBeenCalled();
+    expect(B.pause).not.toHaveBeenCalled();
+  });
+
+  test("a trim of the next clip moves the standby player's seek", async () => {
+    await bothReady();
+    await act(() => { st().apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "y" ? { ...c, trimStart: 1.5 } : c)) })); });
+    expect(B.seeks).toEqual([1, 1.5]);
+    expect(B.replaceAsync).toHaveBeenCalledTimes(1);
+  });
+
+  test("playing across the cut: the view switches to the preloaded player with no reload, it plays, the old one is paused and silenced", async () => {
+    await bothReady();
+    const video = view();
+    await act(() => { st().setPlaying(true); });
+    expect(A.play).toHaveBeenCalledTimes(1);
+    A.pause.mockClear();
+    let ratesAtPlay: number[] | null = null;
+    let volumeAtPlay: number | null = null;
+    B.play.mockImplementationOnce(() => { ratesAtPlay = B.rates.slice(); volumeAtPlay = B.volume; B.playing = true; });
+    await tick(A, 4); // x's end → the playhead enters y
+    expect(st().playhead).toBe(4);
+    expect(view().props.player).toBe(B);
+    expect(view()).toBe(video); // the same view: no remount
+    expect(A.replaceAsync).not.toHaveBeenCalledWith({ uri: Y });
+    expect(B.replaceAsync).toHaveBeenCalledTimes(1);
+    expect(B.play).toHaveBeenCalledTimes(1);
+    expect(B.playing).toBe(true);
+    expect(B.seeks).toEqual([1]); // not seeked again
+    // y's sound and speed were on the new player before it started.
+    expect(ratesAtPlay).toEqual([0.5]);
+    expect(volumeAtPlay).toBe(0.5);
+    expect(B.rates).toEqual([0.5]);
+    expect(B.volume).toBe(0.5);
+    expect(B.muted).toBe(false);
+    // The old player: paused once, silent, its rate left alone (a rate write would start it again).
+    expect(A.pause).toHaveBeenCalledTimes(1);
+    expect(A.playing).toBe(false);
+    expect(A.muted).toBe(true);
+    expect(A.volume).toBe(0);
+    expect(A.rates).toEqual([]);
+    expect(st().isPlaying).toBe(true);
+    await act(() => { st().setPlaying(false); });
+  });
+
+  test("after the hand-over the old player preloads the clip after, and takes over again at the next cut", async () => {
+    await bothReady();
+    const video = view();
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 4);
+    expect(A.replaceAsync.mock.calls).toEqual([[{ uri: X }], [{ uri: Z }]]);
+    A.seeks.length = 0; A.play.mockClear();
+    await readyUp(A);
+    expect(A.seeks).toEqual([0]);
+    expect(A.play).not.toHaveBeenCalled();
+    expect(A.playing).toBe(false);
+    await tick(B, 2); // y's source 2 → playhead 4 + 1 / 0.5
+    expect(st().playhead).toBe(6);
+    B.pause.mockClear();
+    await tick(B, 3); // y's end → z
+    expect(st().playhead).toBe(8);
+    expect(view().props.player).toBe(A);
+    expect(view()).toBe(video);
+    expect(A.play).toHaveBeenCalledTimes(1);
+    expect(A.replaceAsync).toHaveBeenCalledTimes(2);
+    expect(A.volume).toBe(1);
+    expect(A.muted).toBe(false);
+    expect(A.rates).toEqual([]); // z runs at 1, as this player already did
+    expect(B.pause).toHaveBeenCalledTimes(1);
+    expect(B.muted).toBe(true);
+    expect(B.volume).toBe(0);
+    expect(B.replaceAsync).toHaveBeenCalledTimes(1); // z is the last clip: nothing to preload
+    await tick(A, 2);
+    expect(st().playhead).toBe(10);
+    await tick(A, 4.1);
+    expect(st().isPlaying).toBe(false);
+    expect(st().playhead).toBe(12);
+  });
+
+  test("a late timeUpdate from the player that just lost the picture does not move the playhead", async () => {
+    await bothReady();
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 4);
+    expect(view().props.player).toBe(B);
+    const reloads = A.replaceAsync.mock.calls.length + B.replaceAsync.mock.calls.length;
+    await tick(A, 3.9); // still from x
+    await tick(A, 4.05);
+    expect(st().playhead).toBe(4);
+    expect(view().props.player).toBe(B);
+    expect(A.replaceAsync.mock.calls.length + B.replaceAsync.mock.calls.length).toBe(reloads);
+    await tick(B, 1.5);
+    expect(st().playhead).toBe(5);
+    await act(() => { st().setPlaying(false); });
+  });
+
+  test("the standby player becoming ready never starts it or moves the playhead, even while playing", async () => {
+    await mount();
+    await readyUp(A);
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 2);
+    await readyUp(B);
+    expect(B.seeks).toEqual([1]);
+    expect(B.play).not.toHaveBeenCalled();
+    expect(B.playing).toBe(false);
+    expect(st().playhead).toBe(2);
+    await tick(B, 1); // its own seek landing
+    expect(st().playhead).toBe(2);
+    await act(() => { st().setPlaying(false); });
+  });
+
+  test("paused: scrubbing across the cut does not hand over — the player on screen loads the clip as it always did", async () => {
+    await bothReady();
+    await act(() => { st().seek(4); });
+    expect(view().props.player).toBe(A);
+    expect(A.replaceAsync).toHaveBeenLastCalledWith({ uri: Y });
+    expect(B.play).not.toHaveBeenCalled();
+    expect(A.play).not.toHaveBeenCalled();
+    A.seeks.length = 0;
+    await readyUp(A);
+    expect(A.seeks).toEqual([1]);
+    expect(A.playing).toBe(false);
+    expect(B.playing).toBe(false);
+  });
+
+  test("the standby player is not ready at the cut: the player on screen reloads, seeks and plays as it always did", async () => {
+    await mount();
+    await readyUp(A);
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 4);
+    expect(view().props.player).toBe(A);
+    expect(A.replaceAsync).toHaveBeenLastCalledWith({ uri: Y });
+    expect(B.play).not.toHaveBeenCalled();
+    A.seeks.length = 0; A.play.mockClear();
+    await readyUp(A);
+    expect(A.seeks).toEqual([1]);
+    expect(A.play).toHaveBeenCalledTimes(1);
+    expect(A.rates).toEqual([0.5]);
+    // The standby player now prepares the clip after.
+    expect(B.replaceAsync).toHaveBeenLastCalledWith({ uri: Z });
+    await act(() => { st().setPlaying(false); });
+  });
+
+  test("a seek by the user into the middle of the next clip while playing does not hand over", async () => {
+    await bothReady();
+    await act(() => { st().setPlaying(true); });
+    await act(() => { st().seek(6); });
+    expect(view().props.player).toBe(A);
+    expect(A.replaceAsync).toHaveBeenLastCalledWith({ uri: Y });
+    expect(B.play).not.toHaveBeenCalled();
+    await act(() => { st().setPlaying(false); });
+  });
+
+  test("the next clip's media is replaced after it was preloaded: the standby player loads the new file", async () => {
+    await bothReady();
+    await act(() => { st().apply((p) => replaceClipMedia(p, "y", { sourceUri: "file:///media/new.mp4", sourceDuration: 8, width: 1080, height: 1920, kind: "video" })); });
+    expect(B.replaceAsync).toHaveBeenLastCalledWith({ uri: "file:///media/new.mp4" });
+    expect(B.seeks).toEqual([1]); // nothing in the new file until it is ready
+  });
+
+  test("a hand-over while a voice-over is recorded keeps the new player silent", async () => {
+    await bothReady();
+    await act(() => { st().setRecording(true); });
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 4);
+    expect(view().props.player).toBe(B);
+    expect(B.muted).toBe(true);
+    expect(B.volume).toBe(0);
+    await act(() => { st().setPlaying(false); st().setRecording(false); });
+  });
+
+  test("a photo next, a missing next clip or the same file next: nothing is preloaded", async () => {
+    st().setProject(makeProject({ clips: [makeClip({ id: "x", sourceDuration: 4 }), makePhotoClip({ id: "p", seconds: 1 }), makeClip({ id: "y", sourceDuration: 4 })] }));
+    const first = await mount();
+    expect(B.replaceAsync).not.toHaveBeenCalled();
+    await first.unmount();
+    st().setProject(makeProject({ clips: [makeClip({ id: "x", sourceDuration: 4 }), makeClip({ id: "y", sourceDuration: 4 })] }));
+    useEditorStore.setState({ missingSourceUris: [Y] });
+    const second = await mount();
+    expect(B.replaceAsync).not.toHaveBeenCalled();
+    await second.unmount();
+    useEditorStore.setState({ missingSourceUris: [] });
+    st().setProject(makeProject({ clips: [makeClip({ id: "x", sourceDuration: 4 }), makeClip({ id: "x2", sourceDuration: 4, sourceUri: X })] }));
+    await mount();
+    expect(B.replaceAsync).not.toHaveBeenCalled();
+  });
+
+  describe("the standby player is started just before the cut (a ready player needs 0.2–0.3 s to get going)", () => {
+    test("playing: exactly one play() once the playhead is in the clip's last 0.22 s, silent, the next clip's rate written once before it", async () => {
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.5);
+      await tick(A, 3.77);
+      expect(B.play).not.toHaveBeenCalled();
+      expect(B.rates).toEqual([]);
+      let ratesAtPlay: number[] | null = null;
+      B.play.mockImplementationOnce(() => { ratesAtPlay = B.rates.slice(); B.playing = true; });
+      await tick(A, 3.79);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      expect(ratesAtPlay).toEqual([0.5]);
+      expect(B.muted).toBe(true);
+      expect(B.volume).toBe(0);
+      expect(B.seeks).toEqual([1]);
+      expect(view().props.player).toBe(A); // not yet
+      expect(st().playhead).toBe(3.79);
+      for (const t of [3.85, 3.9, 3.95]) await tick(A, t);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      expect(B.rates).toEqual([0.5]);
+      expect(B.pause).not.toHaveBeenCalled();
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("the rolling standby player's own events never move the playhead before the hand-over", async () => {
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await tick(B, 1.02);
+      await tick(B, 1.05);
+      expect(st().playhead).toBe(3.9);
+      expect(view().props.player).toBe(A);
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("at the cut the rolling player takes over without a second play(): unmuted at the clip's volume, the view swapped, the old one paused", async () => {
+      await bothReady();
+      const video = view();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      A.pause.mockClear();
+      await tick(A, 4);
+      expect(st().playhead).toBe(4);
+      expect(view().props.player).toBe(B);
+      expect(view()).toBe(video);
+      expect(B.play).toHaveBeenCalledTimes(1); // the early start only
+      expect(B.rates).toEqual([0.5]);
+      expect(B.seeks).toEqual([1]);
+      expect(B.pause).not.toHaveBeenCalled();
+      expect(B.muted).toBe(false);
+      expect(B.volume).toBe(0.5);
+      expect(A.pause).toHaveBeenCalledTimes(1);
+      expect(A.muted).toBe(true);
+      expect(A.volume).toBe(0);
+      expect(A.replaceAsync).not.toHaveBeenCalledWith({ uri: Y });
+      // It had already moved a little: the playhead follows it from there, never back before the cut.
+      await tick(B, 1.03);
+      expect(st().playhead).toBeCloseTo(4.06, 9);
+      await tick(A, 3.99); // a late one from the old player
+      expect(st().playhead).toBeCloseTo(4.06, 9);
+      // The old player prepares the clip after.
+      expect(A.replaceAsync).toHaveBeenLastCalledWith({ uri: Z });
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("paused: scrubbing into the last 0.22 s never starts the standby player", async () => {
+      await bothReady();
+      for (const t of [3.8, 3.9, 3.99]) await act(() => { st().seek(t); });
+      expect(B.play).not.toHaveBeenCalled();
+      expect(B.rates).toEqual([]);
+      expect(B.playing).toBe(false);
+    });
+
+    test("pausing inside the window pauses the standby player once and seeks it back to the clip's start once; a paused cut then loads as ever", async () => {
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      expect(B.playing).toBe(true);
+      await act(() => { st().setPlaying(false); });
+      expect(B.pause).toHaveBeenCalledTimes(1);
+      expect(B.playing).toBe(false);
+      expect(B.seeks).toEqual([1, 1]);
+      for (const t of [3.95, 3.85]) await act(() => { st().seek(t); });
+      await act(() => { st().applyTransient((p) => setClipTransform(p, "x", { x: 0.1 })); });
+      expect(B.pause).toHaveBeenCalledTimes(1);
+      expect(B.seeks).toEqual([1, 1]);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await act(() => { st().seek(4); });
+      expect(view().props.player).toBe(A);
+      expect(A.replaceAsync).toHaveBeenLastCalledWith({ uri: Y });
+    });
+
+    test("a seek away by the user inside the window does the same; coming back starts it again without rewriting the rate", async () => {
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await act(() => { st().seek(1); });
+      expect(B.pause).toHaveBeenCalledTimes(1);
+      expect(B.playing).toBe(false);
+      expect(B.seeks).toEqual([1, 1]);
+      await tick(A, 1.2);
+      expect(B.pause).toHaveBeenCalledTimes(1);
+      expect(B.seeks).toEqual([1, 1]);
+      await tick(A, 3.9);
+      expect(B.play).toHaveBeenCalledTimes(2);
+      expect(B.rates).toEqual([0.5]);
+      await tick(A, 4);
+      expect(view().props.player).toBe(B);
+      expect(B.play).toHaveBeenCalledTimes(2);
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("a seek by the user into the middle of the next clip while the standby player rolls: it is stopped, and the clip loads as ever", async () => {
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      await act(() => { st().seek(6); });
+      expect(view().props.player).toBe(A);
+      expect(A.replaceAsync).toHaveBeenLastCalledWith({ uri: Y });
+      expect(B.pause).toHaveBeenCalledTimes(1);
+      expect(B.muted).toBe(true);
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("an edit that moves the next clip's start while the standby player rolls stops it and seeks it to the new start", async () => {
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      await act(() => { st().apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "y" ? { ...c, trimStart: 1.5 } : c)) })); });
+      expect(B.pause).toHaveBeenCalledTimes(1);
+      expect(B.seeks).toEqual([1, 1.5]);
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("the next clip going away while the standby player rolls stops it", async () => {
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      await act(() => { st().apply((p) => ({ ...p, clips: [p.clips[0]] })); });
+      expect(B.pause).toHaveBeenCalledTimes(1);
+      expect(B.playing).toBe(false);
+      await act(() => { st().setPlaying(false); });
+      expect(B.pause).toHaveBeenCalledTimes(1);
+    });
+
+    test("the standby player not ready inside the window: no early start, and the cut loads as ever", async () => {
+      await mount();
+      await readyUp(A);
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      expect(B.play).not.toHaveBeenCalled();
+      await tick(A, 4);
+      expect(view().props.player).toBe(A);
+      expect(A.replaceAsync).toHaveBeenLastCalledWith({ uri: Y });
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("a clip shorter than the lead: the standby player starts as soon as it is ready", async () => {
+      st().setProject(makeProject({ clips: [makeClip({ id: "x", sourceDuration: 4, trimEnd: 0.15 }), makeClip({ id: "y", sourceDuration: 4 })] }));
+      await mount();
+      await readyUp(A);
+      await act(() => { st().setPlaying(true); });
+      expect(B.play).not.toHaveBeenCalled();
+      await readyUp(B);
+      await tick(A, 0.05);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await tick(A, 0.15);
+      expect(view().props.player).toBe(B);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await act(() => { st().setPlaying(false); });
+    });
+  });
+
+  test("unmounting after a hand-over is safe although both players are already released", async () => {
+    const { unmount } = await bothReady();
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 4);
+    A.released = true; B.released = true;
+    await unmount();
+    A.released = false; B.released = false;
+    await act(() => { st().setPlaying(false); });
   });
 });

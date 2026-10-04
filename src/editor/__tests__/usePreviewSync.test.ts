@@ -59,3 +59,16 @@ describe("nextPresentClipIndex", () => {
     expect(nextPresentClipIndex(p, 1, [c.sourceUri])).toBeNull();
   });
 });
+
+test("a seek that lands a hair before the trim start stays in the clip (never falls back into the previous one)", () => {
+  // Values from a device: AVPlayer lands on 9.905555555552969 when asked for 9.905555555555555.
+  const first = makeClip({ id: "first", sourceDuration: 10.066666666666666, trimStart: 5.322222222222222, trimEnd: 10.066666666666666 });
+  const second = makeClip({ id: "second", sourceDuration: 14.057333333333334, trimStart: 9.905555555555555, trimEnd: 14.057333333333334 });
+  const q = makeProject({ clips: [first, second] });
+  const start = 10.066666666666666 - 5.322222222222222;
+  const hit = clipAt(q, start)!;
+  expect(hit.clip.id).toBe("second");
+  const { playhead, ended } = nextPlayheadFromPlayer(q, hit, 9.905555555552969, []);
+  expect(ended).toBe(false);
+  expect(clipAt(q, playhead)!.clip.id).toBe("second");
+});
