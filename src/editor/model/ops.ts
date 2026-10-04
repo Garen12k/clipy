@@ -6,7 +6,7 @@ import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_LIMITS, aspectRatioValue, clampAdjust, clampAnimEdge, clampClipAnimation, clampClipKeyframes, clampCrop, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTransform,
   CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
-  MIN_CLIP_SECONDS, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_LIMITS, TRANSITION_LIMITS,
+  MIN_CLIP_SECONDS, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   type AnimEdge, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem, type FilterId,
   type Keyframe, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TransitionType,
 } from "./types";
@@ -313,15 +313,20 @@ export function normaliseTransitions(clips: Clip[]): Clip[] {
   return changed ? out : clips;
 }
 
+/** `speed` (2 decimals), lowered where needed so the clip's source span still plays for MIN_CLIP_SECONDS. */
+function cappedSpeed(c: Clip, speed: number): number {
+  const maxForMin = (c.trimEnd - c.trimStart) / MIN_CLIP_SECONDS;   // speed at which output hits 0.1 s
+  // Round the cap DOWN so rounding never pushes output under 0.1 s; the 1e-9 absorbs float noise (0.3 / 0.1 = 2.9999…).
+  return Math.min(r2(speed), Math.floor(maxForMin * 100 + 1e-9) / 100);
+}
+
 export function setClipSpeed(p: Project, clipId: string, speed: number): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
   if (i < 0) return p;
   const c = p.clips[i];
   if (isPhoto(c)) return p;
-  let s = clamp(speed, SPEED_LIMITS);
-  const maxForMin = (c.trimEnd - c.trimStart) / MIN_CLIP_SECONDS;   // speed at which output hits 0.1 s
-  // Round the cap DOWN so rounding never pushes output under 0.1 s; the 1e-9 absorbs float noise (0.3 / 0.1 = 2.9999…).
-  s = Math.min(r2(s), Math.floor(maxForMin * 100 + 1e-9) / 100);
+  if (!Number.isFinite(speed)) return p;
+  const s = cappedSpeed(c, clamp(speed, SPEED_LIMITS));
   if (s === c.speed && c.speedCurve === null) return p;
   const clips = p.clips.slice(); clips[i] = { ...c, speed: s, speedCurve: null };   // a constant speed and a curve are exclusive
   return touch(p, { clips: normaliseTransitions(clips) });
@@ -340,7 +345,9 @@ export function setClipSpeedCurve(p: Project, clipId: string, id: SpeedCurveId |
   let next: Clip;
   if (id === null) {
     if (c.speedCurve === null) return p;
-    next = { ...c, speedCurve: null };
+    // "None" always works. A short piece of a slow part of the curve would be under MIN_CLIP_SECONDS at speed 1, so it gets the
+    // highest constant speed that keeps the minimum (the cap `setClipSpeed` applies), never under the slowest speed there is.
+    next = { ...c, speedCurve: null, speed: clamp(cappedSpeed(c, 1), SPEED_LIMITS) };
   } else {
     if (!(SPEED_CURVE_IDS as readonly string[]).includes(id)) return p;
     const speedCurve = presetCurve(c, id, c.trimStart, c.trimEnd);
@@ -353,9 +360,13 @@ export function setClipSpeedCurve(p: Project, clipId: string, id: SpeedCurveId |
   return touch(p, { clips: normaliseTransitions(clips) });
 }
 
-/** The preset's steps across [trimStart, trimEnd], through the sanity rule so what is stored reloads unchanged. */
+/**
+ * The preset's steps across [trimStart, trimEnd], through the sanity rule so what is stored reloads unchanged. Null when the range
+ * is too short to hold every slice (the sanity rule merges steps under `minStep`): a collapsed curve is never stored.
+ */
 function presetCurve(c: Pick<Clip, "kind">, id: SpeedCurveId, trimStart: number, trimEnd: number): SpeedCurve | null {
-  return clampSpeedCurve({ id, steps: curveSteps(id, trimStart, trimEnd) }, c);
+  const curve = clampSpeedCurve({ id, steps: curveSteps(id, trimStart, trimEnd) }, c);
+  return curve && curve.steps.length >= SPEED_CURVE_LIMITS.slices ? curve : null;
 }
 
 export function setClipFilter(p: Project, clipId: string, filter: FilterId | null): Project {

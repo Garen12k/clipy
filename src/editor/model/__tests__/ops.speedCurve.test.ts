@@ -1,7 +1,8 @@
 jest.mock("@/src/lib/id", () => ({ newId: jest.fn(() => "new-id") }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { TEMPLATES } from "../../templates";
-import { makeClip, makeKeyframe, makePhotoClip, makeProject, type Clip, type SpeedCurveId } from "../types";
+import { newId } from "@/src/lib/id";
+import { makeClip, makeKeyframe, makePhotoClip, makeProject, MIN_CLIP_SECONDS, SPEED_LIMITS, type Clip, type SpeedCurveId } from "../types";
 import { clipDuration, curveSteps, outputOffsetOf, totalDuration } from "../timeline";
 import {
   applyTemplate, duplicateClip, insertFreezeFrame, replaceClipMedia, setClipReversed, setClipSpeed, setClipSpeedCurve, splitClipAt, trimClip,
@@ -77,6 +78,42 @@ describe("setClipSpeedCurve", () => {
     expect(outputOffsetOf(out.clips[0], 1.5)).toBeCloseTo(1.25, 9);
     expect(outputOffsetOf(q.clips[0], 5)).toBe(5);
     expect(outputOffsetOf(out.clips[0], 5)).toBeCloseTo(35 / 6, 9);
+  });
+});
+
+describe("review fixes", () => {
+  test("None always works: on a piece too short for speed 1 the constant speed drops to the highest that keeps the minimum length", () => {
+    // hero on 0–8 plays source 3–5 at 0.5× (output 11/6 … 35/6). Two cuts inside it leave 0.15 s on screen = 0.075 s of source.
+    (newId as jest.Mock).mockReturnValueOnce("mid").mockReturnValueOnce("tail");
+    const cut = splitClipAt(splitClipAt(curved(), 3), 3.15);
+    expect(cut.clips.map((c) => c.id)).toEqual(["a", "mid", "tail", "b"]);
+    const mid = cut.clips[1];
+    expect(mid.trimEnd - mid.trimStart).toBeCloseTo(0.075, 9);
+    expect(clipDuration(mid)).toBeCloseTo(0.15, 9);
+    const out = setClipSpeedCurve(cut, "mid", null);
+    const c = out.clips[1];
+    expect(c.speedCurve).toBeNull();
+    expect(c.speed).toBeLessThan(1);
+    expect(c.speed).toBeGreaterThanOrEqual(0.74);
+    expect(clipDuration(c)).toBeGreaterThanOrEqual(MIN_CLIP_SECONDS - 1e-9);
+    expect(setClipSpeedCurve(out, "mid", null)).toBe(out);
+    // The cap never goes under the slowest speed there is.
+    const sliver = makeProject({ clips: [{ ...makeClip({ id: "s", sourceDuration: 8, trimStart: 3, trimEnd: 3.01 }), speedCurve: { id: "hero", steps: curveSteps("hero", 0, 8) } }] });
+    expect(setClipSpeedCurve(sliver, "s", null).clips[0]).toMatchObject({ speedCurve: null, speed: SPEED_LIMITS[0] });
+  });
+
+  test("a preset is refused when the source is too short to hold all eight steps", () => {
+    const q = makeProject({ clips: [makeClip({ id: "t", sourceDuration: 8, trimStart: 1, trimEnd: 1.05, speed: 0.25 })] });   // 0.2 s on screen
+    expect(clipDuration(q.clips[0])).toBeCloseTo(0.2, 9);
+    for (const id of ["hero", "bullet", "flashIn"] as const) expect(setClipSpeedCurve(q, "t", id)).toBe(q);
+  });
+
+  test("setClipSpeed refuses a speed that is not a finite number", () => {
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      expect(setClipSpeed(p, "a", bad)).toBe(p);
+      const once = curved();
+      expect(setClipSpeed(once, "a", bad)).toBe(once);
+    }
   });
 });
 
