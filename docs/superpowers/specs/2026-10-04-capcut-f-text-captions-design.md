@@ -1,7 +1,7 @@
 # CapCut group F — Text and captions: design
 
 **Date:** 2026-10-04
-**Status:** Approved by the user ("yes")
+**Status:** Implemented 2026-10-04 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Roadmap:** `docs/superpowers/research/capcut-roadmap.md`, group F
 **Builds on:** schema v8
 
@@ -83,6 +83,13 @@ Eight open-licence Google fonts added as bundled files in `assets/fonts` (and to
 - **Font strip**: sixteen fonts.
 - **Caption style sheet**: a preset strip at the top; a sample caption ("This is how captions look") rendered with the current style, its second word highlighted when highlight is on; a "Highlight spoken word" switch + colour row; the existing controls plus the same Style section.
 - Captions keep their words when restyled; editing a caption's text clears its words (that caption shows no highlight).
+
+**As built:**
+- A template replaces the whole look, and sets an animation only when it defines one.
+- The caption sheet has an Outline switch.
+- With no captions, the sheet shows "Add captions to style them" and its controls change nothing.
+- Trimming a caption's start shifts its word highlight.
+- Permanent Marker is Apache-2.0 (the other fonts are OFL).
 
 ## 8. Captions pipeline
 
