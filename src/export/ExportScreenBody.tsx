@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
-import type { Project } from "@/src/editor/model/types";
+import { EXPORT_FPS, EXPORT_QUALITIES, type ExportSettings, type Project } from "@/src/editor/model/types";
+import { useEditorStore } from "@/src/editor/store";
 import { fileSize } from "@/src/lib/fileInfo";
 import { formatDuration } from "@/src/lib/format";
 import { Compass } from "@/src/theme/Compass";
@@ -12,11 +13,11 @@ import { ProgressRing } from "@/src/ui/ProgressRing";
 import { Screen } from "@/src/ui/Screen";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Body, Title } from "@/src/ui/Text";
-import { canExport4K, estimateBytes, exportableClips, exportDuration, formatBytes, RESOLUTIONS, type Resolution } from "./estimate";
+import { canExport4K, estimateBytes, exportableClips, exportDuration, formatBytes, QUALITY_LABELS, RESOLUTIONS, type Resolution } from "./estimate";
 import type { ExportState } from "./useExport";
 
 type Props = {
-  project: Project; missingSourceUris?: string[]; state: ExportState; start: (r: Resolution) => void; cancel: () => void; reset: () => void;
+  project: Project; missingSourceUris?: string[]; state: ExportState; start: (r: Resolution, s: ExportSettings) => void; cancel: () => void; reset: () => void;
   onSave: () => void; onShare: () => void; onDone: () => void;
   /** When given, "Post to…" is the main action on the finish screen and Save to Photos steps down to secondary. */
   onPost?: () => void;
@@ -24,6 +25,8 @@ type Props = {
 
 export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone, onPost }: Props) {
   const [res, setRes] = useState<Resolution>(1080);
+  const [settings, setSettings] = useState<ExportSettings>(project.exportSettings);
+  const change = (patch: Partial<ExportSettings>) => { const next = { ...settings, ...patch }; setSettings(next); useEditorStore.getState().setExportSettings(next); };
   const clips = exportableClips(project, missingSourceUris);
   const has4K = canExport4K(clips);
   const duration = exportDuration(project, missingSourceUris);
@@ -47,7 +50,15 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
             {RESOLUTIONS.map((r) => <Chip key={r.value} label={r.label} selected={res === r.value} disabled={r.value === 2160 && !has4K} onPress={() => setRes(r.value)} />)}
           </View>
           {!has4K && <Body muted style={{ fontSize: 12 }}>4K needs a 4K source clip.</Body>}
-          <Body muted>Estimated size: {formatBytes(estimateBytes(duration, res))}</Body>
+          <Body muted>Frame rate</Body>
+          <View style={{ flexDirection: "row", gap: theme.space.md }}>
+            {EXPORT_FPS.map((f) => <Chip key={f} label={`${f} fps`} selected={settings.fps === f} onPress={() => change({ fps: f })} />)}
+          </View>
+          <Body muted>Quality</Body>
+          <View style={{ flexDirection: "row", gap: theme.space.md }}>
+            {EXPORT_QUALITIES.map((q) => <Chip key={q} label={QUALITY_LABELS[q]} selected={settings.quality === q} onPress={() => change({ quality: q })} />)}
+          </View>
+          <Body muted>Estimated size: {formatBytes(estimateBytes(duration, res, settings))}</Body>
         </View>
       )}
       {state.status === "unavailable" && (
@@ -58,7 +69,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
         </View>
       )}
       {state.status === "idle" && (
-        <PrimaryButton title="Export" onPress={() => start(res)}
+        <PrimaryButton title="Export" onPress={() => start(res, settings)}
           icon={<View accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Compass size={18} /></View>} />
       )}
       {state.status === "exporting" && (

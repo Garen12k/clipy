@@ -1,11 +1,21 @@
 import { clipDuration } from "@/src/editor/model/timeline";
-import type { AudioTrack, Clip, LayerClip, Project } from "@/src/editor/model/types";
+import { clampExportSettings, DEFAULT_EXPORT_SETTINGS, type AudioTrack, type Clip, type ExportFps, type ExportQuality, type ExportSettings, type LayerClip, type Project } from "@/src/editor/model/types";
 
 export type Resolution = 720 | 1080 | 2160;
 export const RESOLUTIONS: { value: Resolution; label: string }[] = [{ value: 720, label: "720p" }, { value: 1080, label: "1080p" }, { value: 2160, label: "4K" }];
 export const BITRATE_MBPS: Record<Resolution, number> = { 720: 5, 1080: 10, 2160: 35 };
 
-export const estimateBytes = (durationSec: number, res: Resolution): number => (durationSec * BITRATE_MBPS[res] * 1e6) / 8;
+export const FPS_BITRATE_FACTOR: Record<ExportFps, number> = { 24: 0.9, 30: 1, 60: 1.5 };
+export const QUALITY_BITRATE_FACTOR: Record<ExportQuality, number> = { high: 1, small: 0.6 };
+export const QUALITY_LABELS: Record<ExportQuality, string> = { high: "High", small: "Smaller file" };
+/** Video bits per second for a resolution and export settings, rounded. Settings are clamped, so junk never yields NaN. */
+export const exportBitrate = (res: Resolution, s: ExportSettings = DEFAULT_EXPORT_SETTINGS): number => {
+  const c = clampExportSettings(s);
+  return Math.round(BITRATE_MBPS[res] * 1e6 * FPS_BITRATE_FACTOR[c.fps] * QUALITY_BITRATE_FACTOR[c.quality]);
+};
+export const estimateBytes = (durationSec: number, res: Resolution, s: ExportSettings = DEFAULT_EXPORT_SETTINGS): number => (durationSec * exportBitrate(res, s)) / 8;
+/** What the request carries: 0 (no limit — today's export) for High, the capped bitrate for Smaller file. */
+export const requestBitrate = (res: Resolution, s: ExportSettings = DEFAULT_EXPORT_SETTINGS): number => (clampExportSettings(s).quality === "small" ? exportBitrate(res, s) : 0);
 /**
  * Only video clips count: a still photo is never a 4K source. Called with the main clips only — layers never gate 4K
  * (they are drawn smaller than the frame, so a 4K export is fine whatever resolution they have).

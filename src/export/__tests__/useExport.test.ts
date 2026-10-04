@@ -19,6 +19,7 @@ import { exportTimeline } from "@/modules/clipy-video";
 import { insertFreezeFrame, setClipReversed, setTransition, splitClipAt } from "@/src/editor/model/ops";
 import { makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { toExportLayer as toLayer } from "@/modules/clipy-video";
+import { estimateBytes } from "../estimate";
 import { useExport } from "../useExport";
 
 const a = makeClip({ id: "a", sourceDuration: 4, volume: 1.5, muted: true, speed: 2, filter: "warm", transitionOut: { type: "fade", duration: 0.5 } });
@@ -52,6 +53,7 @@ test("exports only clips whose source file is present", async () => {
         expect.objectContaining({ volume: 1.5, muted: true, speed: 2, filter: "warm", transition: { type: "fade", duration: 0.5 }, gain: [{ time: 0, gain: 0 }, { time: 2, gain: 0 }] }),
         expect.objectContaining({ sourceUri: b.sourceUri }),
       ],
+      fps: 30, bitrate: 0,
     }),
   );
   expect(result.current.state.status).toBe("exporting");
@@ -264,5 +266,49 @@ describe("layers", () => {
     const req = await run(makeProject({ id: "pl4", clips: [main], layers: [l] }));
     expect(req.layers[0]).toEqual(toLayer(l));
     expect(req.layers[0].keyframes.map((k: { t: number }) => k.t)).toEqual([0, 2]);
+  });
+});
+
+describe("export options in the request", () => {
+  const main = makeClip({ id: "x", sourceDuration: 4 });
+  const run = async (p: ReturnType<typeof makeProject>) => {
+    const { result } = await renderHook(() => useExport(p, []));
+    await act(() => result.current.start(1080));
+    return (exportTimeline as jest.Mock).mock.calls[0][0];
+  };
+  test("the default export is today's request plus fps 30 and bitrate 0", async () => {
+    const req = await run(makeProject({ id: "o1", clips: [main] }));
+    expect(req).toMatchObject({ fps: 30, bitrate: 0, resolution: 1080, aspectRatio: "9:16" });
+  });
+  test("start(res) uses the project's saved settings", async () => {
+    const req = await run(makeProject({ id: "o2", clips: [main], exportSettings: { fps: 60, quality: "small" } }));
+    expect(req).toMatchObject({ fps: 60, bitrate: 9_000_000 });
+  });
+  test("explicit settings win over the project's", async () => {
+    const { result } = await renderHook(() => useExport(makeProject({ id: "o3", clips: [main], exportSettings: { fps: 60, quality: "small" } }), []));
+    await act(() => result.current.start(720, { fps: 24, quality: "high" }));
+    expect((exportTimeline as jest.Mock).mock.calls[0][0]).toMatchObject({ fps: 24, bitrate: 0, resolution: 720 });
+  });
+  test("garbage settings still send finite whole numbers", async () => {
+    const req = await run(makeProject({ id: "o4", clips: [main], exportSettings: { fps: NaN, quality: "small" } as never }));
+    expect(req.fps).toBe(30);
+    expect(Number.isInteger(req.bitrate) && req.bitrate >= 0).toBe(true);
+    const { result } = await renderHook(() => useExport(makeProject({ id: "o5", clips: [main] }), []));
+    jest.clearAllMocks();
+    await act(() => result.current.start(1080, { fps: Infinity, quality: null } as never));
+    expect((exportTimeline as jest.Mock).mock.calls[0][0]).toMatchObject({ fps: 30, bitrate: 0 });
+  });
+  test("the free-space check uses the settings", async () => {
+    const p = makeProject({ id: "o6", clips: [main] });
+    const need = estimateBytes(4, 1080, { fps: 60, quality: "high" }) * 2;
+    const fs = jest.requireMock("@/src/projects/expoFs").expoFs;
+    const orig = fs.freeBytes;
+    fs.freeBytes = async () => need - 1;
+    try {
+      const { result } = await renderHook(() => useExport(p, []));
+      await act(() => result.current.start(1080, { fps: 60, quality: "high" }));
+      expect(exportTimeline).not.toHaveBeenCalled();
+      expect(result.current.state).toMatchObject({ status: "error", message: expect.stringContaining("Not enough free space") });
+    } finally { fs.freeBytes = orig; }
   });
 });
