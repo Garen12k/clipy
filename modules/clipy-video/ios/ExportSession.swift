@@ -101,7 +101,6 @@ struct ExportClip: Record {
   @Field var animOut: ExportAnimEdge?
   @Field var animCombo: String?                    // one of `ANIM_COMBO_IDS`; set → In / Out are not played
   @Field var keyframes: [ExportKeyframe] = []      // non-empty → they give x / y / scale / rotation / opacity
-  @Field var outputDuration: Double = 0            // (trimEnd − trimStart) / speed as the app computed it (informational)
 }
 
 struct ExportOverlay: Record {
@@ -207,6 +206,10 @@ private struct PlacedClip {
 /// Events go through `onEvent`: `progress` (repeating), then exactly one of `done` / `cancelled` / `error`.
 /// Errors thrown from `start` are NOT emitted here — the caller (the module) turns them into an `error` event.
 final class ExportSession {
+  /// Frames per second of the exported video: the composition's frame duration, the still "hold" frame of a
+  /// transition handle and the sampling of text / sticker motion (`OverlayMotion.fps`) all use this one rate.
+  static let frameRate: Int32 = 30
+
   let id = UUID().uuidString
   private let lock = NSLock()
   private var session: AVAssetExportSession?   // guarded by `lock`
@@ -621,7 +624,7 @@ final class ExportSession {
     var audioVolumes: [[(at: CMTime, volume: Float)]] = [[], []]
     var placed: [PlacedClip] = []
     var cursor = CMTime.zero
-    let holdFrame = CMTime(value: 1, timescale: 30)
+    let holdFrame = CMTime(value: 1, timescale: ExportSession.frameRate)
 
     /// Appends `source` at `a` and retimes it to end exactly at `b` (speed). Every insert lands at or after the
     /// track's current end, so nothing already on the track shifts. False when there is nothing to insert.
@@ -763,7 +766,7 @@ final class ExportSession {
     let videoComposition = AVMutableVideoComposition()
     videoComposition.customVideoCompositorClass = ClipyCompositor.self
     videoComposition.renderSize = renderSize
-    videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+    videoComposition.frameDuration = CMTime(value: 1, timescale: ExportSession.frameRate)
     videoComposition.instructions = instructions
 
     // Text, caption and sticker overlays, composited on top of the video by Core Animation.

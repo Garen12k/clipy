@@ -50,7 +50,6 @@ final class MediaPrePassTests: XCTestCase {
     c.animIn = animIn; c.animOut = animOut; c.animCombo = "sway"
     var pin = ExportKeyframe(); pin.t = 1.5; pin.x = 0.2; pin.y = -0.1; pin.scale = 2; pin.rotation = 45; pin.opacity = 0.5
     c.keyframes = [ExportKeyframe(), pin]
-    c.outputDuration = 1.5
 
     let prepared = URL(fileURLWithPath: "/tmp/clipy-prepass-x/0-photo.mp4")
     let r = MediaPrePass.rewrite(c, preparedURL: prepared, duration: 3)
@@ -77,7 +76,6 @@ final class MediaPrePassTests: XCTestCase {
     XCTAssertEqual(r.keyframes.first?.t, 0); XCTAssertEqual(r.keyframes.first?.scale, 1); XCTAssertEqual(r.keyframes.first?.opacity, 1)
     XCTAssertEqual(r.keyframes.last?.t, 1.5); XCTAssertEqual(r.keyframes.last?.x, 0.2); XCTAssertEqual(r.keyframes.last?.y, -0.1)
     XCTAssertEqual(r.keyframes.last?.scale, 2); XCTAssertEqual(r.keyframes.last?.rotation, 45); XCTAssertEqual(r.keyframes.last?.opacity, 0.5)
-    XCTAssertEqual(r.outputDuration, 1.5)
     XCTAssertEqual(ExportSession.clipMotion(r)?.animCombo, "sway")
   }
 

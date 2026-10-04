@@ -180,7 +180,10 @@ test("the request records decode the motion fields", () => {
   expect(clip).toMatch(/@Field var animOut: ExportAnimEdge\?/);
   expect(clip).toMatch(/@Field var animCombo: String\?/);
   expect(clip).toMatch(/@Field var keyframes: \[ExportKeyframe\] = \[\]/);
-  expect(clip).toMatch(/@Field var outputDuration: Double = 0\b/);
+  // The clip's length is the composition's (`outDur`): no informational copy travels with the request.
+  expect(session).not.toMatch(/outputDuration/);
+  expect(prePass).not.toMatch(/outputDuration/);
+  expect(readFileSync(join(iosDir, "../index.ts"), "utf8")).not.toMatch(/outputDuration/);
   const overlay = between(session, "struct ExportOverlay: Record {", "\n}");
   expect(overlay).toMatch(/@Field var animIn: ExportAnimEdge\?/);
   expect(overlay).toMatch(/@Field var animOut: ExportAnimEdge\?/);
@@ -191,9 +194,10 @@ test("the request records decode the motion fields", () => {
 test("the pre-pass rewrite carries every ExportClip field", () => {
   const body = between(prePass, "static func rewrite(", "return out");
   const fields = recordFields("ExportClip");
-  expect(fields).toEqual(expect.arrayContaining(["animIn", "animOut", "animCombo", "keyframes", "outputDuration"]));
+  expect(fields).toEqual(expect.arrayContaining(["animIn", "animOut", "animCombo", "keyframes"]));
+  expect(fields).not.toContain("outputDuration");
   for (const f of fields) expect(body).toMatch(new RegExp(`\\n\\s*out\\.${f} = `));
-  for (const f of ["animIn", "animOut", "animCombo", "keyframes", "outputDuration"]) expect(body).toContain(`out.${f} = clip.${f}\n`);
+  for (const f of ["animIn", "animOut", "animCombo", "keyframes"]) expect(body).toContain(`out.${f} = clip.${f}\n`);
 });
 
 test("a LayerSpec knows its clip's motion, composition start and length", () => {
@@ -212,19 +216,38 @@ test("a LayerSpec knows its clip's motion, composition start and length", () => 
 test("the compositor: motion replaces the placement and fades the picture; without motion the path is unchanged", () => {
   const body = between(compositor, "func startRequest(", "\n  }\n");
   // The motion branch comes first, so `usesFill` is only consulted for a clip without motion.
-  const at = ["if let motion = spec.motion {", "} else if spec.usesFill {", "img = source.transformed(by: spec.fill).cropped(to: rect)", "} else {",
-    "ClipLayout.ciPlacement(orientedExtent: oriented.extent, crop: spec.crop, transform: spec.transform, frame: size)"].map((s) => body.indexOf(s));
+  const at = ["if spec.motion != nil {", "img = ClipyCompositor.movingFrame(spec, source: source, time: time, size: size)", "} else if spec.usesFill {",
+    "img = source.transformed(by: spec.fill).cropped(to: rect)", "} else {",
+    "img = ClipyCompositor.placedFrame(spec, transform: spec.transform, opacity: 1, source: source, size: size)"].map((s) => body.indexOf(s));
   expect(at.every((i) => i >= 0)).toBe(true);
   expect([...at].sort((a, b) => a - b)).toEqual(at);
+  expect(compositor).toContain("static func movingFrame(_ spec: LayerSpec, source: CIImage, time: Double, size: CGSize) -> CIImage {");   // no unused `motion:`
   const moving = code(between(compositor, "static func movingFrame(", "\n  }\n"));
-  expect(moving).toMatch(/ClipLayout\.ciPlacement\(orientedExtent: oriented\.extent, crop: spec\.crop, transform: t, frame: size\)/);
   expect(moving).not.toMatch(/usesFill/);
   expect(moving).toMatch(/flipH: spec\.transform\.flipH, flipV: spec\.transform\.flipV/);
+  expect(moving).toContain("guard t.scale > 0, v.opacity > 0 else { return background(spec, source: source, size: size) }");
+  expect(moving).toContain("return placedFrame(spec, transform: t, opacity: v.opacity, source: source, size: size)");
+});
+
+test("the compositor: one placement chain for still and moving clips; a fade is a dissolve from the background", () => {
+  const all = code(compositor);
+  // The crop / clamp / transform chain exists once, in `placedFrame`.
+  expect(all.match(/ClipLayout\.ciPlacement\(/g)).toHaveLength(1);
+  expect(all.match(/\.clampedToExtent\(\)\n\s*\.transformed\(by: p\.local\)/g)).toHaveLength(1);
+  const placed = code(between(compositor, "static func placedFrame(", "\n  }\n"));
+  expect(placed).toContain("static func placedFrame(_ spec: LayerSpec, transform: ClipTransform, opacity: Double, source: CIImage, size: CGSize) -> CIImage {");
+  expect(placed).toContain("ClipLayout.ciPlacement(orientedExtent: oriented.extent, crop: spec.crop, transform: transform, frame: size)");
+  for (const step of ["oriented.cropped(to: p.cropRect).clampedToExtent()", ".transformed(by: p.local).cropped(to: p.localRect)", ".transformed(by: p.outer)"]) expect(placed).toContain(step);
   // The background shows when the picture does not cover the frame OR it is not fully opaque.
-  expect(moving).toMatch(/v\.opacity >= 1 && ClipLayout\.coversFrame\(/);
-  const faded = code(between(compositor, "static func faded(", "\n  }\n"));
-  expect(faded).toMatch(/opacity < 1/);
-  expect(faded).toMatch(/"CIColorMatrix"/);
-  expect(faded).toMatch(/"inputAVector": CIVector\(x: 0, y: 0, z: 0, w: CGFloat\(opacity\)\)/);
-  expect(faded).toMatch(/Adjust\.filtered\(/);                     // CIFilter(name:) + nil-guard
+  expect(placed).toContain("let covered = opacity >= 1 && ClipLayout.coversFrame(p.placed, size.width, size.height)");
+  expect(placed).toContain("let over = picture.composited(over: behind).cropped(to: rect)");
+  // Fully opaque: no dissolve at all. Otherwise background → picture-over-background by the opacity (no alpha arithmetic).
+  expect(placed).toContain("guard opacity < 1 else { return over }");
+  expect(placed).toContain("guard opacity > 0 else { return behind }");
+  expect(placed).toContain("return dissolve(from: behind, to: over, progress: CGFloat(opacity)).cropped(to: rect)");
+  expect(all).not.toMatch(/inputAVector/);
+  expect(all).not.toMatch(/static func faded\(/);
+  expect(table).not.toMatch(/ClipyCompositor\.faded\(/);
+  expect(table).not.toMatch(/movingFrame\([^)]*motion:/);
+  expect(table).toContain("func testAPlacedFrameFadesByDissolvingFromItsBackground()");
 });

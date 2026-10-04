@@ -35,7 +35,6 @@ export interface ExportClip {
   filterIntensity: number; adjust: ClipAdjust;
   animIn: ExportAnimEdge | null; animOut: ExportAnimEdge | null; animCombo: string | null;
   keyframes: ExportKeyframe[];   // clip-local OUTPUT seconds, ascending; the pins inside the clip plus the nearest one each side
-  outputDuration: number;
 }
 /** Pins converted to output-local seconds, sorted, trimmed to [0, length] plus the last one before 0 and the first one after length. */
 function outputKeyframes(c: Clip, length: number): ExportKeyframe[] {
@@ -46,8 +45,8 @@ function outputKeyframes(c: Clip, length: number): ExportKeyframe[] {
   return [...before.slice(-1), ...inside, ...(after ? [after] : [])];
 }
 export function toExportClip(c: Clip): ExportClip {
-  const outputDuration = clipDuration(c);
-  const edges = edgeDurations(c.animation.in?.duration ?? 0, c.animation.out?.duration ?? 0, outputDuration);
+  const length = clipDuration(c);   // not sent: the export takes the clip's length from its composition
+  const edges = edgeDurations(c.animation.in?.duration ?? 0, c.animation.out?.duration ?? 0, length);
   return {
     sourceUri: c.sourceUri, trimStart: c.trimStart, trimEnd: c.trimEnd, volume: c.volume, muted: c.muted,
     speed: c.speed, filter: c.filter, transition: { type: c.transitionOut.type, duration: c.transitionOut.duration },
@@ -57,7 +56,7 @@ export function toExportClip(c: Clip): ExportClip {
     reversed: c.reversed,
     filterIntensity: c.filterIntensity, adjust: { ...c.adjust },
     animIn: toEdge(c.animation.in, edges.in), animOut: toEdge(c.animation.out, edges.out), animCombo: c.animation.combo,
-    keyframes: outputKeyframes(c, outputDuration), outputDuration,
+    keyframes: outputKeyframes(c, length),
   };
 }
 export interface ExportEffect { type: string; start: number; end: number; intensity: number }

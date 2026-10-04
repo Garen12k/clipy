@@ -445,17 +445,42 @@ final class MotionTests: XCTestCase {
     XCTAssertEqual(l.values(at: 15)?.opacity ?? -1, 0, accuracy: 1e-9)
   }
 
-  func testFadedMultipliesTheAlpha() {
+  /// A white picture over a red background at an opacity: `background·(1 − opacity) + picture·opacity` — white at 1
+  /// (and above), half way at 0.5, the background alone at 0. Always exactly the frame.
+  func testAPlacedFrameFadesByDissolvingFromItsBackground() {
     let white = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: rect)
-    XCTAssertTrue(ClipyCompositor.faded(white, opacity: 1) === white)          // fully opaque: no filter
-    XCTAssertTrue(ClipyCompositor.faded(white, opacity: 1.5) === white)
-    let black = CIImage(color: CIColor.black).cropped(to: rect)
-    let half = rgb(ClipyCompositor.faded(white, opacity: 0.5).composited(over: black), 32, 18)
-    XCTAssertEqual(half.r, 0.5, accuracy: 0.03)
+    let l = layer(nil, background: LayerBackground(type: "color", color: "#FF0000"))
+    func pixel(_ opacity: Double) -> (r: Double, g: Double, b: Double) {
+      let img = ClipyCompositor.placedFrame(l, transform: .identity, opacity: opacity, source: white, size: size)
+      XCTAssertEqual(img.extent, rect)
+      return rgb(img, 32, 18)
+    }
+    for opacity in [1.0, 1.5] {                                    // fully opaque: the picture, no dissolve
+      let full = pixel(opacity)
+      XCTAssertEqual(full.r, 1, accuracy: 0.03)
+      XCTAssertEqual(full.g, 1, accuracy: 0.03)
+      XCTAssertEqual(full.b, 1, accuracy: 0.03)
+    }
+    let half = pixel(0.5)
+    XCTAssertEqual(half.r, 1, accuracy: 0.03)
     XCTAssertEqual(half.g, 0.5, accuracy: 0.03)
     XCTAssertEqual(half.b, 0.5, accuracy: 0.03)
-    let none = rgb(ClipyCompositor.faded(white, opacity: 0).composited(over: black), 32, 18)
-    XCTAssertEqual(none.r, 0, accuracy: 0.02)
+    let none = pixel(0)                                            // the background only
+    XCTAssertEqual(none.r, 1, accuracy: 0.03)
+    XCTAssertEqual(none.g, 0, accuracy: 0.03)
+    XCTAssertEqual(none.b, 0, accuracy: 0.03)
+  }
+
+  /// The still placement goes through the same helper: a half-size picture leaves the background around it.
+  func testAPlacedFrameDrawsAStillPlacementOverItsBackground() {
+    let white = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: rect)
+    let small = ClipTransform(scale: 0.5, x: 0, y: 0, rotation: 0, flipH: false, flipV: false)
+    let l = layer(nil, transform: small, background: LayerBackground(type: "color", color: "#FF0000"))
+    let img = ClipyCompositor.placedFrame(l, transform: l.transform, opacity: 1, source: white, size: size)
+    XCTAssertEqual(img.extent, rect)
+    XCTAssertEqual(rgb(img, 32, 18).g, 1, accuracy: 0.03)          // the picture, in the middle
+    XCTAssertEqual(rgb(img, 2, 2).g, 0, accuracy: 0.03)            // the background, in the corner
+    XCTAssertEqual(rgb(img, 2, 2).r, 1, accuracy: 0.03)
   }
 
   /// A white picture fading in over a red background: red at the clip's start, 0.875 white + 0.125 red half way
@@ -465,7 +490,7 @@ final class MotionTests: XCTestCase {
     let motion = ClipMotionSpec(keyframes: [], animIn: MotionEdge(id: "fade", duration: 1), animOut: nil, animCombo: nil)
     let l = layer(motion, background: LayerBackground(type: "color", color: "#FF0000"), clipStart: 2, clipLength: 4)
     func pixel(_ time: Double) -> (r: Double, g: Double, b: Double) {
-      let img = ClipyCompositor.movingFrame(l, motion: motion, source: white, time: time, size: size)
+      let img = ClipyCompositor.movingFrame(l, source: white, time: time, size: size)
       XCTAssertEqual(img.extent, rect)
       return rgb(img, 32, 18)
     }
@@ -489,7 +514,7 @@ final class MotionTests: XCTestCase {
     let pin = MotionKeyframe(t: 0, x: 0.5, y: 0, scale: 1, rotation: 0, opacity: 1)
     let motion = ClipMotionSpec(keyframes: [pin], animIn: nil, animOut: nil, animCombo: nil)
     let l = layer(motion, background: LayerBackground(type: "color", color: "#FF0000"), clipStart: 0, clipLength: 4)
-    let img = ClipyCompositor.movingFrame(l, motion: motion, source: white, time: 1, size: size)
+    let img = ClipyCompositor.movingFrame(l, source: white, time: 1, size: size)
     let left = rgb(img, 8, 18)
     let right = rgb(img, 56, 18)
     XCTAssertEqual(left.r, 1, accuracy: 0.03)                      // background (red)

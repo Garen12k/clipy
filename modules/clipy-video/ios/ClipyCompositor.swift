@@ -186,23 +186,13 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
       guard let pb = req.sourceFrame(byTrackID: spec.trackID) else { return nil }
       let source = CIImage(cvPixelBuffer: pb)
       let img: CIImage
-      if let motion = spec.motion {
+      if spec.motion != nil {
         // Animated / keyframed clip: the resolved transform replaces the static one (never the `usesFill` shortcut).
-        img = ClipyCompositor.movingFrame(spec, motion: motion, source: source, time: time, size: size)
+        img = ClipyCompositor.movingFrame(spec, source: source, time: time, size: size)
       } else if spec.usesFill {
         img = source.transformed(by: spec.fill).cropped(to: rect)       // unchanged pre-placement path
       } else {
-        let oriented = source.transformed(by: spec.orient)
-        let p = ClipLayout.ciPlacement(orientedExtent: oriented.extent, crop: spec.crop, transform: spec.transform, frame: size)
-        // Hard crop edges: clamp the cropped picture so scaling never samples transparency across the crop border,
-        // cut it back to the placed box while still unrotated, and only then rotate + translate (a rotated picture's
-        // edges are the box's own edges, with no clamped smear in the corners).
-        let picture = oriented.cropped(to: p.cropRect).clampedToExtent()
-          .transformed(by: p.local).cropped(to: p.localRect)
-          .transformed(by: p.outer)
-        let covered = ClipLayout.coversFrame(p.placed, size.width, size.height)
-        let behind = covered ? black : ClipyCompositor.background(spec, source: source, size: size)
-        img = picture.composited(over: behind).cropped(to: rect)
+        img = ClipyCompositor.placedFrame(spec, transform: spec.transform, opacity: 1, source: source, size: size)
       }
       return ClipyCompositor.look(spec, on: img, time: time)
     }
@@ -251,11 +241,10 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
   }
 
   /// One frame of a clip with motion: the picture placed by the transform resolved for `time` (flips from the static
-  /// transform), its alpha multiplied by the resolved opacity, over the clip's background. The background is drawn
-  /// when the picture does not cover the frame OR is not fully opaque. A picture that cannot be seen (scale ≤ 0 or
-  /// opacity ≤ 0) leaves just the background; values that cannot be placed (non-finite, empty crop) fall back to the
-  /// plain cover (`fill`) frame, as for a clip without motion.
-  static func movingFrame(_ spec: LayerSpec, motion: ClipMotionSpec, source: CIImage, time: Double, size: CGSize) -> CIImage {
+  /// transform) and faded by the resolved opacity over the clip's background (`placedFrame`). A picture that cannot
+  /// be seen (scale ≤ 0 or opacity ≤ 0) leaves just the background; values that cannot be placed (non-finite, empty
+  /// crop) fall back to the plain cover (`fill`) frame, as for a clip without motion.
+  static func movingFrame(_ spec: LayerSpec, source: CIImage, time: Double, size: CGSize) -> CIImage {
     let rect = CGRect(origin: .zero, size: size)
     let plain = source.transformed(by: spec.fill).cropped(to: rect)
     guard let v = spec.values(at: time) else { return plain }
@@ -265,22 +254,33 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
     let finite = [t.scale, t.x, t.y, t.rotation, c.x, c.y, c.w, c.h].allSatisfy { $0.isFinite } && v.opacity.isFinite
     guard finite, c.w > 0, c.h > 0 else { return plain }
     guard t.scale > 0, v.opacity > 0 else { return background(spec, source: source, size: size) }
+    return placedFrame(spec, transform: t, opacity: v.opacity, source: source, size: size)
+  }
+
+  /// A clip's picture placed by `transform` (`ClipLayout.ciPlacement`: crop, flip, scale, rotate, offset) over its
+  /// background, cropped to the frame — the one drawing chain of a still placed clip (`opacity` 1) and of a clip
+  /// with motion. `transform` must be placeable (finite, scale > 0) and the crop non-empty: the callers check.
+  /// The background (black / colour / blur) is drawn when the picture does not cover the frame OR is not fully
+  /// opaque; a covering, opaque picture gets plain black behind it (never seen, and no blur is computed).
+  /// Opacity: ≥ 1 → the picture over its background, no dissolve; ≤ 0 → the background only; in between → a
+  /// dissolve FROM the background TO the picture-over-background at `opacity`. Both ends are opaque full frames, so
+  /// the result is `background·(1 − opacity) + picture·opacity` whatever alpha convention the picture carries.
+  static func placedFrame(_ spec: LayerSpec, transform: ClipTransform, opacity: Double, source: CIImage, size: CGSize) -> CIImage {
+    let rect = CGRect(origin: .zero, size: size)
     let oriented = source.transformed(by: spec.orient)
-    let p = ClipLayout.ciPlacement(orientedExtent: oriented.extent, crop: spec.crop, transform: t, frame: size)
-    // Same hard-edged drawing as the static placement in `startRequest`.
+    let p = ClipLayout.ciPlacement(orientedExtent: oriented.extent, crop: spec.crop, transform: transform, frame: size)
+    // Hard crop edges: clamp the cropped picture so scaling never samples transparency across the crop border,
+    // cut it back to the placed box while still unrotated, and only then rotate + translate (a rotated picture's
+    // edges are the box's own edges, with no clamped smear in the corners).
     let picture = oriented.cropped(to: p.cropRect).clampedToExtent()
       .transformed(by: p.local).cropped(to: p.localRect)
       .transformed(by: p.outer)
-    let covered = v.opacity >= 1 && ClipLayout.coversFrame(p.placed, size.width, size.height)
+    let covered = opacity >= 1 && ClipLayout.coversFrame(p.placed, size.width, size.height)
     let behind = covered ? CIImage(color: CIColor.black).cropped(to: rect) : background(spec, source: source, size: size)
-    return faded(picture, opacity: v.opacity).composited(over: behind).cropped(to: rect)
-  }
-
-  /// `image` with its alpha multiplied by `opacity` (`CIColorMatrix`: A vector (0, 0, 0, opacity); the colour vectors
-  /// keep their identity defaults). Fully opaque (≥ 1) skips the filter; so does a missing filter.
-  static func faded(_ image: CIImage, opacity: Double) -> CIImage {
-    guard opacity < 1 else { return image }
-    return Adjust.filtered(image, "CIColorMatrix", ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(opacity))]) ?? image
+    guard opacity > 0 else { return behind }
+    let over = picture.composited(over: behind).cropped(to: rect)
+    guard opacity < 1 else { return over }
+    return dissolve(from: behind, to: over, progress: CGFloat(opacity)).cropped(to: rect)
   }
 
   /// Blur radius as a fraction of the frame's shorter side.

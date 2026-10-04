@@ -120,7 +120,12 @@ final class OverlayMotionTests: XCTestCase {
     XCTAssertEqual(OverlayMotion.scaleRatio(1.5, base: 1.5), 1)
     XCTAssertEqual(OverlayMotion.scaleRatio(3, base: 1.5), 2)
     XCTAssertEqual(OverlayMotion.scaleRatio(0.75, base: 1.5), 0.5)
-    XCTAssertEqual(OverlayMotion.scaleRatio(-1, base: 1), 0)
+    // Never 0 or negative: a transform scaled by 0 is singular.
+    XCTAssertEqual(OverlayMotion.scaleRatio(0, base: 1), OverlayMotion.minScaleRatio)
+    XCTAssertEqual(OverlayMotion.scaleRatio(-1, base: 1), OverlayMotion.minScaleRatio)
+    XCTAssertEqual(OverlayMotion.minScaleRatio, 0.001)
+    XCTAssertEqual(OverlayMotion.fps, 30)
+    XCTAssertEqual(ExportSession.frameRate, 30)
     XCTAssertEqual(OverlayMotion.scaleRatio(2, base: 0), 1)
     XCTAssertEqual(OverlayMotion.scaleRatio(.nan, base: 1), 1)
     // Content is drawn at the largest ratio, between 1 and the cap.

@@ -29,7 +29,20 @@ test("OverlayMotion.swift is pure maths: Foundation only, no layers", () => {
 
 test("the sampler has the agreed signature and samples 30 times per second", () => {
   expect(motion).toContain("static func samples(start: Double, end: Double, fps: Double, resolve: (Double) -> KeyValues) -> [(time: Double, values: KeyValues)]");
-  expect(motion).toMatch(/static let fps: Double = 30\n/);
+  // The rate is named once (`ExportSession.frameRate`) and shared by the composition's frame duration, the hold frame and the sampler.
+  expect(motion).toMatch(/static let fps: Double = Double\(ExportSession\.frameRate\)\n/);
+  expect(session).toMatch(/static let frameRate: Int32 = 30\n/);
+  expect(session).toContain("videoComposition.frameDuration = CMTime(value: 1, timescale: ExportSession.frameRate)");
+  expect(session).toContain("let holdFrame = CMTime(value: 1, timescale: ExportSession.frameRate)");
+  expect(session).not.toMatch(/timescale: 30\)/);
+});
+
+test("a sampled scale of 0 never gives a singular transform: the ratio has a small positive floor", () => {
+  expect(motion).toMatch(/static let minScaleRatio: Double = 0\.001\n/);
+  const body = between(motion, "static func scaleRatio(", "\n  }\n");
+  expect(body).toContain("return max(minScaleRatio, scale / base)");
+  expect(tests).toContain("XCTAssertEqual(OverlayMotion.scaleRatio(0, base: 1), OverlayMotion.minScaleRatio)");
+  expect(tests).toContain("XCTAssertEqual(OverlayMotion.scaleRatio(-1, base: 1), OverlayMotion.minScaleRatio)");
 });
 
 test("the resolver is Motion.resolveOverlay over the overlay's own values (opacity 1), its pins, edges and loop", () => {

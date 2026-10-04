@@ -228,6 +228,8 @@ When the first EAS build exists, compare the export against the preview and chec
 4. **VHS scan lines** (the generator is unverified).
 5. **Spin and slide directions** of the new transitions.
 6. **Text and sticker animations** use sampled Core Animation keyframes. Check timing, direction, and that an animated text is hidden before and after its time.
-7. **Resized text.** When a text's size is keyframed or animated, the export scales the laid-out text while the preview re-wraps it. Compare the two.
-8. **Fading clip.** A fading clip should fade over its background (black / colour / blur).
-9. **Rotation direction** of Spin and of keyframed rotation.
+7. **Resized text.** When a text's size is keyframed or animated, the export scales the laid-out lines while the preview re-wraps the text. Compare the two with a large pinned text (two lines, pinned from small to big).
+8. **Sharpness of scaled-up text.** A text or sticker that grows (a pin with a bigger scale, Pop, Pulse) should stay sharp in the export, not blurry.
+9. **Core Animation keyframes in the export.** Check that the export tool honours the sampled keyframes at all: an animated text or sticker must move in the exported file, not sit still or be missing.
+10. **Fading clip.** A fading clip should fade over its background (black / colour / blur): half way through a Fade the picture and the background are mixed half and half.
+11. **Rotation direction** of Spin and of keyframed rotation.

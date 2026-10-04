@@ -90,7 +90,6 @@ enum MediaPrePass {
     out.animOut = clip.animOut
     out.animCombo = clip.animCombo
     out.keyframes = clip.keyframes
-    out.outputDuration = clip.outputDuration
     return out
   }
 

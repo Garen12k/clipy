@@ -4,8 +4,12 @@ import Foundation
 /// part (`ExportSession.addMotion`) turns the samples into Core Animation keyframes. No formula lives here — every
 /// value comes from `Motion.resolveOverlay`.
 enum OverlayMotion {
-  /// Samples per second of an overlay's life (the export's frame rate).
-  static let fps: Double = 30
+  /// Samples per second of an overlay's life: the export's frame rate (`ExportSession.frameRate`).
+  static let fps: Double = Double(ExportSession.frameRate)
+  /// The smallest factor a layer's transform is ever scaled by. A pin may hold scale 0 (the clamp in the app keeps
+  /// real pins well above it, but an animation can multiply towards 0); a transform scaled by exactly 0 is singular,
+  /// which Core Animation cannot interpolate from or to. At this floor the layer is far below one pixel.
+  static let minScaleRatio: Double = 0.001
   /// Two sample times are never closer than this (seconds), so the key times strictly increase.
   static let minStep: Double = 1e-6
   /// The most an animated overlay's content is drawn above its own size to stay sharp while it is scaled up.
@@ -62,11 +66,12 @@ enum OverlayMotion {
   }
 
   /// A sampled scale relative to the scale the layer was built at (`base` = the overlay's own scale, which is baked
-  /// into its font size / box): the factor the layer's transform applies. Never negative; 1 when `base` is not a
-  /// finite, positive number or `scale` is not finite.
+  /// into its font size / box): the factor the layer's transform applies. Never below `minScaleRatio` (so never 0 or
+  /// negative: the transform stays invertible); 1 when `base` is not a finite, positive number or `scale` is not
+  /// finite.
   static func scaleRatio(_ scale: Double, base: Double) -> Double {
     guard base.isFinite, base > 0, scale.isFinite else { return 1 }
-    return max(0, scale / base)
+    return max(minScaleRatio, scale / base)
   }
 
   /// How much above its own size the content must be drawn so that the largest sampled scale is still sharp: the

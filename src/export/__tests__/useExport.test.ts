@@ -149,6 +149,7 @@ test("clip and overlay motion reaches the export request", async () => {
   const { result } = await renderHook(() => useExport(makeProject({ id: "p9", clips: [clip], overlays: [st] }), []));
   await act(() => result.current.start(1080));
   const req = (exportTimeline as jest.Mock).mock.calls[0][0];
-  expect(req.clips[0]).toMatchObject({ outputDuration: 4, animIn: { id: "fade", duration: 0.5 }, keyframes: [makeKeyframe({ t: 1, x: 0.2 })] });
+  expect(req.clips[0]).toMatchObject({ animIn: { id: "fade", duration: 0.5 }, keyframes: [makeKeyframe({ t: 1, x: 0.2 })] });
+  expect(req.clips[0]).not.toHaveProperty("outputDuration");
   expect(req.overlays[0]).toMatchObject({ animLoop: "wiggle", keyframes: [makeKeyframe({ t: 1, scale: 2 })] });
 });
