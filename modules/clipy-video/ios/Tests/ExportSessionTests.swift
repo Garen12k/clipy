@@ -200,7 +200,7 @@ final class ExportSessionTests: XCTestCase {
       try await session.start(request)
       XCTFail("a file without an audio track should fail the export")
     } catch {
-      XCTAssertEqual((error as? ExportError)?.errorDescription, "No audio track in \(a.absoluteString)")
+      XCTAssertEqual((error as? ExportError)?.errorDescription, "No sound in audio file \(a.absoluteString)")
     }
   }
 

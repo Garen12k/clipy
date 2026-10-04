@@ -963,9 +963,9 @@ final class ExportSession {
     // file without an audio track throw `sessionFailed`, and a file that cannot be read throws AVFoundation's error.
     for audio in request.audioTracks {
       if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
-      guard let audioURL = URL(string: audio.sourceUri) else { throw ExportError.sessionFailed("Invalid music URI: \(audio.sourceUri)") }
+      guard let audioURL = URL(string: audio.sourceUri) else { throw ExportError.sessionFailed("Invalid audio file URI: \(audio.sourceUri)") }
       let audioAsset = AVURLAsset(url: audioURL)
-      guard let srcAudio = try await audioAsset.loadTracks(withMediaType: .audio).first else { throw ExportError.sessionFailed("No audio track in \(audio.sourceUri)") }
+      guard let srcAudio = try await audioAsset.loadTracks(withMediaType: .audio).first else { throw ExportError.sessionFailed("No sound in audio file \(audio.sourceUri)") }
       let assetDuration = try await audioAsset.load(.duration)
       let insertAt = Self.time(max(0, audio.start))
       let srcEnd = CMTimeMinimum(Self.time(max(0, audio.trimEnd)), assetDuration)
