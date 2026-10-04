@@ -107,6 +107,36 @@ export function rateAt(c: Clip, offsetInClip: number): number {
 export function playbackSpans(c: Clip): { duration: number; speed: number }[] {
   return legs(c, c.reversed).map((l) => ({ duration: Math.abs(l.b - l.a), speed: l.speed }));
 }
+/**
+ * The source time `outputDelta` seconds of forward playback after `sourceTime` (before it when negative) — what a trim-handle drag
+ * needs. It does not depend on the clip's trim: a curved clip is walked over its steps across the whole source, so a handle dragged
+ * back out over a trimmed-off part meets the speeds that are really there.
+ */
+export function sourceAfter(c: Clip, sourceTime: number, outputDelta: number): number {
+  if (!stepsOf(c)) return sourceTime + outputDelta * c.speed;
+  const whole = legs({ ...c, trimStart: Math.min(0, c.trimStart), trimEnd: Math.max(c.sourceDuration, c.trimEnd) }, false);
+  return walkToSource(whole, walkToOutput(whole, sourceTime) + outputDelta);
+}
+/** True when the source range [trimStart, trimEnd] of this clip would play for less than `minSeconds` (a trim to it is refused). */
+export function spanTooShort(c: Clip, trimStart: number, trimEnd: number, minSeconds: number): boolean {
+  if (!stepsOf(c)) return trimEnd - trimStart < minSeconds * c.speed - 1e-9;
+  return clipDuration({ ...c, trimStart, trimEnd }) < minSeconds - 1e-9;
+}
+/** Source times at every `interval` output seconds from the clip's start, in source order (at most `max`): where thumbnails are taken. */
+export function sourceSamples(c: Clip, interval: number, max: number): number[] {
+  const out: number[] = [];
+  if (!stepsOf(c)) {
+    for (let t = c.trimStart; t < c.trimEnd - 1e-9 && out.length < max; t += interval * c.speed) out.push(t);
+    return out;
+  }
+  const ls = legs(c, false);
+  for (let k = 0; out.length < max; k++) {
+    const t = walkToSource(ls, k * interval);
+    if (!(t < c.trimEnd - 1e-9)) break;
+    out.push(t);
+  }
+  return out;
+}
 export const totalDuration = (p: Project): number => p.clips.reduce((s, c) => s + clipDuration(c), 0);
 
 export function clipStartTimes(p: Project): number[] {

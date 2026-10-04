@@ -1,4 +1,4 @@
-import { clipDuration, timeToX } from "@/src/editor/model/timeline";
+import { clipDuration, sourceSamples, timeToX } from "@/src/editor/model/timeline";
 import type { Clip } from "@/src/editor/model/types";
 
 export const CLIP_AREA_HEIGHT = 120;
@@ -17,10 +17,8 @@ export const stripWidth = (c: Clip, pps: number): number => timeToX(clipDuration
 export const thumbInterval = (pps: number, thumbWidth = THUMB_WIDTH): number => Math.max(MIN_THUMB_INTERVAL, thumbWidth / pps);
 
 export function thumbTimes(c: Clip, pps: number, thumbWidth = THUMB_WIDTH): number[] {
-  const interval = thumbInterval(pps, thumbWidth);
-  const out: number[] = [];
-  // SANCTIONED: interval is an output-seconds step; clip.speed scales it to a source-seconds step directly.
-  for (let t = c.trimStart; t < c.trimEnd - 1e-9 && out.length < 500; t += interval * c.speed) out.push(Number(t.toFixed(3)));
+  // One thumb per `interval` of OUTPUT time; timeline.ts turns that into source times (speed and speed curves live there).
+  const out = sourceSamples(c, thumbInterval(pps, thumbWidth), 500).map((t) => Number(t.toFixed(3)));
   return out.length ? out : [c.trimStart];
 }
 

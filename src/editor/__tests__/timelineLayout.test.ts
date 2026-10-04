@@ -1,3 +1,4 @@
+import { curveSteps } from "@/src/editor/model/timeline";
 import { makeClip } from "@/src/editor/model/types";
 import { indexFromDrop, LANE_GAP, LANE_HEIGHT, laneTop, stripWidth, thumbInterval, thumbTimes, TIMELINE_HEIGHT } from "../timelineLayout";
 
@@ -42,4 +43,11 @@ test("lanes sit under the clip strip", () => {
   expect(laneTop(0)).toBe(120);
   expect(laneTop(1)).toBe(120 + LANE_HEIGHT + LANE_GAP);
   expect(laneTop(2)).toBe(120 + 2 * (LANE_HEIGHT + LANE_GAP));
+});
+
+test("thumbTimes on a curved clip: the source time under each output-second mark", () => {
+  // hero on 0–8: 1, 2, 3, 0.5, 0.5, 3, 2, 1 → 7.667 s on screen; marks at 0 … 7 s.
+  const hero = { ...makeClip({ id: "h", sourceDuration: 8 }), speedCurve: { id: "hero" as const, steps: curveSteps("hero", 0, 8) } };
+  expect(thumbTimes(hero, 64)).toEqual([0, 1, 3.083, 3.583, 4.083, 4.583, 5.5, 7.333]);
+  expect(stripWidth(hero, 60)).toBeCloseTo(460, 6);
 });

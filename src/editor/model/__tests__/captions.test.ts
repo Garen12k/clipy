@@ -2,6 +2,7 @@ jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }
 import { CAPTION_STYLE } from "@/src/editor/effects";
 import { linesToCaptions, mergeSegmentsIntoLines, segmentsToOutput } from "../captions";
 import { replaceCaptions, setCaptionStyleForAll } from "../ops";
+import { curveSteps } from "../timeline";
 import { makeClip, makeOverlay, makeProject } from "../types";
 
 const w = (text: string, start: number, end: number) => ({ text, start, end });
@@ -40,4 +41,20 @@ test("linesToCaptions applies the caption style; replaceCaptions swaps only capt
   expect(styled.overlays[1]).toMatchObject({ color: "#F5C542", y: 0.9 });
   expect(styled.overlays[0]).toMatchObject({ color: makeOverlay({ id: "t" }).color });
   expect(setCaptionStyleForAll(styled, { color: "#F5C542" })).toBe(styled);
+});
+
+test("segmentsToOutput on a curved clip maps each end through the curve", () => {
+  // hero on 0–8: speeds 1, 2, 3, 0.5, 0.5, 3, 2, 1 for the 1 s slices; output boundaries 0, 1, 1.5, 11/6, 23/6, …
+  const clip = { ...makeClip({ id: "h", sourceDuration: 8 }), speedCurve: { id: "hero" as const, steps: curveSteps("hero", 0, 8) } };
+  expect(segmentsToOutput(clip, 5, [w("slow", 3, 4), w("fast", 1, 2), w("across", 2.5, 3.5)])).toEqual([
+    { text: "fast", start: 6, end: 6.5 },          // 1 s of source at 2×
+    { text: "across", start: 6.667, end: 7.833 },  // half the 3× slice, then half the 0.5× slice
+    { text: "slow", start: 6.833, end: 8.833 },    // 1 s of source at 0.5×
+  ]);
+  // Trimmed after the curve was applied: the steps stay, the clip now starts at source 2.
+  const t = { ...clip, trimStart: 2, trimEnd: 7 };
+  expect(segmentsToOutput(t, 0, [w("edge", 1, 2.5), w("slow", 3, 4), w("out", 7.2, 8)])).toEqual([
+    { text: "edge", start: 0, end: 0.167 },
+    { text: "slow", start: 0.333, end: 2.333 },
+  ]);
 });
