@@ -3,8 +3,8 @@
 // separate "extend-expect" import is needed here.
 
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], isLoaded: () => true }));
-// Music feature deps: harmless defaults so suites that mount EditorToolbar (which always
-// renders MusicSheet) don't need to know about them. MusicSheet.test.tsx overrides these
+// Audio feature deps: harmless defaults so suites that mount EditorToolbar (which always
+// renders AddAudioSheet) don't need to know about them. AddAudioSheet.test.tsx overrides these
 // per-module with jest.mock calls of its own, which take precedence over these.
 jest.mock("expo-audio", () => ({
   useAudioPlayer: () => ({ play: () => {}, pause: () => {}, playing: false, replace: () => {}, seekTo: async () => {}, currentTime: 0, volume: 1 }),

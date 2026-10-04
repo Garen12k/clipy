@@ -7,7 +7,7 @@ jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () 
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { useToast } from "@/src/ui/Toast";
-import { makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { AUDIO_LIMITS, makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 
@@ -375,6 +375,111 @@ describe("Effects on the timeline", () => {
     expect(useEditorStore.getState().past).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Strength" })).toBeNull();
     expect(screen.getByRole("button", { name: "Filter" })).toBeTruthy();
+  });
+});
+
+describe("Audio tools", () => {
+  const withAudio = (count = 2) => useEditorStore.getState().setProject(makeProject({
+    clips: [makeClip({ id: "a", sourceDuration: 10 })],
+    audioTracks: Array.from({ length: count }, (_, i) => makeAudioTrack({ id: `t${i + 1}`, sourceDuration: 4, start: i, volume: 1.2 })),
+  }));
+  const tracks = () => useEditorStore.getState().project!.audioTracks;
+  const btn = (name: string) => screen.getByRole("button", { name });
+  const row = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
+  const past = () => useEditorStore.getState().past.length;
+  beforeEach(() => { useToast.getState().clear(); });
+
+  test("the Audio group lists Add audio, Volume, Ducking, Beats; Add audio opens the sheet", async () => {
+    await renderBar();
+    await openGroup("Audio");
+    expect(row()).toEqual(["Add audio", "Volume", "Ducking", "Beats"]);
+    expect(btn("Add audio")).toBeEnabled();
+    expect(btn("Ducking")).toBeEnabled();
+    expect(screen.queryByRole("header", { name: "Add audio" })).toBeNull();
+    await fireEvent.press(btn("Add audio"));
+    expect(screen.getByRole("header", { name: "Add audio" })).toBeTruthy();
+  });
+
+  test("Ducking toggles the project's ducking in one undo step each and shows active", async () => {
+    await renderBar();
+    await openGroup("Audio");
+    expect(btn("Ducking")).not.toBeSelected();
+    await fireEvent.press(btn("Ducking"));
+    expect(useEditorStore.getState().project!.ducking).toBe(true);
+    expect(btn("Ducking")).toBeSelected();
+    expect(past()).toBe(1);
+    await fireEvent.press(btn("Ducking"));
+    expect(useEditorStore.getState().project!.ducking).toBe(false);
+    expect(btn("Ducking")).not.toBeSelected();
+    expect(past()).toBe(2);
+  });
+
+  test("selecting a track jumps to Audio and shows exactly Volume, Fade, Duplicate, Delete; deselecting restores the tools", async () => {
+    withAudio();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectAudio("t1"); });
+    expect(screen.getByRole("tab", { name: "Audio" })).toBeSelected();
+    expect(row()).toEqual(["Volume", "Fade", "Duplicate", "Delete"]);
+    for (const l of row()) expect(btn(l)).toBeEnabled();
+    await openGroup("Edit");
+    expect(btn("Split")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Fade" })).toBeNull();
+    await openGroup("Audio");
+    await act(() => { useEditorStore.getState().selectAudio(null); });
+    expect(screen.getByRole("tab", { name: "Audio" })).toBeSelected();
+    expect(row()).toEqual(["Add audio", "Volume", "Ducking", "Beats"]);
+  });
+
+  test("Volume opens the selected track's volume sheet, Fade its fade sheet", async () => {
+    withAudio();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectAudio("t2"); });
+    expect(screen.queryByTestId("audio-volume")).toBeNull();
+    await fireEvent.press(btn("Volume"));
+    expect(screen.getByTestId("audio-volume")).toBeTruthy();
+    expect(screen.getByText("Volume 120 %")).toBeTruthy();
+    expect(screen.queryByTestId("volume-slider")).toBeNull();
+    await fireEvent(screen.getByTestId("audio-volume"), "valueChange", 0.4);
+    expect(tracks().map((t) => t.volume)).toEqual([1.2, 0.4]);
+    await fireEvent.press(btn("Fade"));
+    expect(screen.getByTestId("fade-in").props.maximumValue).toBe(2);
+    await fireEvent(screen.getByTestId("fade-in"), "valueChange", 1);
+    expect(tracks().map((t) => t.fadeIn)).toEqual([0, 1]);
+  });
+
+  test("Duplicate copies the track in one undo step and selects the copy", async () => {
+    withAudio();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectAudio("t1"); });
+    await fireEvent.press(btn("Duplicate"));
+    expect(tracks().map((t) => t.id)).toEqual(["t1", "dup", "t2"]);
+    expect(past()).toBe(1);
+    expect(useEditorStore.getState().selectedAudioId).toBe("dup");
+    expect(row()).toEqual(["Volume", "Fade", "Duplicate", "Delete"]);
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("Duplicate at the track limit toasts and changes nothing", async () => {
+    withAudio(AUDIO_LIMITS.maxTracks);
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectAudio("t1"); });
+    await fireEvent.press(btn("Duplicate"));
+    expect(tracks()).toHaveLength(AUDIO_LIMITS.maxTracks);
+    expect(past()).toBe(0);
+    expect(useEditorStore.getState().selectedAudioId).toBe("t1");
+    expect(useToast.getState().message).toBe("You've reached the audio track limit.");
+  });
+
+  test("Delete removes the track in one undo step, clears the selection and restores the tools", async () => {
+    withAudio();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectAudio("t1"); });
+    await fireEvent.press(btn("Delete"));
+    expect(tracks().map((t) => t.id)).toEqual(["t2"]);
+    expect(past()).toBe(1);
+    expect(useEditorStore.getState().selectedAudioId).toBeNull();
+    expect(useEditorStore.getState().project!.clips).toHaveLength(1);
+    expect(row()).toEqual(["Add audio", "Volume", "Ducking", "Beats"]);
   });
 });
 

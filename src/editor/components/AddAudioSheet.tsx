@@ -1,0 +1,138 @@
+import { Asset } from "expo-asset";
+import { useAudioPlayer } from "expo-audio";
+import * as DocumentPicker from "expo-document-picker";
+import { useEffect, useRef, useState } from "react";
+import { Alert, ScrollView, View } from "react-native";
+import { BUNDLED_TRACKS, type BundledTrack } from "@/src/editor/music";
+import { addAudioTrack } from "@/src/editor/model/ops";
+import { AUDIO_LIMITS, type AudioKind } from "@/src/editor/model/types";
+import { SFX, SFX_IDS, type SfxId } from "@/src/editor/sfx";
+import { useEditorStore } from "@/src/editor/store";
+import { formatDuration } from "@/src/lib/format";
+import { storage } from "@/src/projects";
+import { audioDuration } from "@/src/projects/audioInfo";
+import { theme } from "@/src/theme/theme";
+import { Chip } from "@/src/ui/Chip";
+import { haptic } from "@/src/ui/haptics";
+import { IconButton } from "@/src/ui/IconButton";
+import { PrimaryButton } from "@/src/ui/PrimaryButton";
+import { Sheet } from "@/src/ui/Sheet";
+import { Body } from "@/src/ui/Text";
+import { useToast } from "@/src/ui/Toast";
+
+const MAX_BYTES = 50 * 1024 * 1024;
+/** How long after a preview's nominal end its button flips back to "play" (the player needs a moment to start). */
+const PREVIEW_TAIL_MS = 400;
+
+/** One entry per tab, in display order: a new tab is one line here plus its body below. */
+const TABS = [
+  { id: "music", label: "Music" },
+  { id: "files", label: "Files" },
+  { id: "effects", label: "Effects" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+type Picked = { uri: string; title: string; durationSec: number };
+const ROW = { flexDirection: "row", alignItems: "center", gap: theme.space.md, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, padding: theme.space.md } as const;
+
+/**
+ * Adds audio to the project: bundled music, a file, or a built-in sound effect. Every path copies the file into the project, adds a
+ * track starting at the playhead, selects it and closes the sheet. The track's own controls are the selected-track tools in the toolbar.
+ */
+export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [tab, setTab] = useState<TabId>("music");
+  const [busy, setBusy] = useState(false);
+  const adding = useRef(false);   // `busy` only disables after a re-render: two presses in one frame must not add twice
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const preview = useAudioPlayer(null);
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopPreview = () => {
+    if (previewTimer.current) { clearTimeout(previewTimer.current); previewTimer.current = null; }
+    // The player may already be released (unmount): pausing it then throws.
+    try { preview.pause(); } catch {}
+    setPreviewId(null);
+  };
+  const togglePreview = (id: string, file: number, durationSec: number) => {
+    const wasPlaying = previewId === id;
+    stopPreview();
+    if (wasPlaying) return;
+    try { preview.replace(file); preview.play(); } catch { return; }
+    setPreviewId(id);
+    previewTimer.current = setTimeout(() => { previewTimer.current = null; setPreviewId(null); }, durationSec * 1000 + PREVIEW_TAIL_MS);
+  };
+  useEffect(() => { if (!visible) stopPreview(); }, [visible]);   // closed by the parent
+  // useAudioPlayer releases the native player in its own unmount cleanup, which runs before this one.
+  useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current); try { preview.pause(); } catch {} }, [preview]);
+
+  const close = () => { stopPreview(); onClose(); };
+  // The sheet is a native Modal and would cover the toast: close first.
+  const refuse = () => { close(); useToast.getState().show("You've reached the audio track limit."); };
+
+  /** Runs the whole resolve (download / measure) + import under the busy state, then adds the track at the playhead. Any failure is a toast. */
+  async function add(kind: AudioKind, resolve: () => Promise<Picked>) {
+    const before = useEditorStore.getState().project;
+    if (!before || adding.current) return;
+    if (before.audioTracks.length >= AUDIO_LIMITS.maxTracks) { refuse(); return; }   // before copying a file nobody will use
+    adding.current = true;
+    setBusy(true);
+    try {
+      const imported = await storage.importAudio(before.id, await resolve(), kind);
+      const { project, playhead, apply, selectAudio } = useEditorStore.getState();
+      if (!project || project.id !== before.id) return;   // the editor moved on while the file was copied
+      // The op returns the same project when it refuses.
+      const next = addAudioTrack(project, { ...imported, start: Math.round(playhead * 1000) / 1000 });
+      if (next === project) { refuse(); return; }
+      apply(() => next);
+      selectAudio(imported.id);
+      haptic("light");
+      close();
+    } catch (e) { useToast.getState().show("Couldn't add that audio file"); console.warn(e); }
+    finally { adding.current = false; setBusy(false); }
+  }
+  const bundled = (file: number, title: string, durationSec: number) => async (): Promise<Picked> => {
+    const asset = Asset.fromModule(file);
+    await asset.downloadAsync();
+    return { uri: asset.localUri ?? asset.uri, title, durationSec };
+  };
+  const addBundled = (t: BundledTrack) => add("music", bundled(t.file, t.title, t.durationSec));
+  const addSfx = (id: SfxId) => add("sfx", bundled(SFX[id].file, SFX[id].label, SFX[id].durationSec));
+  async function pickFile() {
+    const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: false });
+    if (res.canceled || !res.assets[0]) return;
+    const a = res.assets[0];
+    const go = () => add("music", async () => ({ uri: a.uri, title: a.name, durationSec: await audioDuration(a.uri) }));
+    if ((a.size ?? 0) > MAX_BYTES) Alert.alert("Large file", "This file is over 50 MB. Add it anyway?", [{ text: "Cancel", style: "cancel" }, { text: "Add", onPress: go }]);
+    else await go();
+  }
+
+  const row = (r: { id: string; title: string; detail: string; file: number; durationSec: number; addLabel: string; onAdd: () => void }) => (
+    <View key={r.id} style={ROW}>
+      <IconButton name={previewId === r.id ? "stop" : "play"} color={theme.colors.accent}
+        accessibilityLabel={`${previewId === r.id ? "Stop" : "Play"} ${r.title}`} onPress={() => togglePreview(r.id, r.file, r.durationSec)} />
+      <View style={{ flex: 1 }}><Body>{r.title}</Body><Body muted style={{ fontSize: 12 }}>{r.detail}</Body></View>
+      <Chip label={r.addLabel} accessibilityLabel={`${r.addLabel} ${r.title}`} selected={false} disabled={busy} onPress={r.onAdd} />
+    </View>
+  );
+
+  return (
+    <Sheet visible={visible} onClose={close} title="Add audio" height="60%">
+      <View style={{ flexDirection: "row", gap: theme.space.md }}>
+        {TABS.map((t) => <Chip key={t.id} label={t.label} selected={tab === t.id} onPress={() => { if (t.id !== tab) stopPreview(); setTab(t.id); }} />)}
+      </View>
+      {tab === "music" && (BUNDLED_TRACKS.length === 0 ? (
+        <Body muted>No bundled tracks yet — use Files.</Body>
+      ) : (
+        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: theme.space.sm }}>
+          {BUNDLED_TRACKS.map((t) => row({ id: `music:${t.id}`, title: t.title, detail: `${formatDuration(t.durationSec)} · ${t.license}`, file: t.file, durationSec: t.durationSec, addLabel: "Use", onAdd: () => addBundled(t) }))}
+        </ScrollView>
+      ))}
+      {tab === "files" && <PrimaryButton title="Choose a file" disabled={busy} onPress={pickFile} />}
+      {tab === "effects" && (
+        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: theme.space.sm }}>
+          {SFX_IDS.map((id) => row({ id: `sfx:${id}`, title: SFX[id].label, detail: `${SFX[id].durationSec.toFixed(1)} s`, file: SFX[id].file, durationSec: SFX[id].durationSec, addLabel: "Add", onAdd: () => addSfx(id) }))}
+        </ScrollView>
+      )}
+    </Sheet>
+  );
+}

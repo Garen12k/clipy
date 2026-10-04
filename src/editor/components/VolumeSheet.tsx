@@ -1,11 +1,13 @@
 import Slider from "@react-native-community/slider";
 import { Switch, View } from "react-native";
-import { setClipMuted, setClipVolume } from "@/src/editor/model/ops";
-import { CLIP_VOLUME } from "@/src/editor/model/types";
+import { setClipFade, setClipMuted, setClipVolume } from "@/src/editor/model/ops";
+import { clipDuration } from "@/src/editor/model/timeline";
+import { CLIP_VOLUME, isPhoto } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
+import { FadeSliders } from "./AudioFadeSheet";
 
 export function VolumeSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const clip = useEditorStore((s) => s.project?.clips.find((c) => c.id === clipId) ?? null);
@@ -22,6 +24,11 @@ export function VolumeSheet({ clipId, visible, onClose }: { clipId: string | nul
         <Body>Mute</Body>
         <Switch accessibilityLabel="Mute" value={clip.muted} onValueChange={(m) => apply((p) => setClipMuted(p, clip.id, m))} trackColor={{ true: theme.colors.accent }} />
       </View>
+      {/* A photo has no sound of its own to fade. */}
+      {!isPhoto(clip) && (
+        <FadeSliders fadeIn={clip.fadeIn} fadeOut={clip.fadeOut} length={clipDuration(clip)}
+          onStart={beginTransaction} onChange={(patch) => applyTransient((p) => setClipFade(p, clip.id, patch))} />
+      )}
     </Sheet>
   );
 }
