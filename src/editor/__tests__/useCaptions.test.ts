@@ -20,6 +20,7 @@ test("transcribes every clip, merges lines, applies captions once, reports skipp
   const caps = useEditorStore.getState().project!.overlays;
   expect(caps).toHaveLength(1);
   expect(caps[0]).toMatchObject({ kind: "caption", text: "Hello world", start: 0, end: 1 });
+  expect(caps[0]).toMatchObject({ words: [{ text: "Hello", start: 0, end: 0.5 }, { text: "world", start: 0.6, end: 1 }], highlightColor: null });
   expect(result.current.state.skipped).toEqual(["b"]);
   expect(useEditorStore.getState().past).toHaveLength(1);
 });

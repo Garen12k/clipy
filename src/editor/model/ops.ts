@@ -4,14 +4,15 @@ import { clipAt, clipDuration, curveSteps, sourceTimeAt, spanTooShort, splitSour
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
-  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_LIMITS, aspectRatioValue, clampAdjust, clampAnimEdge, clampClipAnimation, clampClipKeyframes, clampCrop, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTransform,
-  CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_LIMITS, aspectRatioValue, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
+  CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   MIN_CLIP_SECONDS, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   type AnimEdge, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem, type FilterId,
-  type Keyframe, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TransitionType,
+  type Keyframe, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
 } from "./types";
 import { totalDuration } from "./timeline";
 import type { Template } from "../templates";
+import { CAPTION_PRESET_IDS, CAPTION_PRESETS, TEXT_TEMPLATE_IDS, TEXT_TEMPLATES, type CaptionPresetId, type TextTemplateId } from "../textTemplates";
 
 /**
  * Drops effects left at or past the end of a project `total` seconds long (within EFFECT_END_SLACK of it: they cannot be reached on
@@ -159,7 +160,10 @@ function normaliseOverlay<O extends Overlay>(p: Project, o: O): O {
     else { end = total; start = Math.max(0, total - OVERLAY_LIMITS.minDuration); }
   }
   const shared = { x: clamp(o.x, [0, 1]), y: clamp(o.y, [0, 1]), scale: clamp(o.scale, OVERLAY_LIMITS.scale), start: r3(start), end: r3(end) };
-  return isTextOverlay(o) ? { ...o, ...shared, fontScale: clamp(o.fontScale, OVERLAY_LIMITS.fontScale) } : { ...o, ...shared };
+  if (!isTextOverlay(o)) return { ...o, ...shared };
+  const text = { ...o, ...shared, fontScale: clamp(o.fontScale, OVERLAY_LIMITS.fontScale) };
+  // A caption's words are seconds from its start: a timing edit keeps them, clamped to the new length by the loader's own rule.
+  return o.kind === "caption" && o.words.length > 0 ? { ...text, words: clampCaptionWords(o.words, o.text, captionLength(shared.start, shared.end)) } : text;
 }
 
 function replaceOverlay(p: Project, i: number, next: Overlay): Project {
@@ -173,7 +177,9 @@ export function updateOverlay(p: Project, id: string, patch: Partial<Omit<TextOv
   if (i < 0) return p;
   const cur = p.overlays[i];
   if (!isTextOverlay(cur)) return p;
-  return replaceOverlay(p, i, normaliseOverlay(p, { ...cur, ...patch }));
+  // Editing a caption's text clears its words (they no longer are that text); every other edit keeps them.
+  const retyped = cur.kind === "caption" && patch.text !== undefined && patch.text !== cur.text && patch.words === undefined;
+  return replaceOverlay(p, i, normaliseOverlay(p, { ...cur, ...patch, ...(retyped ? { words: [] } : {}) }));
 }
 
 /** An overlay's start and pins when a start-handle drag began (see `updateOverlayShared`). */
@@ -239,8 +245,9 @@ export function duplicateOverlay(p: Project, id: string): Project {
   const src = p.overlays[i];
   // The pins get the same offset (through the sanity rule, so clamped): a keyframed copy must not land exactly on the original.
   const keyframes = clampOverlayKeyframes(src.keyframes.map((k) => ({ ...k, x: k.x + DUPLICATE_OFFSET, y: k.y + DUPLICATE_OFFSET })));
+  const own = isTextOverlay(src) ? { style: clampTextStyle(src.style), words: src.words.map((w) => ({ ...w })) } : {};   // the copy's own objects
   const copy = normaliseOverlay(p, { ...src, id: newId(), x: src.x + DUPLICATE_OFFSET, y: src.y + DUPLICATE_OFFSET,
-    animation: copyOverlayAnimation(src.animation), keyframes } as Overlay);
+    animation: copyOverlayAnimation(src.animation), keyframes, ...own } as Overlay);
   return touch(p, { overlays: [...p.overlays.slice(0, i + 1), copy, ...p.overlays.slice(i + 1)] });
 }
 
@@ -409,14 +416,25 @@ export function setTransition(p: Project, clipId: string, t: { type: TransitionT
   return touch(p, { clips });
 }
 
+/**
+ * Swaps every caption for the new ones. The new captions take the look of the ones they replace (the first one's: captions are styled
+ * together) — font, size, colour, background, outline, alignment, position, style and highlight, each its own copy — so re-running the
+ * captions does not throw the chosen look away. Text, timing and words are the new captions' own.
+ */
 export function replaceCaptions(p: Project, captions: TextOverlay[]): Project {
   const kept = p.overlays.filter((o) => o.kind !== "caption");
   if (kept.length === p.overlays.length && captions.length === 0) return p;
-  return touch(p, { overlays: [...kept, ...captions.map((c) => normaliseOverlay(p, c))] });
+  const look = p.overlays.find((o): o is TextOverlay => o.kind === "caption");
+  const styled = (c: TextOverlay): TextOverlay => look ? { ...c, fontId: look.fontId, fontScale: look.fontScale, color: look.color,
+    background: look.background ? { ...look.background } : null, outline: look.outline, align: look.align, x: look.x, y: look.y,
+    style: clampTextStyle(look.style), highlightColor: look.highlightColor } : c;
+  return touch(p, { overlays: [...kept, ...captions.map((c) => normaliseOverlay(p, styled(c)))] });
 }
 /**
  * One-tap look: speed + filter (+ transition on every cut but the last) for one clip or every clip, then a title and a sticker
- * over the first 3 s. Project scope also restyles captions and existing text overlays. Built only from the ops above.
+ * over the first 3 s. Project scope also restyles captions and existing text overlays; a look knows nothing of text styles, so it puts
+ * the outline colour of what it restyles back to automatic (an outline colour picked for the old text colour would clash with the new
+ * one) and keeps the rest of the style. Built only from the ops above.
  */
 export function applyTemplate(p: Project, t: Template, scope: "clip" | "project", clipId: string | null): Project {
   if (p.clips.length === 0) return p;
@@ -435,8 +453,8 @@ export function applyTemplate(p: Project, t: Template, scope: "clip" | "project"
     for (const c of next.clips.slice(0, -1)) next = setTransition(next, c.id, t.transition);
     const clips = normaliseTransitions(next.clips);
     if (clips !== next.clips) next = touch(next, { clips });
-    next = setCaptionStyleForAll(next, t.caption);
-    for (const o of next.overlays) if (o.kind === "text") next = updateOverlay(next, o.id, t.text);
+    next = setCaptionStyleForAll(next, { ...t.caption, style: { outlineColor: null } });
+    for (const o of next.overlays) if (o.kind === "text") next = updateOverlay(next, o.id, { ...t.text, style: { ...o.style, outlineColor: null } });
   }
   const end = Math.min(3, totalDuration(next));   // unrounded: r3 could land a hair past a sped-up total
   if (end <= 0) return next;
@@ -444,11 +462,38 @@ export function applyTemplate(p: Project, t: Template, scope: "clip" | "project"
   return addSticker(next, makeSticker({ id: newId(), ...t.sticker, start: 0, end }));
 }
 
-export function setCaptionStyleForAll(p: Project, style: Partial<Pick<TextOverlay, "fontId" | "fontScale" | "color" | "background" | "outline" | "align" | "x" | "y">>): Project {
+export type CaptionStylePatch = Partial<Pick<TextOverlay, "fontId" | "fontScale" | "color" | "background" | "outline" | "align" | "x" | "y">>
+  & { style?: Partial<TextStyle>; highlightColor?: string | null };
+
+/**
+ * A style patch as it is merged: keys set to `undefined` are left out (they would wipe the stored value), and numbers — the nested
+ * shadow / glow ones too — are rounded to two decimals, the sliders' step, so a slider back at its centre stores exactly 0 or 1.
+ */
+function cleanStylePatch(patch: Partial<TextStyle>): Partial<TextStyle> {
+  const round = (v: unknown): unknown => (typeof v === "number" ? r2(v) : v);
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    out[k] = typeof v === "object" && v !== null ? Object.fromEntries(Object.entries(v).map(([n, x]) => [n, round(x)])) : round(v);
+  }
+  return out as Partial<TextStyle>;
+}
+
+/**
+ * One change over every caption. `style` is merged into each caption's own style (see `cleanStylePatch`) and clamped; `highlightColor`
+ * must be #RRGGBB (anything else → null, no word highlight). Text, timing and words are never touched. Same project when nothing changes.
+ */
+export function setCaptionStyleForAll(p: Project, patch: CaptionStylePatch): Project {
+  const { style: stylePatch, highlightColor, ...fields } = patch;
+  const style = stylePatch === undefined ? undefined : cleanStylePatch(stylePatch);
   let changed = false;
   const overlays = p.overlays.map((o) => {
     if (o.kind !== "caption") return o;
-    const next = normaliseOverlay(p, { ...o, ...style });
+    const merged: TextOverlay = { ...o, ...fields };
+    if (fields.background) merged.background = { ...fields.background };   // each caption owns its objects
+    if (style !== undefined) merged.style = clampTextStyle({ ...o.style, ...style });
+    if (highlightColor !== undefined) merged.highlightColor = isHexColor(highlightColor) ? highlightColor : null;
+    const next = normaliseOverlay(p, merged);
     if (JSON.stringify(next) !== JSON.stringify(o)) { changed = true; return next; }
     return o;
   });
@@ -725,13 +770,55 @@ export function setAnimationForAllClips(p: Project, a: ClipAnimation): Project {
 /** Text and stickers; captions are refused. In, Out and Loop are independent; `null` clears the one it names. */
 export function setOverlayAnimation(p: Project, overlayId: string, patch: Partial<OverlayAnimation>): Project {
   const i = p.overlays.findIndex((o) => o.id === overlayId);
-  if (i < 0 || p.overlays[i].kind === "caption" || !edgesOk(patch)) return p;
-  if (patch.loop != null && !(ANIM_LOOP_IDS as readonly string[]).includes(patch.loop)) return p;
+  if (i < 0 || p.overlays[i].kind === "caption") return p;
   const cur = p.overlays[i];
-  const next: OverlayAnimation = { ...cur.animation };
+  const animation = patchedOverlayAnimation(cur.animation, patch);
+  return animation ? replaceOverlay(p, i, { ...cur, animation }) : p;
+}
+
+/** `cur` with the patch's In / Out / Loop written (clamped); null when the patch is refused (unknown id, non-finite duration). */
+function patchedOverlayAnimation(cur: OverlayAnimation, patch: Partial<OverlayAnimation>): OverlayAnimation | null {
+  if (!edgesOk(patch)) return null;
+  if (patch.loop != null && !(ANIM_LOOP_IDS as readonly string[]).includes(patch.loop)) return null;
+  const next: OverlayAnimation = { ...cur };
   for (const k of EDGES) if (patch[k] !== undefined) next[k] = patch[k] ?? null;
   if (patch.loop !== undefined) next.loop = patch.loop;
-  return replaceOverlay(p, i, { ...cur, animation: clampOverlayAnimation(next) });
+  return clampOverlayAnimation(next);
+}
+
+// ---- Text style, templates and caption presets ----
+
+/** Text and captions: the patch is merged into the overlay's style (see `cleanStylePatch`) and clamped (TEXT_STYLE_LIMITS, #RRGGBB colours). Same project when nothing changes. */
+export function setTextStyle(p: Project, overlayId: string, patch: Partial<TextStyle>): Project {
+  const i = p.overlays.findIndex((o) => o.id === overlayId);
+  if (i < 0) return p;
+  const cur = p.overlays[i];
+  if (!isTextOverlay(cur)) return p;
+  return replaceOverlay(p, i, { ...cur, style: clampTextStyle({ ...cur.style, ...cleanStylePatch(patch) }) });
+}
+
+/**
+ * A one-tap look for a text (kind "text" only): font, colour, background, outline and the WHOLE style are replaced, so nothing of an
+ * earlier template is left. The entrance and the loop animation are part of the look: they become the template's, or none when it
+ * defines none (written by the rules of `setOverlayAnimation`); the exit animation is the text's own unless the template names one.
+ * Text, position, size, rotation, alignment, timing and keyframes stay. One change; same project when nothing changes.
+ */
+export function applyTextTemplate(p: Project, overlayId: string, templateId: TextTemplateId): Project {
+  const i = p.overlays.findIndex((o) => o.id === overlayId);
+  if (i < 0 || !(TEXT_TEMPLATE_IDS as readonly string[]).includes(templateId)) return p;
+  const cur = p.overlays[i];
+  if (cur.kind !== "text") return p;
+  const t = TEXT_TEMPLATES[templateId].patch;
+  const animation = patchedOverlayAnimation(cur.animation, { in: null, loop: null, ...t.animation });
+  if (!animation) return p;
+  return replaceOverlay(p, i, { ...cur, fontId: t.fontId, color: t.color, background: t.background ? { ...t.background } : null,
+    outline: t.outline, style: clampTextStyle(t.style), animation });
+}
+
+/** A one-tap look for every caption (font, size, colour, background, outline, whole style, highlight); unchanged when there are none. */
+export function applyCaptionPreset(p: Project, presetId: CaptionPresetId): Project {
+  if (!(CAPTION_PRESET_IDS as readonly string[]).includes(presetId)) return p;
+  return setCaptionStyleForAll(p, CAPTION_PRESETS[presetId].patch);
 }
 
 type PinValues = Pick<Keyframe, "x" | "y" | "scale" | "rotation" | "opacity">;

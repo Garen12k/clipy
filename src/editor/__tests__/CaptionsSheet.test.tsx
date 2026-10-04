@@ -24,6 +24,15 @@ test("shows the fallback card in Expo Go", async () => {
   expect(screen.getByText("Captions need the native build")).toBeTruthy();
 });
 
+test("Expo Go: the caption style sheet can still be opened from the fallback card", async () => {
+  load(false);
+  await render(<CaptionsSheet visible onClose={() => {}} />);
+  expect(screen.queryByText("Caption style")).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "Style captions" }));
+  expect(screen.getByText("Caption style")).toBeTruthy();
+  expect(screen.getByText("This is how captions look")).toBeTruthy();
+});
+
 test("offers Style captions next to Replace when captions already exist", async () => {
   mockNative = true; load(true);
   await render(<CaptionsSheet visible onClose={() => {}} />);

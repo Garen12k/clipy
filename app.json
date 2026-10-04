@@ -56,7 +56,15 @@
             "./assets/fonts/Pacifico-Regular.ttf",
             "./assets/fonts/PermanentMarker-Regular.ttf",
             "./assets/fonts/Lobster-Regular.ttf",
-            "./assets/fonts/Roboto-Regular.ttf"
+            "./assets/fonts/Roboto-Regular.ttf",
+            "./assets/fonts/BebasNeue-Regular.ttf",
+            "./assets/fonts/Poppins-SemiBold.ttf",
+            "./assets/fonts/PlayfairDisplay-Regular.ttf",
+            "./assets/fonts/Fredoka-Regular.ttf",
+            "./assets/fonts/Caveat-Regular.ttf",
+            "./assets/fonts/PressStart2P-Regular.ttf",
+            "./assets/fonts/Righteous-Regular.ttf",
+            "./assets/fonts/DancingScript-Regular.ttf"
           ]
         }
       ],

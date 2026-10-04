@@ -110,6 +110,28 @@ struct ExportClip: Record {
   @Field var speedSpans: [ExportSpeedSpan] = []    // a speed curve, in PLAYBACK order; empty → constant `speed`
 }
 
+/// `TextStyle` with shadow / glow flattened: a nil colour = that feature is off. The defaults are the neutral style.
+struct ExportTextStyle: Record {
+  @Field var opacity: Double = 1
+  @Field var letterSpacing: Double = 0             // fraction of the font size
+  @Field var lineSpacing: Double = 1               // × the normal line height
+  @Field var outlineColor: String?                 // JS `null` → nil (automatic contrast colour)
+  @Field var outlineWidth: Double = 1              // × the base outline width
+  @Field var shadowColor: String?                  // JS `null` → nil (no shadow)
+  @Field var shadowOpacity: Double = 0
+  @Field var shadowDistance: Double = 0            // fraction of the font size
+  @Field var shadowBlur: Double = 0                // fraction of the font size
+  @Field var glowColor: String?                    // JS `null` → nil (no glow)
+  @Field var glowSize: Double = 0                  // fraction of the font size
+}
+
+/// One spoken word of a caption.
+struct ExportCaptionWord: Record {
+  @Field var text: String = ""
+  @Field var start: Double = 0
+  @Field var end: Double = 0
+}
+
 struct ExportOverlay: Record {
   @Field var kind: String = "text"                 // text | caption | sticker
   @Field var emoji: String?                        // sticker: emoji character(s)
@@ -133,6 +155,10 @@ struct ExportOverlay: Record {
   @Field var animOut: ExportAnimEdge?
   @Field var animLoop: String?                     // one of `ANIM_LOOP_IDS`
   @Field var keyframes: [ExportKeyframe] = []      // t = seconds since the overlay's start
+  // Text style, caption words and highlight: `OverlayLayout.layout` turns the style into pixels.
+  @Field var style: ExportTextStyle = ExportTextStyle()
+  @Field var words: [ExportCaptionWord] = []       // captions only; start / end = seconds since the caption's start
+  @Field var highlightColor: String?               // captions only; JS `null` → nil (no word highlight)
 }
 
 struct ExportAudio: Record {
@@ -173,14 +199,6 @@ extension UIColor {
     let n: UInt32 = digits.count == 6 ? (UInt32(digits, radix: 16) ?? 0xFFFFFF) : 0xFFFFFF
     self.init(red: CGFloat((n >> 16) & 0xFF) / 255, green: CGFloat((n >> 8) & 0xFF) / 255, blue: CGFloat(n & 0xFF) / 255, alpha: 1)
   }
-}
-
-/// Mirror of `contrastFor` in src/editor/components/OverlayText.tsx: black outline for light text, white for dark.
-func contrastFor(hex: String) -> String {
-  let digits = String(hex.replacingOccurrences(of: "#", with: "").prefix(6))
-  let n = UInt32(digits, radix: 16) ?? 0          // TS: parseInt → NaN → channels 0 → "#FFFFFF"
-  let r = Double((n >> 16) & 255), g = Double((n >> 8) & 255), b = Double(n & 255)
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? "#000000" : "#FFFFFF"
 }
 
 /// A clip after its asset has been loaded and its trim clamped to the source.
@@ -382,6 +400,11 @@ final class ExportSession {
   /// One overlay as a Core Animation layer tree in render-size pixels, visible only during [start, end).
   /// Core Animation in the export has a BOTTOM-LEFT origin: y is flipped and the rotation negated
   /// (the preview rotates clockwise in a y-down space).
+  /// The text style (all numbers from `OverlayLayout`): letter spacing, line height and the stroke go into the
+  /// attributed string; glow and shadow are tinted copies of the text layer below it, each casting a layer shadow;
+  /// the opacity multiplies the visibility / motion opacity; a caption's spoken words are copies above it, one per
+  /// word. Every one of those is guarded, so a text with the neutral style and no words builds the container and
+  /// the one text layer it always built.
   static func overlayLayer(_ o: ExportOverlay, renderSize: CGSize) -> CALayer {
     let l = OverlayLayout.layout(o, frame: renderSize)
     // CTFontCreateWithName never fails (it silently substitutes), so check availability through UIFont first.
@@ -406,10 +429,12 @@ final class ExportSession {
     // React Native centres the glyphs inside the lineHeight box; shift the baseline to match.
     let glyphHeight = CTFontGetAscent(font) + CTFontGetDescent(font) + CTFontGetLeading(font)
     attrs[key(kCTBaselineOffsetAttributeName)] = NSNumber(value: Double((l.lineHeight - glyphHeight) / 2))
+    // Extra space after every glyph, in pixels (React Native's letterSpacing does the same, the last glyph included).
+    if l.letterSpacing != 0 { attrs[key(kCTKernAttributeName)] = NSNumber(value: Double(l.letterSpacing)) }
     if o.outline, l.fontSize > 0 {
       // Negative stroke width (percent of the font size) = stroke AND fill, so a single layer draws outlined text.
       attrs[key(kCTStrokeWidthAttributeName)] = NSNumber(value: Double(-(l.outlineWidth / l.fontSize * 100)))
-      attrs[key(kCTStrokeColorAttributeName)] = UIColor(hex: contrastFor(hex: o.color)).cgColor
+      attrs[key(kCTStrokeColorAttributeName)] = UIColor(hex: l.outlineColor).cgColor
     }
     let string = NSAttributedString(string: o.text, attributes: attrs)
 
@@ -430,17 +455,76 @@ final class ExportSession {
       container.cornerRadius = pad / 2
     }
 
-    let textLayer = CATextLayer()
-    textLayer.string = string
-    textLayer.alignmentMode = mode
-    textLayer.isWrapped = true
-    textLayer.truncationMode = .none
-    textLayer.contentsScale = 1                       // render size is already in pixels
-    textLayer.frame = CGRect(x: pad, y: pad, width: w, height: h)
+    // Every text layer of this overlay: the same frame, alignment and wrapping, so the copies sit exactly on the fill.
+    func textCopy(_ string: NSAttributedString) -> CATextLayer {
+      let layer = CATextLayer()
+      layer.string = string
+      layer.alignmentMode = mode
+      layer.isWrapped = true
+      layer.truncationMode = .none
+      layer.contentsScale = 1                         // render size is already in pixels
+      layer.frame = CGRect(x: pad, y: pad, width: w, height: h)
+      return layer
+    }
+    // The same text with its fill AND its stroke in one colour, so a copy shows no glyph in another colour.
+    func tinted(_ hex: String) -> NSAttributedString {
+      let tint = UIColor(hex: hex).cgColor
+      var copy = attrs
+      copy[key(kCTForegroundColorAttributeName)] = tint
+      if copy[key(kCTStrokeColorAttributeName)] != nil { copy[key(kCTStrokeColorAttributeName)] = tint }
+      return NSAttributedString(string: o.text, attributes: copy)
+    }
+
+    let textLayer = textCopy(string)
     container.addSublayer(textLayer)
 
+    // Glow and shadow: a layer's shadow is cast by what the layer draws, so each is a copy of the text in the
+    // glow / shadow colour, below the fill (bottom to top: glow, shadow, fill, as the preview stacks them).
+    // `shadowRadius` is the blur's standard deviation, about half of a blur given as a radius, hence the `/ 2`
+    // (to be tuned against the preview on the first build).
+    // Off the default path the container holds several layers that overlap; group opacity makes a see-through or
+    // fading text fade as ONE picture (the copies do not show through each other). A default text never sets it.
+    if let glow = l.glow, glow.radius > 0 {
+      container.allowsGroupOpacity = true
+      let halo = textCopy(tinted(glow.color))
+      halo.shadowColor = UIColor(hex: glow.color).cgColor
+      halo.shadowOpacity = 1
+      halo.shadowRadius = glow.radius / 2
+      halo.shadowOffset = .zero
+      container.insertSublayer(halo, below: textLayer)
+    }
+    if let shadow = l.shadow, shadow.opacity > 0 {
+      container.allowsGroupOpacity = true
+      // The layer's own opacity carries the shadow's strength: it fades the copy's glyphs and the shadow they cast
+      // together. The layout's offset is y-down (top-left origin); this layer space is y-up, so `dy` is negated.
+      let cast = textCopy(tinted(shadow.color))
+      cast.opacity = Float(shadow.opacity)
+      cast.shadowColor = UIColor(hex: shadow.color).cgColor
+      cast.shadowOpacity = 1
+      cast.shadowRadius = shadow.blur / 2
+      cast.shadowOffset = CGSize(width: shadow.dx, height: -shadow.dy)
+      container.insertSublayer(cast, below: textLayer)
+    }
+
+    // Word highlight: for each spoken word a copy of the fill text with that word in the highlight colour, above
+    // the fill, shown only while the word is spoken (composition time). The caption itself stays underneath.
+    // Captions never have motion, so the visibility animation is all a word layer needs.
+    if o.kind == "caption", let highlight = o.highlightColor, !o.words.isEmpty {
+      container.allowsGroupOpacity = true
+      let spans = CaptionWords.spans(text: o.text, words: o.words.map { (text: $0.text, start: $0.start, end: $0.end) }, start: o.start, end: o.end)
+      for span in spans {
+        let lit = NSMutableAttributedString(attributedString: string)
+        lit.addAttribute(key(kCTForegroundColorAttributeName), value: UIColor(hex: highlight).cgColor, range: span.range)
+        let wordLayer = textCopy(lit)
+        container.addSublayer(wordLayer)
+        addVisibility(wordLayer, start: span.start, end: span.end)
+      }
+    }
+
     container.transform = overlayTransform(scale: 1, rotation: l.rotation)
-    if !addMotion(container, o, renderSize: renderSize) { addVisibility(container, start: o.start, end: o.end) }
+    let shown = Double(l.opacity)                     // the text style's opacity, on top of visibility / motion
+    if shown < 1 { container.allowsGroupOpacity = true }   // a see-through text over its own background bar
+    if !addMotion(container, o, renderSize: renderSize, opacity: shown) { addVisibility(container, start: o.start, end: o.end, opacity: shown) }
     return container
   }
 
@@ -458,12 +542,13 @@ final class ExportSession {
     return scale == 1 ? turn : CATransform3DScale(turn, scale, scale, 1)
   }
 
-  /// Hidden by default; the animation (opacity 1) only runs during [start, end) and is removed afterwards.
-  static func addVisibility(_ layer: CALayer, start: Double, end: Double) {
+  /// Hidden by default; the animation (opacity `opacity`: 1 unless a text style lowers it) only runs during
+  /// [start, end) and is removed afterwards.
+  static func addVisibility(_ layer: CALayer, start: Double, end: Double, opacity: Double = 1) {
     layer.opacity = 0
     let anim = CABasicAnimation(keyPath: "opacity")
-    anim.fromValue = 1.0
-    anim.toValue = 1.0
+    anim.fromValue = opacity
+    anim.toValue = opacity
     anim.beginTime = max(start, AVCoreAnimationBeginTimeAtZero)   // 0 would mean "now", not the video's start
     anim.duration = end - start
     anim.fillMode = .removed
@@ -480,8 +565,8 @@ final class ExportSession {
   /// given to the video composition's animation tool; with `.removed` a finished animation has no effect.
   /// Scale: the overlay's own scale is baked into the layer's font size / box, so each sample applies the RATIO
   /// `sample.scale / o.scale`; the content sublayers are drawn at the largest ratio (`contentsScale`) so scaling up
-  /// stays sharp without changing the layout.
-  static func addMotion(_ layer: CALayer, _ o: ExportOverlay, renderSize: CGSize) -> Bool {
+  /// stays sharp without changing the layout. `opacity` (a text style's, else 1) multiplies every opacity sample.
+  static func addMotion(_ layer: CALayer, _ o: ExportOverlay, renderSize: CGSize, opacity: Double = 1) -> Bool {
     guard OverlayMotion.hasMotion(o) else { return false }
     let samples = OverlayMotion.samples(start: o.start, end: o.end, fps: OverlayMotion.fps, resolve: OverlayMotion.resolver(o))
     guard samples.count >= 2, OverlayMotion.allFinite(samples) else { return false }
@@ -496,7 +581,7 @@ final class ExportSession {
       NSValue(caTransform3D: overlayTransform(scale: CGFloat(OverlayMotion.scaleRatio(s.values.scale, base: o.scale)), rotation: CGFloat(s.values.rotation)))
     }
     let opacities: [Any] = samples.map { (s: (time: Double, values: KeyValues)) -> Any in
-      NSNumber(value: s.values.opacity)
+      NSNumber(value: s.values.opacity * opacity)
     }
 
     let sharp = CGFloat(OverlayMotion.contentScale(samples, base: o.scale))

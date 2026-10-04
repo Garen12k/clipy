@@ -92,7 +92,7 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and a f
 - `src/theme/` — theme tokens
 - `src/ui/` — shared UI primitives
 - `modules/clipy-video/` — Swift native module (`ios/`, `ios/Tests/`) and its TypeScript wrapper (`index.ts`)
-- `assets/fonts/` — 8 bundled OFL font files used by the text style panel
+- `assets/fonts/` — 16 bundled font files used by the text style panel (licences in `assets/fonts/LICENSES.md`)
 - `assets/music/` — bundled background tracks + `manifest.json` (currently empty; see
   `assets/music/README.md` for how to add a CC0 track)
 - `assets/emoji.json` — emoji search data (`char`/`name`/`keywords[]`) for the sticker sheet,
@@ -115,8 +115,10 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and a f
   (font, size, color, background, alignment, outline); each overlay gets a start/end on a
   dedicated text lane in the timeline. Overlay layout is computed as fractions of the frame
   (`src/editor/model/overlayLayout.ts`) so preview and export agree on placement.
-- Fonts: 8 bundled OFL fonts in `assets/fonts` (Bangers, Anton, Oswald, Montserrat, Pacifico,
-  Permanent Marker, Lobster, Roboto), loaded via the `expo-font` config plugin.
+- Fonts: 16 bundled fonts in `assets/fonts` (Bangers, Anton, Oswald, Montserrat, Pacifico,
+  Permanent Marker, Lobster, Roboto, Bebas Neue, Poppins, Playfair, Fredoka, Caveat, Press Start,
+  Righteous, Dancing Script), loaded via the `expo-font` config plugin. Licences are listed in
+  `assets/fonts/LICENSES.md`.
 - Music: one background track per project, imported from the Files app, with a move/trim handle
   on a dedicated music lane and a volume control. `assets/music/manifest.json` is intentionally
   empty for now (no bundled tracks ship yet); see `assets/music/README.md` for how to add a
@@ -221,6 +223,28 @@ Animations and keyframes. Everything shows exactly in the preview (no "Preview" 
 
 The exported video does the same, but that Swift has never been compiled.
 
+## Text and captions
+
+Everything here is in the **Text** group of the toolbar.
+
+- **Templates** - a strip at the top of the text panel with twelve one-tap looks: Clean title, Bold pop,
+  Neon, Subtitle bar, Comic, Retro, Handwritten, Elegant, Shadowed, Outline only, Sticker label, Soft glow.
+  A template keeps your words, position, size and timing and replaces the look.
+- **Style** - a block in the text panel: Opacity, Letter spacing, Line spacing, outline colour and
+  thickness, Shadow (colour, opacity, distance, blur) and Glow (colour, size).
+- **Fonts** - sixteen (eight new: Bebas Neue, Poppins, Playfair, Fredoka, Caveat, Press Start, Righteous,
+  Dancing Script).
+- **Caption style** - six presets: Classic bar, Bold outline, Yellow pop, Clean white, Neon glow, Karaoke.
+  The sheet shows a sample caption, a "Highlight spoken word" switch with a colour, an Outline switch and
+  the same Style block.
+
+Auto captions only work in a native build, so in Expo Go only the sample shows the caption styling and the
+word highlight.
+
+**Preview vs export.** The preview draws text styling with stacked text layers, which is close to exact.
+The outline is a soft halo in the preview and a hard stroke in the export. The export is Swift that has
+never been compiled.
+
 ## First native build — things to check
 
 When the first EAS build exists, compare the export against the preview and check these Look items:
@@ -241,3 +265,13 @@ When the first EAS build exists, compare the export against the preview and chec
 10. **Fading clip.** A fading clip should fade over its background (black / colour / blur): half way through a Fade the picture and the background are mixed half and half.
 11. **Rotation direction** of Spin and of keyframed rotation.
 12. **Speed curves.** A curved clip's exported length equals its length on the timeline; there is no black frame or gap between steps or next to a transition; and the clip's sound stays in sync after retiming.
+
+Text and captions items:
+
+13. **Fonts.** Each of the 16 fonts appears in the exported video (not a plain system font).
+14. **Shadow and glow strength** against the preview. The export uses half the blur radius as a first guess.
+15. **Shadow direction** is down-right, as in the preview.
+16. **Letter spacing** on centred text.
+17. **Text opacity** together with a shadow or glow.
+18. **Caption word highlight** timing, and that the lit word does not look heavier than the rest.
+19. **Captions are generated with word timings** (so the highlight has something to follow).

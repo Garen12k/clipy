@@ -1,10 +1,9 @@
 import { normaliseTransitions } from "./ops";
 import {
-  clampAdjust, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
+  captionLength, clampAdjust, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, FONT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, isHexColor, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
   type Clip, type ClipAdjust, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type EffectItem, type Overlay, type PostRecord, type Project, type ShapeId,
 } from "./types";
 
-const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 type Raw = Record<string, unknown> & { clips: unknown[] };
 
@@ -29,8 +28,19 @@ function withMotion(o: Record<string, unknown>): Overlay {
   return { ...o, animation: clampOverlayAnimation(o.animation), keyframes: clampOverlayKeyframes(o.keyframes) } as unknown as Overlay;
 }
 
+/** Text style repaired for text and captions; words and highlight only survive on captions (words only while they still match the text). Stickers untouched. */
+function withTextStyle(o: Overlay): Overlay {
+  if (o.kind === "sticker") return o;
+  const style = clampTextStyle((o as unknown as Record<string, unknown>).style);
+  const fontId = (FONT_IDS as readonly unknown[]).includes((o as unknown as Record<string, unknown>).fontId) ? o.fontId : "montserrat";
+  if (o.kind !== "caption") return { ...o, fontId, style, words: [], highlightColor: null };
+  const text = typeof o.text === "string" ? o.text : "";
+  const start = typeof o.start === "number" ? o.start : 0, end = typeof o.end === "number" ? o.end : 0;
+  return { ...o, fontId, style, words: clampCaptionWords(o.words, text, captionLength(start, end)), highlightColor: isHexColor(o.highlightColor) ? o.highlightColor : null };
+}
+
 /**
- * Brings a v2–v8 file to a safe v8 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
+ * Brings a v2–v9 file to a safe v9 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
  * null, unknown transition → dissolve (duration kept), transitions re-capped (last clip cleared), overlays get a kind, bad stickers fixed/dropped,
  * clips get kind/transform/crop/background/reversed defaults or repairs, photos forced to the photo rules, look fields (strength, adjust) clamped, effects repaired,
  * speed curves repaired (a curve forces speed 1; photos never have one).
@@ -49,7 +59,7 @@ function normaliseCurrent(raw: Raw): Raw {
     const crop = clampCrop(isObj(c.crop) ? (c.crop as CropRect) : FULL_CROP);
     const bg = c.background as Record<string, unknown> | undefined;
     const background: ClipBackground = isObj(bg) && bg.type === "blur" ? { type: "blur" }
-      : isObj(bg) && bg.type === "color" && typeof bg.color === "string" && HEX_COLOR.test(bg.color) ? { type: "color", color: bg.color }
+      : isObj(bg) && bg.type === "color" && isHexColor(bg.color) ? { type: "color", color: bg.color }
       : { type: "black" };
     const reversed = c.reversed === true;
     const filterIntensity = typeof c.filterIntensity === "number" && Number.isFinite(c.filterIntensity) ? clampNum(c.filterIntensity, 0, 1) : 1;
@@ -63,9 +73,9 @@ function normaliseCurrent(raw: Raw): Raw {
   });
   const clips = normaliseTransitions(mapped);
   const overlays = ((raw.overlays as Array<Record<string, unknown>> | undefined) ?? []).flatMap((o): Overlay[] => {
-    if (!o.kind) return [withMotion({ ...o, kind: "text" as const })];
+    if (!o.kind) return [withTextStyle(withMotion({ ...o, kind: "text" as const }))];
     if (o.kind === "sticker") { const s = normaliseSticker(o); return s ? [withMotion(s as unknown as Record<string, unknown>)] : []; }
-    return [withMotion(o)];
+    return [withTextStyle(withMotion(o))];
   });
   const posts = (Array.isArray(raw.posts) ? raw.posts : []).filter((r): r is PostRecord =>
     isObj(r) && (POST_PLATFORMS as readonly unknown[]).includes(r.platform) && (typeof r.url === "string" || r.url === null) && typeof r.postedAt === "string");
@@ -87,6 +97,6 @@ export function migrateProject(raw: unknown): Project {
   if (version < 1) throw new Error("Project file is missing required fields");
   let cur = raw as Raw;
   if (version === 1) cur = v1to2(cur);
-  // v2 → v8 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
+  // v2 → v9 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
   return normaliseCurrent(cur) as unknown as Project;
 }

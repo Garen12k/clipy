@@ -2,12 +2,13 @@ export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 8 as const;
+export const SCHEMA_VERSION = 9 as const;
 export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
 export type PostPlatform = (typeof POST_PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
 export interface PostRecord { platform: PostPlatform; url: string | null; postedAt: string }
-export const FONT_IDS = ["bangers", "anton", "oswald", "montserrat", "pacifico", "permanentMarker", "lobster", "roboto"] as const;
+export const FONT_IDS = ["bangers", "anton", "oswald", "montserrat", "pacifico", "permanentMarker", "lobster", "roboto",
+  "bebasNeue", "poppins", "playfair", "fredoka", "caveat", "pressStart", "righteous", "dancingScript"] as const;
 export type FontId = (typeof FONT_IDS)[number];
 export type Align = "left" | "center" | "right";
 export const OVERLAY_LIMITS = { fontScale: [0.02, 0.25] as const, scale: [0.2, 5] as const, minDuration: 0.2 };
@@ -224,11 +225,80 @@ export function clampSpeedCurve(v: unknown, clip: { kind: ClipKind }): SpeedCurv
   return { id: v.id as SpeedCurveId, steps: steps.slice(0, SPEED_CURVE_LIMITS.maxSteps) };
 }
 
+export interface TextShadow { color: string; opacity: number; distance: number; blur: number }   // distance, blur: fractions of the font size
+export interface TextGlow { color: string; size: number }                                         // size: fraction of the font size
+export interface TextStyle {
+  opacity: number;              // 0–1, default 1
+  letterSpacing: number;        // −0.05…0.3 of the font size, default 0
+  lineSpacing: number;          // 0.8…2 × the normal line height, default 1
+  outlineColor: string | null;  // null = automatic contrast colour
+  outlineWidth: number;         // 0.5…3 × the base outline width, default 1
+  shadow: TextShadow | null;    // default null
+  glow: TextGlow | null;        // default null
+}
+export const DEFAULT_TEXT_STYLE: TextStyle = { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null };
+export const TEXT_STYLE_LIMITS = { opacity: [0, 1], letterSpacing: [-0.05, 0.3], lineSpacing: [0.8, 2], outlineWidth: [0.5, 3],
+  shadowOpacity: [0, 1], shadowDistance: [0, 0.3], shadowBlur: [0, 0.5], glowSize: [0.05, 0.6] } as const;
+export const DEFAULT_SHADOW: TextShadow = { color: "#000000", opacity: 0.6, distance: 0.06, blur: 0.1 };
+export const DEFAULT_GLOW: TextGlow = { color: "#FFFFFF", size: 0.25 };
+export interface CaptionWord { text: string; start: number; end: number }   // seconds from the caption's start
+
+export const isHexColor = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v);
+
+/** Every field present and in range; non-finite / missing numbers → the default, bad colours → the default (outlineColor: null). Idempotent, unknown keys dropped. */
+export function clampTextStyle(v: unknown): TextStyle {
+  const s = isRec(v) ? v : {};
+  const L = TEXT_STYLE_LIMITS;
+  const num = (x: unknown, d: number, r: readonly [number, number]) => clampNum(isNum(x) ? x : d, r[0], r[1]);
+  const sh = s.shadow, gl = s.glow;
+  return {
+    opacity: num(s.opacity, DEFAULT_TEXT_STYLE.opacity, L.opacity),
+    letterSpacing: num(s.letterSpacing, DEFAULT_TEXT_STYLE.letterSpacing, L.letterSpacing),
+    lineSpacing: num(s.lineSpacing, DEFAULT_TEXT_STYLE.lineSpacing, L.lineSpacing),
+    outlineColor: isHexColor(s.outlineColor) ? s.outlineColor : null,
+    outlineWidth: num(s.outlineWidth, DEFAULT_TEXT_STYLE.outlineWidth, L.outlineWidth),
+    shadow: isRec(sh) ? {
+      color: isHexColor(sh.color) ? sh.color : DEFAULT_SHADOW.color,
+      opacity: num(sh.opacity, DEFAULT_SHADOW.opacity, L.shadowOpacity),
+      distance: num(sh.distance, DEFAULT_SHADOW.distance, L.shadowDistance),
+      blur: num(sh.blur, DEFAULT_SHADOW.blur, L.shadowBlur),
+    } : null,
+    glow: isRec(gl) ? {
+      color: isHexColor(gl.color) ? gl.color : DEFAULT_GLOW.color,
+      size: num(gl.size, DEFAULT_GLOW.size, L.glowSize),
+    } : null,
+  };
+}
+
+/** A caption's length for `clampCaptionWords`: in milliseconds like every stored time (3.4 − 3 is 0.4, not 0.3999…); 0 when it is not a number. */
+export function captionLength(start: number, end: number): number {
+  const length = end - start;
+  return Number.isFinite(length) ? Math.round(length * 1000) / 1000 : 0;
+}
+
+/** Entries need non-empty text and finite times (clamped to [0, length], end ≥ start); sorted by start. If the words joined with single spaces
+ *  do not equal the caption's text (whitespace-normalised) the words are stale → []. Idempotent. */
+export function clampCaptionWords(v: unknown, text: string, length: number): CaptionWord[] {
+  if (!Array.isArray(v)) return [];
+  const hi = Number.isFinite(length) ? Math.max(0, length) : 0;
+  const words: CaptionWord[] = [];
+  for (const e of v) {
+    if (!isRec(e) || typeof e.text !== "string" || e.text.trim().length === 0 || !isNum(e.start) || !isNum(e.end)) continue;
+    const start = clampNum(e.start, 0, hi);
+    words.push({ text: e.text, start, end: Math.max(start, clampNum(e.end, 0, hi)) });
+  }
+  words.sort((a, b) => a.start - b.start);
+  return words.map((w) => w.text).join(" ") === text.trim().replace(/\s+/g, " ") ? words : [];
+}
+
 export interface TextOverlay {
   id: string; kind: "text" | "caption"; text: string; fontId: FontId; fontScale: number; color: string;
   background: { color: string; opacity: number } | null; outline: boolean; align: Align;
   x: number; y: number; scale: number; rotation: number; start: number; end: number;
   animation: OverlayAnimation; keyframes: Keyframe[];   // captions carry them too but the sanity pass keeps them empty
+  style: TextStyle;
+  words: CaptionWord[];            // captions only; [] for plain text
+  highlightColor: string | null;   // captions only; null = no word highlight
 }
 export interface StickerOverlay {
   id: string; kind: "sticker"; emoji: string | null; shape: ShapeId | null; color: string;
@@ -271,7 +341,7 @@ export function makePhotoClip(partial: Partial<Clip> & Pick<Clip, "id"> & { seco
 export function makeOverlay(partial: Partial<TextOverlay> & Pick<TextOverlay, "id">): TextOverlay {
   return { kind: "text", text: "Your text", fontId: "bangers", fontScale: 0.07, color: "#F4F4F5", background: null, outline: true,
     align: "center", x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 3,
-    animation: { ...NO_OVERLAY_ANIMATION }, keyframes: [], ...partial };
+    animation: { ...NO_OVERLAY_ANIMATION }, keyframes: [], style: { ...DEFAULT_TEXT_STYLE }, words: [], highlightColor: null, ...partial };
 }
 export function makeSticker(partial: Partial<StickerOverlay> & Pick<StickerOverlay, "id">): StickerOverlay {
   return { kind: "sticker", emoji: "⭐", shape: null, color: "#F5C542", x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 3,

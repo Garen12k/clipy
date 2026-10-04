@@ -2,14 +2,11 @@ import { Pressable, View } from "react-native";
 import { hasOverlayMotion, overlayBaseAt, resolveOverlayMotion, type KeyValues } from "@/src/editor/model/motion";
 import { isSticker, type Overlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { OverlayText } from "./OverlayText";
+import { MIN_VIEW_OPACITY, OverlayText } from "./OverlayText";
 import { SelectionFrame } from "./SelectionFrame";
 import { StickerView } from "./StickerView";
 
 type Props = { frameW: number; frameH: number; onOpenPanel: (overlayId: string) => void };
-
-/** Preview only: React Native on iOS skips hit-testing for views with alpha below 0.01, so a fully faded overlay could not be tapped. */
-const MIN_VIEW_OPACITY = 0.02;
 
 /** The overlay drawn at another placement (a display copy; the project is not changed). */
 const placed = <T extends Overlay>(o: T, v: KeyValues): T => ({ ...o, x: v.x, y: v.y, scale: v.scale, rotation: v.rotation });
@@ -42,13 +39,16 @@ export function OverlayLayer({ frameW, frameH, onOpenPanel }: Props) {
           );
           return m && frame ? [main, <StickerView key={`${o.id}-frame`} sticker={placed(o, overlayBaseAt(o, playhead))} {...size} frameOnly>{frame}</StickerView>] : [main];
         }
+        // A see-through text (style opacity) fades its whole wrapper, so its frame goes in the unfaded copy too.
+        const apart = m !== null || o.style.opacity < 1;
+        const time = o.kind === "caption" && o.words.length > 0 && o.highlightColor ? playhead : undefined;
         const main = (
-          <OverlayText key={o.id} overlay={m ? placed(o, m) : o} {...size} opacity={opacity}>
+          <OverlayText key={o.id} overlay={m ? placed(o, m) : o} {...size} opacity={opacity} time={time}>
             <Pressable style={{ position: "absolute", inset: 0 }} onPress={() => selectOverlay(o.id)} accessibilityLabel={`Overlay ${o.text}`} />
-            {m ? null : frame}
+            {apart ? null : frame}
           </OverlayText>
         );
-        return m && frame ? [main, <OverlayText key={`${o.id}-frame`} overlay={placed(o, overlayBaseAt(o, playhead))} {...size} frameOnly>{frame}</OverlayText>] : [main];
+        return apart && frame ? [main, <OverlayText key={`${o.id}-frame`} overlay={placed(o, overlayBaseAt(o, playhead))} {...size} frameOnly>{frame}</OverlayText>] : [main];
       })}
     </View>
   );
