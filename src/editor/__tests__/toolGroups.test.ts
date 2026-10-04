@@ -6,7 +6,7 @@ test("five groups in order with the spec's tools", () => {
     ["effects", "Effects", ["filter", "adjust", "effect", "speed", "transition", "templates", "background"]],
     ["text", "Text", ["text", "captions", "animate", "keyframe"]],
     ["stickers", "Stickers", ["sticker", "animate", "keyframe"]],
-    ["audio", "Audio", ["music", "volume"]],
+    ["audio", "Audio", ["addAudio", "volume", "ducking", "beats"]],
   ]);
 });
 
@@ -15,7 +15,7 @@ test("every tool appears exactly once, except Animate and Keyframe which sit in 
   const shared = ["animate", "keyframe"];
   const rest = all.filter((t) => !shared.includes(t));
   expect(new Set(rest).size).toBe(rest.length);
-  expect(rest).toHaveLength(22);
+  expect(rest).toHaveLength(24);
   for (const t of shared) expect(TOOL_GROUPS.filter((g) => (g.tools as string[]).includes(t)).map((g) => g.id)).toEqual(["edit", "text", "stickers"]);
   for (const g of TOOL_GROUPS) expect(new Set(g.tools).size).toBe(g.tools.length);
 });
@@ -42,4 +42,16 @@ test("an effect selection jumps to Effects; existing cases unchanged", () => {
 test("effect sub-row tools are in no group", () => {
   const all = TOOL_GROUPS.flatMap((g) => g.tools) as string[];
   for (const t of ["effectStrength", "effectDuplicate", "effectDelete"]) expect(all).not.toContain(t);
+});
+
+test("an audio selection jumps to Audio", () => {
+  expect(groupForSelection({ clipId: null, overlayKind: null, audioId: "m1" }, "edit")).toBe("audio");
+  expect(groupForSelection({ clipId: null, overlayKind: null, audioId: "m1" }, "text")).toBe("audio");
+  expect(groupForSelection({ clipId: null, overlayKind: null, audioId: null }, "text")).toBeNull();
+  expect(groupForSelection({ clipId: "a", overlayKind: null, audioId: null }, "stickers")).toBe("edit");
+});
+
+test("audio sub-row tools are in no group; the old music id is gone", () => {
+  const all = TOOL_GROUPS.flatMap((g) => g.tools) as string[];
+  for (const t of ["audioVolume", "audioFade", "audioDuplicate", "audioDelete", "music"]) expect(all).not.toContain(t);
 });

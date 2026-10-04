@@ -47,7 +47,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "clipAnimation" | "overlayAnimation" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "clipAnimation" | "overlayAnimation" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useEditorStore((s) => s.project?.clips.find((c) => c.id === s.selectedClipId) ?? null);
   const photoSel = !!selectedClip && isPhoto(selectedClip);
@@ -59,7 +59,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const [group, setGroup] = useState<ToolGroupId>("edit");
   const overlayKind = useEditorStore((s) => s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind ?? null);
   const selectedEffectId = useEditorStore((s) => s.selectedEffectId);
-  useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind, effectId: selectedEffectId }, cur) ?? cur); }, [selectedId, overlayKind, selectedEffectId]);
+  const selectedAudioId = useEditorStore((s) => s.selectedAudioId);
+  useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind, effectId: selectedEffectId, audioId: selectedAudioId }, cur) ?? cur); }, [selectedId, overlayKind, selectedEffectId, selectedAudioId]);
 
   // Animate / Keyframe act on what the open group edits: Edit → the selected clip, Text → a selected text (not a caption), Stickers → a selected sticker.
   const motionOverlayKind = group === "text" ? "text" : group === "stickers" ? "sticker" : null;
@@ -149,8 +150,15 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     text: { label: "Text", icon: "text", disabled: !hasClips, onPress: addText },
     captions: { label: "Captions", icon: "chatbox-ellipses", disabled: !hasClips, onPress: () => setSheet("captions") },
     sticker: { label: "Sticker", icon: "happy", disabled: !hasClips, onPress: () => setSheet("sticker") },
-    music: { label: "Music", icon: "musical-notes", onPress: () => setSheet("music") },
+    addAudio: { label: "Add audio", icon: "musical-notes", onPress: () => setSheet("addAudio") },
     volume: { label: "Volume", icon: "volume-high", disabled: noSel || photoSel || !!selectedClip?.reversed, onPress: () => setSheet("volume") },
+    // Placeholders until the audio screens exist: listed so the map stays exhaustive, disabled and without an action.
+    ducking: { label: "Ducking", icon: "volume-low", disabled: true, onPress: () => {} },
+    beats: { label: "Beats", icon: "pulse", disabled: true, onPress: () => {} },
+    audioVolume: { label: "Volume", icon: "volume-medium", disabled: true, onPress: () => {} },
+    audioFade: { label: "Fade", icon: "trending-up", disabled: true, onPress: () => {} },
+    audioDuplicate: { label: "Duplicate", icon: "copy", disabled: true, onPress: () => {} },
+    audioDelete: { label: "Delete", icon: "trash", disabled: true, onPress: () => {} },
   };
   const active = TOOL_GROUPS.find((g) => g.id === group)!;
   const tools = group === "effects" && selectedEffectId ? SELECTED_EFFECT_TOOLS : active.tools;
@@ -179,7 +187,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <EffectStrengthSheet effectId={selectedEffectId} visible={sheet === "effectStrength"} onClose={() => setSheet(null)} />
       <BackgroundSheet clipId={selectedId} visible={sheet === "background"} onClose={() => setSheet(null)} />
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
-      <MusicSheet visible={sheet === "music"} onClose={() => setSheet(null)} />
+      <MusicSheet visible={sheet === "addAudio"} onClose={() => setSheet(null)} />
       <VolumeSheet clipId={selectedId} visible={sheet === "volume"} onClose={() => setSheet(null)} />
       <StickerSheet visible={sheet === "sticker"} onClose={() => setSheet(null)} onAdded={() => {}} />
       <CaptionsSheet visible={sheet === "captions"} onClose={() => setSheet(null)} />

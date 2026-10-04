@@ -36,11 +36,11 @@ test("moveOverlay keeps duration and clamps; delete/duplicate", () => {
   expect(dup.overlays[1].y).toBeCloseTo(0.53);
 });
 
-test("audio track: set replaces, update clamps, remove clears", () => {
+test("audio track (deprecated single-track ops): set adds, update clamps the first, remove drops the first", () => {
   const t = makeAudioTrack({ id: "m1", sourceDuration: 30 });
   const withTrack = setAudioTrack(p, t);
   expect(withTrack.audioTracks).toEqual([t]);
-  expect(setAudioTrack(withTrack, makeAudioTrack({ id: "m2", sourceDuration: 5 })).audioTracks[0].id).toBe("m2");
+  expect(setAudioTrack(withTrack, makeAudioTrack({ id: "m2", sourceDuration: 5 })).audioTracks.map((x) => x.id)).toEqual(["m1", "m2"]);
   const upd = updateAudioTrack(withTrack, { trimStart: 29.8, trimEnd: 99, start: -2, volume: 9 });
   expect(upd.audioTracks[0]).toMatchObject({ trimStart: 29.5, trimEnd: 30, start: 0, volume: 2 });
   expect(updateAudioTrack(p, { volume: 1 })).toBe(p); // no track → no-op
