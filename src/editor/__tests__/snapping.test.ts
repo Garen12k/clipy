@@ -142,3 +142,32 @@ test("ending a snapper that never began leaves another bar's guide alone", () =>
   dragged.end();
   expect(guide()).toBeNull();
 });
+
+test("ending an active snapper clears only the guide it set itself: another active snapper's guide stays", () => {
+  const showing = createSnapper(), idle = createSnapper();
+  showing.begin("o"); idle.begin("e");
+  expect(showing.time(3.95)).toBe(4);
+  idle.end();                      // began, never snapped: the guide is not its own
+  expect(guide()).toBe(4);
+  expect(showing.snapped()).toBe(true);
+  // A snapper that leaves its own snap after another one took the guide over does not hide the other's guide either.
+  idle.begin("e");
+  expect(idle.time(2.04)).toBe(2);
+  expect(guide()).toBe(2);
+  expect(showing.time(3.6)).toBe(3.6);
+  expect(guide()).toBe(2);
+  showing.end();
+  expect(guide()).toBe(2);
+  idle.end();
+  expect(guide()).toBeNull();
+});
+
+test("at zoom 0 the threshold is not a number of seconds: nothing snaps", () => {
+  useEditorStore.setState({ pixelsPerSecond: 0 });   // setZoom never gives 0; the snapper must cope anyway
+  const s = createSnapper();
+  s.begin("o");
+  expect(s.time(3.95)).toBe(3.95);
+  expect(s.move(2.9, 1.05)).toBe(2.9);
+  expect(buzz).not.toHaveBeenCalled();
+  expect(guide()).toBeNull();
+});

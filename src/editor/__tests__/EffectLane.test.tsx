@@ -149,4 +149,24 @@ describe("snapping", () => {
     expect(e()).toMatchObject({ start: 5.5, end: 6.5 });
     expect(held).toEqual({ guide: 6.5, buzzes: 0 });
   });
+
+  test("touching a handle also begins the body's pan, which fails: its finalize does not stop the handle snapping", async () => {
+    await render(<EffectLane />);
+    const g = await handle("Effect end handle");
+    await act(() => { g.handlers.onStart(); (screen.getByTestId("effect-pill-e").props.gesture as SnapG).handlers.onFinalize(); g.handlers.onUpdate({ translationX: 0.47 * 80 }); });   // end 6.97 → 7
+    expect(e()).toMatchObject({ start: 5.5, end: 7 });
+    expect(guide()).toBe(7);
+    expect(buzz).toHaveBeenCalledTimes(1);
+    await act(() => { g.handlers.onFinalize(); });
+    expect(guide()).toBeNull();
+  });
+
+  test("a pill removed in the middle of a drag takes its guide with it", async () => {
+    const view = await render(<EffectLane />);
+    const g = await handle("Effect end handle");
+    await act(() => { g.handlers.onStart(); g.handlers.onUpdate({ translationX: 0.47 * 80 }); });
+    expect(guide()).toBe(7);
+    await view.unmount();
+    expect(guide()).toBeNull();
+  });
 });

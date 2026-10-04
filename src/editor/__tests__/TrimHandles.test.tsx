@@ -111,4 +111,16 @@ describe("snapping", () => {
     expect(trimFromDrag(a, "start", 0, 7.99 * 80, 80, true).trimStart).toBe(7.9);
     expect(trimFromDrag(a, "end", 8, 80, 80, true).trimEnd).toBe(8);
   });
+
+
+  test("handles removed in the middle of a drag take the guide with them", async () => {
+    st().setProject(makeProject({ clips: [a], beatMarkers: [5.37] })); st().seek(2); st().setZoom(80);
+    useSnapGuide.setState({ time: null }); buzz.mockClear();
+    const view = await render(<TrimHandles clip={a} />);
+    const g = handle("end");
+    await act(() => { g.handlers.onStart(); g.handlers.onUpdate({ translationX: -2.6 * 80 }); });
+    expect(guide()).toBe(5.37);
+    await view.unmount();
+    expect(guide()).toBeNull();
+  });
 });

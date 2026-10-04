@@ -31,7 +31,8 @@ export const clipSnapTargets = (p: Project, playhead: number): number[] => sorte
 
 export function snapTime(t: number, targets: readonly number[], threshold: number): { time: number; target: number | null } {
   let best: number | null = null;
-  if (Number.isFinite(t) && threshold > 0) for (const x of targets) {
+  // A threshold that is not a positive number of seconds (8 points at 0 pixels per second is Infinity) never snaps.
+  if (Number.isFinite(t) && Number.isFinite(threshold) && threshold > 0) for (const x of targets) {
     const d = Math.abs(x - t);
     if (d <= threshold && (best === null || d < Math.abs(best - t))) best = x;   // strict `<`: on a tie the earlier target stays
   }

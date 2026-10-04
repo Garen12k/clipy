@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { makeClip, makeKeyframe, makeOverlay, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -64,6 +64,19 @@ test("no dots when unselected or without pins", async () => {
   const plain = makeClip({ id: "c", sourceDuration: 4 });
   await render(<ClipThumbStrip clip={plain} pixelsPerSecond={50} selected missing={false} onPress={() => {}} />);
   expect(screen.queryByTestId("keyframe-dot-0")).toBeNull();
+});
+
+test("in multi-select mode a chosen strip shows no dots (a tap there must toggle the clip, not seek); they are back after Done", async () => {
+  const clip = clipFixture();
+  await render(<ClipThumbStrip clip={clip} pixelsPerSecond={50} selected missing={false} onPress={() => {}} />);
+  expect(screen.getByTestId("keyframe-dot-0")).toBeTruthy();
+  await act(() => { useEditorStore.getState().enterMultiSelect(); });
+  expect(useEditorStore.getState().multiSelect).not.toBeNull();
+  expect(screen.queryByTestId("keyframe-dot-0")).toBeNull();
+  expect(screen.queryByLabelText("Keyframe")).toBeNull();
+  await act(() => { useEditorStore.getState().exitMultiSelect(); });
+  expect(screen.getByTestId("keyframe-dot-0")).toBeTruthy();
+  expect(screen.getByTestId("keyframe-dot-1")).toBeTruthy();
 });
 
 test("selected overlay pill shows pins and press seeks to start + t", async () => {

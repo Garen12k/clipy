@@ -358,4 +358,25 @@ describe("snapping", () => {
     expect(show).toHaveBeenCalledTimes(1);
     expect(show).toHaveBeenCalledWith(TOAST);
   });
+
+
+  test("touching a handle also begins the body's pan, which fails: its finalize does not stop the handle snapping", async () => {
+    await render(<LayerLane />);
+    const g = await snapHandle("l", "end");
+    await act(() => { g.handlers.onStart(); bar("l").handlers.onFinalize(); g.handlers.onUpdate({ translationX: 0.46 * 80 }); });   // end 5.46 → 5.5
+    expect(l().trimEnd).toBeCloseTo(2.5, 9);
+    expect(guide()).toBe(5.5);
+    expect(buzz).toHaveBeenCalledTimes(1);
+    await act(() => { g.handlers.onEnd?.(); g.handlers.onFinalize(); });
+    expect(guide()).toBeNull();
+  });
+
+  test("a bar removed in the middle of a drag takes its guide with it", async () => {
+    const view = await render(<LayerLane />);
+    const g = await snapHandle("l", "end");
+    await act(() => { g.handlers.onStart(); g.handlers.onUpdate({ translationX: 0.46 * 80 }); });
+    expect(guide()).toBe(5.5);
+    await view.unmount();
+    expect(guide()).toBeNull();
+  });
 });

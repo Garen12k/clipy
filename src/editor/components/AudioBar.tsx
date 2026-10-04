@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { trackEnd } from "@/src/editor/model/audioSync";
@@ -8,7 +8,7 @@ import { timeToX, xToTime } from "@/src/editor/model/timeline";
 import type { AudioKind, AudioTrack, Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
-import { createSnapper, sameTime } from "../snapping";
+import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { LANE_HEIGHT } from "../timelineLayout";
 
 const HANDLE_W = 12;
@@ -40,37 +40,38 @@ export function AudioBar({ track: t, missing, selected, overlapping = false, onP
     if (cur) startRef.current = { start: cur.start, trimStart: cur.trimStart, trimEnd: cur.trimEnd };
     store.beginTransaction();
   };
-  // Snapping (one object, for the same reason as the ref). A snap counts only when the op really leaves the dragged edge on the target.
-  const snapper = useRef(createSnapper()).current;
+  // Snapping: one snapper per gesture (see `createBarSnappers`). A snap counts only when the op really leaves the dragged edge on the target.
+  const snappers = useRef(createBarSnappers()).current;
+  useEffect(() => () => endSnappers(snappers), [snappers]);   // removed mid-drag: the guide goes with the bar
   /** Where the bar was when the drag began: its length and its end on the timeline. */
   const origin = () => { const { start, trimStart, trimEnd } = startRef.current; return { start, trimStart, trimEnd, len: trimEnd - trimStart, end: start + (trimEnd - trimStart) }; };
-  const begin = (...edges: ("start" | "end")[]) => () => { snap(); snapper.begin(t.id); snapper.rest(...edges.map((k) => origin()[k])); };
+  const begin = (which: keyof BarSnappers, ...edges: ("start" | "end")[]) => () => { snap(); snappers[which].begin(t.id); snappers[which].rest(...edges.map((k) => origin()[k])); };
   const on = (q: Project, target: number, ...edges: ("start" | "end")[]) => {
     const v = q.audioTracks.find((x) => x.id === t.id);
     return !!v && edges.some((k) => sameTime(k === "start" ? v.start : trackEnd(v), target));
   };
 
   const gestures = useMemo(() => {
-    const move = Gesture.Pan().activateAfterLongPress(150).onStart(begin("start", "end"))
+    const move = Gesture.Pan().activateAfterLongPress(150).onStart(begin("move", "start", "end"))
       .onUpdate((e) => store.applyTransient((p) => {
         const { start, len } = origin();
-        return moveAudioTrack(p, t.id, snapper.move(start + xToTime(e.translationX, pps), len, (s, target) => on(moveAudioTrack(p, t.id, s), target, "start", "end")));
-      })).onFinalize(() => snapper.end()).runOnJS(true);
+        return moveAudioTrack(p, t.id, snappers.move.move(start + xToTime(e.translationX, pps), len, (s, target) => on(moveAudioTrack(p, t.id, s), target, "start", "end")));
+      })).onFinalize(() => snappers.move.end()).runOnJS(true);
     // Both handles move the bar's END on screen (the start stays where it is): the start handle the other way.
-    const left = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("end"))
+    const left = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("left", "end"))
       .onUpdate((e) => store.applyTransient((p) => {
         const { trimStart, end } = origin(), dx = xToTime(e.translationX, pps);
         const trim = (by: number) => updateAudioTrackById(p, t.id, { trimStart: trimStart + by });
-        const to = snapper.time(end - dx, (s, target) => on(trim(end - s), target, "end"));
-        return trim(snapper.snapped() ? end - to : dx);   // not snapped: the finger's own distance, exactly as before
-      })).onFinalize(() => snapper.end()).runOnJS(true);
-    const right = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("end"))
+        const to = snappers.left.time(end - dx, (s, target) => on(trim(end - s), target, "end"));
+        return trim(snappers.left.snapped() ? end - to : dx);   // not snapped: the finger's own distance, exactly as before
+      })).onFinalize(() => snappers.left.end()).runOnJS(true);
+    const right = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("right", "end"))
       .onUpdate((e) => store.applyTransient((p) => {
         const { trimEnd, end } = origin(), dx = xToTime(e.translationX, pps);
         const trim = (by: number) => updateAudioTrackById(p, t.id, { trimEnd: trimEnd + by });
-        const to = snapper.time(end + dx, (s, target) => on(trim(s - end), target, "end"));
-        return trim(snapper.snapped() ? to - end : dx);
-      })).onFinalize(() => snapper.end()).runOnJS(true);
+        const to = snappers.right.time(end + dx, (s, target) => on(trim(s - end), target, "end"));
+        return trim(snappers.right.snapped() ? to - end : dx);
+      })).onFinalize(() => snappers.right.end()).runOnJS(true);
     return { move, left, right };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t.id, pps]);

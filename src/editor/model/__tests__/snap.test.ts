@@ -53,6 +53,10 @@ test("snapTime: the nearest target within the threshold, else the time itself", 
   expect(snapTime(5, [], 1)).toEqual({ time: 5, target: null });
   expect(snapTime(NaN, ALL, 1)).toEqual({ time: NaN, target: null });
   expect(snapTime(4.05, ALL, 0)).toEqual({ time: 4.05, target: null });   // no reach
+  // A threshold that is not a positive, finite number of seconds never snaps (8 points at 0 pixels per second is Infinity).
+  expect(snapThreshold(0)).toBe(Infinity);
+  for (const bad of [Infinity, -Infinity, NaN, -0.1]) expect(snapTime(4.05, ALL, bad)).toEqual({ time: 4.05, target: null });
+  expect(snapMove(2.9, 1.05, ALL, Infinity)).toEqual({ start: 2.9, target: null });
 });
 
 test("snapMove tries both edges of the bar; the nearer snap wins, a tie goes to the start", () => {

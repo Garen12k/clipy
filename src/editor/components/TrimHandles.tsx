@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { clipDuration, clipStartTimes, sourceAfter, timeToX, xToTime } from "@/src/editor/model/timeline";
@@ -38,6 +38,7 @@ function Handle({ clip, edge }: { clip: Clip; edge: "start" | "end" }) {
   // The trim value and the clip's end on the timeline when the drag began (one object: gesture callbacks get copies of reassigned variables).
   const startRef = useRef({ value: edge === "start" ? clip.trimStart : clip.trimEnd, end: 0 });
   const snapper = useRef(createSnapper()).current;
+  useEffect(() => () => snapper.end(), [snapper]);   // removed mid-drag: the guide goes with the handle
   const pan = Gesture.Pan().activeOffsetX([-4, 4])
     .onStart(() => {
       const p = useEditorStore.getState().project, c = p?.clips.find((x) => x.id === clip.id);

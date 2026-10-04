@@ -28,48 +28,66 @@ export interface Snapper {
   move(start: number, duration: number, lands?: Lands): number;
   /** The last call landed on a target. */
   snapped(): boolean;
-  /** Clears the guide and the entered-snap memory. Does nothing when `begin` was not called since the last `end`. */
+  /** Clears the entered-snap memory and the guide, if the guide is this snapper's own. Does nothing when `begin` was not called since the last `end`. */
   end(): void;
 }
 
+/** The snapper whose guide is showing (its state object): the guide store is shared, and a snapper hides only a guide it set itself. */
+const guide: { owner: object | null } = { owner: null };
+
 export function createSnapper(): Snapper {
-  let targets: number[] = [], threshold = 0, last: number | null = null, active = false;
+  // One mutated object, never reassigned variables (see `Snapper`).
+  const state = { targets: [] as number[], threshold: 0, last: null as number | null, active: false };
+  const show = (time: number) => { guide.owner = state; useSnapGuide.setState({ time }); };
+  const hide = () => {
+    if (guide.owner !== state) return;   // another snapper's guide (or none): not this one's to clear
+    guide.owner = null;
+    if (useSnapGuide.getState().time !== null) useSnapGuide.setState({ time: null });
+  };
   const landed = (target: number | null) => {
-    if (target !== null && target !== last) haptic("light");            // entering a snap; holding it or leaving it is silent
-    if (target !== last) useSnapGuide.setState({ time: target });
-    last = target;
+    if (target !== null && target !== state.last) haptic("light");            // entering a snap; holding it or leaving it is silent
+    if (target !== state.last) { if (target === null) hide(); else show(target); }
+    state.last = target;
   };
   return {
     begin(excludeId, mainClip = false) {
       const s = useEditorStore.getState();
-      targets = !s.project ? [] : mainClip ? clipSnapTargets(s.project, s.playhead) : snapTargets(s.project, s.playhead, excludeId);
-      threshold = snapThreshold(s.pixelsPerSecond); last = null; active = true;
+      state.targets = !s.project ? [] : mainClip ? clipSnapTargets(s.project, s.playhead) : snapTargets(s.project, s.playhead, excludeId);
+      state.threshold = snapThreshold(s.pixelsPerSecond); state.last = null; state.active = true;
     },
     rest(...edges) {
       for (const edge of edges) {
-        const on = targets.find((x) => sameTime(x, edge));
+        const on = state.targets.find((x) => sameTime(x, edge));
         if (on === undefined) continue;
-        last = on; useSnapGuide.setState({ time: on });
+        state.last = on; show(on);
         return;
       }
     },
     time(t, lands) {
-      const r = snapTime(t, targets, threshold);
+      const r = snapTime(t, state.targets, state.threshold);
       const ok = r.target !== null && (!lands || lands(r.time, r.target));
       landed(ok ? r.target : null);
       return ok ? r.time : t;
     },
     move(start, duration, lands) {
-      const r = snapMove(start, duration, targets, threshold);
+      const r = snapMove(start, duration, state.targets, state.threshold);
       const ok = r.target !== null && (!lands || lands(r.start, r.target));
       landed(ok ? r.target : null);
       return ok ? r.start : start;
     },
-    snapped: () => last !== null,
+    snapped: () => state.last !== null,
     end() {
-      if (!active) return;   // a gesture that never began (a tap) must not clear the guide another bar is showing
-      targets = []; last = null; active = false;
-      if (useSnapGuide.getState().time !== null) useSnapGuide.setState({ time: null });
+      if (!state.active) return;   // a gesture that never began (a tap) must not clear the guide another bar is showing
+      state.targets = []; state.last = null; state.active = false;
+      hide();
     },
   };
 }
+
+/**
+ * A bar's three gestures, one snapper each: touching a handle also begins the bar's move pan, which fails and finalizes — that must
+ * end its own (idle) snapper, not the one the handle is using.
+ */
+export type BarSnappers = { move: Snapper; left: Snapper; right: Snapper };
+export const createBarSnappers = (): BarSnappers => ({ move: createSnapper(), left: createSnapper(), right: createSnapper() });
+export const endSnappers = (s: BarSnappers): void => { s.move.end(); s.left.end(); s.right.end(); };

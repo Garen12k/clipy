@@ -23,7 +23,9 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
   const photo = isPhoto(clip);
   // One badge slot for speed: the curve's label when a curve is set, else the constant speed when it is not 1×.
   const speedBadge = clip.speedCurve ? SPEED_CURVES[clip.speedCurve.id].label : clip.speed !== 1 ? formatSpeed(clip.speed) : null;
-  const showDots = selected && clip.keyframes.length > 0;
+  // No dots in multi-select mode: a tap on a dot would seek instead of toggling the clip.
+  const selecting = useEditorStore((s) => s.multiSelect !== null);
+  const showDots = selected && !selecting && clip.keyframes.length > 0;
   // Where this clip starts on the timeline (a dot press seeks to start + the pin's output offset). Only read while dots show.
   const clipStart = useEditorStore((s) => {
     if (!showDots || !s.project) return 0;

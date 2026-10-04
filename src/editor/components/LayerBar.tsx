@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { moveLayer, trimLayer } from "@/src/editor/model/ops";
@@ -8,7 +8,7 @@ import { clampNum, isPhoto, LAYER_LIMITS, PHOTO, type LayerClip, type Project } 
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { useToast } from "@/src/ui/Toast";
-import { createSnapper, sameTime } from "../snapping";
+import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { LANE_HEIGHT } from "../timelineLayout";
 
 const HANDLE_W = 12;
@@ -70,10 +70,11 @@ export function LayerBar({ layer: l, missing = false, selected, overlapping = fa
     if (cur) dragRef.current = { start: cur.start, end: layerEnd(cur), trimStart: cur.trimStart, trimEnd: cur.trimEnd, refused: false };
     store.beginTransaction();
   };
-  // Snapping (one object, for the same reason as the ref). A snap counts only when the op really leaves the dragged edge on the target:
+  // Snapping: one snapper per gesture (see `createBarSnappers`). A snap counts only when the op really leaves the dragged edge on the target:
   // one the op clamps away or refuses (the overlap rule) is not taken, and the frame is the finger's own.
-  const snapper = useRef(createSnapper()).current;
-  const begin = (...edges: ("start" | "end")[]) => () => { snap(); snapper.begin(l.id); snapper.rest(...edges.map((k) => dragRef.current[k])); };
+  const snappers = useRef(createBarSnappers()).current;
+  useEffect(() => () => endSnappers(snappers), [snappers]);   // removed mid-drag: the guide goes with the bar
+  const begin = (which: keyof BarSnappers, ...edges: ("start" | "end")[]) => () => { snap(); snappers[which].begin(l.id); snappers[which].rest(...edges.map((k) => dragRef.current[k])); };
   const on = (q: Project, target: number, ...edges: ("start" | "end")[]) => { const v = current(q); return !!v && edges.some((k) => sameTime(k === "start" ? v.start : layerEnd(v), target)); };
   /** One frame of a drag. `wants` says whether the frame asks for a change: an op that then returns the same project has refused it. */
   const apply = (translationX: number, op: (p: Project, cur: LayerClip) => { next: Project; wants: boolean }) =>
@@ -96,22 +97,22 @@ export function LayerBar({ layer: l, missing = false, selected, overlapping = fa
       apply(e.translationX, (p, cur) => {
         // The edge this handle moves on screen: the bar's start (left) or its end (right). Its snapped time goes back into a drag
         // distance for `layerTrimFromDrag`; a frame that does not snap keeps the finger's own distance, exactly as before.
-        const edge = handle === "left" ? "start" : "end", from = dragRef.current[edge];
+        const edge = handle === "left" ? "start" : "end", from = dragRef.current[edge], snapper = snappers[handle];
         const at = (tx: number) => { const t = layerTrimFromDrag(cur, handle, dragRef.current, tx, pps); return { t, next: trimLayer(p, l.id, t.trimStart, t.trimEnd, t.anchor) }; };
         const to = snapper.time(from + xToTime(e.translationX, pps), (s, target) => on(at(timeToX(s - from, pps)).next, target, edge));
         const { t, next } = at(snapper.snapped() ? timeToX(to - from, pps) : e.translationX);
         return { next, wants: Math.abs(t.trimStart - cur.trimStart) > SAME || Math.abs(t.trimEnd - cur.trimEnd) > SAME };
       });
-    const move = Gesture.Pan().activateAfterLongPress(150).onStart(begin("start", "end"))
+    const move = Gesture.Pan().activateAfterLongPress(150).onStart(begin("move", "start", "end"))
       .onUpdate((e) => apply(e.translationX, (p, cur) => {
         const place = (s: number) => moveLayer(p, l.id, Math.max(0, s));
-        const start = Math.max(0, snapper.move(dragRef.current.start + xToTime(e.translationX, pps), clipDuration(cur), (s, target) => on(place(s), target, "start", "end")));
+        const start = Math.max(0, snappers.move.move(dragRef.current.start + xToTime(e.translationX, pps), clipDuration(cur), (s, target) => on(place(s), target, "start", "end")));
         // The op keeps 3 decimals: a start that rounds to where the bar already is asks for nothing.
         return { next: place(start), wants: Math.abs(Math.round(start * 1000) / 1000 - cur.start) > SAME };
       }))
-      .onEnd(finish).onFinalize(() => snapper.end()).runOnJS(true);
-    const left = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("start")).onUpdate(trim("left")).onEnd(finish).onFinalize(() => snapper.end()).runOnJS(true);
-    const right = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("end")).onUpdate(trim("right")).onEnd(finish).onFinalize(() => snapper.end()).runOnJS(true);
+      .onEnd(finish).onFinalize(() => snappers.move.end()).runOnJS(true);
+    const left = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("left", "start")).onUpdate(trim("left")).onEnd(finish).onFinalize(() => snappers.left.end()).runOnJS(true);
+    const right = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("right", "end")).onUpdate(trim("right")).onEnd(finish).onFinalize(() => snappers.right.end()).runOnJS(true);
     return { move, left, right };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [l.id, pps]);

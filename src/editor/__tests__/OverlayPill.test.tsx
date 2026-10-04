@@ -130,4 +130,27 @@ describe("snapping", () => {
     await act(() => { g.handlers.onFinalize(); });
     expect(guide()).toBeNull();
   });
+
+  test("touching a handle also begins the body's pan, which fails: its finalize does not stop the handle snapping", async () => {
+    await pill();
+    const g = handle("Text end handle");
+    await act(() => { g.handlers.onStart(); body().handlers.onFinalize(); g.handlers.onUpdate({ translationX: 0.76 * 80 }); });   // end 3.26 → 3.3
+    expect(o()).toMatchObject({ start: 1, end: 3.3 });
+    expect(guide()).toBe(3.3);
+    expect(buzz).toHaveBeenCalledTimes(1);
+    // The other handle's finalize (never started) is a no-op too.
+    await act(() => { handle("Text start handle").handlers.onFinalize(); });
+    expect(guide()).toBe(3.3);
+    await act(() => { g.handlers.onFinalize(); });
+    expect(guide()).toBeNull();
+  });
+
+  test("a pill removed in the middle of a drag takes its guide with it", async () => {
+    const view = await render(<OverlayPill overlay={snapProject.overlays[0]} selected onPress={() => {}} />);
+    const g = handle("Text end handle");
+    await act(() => { g.handlers.onStart(); g.handlers.onUpdate({ translationX: 0.76 * 80 }); });
+    expect(guide()).toBe(3.3);
+    await view.unmount();
+    expect(guide()).toBeNull();
+  });
 });

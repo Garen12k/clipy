@@ -200,4 +200,24 @@ describe("snapping", () => {
     expect(m()).toMatchObject({ start: 0.5, trimStart: 0, trimEnd: 9 });
     expect(held).toEqual({ guide: null, buzzes: 0 });
   });
+
+  test("touching a handle also begins the body's pan, which fails: its finalize does not stop the handle snapping", async () => {
+    await render(<AudioLane kind="music" />);
+    const g = await handle("Music end handle");
+    await act(() => { g.handlers.onStart(); (screen.getByTestId("audio-bar-m").props.gesture as SnapG).handlers.onFinalize(); g.handlers.onUpdate({ translationX: -2.46 * 80 }); });   // end 7.04 → 7
+    expect(m()).toMatchObject({ start: 0.5, trimStart: 0, trimEnd: 6.5 });
+    expect(guide()).toBe(7);
+    expect(buzz).toHaveBeenCalledTimes(1);
+    await act(() => { g.handlers.onFinalize(); });
+    expect(guide()).toBeNull();
+  });
+
+  test("a bar removed in the middle of a drag takes its guide with it", async () => {
+    const view = await render(<AudioLane kind="music" />);
+    const g = await handle("Music end handle");
+    await act(() => { g.handlers.onStart(); g.handlers.onUpdate({ translationX: -2.46 * 80 }); });
+    expect(guide()).toBe(7);
+    await view.unmount();
+    expect(guide()).toBeNull();
+  });
 });
