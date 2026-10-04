@@ -1,7 +1,7 @@
 # CapCut group C, round 1 — Animations and keyframes: design
 
 **Date:** 2026-10-04
-**Status:** Approved by the user ("yes", two rounds: animations + keyframes first, speed curves second)
+**Status:** Implemented 2026-10-04 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Roadmap:** `docs/superpowers/research/capcut-roadmap.md`, group C
 **Builds on:** groups A and B (schema v6)
 
@@ -58,6 +58,7 @@ Migration v6 → v7 adds the defaults. Sanity pass (every load, idempotent): unk
   - Combo (clips) runs over the whole clip. Loop (overlays) runs for the overlay's whole life, in seconds since its start, and also during In / Out.
 - **Clip opacity** fades the picture over the clip's own background (black / colour / blur) — in preview and export alike.
 - Split: both halves keep all pins (they are in source time); the left half keeps In, the right half keeps Out; a Combo stays on both. Duplicate copies everything (no shared arrays). Replace keeps animations and clears keyframes. Freeze: the still gets no animation and no keyframes. Reverse keeps pins (they stay on their pictures).
+- **Changed during the build:** splitting a keyframed photo re-bases the right half's pins so the motion continues; trimming a text / sticker's start keeps the value in effect at the new start; rotation written by gestures is not wrapped, so whole turns can be keyframed.
 - A transition window shows each clip with its own motion evaluated at its own local time (clamped to the clip's range).
 
 ## 4. Shared maths — `src/editor/model/motion.ts` ↔ `modules/clipy-video/ios/Motion.swift`
@@ -89,7 +90,7 @@ export const MOTION = { slideClip: 1, slideOverlay: 0.25, zoomFrom: 0.6, zoomOut
   - `float`: `dy = floatAmp·sin(2π·floatHz·s)`; `blink`: opacity `blinkMin + (1 − blinkMin)·(0.5 + 0.5·cos(2π·blinkHz·s))`; `shake`: `dx = shakeAmp·sin(2π·shakeHz·s)`
 - `edgeDurations(inDur, outDur, length)` → scaled `{ in, out }` (proportional shrink when `in + out > length`).
 - `sampleKeyframes(keyframes, t)` → `{ x, y, scale, rotation, opacity } | null` (null when empty).
-- `resolveClipMotion(clip, offsetInClip, length)` → `{ transform: ClipTransform; opacity: number }`: base (keyframes sampled at the clip's source time for that offset — via `timeline.ts` — or the static transform) combined with In / Out or Combo, `distance = slideClip`. The result is NOT clamped to `TRANSFORM_LIMITS` (animations may leave the frame).
+- `resolveClipMotion(clip, offsetInClip)` → `{ transform: ClipTransform; opacity: number }`: base (keyframes sampled at the clip's source time for that offset — via `timeline.ts` — or the static transform) combined with In / Out or Combo, `distance = slideClip`. The result is NOT clamped to `TRANSFORM_LIMITS` (animations may leave the frame).
 - `resolveOverlayMotion(overlay, time)` → `{ x, y, scale, rotation, opacity }` with `distance = slideOverlay`.
 
 The Swift twin holds the same constants and functions; a Jest parity test compares constants, ids and shared vectors.
