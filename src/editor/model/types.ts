@@ -180,10 +180,14 @@ export function clampExportSettings(v: unknown): ExportSettings {
 /** Not a string → ""; trimmed, cut to COVER_LIMITS.titleMax whole characters (code points), trimmed again so a cut leaves no trailing space. */
 export const clampCoverTitle = (v: unknown): string =>
   (typeof v === "string" ? Array.from(v.trim()).slice(0, COVER_LIMITS.titleMax).join("").trim() : "");
-/** `total` = the project's length in seconds. Round first, then clamp (that order makes it idempotent). */
+/**
+ * `total` = the project's length in seconds. The time is rounded to the millisecond, then clamped to the project's last WHOLE
+ * millisecond (a bound like 7.0004 would be rounded away on the next pass): one pass is final.
+ */
 export function clampCover(v: unknown, total: number): Cover | null {
   if (!isRec(v) || !isNum(v.time)) return null;
-  return { time: clampNum(Math.round(v.time * 1000) / 1000, 0, isNum(total) ? Math.max(0, total) : 0), title: clampCoverTitle(v.title) };
+  const end = isNum(total) ? Math.max(0, Math.floor(total * 1000) / 1000) : 0;
+  return { time: clampNum(Math.round(v.time * 1000) / 1000, 0, end), title: clampCoverTitle(v.title) };
 }
 export const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const finiteOr = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);

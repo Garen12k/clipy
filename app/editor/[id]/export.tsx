@@ -1,7 +1,7 @@
 import { requestPermissionsAsync, saveToLibraryAsync } from "expo-media-library/legacy";
 import { router } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { coverTimeOf } from "@/src/editor/model/timeline";
+import { coverTimeOf, LAST_FRAME_SLACK } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { ExportScreenBody } from "@/src/export/ExportScreenBody";
 import { exportDuration } from "@/src/export/estimate";
@@ -40,8 +40,9 @@ export default function ExportScreen() {
     const total = exportDuration(project, missingSourceUris);
     const params = {
       fileUri: state.fileUri, durationSec: String(total), mimeType: "video/mp4", projectId: project.id, title: project.name,
-      // The cover frame as whole milliseconds, never past the exported length; no cover sends nothing.
-      ...(project.cover ? { coverMs: String(Math.round(Math.min(coverTimeOf(project), total) * 1000)) } : {}),
+      // The cover frame as whole milliseconds, always inside the exported length: at the end it is the frame the cover
+      // itself shows there (`frameAt` reads LAST_FRAME_SLACK before the end). No cover sends nothing.
+      ...(project.cover ? { coverMs: String(Math.round(Math.min(coverTimeOf(project), Math.max(0, total - LAST_FRAME_SLACK)) * 1000)) } : {}),
     };
     router.dismiss();
     router.push({ pathname: "/post", params });

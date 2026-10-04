@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
-import { EXPORT_FPS, EXPORT_QUALITIES, type ExportSettings, type Project } from "@/src/editor/model/types";
+import { clampExportSettings, EXPORT_FPS, EXPORT_QUALITIES, type ExportSettings, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { fileSize } from "@/src/lib/fileInfo";
 import { formatDuration } from "@/src/lib/format";
@@ -25,7 +25,8 @@ type Props = {
 
 export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone, onPost }: Props) {
   const [res, setRes] = useState<Resolution>(1080);
-  const [settings, setSettings] = useState<ExportSettings>(project.exportSettings);
+  // Read clamped: settings the app does not offer (a damaged file) still show a selected chip — the defaults.
+  const [settings, setSettings] = useState<ExportSettings>(() => clampExportSettings(project.exportSettings));
   const change = (patch: Partial<ExportSettings>) => { const next = { ...settings, ...patch }; setSettings(next); useEditorStore.getState().setExportSettings(next); };
   const clips = exportableClips(project, missingSourceUris);
   const has4K = canExport4K(clips);

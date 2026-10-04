@@ -22,11 +22,14 @@ const NOT_READY = "9007";
 /**
  * The Reel's cover frame: `thumb_offset`, milliseconds into the video, default 0
  * (https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media/). Anything that is not
- * a finite number inside the video is ignored rather than failing the post.
+ * a finite number inside the video — from 0 up to, not including, its length in whole milliseconds — is ignored rather than
+ * failing the post.
  */
 const thumbOffset = (input: PrepareInput): string | null => {
   const v = input.options.thumbOffsetMs;
-  return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= input.durationSec * 1000 ? String(Math.round(v)) : null;
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const ms = Math.round(v);
+  return v >= 0 && ms < input.durationSec * 1000 ? String(ms) : null;
 };
 
 const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);

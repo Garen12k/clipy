@@ -61,9 +61,10 @@ test("defaults and limits: MIME type defaults to video/mp4, title is cut to 100,
 test("coverMs is a whole number of milliseconds inside the video; anything else is null and the rest stays valid", () => {
   expect(videoFromParams({ ...ok, coverMs: "2500" })!.coverMs).toBe(2500);
   expect(videoFromParams({ ...ok, coverMs: "0" })!.coverMs).toBe(0);
-  expect(videoFromParams({ ...ok, coverMs: "21000" })!.coverMs).toBe(21000);
+  expect(videoFromParams({ ...ok, coverMs: "20999" })!.coverMs).toBe(20999);
   expect(videoFromParams(ok)!.coverMs).toBeNull();
-  for (const bad of ["-1", "abc", "2.5", "21001", ""]) {
+  // The video's own length (21 s) is its end, not a frame in it.
+  for (const bad of ["-1", "abc", "2.5", "21000", "21001", ""]) {
     const t = videoFromParams({ ...ok, coverMs: bad });
     expect(t).not.toBeNull();
     expect(t!.coverMs).toBeNull();

@@ -33,3 +33,14 @@ test("frameAt: a reversed clip is read backwards, a photo is always its one pict
   const ph = makePhotoClip({ id: "ph", seconds: 3 });
   expect(frameAt(makeProject({ clips: [ph, a] }), 1)).toEqual({ clip: ph, sourceTime: 0 });
 });
+
+test("frameAt: a time exactly on a cut is the later clip at its start; any offset inside a photo is the photo", () => {
+  expect(frameAt(p(), 4)).toEqual({ clip: b, sourceTime: 0 });
+  const tb = { ...b, trimStart: 1 };                                   // 5 s of source at 2× → timeline 4–6.5
+  expect(frameAt(makeProject({ clips: [a, tb] }), 4)).toEqual({ clip: tb, sourceTime: 1 });
+  const ph = makePhotoClip({ id: "ph", seconds: 3 });                  // timeline 4–7
+  const q = makeProject({ clips: [a, ph, b] });
+  expect(frameAt(q, 4)).toEqual({ clip: ph, sourceTime: 0 });
+  expect(frameAt(q, 5.7)).toEqual({ clip: ph, sourceTime: 0 });
+  expect(frameAt(q, 7)).toEqual({ clip: b, sourceTime: 0 });
+});

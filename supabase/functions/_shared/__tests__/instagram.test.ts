@@ -444,10 +444,11 @@ describe("prepare: thumb_offset", () => {
     return form(calls[1].init);
   };
   const BASE = { media_type: "REELS", upload_type: "resumable", caption: "Beach day", share_to_feed: "true", access_token: "ptok" };
-  test.each([[2500, "2500"], [2499.6, "2500"], [0, "0"], [21000, "21000"]])("%j becomes thumb_offset %j", async (v, s) => {
+  test.each([[2500, "2500"], [2499.6, "2500"], [0, "0"], [20999, "20999"], [20999.4, "20999"]])("%j becomes thumb_offset %j", async (v, s) => {
     expect(await sent({ thumbOffsetMs: v })).toEqual({ ...BASE, thumb_offset: s });
   });
-  test.each([[-1], [NaN], [Infinity], ["2500"], [21001], [null]])("%j is ignored, not an error", async (v) => {
+  // The video is 21 s long: 21000 (and anything that rounds to it) is its end, not a frame in it.
+  test.each([[-1], [NaN], [Infinity], ["2500"], [21000], [20999.6], [21001], [null]])("%j is ignored, not an error", async (v) => {
     expect(await sent({ thumbOffsetMs: v })).toEqual(BASE);
   });
   test("no option at all", async () => { expect(await sent({})).toEqual(BASE); });

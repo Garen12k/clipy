@@ -54,7 +54,7 @@ test("forClips folds a single-clip op over the main clips: one project out, the 
   expect(forClips(p, ["c"], (q, id) => setClipVolume(q, id, 0.5))).toBe(p);   // nothing changed → same project
   const fast = forClips(p, ["a", "b"], (q, id) => setClipSpeed(q, id, 2));
   expect(totalDuration(fast)).toBe(10);                              // 4 / 2 + 6 / 2 + 5
-  expect(fast.clips[0].transitionOut).toEqual({ type: "fade", duration: 0.5 });   // cap = min(1, 0.5 × min(2, 3)) = 0.75 ≥ 0.5
+  expect(fast.clips[0].transitionOut).toEqual({ type: "fade", duration: 0.5 });   // cap = min(1, r2(0.5 × min(2, 3))) = 1 ≥ 0.5
 });
 
 test("setCover clamps through clampCover; null clears; unchanged or invalid → the same project", () => {

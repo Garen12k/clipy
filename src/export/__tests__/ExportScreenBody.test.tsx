@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 let mockSize = 0;
 jest.mock("@/src/lib/fileInfo", () => ({ fileSize: () => mockSize }));
-import { makeClip, makeProject } from "@/src/editor/model/types";
+import { makeClip, makeProject, type ExportSettings } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import type { ExportState } from "../useExport";
 import { ExportScreenBody } from "../ExportScreenBody";
@@ -96,6 +96,16 @@ describe("frame rate and quality", () => {
     expect(sel("Smaller file")).toBeSelected();
     for (const n of ["30 fps", "60 fps", "High"]) expect(sel(n)).not.toBeSelected();
     expect(screen.getByText("Estimated size: 20 MB")).toBeTruthy();
+  });
+  test("settings that are not ones the app offers still show a selected chip (the defaults), and that is what Export starts with", async () => {
+    const start = jest.fn();
+    const junk = { fps: 25, quality: "ultra" } as unknown as ExportSettings;
+    const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 30 })], exportSettings: junk });
+    await render(<ExportScreenBody project={p} state={{ status: "idle", ...base }} start={start} cancel={jest.fn()} reset={jest.fn()} onSave={jest.fn()} onShare={jest.fn()} onDone={jest.fn()} />);
+    expect(sel("30 fps")).toBeSelected();
+    expect(sel("High")).toBeSelected();
+    await fireEvent.press(sel("Export"));
+    expect(start).toHaveBeenCalledWith(1080, { fps: 30, quality: "high" });
   });
   test("picking updates the estimate, is remembered without an undo step, and is what Export starts with", async () => {
     const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 30 })] });

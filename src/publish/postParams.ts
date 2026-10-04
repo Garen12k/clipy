@@ -10,7 +10,7 @@ const MIME = /^video\/[a-z0-9.+-]{1,40}$/i;
 const TITLE_MAX = 100;
 
 export interface PostTarget { video: VideoInfo; projectId: string | null; title: string | null;
-  /** The project's cover frame in whole milliseconds into the video (inside its length), or null. */
+  /** The project's cover frame in whole milliseconds into the video (before its end), or null. */
   coverMs: number | null }
 
 /** "file:///private/var/a//b/" → "/var/a/b/" (iOS reports the same container both with and without /private). */
@@ -52,7 +52,7 @@ export function videoFromParams(params: Record<string, Param>): PostTarget | nul
   if (size <= 0) return null;
   const title = one(params.title);
   const c = Number(one(params.coverMs) || NaN);
-  const coverMs = Number.isInteger(c) && c >= 0 && c <= durationSec * 1000 ? c : null;
+  const coverMs = Number.isInteger(c) && c >= 0 && c < durationSec * 1000 ? c : null;   // the video's length is its end, not a frame
   return {
     video: { fileUri, durationSec, fileSize: size, mimeType },
     projectId: one(params.projectId) || null,
