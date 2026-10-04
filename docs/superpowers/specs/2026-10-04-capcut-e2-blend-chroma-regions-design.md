@@ -1,7 +1,7 @@
 # CapCut group E, round 2 — Blend modes, green screen, blur / mosaic box: design
 
 **Date:** 2026-10-04
-**Status:** Approved by the user (round 2 of group E; "continue")
+**Status:** Implemented 2026-10-04 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Builds on:** schema v11 (layers, opacity, masks)
 
 ## 1. What the user gets
@@ -62,6 +62,17 @@ The export builds a `CHROMA.cube`³ colour cube from this function (premultiplie
 - **Blend sheet:** six tiles; one undo step per pick; a note "Shows in the exported video".
 - **Green screen sheet:** a switch (on → the first preset at the default strength), a colour row (Green, Blue, then the palette), a Strength slider, and the same note.
 - **Effects sheet:** two more tiles — Blur box and Mosaic box — added at the playhead like the other effects, with the default rectangle.
+
+**As built:**
+- A tap on the selected box or its handles does nothing; a tap elsewhere on the preview deselects.
+- Pinch keeps the box's shape; at the size limits the pinch stops rather than squashing the box.
+- A box at the minimum size is covered by its two handles: enlarge it with a handle before dragging it.
+- Dragging then pinching in one touch sequence is two undo steps.
+- While Green screen is off, the colour chips, palette and slider are dimmed and do nothing.
+- The export keys at the strength rounded to 0.01.
+- On a layer the green screen runs after the layer's filter / adjust (a black-and-white look leaves nothing to key). On a main clip the key runs before the look, and the look also tints the revealed background (same as a masked main clip).
+- The key is looked up in display (sRGB) values with `CIColorCubeWithColorSpace`.
+- Blend: the blend filter gets an opaque copy of the layer picture and the picture's alpha is applied as a mask afterwards.
 
 ## 6. Export
 

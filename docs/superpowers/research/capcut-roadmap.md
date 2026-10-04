@@ -74,11 +74,11 @@
 |---|---|---|---|---|
 | Overlay / picture-in-picture (video or photo on top) | Have | Yes | L | second video player in preview |
 | Opacity | Have | Yes | S | |
-| Blend modes | Missing | No | M | export only |
+| Blend modes | Have | No | M | export only |
 | Masks (circle, rectangle, linear, star, heart, mirror; feather, invert) | Have | Approx | L | 3 shapes; no feather |
-| Chroma key (green screen) | Missing | No | L | Core Image; export only |
+| Chroma key (green screen) | Have | No | L | Core Image; export only |
 | Remove background / auto cutout | Missing | No | XL | Vision person segmentation; iOS 15+; export only |
-| Mosaic / blur a region | Missing | Approx | M | |
+| Mosaic / blur a region | Have | Approx | M | blur box / mosaic box effects |
 
 ## F — Text and captions upgrades (not in the original A–E; suggested after C)
 
