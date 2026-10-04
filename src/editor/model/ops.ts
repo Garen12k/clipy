@@ -278,14 +278,18 @@ function cleanAudioTrack(t: AudioTrack): AudioTrack {
 }
 
 /**
- * The track at index `i` with the patch written and cleaned (`cleanAudioTrack`). A key set to `undefined` is ignored (it would wipe
- * the stored value). Same project when nothing changes or a patched number is not finite.
+ * The track at index `i` with the patch written and cleaned (`cleanAudioTrack`), each fade then cut to half the track's length.
+ * A key set to `undefined` is ignored (it would wipe the stored value). Same project when nothing changes or a patched number is
+ * not finite.
  */
 function patchAudioTrack(p: Project, i: number, patch: AudioPatch): Project {
   const t = p.audioTracks[i];
   const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as AudioPatch;
   if (AUDIO_NUMBER_KEYS.some((k) => defined[k] !== undefined && !Number.isFinite(defined[k]))) return p;
-  const next = cleanAudioTrack({ ...t, ...defined });
+  const cleaned = cleanAudioTrack({ ...t, ...defined });
+  // A fade is at most half the track's (new) length, so the fade sheet's label, its cap and the mix agree after a trim.
+  const half = r2((cleaned.trimEnd - cleaned.trimStart) / 2);
+  const next: AudioTrack = { ...cleaned, fadeIn: Math.min(cleaned.fadeIn, half), fadeOut: Math.min(cleaned.fadeOut, half) };
   if (sameJson(next, t)) return p;
   const audioTracks = p.audioTracks.slice(); audioTracks[i] = next;
   return touch(p, { audioTracks });

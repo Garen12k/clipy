@@ -52,50 +52,70 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   // Set by the Record tab while it is mounted: leaving it mid-recording stops and saves first (it then closes the sheet itself).
   const recordGuard = useRef<(() => boolean) | null>(null) as RecordCloseGuard;
 
+  // The id being previewed, readable from cleanups and late callbacks; null = the preview player is idle and is left alone.
+  const previewing = useRef<string | null>(null);
+  // Read after an await: the sheet may have been dismissed while a file was copied.
+  const open = useRef(visible);
+  open.current = visible;
+
   const stopPreview = () => {
     if (previewTimer.current) { clearTimeout(previewTimer.current); previewTimer.current = null; }
+    if (previewing.current === null) return;
+    previewing.current = null;
     // The player may already be released (unmount): pausing it then throws.
     try { preview.pause(); } catch {}
     setPreviewId(null);
   };
   const togglePreview = (id: string, file: number, durationSec: number) => {
-    const wasPlaying = previewId === id;
+    const wasPlaying = previewing.current === id;
     stopPreview();
     if (wasPlaying) return;
     try { preview.replace(file); preview.play(); } catch { return; }
+    previewing.current = id;
     setPreviewId(id);
-    previewTimer.current = setTimeout(() => { previewTimer.current = null; setPreviewId(null); }, durationSec * 1000 + PREVIEW_TAIL_MS);
+    previewTimer.current = setTimeout(() => { previewTimer.current = null; previewing.current = null; setPreviewId(null); }, durationSec * 1000 + PREVIEW_TAIL_MS);
   };
   useEffect(() => { if (!visible) stopPreview(); }, [visible]);   // closed by the parent
   // useAudioPlayer releases the native player in its own unmount cleanup, which runs before this one.
-  useEffect(() => () => { if (previewTimer.current) clearTimeout(previewTimer.current); try { preview.pause(); } catch {} }, [preview]);
+  useEffect(() => () => {
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+    if (previewing.current !== null) { try { preview.pause(); } catch {} }
+  }, [preview]);
 
   const closeNow = () => { stopPreview(); onClose(); };
   const close = () => { if (recordGuard.current?.()) return; closeNow(); };
+  /** After an import: a sheet the user already dismissed must not be closed again (the parent may be showing another sheet by now). */
+  const closeIfOpen = () => { if (open.current) close(); };
   // The sheet is a native Modal and would cover the toast: close first.
-  const refuse = () => { close(); useToast.getState().show("You've reached the audio track limit."); };
+  const refuse = () => { closeIfOpen(); useToast.getState().show("You've reached the audio track limit."); };
 
-  /** Runs the whole resolve (download / measure) + import under the busy state, then adds the track at the playhead. Any failure is a toast. */
-  async function add(kind: AudioKind, resolve: () => Promise<Picked>) {
-    const before = useEditorStore.getState().project;
-    if (!before || adding.current) return;
-    if (before.audioTracks.length >= AUDIO_LIMITS.maxTracks) { refuse(); return; }   // before copying a file nobody will use
+  /** One add at a time, under the busy state; any failure is a toast. The ref makes the second of two presses in one frame a no-op. */
+  async function guarded(work: () => Promise<void>) {
+    if (adding.current) return;
     adding.current = true;
     setBusy(true);
-    try {
-      const imported = await storage.importAudio(before.id, await resolve(), kind);
-      const { project, playhead, apply, selectAudio } = useEditorStore.getState();
-      if (!project || project.id !== before.id) return;   // the editor moved on while the file was copied
-      // The op returns the same project when it refuses.
-      const next = addAudioTrack(project, { ...imported, start: Math.round(playhead * 1000) / 1000 });
-      if (next === project) { refuse(); return; }
-      apply(() => next);
-      selectAudio(imported.id);
-      haptic("light");
-      close();
-    } catch (e) { useToast.getState().show("Couldn't add that audio file"); console.warn(e); }
+    try { await work(); }
+    catch (e) { useToast.getState().show("Couldn't add that audio file"); console.warn(e); }
     finally { adding.current = false; setBusy(false); }
   }
+  /** Resolves (download / measure) and imports the file, then adds the track at `at` — the playhead when the user pressed, not when the copy finished. */
+  async function importAndAdd(kind: AudioKind, resolve: () => Promise<Picked>, at: number) {
+    const before = useEditorStore.getState().project;
+    if (!before) return;
+    if (before.audioTracks.length >= AUDIO_LIMITS.maxTracks) { refuse(); return; }   // before copying a file nobody will use
+    const imported = await storage.importAudio(before.id, await resolve(), kind);
+    const { project, apply, selectAudio } = useEditorStore.getState();
+    if (!project || project.id !== before.id) return;   // the editor moved on while the file was copied
+    // The op returns the same project when it refuses.
+    const next = addAudioTrack(project, { ...imported, start: Math.round(at * 1000) / 1000 });
+    if (next === project) { refuse(); return; }
+    apply(() => next);
+    selectAudio(imported.id);
+    haptic("light");
+    closeIfOpen();
+  }
+  const pressTime = () => useEditorStore.getState().playhead;
+  const add = (kind: AudioKind, resolve: () => Promise<Picked>) => { const at = pressTime(); void guarded(() => importAndAdd(kind, resolve, at)); };
   const bundled = (file: number, title: string, durationSec: number) => async (): Promise<Picked> => {
     const asset = Asset.fromModule(file);
     await asset.downloadAsync();
@@ -103,13 +123,17 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   };
   const addBundled = (t: BundledTrack) => add("music", bundled(t.file, t.title, t.durationSec));
   const addSfx = (id: SfxId) => add("sfx", bundled(SFX[id].file, SFX[id].label, SFX[id].durationSec));
-  async function pickFile() {
-    const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: false });
-    if (res.canceled || !res.assets[0]) return;
-    const a = res.assets[0];
-    const go = () => add("music", async () => ({ uri: a.uri, title: a.name, durationSec: await audioDuration(a.uri) }));
-    if ((a.size ?? 0) > MAX_BYTES) Alert.alert("Large file", "This file is over 50 MB. Add it anyway?", [{ text: "Cancel", style: "cancel" }, { text: "Add", onPress: go }]);
-    else await go();
+  function pickFile() {
+    const at = pressTime();
+    void guarded(async () => {
+      const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: false });
+      if (res.canceled || !res.assets[0]) return;
+      const a = res.assets[0];
+      const go = () => importAndAdd("music", async () => ({ uri: a.uri, title: a.name, durationSec: await audioDuration(a.uri) }), at);
+      // The alert outlives this guard: its "Add" takes the guard again.
+      if ((a.size ?? 0) > MAX_BYTES) Alert.alert("Large file", "This file is over 50 MB. Add it anyway?", [{ text: "Cancel", style: "cancel" }, { text: "Add", onPress: () => { void guarded(go); } }]);
+      else await go();
+    });
   }
 
   const row = (r: { id: string; title: string; detail: string; file: number; durationSec: number; addLabel: string; onAdd: () => void }) => (

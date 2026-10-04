@@ -201,6 +201,101 @@ test("Choose a file is disabled while the picked file's duration is being measur
   expect(disabledWhileMeasuring).toBe(true);
 });
 
+test("the track starts where the playhead was at the press, not where it is when the import finishes", async () => {
+  importAudio.mockImplementationOnce(async (_id: string, a: { title: string; durationSec: number }) => {
+    useEditorStore.getState().seek(7);   // playback ran on while the file was copied
+    return makeAudioTrack({ id: "slow", title: a.title, sourceDuration: a.durationSec });
+  });
+  await render(<AddAudioSheet visible onClose={() => {}} />);
+  await act(() => { useEditorStore.getState().seek(2); });
+  await fireEvent.press(btn("Use Sunny Loop"));
+  await waitFor(() => expect(tracks()).toHaveLength(1));
+  expect(tracks()[0]).toMatchObject({ id: "slow", start: 2 });
+});
+
+test("Files: the track starts where the playhead was when Choose a file was pressed", async () => {
+  (DocumentPicker.getDocumentAsync as jest.Mock).mockImplementationOnce(async () => {
+    useEditorStore.getState().seek(6);
+    return { canceled: false, assets: [{ uri: "file:///picked/c.m4a", name: "c.m4a", size: 1000 }] };
+  });
+  await render(<AddAudioSheet visible onClose={() => {}} />);
+  await act(() => { useEditorStore.getState().seek(1.5); });
+  await fireEvent.press(btn("Files"));
+  await fireEvent.press(btn("Choose a file"));
+  await waitFor(() => expect(tracks()).toHaveLength(1));
+  expect(tracks()[0].start).toBe(1.5);
+});
+
+test("two presses before the first import finishes add one track", async () => {
+  let finish!: () => void;
+  importAudio.mockImplementationOnce((_id: string, a: { title: string; durationSec: number }) => new Promise((resolve) => {
+    finish = () => resolve(makeAudioTrack({ id: "one", title: a.title, sourceDuration: a.durationSec, kind: "sfx" }));
+  }));
+  await render(<AddAudioSheet visible onClose={() => {}} />);
+  await fireEvent.press(btn("Effects"));
+  await fireEvent.press(btn("Add Whoosh"));
+  await fireEvent.press(btn("Add Whoosh"));
+  await fireEvent.press(btn("Add Pop"));
+  await waitFor(() => expect(importAudio).toHaveBeenCalled());
+  await act(async () => { finish(); });
+  await waitFor(() => expect(tracks()).toHaveLength(1));
+  await waitFor(() => expect(btn("Add Whoosh")).toBeEnabled());
+  expect(importAudio).toHaveBeenCalledTimes(1);
+  expect(tracks()).toHaveLength(1);
+  expect(useEditorStore.getState().past).toHaveLength(1);
+});
+
+test("a sheet dismissed during the import is not closed a second time; the track is still added", async () => {
+  let finish!: () => void;
+  importAudio.mockImplementationOnce((_id: string, a: { title: string; durationSec: number }) => new Promise((resolve) => {
+    finish = () => resolve(makeAudioTrack({ id: "late", title: a.title, sourceDuration: a.durationSec }));
+  }));
+  const onClose = jest.fn();
+  const view = await render(<AddAudioSheet visible onClose={onClose} />);
+  await fireEvent.press(btn("Use Sunny Loop"));
+  await waitFor(() => expect(importAudio).toHaveBeenCalled());
+  await view.rerender(<AddAudioSheet visible={false} onClose={onClose} />);
+  await act(async () => { finish(); });
+  await waitFor(() => expect(tracks().map((t) => t.id)).toEqual(["late"]));
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+test("Files: busy from the press on, and a picker that fails is a toast", async () => {
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  let fail!: (e: Error) => void;
+  (DocumentPicker.getDocumentAsync as jest.Mock).mockClear();
+  (DocumentPicker.getDocumentAsync as jest.Mock).mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+  await render(<AddAudioSheet visible onClose={() => {}} />);
+  await fireEvent.press(btn("Files"));
+  await fireEvent.press(btn("Choose a file"));
+  expect(btn("Choose a file")).toBeDisabled();
+  await act(async () => { fail(new Error("picker broke")); });
+  await waitFor(() => expect(useToast.getState().message).toBe("Couldn't add that audio file"));
+  await waitFor(() => expect(btn("Choose a file")).toBeEnabled());
+  expect(tracks()).toEqual([]);
+  expect(DocumentPicker.getDocumentAsync).toHaveBeenCalledTimes(1);
+  warn.mockRestore();
+});
+
+test("Files: a cancelled picker frees the button again without a toast", async () => {
+  (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValueOnce({ canceled: true });
+  await render(<AddAudioSheet visible onClose={() => {}} />);
+  await fireEvent.press(btn("Files"));
+  await fireEvent.press(btn("Choose a file"));
+  await waitFor(() => expect(btn("Choose a file")).toBeEnabled());
+  expect(useToast.getState().message).toBeNull();
+});
+
+test("the preview player is left alone while nothing is previewing", async () => {
+  const view = await render(<AddAudioSheet visible onClose={() => {}} />);
+  await fireEvent.press(btn("Effects"));
+  await fireEvent.press(btn("Music"));
+  await fireEvent.press(screen.getByLabelText("Close sheet"));
+  await view.rerender(<AddAudioSheet visible={false} onClose={() => {}} />);
+  await view.unmount();
+  expect(mockPlayer.pause).not.toHaveBeenCalled();
+});
+
 describe("Record tab", () => {
   const record = async (onClose: () => void, at: number) => {
     await render(<AddAudioSheet visible onClose={onClose} />);

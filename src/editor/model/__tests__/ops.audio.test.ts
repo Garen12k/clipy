@@ -79,8 +79,27 @@ describe("updateAudioTrackById", () => {
     const next = updateAudioTrackById(p, "m1", { start: -2, volume: 9, fadeIn: 7, fadeOut: -1 });
     expect(next.audioTracks[0]).toMatchObject({ start: 0, volume: 2, fadeIn: 5, fadeOut: 0 });
     expect(updateAudioTrackById(p, "m1", { start: 1.23456 }).audioTracks[0].start).toBe(1.235);
-    // storage keeps the user's fades even when they do not fit the length (audioMix fits them)
-    expect(track(updateAudioTrackById(p, "s1", { fadeIn: 3, fadeOut: 4 }), "s1")).toMatchObject({ fadeIn: 3, fadeOut: 4 });
+    // a fade is at most half the track's length, so the sheet's label, its cap and the mix agree
+    expect(track(updateAudioTrackById(p, "s1", { fadeIn: 3, fadeOut: 4 }), "s1")).toMatchObject({ fadeIn: 0.5, fadeOut: 0.5 });
+  });
+
+  test("shortening a track clamps its stored fades to half the new length", () => {
+    const long = makeProject({ clips: base.clips, audioTracks: [{ ...music, fadeIn: 5, fadeOut: 3 }, voice] });
+    const trimmed = updateAudioTrackById(long, "m1", { trimEnd: 4 });
+    expect(trimmed.audioTracks[0]).toEqual({ ...music, trimEnd: 4, fadeIn: 2, fadeOut: 2 });
+    expect(trimmed.audioTracks[1]).toBe(voice);
+    expect(updateAudioTrackById(long, "m1", { trimStart: 24.5 }).audioTracks[0]).toMatchObject({ fadeIn: 2.75, fadeOut: 2.75 });
+    // rounded to 2 decimals: half of 0.35 s
+    const short = makeProject({ audioTracks: [{ ...sfx, fadeIn: 0.5, fadeOut: 0.1 }] });
+    expect(updateAudioTrackById(short, "s1", { trimEnd: 0.35 }).audioTracks[0]).toMatchObject({ fadeIn: 0.18, fadeOut: 0.1 });
+  });
+
+  test("fades that already fit are left exactly as they are", () => {
+    const fits = makeProject({ clips: base.clips, audioTracks: [{ ...music, fadeIn: 1.5, fadeOut: 2 }] });
+    expect(updateAudioTrackById(fits, "m1", { trimEnd: 10 }).audioTracks[0]).toEqual({ ...fits.audioTracks[0], trimEnd: 10 });
+    expect(updateAudioTrackById(fits, "m1", { trimEnd: 4 }).audioTracks[0]).toMatchObject({ fadeIn: 1.5, fadeOut: 2 });
+    expect(updateAudioTrackById(fits, "m1", { trimEnd: 30 })).toBe(fits);
+    expect(updateAudioTrackById(fits, "m1", { fadeIn: 1.5, fadeOut: 2 })).toBe(fits);
   });
 
   test("unknown id, no change and non-finite values return the same project", () => {
