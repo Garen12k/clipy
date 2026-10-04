@@ -1,7 +1,7 @@
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { useEditorStore } from "@/src/editor/store";
 import { fitScale } from "../clipLayout";
-import { clipBaseAt, overlayBaseAt } from "../motion";
+import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "../motion";
 import { clipDuration } from "../timeline";
 import {
   applyTemplate, clipKeyframeAt, duplicateClip, duplicateOverlay, editClipTransformAt, editOverlayAt, fillClip, fitClip, frameSize, insertFreezeFrame,
@@ -356,14 +356,20 @@ describe("split / duplicate / replace / freeze / template", () => {
     expect(copy.keyframes).not.toBe(src.keyframes);
     expect(copy.keyframes[0]).not.toBe(src.keyframes[0]);
   });
-  test("duplicateOverlay deep-copies animation and keyframes", () => {
+  test("duplicateOverlay deep-copies animation and keyframes; the pins get the copy's offset, clamped", () => {
     const opins = [kf({ t: 0, x: 0.2, y: 0.2 }), kf({ t: 1, x: 0.6, y: 0.6 })];
     const src0 = withOverlay("s", { animation: { in: fade, out: null, loop: "spin" }, keyframes: opins });
     const p = duplicateOverlay(src0, "s");
     const src = ov(p, "s");
     const copy = p.overlays[p.overlays.indexOf(src) + 1];
     expect(copy.animation).toEqual(src.animation);
-    expect(copy.keyframes).toEqual(opins);
+    expect(src.keyframes).toEqual(opins);
+    expect(copy.keyframes.map((k) => k.t)).toEqual([0, 1]);
+    expect(copy.keyframes[0]).toMatchObject({ x: expect.closeTo(0.23, 9), y: expect.closeTo(0.23, 9), scale: 1, rotation: 0, opacity: 1 });
+    expect(copy.keyframes[1]).toMatchObject({ x: expect.closeTo(0.63, 9), y: expect.closeTo(0.63, 9) });
+    expect(copy.x - src.x).toBeCloseTo(copy.keyframes[0].x - src.keyframes[0].x, 9);   // the same offset as the static placement
+    const edge = duplicateOverlay(withOverlay("s", { keyframes: [kf({ t: 0, x: 0.99, y: 1 })] }), "s");
+    expect(edge.overlays[edge.overlays.findIndex((o) => o.id === "s") + 1].keyframes).toEqual([kf({ t: 0, x: 1, y: 1 })]);
     expect(copy.animation).not.toBe(src.animation);
     expect(copy.animation.in).not.toBe(src.animation.in);
     expect(copy.keyframes).not.toBe(src.keyframes);
@@ -376,6 +382,37 @@ describe("split / duplicate / replace / freeze / template", () => {
     const q = replaceClipMedia(moving, "a", { sourceUri: "file:///new.jpg", sourceDuration: 0, width: 720, height: 1280, kind: "photo" });
     expect(clip(q).keyframes).toEqual([]);
     expect(clip(q).animation).toEqual({ in: fade, out: pop, combo: null });
+  });
+  test("replaceClipMedia keeps the placement shown at the clip's first frame (flips kept, opacity dropped)", () => {
+    const tf = { scale: 1, x: 0.9, y: 0.9, rotation: 10, flipH: true, flipV: false };
+    const keyedPins = [kf({ t: 2, x: 0.4, y: -0.2, scale: 2, rotation: 450, opacity: 0.3 }), kf({ t: 6, x: -0.4 })];
+    const media = { sourceUri: "file:///new.mp4", sourceDuration: 20, width: 720, height: 1280, kind: "video" as const };
+    const p = replaceClipMedia(withClip({ transform: tf, keyframes: keyedPins }), "a", media);
+    expect(clip(p).transform).toEqual({ scale: 2, x: 0.4, y: -0.2, rotation: 90, flipH: true, flipV: false });
+    expect(clip(p).keyframes).toEqual([]);
+    // Trimmed into the pins: the first frame shows the interpolated value.
+    const trimmed = withClip({ transform: tf, keyframes: keyedPins, trimStart: 4, trimEnd: 8 });
+    const at = clipBaseAt(clip(trimmed), 0);
+    expect(clip(replaceClipMedia(trimmed, "a", media)).transform).toMatchObject({ x: at.x, y: at.y, scale: at.scale, flipH: true });
+    // A reversed clip starts on its LAST source moment.
+    const rev = withClip({ transform: tf, keyframes: keyedPins, reversed: true });
+    expect(clip(replaceClipMedia(rev, "a", media)).transform).toMatchObject({ x: -0.4, y: 0, scale: 1, rotation: 0 });
+    // Without pins the static transform is untouched.
+    expect(clip(replaceClipMedia(withClip({ transform: tf }), "a", media)).transform).toEqual(tf);
+  });
+  test("freeze frame of a keyframed clip: the still shows the placement at the freeze moment (flips kept, opacity dropped)", () => {
+    const tf = { scale: 1, x: 0.9, y: 0.9, rotation: 10, flipH: true, flipV: true };
+    const src = withClip({ transform: tf, keyframes: [kf({ t: 2, x: 0.4, y: -0.2, scale: 2, rotation: 400, opacity: 0.3 }), kf({ t: 6, x: -0.4 })] });
+    const at = clipBaseAt(clip(src), 4);
+    expect(at.x).toBeCloseTo(0, 9);
+    const p = insertFreezeFrame(src, 4, { id: "still", sourceUri: "file:///still.jpg", width: 1080, height: 1920 });
+    const still = p.clips[1];
+    expect(still.transform).toEqual({ scale: at.scale, x: at.x, y: at.y, rotation: 200 - 360, flipH: true, flipV: true });
+    expect(still.keyframes).toEqual([]);
+    // Without pins the still copies the static transform, as before.
+    const plain = insertFreezeFrame(withClip({ transform: tf }), 4, { id: "still", sourceUri: "file:///still.jpg", width: 1080, height: 1920 });
+    expect(plain.clips[1].transform).toEqual(tf);
+    expect(plain.clips[1].transform).not.toBe(tf);
   });
   test("freeze frame: the still has no animation and no keyframes; the halves follow the split rule", () => {
     const p = insertFreezeFrame(moving, 4, { id: "still", sourceUri: "file:///still.jpg", width: 1080, height: 1920 });
@@ -488,7 +525,46 @@ describe("overlay keyframes", () => {
     const later = withOverlay("t", { keyframes: [kf({ t: 0, x: 0.1, y: 0.1 }), kf({ t: 1, x: 0.2, y: 0.2 }), kf({ t: 3, x: 0.8, y: 0.8 })] });
     const p = updateOverlayShared(later, "t", { start: 4 });   // shift −2: pins at −2, −1, 1
     const got = ov(p, "t").keyframes;
-    expect(got).toEqual([kf({ t: 0, x: 0.2, y: 0.2 }), kf({ t: 1, x: 0.8, y: 0.8 })]);   // of the pins before the new start only the LAST stays, at 0
+    // The pins before the new start become ONE pin at 0 holding the value that was showing there (half way from 0.2 to 0.8).
+    expect(got).toEqual([kf({ t: 0, x: expect.closeTo(0.5, 9), y: expect.closeTo(0.5, 9) }), kf({ t: 1, x: 0.8, y: 0.8 })]);
     expect(clampOverlayKeyframes(got)).toEqual(got);
+  });
+
+  describe("dragging the start handle past a pin", () => {
+    const pins = [kf({ t: 0, x: 0.1 }), kf({ t: 1, x: 0.9 }), kf({ t: 4, x: 0.5 })];
+    const long = withOverlay("t", { start: 0, end: 6, keyframes: pins });
+    const want = sampleKeyframes(pins, 1.5)!;
+    const from = { start: 0, keyframes: pins };   // what the pill snapshots when the drag starts
+
+    test("one step: the head pin is the value that was showing at the new start", () => {
+      const got = ov(updateOverlayShared(long, "t", { start: 1.5 }), "t");
+      expect(got.start).toBe(1.5);
+      expect(got.keyframes).toEqual([{ t: 0, ...want }, kf({ t: 2.5, x: 0.5 })]);
+      expect(want.x).toBeLessThan(0.9);
+      expect(want.x).toBeGreaterThan(0.5);
+    });
+    test("in 17 ms steps (each applied to the already-changed project) the result is the same as one step", () => {
+      let p = long;
+      for (let s = 0.017; s < 1.5; s += 0.017) p = updateOverlayShared(p, "t", { start: s }, from);
+      p = updateOverlayShared(p, "t", { start: 1.5 }, from);
+      const got = ov(p, "t").keyframes;
+      expect(got).toHaveLength(2);
+      expect(got[0].t).toBe(0);
+      expect(got[0].x).toBeCloseTo(want.x, 9);
+      expect(got[1]).toEqual(kf({ t: 2.5, x: 0.5 }));
+      expect(got).toEqual(ov(updateOverlayShared(long, "t", { start: 1.5 }), "t").keyframes);
+      expect(clampOverlayKeyframes(got)).toEqual(got);
+    });
+    test("dragging back within the same gesture brings the pins back", () => {
+      let p = updateOverlayShared(long, "t", { start: 1.5 }, from);
+      p = updateOverlayShared(p, "t", { start: 0.5 }, from);
+      expect(ov(p, "t").keyframes).toEqual([{ t: 0, ...sampleKeyframes(pins, 0.5)! }, kf({ t: 0.5, x: 0.9 }), kf({ t: 3.5, x: 0.5 })]);
+      p = updateOverlayShared(p, "t", { start: 0 }, from);
+      expect(ov(p, "t").keyframes).toEqual(pins);
+    });
+    test("a snapshot is only used by a start trim", () => {
+      const p = updateOverlayShared(long, "t", { end: 5 }, from);
+      expect(ov(p, "t").keyframes).toBe(ov(long, "t").keyframes);
+    });
   });
 });

@@ -213,6 +213,50 @@ describe("selection frame with motion", () => {
     expect(store().past).toHaveLength(1);
   });
 
+  test("a gesture whose finalize never arrived does not leak into the next touch: a begin for a kind still active starts a new sequence", async () => {
+    await show([keyedSticker()], 1, "k");
+    const { pan, pinch } = gestures("k");
+    await act(() => {
+      pan.handlers.onStart({ translationX: 0, translationY: 0 });
+      pan.handlers.onUpdate({ translationX: 20, translationY: 0 });        // its finalize never arrives
+      store().seek(1.5);
+      pan.handlers.onBegin({});
+      pan.handlers.onStart({ translationX: 0, translationY: 0 });
+      pan.handlers.onUpdate({ translationX: 20, translationY: 0 });
+      pan.handlers.onFinalize({}, true);
+    });
+    expect(ov("k").keyframes.map((f) => f.t)).toEqual([0, 1, 1.5, 2]);     // the new touch pins the playhead it started at
+    expect(ov("k").keyframes[1].x).toBeCloseTo(0.4 + 20 / W, 9);           // the stale drag is not written again
+    expect(store().past).toHaveLength(2);                                  // and it is its own undo step
+    // A begin for a kind that is not active leaves a sequence in progress alone.
+    await act(() => {
+      pan.handlers.onBegin({});
+      pan.handlers.onStart({ translationX: 0, translationY: 0 });
+      pan.handlers.onUpdate({ translationX: 10, translationY: 0 });
+      pinch.handlers.onBegin({});
+      pinch.handlers.onStart({ scale: 1 });
+      pinch.handlers.onUpdate({ scale: 1.2 });
+      pinch.handlers.onFinalize({}, true);
+      pan.handlers.onFinalize({}, true);
+    });
+    expect(store().past).toHaveLength(3);
+  });
+
+  test("a start for a kind already active resets the sequence the same way", async () => {
+    await show([keyedSticker()], 1, "k");
+    const { pan } = gestures("k");
+    await act(() => {
+      pan.handlers.onStart({ translationX: 0, translationY: 0 });
+      pan.handlers.onUpdate({ translationX: 20, translationY: 0 });
+      store().seek(1.5);
+      pan.handlers.onStart({ translationX: 0, translationY: 0 });          // no begin either
+      pan.handlers.onUpdate({ translationX: 20, translationY: 0 });
+      pan.handlers.onFinalize({}, true);
+    });
+    expect(ov("k").keyframes.map((f) => f.t)).toEqual([0, 1, 1.5, 2]);
+    expect(store().past).toHaveLength(2);
+  });
+
   test("the unseen base copy takes no touches itself", async () => {
     await show([slideText(), { ...keyedSticker(), id: "h", emoji: null, shape: "heart" }], 1, "t");
     const hidden = within(screen.getByTestId("overlay-base-t")).getByText("Slide", { includeHiddenElements: true });

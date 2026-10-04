@@ -14,8 +14,22 @@ test("KeyframeDots places diamonds at t*pps and drops those outside [0, width]",
   expect(screen.getByTestId("keyframe-dot-0")).toBeTruthy();
   expect(screen.getByTestId("keyframe-dot-1")).toBeTruthy();
   expect(screen.queryByTestId("keyframe-dot-2")).toBeNull();
+  expect(screen.getByTestId("keyframe-dot-0")).toHaveStyle({ left: -4 });       // centred on t·pps (the diamond is 8 wide)
+  expect(screen.getByTestId("keyframe-dot-1")).toHaveStyle({ left: 1 * 50 - 4 });
   await fireEvent.press(screen.getByTestId("keyframe-dot-1"));
   expect(onPress).toHaveBeenCalledWith(1);
+});
+
+test("a clip at speed 2 shows its pins at half their source distance and a press seeks to the output time", async () => {
+  // Source 2…6 at 2× = 2 s on the timeline (100 px at 50 px/s): pins at source 3 and 5 sit at output 0.5 and 1.5; source 9 is outside.
+  const clip = clipFixture({ speed: 2 });
+  await render(<ClipThumbStrip clip={clip} pixelsPerSecond={50} selected missing={false} onPress={() => {}} />);
+  expect(screen.getByLabelText("Clip b")).toHaveStyle({ width: 100 });
+  expect(screen.getByTestId("keyframe-dot-0")).toHaveStyle({ left: 0.5 * 50 - 4 });
+  expect(screen.getByTestId("keyframe-dot-1")).toHaveStyle({ left: 1.5 * 50 - 4 });
+  expect(screen.queryByTestId("keyframe-dot-2")).toBeNull();
+  await fireEvent.press(screen.getByTestId("keyframe-dot-1"));
+  expect(useEditorStore.getState().playhead).toBe(3 + 1.5);
 });
 
 function clipFixture(over = {}) {

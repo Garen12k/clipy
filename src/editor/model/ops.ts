@@ -174,23 +174,33 @@ export function updateOverlay(p: Project, id: string, patch: Partial<Omit<TextOv
   return replaceOverlay(p, i, normaliseOverlay(p, { ...cur, ...patch }));
 }
 
+/** An overlay's start and pins when a start-handle drag began (see `updateOverlayShared`). */
+export type OverlayTrimOrigin = Pick<Overlay, "start" | "keyframes">;
+
 /**
  * A patch that names `start` trims the start: the pins (seconds from the start) are shifted by the same amount so they stay at the same
- * project time. Of the pins left before the new start only the LAST stays (the value in effect there), placed at t = 0; the result goes
- * through the sanity rule (`clampOverlayKeyframes`), so what is stored always reloads unchanged. `moveOverlay` moves the pins with the overlay instead.
+ * project time. The pins left before the new start become ONE pin at t = 0 holding the value that was showing there
+ * (`sampleKeyframes`, as the photo split does); the result goes through the sanity rule (`clampOverlayKeyframes`), so what is stored
+ * always reloads unchanged. `moveOverlay` moves the pins with the overlay instead.
+ * A drag calls this once per frame on the already-changed project. Re-basing the re-based pins again and again would lose the pins
+ * the handle passed (the curve between two pins cannot be rebuilt from a head pin), so a drag passes `from` — the overlay's start and
+ * pins when it began — and every step is computed from that: any number of steps gives exactly the one-step result, and dragging back
+ * brings the pins back. `from` is only read by a start trim.
  */
-export function updateOverlayShared(p: Project, id: string, patch: SharedPatch): Project {
-  return patchOverlayShared(p, id, patch, patch.start !== undefined);
+export function updateOverlayShared(p: Project, id: string, patch: SharedPatch, from?: OverlayTrimOrigin): Project {
+  return patchOverlayShared(p, id, patch, patch.start !== undefined, from);
 }
 
-function patchOverlayShared(p: Project, id: string, patch: SharedPatch, shiftPins: boolean): Project {
+function patchOverlayShared(p: Project, id: string, patch: SharedPatch, shiftPins: boolean, from?: OverlayTrimOrigin): Project {
   const i = p.overlays.findIndex((o) => o.id === id);
   if (i < 0) return p;
   const cur = p.overlays[i];
   let next = normaliseOverlay(p, { ...cur, ...patch } as Overlay);
-  const by = next.start - cur.start;
-  if (shiftPins && by !== 0 && cur.keyframes.length > 0) {
-    next = { ...next, keyframes: rebasePins(cur.keyframes, by, (before) => before[before.length - 1], clampOverlayKeyframes) };
+  const origin = shiftPins && from ? from : cur;
+  const by = next.start - origin.start;
+  if (shiftPins && (by !== 0 || origin !== cur) && origin.keyframes.length > 0) {
+    const head = sampleKeyframes(origin.keyframes, by);
+    if (head) next = { ...next, keyframes: rebasePins(origin.keyframes, by, () => head, clampOverlayKeyframes) };
   }
   return replaceOverlay(p, i, next);
 }
@@ -218,12 +228,17 @@ export function deleteOverlay(p: Project, id: string): Project {
   return touch(p, { overlays: p.overlays.filter((o) => o.id !== id) });
 }
 
+/** How far (fraction of the frame, right and down) a duplicated text / sticker sits from its original. */
+const DUPLICATE_OFFSET = 0.03;
+
 export function duplicateOverlay(p: Project, id: string): Project {
   const i = p.overlays.findIndex((o) => o.id === id);
   if (i < 0) return p;
   const src = p.overlays[i];
-  const copy = normaliseOverlay(p, { ...src, id: newId(), x: src.x + 0.03, y: src.y + 0.03,
-    animation: copyOverlayAnimation(src.animation), keyframes: copyPins(src.keyframes) } as Overlay);
+  // The pins get the same offset (through the sanity rule, so clamped): a keyframed copy must not land exactly on the original.
+  const keyframes = clampOverlayKeyframes(src.keyframes.map((k) => ({ ...k, x: k.x + DUPLICATE_OFFSET, y: k.y + DUPLICATE_OFFSET })));
+  const copy = normaliseOverlay(p, { ...src, id: newId(), x: src.x + DUPLICATE_OFFSET, y: src.y + DUPLICATE_OFFSET,
+    animation: copyOverlayAnimation(src.animation), keyframes } as Overlay);
   return touch(p, { overlays: [...p.overlays.slice(0, i + 1), copy, ...p.overlays.slice(i + 1)] });
 }
 
@@ -488,8 +503,10 @@ export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "
   if (i < 0) return p;
   const old = p.clips[i];
   const prevOut = clipDuration(old);
-  // Pins sit on the old pictures (source time), so they go; the animation stays.
-  const base: Clip = { ...old, sourceUri: media.sourceUri, width: media.width, height: media.height, kind: media.kind, trimStart: 0, keyframes: [] };
+  // Pins sit on the old pictures (source time), so they go; the animation stays. The placement they showed at the clip's first frame
+  // becomes the static transform (without pins it already is).
+  const transform = old.keyframes.length > 0 ? transformAt(old, 0) : old.transform;
+  const base: Clip = { ...old, sourceUri: media.sourceUri, width: media.width, height: media.height, kind: media.kind, trimStart: 0, transform, keyframes: [] };
   let next: Clip;
   if (media.kind === "photo") {
     next = { ...base, speed: 1, muted: true, reversed: false, sourceDuration: PHOTO.maxSeconds, trimEnd: clamp(prevOut, [PHOTO.minSeconds, PHOTO.maxSeconds]) };
@@ -505,13 +522,19 @@ export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "
   return touch(p, { clips: normaliseTransitions(clips) });
 }
 
+/** The clip's base placement at `offsetInClip` as a static transform: through `clampTransform`, flips kept, opacity dropped. */
+function transformAt(c: Clip, offsetInClip: number): ClipTransform {
+  const at = clipBaseAt(c, offsetInClip);
+  return clampTransform({ ...c.transform, x: at.x, y: at.y, scale: at.scale, rotation: at.rotation });
+}
+
 export function setClipReversed(p: Project, clipId: string, reversed: boolean): Project {
   return updateClip(p, clipId, (c) => (isPhoto(c) || c.reversed === reversed ? c : { ...c, reversed }));
 }
 
 /**
  * Splits the video clip under `outputTime` and puts a still (PHOTO.freezeSeconds long) between the halves. The still copies the clip's
- * filter, transform, crop and background; the right half keeps the original transition. Refused (same project) on a photo, a missing clip,
+ * filter, crop and background, and its transform — of a keyframed clip the placement shown at the freeze moment; the right half keeps the original transition. Refused (same project) on a photo, a missing clip,
  * or within MIN_CLIP_SECONDS of either end. Overlays and music are not shifted, like every other length-changing op here.
  */
 export function insertFreezeFrame(p: Project, outputTime: number, still: { id: string; sourceUri: string; width: number; height: number }): Project {
@@ -523,7 +546,8 @@ export function insertFreezeFrame(p: Project, outputTime: number, still: { id: s
   const photo: Clip = {
     ...newPhotoClip({ ...still, seconds: PHOTO.freezeSeconds }),
     filter: src.filter, filterIntensity: src.filterIntensity, adjust: { ...src.adjust },
-    transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background },
+    transform: src.keyframes.length > 0 ? transformAt(src, hit.offsetInClip) : { ...src.transform },
+    crop: { ...src.crop }, background: { ...src.background },
   };
   const at = hit.index + 1;
   return touch(p, { clips: normaliseTransitions([...split.clips.slice(0, at), photo, ...split.clips.slice(at)]) });

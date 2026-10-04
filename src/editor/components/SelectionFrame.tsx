@@ -31,7 +31,11 @@ export function SelectionFrame({ overlay, frameW, frameH, onDoubleTap }: Props) 
   }).current;
   const id = overlay.id;
 
+  // A gesture of `kind` receives touches while that kind is still marked active: its `onFinalize` never arrived, so the old sequence
+  // is stale — drop it (as `ClipGestures` does); the next start opens a new one (its own playhead and undo step).
+  const dropStale = (kind: Kind) => { if (seq.active.has(kind)) seq.active.clear(); };
   const begin = (kind: Kind, fields: Field[]) => {
+    dropStale(kind);
     const s = useEditorStore.getState();
     if (seq.active.size === 0) { seq.time = s.playhead; seq.begun = false; }
     seq.active.add(kind);
@@ -55,16 +59,16 @@ export function SelectionFrame({ overlay, frameW, frameH, onDoubleTap }: Props) 
   };
 
   const gesture = useMemo(() => {
-    const pan = Gesture.Pan().minDistance(2).onStart(() => begin("pan", ["x", "y"]))
+    const pan = Gesture.Pan().minDistance(2).onBegin(() => dropStale("pan")).onStart(() => begin("pan", ["x", "y"]))
       .onUpdate((e) => write("pan", { x: seq.start.x + e.translationX / frameW, y: seq.start.y + e.translationY / frameH }))
       .onFinalize(() => end("pan"))
       .runOnJS(true);
-    const pinch = Gesture.Pinch().onStart(() => begin("pinch", ["scale"]))
+    const pinch = Gesture.Pinch().onBegin(() => dropStale("pinch")).onStart(() => begin("pinch", ["scale"]))
       .onUpdate((e) => write("pinch", { scale: seq.start.scale * e.scale }))
       .onFinalize(() => end("pinch"))
       .runOnJS(true);
     // The gesture-start rotation plus the raw twist, with no normalisation in between (a pin may hold full turns).
-    const rotate = Gesture.Rotation().onStart(() => begin("rotate", ["rotation"]))
+    const rotate = Gesture.Rotation().onBegin(() => dropStale("rotate")).onStart(() => begin("rotate", ["rotation"]))
       .onUpdate((e) => write("rotate", { rotation: snapAngle(seq.start.rotation + (e.rotation * 180) / Math.PI) }))
       .onFinalize(() => end("rotate"))
       .runOnJS(true);

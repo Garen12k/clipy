@@ -1,7 +1,8 @@
 import Slider from "@react-native-community/slider";
 import { useState } from "react";
 import { Pressable, ScrollView, Switch, TextInput, View } from "react-native";
-import { deleteOverlay, duplicateOverlay, updateOverlay, updateOverlayShared } from "@/src/editor/model/ops";
+import { overlayBaseAt } from "@/src/editor/model/motion";
+import { deleteOverlay, duplicateOverlay, editOverlayAt, updateOverlay, updateOverlayShared } from "@/src/editor/model/ops";
 import { isTextOverlay, OVERLAY_LIMITS, type Align } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
@@ -20,12 +21,20 @@ const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.te
 export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
   const found = useEditorStore((s) => s.project?.overlays.find((o) => o.id === overlayId) ?? null);
   const { apply, beginTransaction, applyTransient, selectOverlay } = useEditorStore.getState();
+  // The playhead, followed only while the overlay has keyframes (else nothing shown here depends on it).
+  const playhead = useEditorStore((s) => ((s.project?.overlays.find((o) => o.id === overlayId)?.keyframes.length ?? 0) > 0 ? s.playhead : 0));
   const [fine, setFine] = useState(false);
   if (!found || !isTextOverlay(found)) return null;
   const overlay = found;
   const id = overlay.id;
   const patch = (p: Parameters<typeof updateOverlay>[2]) => apply((x) => updateOverlay(x, id, p));
   const patchShared = (p: Parameters<typeof updateOverlayShared>[2]) => apply((x) => updateOverlayShared(x, id, p));
+  // Placement (x / y / scale / rotation) is read and written at the playhead: the pin there when the overlay has keyframes — its own
+  // values are hidden then and must never be edited silently — otherwise its own values (`editOverlayAt` is the plain update then).
+  const base = overlayBaseAt(overlay, playhead);
+  // Captions have no keyframes and `editOverlayAt` refuses them: they keep the plain update.
+  const place = (p: Parameters<typeof editOverlayAt>[3]) =>
+    apply((x) => (overlay.kind === "caption" ? updateOverlayShared(x, id, p) : editOverlayAt(x, id, useEditorStore.getState().playhead, p)));
   const slider = (key: "fontScale" | "opacity") => ({
     onSlidingStart: () => beginTransaction(),
     onValueChange: (v: number) => applyTransient((x) => updateOverlay(x, id, key === "fontScale" ? { fontScale: v } : { background: { color: overlay.background?.color ?? "#000000", opacity: v } })),
@@ -62,10 +71,10 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
         </Pressable>
         {fine && (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.md }}>
-            <NumField label="X %" value={Math.round(overlay.x * 100)} onCommit={(v) => patchShared({ x: v / 100 })} />
-            <NumField label="Y %" value={Math.round(overlay.y * 100)} onCommit={(v) => patchShared({ y: v / 100 })} />
-            <NumField label="Scale" value={Number(overlay.scale.toFixed(2))} step={0.01} onCommit={(v) => patchShared({ scale: v })} />
-            <NumField label="Rotation °" value={Math.round(overlay.rotation)} onCommit={(v) => patchShared({ rotation: v })} />
+            <NumField label="X %" value={Math.round(base.x * 100)} onCommit={(v) => place({ x: v / 100 })} />
+            <NumField label="Y %" value={Math.round(base.y * 100)} onCommit={(v) => place({ y: v / 100 })} />
+            <NumField label="Scale" value={Number(base.scale.toFixed(2))} step={0.01} onCommit={(v) => place({ scale: v })} />
+            <NumField label="Rotation °" value={Math.round(base.rotation)} onCommit={(v) => place({ rotation: v })} />
             <NumField label="Start s" value={Number(overlay.start.toFixed(1))} step={0.1} onCommit={(v) => patchShared({ start: v })} />
             <NumField label="End s" value={Number(overlay.end.toFixed(1))} step={0.1} onCommit={(v) => patchShared({ end: v })} />
           </View>

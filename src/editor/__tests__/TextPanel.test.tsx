@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
 jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, onValueChange }: { testID?: string; onValueChange?: (v: number) => void }) => <View testID={testID} onTouchEnd={() => onValueChange?.(0.12)} />; });
-import { isTextOverlay, makeClip, makeOverlay, makeProject, type TextOverlay } from "@/src/editor/model/types";
+import { isTextOverlay, makeClip, makeOverlay, makeProject, type Keyframe, type TextOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { TextPanel } from "../components/TextPanel";
 
@@ -64,4 +64,71 @@ test("Done is disabled while the text is empty", async () => {
   await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
   await fireEvent.changeText(screen.getByLabelText("Overlay text"), "");
   expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+});
+
+describe("fine-tune placement on a keyframed text", () => {
+  const pin = (t: number, v: Partial<Keyframe> = {}): Keyframe => ({ t, x: 0.5, y: 0.5, scale: 1, rotation: 0, opacity: 1, ...v });
+  const pins = [pin(0, { x: 0.2, y: 0.2 }), pin(2, { x: 0.6, y: 0.4, scale: 2, rotation: 90 })];
+  const field = (label: string) => screen.getByLabelText(label);
+  const commit = async (label: string, text: string) => { await fireEvent.changeText(field(label), text); await fireEvent(field(label), "blur"); };
+  beforeEach(() => {
+    useEditorStore.getState().setProject({ ...p, overlays: [makeOverlay({ id: "o1", text: "Hi", start: 1, end: 4, x: 0.9, y: 0.9, scale: 3, rotation: 10, keyframes: pins })] });
+    useEditorStore.getState().seek(2);   // 1 s into the text: half way between the pins
+  });
+
+  test("X / Y / Scale / Rotation show the value at the playhead, not the hidden static one", async () => {
+    await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+    await fireEvent.press(screen.getByText("Fine-tune"));
+    expect(field("X %").props.value).toBe("40");
+    expect(field("Y %").props.value).toBe("30");
+    expect(field("Scale").props.value).toBe("1.5");
+    expect(field("Rotation °").props.value).toBe("45");
+    await act(() => { useEditorStore.getState().seek(3); });
+    expect(field("X %").props.value).toBe("60");
+    expect(field("Rotation °").props.value).toBe("90");
+  });
+
+  test("a commit writes the pin at the playhead in one undo step and leaves the static values alone", async () => {
+    await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+    await fireEvent.press(screen.getByText("Fine-tune"));
+    const before = useEditorStore.getState().past.length;
+    await commit("X %", "25");
+    expect(ov().keyframes.map((k) => k.t)).toEqual([0, 1, 2]);
+    expect(ov().keyframes[1]).toMatchObject({ x: 0.25, y: expect.closeTo(0.3, 9), scale: expect.closeTo(1.5, 9), rotation: expect.closeTo(45, 9) });
+    expect(ov()).toMatchObject({ x: 0.9, y: 0.9, scale: 3, rotation: 10 });
+    expect(useEditorStore.getState().past.length).toBe(before + 1);
+    await commit("Rotation °", "400");
+    expect(ov().keyframes[1].rotation).toBe(400);
+    expect(ov().rotation).toBe(10);
+    expect(field("X %").props.value).toBe("25");
+  });
+
+  test("Start / End still write the overlay's own range", async () => {
+    await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+    await fireEvent.press(screen.getByText("Fine-tune"));
+    await commit("End s", "3");
+    expect(ov().end).toBe(3);
+    expect(ov().keyframes).toEqual(pins);
+  });
+});
+
+test("without keyframes the fine-tune fields show and write the static placement, whatever the playhead", async () => {
+  useEditorStore.getState().seek(3);
+  await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+  await fireEvent.press(screen.getByText("Fine-tune"));
+  expect(screen.getByLabelText("X %").props.value).toBe("50");
+  await fireEvent.changeText(screen.getByLabelText("Scale"), "2");
+  await fireEvent(screen.getByLabelText("Scale"), "blur");
+  await fireEvent.changeText(screen.getByLabelText("Rotation °"), "30");
+  await fireEvent(screen.getByLabelText("Rotation °"), "blur");
+  expect(ov()).toMatchObject({ scale: 2, rotation: 30, keyframes: [] });
+});
+
+test("a caption's fine-tune fields still write its placement", async () => {
+  useEditorStore.getState().setProject({ ...p, overlays: [makeOverlay({ id: "o1", kind: "caption", text: "Cap", start: 1, end: 4 })] });
+  await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+  await fireEvent.press(screen.getByText("Fine-tune"));
+  await fireEvent.changeText(screen.getByLabelText("Y %"), "80");
+  await fireEvent(screen.getByLabelText("Y %"), "blur");
+  expect(ov().y).toBe(0.8);
 });

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { ANIM_LIMITS, type AnimEdge } from "@/src/editor/model/types";
 import type { IoniconName } from "@/src/editor/toolGroups";
 import { theme } from "@/src/theme/theme";
@@ -8,16 +8,22 @@ import { PressableScale } from "@/src/ui/PressableScale";
 import { Body } from "@/src/ui/Text";
 
 const NONE_ICON: IoniconName = "ban-outline";
+/** Tile geometry (points): the column a tile takes in the grid, its rounded icon box, the glyph inside, and the two small text sizes. */
+const TILE_WIDTH = 68;
+const ICON_BOX = 44;
+const ICON_SIZE = 20;
+const LABEL_SIZE = 11;
+const CAPTION_SIZE = 12;
 const clearRing = { borderWidth: theme.ring.borderWidth, borderColor: "transparent" };
 
 function Tile({ label, icon, selected, onPress }: { label: string; icon: IoniconName; selected: boolean; onPress: () => void }) {
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress}
-      style={{ alignItems: "center", width: 68, paddingVertical: theme.space.xs }}>
-      <View style={[{ width: 44, height: 44, borderRadius: theme.radius.tile + 5, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceAlt }, selected ? theme.ring : clearRing]}>
-        <Ionicons name={icon} size={20} color={selected ? theme.colors.accent : theme.colors.text} />
+      style={{ alignItems: "center", width: TILE_WIDTH, paddingVertical: theme.space.xs }}>
+      <View style={[{ width: ICON_BOX, height: ICON_BOX, borderRadius: theme.radius.card, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceAlt }, selected ? theme.ring : clearRing]}>
+        <Ionicons name={icon} size={ICON_SIZE} color={selected ? theme.colors.accent : theme.colors.text} />
       </View>
-      <Text numberOfLines={1} style={{ fontFamily: selected ? theme.fonts.bodySemi : theme.fonts.body, color: selected ? theme.colors.accent : theme.colors.text, fontSize: 11, marginTop: 4 }}>{label}</Text>
+      <Body numberOfLines={1} weight={selected ? "semi" : "regular"} style={{ color: selected ? theme.colors.accent : theme.colors.text, fontSize: LABEL_SIZE, marginTop: theme.space.xs }}>{label}</Body>
     </PressableScale>
   );
 }
@@ -50,7 +56,7 @@ export function AnimationLength({ edge, onStart, onChange }: { edge: AnimEdge | 
         onValueChange={onChange}
         minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent}
       />
-      <Body muted style={{ fontSize: 12 }}>Length {edgeDuration(edge).toFixed(2)} s</Body>
+      <Body muted style={{ fontSize: CAPTION_SIZE }}>Length {edgeDuration(edge).toFixed(2)} s</Body>
     </>
   );
 }

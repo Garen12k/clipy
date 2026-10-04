@@ -66,6 +66,24 @@ test("the Length slider is one undo step per drag and picking another tile keeps
   expect(anim().in).toEqual({ id: "fade", duration: 0.5 });
 });
 
+test("dragging the Length slider on the Out tab changes Out only, as one undo step", async () => {
+  await render(<ClipAnimationSheet clipId="a" visible onClose={() => {}} />);
+  await press("Fade");
+  await press("Out");
+  await press("Slide left");
+  expect(slider().props).toMatchObject({ disabled: false, value: 0.5 });
+  const before = past();
+  await fireEvent(slider(), "touchStart");
+  await fireEvent(slider(), "touchMove", { v: 0.8 });
+  await fireEvent(slider(), "touchMove", { v: 1.5 });
+  expect(anim()).toEqual({ in: { id: "fade", duration: 0.5 }, out: { id: "slideLeft", duration: 1.5 }, combo: null });
+  expect(past()).toBe(before + 1);
+  expect(screen.getByText("Length 1.50 s")).toBeTruthy();
+  await press("In");
+  expect(slider().props.value).toBe(0.5);
+  expect(tile("Fade")).toBeSelected();
+});
+
 test("the Combo tab lists the combos without a slider; picking one clears In / Out and the tabs reflect it", async () => {
   await render(<ClipAnimationSheet clipId="a" visible onClose={() => {}} />);
   await press("Fade");
