@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { VolumeSheet } from "../components/VolumeSheet";
 
@@ -64,4 +64,30 @@ test("a photo has no fade sliders", async () => {
   expect(screen.getByTestId("volume-slider")).toBeTruthy();
   expect(screen.queryByTestId("fade-in")).toBeNull();
   expect(screen.queryByText(/Fade/)).toBeNull();
+});
+
+test("without clipIds the title is Volume", async () => {
+  await render(<VolumeSheet clipId="a" visible onClose={() => {}} />);
+  expect(screen.getByRole("header", { name: "Volume" })).toBeTruthy();
+});
+
+test("clipIds: the slider and Mute write every listed video clip, one undo step each; photos and a layer id are skipped; no fade sliders", async () => {
+  const st = () => useEditorStore.getState();
+  st().setProject({ ...st().project!, layers: [makeLayer({ id: "y", sourceDuration: 2 })] });
+  const photo = clip(1);
+  await render(<VolumeSheet clipId="a" clipIds={["a", "p", "l", "y"]} visible onClose={() => {}} />);
+  expect(screen.getByRole("header", { name: "Volume · 3 clips" })).toBeTruthy();
+  expect(screen.queryByTestId("fade-in")).toBeNull();
+  expect(screen.queryByText(/Fade/)).toBeNull();
+  await drag("volume-slider", 0.7, 0.5);
+  expect(st().project!.clips.map((c) => c.volume)).toEqual([0.5, 1, 0.5]);
+  expect(st().project!.layers[0].volume).toBe(1);
+  expect(past()).toBe(1);
+  await fireEvent(screen.getByLabelText("Mute"), "valueChange", true);
+  expect([clip(0).muted, clip(2).muted]).toEqual([true, true]);
+  expect(clip(1)).toBe(photo);                                  // the ops skip a photo: the same object
+  expect(st().project!.layers[0].muted).toBe(false);
+  expect(past()).toBe(2);
+  await act(() => { st().undo(); st().undo(); });
+  expect(st().project!.clips.map((c) => c.volume)).toEqual([1, 1, 1]);
 });

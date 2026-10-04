@@ -3,9 +3,9 @@ import { useState } from "react";
 import { View } from "react-native";
 import { SPEED_CURVES } from "@/src/editor/effects";
 import { formatSpeed } from "@/src/lib/format";
-import { setClipSpeed, setClipSpeedCurve } from "@/src/editor/model/ops";
+import { forClips, mainClipIds, setClipSpeed, setClipSpeedCurve } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
-import { SPEED_CURVE_IDS, SPEED_LIMITS, type Clip, type SpeedCurveId } from "@/src/editor/model/types";
+import { SPEED_CURVE_IDS, SPEED_LIMITS, type Clip, type Project, type SpeedCurveId } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
@@ -65,36 +65,44 @@ function CurveTile({ id, label, shape, selected, onPress }: { id: string; label:
 
 const LAYER_REFUSED = "That speed doesn't fit this layer.";
 
-/** A clip's or layer's speed: one constant speed (Normal) or a speed-curve preset (Curve). The ops keep the two exclusive. */
-export function SpeedSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
+/**
+ * A clip's or layer's speed: one constant speed (Normal) or a speed-curve preset (Curve). The ops keep the two exclusive.
+ * `clipIds` (multi-select): every change is written to all of these main clips (the ops skip photos, and clips a curve would leave
+ * too short); `clipId` is the clip whose values are shown.
+ */
+export function SpeedSheet({ clipId, clipIds, visible, onClose }: { clipId: string | null; clipIds?: string[]; visible: boolean; onClose: () => void }) {
   const clip = useItemClip(clipId);
   const layer = useIsLayer(clipId);
+  const count = useEditorStore((s) => (clipIds && s.project ? mainClipIds(s.project, clipIds).length : 0));
   if (!clip) return null;
   return (
-    <Sheet visible={visible} onClose={onClose} title="Speed">
+    <Sheet visible={visible} onClose={onClose} title={clipIds ? `Speed · ${count} ${count === 1 ? "clip" : "clips"}` : "Speed"}>
       {/* Mounted only while the sheet is open (and per clip), so it opens on the tab the clip's speed lives on. */}
-      <SpeedBody key={clip.id} clip={clip} layer={layer} onClose={onClose} />
+      <SpeedBody key={clip.id} clip={clip} clipIds={clipIds} layer={layer} onClose={onClose} />
     </Sheet>
   );
 }
 
-function SpeedBody({ clip, layer, onClose }: { clip: Clip; layer: boolean; onClose: () => void }) {
+function SpeedBody({ clip, clipIds, layer, onClose }: { clip: Clip; clipIds?: string[]; layer: boolean; onClose: () => void }) {
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const curveId = clip.speedCurve?.id ?? null;
   const [tab, setTab] = useState<Tab>(curveId ? "curve" : "normal");
   const sliderTint = curveId ? theme.colors.textMuted : theme.colors.accent;
+  /** One clip op on the shown clip, or on every clip of the multi-selection (one project out, so one undo step). */
+  const write = (p: Project, op: (p: Project, id: string) => Project) => (clipIds ? forClips(p, clipIds, op) : op(p, clip.id));
 
   const pickCurve = (id: SpeedCurveId | null) => {
     const project = useEditorStore.getState().project;
     if (!project) return;
     // Picking the active preset again is not skipped: the op re-spreads it over the clip's current trim.
-    const next = setClipSpeedCurve(project, clip.id, id);
+    const next = write(project, (p, cid) => setClipSpeedCurve(p, cid, id));
     if (next === project) {
       // The same project for the tile that is already selected: nothing to change — silently.
       if (id === curveId) return;
       // Otherwise the op refused: the preset would leave the clip shorter than a clip may be (a layer: or break the layer rules).
+      // (For a multi-selection: no selected clip could take it. Clips that can are changed; the others are skipped silently.)
       // The toast lives on the screen under this sheet's Modal, so the sheet closes first.
-      onClose(); useToast.getState().show(layer ? LAYER_REFUSED : "This clip is too short for a speed curve."); return;
+      onClose(); useToast.getState().show(clipIds ? "These clips are too short for a speed curve." : layer ? LAYER_REFUSED : "This clip is too short for a speed curve."); return;
     }
     haptic("light");
     apply(() => next);
@@ -103,7 +111,7 @@ function SpeedBody({ clip, layer, onClose }: { clip: Clip; layer: boolean; onClo
   const pickSpeed = (speed: number) => {
     const project = useEditorStore.getState().project;
     if (!project) return;
-    const next = setClipSpeed(project, clip.id, speed);
+    const next = write(project, (p, cid) => setClipSpeed(p, cid, speed));
     // A layer whose new length would break the layer rules (too short, or a third video at once) is refused: the same project for
     // a speed that is not the current one. A main clip is never refused here (its speed is capped instead).
     if (next === project) { if (layer && (curveId !== null || speed !== clip.speed)) { onClose(); useToast.getState().show(LAYER_REFUSED); } return; }
@@ -125,7 +133,7 @@ function SpeedBody({ clip, layer, onClose }: { clip: Clip; layer: boolean; onClo
           </View>
           {/* With a curve the clip's constant speed is 1, so the slider rests at 1× (muted); setClipSpeed clears the curve. */}
           <Slider testID="speed-slider" minimumValue={SPEED_LIMITS[0]} maximumValue={SPEED_LIMITS[1]} step={0.05} value={clip.speed}
-            onSlidingStart={beginTransaction} onValueChange={(v) => applyTransient((p) => setClipSpeed(p, clip.id, v))}
+            onSlidingStart={beginTransaction} onValueChange={(v) => applyTransient((p) => write(p, (q, cid) => setClipSpeed(q, cid, v)))}
             minimumTrackTintColor={sliderTint} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={sliderTint} />
           {curveId ? null : <Body muted style={{ fontSize: CAPTION_SIZE }}>Audio keeps its pitch in the exported video.</Body>}
         </>

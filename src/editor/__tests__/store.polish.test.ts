@@ -82,3 +82,12 @@ test("setExportSettings: unchanged or junk that clamps to what is stored does no
   expect(st().dirty).toBe(false);
   expect(st().project).toBe(p);
 });
+
+test("entering the mode again while in it keeps the chosen clips", () => {
+  st().enterMultiSelect();
+  st().toggleMultiSelect("a"); st().toggleMultiSelect("c");
+  const before = st().multiSelect;
+  st().enterMultiSelect();
+  expect(st().multiSelect).toBe(before);
+  expect(st().multiSelect).toEqual(["a", "c"]);
+});

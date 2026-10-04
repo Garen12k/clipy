@@ -670,3 +670,40 @@ describe("Animate and Keyframe", () => {
     expect(btn("Keyframe")).toBeDisabled();
   });
 });
+
+describe("Select (multi-select)", () => {
+  const btn = (name: string) => screen.getByRole("button", { name });
+
+  test("Select is disabled with one clip and enabled with two", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] }));
+    await renderBar();
+    expect(btn("Select")).toBeDisabled();
+    await act(() => { useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })] })); });
+    expect(btn("Select")).toBeEnabled();
+    const row = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
+    expect(row.slice(-4)).toEqual(["Delete", "Select", "Ratio", "Cover"]);
+  });
+
+  test("pressing Select replaces the toolbar with the action bar; Done brings the tabs back on the same group", async () => {
+    await renderBar();
+    await fireEvent.press(btn("Select"));
+    expect(useEditorStore.getState().multiSelect).toEqual([]);
+    expect(screen.getByRole("header", { name: "0 selected" })).toBeTruthy();
+    expect(screen.queryAllByRole("tab")).toHaveLength(0);
+    for (const l of ["Delete", "Duplicate", "Filter", "Speed", "Volume", "Select all", "Done"]) expect(btn(l)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Split" })).toBeNull();
+    await fireEvent.press(btn("Done"));
+    expect(useEditorStore.getState().multiSelect).toBeNull();
+    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    expect(screen.getByRole("tab", { name: "Edit" })).toBeSelected();
+    expect(btn("Split")).toBeTruthy();
+  });
+
+  test("entering with clip a selected starts with it chosen", async () => {
+    await renderBar();
+    await act(() => { useEditorStore.getState().select("a"); });
+    await fireEvent.press(btn("Select"));
+    expect(screen.getByRole("header", { name: "1 selected" })).toBeTruthy();
+    expect(useEditorStore.getState()).toMatchObject({ multiSelect: ["a"], selectedClipId: null });
+  });
+});

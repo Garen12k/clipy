@@ -25,6 +25,8 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
   const playhead = useEditorStore((s) => s.playhead);
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const selectedId = useEditorStore((s) => s.selectedClipId);
+  /** Multi-select mode: a tap on a clip toggles it (no seek, no single selection) and the gold border marks the chosen clips. */
+  const multi = useEditorStore((s) => s.multiSelect);
   const missing = useEditorStore((s) => s.missingSourceUris);
   const { seek, select, setZoom } = useEditorStore.getState();
 
@@ -72,8 +74,8 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           contentContainerStyle={{ paddingHorizontal: pad, height, flexDirection: "column" }}>
           <View style={{ height: CLIP_AREA_HEIGHT, flexDirection: "row", alignItems: "center" }}>
             {project.clips.map((clip, i) => (
-              <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
-                onPress={() => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
+              <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={multi ? multi.includes(clip.id) : clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
+                onPress={multi ? () => useEditorStore.getState().toggleMultiSelect(clip.id) : () => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
                 {renderStripExtras?.(clip.id, i)}
               </ClipThumbStrip>
             ))}

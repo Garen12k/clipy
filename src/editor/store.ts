@@ -150,7 +150,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectAudio: (id) => set(id ? { selectedAudioId: id, multiSelect: null, selectedClipId: null, selectedOverlayId: null, selectedEffectId: null } : { selectedAudioId: null }),
   enterMultiSelect: () => {
     const s = get();
-    if (!s.project) return;
+    if (!s.project || s.multiSelect !== null) return;   // already in the mode: the chosen clips stay
     const seed = s.selectedClipId && s.project.clips.some((c) => c.id === s.selectedClipId) ? [s.selectedClipId] : [];
     set({ multiSelect: seed, selectedClipId: null, selectedOverlayId: null, selectedEffectId: null, selectedAudioId: null });
   },

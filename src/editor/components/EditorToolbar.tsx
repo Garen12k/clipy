@@ -35,6 +35,7 @@ import { RatioSheet } from "./RatioSheet";
 import { SpeedSheet } from "./SpeedSheet";
 import { FilterSheet } from "./FilterSheet";
 import { MaskSheet } from "./MaskSheet";
+import { MultiSelectBar } from "./MultiSelectBar";
 import { OpacitySheet } from "./OpacitySheet";
 import { StickerPanel } from "./StickerPanel";
 import { StickerSheet } from "./StickerSheet";
@@ -80,6 +81,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const selectedEffectId = useEditorStore((s) => s.selectedEffectId);
   const selectedAudioId = useEditorStore((s) => s.selectedAudioId);
   const ducking = useEditorStore((s) => !!s.project?.ducking);
+  const multi = useEditorStore((s) => s.multiSelect !== null);
   useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind, effectId: selectedEffectId, audioId: selectedAudioId }, cur) ?? cur); }, [selectedId, overlayKind, selectedEffectId, selectedAudioId]);
 
   // Animate / Keyframe act on what the open group edits: Edit → the selected clip, Text → a selected text (not a caption), Stickers → a selected sticker.
@@ -203,6 +205,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     freeze: { label: "Freeze", icon: "snow", disabled: noSel || layerSel || photoSel || freezeBusy, onPress: () => { haptic("light"); void freeze(); } },
     duplicate: { label: "Duplicate", icon: "copy", disabled: noSel, onPress: duplicateSelected },
     delete: { label: "Delete", icon: "trash", disabled: noSel, onPress: () => { if (selectedId) { haptic("medium"); apply((p) => deleteClip(p, selectedId)); } } },
+    select: { label: "Select", icon: "checkmark-done", disabled: clipCount < 2, onPress: () => { haptic("light"); useEditorStore.getState().enterMultiSelect(); } },
     ratio: { label: "Ratio", icon: "phone-portrait", disabled: layerSel, onPress: () => setSheet("ratio") },
     cover: { label: "Cover", icon: "image-outline", disabled: !hasClips, onPress: () => setSheet("cover") },
     filter: { label: "Filter", icon: "color-filter", disabled: noSel, onPress: () => setSheet("filter") },
@@ -231,6 +234,9 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const active = TOOL_GROUPS.find((g) => g.id === group)!;
   const tools = group === "effects" && selectedEffectId ? SELECTED_EFFECT_TOOLS : group === "audio" && selectedAudioId ? SELECTED_AUDIO_TOOLS
     : group === "edit" && layerSel ? [...SELECTED_LAYER_TOOLS, ...active.tools] : active.tools;
+
+  // Multi-select: the action bar takes the toolbar's place. This component stays mounted, so the open group survives the mode.
+  if (multi) return <MultiSelectBar />;
 
   return (
     <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: Math.max(insets.bottom, theme.space.sm) }}>

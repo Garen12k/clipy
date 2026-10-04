@@ -162,3 +162,32 @@ test("the snap guide is drawn inside the scroll content, out of the flow: width,
   await act(() => { useSnapGuide.setState({ time: null }); });
   expect(screen.queryByTestId("snap-guide")).toBeNull();
 });
+
+describe("multi-select", () => {
+  const two = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })] });
+  const strip = (id: string) => screen.getByRole("button", { name: `Clip ${id}` });
+  beforeEach(() => { useEditorStore.getState().setProject(two); });
+
+  test("in the mode a tap toggles the clip: no seek, no single selection, both strips show as selected", async () => {
+    await render(<Timeline />);
+    await act(() => { useEditorStore.getState().seek(1); useEditorStore.getState().enterMultiSelect(); });
+    await fireEvent.press(strip("a"));
+    await fireEvent.press(strip("b"));
+    expect(useEditorStore.getState()).toMatchObject({ multiSelect: ["a", "b"], selectedClipId: null, playhead: 1 });
+    expect(strip("a")).toBeSelected();
+    expect(strip("b")).toBeSelected();
+    await fireEvent.press(strip("a"));
+    expect(useEditorStore.getState()).toMatchObject({ multiSelect: ["b"], selectedClipId: null, playhead: 1 });
+    expect(strip("a")).not.toBeSelected();
+    expect(strip("b")).toBeSelected();
+    expect(scrollHandlers(screen.getByTestId("timeline-scroll"))).toEqual(SCROLL_HANDLERS);
+  });
+
+  test("outside the mode a tap selects the clip and seeks to its start, as before", async () => {
+    await render(<Timeline />);
+    await fireEvent.press(strip("b"));
+    expect(useEditorStore.getState()).toMatchObject({ multiSelect: null, selectedClipId: "b", playhead: 4 });
+    expect(strip("b")).toBeSelected();
+    expect(strip("a")).not.toBeSelected();
+  });
+});
