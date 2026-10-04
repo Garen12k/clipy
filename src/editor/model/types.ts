@@ -2,7 +2,7 @@ export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 7 as const;
+export const SCHEMA_VERSION = 8 as const;
 export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
 export type PostPlatform = (typeof POST_PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
@@ -24,6 +24,14 @@ export const SHAPE_IDS = ["circle", "square", "roundedBox", "arrow", "star", "sp
 export type ShapeId = (typeof SHAPE_IDS)[number];
 export const SPEED_LIMITS = [0.25, 4] as const;
 export const TRANSITION_LIMITS = { min: 0.3, max: 1.0 };
+
+export const SPEED_CURVE_IDS = ["montage", "hero", "bullet", "jumpCut", "flashIn", "flashOut"] as const;
+export type SpeedCurveId = (typeof SPEED_CURVE_IDS)[number];
+/** `from` = source seconds where this step starts; it runs to the next step's `from`. Sorted by `from`. */
+export interface SpeedStep { from: number; speed: number }
+export interface SpeedCurve { id: SpeedCurveId; steps: SpeedStep[] }
+/** A preset is `slices` equal steps; a stored curve holds at most `maxSteps`; a step shorter than `minStep` source seconds is dropped. */
+export const SPEED_CURVE_LIMITS = { slices: 8, maxSteps: 64, minStep: 0.01 };
 
 export const CLIP_KINDS = ["video", "photo"] as const;
 export type ClipKind = (typeof CLIP_KINDS)[number];
@@ -96,6 +104,7 @@ export interface Clip {
   adjust: ClipAdjust;            // default all 0
   animation: ClipAnimation;      // default none
   keyframes: Keyframe[];         // sorted by t (SOURCE seconds); default []
+  speedCurve: SpeedCurve | null; // default null; photos always null; a curve means `speed` is 1 (model/timeline.ts does the maths)
 }
 export const isPhoto = (c: Clip) => c.kind === "photo";
 
@@ -192,6 +201,29 @@ export function makeKeyframe(partial: Partial<Keyframe> & Pick<Keyframe, "t">): 
   return { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, ...partial };
 }
 
+/**
+ * A safe curve or none: unknown id / junk / no usable step / photo → null. Steps need a finite `from` and speed (speed clamped to
+ * SPEED_LIMITS), are sorted by `from`, a step shorter than `minStep` is dropped (the last step runs on, so it always stays) and only
+ * the first `maxSteps` are kept. Idempotent.
+ */
+export function clampSpeedCurve(v: unknown, clip: { kind: ClipKind }): SpeedCurve | null {
+  if (clip.kind === "photo" || !isRec(v) || !(SPEED_CURVE_IDS as readonly unknown[]).includes(v.id) || !Array.isArray(v.steps)) return null;
+  const clean: SpeedStep[] = [];
+  for (const e of v.steps) {
+    if (!isRec(e) || !isNum(e.from) || !isNum(e.speed)) continue;
+    clean.push({ from: e.from, speed: clampNum(e.speed, SPEED_LIMITS[0], SPEED_LIMITS[1]) });
+  }
+  clean.sort((a, b) => a.from - b.from);
+  const steps: SpeedStep[] = [];
+  for (const e of clean) {
+    // The 1e-9 keeps a step of exactly `minStep` despite float noise (2.01 − 2 < 0.01).
+    if (steps.length > 0 && e.from - steps[steps.length - 1].from < SPEED_CURVE_LIMITS.minStep - 1e-9) steps[steps.length - 1] = e;
+    else steps.push(e);
+  }
+  if (steps.length === 0) return null;
+  return { id: v.id as SpeedCurveId, steps: steps.slice(0, SPEED_CURVE_LIMITS.maxSteps) };
+}
+
 export interface TextOverlay {
   id: string; kind: "text" | "caption"; text: string; fontId: FontId; fontScale: number; color: string;
   background: { color: string; opacity: number } | null; outline: boolean; align: Align;
@@ -222,7 +254,7 @@ export function newVideoClip(a: Pick<Clip, "id" | "sourceUri" | "sourceDuration"
   return { ...a, trimStart: 0, trimEnd: a.sourceDuration, speed: 1, filter: null, volume: 1, muted: false,
     transitionOut: { type: "none", duration: 0 }, kind: "video", transform: { ...DEFAULT_TRANSFORM }, crop: { ...FULL_CROP },
     background: { ...BLACK_BACKGROUND }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
-    animation: { ...NO_CLIP_ANIMATION }, keyframes: [] };
+    animation: { ...NO_CLIP_ANIMATION }, keyframes: [], speedCurve: null };
 }
 /** A still-image clip: default length, silent, speed 1, never reversed. */
 export function newPhotoClip(a: Pick<Clip, "id" | "sourceUri" | "width" | "height"> & { seconds?: number }): Clip {

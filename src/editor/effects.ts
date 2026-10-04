@@ -1,4 +1,4 @@
-import type { AnimComboId, AnimInId, AnimLoopId, EffectId, FilterId, ShapeId, TextOverlay, TransitionType } from "./model/types";
+import type { AnimComboId, AnimInId, AnimLoopId, EffectId, FilterId, ShapeId, SpeedCurveId, TextOverlay, TransitionType } from "./model/types";
 import type { IoniconName } from "./toolGroups";
 
 export interface FilterPreview { tint: string; tintOpacity: number; saturation: number; brightness: number }
@@ -76,6 +76,16 @@ export const ANIM_LOOP: Record<AnimLoopId, { label: string; icon: IoniconName }>
   float:  { label: "Float",  icon: "cloud-outline" },
   blink:  { label: "Blink",  icon: "eye-outline" },
   shake:  { label: "Shake",  icon: "phone-portrait-outline" },
+};
+
+/** Speed-curve presets: eight speeds for eight equal slices of the clip's trimmed source range (model/timeline.ts `curveSteps` writes the steps). */
+export const SPEED_CURVES: Record<SpeedCurveId, { label: string; shape: readonly number[] }> = {
+  montage:  { label: "Montage",   shape: [2.5, 2.5, 0.5, 2.5, 2.5, 0.5, 2.5, 2.5] },
+  hero:     { label: "Hero",      shape: [1, 2, 3, 0.5, 0.5, 3, 2, 1] },
+  bullet:   { label: "Bullet",    shape: [3.5, 3.5, 3.5, 0.3, 0.3, 3.5, 3.5, 3.5] },
+  jumpCut:  { label: "Jump cut",  shape: [1, 4, 1, 4, 1, 4, 1, 4] },
+  flashIn:  { label: "Flash in",  shape: [4, 3, 2, 1.5, 1, 1, 1, 1] },
+  flashOut: { label: "Flash out", shape: [1, 1, 1, 1, 1.5, 2, 3, 4] },
 };
 
 /** 100×100 box, absolute M/L/C/Q/Z only — copied verbatim into Effects.swift. */

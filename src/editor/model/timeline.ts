@@ -1,16 +1,91 @@
-import type { Clip, Project } from "./types";
+import { SPEED_CURVES } from "../effects";
+import { clampNum, SPEED_CURVE_LIMITS, SPEED_LIMITS, type Clip, type Project, type SpeedCurveId, type SpeedStep } from "./types";
 
-/** Output seconds this clip occupies on the timeline. The ONLY place speed scales durations. */
-export const clipDuration = (c: Clip): number => (c.trimEnd - c.trimStart) / c.speed;
-/** Source-file seconds for an offset (output seconds) into the clip. */
-export const outputToSource = (c: Clip, offsetInClip: number): number => c.trimStart + offsetInClip * c.speed;
+// Speed arithmetic lives ONLY in this file. A clip either has one constant `speed` or a speed curve: constant-speed steps in SOURCE
+// time (step i covers [steps[i].from, steps[i + 1].from); the first step also covers everything before it, the last everything after).
+// Every function branches on the curve first, so a clip without one runs exactly the expressions it always has.
+
+export type SpeedSpan = { from: number; to: number; speed: number };
+
+/** The curve's steps, or null for a constant-speed clip (an empty step list counts as no curve). */
+const stepsOf = (c: Clip): SpeedStep[] | null => (c.speedCurve && c.speedCurve.steps.length > 0 ? c.speedCurve.steps : null);
+
+/** Eight equal slices of [trimStart, trimEnd] with the preset's speeds (clamped to SPEED_LIMITS). */
+export function curveSteps(id: SpeedCurveId, trimStart: number, trimEnd: number): SpeedStep[] {
+  const slice = (trimEnd - trimStart) / SPEED_CURVE_LIMITS.slices;
+  return SPEED_CURVES[id].shape.slice(0, SPEED_CURVE_LIMITS.slices).map((speed, i) => ({ from: trimStart + i * slice, speed: clampNum(speed, SPEED_LIMITS[0], SPEED_LIMITS[1]) }));
+}
+
+/**
+ * The clip's source range cut into constant-speed spans in SOURCE order, covering exactly [trimStart, trimEnd]: one span for a
+ * constant-speed clip. Zero-length spans are omitted — except that a clip with no length at all still gets its one (empty) span,
+ * so there is always an edge speed to extend with.
+ */
+export function speedSpans(c: Clip): SpeedSpan[] {
+  const steps = stepsOf(c);
+  if (!steps) return [{ from: c.trimStart, to: c.trimEnd, speed: c.speed }];
+  const spans: SpeedSpan[] = [];
+  let atStart = steps[0].speed;   // the speed under trimStart, for the empty-clip case
+  for (let i = 0; i < steps.length; i++) {
+    const from = i === 0 ? c.trimStart : Math.max(steps[i].from, c.trimStart);
+    const to = i === steps.length - 1 ? c.trimEnd : Math.min(steps[i + 1].from, c.trimEnd);
+    if (steps[i].from <= c.trimStart) atStart = steps[i].speed;
+    if (to > from) spans.push({ from, to, speed: steps[i].speed });
+  }
+  return spans.length > 0 ? spans : [{ from: c.trimStart, to: c.trimEnd, speed: atStart }];
+}
+
+/** A span as it is played: source runs from `a` to `b` (b < a when the clip is reversed). */
+type Leg = { a: number; b: number; speed: number };
+/** Spans in PLAYBACK order: source order, or back to front (each one mirrored) when `backwards`. */
+function legs(c: Clip, backwards: boolean): Leg[] {
+  const spans = speedSpans(c);
+  return backwards ? spans.reverse().map((s) => ({ a: s.to, b: s.from, speed: s.speed })) : spans.map((s) => ({ a: s.from, b: s.to, speed: s.speed }));
+}
+const legSeconds = (l: Leg): number => Math.abs(l.b - l.a) / l.speed;
+/** The leg playing at `offset` and the output offset where it starts. A boundary belongs to the later leg; offsets outside the clip get the first / last leg. */
+function legAt(ls: Leg[], offset: number): { leg: Leg; start: number } {
+  let start = 0;
+  for (let i = 0; i < ls.length - 1; i++) {
+    const end = start + legSeconds(ls[i]);
+    if (offset < end) return { leg: ls[i], start };
+    start = end;
+  }
+  return { leg: ls[ls.length - 1], start };
+}
+/** Source time at an output offset; outside the clip the first / last leg carries on at its own speed. */
+function walkToSource(ls: Leg[], offset: number): number {
+  const { leg, start } = legAt(ls, offset);
+  return leg.a + (leg.b >= leg.a ? 1 : -1) * (offset - start) * leg.speed;
+}
+/** Inverse of `walkToSource`, with the same boundary rule and the same linear extensions. */
+function walkToOutput(ls: Leg[], sourceTime: number): number {
+  let start = 0;
+  let leg = ls[ls.length - 1];
+  for (let i = 0; i < ls.length - 1; i++) {
+    const l = ls[i];
+    if (l.b >= l.a ? sourceTime < l.b : sourceTime > l.b) { leg = l; break; }
+    start += legSeconds(l);
+  }
+  return start + ((leg.b >= leg.a ? sourceTime - leg.a : leg.a - sourceTime)) / leg.speed;
+}
+
+/** Output seconds this clip occupies on the timeline: Σ (to − from) / speed over its spans. */
+export const clipDuration = (c: Clip): number =>
+  stepsOf(c) ? speedSpans(c).reduce((s, x) => s + (x.to - x.from) / x.speed, 0) : (c.trimEnd - c.trimStart) / c.speed;
+/** Source-file seconds for an offset (output seconds) into the clip, playing forward. */
+export const outputToSource = (c: Clip, offsetInClip: number): number =>
+  stepsOf(c) ? walkToSource(legs(c, false), offsetInClip) : c.trimStart + offsetInClip * c.speed;
 /** Source-file seconds shown at `offsetInClip`: mirrored inside the trim span when the clip is reversed. Also where a split cuts. */
-export const freezeSourceTime = (c: Clip, offsetInClip: number): number =>
-  c.reversed ? c.trimEnd - offsetInClip * c.speed : outputToSource(c, offsetInClip);
+export const freezeSourceTime = (c: Clip, offsetInClip: number): number => {
+  if (stepsOf(c)) return walkToSource(legs(c, c.reversed), offsetInClip);
+  return c.reversed ? c.trimEnd - offsetInClip * c.speed : outputToSource(c, offsetInClip);
+};
 /** Reversed-aware source time for an output offset — `freezeSourceTime` under the name motion code reads best with. */
 export const sourceTimeAt = freezeSourceTime;
 /** Inverse of `sourceTimeAt`: the output offset at which a source time shows (may fall outside [0, clipDuration]). */
 export function outputOffsetOf(c: Clip, sourceTime: number): number {
+  if (stepsOf(c)) return walkToOutput(legs(c, c.reversed), sourceTime);
   return (c.reversed ? c.trimEnd - sourceTime : sourceTime - c.trimStart) / c.speed;
 }
 
@@ -21,8 +96,17 @@ export function splitSourceRanges(c: Clip, offsetInClip: number): { left: [numbe
     ? { left: [cut, c.trimEnd], right: [c.trimStart, cut] }
     : { left: [c.trimStart, cut], right: [cut, c.trimEnd] };
 }
-/** Output offset (seconds into the clip) for a source-file time. */
-export const sourceToOutput = (c: Clip, sourceTime: number): number => (sourceTime - c.trimStart) / c.speed;
+/** Output offset (seconds into the clip) for a source-file time, playing forward. */
+export const sourceToOutput = (c: Clip, sourceTime: number): number =>
+  stepsOf(c) ? walkToOutput(legs(c, false), sourceTime) : (sourceTime - c.trimStart) / c.speed;
+/** Playback rate at an output offset (the speed of the span being shown): on a boundary the later span in playback order; outside the clip the first / last one. */
+export function rateAt(c: Clip, offsetInClip: number): number {
+  return stepsOf(c) ? legAt(legs(c, c.reversed), offsetInClip).leg.speed : c.speed;
+}
+/** Spans in PLAYBACK order as (source seconds, speed) — reversed clips list them back to front. For the export. */
+export function playbackSpans(c: Clip): { duration: number; speed: number }[] {
+  return legs(c, c.reversed).map((l) => ({ duration: Math.abs(l.b - l.a), speed: l.speed }));
+}
 export const totalDuration = (p: Project): number => p.clips.reduce((s, c) => s + clipDuration(c), 0);
 
 export function clipStartTimes(p: Project): number[] {

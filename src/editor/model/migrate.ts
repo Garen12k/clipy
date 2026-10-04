@@ -1,6 +1,6 @@
 import { normaliseTransitions } from "./ops";
 import {
-  clampAdjust, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
+  clampAdjust, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
   type Clip, type ClipAdjust, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type EffectItem, type Overlay, type PostRecord, type Project, type ShapeId,
 } from "./types";
 
@@ -30,19 +30,21 @@ function withMotion(o: Record<string, unknown>): Overlay {
 }
 
 /**
- * Brings a v2–v7 file to a safe v7 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
+ * Brings a v2–v8 file to a safe v8 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
  * null, unknown transition → dissolve (duration kept), transitions re-capped (last clip cleared), overlays get a kind, bad stickers fixed/dropped,
- * clips get kind/transform/crop/background/reversed defaults or repairs, photos forced to the photo rules, look fields (strength, adjust) clamped, effects repaired.
+ * clips get kind/transform/crop/background/reversed defaults or repairs, photos forced to the photo rules, look fields (strength, adjust) clamped, effects repaired,
+ * speed curves repaired (a curve forces speed 1; photos never have one).
  */
 function normaliseCurrent(raw: Raw): Raw {
   const mapped = (raw.clips as Clip[]).map((c) => {
-    const speed = typeof c.speed === "number" && c.speed >= SPEED_LIMITS[0] && c.speed <= SPEED_LIMITS[1] ? c.speed : 1;
+    const kind: ClipKind = (CLIP_KINDS as readonly string[]).includes(c.kind as string) ? c.kind : "video";
+    const speedCurve = clampSpeedCurve(c.speedCurve, { kind });
+    const speed = !speedCurve && typeof c.speed === "number" && c.speed >= SPEED_LIMITS[0] && c.speed <= SPEED_LIMITS[1] ? c.speed : 1;
     const filter = (FILTER_IDS as readonly string[]).includes(c.filter as string) && c.filter !== "none" ? c.filter : null;
     const t = c.transitionOut;
     const tDur = t && typeof t.duration === "number" && Number.isFinite(t.duration) && t.duration > 0 ? t.duration : 0;
     const known = t && (TRANSITION_TYPES as readonly string[]).includes(t.type);
     const transitionOut = tDur > 0 && typeof t?.type === "string" && t.type !== "none" ? { type: known ? t.type : ("dissolve" as const), duration: tDur } : { type: "none" as const, duration: 0 };
-    const kind: ClipKind = (CLIP_KINDS as readonly string[]).includes(c.kind as string) ? c.kind : "video";
     const transform = clampTransform(isObj(c.transform) ? (c.transform as ClipTransform) : DEFAULT_TRANSFORM);
     const crop = clampCrop(isObj(c.crop) ? (c.crop as CropRect) : FULL_CROP);
     const bg = c.background as Record<string, unknown> | undefined;
@@ -54,7 +56,7 @@ function normaliseCurrent(raw: Raw): Raw {
     const adjust = clampAdjust(isObj(c.adjust) ? (c.adjust as Partial<ClipAdjust>) : undefined);
     const animation = clampClipAnimation(c.animation);
     const keyframes = clampClipKeyframes(c.keyframes);
-    const base = { ...c, speed, filter, transitionOut, kind, transform, crop, background, reversed, filterIntensity, adjust, animation, keyframes } as Clip;
+    const base = { ...c, speed, filter, transitionOut, kind, transform, crop, background, reversed, filterIntensity, adjust, animation, keyframes, speedCurve } as Clip;
     if (kind !== "photo") return base;
     const trimEnd = clampNum(typeof c.trimEnd === "number" && Number.isFinite(c.trimEnd) ? c.trimEnd : PHOTO.defaultSeconds, PHOTO.minSeconds, PHOTO.maxSeconds);
     return { ...base, speed: 1, muted: true, reversed: false, trimStart: 0, sourceDuration: PHOTO.maxSeconds, trimEnd };
@@ -85,6 +87,6 @@ export function migrateProject(raw: unknown): Project {
   if (version < 1) throw new Error("Project file is missing required fields");
   let cur = raw as Raw;
   if (version === 1) cur = v1to2(cur);
-  // v2 → v7 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
+  // v2 → v8 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
   return normaliseCurrent(cur) as unknown as Project;
 }
