@@ -1,6 +1,8 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { FONTS } from "@/src/editor/fonts";
-import { isSticker, type Align, type AspectRatio, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Overlay } from "@/src/editor/model/types";
+import { edgeDurations } from "@/src/editor/model/motion";
+import { clipDuration, outputOffsetOf } from "@/src/editor/model/timeline";
+import { isSticker, type AnimEdge, type Align, type AspectRatio, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type Overlay } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -9,12 +11,18 @@ export type ExportEvent = { jobId: string } & (
   | { type: "error"; message: string }
   | { type: "cancelled" });
 
+export interface ExportAnimEdge { id: string; duration: number }
+export interface ExportKeyframe { t: number; x: number; y: number; scale: number; rotation: number; opacity: number }
+const copyKeyframe = (k: Keyframe): ExportKeyframe => ({ t: k.t, x: k.x, y: k.y, scale: k.scale, rotation: k.rotation, opacity: k.opacity });
+const toEdge = (e: AnimEdge | null, duration: number): ExportAnimEdge | null => (e && duration > 0 ? { id: e.id, duration } : null);
+
 export interface ExportOverlay {
   kind: "text" | "caption" | "sticker";
   text: string; fontPostScriptName: string; fontScale: number; color: string;
   backgroundColor: string | null; backgroundOpacity: number; outline: boolean; align: Align;
   emoji: string | null; shape: string | null;
   x: number; y: number; scale: number; rotation: number; start: number; end: number;
+  animIn: ExportAnimEdge | null; animOut: ExportAnimEdge | null; animLoop: string | null; keyframes: ExportKeyframe[];
 }
 export interface ExportAudio { sourceUri: string; start: number; trimStart: number; trimEnd: number; volume: number }
 export interface ExportClip {
@@ -25,8 +33,21 @@ export interface ExportClip {
   background: { type: "black" | "color" | "blur"; color: string | null };
   reversed: boolean;
   filterIntensity: number; adjust: ClipAdjust;
+  animIn: ExportAnimEdge | null; animOut: ExportAnimEdge | null; animCombo: string | null;
+  keyframes: ExportKeyframe[];   // clip-local OUTPUT seconds, ascending; the pins inside the clip plus the nearest one each side
+  outputDuration: number;
+}
+/** Pins converted to output-local seconds, sorted, trimmed to [0, length] plus the last one before 0 and the first one after length. */
+function outputKeyframes(c: Clip, length: number): ExportKeyframe[] {
+  const pins = c.keyframes.map((k) => ({ ...copyKeyframe(k), t: outputOffsetOf(c, k.t) })).sort((a, b) => a.t - b.t);
+  const before = pins.filter((k) => k.t < 0);
+  const inside = pins.filter((k) => k.t >= 0 && k.t <= length);
+  const after = pins.find((k) => k.t > length);
+  return [...before.slice(-1), ...inside, ...(after ? [after] : [])];
 }
 export function toExportClip(c: Clip): ExportClip {
+  const outputDuration = clipDuration(c);
+  const edges = edgeDurations(c.animation.in?.duration ?? 0, c.animation.out?.duration ?? 0, outputDuration);
   return {
     sourceUri: c.sourceUri, trimStart: c.trimStart, trimEnd: c.trimEnd, volume: c.volume, muted: c.muted,
     speed: c.speed, filter: c.filter, transition: { type: c.transitionOut.type, duration: c.transitionOut.duration },
@@ -35,6 +56,8 @@ export function toExportClip(c: Clip): ExportClip {
     background: { type: c.background.type, color: c.background.type === "color" ? c.background.color : null },
     reversed: c.reversed,
     filterIntensity: c.filterIntensity, adjust: { ...c.adjust },
+    animIn: toEdge(c.animation.in, edges.in), animOut: toEdge(c.animation.out, edges.out), animCombo: c.animation.combo,
+    keyframes: outputKeyframes(c, outputDuration), outputDuration,
   };
 }
 export interface ExportEffect { type: string; start: number; end: number; intensity: number }
@@ -50,19 +73,25 @@ export interface ExportRequest {
   resolution: Resolution;
   outputPath: string;
 }
+function overlayMotion(o: Overlay): Pick<ExportOverlay, "animIn" | "animOut" | "animLoop" | "keyframes"> {
+  const edges = edgeDurations(o.animation.in?.duration ?? 0, o.animation.out?.duration ?? 0, o.end - o.start);
+  return { animIn: toEdge(o.animation.in, edges.in), animOut: toEdge(o.animation.out, edges.out), animLoop: o.animation.loop, keyframes: o.keyframes.map(copyKeyframe) };
+}
 export function toExportOverlay(o: Overlay): ExportOverlay {
   const shared = { x: o.x, y: o.y, scale: o.scale, rotation: o.rotation, start: o.start, end: o.end };
+  // Captions never animate or carry pins.
+  const motion = o.kind === "caption" ? { animIn: null, animOut: null, animLoop: null, keyframes: [] } : overlayMotion(o);
   if (isSticker(o)) {
     return {
       kind: "sticker", text: "", fontPostScriptName: "", fontScale: 0, color: o.color,
       backgroundColor: null, backgroundOpacity: 0, outline: false, align: "center",
-      emoji: o.emoji, shape: o.shape, ...shared,
+      emoji: o.emoji, shape: o.shape, ...shared, ...motion,
     };
   }
   return {
     kind: o.kind, text: o.text, fontPostScriptName: FONTS[o.fontId].postScriptName, fontScale: o.fontScale, color: o.color,
     backgroundColor: o.background?.color ?? null, backgroundOpacity: o.background?.opacity ?? 0, outline: o.outline, align: o.align,
-    emoji: null, shape: null, ...shared,
+    emoji: null, shape: null, ...shared, ...motion,
   };
 }
 
