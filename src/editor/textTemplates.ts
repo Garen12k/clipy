@@ -17,6 +17,9 @@ export interface CaptionPresetPatch extends Pick<TextOverlay, "fontId" | "fontSc
 
 const style = (over: Partial<TextStyle> = {}): TextStyle => ({ ...DEFAULT_TEXT_STYLE, ...over });
 
+/** The colour the spoken word gets when "Highlight spoken word" is switched on (the Karaoke preset's yellow). */
+export const DEFAULT_HIGHLIGHT_COLOR = "#FFE14D";
+
 export const TEXT_TEMPLATE_IDS = ["cleanTitle", "boldPop", "neon", "subtitleBar", "comic", "retro", "handwritten", "elegant",
   "shadowed", "outlineOnly", "stickerLabel", "softGlow"] as const;
 export type TextTemplateId = (typeof TEXT_TEMPLATE_IDS)[number];
