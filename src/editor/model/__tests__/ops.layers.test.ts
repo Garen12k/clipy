@@ -42,25 +42,34 @@ describe("lookup and timing helpers", () => {
     expect(layerEnd(ph)).toBe(5);
   });
 
-  test("layersAt: on screen at that time, in list order; the end is exclusive; nothing past the project's end", () => {
+  test("layersAt: on screen at that time, in list order; the end is exclusive; at and past the project's end, the project's last frame", () => {
     expect(layersAt(p, 0.5)).toEqual([]);
     expect(layersAt(p, 1)).toEqual([v1]);
     expect(layersAt(p, 3)).toEqual([v1, ph]);
     expect(layersAt(p, 5)).toEqual([]);
     expect(layersAt(p, 9)).toEqual([v2]);
-    expect(layersAt(p, 10)).toEqual([]);      // the project ends at 10: the rest of v2 is never shown
-    expect(layersAt(p, 12)).toEqual([]);
+    // The project ends at 10 with v2 still running: it stays on the last frame (as the last main clip does), its rest never shown.
+    expect(layersAt(p, 10)).toEqual([v2]);
+    expect(layersAt(p, 12)).toEqual([v2]);
     expect(layersAt(p, NaN)).toEqual([]);
     expect(layersAt({ ...p, layers: [ph, v1] }, 3)).toEqual([ph, v1]);
+    // A layer that ends exactly with the project is on its last frame too; one that ended earlier is not.
+    const flush = makeLayer({ id: "flush", sourceDuration: 3, start: 7 });      // 7 – 10
+    expect(layersAt({ ...p, layers: [v1, flush] }, 10)).toEqual([flush]);
+    expect(layersAt({ ...p, layers: [v1, flush] }, 9.999)).toEqual([flush]);
+    // Nothing shows in a project without main clips.
+    expect(layersAt({ ...p, clips: [] }, 0)).toEqual([]);
   });
 
-  test("itemOffsetAt for a layer: time − start while it is on screen", () => {
+  test("itemOffsetAt for a layer: time − start while it is on screen (the project's end counts as its last frame)", () => {
     expect(itemOffsetAt(p, "v1", 1)).toBe(0);
     expect(itemOffsetAt(p, "v1", 3.5)).toBe(2.5);
     expect(itemOffsetAt(p, "v1", 5)).toBeNull();
     expect(itemOffsetAt(p, "v1", 0.9)).toBeNull();
+    expect(itemOffsetAt(p, "v1", 10)).toBeNull();
     expect(itemOffsetAt(p, "v2", 9)).toBe(1);
-    expect(itemOffsetAt(p, "v2", 10)).toBeNull();
+    expect(itemOffsetAt(p, "v2", 10)).toBe(2);
+    expect(itemOffsetAt(p, "v2", 99)).toBe(2);
     expect(itemOffsetAt(p, "v2", NaN)).toBeNull();
   });
 

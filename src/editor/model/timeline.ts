@@ -174,8 +174,14 @@ export function findItem(p: Project, id: string): { clip: Clip; layer: boolean }
 /** Project time at which a layer ends: start + its output length (it may be past the project's end). */
 export const layerEnd = (l: LayerClip): number => l.start + clipDuration(l);
 
-/** A layer is on screen from its start up to (not including) its end or the project's end, whichever comes first. */
-const layerShowsAt = (l: LayerClip, time: number, total: number): boolean => l.start <= time && time < Math.min(layerEnd(l), total);
+/**
+ * A layer is on screen from its start up to (not including) its end. At and past the project's end the project's LAST frame is
+ * shown (as `clipAt` keeps showing the last main clip): a layer still running there stays on screen; its rest is never shown.
+ */
+const layerShowsAt = (l: LayerClip, time: number, total: number): boolean => {
+  const t = time >= total ? total - 1e-6 : time;
+  return l.start <= t && t < layerEnd(l);
+};
 
 /** The layers on screen at a project time, in draw order (list order: later = on top). */
 export function layersAt(p: Project, time: number): LayerClip[] {
@@ -185,7 +191,8 @@ export function layersAt(p: Project, time: number): LayerClip[] {
 
 /**
  * The item's local output offset at a project time, or null when it is not on screen then. A main clip: `clipAt`'s offset when the clip
- * under `time` is that clip (at and past the project's end that is the last clip, at its end). A layer: `time − start` while it shows.
+ * under `time` is that clip (at and past the project's end that is the last clip, at its end). A layer: `time − start` while it shows
+ * (at and past the project's end: the project's end − start, for a layer still running there).
  */
 export function itemOffsetAt(p: Project, id: string, time: number): number | null {
   if (!Number.isFinite(time)) return null;
@@ -193,7 +200,8 @@ export function itemOffsetAt(p: Project, id: string, time: number): number | nul
   if (hit && hit.clip.id === id) return hit.offsetInClip;
   if (p.clips.some((c) => c.id === id)) return null;
   const layer = p.layers.find((l) => l.id === id);
-  return layer && layerShowsAt(layer, time, totalDuration(p)) ? time - layer.start : null;
+  const total = totalDuration(p);
+  return layer && layerShowsAt(layer, time, total) ? Math.min(time, total) - layer.start : null;
 }
 
 /** The transition window the playhead is inside (if any): which cut, and progress 0→1 across it, centred on the cut. */

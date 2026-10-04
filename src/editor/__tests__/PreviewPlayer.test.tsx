@@ -654,6 +654,123 @@ test("tapping the preview with an audio track selected deselects it without star
   expect(useEditorStore.getState().isPlaying).toBe(true);
 });
 
+describe("tapping layers on the preview", () => {
+  const st = () => useEditorStore.getState();
+  const tf = (x: number, rotation = 0) => ({ scale: 0.4, x, y: 0, rotation, flipH: false, flipV: false });
+  /** A photo layer whose 108×192 box sits around (135 + x·270, 240) in the 270×480 frame. */
+  const photo = (id: string, x: number, start = 0, over: Partial<LayerClip> = {}): LayerClip => ({ ...makePhotoClip({ id, seconds: 2 }), transform: tf(x), start, ...over });
+  const mount = async (layers: LayerClip[]) => {
+    st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], layers, overlays: [makeOverlay({ id: "t", text: "Hi", start: 0, end: 8 })] }));
+    await render(<PreviewPlayer />);
+    await layout();
+  };
+  const tap = (x: number, y: number) => fireEvent.press(screen.getByLabelText("Preview"), { nativeEvent: { locationX: x, locationY: y } });
+
+  test("a tap on a layer's picture selects it and does not start playback; it then takes the gestures", async () => {
+    await mount([photo("one", 0)]);
+    await tap(135, 240);
+    expect(st().selectedClipId).toBe("one");
+    expect(st().isPlaying).toBe(false);
+    expect(screen.getByTestId("clip-gesture-area")).toBeTruthy();
+    expect(screen.getByTestId("clip-selection-frame")).toHaveStyle({ left: 81, top: 144, width: 108, height: 192 });
+  });
+
+  test("where layers overlap, the topmost (drawn last) is selected", async () => {
+    await mount([photo("low", 0), photo("top", 0.2)]); // low spans x 81–189, top 135–243
+    await tap(160, 240);
+    expect(st().selectedClipId).toBe("top");
+    await tap(100, 240);
+    expect(st().selectedClipId).toBe("low");
+    await tap(230, 240);
+    expect(st().selectedClipId).toBe("top");
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("a turned layer is hit by its turned box", async () => {
+    await mount([photo("one", 0, 0, { transform: tf(0, 45) })]);
+    await tap(135, 150); // inside the upright box only
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(true);
+    await tap(205, 240); // inside the turned box only
+    expect(st().selectedClipId).toBe("one");
+  });
+
+  test("a tap beside every layer, nothing selected: plays / pauses as it always did", async () => {
+    await mount([photo("one", 0)]);
+    await tap(20, 20);
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(true);
+    await tap(20, 20);
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("with a layer selected: a tap on it changes nothing more, a tap elsewhere deselects it without playing, the next one plays", async () => {
+    await mount([photo("one", 0)]);
+    await tap(135, 240);
+    await tap(150, 250);
+    expect(st().selectedClipId).toBe("one");
+    expect(st().isPlaying).toBe(false);
+    await tap(20, 20);
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(false);
+    expect(screen.queryByTestId("clip-gesture-area")).toBeNull();
+    await tap(20, 20);
+    expect(st().isPlaying).toBe(true);
+  });
+
+  test("a selected layer that is not on screen is deselected by a tap anywhere", async () => {
+    await mount([photo("late", 0, 4)]); // on screen 4–6
+    await act(() => { st().select("late"); });
+    await tap(135, 240); // where it would be: it is not drawn now
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("a layer that is not on screen at the playhead, or all but invisible, is not hit", async () => {
+    await mount([photo("late", 0, 4), photo("ghost", 0, 0, { opacity: 0.01 })]);
+    await tap(135, 240);
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(true);
+  });
+
+  test("with a main clip selected a tap beside the layers still plays and keeps the selection; a tap on a layer selects the layer", async () => {
+    await mount([photo("one", 0)]);
+    await act(() => { st().select("a"); });
+    await tap(20, 20);
+    expect(st().selectedClipId).toBe("a");
+    expect(st().isPlaying).toBe(true);
+    await tap(135, 240);
+    expect(st().selectedClipId).toBe("one");
+  });
+
+  test("a tap on a layer while a text is selected selects the layer (the selection stays exclusive)", async () => {
+    await mount([photo("one", 0)]);
+    await act(() => { st().selectOverlay("t"); });
+    await tap(135, 240);
+    expect(st().selectedClipId).toBe("one");
+    expect(st().selectedOverlayId).toBeNull();
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("a tap that carries no position hits no layer", async () => {
+    await mount([photo("one", 0)]);
+    await fireEvent.press(screen.getByLabelText("Preview"));
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(true);
+  });
+
+  test("a layer's keyframed place at the playhead is what is hit", async () => {
+    const kf = (t: number, x: number) => ({ t, x, y: 0, scale: 0.4, rotation: 0, opacity: 1 });
+    await mount([{ ...makeLayer({ id: "v", sourceDuration: 4, start: 0, keyframes: [kf(0, 0), kf(2, 0.4)] }), transform: tf(0) }]);
+    await act(() => { st().seek(2); }); // the picture is now around x = 243
+    await tap(135, 240);
+    expect(st().selectedClipId).toBeNull();
+    await act(() => { st().setPlaying(false); });
+    await tap(243, 240);
+    expect(st().selectedClipId).toBe("v");
+  });
+});
+
 describe("clip motion (animations and keyframes)", () => {
   const box = () => StyleSheet.flatten(screen.getByTestId("clip-box").props.style);
   const pin = (t: number, over: Partial<{ x: number; y: number; scale: number; rotation: number; opacity: number }> = {}) =>

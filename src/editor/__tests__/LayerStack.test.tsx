@@ -188,6 +188,16 @@ describe("mounting follows the playhead", () => {
     await seek(7);
     expect(screen.queryByTestId("layer-stack")).toBeNull();
     expect(players[0].released).toBe(true);
+    await seek(10); // the project's end: neither was still running
+    expect(screen.queryByTestId("layer-stack")).toBeNull();
+  });
+
+  test("a layer still running at the project's end stays drawn on the project's last frame; one that ended earlier does not", async () => {
+    load([photoLayer("late", { start: 8 }), photoLayer("early", { start: 2 })]); // late 8–11 (the project ends at 10), early 2–5
+    st().seek(10);
+    await render(<LayerStack frameW={W} frameH={H} />);
+    expect(screen.getByTestId("layer-late")).toBeTruthy();
+    expect(screen.queryByTestId("layer-early")).toBeNull();
   });
 
   test("two video layers each get their own player and file", async () => {

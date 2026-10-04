@@ -5,7 +5,7 @@ import { gestureTransform, restingMagnets, type GestureValues, type Magnet } fro
 import { fitScale, placeClip, SNAP } from "@/src/editor/model/clipLayout";
 import { clipBaseAt } from "@/src/editor/model/motion";
 import { editClipTransformAt } from "@/src/editor/model/ops";
-import { clipAt } from "@/src/editor/model/timeline";
+import { findItem, itemOffsetAt } from "@/src/editor/model/timeline";
 import type { ClipTransform } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
@@ -17,7 +17,7 @@ const fill = { position: "absolute" as const, left: 0, top: 0, right: 0, bottom:
 const NONE: GestureValues = { dx: 0, dy: 0, scale: 1, rotation: 0 };
 
 /**
- * One touch sequence of pan / pinch / twist on clip `clipId`, however many of the three run at once.
+ * One touch sequence of pan / pinch / twist on clip `clipId` — a main clip or a layer — however many of the three run at once.
  * The first gesture to start snapshots the clip's base placement at the playhead (its keyframes there, or its
  * static transform — never the animated value); every update recomposes from that snapshot with the latest values
  * of all three (so update order doesn't matter and magnets don't stick), snaps, and applies it transiently through
@@ -36,7 +36,7 @@ export function createClipGestureSession(clipId: string, frameW: number, frameH:
   let base: GestureValues = { ...NONE };
   let live: GestureValues = { ...NONE };
 
-  const clipNow = () => useEditorStore.getState().project?.clips.find((c) => c.id === clipId) ?? null;
+  const clipNow = () => { const p = useEditorStore.getState().project; return p ? findItem(p, clipId)?.clip ?? null : null; };
 
   const recompose = () => {
     const s = useEditorStore.getState();
@@ -82,10 +82,9 @@ export function createClipGestureSession(clipId: string, frameW: number, frameH:
         const s = useEditorStore.getState();
         const clip = clipNow();
         if (!s.project || !clip) return;
-        const hit = clipAt(s.project, s.playhead);
-        const under = !!hit && hit.clip.id === clipId;
-        if (!under && clip.keyframes.length > 0) return; // no moment to pin (the layer is not shown then)
-        offset = under ? hit.offsetInClip : 0;
+        const shown = itemOffsetAt(s.project, clipId, s.playhead);
+        if (shown === null && clip.keyframes.length > 0) return; // no moment to pin (the picture is not shown then)
+        offset = shown ?? 0;
         const at = clipBaseAt(clip, offset);
         start = { ...clip.transform, x: at.x, y: at.y, scale: at.scale, rotation: at.rotation };
         begun = false;
@@ -110,24 +109,25 @@ export function createClipGestureSession(clipId: string, frameW: number, frameH:
 }
 
 /**
- * Drag (one finger), pinch and twist the selected clip directly on the preview, with a gold frame around the
+ * Drag (one finger), pinch and twist the selected clip or layer directly on the preview, with a gold frame around the
  * picture's base placement (static, or keyframed at the playhead — not the animated one, so it stays put while an
- * animation plays). Only while the selected clip is the one under the playhead and no overlay is selected.
+ * animation plays). Only while the selected item is on screen at the playhead (a main clip: the one under it; a layer: one
+ * showing then) and no overlay is selected.
  * A tap doesn't activate any of these, so it falls through to the preview's Pressable (play / deselect).
  * Rendered below the overlay layer: a touch that lands on an overlay never reaches this view.
  */
 export function ClipGestures({ frameW, frameH }: { frameW: number; frameH: number }) {
   const clip = useEditorStore((s) => {
     if (!s.project || !s.selectedClipId || s.selectedOverlayId) return null;
-    const hit = clipAt(s.project, s.playhead);
-    return hit && hit.clip.id === s.selectedClipId ? hit.clip : null;
+    if (itemOffsetAt(s.project, s.selectedClipId, s.playhead) === null) return null;
+    return findItem(s.project, s.selectedClipId)?.clip ?? null;
   });
   const clipId = clip?.id ?? null;
-  // The playhead's offset in the clip, followed only while the clip has keyframes (else the frame never depends on it).
+  // The playhead's offset in the item, followed only while it has keyframes (else the frame never depends on it).
   const offset = useEditorStore((s) => {
     if (!s.project || !s.selectedClipId || s.selectedOverlayId) return 0;
-    const hit = clipAt(s.project, s.playhead);
-    return hit && hit.clip.id === s.selectedClipId && hit.clip.keyframes.length > 0 ? hit.offsetInClip : 0;
+    if (!((findItem(s.project, s.selectedClipId)?.clip.keyframes.length ?? 0) > 0)) return 0;
+    return itemOffsetAt(s.project, s.selectedClipId, s.playhead) ?? 0;
   });
 
   const gesture = useMemo(() => {

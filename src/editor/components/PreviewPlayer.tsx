@@ -1,8 +1,10 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { clipGainAt } from "@/src/editor/model/audioMix";
-import { clipAt, clipDuration, clipStartTimes, hasSpeedCurve, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
+import { layerHit } from "@/src/editor/model/layerHit";
+import { resolveClipMotion } from "@/src/editor/model/motion";
+import { clipAt, clipDuration, clipStartTimes, findItem, hasSpeedCurve, itemOffsetAt, layersAt, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue, isPhoto, type Clip } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
 import { useEditorStore } from "@/src/editor/store";
@@ -207,7 +209,18 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.md }}>
       <Pressable
-        onPress={() => {
+        onPress={(e?: GestureResponderEvent) => {
+          // A tap on a layer's picture (the topmost one there) selects it; with a layer selected, a tap anywhere else deselects it.
+          // Texts and stickers sit above with their own Pressables, so a tap on one of them never gets here.
+          const s = useEditorStore.getState();
+          if (s.project && frame.w > 0 && frame.h > 0) {
+            const p = s.project, at = s.playhead;
+            // Relative to the view the touch landed in: this frame, or the gesture area that covers it exactly.
+            const point = { x: e?.nativeEvent?.locationX ?? NaN, y: e?.nativeEvent?.locationY ?? NaN };
+            const layerId = layerHit(layersAt(p, at), point, frame.w, frame.h, (l) => resolveClipMotion(l, itemOffsetAt(p, l.id, at) ?? 0));
+            if (layerId) { s.select(layerId); return; }
+            if (s.selectedClipId && findItem(p, s.selectedClipId)?.layer) { s.select(null); return; }
+          }
           if (useEditorStore.getState().selectedOverlayId) { selectOverlay(null); return; }
           if (useEditorStore.getState().selectedEffectId) { useEditorStore.getState().selectEffect(null); return; }
           if (useEditorStore.getState().selectedAudioId) { useEditorStore.getState().selectAudio(null); return; }
