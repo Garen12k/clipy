@@ -1,4 +1,5 @@
 import Slider from "@react-native-community/slider";
+import { fitFades } from "@/src/editor/model/audioMix";
 import { updateAudioTrackById } from "@/src/editor/model/ops";
 import { AUDIO_LIMITS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -15,21 +16,26 @@ export const fadeCap = (length: number): number => Math.max(0, Math.min(AUDIO_LI
 
 type SlidersProps = { fadeIn: number; fadeOut: number; length: number; onStart: () => void; onChange: (patch: FadePatch) => void };
 
-/** The "Fade in" / "Fade out" pair, shared by the track's fade sheet and the clip's Volume sheet. `onStart` opens the drag's undo step. */
+/**
+ * The "Fade in" / "Fade out" pair, shared by the track's fade sheet and the clip's Volume sheet. `onStart` opens the drag's undo step.
+ * The stored fades may be longer than a trimmed track / clip allows (storage keeps what the user set): what is shown is what the
+ * mix plays — `fitFades` — while a drag writes at most `fadeCap`.
+ */
 export function FadeSliders({ fadeIn, fadeOut, length, onStart, onChange }: SlidersProps) {
   const cap = fadeCap(length);
+  const fitted = fitFades(fadeIn, fadeOut, length);
   const slider = (key: "fadeIn" | "fadeOut", label: string, testID: string, value: number) => (
     <>
-      <Body muted>{label} {Math.min(value, cap).toFixed(1)} s</Body>
-      <Slider testID={testID} minimumValue={AUDIO_LIMITS.fade[0]} maximumValue={cap} step={0.05} value={Math.min(value, cap)} disabled={cap <= 0}
+      <Body muted>{label} {value.toFixed(1)} s</Body>
+      <Slider testID={testID} minimumValue={AUDIO_LIMITS.fade[0]} maximumValue={cap} step={0.05} value={value} disabled={cap <= 0}
         onSlidingStart={onStart} onValueChange={(v) => onChange({ [key]: Math.max(0, Math.min(v, cap)) })}
         minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
     </>
   );
   return (
     <>
-      {slider("fadeIn", "Fade in", "fade-in", fadeIn)}
-      {slider("fadeOut", "Fade out", "fade-out", fadeOut)}
+      {slider("fadeIn", "Fade in", "fade-in", fitted.in)}
+      {slider("fadeOut", "Fade out", "fade-out", fitted.out)}
     </>
   );
 }

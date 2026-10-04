@@ -29,7 +29,7 @@ import { replaceClipMedia, setClipAnimation, setClipReversed, setClipSpeed, setC
 import { StyleSheet } from "react-native";
 import { FILTERS } from "@/src/editor/effects";
 import { shakeOffset } from "@/src/editor/model/effectMath";
-import { DEFAULT_ADJUST, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, type Clip } from "@/src/editor/model/types";
+import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
 
@@ -518,6 +518,17 @@ test("tapping the preview with an effect selected deselects it without starting 
   await render(<PreviewPlayer />);
   await fireEvent.press(screen.getByLabelText("Preview"));
   expect(useEditorStore.getState().selectedEffectId).toBeNull();
+  expect(useEditorStore.getState().isPlaying).toBe(false);
+  await fireEvent.press(screen.getByLabelText("Preview"));
+  expect(useEditorStore.getState().isPlaying).toBe(true);
+});
+
+test("tapping the preview with an audio track selected deselects it without starting playback; the next tap plays", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], audioTracks: [makeAudioTrack({ id: "m1", sourceDuration: 4 })] }));
+  useEditorStore.getState().selectAudio("m1");
+  await render(<PreviewPlayer />);
+  await fireEvent.press(screen.getByLabelText("Preview"));
+  expect(useEditorStore.getState().selectedAudioId).toBeNull();
   expect(useEditorStore.getState().isPlaying).toBe(false);
   await fireEvent.press(screen.getByLabelText("Preview"));
   expect(useEditorStore.getState().isPlaying).toBe(true);

@@ -78,7 +78,7 @@ describe("one un-faded music track, no ducking: exactly the calls the single-pla
     expect(p.calls).toEqual([["seekTo", 1, 0, 0]]);
 
     clear();
-    await setPlaying(true); // the player sits at 0: beyond the tolerance, so it is seeked, then played
+    await setPlaying(true); // about to start: always seeked, then played
     expect(p.calls).toEqual([["seekTo", 1, 0, 0], ["play"]]);
 
     clear();
@@ -94,7 +94,7 @@ describe("one un-faded music track, no ducking: exactly the calls the single-pla
 
     clear();
     await act(() => { st().apply((x) => updateAudioTrackById(x, "m", { volume: 0.5 })); });
-    expect(p.calls).toEqual([["volume", 0.5], ["seekTo", 5, 0, 0]]);
+    expect(p.calls).toEqual([["volume", 0.5]]); // paused and already at 5: not seeked again
 
     clear();
     await act(() => { st().apply((x) => setClipTransform(x, "a", { x: 0.2 })); }); // nothing to do with audio
@@ -145,6 +145,105 @@ describe("one un-faded music track, no ducking: exactly the calls the single-pla
   });
 });
 
+describe("starting, and re-starting, a track", () => {
+  // start 2 and binary-exact playheads, so the source times are exact
+  const blip = makeAudioTrack({ id: "s", sourceDuration: 0.125, start: 2, kind: "sfx" });
+
+  test("a short sound that has played to its end is seeked back when the playhead re-enters it, before play()", async () => {
+    load([blip]);
+    await render(<AudioPreview />);
+    const p = playerOf("s");
+    await setPlaying(true);
+    await seek(2.0625);
+    expect(p.calls.slice(-2)).toEqual([["seekTo", 0.0625, 0, 0], ["play"]]);
+    p.currentTime = 0.125; // it played to its end and stays there
+    await seek(2.25);
+    expect(p.playing).toBe(false);
+    clear();
+    await seek(1); // the user scrubs back while playing
+    expect(p.calls).toEqual([]);
+    await seek(2.03125); // 0.09 s from where the player sits: far inside the drift tolerance, and still it must seek
+    expect(p.calls).toEqual([["seekTo", 0.03125, 0, 0], ["play"]]);
+    await setPlaying(false);
+  });
+
+  test("resuming inside a track seeks before play() even when the player already sits there", async () => {
+    load([makeAudioTrack({ id: "m", sourceDuration: 10 })]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await seek(3);
+    p.currentTime = 3;
+    clear();
+    await setPlaying(true);
+    expect(p.calls).toEqual([["seekTo", 3, 0, 0], ["play"]]);
+    await setPlaying(false);
+  });
+
+  test("play() is called once per entry, not on every tick the player reports it is not playing", async () => {
+    load([makeAudioTrack({ id: "m", sourceDuration: 4, start: 2 })]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await setPlaying(true);
+    await seek(2.5);
+    expect(p.play).toHaveBeenCalledTimes(1);
+    p.playing = false; // buffering, or the file ended early
+    for (const t of [2.6, 2.7, 2.8]) { p.currentTime = t - 2; await seek(t); }
+    expect(p.play).toHaveBeenCalledTimes(1);
+    await seek(7); // leaves…
+    expect(p.pause).toHaveBeenCalledTimes(1);
+    await seek(3); // …and enters again: one more
+    expect(p.play).toHaveBeenCalledTimes(2);
+    await setPlaying(false);
+    await setPlaying(true); // pausing ends the entry too
+    expect(p.play).toHaveBeenCalledTimes(3);
+    await setPlaying(false);
+  });
+
+  test("the player's own playing flag is not read on playhead ticks", async () => {
+    load([makeAudioTrack({ id: "m", sourceDuration: 10, fadeIn: 2 })]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    let reads = 0;
+    let playing = false;
+    Object.defineProperty(p, "playing", { configurable: true, get: () => { reads++; return playing; }, set: (v: boolean) => { playing = v; } });
+    await setPlaying(true);
+    for (const t of [0.5, 1, 1.5, 3, 4]) { p.currentTime = t; await seek(t); }
+    await setPlaying(false);
+    await seek(12);
+    expect(reads).toBe(0);
+  });
+
+  test("paused: edits to the track (volume, fades) and unrelated edits do not seek again; a new target does", async () => {
+    load([makeAudioTrack({ id: "m", sourceDuration: 10 })]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await seek(1);
+    clear();
+    await act(() => { st().apply((x) => updateAudioTrackById(x, "m", { volume: 0.5 })); });
+    await act(() => { st().apply((x) => updateAudioTrackById(x, "m", { fadeIn: 2 })); });
+    await act(() => { st().apply((x) => updateAudioTrackById(x, "m", { fadeOut: 1 })); });
+    await act(() => { st().apply((x) => setClipTransform(x, "a", { x: 0.2 })); });
+    expect(p.seekTo).toHaveBeenCalledTimes(2); // the mount and the scrub to 1, nothing since
+    expect(volumeWrites(p)).toEqual([0.5, 0.25]);
+    clear();
+    await act(() => { st().apply((x) => updateAudioTrackById(x, "m", { trimStart: 2 })); }); // same playhead, another place in the file
+    expect(p.calls.filter((c) => c[0] === "seekTo")).toEqual([["seekTo", 3, 0, 0]]);
+    clear();
+    await seek(1.5);
+    expect(p.calls.filter((c) => c[0] === "seekTo")).toEqual([["seekTo", 3.5, 0, 0]]);
+  });
+
+  test("a file that is swapped is seeked again even at the same target", async () => {
+    load([makeAudioTrack({ id: "m", sourceDuration: 10 })]);
+    await render(<AudioPreview />);
+    const p = players[0];
+    await seek(1);
+    clear();
+    await act(() => { st().apply((x) => ({ ...x, audioTracks: [{ ...x.audioTracks[0], sourceUri: "file:///media/other.m4a" }] })); });
+    expect(p.calls).toEqual([["replace", "file:///media/other.m4a"], ["volume", 1], ["seekTo", 1, 0, 0]]);
+  });
+});
+
 describe("several tracks", () => {
   const music = makeAudioTrack({ id: "m", sourceDuration: 10 });
   const voice = makeAudioTrack({ id: "v", sourceDuration: 2, start: 4, kind: "voice" });
@@ -189,6 +288,15 @@ describe("several tracks", () => {
     expect(playerOf("m").volume).toBe(1);
     await seek(5);
     await act(() => { st().apply((x) => setDucking(x, false)); });
+    expect(playerOf("m").volume).toBe(1);
+  });
+
+  test("a voice track whose file is missing is not heard, so it does not duck the music", async () => {
+    load([music, voice], { ducking: true }, [uriOf("v")]);
+    await render(<AudioPreview />);
+    await seek(5);
+    expect(playerOf("m").volume).toBe(1);
+    await seek(3.85);
     expect(playerOf("m").volume).toBe(1);
   });
 

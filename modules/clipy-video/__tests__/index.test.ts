@@ -310,11 +310,19 @@ describe("toExportAudioTrack", () => {
       gain: [{ time: 1, gain: 0 }, { time: 3, gain: 0.8 }, { time: 10, gain: 0.8 }, { time: 11, gain: 0 }],
     });
   });
-  it("clips a track that runs past the end: trimEnd reduced, the curve cut with an interpolated last breakpoint", () => {
+  it("clips a track that runs past the end: trimEnd reduced, the curve cut there; music cut while still audible ends on silence (the safety fade), its own fade-out or not", () => {
     const e = toExportAudioTrack(makeProject({ audioTracks: [music] }), music, 10.5)!;
     expect(e).toMatchObject({ start: 1, trimStart: 2, trimEnd: 11.5 });
-    expect(e.gain.map((b) => b.time)).toEqual([1, 3, 10, 10.5]);
-    expect(e.gain[3].gain).toBeCloseTo(0.4, 9);
+    const times = e.gain.map((b) => b.time);
+    expect(times.slice(0, 3)).toEqual([1, 3, 9.5]);   // the safety fade starts a second before the cut
+    expect(times).toContain(10);                       // where the track's own fade-out starts
+    expect(e.gain[2].gain).toBeCloseTo(0.8, 9);
+    expect(e.gain[e.gain.length - 1]).toEqual({ time: 10.5, gain: 0 });
+    // a voice-over cut the same way keeps its interpolated last breakpoint
+    const voice = { ...music, id: "v", kind: "voice" as const };
+    const v = toExportAudioTrack(makeProject({ audioTracks: [voice] }), voice, 10.5)!;
+    expect(v.gain.map((b) => b.time)).toEqual([1, 3, 10, 10.5]);
+    expect(v.gain[3].gain).toBeCloseTo(0.4, 9);
   });
   it("clips a track that starts before 0", () => {
     const sfx = makeAudioTrack({ id: "s", sourceDuration: 5, kind: "sfx", start: -2 });

@@ -278,18 +278,16 @@ function cleanAudioTrack(t: AudioTrack): AudioTrack {
 }
 
 /**
- * The track at index `i` with the patch written and cleaned (`cleanAudioTrack`), each fade then cut to half the track's length.
- * A key set to `undefined` is ignored (it would wipe the stored value). Same project when nothing changes or a patched number is
- * not finite.
+ * The track at index `i` with the patch written and cleaned (`cleanAudioTrack`). The fades are kept as the user set them however
+ * short the track is trimmed (this runs on every frame of a trim drag: shrinking them here would lose them for good) — `audioMix`
+ * fits them to the length. A key set to `undefined` is ignored (it would wipe the stored value). Same project when nothing
+ * changes or a patched number is not finite.
  */
 function patchAudioTrack(p: Project, i: number, patch: AudioPatch): Project {
   const t = p.audioTracks[i];
   const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as AudioPatch;
   if (AUDIO_NUMBER_KEYS.some((k) => defined[k] !== undefined && !Number.isFinite(defined[k]))) return p;
-  const cleaned = cleanAudioTrack({ ...t, ...defined });
-  // A fade is at most half the track's (new) length, so the fade sheet's label, its cap and the mix agree after a trim.
-  const half = r2((cleaned.trimEnd - cleaned.trimStart) / 2);
-  const next: AudioTrack = { ...cleaned, fadeIn: Math.min(cleaned.fadeIn, half), fadeOut: Math.min(cleaned.fadeOut, half) };
+  const next = cleanAudioTrack({ ...t, ...defined });
   if (sameJson(next, t)) return p;
   const audioTracks = p.audioTracks.slice(); audioTracks[i] = next;
   return touch(p, { audioTracks });
@@ -328,21 +326,6 @@ export function duplicateAudioTrack(p: Project, id: string): Project {
   const src = p.audioTracks[i];
   const copy: AudioTrack = { ...src, id: newId(), start: r3(src.start + (src.trimEnd - src.trimStart)) };
   return touch(p, { audioTracks: [...p.audioTracks.slice(0, i + 1), copy, ...p.audioTracks.slice(i + 1)] });
-}
-
-/** @deprecated Single-track API (the music sheet until it becomes the Add audio sheet): now ADDS the track — use `addAudioTrack`. */
-export function setAudioTrack(p: Project, track: AudioTrack): Project {
-  return addAudioTrack(p, track);
-}
-
-/** @deprecated Single-track API: patches the FIRST track — use `updateAudioTrackById`. */
-export function updateAudioTrack(p: Project, patch: AudioPatch): Project {
-  return p.audioTracks.length === 0 ? p : patchAudioTrack(p, 0, patch);
-}
-
-/** @deprecated Single-track API: removes the FIRST track — use `deleteAudioTrack`. */
-export function removeAudioTrack(p: Project): Project {
-  return p.audioTracks.length === 0 ? p : deleteAudioTrack(p, p.audioTracks[0].id);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { clipGainAt, clipGainCurve, cutCurve, duckFactorAt, END_FADE, exportTrackCurve, fadeEnvelope, fitFades, gainOnCurve, trackGainAt, trackGainCurve, voiceIntervals, withEndFade } from "../audioMix";
+import { clipGainAt, clipGainCurve, cutCurve, duckFactorAt, END_FADE, exportTrackCurve, fadeEnvelope, fitFades, gainOnCurve, restGain, trackGainAt, trackGainCurve, voiceIntervals, withEndFade } from "../audioMix";
 import { DUCKING, makeAudioTrack, makeClip, makePhotoClip, makeProject, type AudioTrack, type Project } from "../types";
 import { CLIP_CURVE_VECTORS, CURVE_VECTORS, DUCK_VECTORS, END_FADE_VECTORS, ENVELOPE_VECTORS, FINE_OVERLAP_CURVE, FIT_VECTORS, INTERVAL_EXPECT, INTERVAL_TRACKS,
   OVERLAP_CURVE, type MixTrack } from "./audioMix.vectors";
@@ -316,6 +316,18 @@ describe("withEndFade", () => {
   });
 });
 
+describe("restGain", () => {
+  it("is the track's own volume (what an un-faded track plays at), never negative, 0 for a broken volume", () => {
+    const at = (volume: number) => restGain(makeAudioTrack({ id: "r", sourceDuration: 5, volume, fadeIn: 2, fadeOut: 2 }));
+    expect(at(0.8)).toBe(0.8);
+    expect(at(2)).toBe(2);
+    expect(at(0)).toBe(0);
+    expect(at(-1)).toBe(0);
+    expect(at(NaN)).toBe(0);
+    expect(at(Infinity)).toBe(0);
+  });
+});
+
 describe("exportTrackCurve", () => {
   const curveOf = (m: Partial<MixTrack>, total: number, others: MixTrack[] = [], ducking = false) => {
     const { p, t } = projectOf({ start: 0, trimStart: 0, trimEnd: 9, volume: 1, kind: "music", fadeIn: 0, fadeOut: 0, ...m }, others, ducking);
@@ -337,10 +349,22 @@ describe("exportTrackCurve", () => {
     expect(curveOf({ trimEnd: 7.995 }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 6.995, gain: 1 }, { time: 7.995, gain: 0 }]);
     expect(curveOf({ trimEnd: 7.9 }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 7.9, gain: 1 }]);
   });
-  it("music with its own fade-out gets no extra fade: the curve is only cut", () => {
-    const cut = curveOf({ fadeOut: 1 }, 8.5);       // own fade over 8 … 9
-    expect(cut.map((b) => b.time)).toEqual([0, 8, 8.5]);
-    [1, 1, 0.5].forEach((g, i) => expect(cut[i].gain).toBeCloseTo(g, 9));
+  it("a fade-out the video never reaches does not switch the safety fade off: a 60 s song with a 2 s fade-out on a 20 s video", () => {
+    expect(curveOf({ trimEnd: 60, fadeOut: 2 }, 20)).toEqual([{ time: 0, gain: 1 }, { time: 19, gain: 1 }, { time: 20, gain: 0 }]);
+  });
+  it("music cut in the middle of its own fade-out still ends on silence: the two fades multiply", () => {
+    const { p, t } = projectOf({ start: 0, trimStart: 0, trimEnd: 9, volume: 1, kind: "music", fadeIn: 0, fadeOut: 1 }, [], false);   // own fade over 8 … 9
+    const curve = exportTrackCurve(p, t, 8.5);
+    expect(curve[0]).toEqual({ time: 0, gain: 1 });
+    expect(curve[curve.length - 1]).toEqual({ time: 8.5, gain: 0 });
+    for (let i = 0; i < 850; i++) {
+      const time = (i + 0.5) / 100;
+      expect(Math.abs(interpolate(curve, time) - trackGainAt(p, t, time) * Math.min(1, 8.5 - time))).toBeLessThanOrEqual(0.01);
+    }
+  });
+  it("music whose own fade-out ends with the video is already silent there: no extra fade", () => {
+    expect(curveOf({ trimEnd: 8, fadeOut: 1 }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 7, gain: 1 }, { time: 8, gain: 0 }]);
+    expect(curveOf({ trimEnd: 8, fadeOut: 3 }, 8).map((b) => b.time)).toEqual([0, 5, 8]);
   });
   it("voice-overs and sound effects are cut without a fade", () => {
     expect(curveOf({ kind: "voice" }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 8, gain: 1 }]);

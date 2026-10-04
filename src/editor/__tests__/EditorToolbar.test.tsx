@@ -427,12 +427,12 @@ describe("Audio tools", () => {
     expect(past()).toBe(2);
   });
 
-  test("selecting a track jumps to Audio and shows exactly Volume, Fade, Duplicate, Delete; deselecting restores the tools", async () => {
+  test("selecting a track jumps to Audio and shows exactly Add audio, Volume, Fade, Duplicate, Delete; deselecting restores the tools", async () => {
     withAudio();
     await renderBar();
     await act(() => { useEditorStore.getState().selectAudio("t1"); });
     expect(screen.getByRole("tab", { name: "Audio" })).toBeSelected();
-    expect(row()).toEqual(["Volume", "Fade", "Duplicate", "Delete"]);
+    expect(row()).toEqual(["Add audio", "Volume", "Fade", "Duplicate", "Delete"]);
     for (const l of row()) expect(btn(l)).toBeEnabled();
     await openGroup("Edit");
     expect(btn("Split")).toBeTruthy();
@@ -441,6 +441,16 @@ describe("Audio tools", () => {
     await act(() => { useEditorStore.getState().selectAudio(null); });
     expect(screen.getByRole("tab", { name: "Audio" })).toBeSelected();
     expect(row()).toEqual(["Add audio", "Volume", "Ducking", "Beats"]);
+  });
+
+  test("with a track selected, Add audio opens the sheet without deselecting", async () => {
+    withAudio();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectAudio("t1"); });
+    expect(screen.queryByRole("header", { name: "Add audio" })).toBeNull();
+    await fireEvent.press(btn("Add audio"));
+    expect(screen.getByRole("header", { name: "Add audio" })).toBeTruthy();
+    expect(useEditorStore.getState().selectedAudioId).toBe("t1");
   });
 
   test("Volume opens the selected track's volume sheet, Fade its fade sheet", async () => {
@@ -468,7 +478,7 @@ describe("Audio tools", () => {
     expect(tracks().map((t) => t.id)).toEqual(["t1", "dup", "t2"]);
     expect(past()).toBe(1);
     expect(useEditorStore.getState().selectedAudioId).toBe("dup");
-    expect(row()).toEqual(["Volume", "Fade", "Duplicate", "Delete"]);
+    expect(row()).toEqual(["Add audio", "Volume", "Fade", "Duplicate", "Delete"]);
     expect(useToast.getState().message).toBeNull();
   });
 

@@ -163,6 +163,63 @@ test("a limit reached while the file was being imported is refused the same way"
   expect(useEditorStore.getState().selectedAudioId).toBeNull();
 });
 
+test("an add refused for another reason than the limit does not blame the limit", async () => {
+  useEditorStore.getState().apply((p) => ({ ...p, audioTracks: [makeAudioTrack({ id: "same", sourceDuration: 5 })] }));
+  importAudio.mockImplementationOnce(async (_id: string, a: { title: string; durationSec: number }) => makeAudioTrack({ id: "same", title: a.title, sourceDuration: a.durationSec }));
+  const order: string[] = [];
+  const onClose = jest.fn(() => { order.push(`close:${useToast.getState().message}`); });
+  await render(<AddAudioSheet visible onClose={onClose} />);
+  await fireEvent.press(btn("Use Sunny Loop"));
+  await waitFor(() => expect(useToast.getState().message).toBe("Couldn't add that audio file."));
+  expect(order).toEqual(["close:null"]);
+  expect(tracks()).toHaveLength(1);
+  expect(useEditorStore.getState().selectedAudioId).toBeNull();
+});
+
+describe("the playhead at the project's end", () => {
+  const MESSAGE = "Move the playhead back to add audio here.";
+
+  test("nothing is imported (the track would never be heard): the sheet closes, then the toast shows", async () => {
+    const order: string[] = [];
+    const onClose = jest.fn(() => { order.push(`close:${useToast.getState().message}`); });
+    await render(<AddAudioSheet visible onClose={onClose} />);
+    await act(() => { useEditorStore.getState().seek(10); });
+    await fireEvent.press(btn("Use Sunny Loop"));
+    expect(useToast.getState().message).toBe(MESSAGE);
+    expect(order).toEqual(["close:null"]);
+    expect(importAudio).not.toHaveBeenCalled();
+    expect(tracks()).toEqual([]);
+    expect(useEditorStore.getState().past).toHaveLength(0);
+  });
+
+  test("within 0.05 s of the end counts as the end, for sound effects too; just before it is fine", async () => {
+    await render(<AddAudioSheet visible onClose={() => {}} />);
+    await fireEvent.press(btn("Effects"));
+    await act(() => { useEditorStore.getState().seek(9.96); });
+    await fireEvent.press(btn("Add Pop"));
+    expect(useToast.getState().message).toBe(MESSAGE);
+    expect(importAudio).not.toHaveBeenCalled();
+    useToast.getState().clear();
+    await act(() => { useEditorStore.getState().seek(9.9); });
+    await fireEvent.press(btn("Add Pop"));
+    await waitFor(() => expect(tracks()).toHaveLength(1));
+    expect(tracks()[0].start).toBe(9.9);
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("Files: the picker is not opened", async () => {
+    (DocumentPicker.getDocumentAsync as jest.Mock).mockClear();
+    const onClose = jest.fn();
+    await render(<AddAudioSheet visible onClose={onClose} />);
+    await act(() => { useEditorStore.getState().seek(10); });
+    await fireEvent.press(btn("Files"));
+    await fireEvent.press(btn("Choose a file"));
+    expect(useToast.getState().message).toBe(MESSAGE);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(DocumentPicker.getDocumentAsync).not.toHaveBeenCalled();
+  });
+});
+
 test("the sheet only adds: with tracks present it shows no track controls", async () => {
   useEditorStore.getState().apply((p) => ({ ...p, audioTracks: [makeAudioTrack({ id: "m", sourceUri: "file:///p/m.mp3", title: "Loop", sourceDuration: 20 })] }));
   await render(<AddAudioSheet visible onClose={() => {}} />);
@@ -179,7 +236,7 @@ test("a bundled track that fails to download shows a toast instead of throwing",
   const onClose = jest.fn();
   await render(<AddAudioSheet visible onClose={onClose} />);
   await fireEvent.press(btn("Use Sunny Loop"));
-  await waitFor(() => expect(useToast.getState().message).toBe("Couldn't add that audio file"));
+  await waitFor(() => expect(useToast.getState().message).toBe("Couldn't add that audio file."));
   expect(tracks()).toEqual([]);
   expect(useEditorStore.getState().past).toHaveLength(0);
   await waitFor(() => expect(btn("Use Sunny Loop")).toBeEnabled());
@@ -270,7 +327,7 @@ test("Files: busy from the press on, and a picker that fails is a toast", async 
   await fireEvent.press(btn("Choose a file"));
   expect(btn("Choose a file")).toBeDisabled();
   await act(async () => { fail(new Error("picker broke")); });
-  await waitFor(() => expect(useToast.getState().message).toBe("Couldn't add that audio file"));
+  await waitFor(() => expect(useToast.getState().message).toBe("Couldn't add that audio file."));
   await waitFor(() => expect(btn("Choose a file")).toBeEnabled());
   expect(tracks()).toEqual([]);
   expect(DocumentPicker.getDocumentAsync).toHaveBeenCalledTimes(1);

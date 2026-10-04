@@ -18,7 +18,7 @@ export function AudioLane({ kind }: { kind: AudioKind }) {
     <View testID={`${kind}-lane`} style={{ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP }}>
       {tracks.map((t, i) => (
         <AudioBar key={t.id} track={t} missing={missing.includes(t.sourceUri)} selected={t.id === selectedId}
-          // Later tracks draw on top; one that covers part of an earlier bar is see-through so both stay visible.
+          // Later tracks draw on top (the selected one above them all — see AudioBar); one that covers part of an earlier bar is see-through so both stay visible.
           overlapping={tracks.slice(0, i).some((o) => t.start < end(o) && o.start < end(t))}
           onPress={() => selectAudio(t.id === selectedId ? null : t.id)} />
       ))}

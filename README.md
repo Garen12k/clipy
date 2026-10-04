@@ -255,7 +255,7 @@ Everything here is in the **Audio** group of the toolbar.
 - **Voice-over** - the video plays with all other sound muted while you talk. The recording lands on the
   timeline where you started.
 - **Tracks** - up to 12. Each is a bar on its own lane (music, voice, sound effects). Tap a bar to select it:
-  **Volume**, **Fade** (in and out, up to 5 s each), **Duplicate**, **Delete**. Long-press a bar to move it;
+  **Add audio**, **Volume**, **Fade** (in and out, up to 5 s each), **Duplicate**, **Delete**. Long-press a bar to move it;
   drag its handles to trim.
 - **Clip sound** - a clip's own sound also has **Fade in** and **Fade out** (in the clip's Volume sheet).
 - **Ducking** - a switch in the Audio tools: music dips to 30 % while a voice-over plays.

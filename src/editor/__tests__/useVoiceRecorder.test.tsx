@@ -7,7 +7,8 @@ const mockRecorder: MockRecorder = {
   currentTime: 0, uri: "file:///cache/rec.m4a", isRecording: false, durationMillis: 0,
   prepareToRecordAsync: jest.fn(async () => { mockCalls.push(["prepare"]); }),
   record: jest.fn(() => { mockCalls.push(["record"]); mockRecorder.isRecording = true; }),
-  stop: jest.fn(async () => { mockCalls.push(["stop"]); mockRecorder.isRecording = false; }),
+  // Like the native recorder, stopping zeroes its clock: the length must be read before stop().
+  stop: jest.fn(async () => { mockCalls.push(["stop"]); mockRecorder.isRecording = false; mockRecorder.currentTime = 0; mockRecorder.durationMillis = 0; }),
   getStatus: jest.fn(() => ({ canRecord: true, isRecording: mockRecorder.isRecording, durationMillis: mockRecorder.durationMillis, mediaServicesDidReset: false, url: mockRecorder.uri })),
 };
 jest.mock("expo-audio", () => ({
@@ -16,6 +17,8 @@ jest.mock("expo-audio", () => ({
   requestRecordingPermissionsAsync: jest.fn(async () => { mockCalls.push(["permission"]); return { granted: true, status: "granted" }; }),
   setAudioModeAsync: jest.fn(async (mode: unknown) => { mockCalls.push(["mode", mode]); }),
 }));
+// The saved file's measured length; by default it cannot be read, and the recorder's own figure stands.
+jest.mock("@/src/projects/audioInfo", () => ({ audioDuration: jest.fn(async () => { throw new Error("unreadable"); }) }));
 let mockN = 0;
 jest.mock("@/src/projects", () => ({ storage: { importAudio: jest.fn(async (_id: string, a: { uri: string; title: string; durationSec: number }, kind: string = "music") => ({ id: `v${++mockN}`, sourceUri: `file:///p/v${mockN}.m4a`, title: a.title, sourceDuration: a.durationSec, start: 0, trimStart: 0, trimEnd: a.durationSec, volume: 1, kind, fadeIn: 0, fadeOut: 0 })) } }));
 import { requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from "expo-audio";
@@ -23,10 +26,12 @@ import { PLAYBACK_AUDIO_MODE, RECORDING_AUDIO_MODE } from "@/src/editor/audioMod
 import { AUDIO_LIMITS, makeAudioTrack, makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { storage } from "@/src/projects";
+import { audioDuration } from "@/src/projects/audioInfo";
 import { useToast } from "@/src/ui/Toast";
 import { useVoiceRecorder } from "../useVoiceRecorder";
 
 const importAudio = storage.importAudio as jest.Mock;
+const measure = audioDuration as jest.Mock;
 const permission = requestRecordingPermissionsAsync as jest.Mock;
 const setMode = setAudioModeAsync as jest.Mock;
 const st = () => useEditorStore.getState();
@@ -101,6 +106,150 @@ test("stop: the track lands where recording began with the recorder's duration, 
   expect(onDismiss).toHaveBeenCalledTimes(1);
   expect(toast()).toBeNull();
   expect(r.current.state).toBe("idle");
+});
+
+test("the recorder's figure from before stop() is used, not the wall clock (stopping zeroes the recorder's clock)", async () => {
+  const now = jest.spyOn(Date, "now");
+  try {
+    now.mockReturnValue(1_000_000);
+    const r = await mount();
+    await act(async () => { await r.current.start(); });
+    mockRecorder.currentTime = 3.2;
+    now.mockReturnValue(1_009_000);   // 9 s on the wall clock
+    await act(async () => { await r.current.stop(); });
+    expect(mockRecorder.currentTime).toBe(0);
+    expect(importAudio).toHaveBeenLastCalledWith("p1", expect.objectContaining({ durationSec: 3.2 }), "voice");
+  } finally { now.mockRestore(); }
+});
+
+describe("where the track starts", () => {
+  test("at the playhead read right after record() returns: time spent getting the recorder ready does not shift it", async () => {
+    mockRecorder.prepareToRecordAsync.mockImplementationOnce(async () => { mockCalls.push(["prepare"]); st().seek(2.75); });   // the playhead moved meanwhile
+    const r = await mount();
+    st().seek(2);
+    await act(async () => { await r.current.start(); });
+    mockRecorder.currentTime = 1;
+    await act(async () => { await r.current.stop(); });
+    expect(st().project!.audioTracks[0]).toMatchObject({ kind: "voice", start: 2.75 });
+  });
+
+  test("playback that was running is paused before the recorder is prepared, and started again after record()", async () => {
+    const seen: Record<string, boolean> = {};
+    mockRecorder.prepareToRecordAsync.mockImplementationOnce(async () => { mockCalls.push(["prepare"]); seen.prepare = st().isPlaying; });
+    mockRecorder.record.mockImplementationOnce(() => { mockCalls.push(["record"]); seen.record = st().isPlaying; });
+    const r = await mount();
+    st().seek(3);
+    st().setPlaying(true);
+    await act(async () => { await r.current.start(); });
+    expect(seen).toEqual({ prepare: false, record: false });
+    expect(st().isPlaying).toBe(true);
+    expect(r.current.state).toBe("recording");
+    mockRecorder.currentTime = 1;
+    await act(async () => { await r.current.stop(); });
+    expect(st().project!.audioTracks[0]).toMatchObject({ start: 3 });
+  });
+});
+
+describe("the track's length", () => {
+  const recorded = async (reported: number, measured: number | Error) => {
+    const r = await mount();
+    await act(async () => { await r.current.start(); });
+    mockRecorder.currentTime = reported;
+    if (measured instanceof Error) measure.mockRejectedValueOnce(measured); else measure.mockResolvedValueOnce(measured);
+    await act(async () => { await r.current.stop(); });
+    return r;
+  };
+
+  test("the saved file measured shorter than the recorder said: the file's length is the track's", async () => {
+    await recorded(3.2, 2.9);
+    expect(measure).toHaveBeenCalledWith("file:///cache/rec.m4a");
+    expect(importAudio).toHaveBeenCalledWith("p1", { uri: "file:///cache/rec.m4a", title: "Voice-over", durationSec: 2.9 }, "voice");
+    expect(st().project!.audioTracks[0]).toMatchObject({ sourceDuration: 2.9, trimEnd: 2.9 });
+  });
+
+  test("measured longer: the recorder's figure stands", async () => {
+    await recorded(3.2, 5);
+    expect(st().project!.audioTracks[0]).toMatchObject({ sourceDuration: 3.2, trimEnd: 3.2 });
+  });
+
+  test("a file that cannot be measured (or measures as nothing): the recorder's figure stands", async () => {
+    await recorded(3.2, new Error("unreadable"));
+    expect(st().project!.audioTracks[0]).toMatchObject({ sourceDuration: 3.2, trimEnd: 3.2 });
+    await act(() => { st().seek(0); });
+    await recorded(2, 0);
+    expect(st().project!.audioTracks[1]).toMatchObject({ sourceDuration: 2, trimEnd: 2 });
+  });
+
+  test("a file measured shorter than the minimum is too short", async () => {
+    await recorded(3, AUDIO_LIMITS.minDuration - 0.1);
+    expect(toast()).toBe("That recording was too short.");
+    expect(importAudio).not.toHaveBeenCalled();
+  });
+
+  test("a cancelled recording is not measured", async () => {
+    const r = await mount();
+    await act(async () => { await r.current.start(); });
+    mockRecorder.currentTime = 2;
+    await act(async () => { await r.current.cancel(); });
+    expect(measure).not.toHaveBeenCalled();
+  });
+});
+
+describe("after unmount nothing is shown", () => {
+  test("a save that finishes after the hook unmounted still adds the track, but calls no onDismiss and shows no toast", async () => {
+    let finish!: () => void;
+    importAudio.mockImplementationOnce((_id: string, a: { title: string; durationSec: number }) => new Promise((resolve) => {
+      finish = () => resolve(makeAudioTrack({ id: "late", title: a.title, sourceDuration: a.durationSec, kind: "voice" }));
+    }));
+    const onDismiss = jest.fn();
+    const view = await renderHook(() => useVoiceRecorder({ onDismiss }));
+    await act(async () => { await view.result.current.start(); });
+    mockRecorder.currentTime = 2;
+    let stopping!: Promise<void>;
+    await act(async () => { stopping = view.result.current.stop(); await Promise.resolve(); });
+    await act(async () => { await new Promise((r) => setImmediate(r)); });
+    expect(importAudio).toHaveBeenCalledTimes(1);
+    await act(async () => { await view.unmount(); });
+    await act(async () => { finish(); await stopping; });
+    expect(st().project!.audioTracks.map((t) => t.id)).toEqual(["late"]);
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(toast()).toBeNull();
+  });
+
+  test("a save that fails after the hook unmounted shows no toast", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    let fail!: (e: Error) => void;
+    importAudio.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+    const onDismiss = jest.fn();
+    const view = await renderHook(() => useVoiceRecorder({ onDismiss }));
+    await act(async () => { await view.result.current.start(); });
+    mockRecorder.currentTime = 2;
+    let stopping!: Promise<void>;
+    await act(async () => { stopping = view.result.current.stop(); await Promise.resolve(); });
+    await act(async () => { await new Promise((r) => setImmediate(r)); });
+    await act(async () => { await view.unmount(); });
+    await act(async () => { fail(new Error("disk full")); await stopping; });
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(toast()).toBeNull();
+    warn.mockRestore();
+  });
+
+  test("a start that fails after the hook unmounted shows no toast; everything is restored", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    let fail!: (e: Error) => void;
+    mockRecorder.prepareToRecordAsync.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+    const onDismiss = jest.fn();
+    const view = await renderHook(() => useVoiceRecorder({ onDismiss }));
+    let starting!: Promise<void>;
+    await act(async () => { starting = view.result.current.start(); await new Promise((r) => setImmediate(r)); });
+    expect(st().recording).toBe(true);
+    await act(async () => { await view.unmount(); });
+    await act(async () => { fail(new Error("released")); await starting; });
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(toast()).toBeNull();
+    expectRestored();
+    warn.mockRestore();
+  });
 });
 
 test("the recorder's status duration is used when it has no current time; the wall clock when it reports nothing", async () => {

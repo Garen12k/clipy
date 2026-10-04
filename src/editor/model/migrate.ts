@@ -87,7 +87,7 @@ function normaliseCurrent(raw: Raw): Raw {
     const intensity = typeof e.intensity === "number" && Number.isFinite(e.intensity) ? clampNum(e.intensity, 0, 1) : EFFECT_LIMITS.defaultIntensity;
     return [{ id: e.id, type: e.type as EffectItem["type"], start, end: Math.max(end, start + EFFECT_LIMITS.minDuration), intensity }];
   });
-  const audioTracks = (Array.isArray(raw.audioTracks) ? raw.audioTracks : []).filter(isObj).slice(0, AUDIO_LIMITS.maxTracks).map((a): AudioTrack => ({
+  const audioTracks = (Array.isArray(raw.audioTracks) ? raw.audioTracks : []).filter((a): a is Record<string, unknown> => isObj(a) && !Array.isArray(a)).slice(0, AUDIO_LIMITS.maxTracks).map((a): AudioTrack => ({
     ...(a as unknown as AudioTrack),
     kind: (AUDIO_KINDS as readonly unknown[]).includes(a.kind) ? (a.kind as AudioKind) : "music",
     fadeIn: clampFade(a.fadeIn), fadeOut: clampFade(a.fadeOut),

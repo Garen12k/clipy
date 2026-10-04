@@ -6,4 +6,3 @@ export function songTimeAt(t: AudioTrack, playhead: number): number | null {
   if (playhead < t.start || playhead >= trackEnd(t)) return null;
   return t.trimStart + (playhead - t.start);
 }
-export const isAudible = (t: AudioTrack, playhead: number): boolean => songTimeAt(t, playhead) !== null;

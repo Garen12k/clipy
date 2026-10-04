@@ -49,6 +49,16 @@ test("each fade drag is one undo step and writes the clip's fade", async () => {
   expect(clip()).toMatchObject({ fadeIn: 1.25, fadeOut: 0 });
 });
 
+test("clip fades longer than the clip show as the mix plays them (fitted); the stored fades are not touched", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "s", sourceDuration: 5, trimEnd: 2, fadeIn: 3, fadeOut: 1 })] }));
+  await render(<VolumeSheet clipId="s" visible onClose={() => {}} />);
+  expect(screen.getByText("Fade in 1.5 s")).toBeTruthy();   // 3 and 1 on 2 s → 1.5 and 0.5
+  expect(screen.getByText("Fade out 0.5 s")).toBeTruthy();
+  expect(screen.getByTestId("fade-in").props).toMatchObject({ maximumValue: 1, value: 1.5 });
+  expect(screen.getByTestId("fade-out").props).toMatchObject({ maximumValue: 1, value: 0.5 });
+  expect(clip()).toMatchObject({ fadeIn: 3, fadeOut: 1 });
+});
+
 test("a photo has no fade sliders", async () => {
   await render(<VolumeSheet clipId="p" visible onClose={() => {}} />);
   expect(screen.getByTestId("volume-slider")).toBeTruthy();

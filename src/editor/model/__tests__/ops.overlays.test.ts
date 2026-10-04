@@ -1,7 +1,7 @@
 jest.mock("@/src/lib/id", () => ({ newId: jest.fn(() => "new-id") }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { makeAudioTrack, makeClip, makeOverlay, makeProject } from "../types";
-import { addTextOverlay, defaultOverlayRange, deleteOverlay, duplicateOverlay, moveOverlay, removeAudioTrack, setAudioTrack, setClipMuted, setClipVolume, updateAudioTrack, updateOverlay } from "../ops";
+import { addAudioTrack, addTextOverlay, defaultOverlayRange, deleteAudioTrack, deleteOverlay, duplicateOverlay, moveOverlay, setClipMuted, setClipVolume, updateAudioTrackById, updateOverlay } from "../ops";
 
 const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [makeOverlay({ id: "o1", start: 1, end: 4 })] });
 
@@ -36,16 +36,16 @@ test("moveOverlay keeps duration and clamps; delete/duplicate", () => {
   expect(dup.overlays[1].y).toBeCloseTo(0.53);
 });
 
-test("audio track (deprecated single-track ops): set adds, update clamps the first, remove drops the first", () => {
+test("audio track: add appends, update clamps the named track, delete drops it", () => {
   const t = makeAudioTrack({ id: "m1", sourceDuration: 30 });
-  const withTrack = setAudioTrack(p, t);
+  const withTrack = addAudioTrack(p, t);
   expect(withTrack.audioTracks).toEqual([t]);
-  expect(setAudioTrack(withTrack, makeAudioTrack({ id: "m2", sourceDuration: 5 })).audioTracks.map((x) => x.id)).toEqual(["m1", "m2"]);
-  const upd = updateAudioTrack(withTrack, { trimStart: 29.8, trimEnd: 99, start: -2, volume: 9 });
+  expect(addAudioTrack(withTrack, makeAudioTrack({ id: "m2", sourceDuration: 5 })).audioTracks.map((x) => x.id)).toEqual(["m1", "m2"]);
+  const upd = updateAudioTrackById(withTrack, "m1", { trimStart: 29.8, trimEnd: 99, start: -2, volume: 9 });
   expect(upd.audioTracks[0]).toMatchObject({ trimStart: 29.5, trimEnd: 30, start: 0, volume: 2 });
-  expect(updateAudioTrack(p, { volume: 1 })).toBe(p); // no track → no-op
-  expect(removeAudioTrack(withTrack).audioTracks).toEqual([]);
-  expect(removeAudioTrack(p)).toBe(p);
+  expect(updateAudioTrackById(p, "m1", { volume: 1 })).toBe(p); // no track → no-op
+  expect(deleteAudioTrack(withTrack, "m1").audioTracks).toEqual([]);
+  expect(deleteAudioTrack(p, "m1")).toBe(p);
 });
 
 test("clip volume and mute", () => {

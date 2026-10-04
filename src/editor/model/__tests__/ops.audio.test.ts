@@ -3,7 +3,7 @@ jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }
 import { AUDIO_LIMITS, BEAT_LIMITS, makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject } from "../types";
 import {
   addAudioTrack, addBeatMarker, clearBeatMarkers, deleteAudioTrack, deleteClip, duplicateAudioTrack, duplicateClip, insertFreezeFrame, moveAudioTrack,
-  removeAudioTrack, removeBeatMarkerNear, replaceClipMedia, setAudioTrack, setClipFade, setDucking, splitClipAt, trimClip, updateAudioTrack, updateAudioTrackById,
+  removeBeatMarkerNear, replaceClipMedia, setClipFade, setDucking, splitClipAt, trimClip, updateAudioTrackById,
 } from "../ops";
 
 const music = makeAudioTrack({ id: "m1", sourceDuration: 30 });
@@ -46,14 +46,14 @@ describe("a patch key explicitly set to undefined is ignored", () => {
     expect(updateAudioTrackById(faded, "m1", { start: undefined })).toBe(faded);
     expect(updateAudioTrackById(faded, "m1", { trimStart: undefined, trimEnd: undefined })).toBe(faded);
     expect(updateAudioTrackById(faded, "m1", { volume: undefined, fadeIn: undefined, fadeOut: undefined })).toBe(faded);
-    expect(updateAudioTrack(faded, { start: undefined, title: undefined, kind: undefined })).toBe(faded);
+    expect(updateAudioTrackById(faded, "m1", { start: undefined, trimEnd: undefined, volume: undefined })).toBe(faded);
   });
 
   test("an undefined key beside a real one leaves its value alone", () => {
     expect(updateAudioTrackById(faded, "m1", { fadeIn: undefined, volume: 0.5 }).audioTracks[0]).toEqual({ ...first, volume: 0.5 });
     expect(updateAudioTrackById(faded, "m1", { start: undefined, trimEnd: 10 }).audioTracks[0]).toEqual({ ...first, trimEnd: 10 });
     expect(updateAudioTrackById(faded, "m1", { trimEnd: undefined, trimStart: undefined, start: 5 }).audioTracks[0]).toEqual({ ...first, start: 5 });
-    expect(updateAudioTrack(faded, { fadeOut: undefined, kind: undefined, volume: 2 }).audioTracks[0]).toEqual({ ...first, volume: 2 });
+    expect(updateAudioTrackById(faded, "m1", { fadeOut: undefined, trimStart: undefined, volume: 2 }).audioTracks[0]).toEqual({ ...first, volume: 2 });
   });
 });
 
@@ -79,27 +79,22 @@ describe("updateAudioTrackById", () => {
     const next = updateAudioTrackById(p, "m1", { start: -2, volume: 9, fadeIn: 7, fadeOut: -1 });
     expect(next.audioTracks[0]).toMatchObject({ start: 0, volume: 2, fadeIn: 5, fadeOut: 0 });
     expect(updateAudioTrackById(p, "m1", { start: 1.23456 }).audioTracks[0].start).toBe(1.235);
-    // a fade is at most half the track's length, so the sheet's label, its cap and the mix agree
-    expect(track(updateAudioTrackById(p, "s1", { fadeIn: 3, fadeOut: 4 }), "s1")).toMatchObject({ fadeIn: 0.5, fadeOut: 0.5 });
+    // fades are stored as the user set them, even on a short track: the mix fits them to the length (fitFades)
+    expect(track(updateAudioTrackById(p, "s1", { fadeIn: 3, fadeOut: 4 }), "s1")).toMatchObject({ fadeIn: 3, fadeOut: 4 });
   });
 
-  test("shortening a track clamps its stored fades to half the new length", () => {
+  test("trimming never touches the stored fades: a handle dragged in and back out leaves them as they were", () => {
     const long = makeProject({ clips: base.clips, audioTracks: [{ ...music, fadeIn: 5, fadeOut: 3 }, voice] });
     const trimmed = updateAudioTrackById(long, "m1", { trimEnd: 4 });
-    expect(trimmed.audioTracks[0]).toEqual({ ...music, trimEnd: 4, fadeIn: 2, fadeOut: 2 });
+    expect(trimmed.audioTracks[0]).toEqual({ ...music, trimEnd: 4, fadeIn: 5, fadeOut: 3 });
     expect(trimmed.audioTracks[1]).toBe(voice);
-    expect(updateAudioTrackById(long, "m1", { trimStart: 24.5 }).audioTracks[0]).toMatchObject({ fadeIn: 2.75, fadeOut: 2.75 });
-    // rounded to 2 decimals: half of 0.35 s
-    const short = makeProject({ audioTracks: [{ ...sfx, fadeIn: 0.5, fadeOut: 0.1 }] });
-    expect(updateAudioTrackById(short, "s1", { trimEnd: 0.35 }).audioTracks[0]).toMatchObject({ fadeIn: 0.18, fadeOut: 0.1 });
-  });
-
-  test("fades that already fit are left exactly as they are", () => {
-    const fits = makeProject({ clips: base.clips, audioTracks: [{ ...music, fadeIn: 1.5, fadeOut: 2 }] });
-    expect(updateAudioTrackById(fits, "m1", { trimEnd: 10 }).audioTracks[0]).toEqual({ ...fits.audioTracks[0], trimEnd: 10 });
-    expect(updateAudioTrackById(fits, "m1", { trimEnd: 4 }).audioTracks[0]).toMatchObject({ fadeIn: 1.5, fadeOut: 2 });
-    expect(updateAudioTrackById(fits, "m1", { trimEnd: 30 })).toBe(fits);
-    expect(updateAudioTrackById(fits, "m1", { fadeIn: 1.5, fadeOut: 2 })).toBe(fits);
+    // every transient frame of the drag, then back to where it began
+    let dragged = long;
+    for (const trimEnd of [20, 8, 1, 0.2, 6, 30]) dragged = updateAudioTrackById(dragged, "m1", { trimEnd });
+    expect(dragged.audioTracks[0]).toEqual(long.audioTracks[0]);
+    expect(updateAudioTrackById(long, "m1", { trimStart: 24.5 }).audioTracks[0]).toMatchObject({ fadeIn: 5, fadeOut: 3 });
+    expect(updateAudioTrackById(long, "m1", { trimEnd: 30 })).toBe(long);
+    expect(updateAudioTrackById(long, "m1", { fadeIn: 5, fadeOut: 3 })).toBe(long);
   });
 
   test("unknown id, no change and non-finite values return the same project", () => {
@@ -149,16 +144,21 @@ describe("deleteAudioTrack / duplicateAudioTrack", () => {
   });
 });
 
-describe("deprecated single-track ops", () => {
-  test("setAudioTrack adds; updateAudioTrack / removeAudioTrack act on the first track", () => {
-    const two = setAudioTrack(setAudioTrack(base, music), voice);
+describe("the single-track ops are gone", () => {
+  test("only the id-based ops are exported", () => {
+    const ops = jest.requireActual("../ops") as Record<string, unknown>;
+    for (const name of ["setAudioTrack", "updateAudioTrack", "removeAudioTrack"]) expect(ops[name]).toBeUndefined();
+  });
+
+  test("what they did, by id: add, patch one track (the other keeps its object), delete; no track → same project", () => {
+    const two = addAudioTrack(addAudioTrack(base, music), voice);
     expect(two.audioTracks).toEqual([music, voice]);
-    const upd = updateAudioTrack(two, { trimStart: 29.8, trimEnd: 99, start: -2, volume: 9 });
+    const upd = updateAudioTrackById(two, "m1", { trimStart: 29.8, trimEnd: 99, start: -2, volume: 9 });
     expect(upd.audioTracks[0]).toMatchObject({ id: "m1", trimStart: 29.5, trimEnd: 30, start: 0, volume: 2 });
-    expect(upd.audioTracks[1]).toBe(two.audioTracks[1]);   // the other track keeps its object
-    expect(removeAudioTrack(two).audioTracks).toEqual([voice]);
-    expect(updateAudioTrack(base, { volume: 1 })).toBe(base);
-    expect(removeAudioTrack(base)).toBe(base);
+    expect(upd.audioTracks[1]).toBe(two.audioTracks[1]);
+    expect(deleteAudioTrack(two, "m1").audioTracks).toEqual([voice]);
+    expect(updateAudioTrackById(base, "m1", { volume: 1 })).toBe(base);
+    expect(deleteAudioTrack(base, "m1")).toBe(base);
   });
 });
 

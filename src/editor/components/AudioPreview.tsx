@@ -1,7 +1,7 @@
 import { useAudioPlayer } from "expo-audio";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { restorePlaybackAudioMode } from "@/src/editor/audioMode";
-import { trackGainAt } from "@/src/editor/model/audioMix";
+import { restGain, trackGainAt } from "@/src/editor/model/audioMix";
 import { songTimeAt } from "@/src/editor/model/audioSync";
 import type { AudioTrack, Project } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
@@ -22,11 +22,20 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
   const loadedUri = useRef<string | null>(null);
   // The volume last written to the player (null: none since the file was loaded), so a write that would change nothing is skipped.
   const appliedVolume = useRef<number | null>(null);
+  // play() has been called for the playhead's current stay inside the track (cleared by pause / leaving the track): play() is
+  // called once per entry, and the native `player.playing` is never read on a playhead tick.
+  const started = useRef(false);
+  // Where the paused player was last seeked to (null: it has played, or the file changed, since), so that an edit which leaves
+  // the target where it is — every frame of a volume or fade drag replaces `track` — does not seek again.
+  const lastSeek = useRef<number | null>(null);
 
   // Load (or swap) the file. A missing file is never loaded: the player stays paused and the effects below do nothing.
   useEffect(() => {
-    if (isMissing) { player.pause(); loadedUri.current = null; appliedVolume.current = null; return; }
-    if (loadedUri.current !== track.sourceUri) { player.replace({ uri: track.sourceUri }); loadedUri.current = track.sourceUri; appliedVolume.current = null; }
+    if (isMissing) { player.pause(); loadedUri.current = null; appliedVolume.current = null; started.current = false; lastSeek.current = null; return; }
+    if (loadedUri.current !== track.sourceUri) {
+      player.replace({ uri: track.sourceUri });
+      loadedUri.current = track.sourceUri; appliedVolume.current = null; started.current = false; lastSeek.current = null;
+    }
   }, [track.sourceUri, isMissing, player]);
 
   // Volume. Declared before the sync effect so that, on the tick playback enters the track, the fade's volume is written
@@ -37,22 +46,37 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
   useEffect(() => {
     if (loadedUri.current === null) return;
     const inside = songTimeAt(track, playhead) !== null;
+    const gain = inside ? trackGainAt(project, track, playhead) : restGain(track);
+    const volume = recording ? 0 : Math.min(PREVIEW_VOLUME_CAP, gain);
+    if (!shouldWriteVolume(appliedVolume.current, volume)) return;
     // The playhead has just left the track and the sync effect below is about to pause the player: leave the volume
     // where the fade-out put it (raising it now would be heard for an instant). It settles on a later run, while paused.
-    if (!inside && player.playing) return;
-    const gain = inside ? trackGainAt(project, track, playhead) : Number.isFinite(track.volume) ? Math.max(0, track.volume) : 0;
-    const volume = recording ? 0 : Math.min(PREVIEW_VOLUME_CAP, gain);
-    if (shouldWriteVolume(appliedVolume.current, volume)) { player.volume = volume; appliedVolume.current = volume; }
+    if (!inside && started.current) return;
+    player.volume = volume;
+    appliedVolume.current = volume;
   }, [project, track, playhead, recording, isMissing, player]);
 
   useEffect(() => {
     if (loadedUri.current === null) return;
     const t = songTimeAt(track, playhead);
-    if (t === null || !isPlaying) { if (player.playing) player.pause(); if (t !== null && !isPlaying) player.seekTo(t, 0, 0).catch(() => {}); return; }
-    // Only re-seek once drift exceeds this tolerance: expo-audio's own clock advances in small
+    if (t === null || !isPlaying) {
+      if (started.current) { player.pause(); started.current = false; }
+      // Paused inside the track: park the player at the playhead, once per target.
+      if (t !== null && lastSeek.current !== t) { lastSeek.current = t; player.seekTo(t, 0, 0).catch(() => {}); }
+      return;
+    }
+    if (!started.current) {
+      // About to start: always seek. A player that played to its end stays there, and for a short sound that is inside the
+      // drift tolerance of anywhere in it — without this seek it would be silent the second time round.
+      player.seekTo(t, 0, 0).catch(() => {});
+      player.play();
+      started.current = true;
+      lastSeek.current = null;
+      return;
+    }
+    // Already playing: only re-seek once drift exceeds the tolerance. expo-audio's own clock advances in small
     // steps against the store's playhead, so re-seeking on every tick would cause audible stutter.
     if (Math.abs(player.currentTime - t) > DRIFT_TOLERANCE) player.seekTo(t, 0, 0).catch(() => {});
-    if (!player.playing) player.play();
   }, [track, playhead, isPlaying, isMissing, player]);
 
   // useAudioPlayer releases the native player in its own unmount cleanup, which runs before
@@ -65,10 +89,17 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
 /** Invisible component: plays the project's audio tracks, one player per track, in sync with the store's playhead. */
 export function AudioPreview() {
   const project = useEditorStore((s) => s.project);
+  const missing = useEditorStore((s) => s.missingSourceUris);
+  // What is heard: a track whose file is missing plays nothing, so it must not duck the music either. The same project object
+  // when nothing is missing, and one stable object per (project, missing) otherwise.
+  const heard = useMemo(() => {
+    if (!project || !project.audioTracks.some((t) => missing.includes(t.sourceUri))) return project;
+    return { ...project, audioTracks: project.audioTracks.filter((t) => !missing.includes(t.sourceUri)) };
+  }, [project, missing]);
 
   // The editor's playback mode (see audioMode.ts), set once; a voice-over recording changes it and puts it back.
   useEffect(() => { void restorePlaybackAudioMode(); }, []);
 
-  if (!project) return null;
-  return <>{project.audioTracks.map((track) => <TrackPlayer key={track.id} project={project} track={track} />)}</>;
+  if (!project || !heard) return null;
+  return <>{project.audioTracks.map((track) => <TrackPlayer key={track.id} project={heard} track={track} />)}</>;
 }

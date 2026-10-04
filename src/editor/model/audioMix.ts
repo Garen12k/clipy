@@ -130,6 +130,14 @@ export function trackGainAt(p: Project, t: AudioTrack, time: number): number {
   return trackGainInside(t, isDucked(p, t) ? voiceIntervals(p.audioTracks) : null, time);
 }
 
+/**
+ * The gain a track's preview player rests at while the playhead is outside the track (the player is paused there): the track's
+ * own volume — what an un-faded track plays at everywhere, so such a track's volume is written once. Never negative; 0 when broken.
+ */
+export function restGain(t: AudioTrack): number {
+  return finitePositive(t.volume);
+}
+
 /** A clip's own-sound gain at an output offset: (muted ? 0 : volume) × fade envelope. Photos are silent. */
 export function clipGainAt(c: Clip, offsetInClip: number): number {
   if (c.muted || isPhoto(c)) return 0;
@@ -271,15 +279,15 @@ export function withEndFade(curve: GainPoint[], endTime: number, seconds: number
 
 /**
  * The gain curve the export plays for a track in a video `total` seconds long (composition seconds): `trackGainCurve` cut to
- * `[0, total]`; empty when nothing of the track is inside. Music that is still playing when the video ends (END_FADE.slack),
- * has no fade-out of its own and is not silent there gets the END_FADE safety fade, so it never stops dead.
+ * `[0, total]`; empty when nothing of the track is inside. Music that is still playing when the video ends (END_FADE.slack)
+ * and is not silent there gets the END_FADE safety fade, so it never stops dead — whether or not it has a fade-out of its own
+ * (a fade-out the video never reaches does nothing; one the video cuts through is multiplied by the safety fade).
  */
 export function exportTrackCurve(p: Project, t: AudioTrack, total: number): GainPoint[] {
   const cut = cutCurve(trackGainCurve(p, t), 0, total);
   if (cut.length < 2) return [];
   const last = cut[cut.length - 1];
   const playsToTheEnd = t.kind === "music" && trackEnd(t) >= total - END_FADE.slack;
-  const ownFadeOut = fitFades(t.fadeIn, t.fadeOut, trackLength(t)).out > 0;
-  if (!playsToTheEnd || ownFadeOut || !(last.gain > 0)) return cut;
+  if (!playsToTheEnd || !(last.gain > 0)) return cut;
   return withEndFade(cut, last.time, END_FADE.seconds);
 }

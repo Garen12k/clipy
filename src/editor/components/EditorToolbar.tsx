@@ -42,8 +42,8 @@ import { VolumeSheet } from "./VolumeSheet";
 type PanelFor = { id: string; kind: "text" | "sticker" } | null;
 /** With an effect selected, the Effects group shows these instead of its normal tools (Effect stays, to add another). */
 const SELECTED_EFFECT_TOOLS: ToolId[] = ["effect", "effectStrength", "effectDuplicate", "effectDelete"];
-/** With an audio track selected, the Audio group shows that track's tools instead of its normal ones. */
-const SELECTED_AUDIO_TOOLS: ToolId[] = ["audioVolume", "audioFade", "audioDuplicate", "audioDelete"];
+/** With an audio track selected, the Audio group shows that track's tools instead of its normal ones (Add audio stays: a second sound can be added without deselecting). */
+const SELECTED_AUDIO_TOOLS: ToolId[] = ["addAudio", "audioVolume", "audioFade", "audioDuplicate", "audioDelete"];
 
 type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void; transitionFor: number | null; onTransitionChange: (index: number | null) => void };
 

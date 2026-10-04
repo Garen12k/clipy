@@ -104,11 +104,36 @@ test("a bar overlapping an earlier one of its kind is drawn later (on top) at 85
   expect(screen.getByTestId("audio-bar-z")).toHaveStyle({ opacity: 1 });
 });
 
-test("a very short track still gets a 28 pt bar; a missing file shows the warning badge", async () => {
-  useEditorStore.getState().setProject({ ...p, audioTracks: [makeAudioTrack({ id: "t", kind: "sfx", sourceDuration: 0.2, start: 2 })] });
+test("a very short track is drawn 12 pt wide (not half a second long) and stays tappable; a missing file shows the warning badge", async () => {
+  useEditorStore.getState().setProject({ ...p, audioTracks: [
+    makeAudioTrack({ id: "t", kind: "sfx", title: "Blip", sourceDuration: 0.1, start: 2 }),
+    makeAudioTrack({ id: "u", kind: "sfx", title: "Longer", sourceDuration: 0.5, start: 4 }),
+  ] });
   useEditorStore.getState().setZoom(50);
   useEditorStore.setState({ missingSourceUris: ["file:///media/t.m4a"] });
   await render(<AudioLane kind="sfx" />);
-  expect(screen.getByTestId("audio-bar-t")).toHaveStyle({ left: 100, width: 28 });
+  expect(screen.getByTestId("audio-bar-t")).toHaveStyle({ left: 100, width: 12 });
+  expect(screen.getByTestId("audio-bar-t").props.hitSlop).toBe(8);
+  expect(screen.getByTestId("audio-bar-u")).toHaveStyle({ left: 200, width: 25 });
   expect(screen.getByTestId("audio-bar-t-missing")).toBeTruthy();
+  // no room for a label on a bar that narrow: it would spill over its neighbours
+  expect(screen.queryByText("Blip")).toBeNull();
+  await fireEvent.press(screen.getByTestId("audio-bar-t"));
+  expect(useEditorStore.getState().selectedAudioId).toBe("t");
+  // both handles fit on the narrow bar, side by side
+  expect(screen.getByLabelText("Sound effect start handle")).toHaveStyle({ left: 0, width: 6 });
+  expect(screen.getByLabelText("Sound effect end handle")).toHaveStyle({ right: 0, width: 6 });
+});
+
+test("the selected bar is drawn above its neighbours, so its handles can be reached under an overlapping bar", async () => {
+  useEditorStore.getState().setProject({ ...p, audioTracks: [
+    makeAudioTrack({ id: "x", sourceDuration: 10, start: 0, trimEnd: 4 }),
+    makeAudioTrack({ id: "y", sourceDuration: 10, start: 3, trimEnd: 4 }),   // drawn later: covers x's end handle
+  ] });
+  await render(<AudioLane kind="music" />);
+  expect(screen.getByTestId("audio-bar-x")).toHaveStyle({ zIndex: 0 });
+  expect(screen.getByTestId("audio-bar-y")).toHaveStyle({ zIndex: 0 });
+  await act(() => { useEditorStore.getState().selectAudio("x"); });
+  expect(screen.getByTestId("audio-bar-x")).toHaveStyle({ zIndex: 1 });
+  expect(screen.getByTestId("audio-bar-y")).toHaveStyle({ zIndex: 0 });
 });

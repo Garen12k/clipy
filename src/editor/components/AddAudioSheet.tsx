@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
 import { BUNDLED_TRACKS, type BundledTrack } from "@/src/editor/music";
 import { addAudioTrack } from "@/src/editor/model/ops";
+import { totalDuration } from "@/src/editor/model/timeline";
 import { AUDIO_LIMITS, type AudioKind } from "@/src/editor/model/types";
 import { SFX, SFX_IDS, type SfxId } from "@/src/editor/sfx";
 import { useEditorStore } from "@/src/editor/store";
@@ -24,6 +25,11 @@ import { RecordTab, type RecordCloseGuard } from "./RecordTab";
 const MAX_BYTES = 50 * 1024 * 1024;
 /** How long after a preview's nominal end its button flips back to "play" (the player needs a moment to start). */
 const PREVIEW_TAIL_MS = 400;
+/** A playhead this close (seconds) to the project's end is at the end: audio added there would never be heard. */
+const END_REACH = 0.05;
+const LIMIT_MESSAGE = "You've reached the audio track limit.";
+const FAILED_MESSAGE = "Couldn't add that audio file.";
+const AT_END_MESSAGE = "Move the playhead back to add audio here.";
 
 /** One entry per tab, in display order: a new tab is one line here plus its body below. */
 const TABS = [
@@ -87,7 +93,19 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   /** After an import: a sheet the user already dismissed must not be closed again (the parent may be showing another sheet by now). */
   const closeIfOpen = () => { if (open.current) close(); };
   // The sheet is a native Modal and would cover the toast: close first.
-  const refuse = () => { closeIfOpen(); useToast.getState().show("You've reached the audio track limit."); };
+  const dismissWith = (message: string) => { closeIfOpen(); useToast.getState().show(message); };
+  /** An add the op refused: the limit is blamed only when the project really is at it. */
+  const refuse = () => {
+    const count = useEditorStore.getState().project?.audioTracks.length ?? 0;
+    dismissWith(count >= AUDIO_LIMITS.maxTracks ? LIMIT_MESSAGE : FAILED_MESSAGE);
+  };
+  /** True (after closing the sheet with a toast) when the playhead is at the project's end: nothing is imported. */
+  const refusedAtEnd = (): boolean => {
+    const { project, playhead } = useEditorStore.getState();
+    if (!project || playhead < totalDuration(project) - END_REACH) return false;
+    dismissWith(AT_END_MESSAGE);
+    return true;
+  };
 
   /** One add at a time, under the busy state; any failure is a toast. The ref makes the second of two presses in one frame a no-op. */
   async function guarded(work: () => Promise<void>) {
@@ -95,7 +113,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
     adding.current = true;
     setBusy(true);
     try { await work(); }
-    catch (e) { useToast.getState().show("Couldn't add that audio file"); console.warn(e); }
+    catch (e) { useToast.getState().show(FAILED_MESSAGE); console.warn(e); }
     finally { adding.current = false; setBusy(false); }
   }
   /** Resolves (download / measure) and imports the file, then adds the track at `at` — the playhead when the user pressed, not when the copy finished. */
@@ -115,7 +133,11 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
     closeIfOpen();
   }
   const pressTime = () => useEditorStore.getState().playhead;
-  const add = (kind: AudioKind, resolve: () => Promise<Picked>) => { const at = pressTime(); void guarded(() => importAndAdd(kind, resolve, at)); };
+  const add = (kind: AudioKind, resolve: () => Promise<Picked>) => {
+    if (adding.current || refusedAtEnd()) return;
+    const at = pressTime();
+    void guarded(() => importAndAdd(kind, resolve, at));
+  };
   const bundled = (file: number, title: string, durationSec: number) => async (): Promise<Picked> => {
     const asset = Asset.fromModule(file);
     await asset.downloadAsync();
@@ -124,6 +146,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   const addBundled = (t: BundledTrack) => add("music", bundled(t.file, t.title, t.durationSec));
   const addSfx = (id: SfxId) => add("sfx", bundled(SFX[id].file, SFX[id].label, SFX[id].durationSec));
   function pickFile() {
+    if (adding.current || refusedAtEnd()) return;
     const at = pressTime();
     void guarded(async () => {
       const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: false });

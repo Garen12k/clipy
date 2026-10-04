@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
+import { updateAudioTrackById } from "@/src/editor/model/ops";
 import { makeAudioTrack, makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { AudioFadeSheet, fadeCap } from "../components/AudioFadeSheet";
@@ -66,6 +67,20 @@ describe("AudioFadeSheet", () => {
     expect(screen.getByTestId("fade-in").props.maximumValue).toBeCloseTo(0.3);
     await drag("fade-out", 4);
     expect(track("s").fadeOut).toBe(0.3);
+  });
+
+  test("fades longer than the trimmed track show as the mix plays them (fitted); the stored fades are not touched", async () => {
+    useEditorStore.getState().apply((p) => ({ ...p, audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 20, trimEnd: 4, fadeIn: 5, fadeOut: 3 })] }));
+    await render(<AudioFadeSheet target={{ type: "track", id: "m" }} visible onClose={() => {}} />);
+    expect(screen.getByText("Fade in 2.5 s")).toBeTruthy();   // 5 and 3 on 4 s → 2.5 and 1.5
+    expect(screen.getByText("Fade out 1.5 s")).toBeTruthy();
+    expect(screen.getByTestId("fade-in").props).toMatchObject({ maximumValue: 2, value: 2.5 });
+    expect(screen.getByTestId("fade-out").props).toMatchObject({ maximumValue: 2, value: 1.5 });
+    expect(track()).toMatchObject({ fadeIn: 5, fadeOut: 3 });
+    // trimmed back out: the user's fades are still there
+    await act(() => { useEditorStore.getState().apply((p) => updateAudioTrackById(p, "m", { trimEnd: 20 })); });
+    expect(screen.getByText("Fade in 5.0 s")).toBeTruthy();
+    expect(screen.getByText("Fade out 3.0 s")).toBeTruthy();
   });
 
   test("each drag is one undo step; fade in and fade out are written separately", async () => {

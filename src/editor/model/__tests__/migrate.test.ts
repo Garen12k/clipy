@@ -348,6 +348,12 @@ test("sanity pass repairs audio kinds, fades, track count, clip fades, ducking a
   expect(migrateProject(p)).toEqual(p);
 });
 
+test("an audio track that is an array (or not an object at all) is dropped", () => {
+  const good = makeAudioTrack({ id: "ok", sourceDuration: 5 });
+  const p = migrateProject({ ...makeProject(), audioTracks: [[], ["x"], null, 3, "t", good] as never });
+  expect(p.audioTracks.map((t) => t.id)).toEqual(["ok"]);
+});
+
 test("a v1 file reaches v10 with the audio defaults", () => {
   const p = migrateProject(v1);
   expect(p).toMatchObject({ schemaVersion: 10, ducking: false, beatMarkers: [], audioTracks: [] });

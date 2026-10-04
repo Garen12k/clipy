@@ -6,6 +6,7 @@ import { totalDuration } from "@/src/editor/model/timeline";
 import { AUDIO_LIMITS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { storage } from "@/src/projects";
+import { audioDuration } from "@/src/projects/audioInfo";
 import { haptic } from "@/src/ui/haptics";
 import { useToast } from "@/src/ui/Toast";
 
@@ -13,6 +14,8 @@ export type VoiceRecorderState = "idle" | "starting" | "recording" | "saving";
 export type VoiceRecorder = { state: VoiceRecorderState; elapsed: number; start(): Promise<void>; stop(): Promise<void>; cancel(): Promise<void> };
 
 const ELAPSED_TICK_MS = 200;
+/** How long the save waits for the recorded file's own length before going with the recorder's figure. */
+const MEASURE_TIMEOUT_MS = 2000;
 const LIMIT_MESSAGE = "You've reached the audio track limit.";
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -30,14 +33,25 @@ function recordedSeconds(recorder: AudioRecorder): number {
   return 0;
 }
 
+/** The length of the file at `uri` in seconds, or null when it cannot be read (in time). Never throws. */
+function measuredSeconds(uri: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), MEASURE_TIMEOUT_MS);
+    audioDuration(uri)
+      .then((d) => resolve(Number.isFinite(d) && d > 0 ? d : null), () => resolve(null))
+      .finally(() => clearTimeout(timer));
+  });
+}
+
 /**
- * Records a voice-over onto the timeline while the video plays: `start` mutes the preview (the store's `recording` flag), allows
- * recording in the audio session, starts the recorder and then playback; `stop` saves the file into the project as a `voice` track
- * beginning where recording began. Playback ending (the project's end, or anything else pausing it) stops the recording too.
+ * Records a voice-over onto the timeline while the video plays: `start` mutes the preview (the store's `recording` flag), pauses
+ * playback if it was running, allows recording in the audio session, starts the recorder and then playback; `stop` saves the file
+ * into the project as a `voice` track beginning where the playhead was when the recorder started, as long as the recorder said —
+ * or as the saved file measures, when that is shorter. Playback ending (the project's end, or anything else pausing it) stops the recording too.
  * Every way out — stop, cancel, an error, unmount — un-mutes the preview and puts the audio session back to its playback mode.
  *
  * `onDismiss` is called before any toast and after a successful save, so that a hosting sheet (a native Modal, which would cover
- * the toast) can close.
+ * the toast) can close. Neither happens once the hook has unmounted: a save still under way then adds its track silently.
  */
 export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRecorder {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -48,6 +62,8 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
   const session = useRef<Session | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const mounted = useRef(true);
+  // Counts unmounts: a start / stop that began in an earlier life of the hook shows nothing when it ends.
+  const life = useRef(0);
   const onDismiss = useRef(opts.onDismiss);
   onDismiss.current = opts.onDismiss;
 
@@ -71,6 +87,7 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
     if (totalDuration(before) <= 0) { notify("Add a clip before recording."); return; }
     if (before.audioTracks.length >= AUDIO_LIMITS.maxTracks) { notify(LIMIT_MESSAGE); return; }   // before recording something nobody can keep
     setPhase("starting");
+    const born = life.current;
     let started = false;
     let message: string | null = null;
     try {
@@ -78,15 +95,18 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
       if (!permission.granted) { message = "Microphone access is needed to record."; return; }
       const s = useEditorStore.getState();
       if (!mounted.current || !s.project || s.project.id !== before.id) return;
-      let startAt = s.playhead;
-      if (startAt >= totalDuration(s.project)) { s.seek(0); startAt = 0; }
-      const mine: Session = { projectId: before.id, startAt, startedMs: Date.now() };
+      // Playback waits for the recorder: whatever time it takes to get ready must not pass on the timeline.
+      if (s.isPlaying) s.setPlaying(false);
+      if (s.playhead >= totalDuration(s.project)) s.seek(0);
+      const mine: Session = { projectId: before.id, startAt: useEditorStore.getState().playhead, startedMs: Date.now() };
       session.current = mine;
       s.setRecording(true);
       await setAudioModeAsync(RECORDING_AUDIO_MODE);
       await recorder.prepareToRecordAsync();
       if (session.current !== mine) return;   // unmounted meanwhile: the cleanup has already restored everything
       recorder.record();
+      // The track begins where the playhead is now that the recorder runs — not where it was when the button was pressed.
+      mine.startAt = useEditorStore.getState().playhead;
       mine.startedMs = Date.now();
       started = true;
       setElapsed(0);
@@ -100,7 +120,7 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
       if (!started) {
         if (session.current) await release(true);
         setPhase("idle");
-        if (message) notify(message);
+        if (message && life.current === born) notify(message);
       }
     }
   };
@@ -109,6 +129,7 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
     const ses = session.current;
     if (phase.current !== "recording" || !ses) return;
     setPhase("saving");   // before pausing playback: the subscription below must not call back in
+    const born = life.current;
     let message: string | null = null;
     let saved = false;
     try {
@@ -127,6 +148,9 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
       if (!save) return;
       if (useEditorStore.getState().project?.id !== ses.projectId) return;   // the editor moved on while recording
       if (!uri) throw new Error("The recorder returned no file");
+      // The recorder's clock can run past what reached the file: the track is never longer than the file itself.
+      const measured = await measuredSeconds(uri);
+      if (measured !== null) seconds = Math.min(seconds, measured);
       if (seconds < AUDIO_LIMITS.minDuration) { message = "That recording was too short."; return; }
       const imported = await storage.importAudio(ses.projectId, { uri, title: "Voice-over", durationSec: r3(seconds) }, "voice");
       const { project, apply, selectAudio } = useEditorStore.getState();
@@ -143,8 +167,10 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
       if (save) message = "Couldn't save that recording.";
     } finally {
       setPhase("idle");
-      if (message) notify(message);
-      else if (saved) onDismiss.current?.();
+      if (life.current === born) {
+        if (message) notify(message);
+        else if (saved) onDismiss.current?.();
+      }
     }
   };
   const stop = () => finish(true);
@@ -164,6 +190,7 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
     mounted.current = true;
     return () => {
       mounted.current = false;
+      life.current += 1;
       stopTimer();
       if (!session.current) return;
       session.current = null;
