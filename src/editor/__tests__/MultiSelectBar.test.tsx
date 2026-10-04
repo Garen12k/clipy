@@ -138,3 +138,18 @@ test("Done leaves the mode", async () => {
   expect(st().multiSelect).toBeNull();
   expect(past()).toBe(0);
 });
+
+test("Volume ignores reversed clips (their sound is never played): only reversed chosen → disabled", async () => {
+  st().setProject(makeProject({ clips: [makeClip({ id: "r", sourceDuration: 4, reversed: true, volume: 0.3 }), makeClip({ id: "n", sourceDuration: 6, volume: 0.8 })] }));
+  await renderWith("r");
+  expect(btn("Volume")).toBeDisabled();
+  expect(btn("Speed")).toBeEnabled();
+});
+
+test("Volume: reversed + normal chosen → enabled, and the sheet shows the normal clip's volume", async () => {
+  st().setProject(makeProject({ clips: [makeClip({ id: "r", sourceDuration: 4, reversed: true, volume: 0.3 }), makeClip({ id: "n", sourceDuration: 6, volume: 0.8 })] }));
+  await renderWith("r", "n");
+  expect(btn("Volume")).toBeEnabled();
+  await press("Volume");
+  expect(screen.getByText("80%")).toBeTruthy();
+});

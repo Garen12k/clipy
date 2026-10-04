@@ -67,3 +67,28 @@ test("setCover clamps through clampCover; null clears; unchanged or invalid → 
   expect(setCover(p, { time: 12, title: "T" })).toBe(p);
   expect(setCover(p, { time: 12.0004, title: " T " })).toBe(p);     // rounds and trims to what is stored
 });
+
+describe("forClips refits effects once, against the final length", () => {
+  const slow = makeClip({ id: "s", sourceDuration: 4, speed: 0.5 });   // 8 s
+  const fastClip = makeClip({ id: "f", sourceDuration: 8, speed: 2 }); // 4 s
+  const fx = makeEffect({ id: "fx", start: 11, end: 12 });
+  const q = makeProject({ clips: [slow, fastClip], effects: [fx] });   // 12 s
+
+  test("an effect that fits the final project survives although an intermediate step was shorter", () => {
+    expect(totalDuration(q)).toBe(12);
+    const out = forClips(q, ["s", "f"], (r, id) => setClipSpeed(r, id, 1));   // s → 4 s first (total 8), then f → 8 s (total 12)
+    expect(totalDuration(out)).toBe(12);
+    expect(out.effects).toEqual([fx]);
+  });
+
+  test("a fold that changes nothing returns the same project", () => {
+    expect(forClips(q, ["s", "f"], (r) => r)).toBe(q);
+    expect(forClips(q, ["s"], (r, id) => setClipSpeed(r, id, 0.5))).toBe(q);
+  });
+
+  test("an effect that truly no longer fits is still dropped", () => {
+    const out = forClips(q, ["s", "f"], (r, id) => setClipSpeed(r, id, 2));   // 2 + 4 = 6 s
+    expect(totalDuration(out)).toBe(6);
+    expect(out.effects).toEqual([]);
+  });
+});

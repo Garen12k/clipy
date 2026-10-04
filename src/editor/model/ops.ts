@@ -135,7 +135,12 @@ export function mainClipIds(p: Project, ids: readonly string[]): string[] {
 
 /** One single-clip op run on every given main clip. One project comes out, so one `apply` is one undo step; the same project when nothing changes. */
 export function forClips(p: Project, ids: readonly string[], op: (p: Project, id: string) => Project): Project {
-  return mainClipIds(p, ids).reduce(op, p);
+  const out = mainClipIds(p, ids).reduce(op, p);
+  // Each step refit the effects against its own intermediate length, so the order of the clips would decide which effects survive.
+  // Refit once, from the original effects, against the final length.
+  if (out.clips === p.clips) return out;
+  const effects = fitEffects(p.effects, totalDuration(out));
+  return effects === out.effects ? out : { ...out, effects };
 }
 
 /** Multi-select Delete. Deleting every clip is allowed, as `deleteClip` allows it. */
