@@ -125,6 +125,40 @@ describe("layers at the playhead", () => {
   });
 });
 
+describe("blend modes, green screen and blur / mosaic boxes (shown only in the export)", () => {
+  const withLayer = (over: Partial<LayerClip>, main: Partial<Clip> = {}) => makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8, ...main })], layers: [makeLayer({ id: "l", sourceDuration: 2, start: 2, ...over })] });
+  const green = { color: "#00FF00", strength: 0.5 };
+  test("a layer with a blend mode other than Normal needs the tag — only while it is on screen", () => {
+    for (const blend of ["screen", "multiply", "overlay", "lighten", "darken"] as const) {
+      const p = withLayer({ blend });
+      expect(needsPreviewTag(p, 3)).toBe(true);
+      expect(needsPreviewTag(p, 1)).toBe(false);
+      expect(needsPreviewTag(p, 4.5)).toBe(false);
+    }
+    expect(needsPreviewTag(withLayer({ blend: "normal" }), 3)).toBe(false);
+  });
+  test("a green screen on a layer needs the tag — only while the layer is on screen", () => {
+    const p = withLayer({ chroma: green });
+    expect(needsPreviewTag(p, 3)).toBe(true);
+    expect(needsPreviewTag(p, 1)).toBe(false);
+    expect(needsPreviewTag(p, 4.5)).toBe(false);
+    expect(needsPreviewTag(withLayer({ chroma: null }), 3)).toBe(false);
+  });
+  test("a green screen on the main clip under the playhead needs the tag", () => {
+    const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4, chroma: green }), makeClip({ id: "b", sourceDuration: 4 })] });
+    expect(needsPreviewTag(p, 1)).toBe(true);
+    expect(needsPreviewTag(p, 5)).toBe(false);
+  });
+  test("a blur or mosaic box needs the tag only while it covers the playhead", () => {
+    for (const type of ["blurBox", "mosaicBox"] as const) {
+      const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], effects: [makeEffect({ id: "e", type, start: 1, end: 2 })] });
+      expect(needsPreviewTag(p, 0.5)).toBe(false);
+      expect(needsPreviewTag(p, 1)).toBe(true);
+      expect(needsPreviewTag(p, 2)).toBe(false);
+    }
+  });
+});
+
 test("a curve with no steps counts as no curve (the rule timeline.ts goes by)", () => {
   expect(needsPreviewTag(one({ speedCurve: { id: "hero", steps: [] } }), 1)).toBe(false);
 });

@@ -633,6 +633,132 @@ describe("layers, opacity and masks", () => {
   });
 });
 
+describe("blur / mosaic boxes, blend modes and green screen", () => {
+  type Json = { props: { testID?: string }; children: (Json | string)[] | null };
+  const ids = (node: Json | string | null, out: string[] = []): string[] => {
+    if (!node || typeof node === "string") return out;
+    if (node.props.testID) out.push(node.props.testID);
+    for (const c of node.children ?? []) ids(c, out);
+    return out;
+  };
+  const find = (node: Json | string | null, id: string): Json | null => {
+    if (!node || typeof node === "string") return null;
+    if (node.props.testID === id) return node;
+    for (const c of node.children ?? []) { const hit = find(c, id); if (hit) return hit; }
+    return null;
+  };
+  const tree = () => screen.toJSON() as unknown as Json;
+  const st = () => useEditorStore.getState();
+  const small = { scale: 0.4, x: 0, y: 0, rotation: 0, flipH: false, flipV: false };
+  const rect = { x: 0.1, y: 0.2, w: 0.4, h: 0.25 };
+  const boxed = () => makeProject({
+    clips: [makeClip({ id: "a", sourceDuration: 8 })],
+    layers: [{ ...makePhotoClip({ id: "one", seconds: 6 }), transform: small, start: 0 }],
+    overlays: [makeOverlay({ id: "t", start: 0, end: 8 })],
+    effects: [makeEffect({ id: "f", type: "flash", start: 0, end: 8, intensity: 1 }), makeEffect({ id: "box", type: "blurBox", start: 2, end: 4, rect })],
+  });
+
+  test("a project without boxes renders the tree it always did: no region nodes", async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    expect(ids(tree()).filter((id) => /^region-/.test(id))).toEqual([]);
+    expect(ids(tree())).toEqual(["effect-transform", "clip-box", "clip-content", "preview-video"]);
+    await act(() => { st().select("a"); });
+    expect(ids(tree())).toEqual(["effect-transform", "clip-box", "clip-content", "preview-video", "clip-gesture-area", "clip-selection-frame"]);
+  });
+
+  test("a box is drawn at its pixels above the picture, layers and effect colours and below text, only while it covers the playhead", async () => {
+    st().setProject(boxed());
+    await render(<PreviewPlayer />);
+    await layout();
+    expect(screen.queryByTestId("region-boxes")).toBeNull();
+    await act(() => { st().seek(3); });
+    expect(screen.getByTestId("region-box-box")).toHaveStyle({ left: 27, top: 96, width: 108, height: 120 });
+    const all = ids(tree());
+    const order = ["effect-transform", "preview-video", "layer-stack", "layer-one", "effect-layer-0", "region-boxes", "region-box-box", "overlay-t", "preview-tag"];
+    expect(order.filter((id) => !all.includes(id))).toEqual([]);
+    expect(order.map((id) => all.indexOf(id))).toEqual([...order.map((id) => all.indexOf(id))].sort((x, y) => x - y));
+    // The box neither shakes with the picture nor sits inside the layers.
+    expect(ids(find(tree(), "effect-transform")).filter((id) => /^region-/.test(id))).toEqual([]);
+    expect(ids(find(tree(), "layer-stack")).filter((id) => /^region-/.test(id))).toEqual([]);
+    expect(screen.getByTestId("region-box-box").props.pointerEvents).toBe("none");
+    await act(() => { st().seek(4); });
+    expect(screen.queryByTestId("region-boxes")).toBeNull();
+  });
+
+  test("a box appearing, being selected and moved never remounts the main video view", async () => {
+    st().setProject(boxed());
+    await render(<PreviewPlayer />);
+    await layout();
+    const video = screen.getByTestId("preview-video");
+    await act(() => { st().seek(3); });
+    await act(() => { st().selectEffect("box"); });
+    expect(screen.getByTestId("region-handle-tl")).toBeTruthy();
+    expect(screen.getByTestId("region-handle-br")).toBeTruthy();
+    const [pan] = (screen.getByTestId("region-box-box").props.gesture as { gestures: { handlers: Record<string, (e: unknown) => void> }[] }).gestures;
+    await act(() => { pan.handlers.onBegin({}); pan.handlers.onStart({}); pan.handlers.onUpdate({ translationX: 27, translationY: 0 }); pan.handlers.onFinalize({}); });
+    expect(st().project!.effects[1].rect!.x).toBeCloseTo(0.2, 9);
+    expect(st().past).toHaveLength(1);
+    expect(screen.getByTestId("region-box-box")).toHaveStyle({ left: 54 });
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    expect(player.replaceAsync).toHaveBeenCalledTimes(1);
+  });
+
+  test("while a box is selected the clip gesture layer is off (selection is exclusive), and the other way round", async () => {
+    st().setProject(boxed());
+    st().seek(3);
+    await render(<PreviewPlayer />);
+    await layout();
+    await act(() => { st().select("a"); });
+    expect(screen.getByTestId("clip-gesture-area")).toBeTruthy();
+    expect(screen.queryByTestId("region-handle-tl")).toBeNull();
+    await act(() => { st().selectEffect("box"); });
+    expect(st().selectedClipId).toBeNull();
+    expect(screen.queryByTestId("clip-gesture-area")).toBeNull();
+    expect(screen.queryByTestId("clip-selection-frame")).toBeNull();
+    expect(screen.getByTestId("region-handle-tl")).toBeTruthy();
+    await act(() => { st().select("one"); });
+    expect(screen.queryByTestId("region-handle-tl")).toBeNull();
+    expect(screen.getByTestId("region-box-box").props.pointerEvents).toBe("none");
+    expect(screen.getByTestId("clip-gesture-area")).toBeTruthy();
+  });
+
+  test("a tap on the preview with a box selected still deselects it (the press handler is unchanged)", async () => {
+    st().setProject(boxed());
+    st().seek(3);
+    st().selectEffect("box");
+    await render(<PreviewPlayer />);
+    await layout();
+    await fireEvent.press(screen.getByLabelText("Preview"), { nativeEvent: { locationX: 260, locationY: 470 } });
+    expect(st().selectedEffectId).toBeNull();
+    expect(st().isPlaying).toBe(false);
+    expect(screen.queryByTestId("region-handle-tl")).toBeNull();
+    expect(screen.getByTestId("region-box-box")).toBeTruthy();
+  });
+
+  test("the Preview tag shows for a box, a layer's blend mode and a green screen", async () => {
+    st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], effects: [makeEffect({ id: "box", type: "mosaicBox", start: 2, end: 4 })] }));
+    await render(<PreviewPlayer />);
+    await layout();
+    expect(screen.queryByTestId("preview-tag")).toBeNull();
+    await act(() => { st().seek(3); });
+    expect(screen.getByTestId("preview-tag")).toBeTruthy();
+    await act(() => { st().seek(5); });
+    expect(screen.queryByTestId("preview-tag")).toBeNull();
+    const layer = (over: Partial<LayerClip>): LayerClip => ({ ...makePhotoClip({ id: "one", seconds: 2 }), transform: small, start: 2, ...over });
+    for (const over of [{ blend: "screen" as const }, { chroma: { color: "#00FF00", strength: 0.5 } }]) {
+      await act(() => { st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], layers: [layer(over)] })); });
+      expect(screen.queryByTestId("preview-tag")).toBeNull();
+      await act(() => { st().seek(3); });
+      expect(screen.getByTestId("preview-tag")).toBeTruthy();
+      // The picture itself is untouched: the same nodes as for a plain layer.
+      expect(ids(tree()).filter((id) => /^region-/.test(id))).toEqual([]);
+    }
+    await act(() => { st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8, chroma: { color: "#0000FF", strength: 1 } })] })); });
+    expect(screen.getByTestId("preview-tag")).toBeTruthy();
+  });
+});
+
 test("tapping the preview with an effect selected deselects it without starting playback; the next tap plays", async () => {
   useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], effects: [makeEffect({ id: "e1", start: 0, end: 2 })] }));
   useEditorStore.getState().selectEffect("e1");
