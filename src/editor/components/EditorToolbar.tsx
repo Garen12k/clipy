@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { addTextOverlay, defaultOverlayRange, deleteClip, deleteEffect, deleteOverlay, duplicateClip, duplicateEffect, setClipReversed, splitClipAt } from "@/src/editor/model/ops";
+import { addTextOverlay, clipKeyframeAt, defaultOverlayRange, deleteClip, deleteEffect, deleteOverlay, duplicateClip, duplicateEffect, overlayKeyframeAt, setClipReversed, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
+import { clipAt } from "@/src/editor/model/timeline";
 import { isPhoto, isTextOverlay, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useClipMedia } from "@/src/editor/useClipMedia";
@@ -16,10 +17,12 @@ import { useReducedMotion } from "@/src/ui/useReducedMotion";
 import { AdjustSheet } from "./AdjustSheet";
 import { BackgroundSheet } from "./BackgroundSheet";
 import { CaptionsSheet } from "./CaptionsSheet";
+import { ClipAnimationSheet } from "./ClipAnimationSheet";
 import { CropScreen } from "./CropScreen";
 import { EffectSheet } from "./EffectSheet";
 import { EffectStrengthSheet } from "./EffectStrengthSheet";
 import { MusicSheet } from "./MusicSheet";
+import { OverlayAnimationSheet } from "./OverlayAnimationSheet";
 import { RatioSheet } from "./RatioSheet";
 import { SpeedSheet } from "./SpeedSheet";
 import { FilterSheet } from "./FilterSheet";
@@ -44,7 +47,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "music" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "clipAnimation" | "overlayAnimation" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useEditorStore((s) => s.project?.clips.find((c) => c.id === s.selectedClipId) ?? null);
   const photoSel = !!selectedClip && isPhoto(selectedClip);
@@ -57,6 +60,38 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const overlayKind = useEditorStore((s) => s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind ?? null);
   const selectedEffectId = useEditorStore((s) => s.selectedEffectId);
   useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind, effectId: selectedEffectId }, cur) ?? cur); }, [selectedId, overlayKind, selectedEffectId]);
+
+  // Animate / Keyframe act on what the open group edits: Edit → the selected clip, Text → a selected text (not a caption), Stickers → a selected sticker.
+  const motionOverlayKind = group === "text" ? "text" : group === "stickers" ? "sticker" : null;
+  const selectedOverlayId = useEditorStore((s) => s.selectedOverlayId);
+  const motionOverlayId = motionOverlayKind && overlayKind === motionOverlayKind ? selectedOverlayId : null;
+  const canAnimate = group === "edit" ? !noSel : !!motionOverlayId;
+  // "off": the playhead is not on the target; otherwise whether it sits on a pin. A primitive, so playhead ticks re-render only on a change.
+  const pin = useEditorStore((s): "off" | "add" | "remove" => {
+    const p = s.project;
+    if (!p) return "off";
+    if (group === "edit") {
+      const hit = s.selectedClipId ? clipAt(p, s.playhead) : null;
+      if (!hit || hit.clip.id !== s.selectedClipId) return "off";
+      return clipKeyframeAt(hit.clip, hit.offsetInClip) ? "remove" : "add";
+    }
+    const o = motionOverlayKind ? p.overlays.find((x) => x.id === s.selectedOverlayId) : undefined;
+    if (!o || o.kind !== motionOverlayKind || s.playhead < o.start || s.playhead > o.end) return "off";
+    return overlayKeyframeAt(o, s.playhead) ? "remove" : "add";
+  });
+  const toggleKeyframe = () => {
+    const { project, playhead } = useEditorStore.getState();
+    if (!project || pin === "off") return;
+    if (group === "edit") {
+      const hit = clipAt(project, playhead);
+      if (!hit || hit.clip.id !== selectedId) return;
+      haptic("light");
+      apply((p) => toggleClipKeyframe(p, hit.clip.id, hit.offsetInClip));
+    } else if (motionOverlayId) {
+      haptic("light");
+      apply((p) => toggleOverlayKeyframe(p, motionOverlayId, playhead));
+    }
+  };
 
   const addText = () => {
     const { project, playhead, selectOverlay } = useEditorStore.getState();
@@ -92,6 +127,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     split: { label: "Split", icon: "cut", disabled: noSel, onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
     trim: { label: "Trim", icon: "crop", disabled: noSel, onPress: () => setSheet("trim") },
     transform: { label: "Transform", icon: "resize", disabled: noSel, onPress: () => setSheet("transform") },
+    animate: { label: "Animate", icon: "play-forward-outline", disabled: !canAnimate, onPress: () => setSheet(group === "edit" ? "clipAnimation" : "overlayAnimation") },
+    keyframe: { label: "Keyframe", icon: pin === "remove" ? "diamond" : "diamond-outline", disabled: pin === "off", active: pin === "remove", onPress: toggleKeyframe },
     crop: { label: "Crop", icon: "crop", disabled: noSel, onPress: () => setSheet("crop") },
     replace: { label: "Replace", icon: "sync", disabled: noSel || mediaBusy, onPress: () => { if (selectedId) void replaceMedia(selectedId); } },
     reverse: { label: "Reverse", icon: "play-back", disabled: noSel || photoSel, active: reversed, onPress: () => { if (selectedId) { haptic("light"); apply((p) => setClipReversed(p, selectedId, !reversed)); } } },
@@ -135,6 +172,8 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <FilterSheet clipId={selectedId} visible={sheet === "filter"} onClose={() => setSheet(null)} />
       <TemplateSheet clipId={selectedId} visible={sheet === "templates"} onClose={() => setSheet(null)} />
       <TransformSheet clipId={selectedId} visible={sheet === "transform"} onClose={() => setSheet(null)} />
+      <ClipAnimationSheet clipId={selectedId} visible={sheet === "clipAnimation"} onClose={() => setSheet(null)} />
+      <OverlayAnimationSheet overlayId={selectedOverlayId} visible={sheet === "overlayAnimation"} onClose={() => setSheet(null)} />
       <AdjustSheet clipId={selectedId} visible={sheet === "adjust"} onClose={() => setSheet(null)} />
       <EffectSheet visible={sheet === "effect"} onClose={() => setSheet(null)} />
       <EffectStrengthSheet effectId={selectedEffectId} visible={sheet === "effectStrength"} onClose={() => setSheet(null)} />

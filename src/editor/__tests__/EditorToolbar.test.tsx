@@ -377,3 +377,152 @@ describe("Effects on the timeline", () => {
     expect(screen.getByRole("button", { name: "Filter" })).toBeTruthy();
   });
 });
+
+describe("Animate and Keyframe", () => {
+  const withOverlays = () => useEditorStore.getState().setProject(makeProject({
+    clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })],
+    overlays: [makeOverlay({ id: "t1", start: 1, end: 3 }), makeSticker({ id: "s1", start: 1, end: 3 }), makeOverlay({ id: "c1", kind: "caption", start: 1, end: 3 })],
+  }));
+  const btn = (name: string) => screen.getByRole("button", { name });
+  const clipPins = (i = 0) => useEditorStore.getState().project!.clips[i].keyframes;
+  const overlayPins = (id: string) => useEditorStore.getState().project!.overlays.find((o) => o.id === id)!.keyframes;
+  const past = () => useEditorStore.getState().past.length;
+
+  test("sit after Transform in Edit and at the end of Text and Stickers", async () => {
+    await renderBar();
+    const row = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
+    expect(row().slice(0, 5)).toEqual(["Split", "Trim", "Transform", "Animate", "Keyframe"]);
+    await openGroup("Text");
+    expect(row()).toEqual(["Text", "Captions", "Animate", "Keyframe"]);
+    await openGroup("Stickers");
+    expect(row()).toEqual(["Sticker", "Animate", "Keyframe"]);
+  });
+
+  test("both are disabled without a selection in every group", async () => {
+    withOverlays();
+    await renderBar();
+    for (const g of ["Edit", "Text", "Stickers"]) {
+      await openGroup(g);
+      expect(btn("Animate")).toBeDisabled();
+      expect(btn("Keyframe")).toBeDisabled();
+    }
+  });
+
+  test("Edit: a selected clip enables Animate; Keyframe also needs the playhead on that clip", async () => {
+    await renderBar();
+    await act(() => { useEditorStore.getState().select("a"); useEditorStore.getState().seek(1); });
+    expect(btn("Animate")).toBeEnabled();
+    expect(btn("Keyframe")).toBeEnabled();
+    await act(() => { useEditorStore.getState().seek(5); });
+    expect(btn("Animate")).toBeEnabled();
+    expect(btn("Keyframe")).toBeDisabled();
+    await act(() => { useEditorStore.getState().select("b"); });
+    expect(btn("Keyframe")).toBeEnabled();
+  });
+
+  test("Edit: Keyframe adds a pin then removes it, the diamond fills while on the pin, one undo step each", async () => {
+    await renderBar();
+    await act(() => { useEditorStore.getState().select("a"); useEditorStore.getState().seek(1); });
+    expect(btn("Keyframe")).not.toBeSelected();
+    await fireEvent.press(btn("Keyframe"));
+    expect(clipPins()).toHaveLength(1);
+    expect(clipPins()[0].t).toBeCloseTo(1);
+    expect(past()).toBe(1);
+    expect(btn("Keyframe")).toBeSelected();
+    await act(() => { useEditorStore.getState().seek(2); });
+    expect(btn("Keyframe")).not.toBeSelected();
+    await act(() => { useEditorStore.getState().seek(1); });
+    expect(btn("Keyframe")).toBeSelected();
+    await fireEvent.press(btn("Keyframe"));
+    expect(clipPins()).toHaveLength(0);
+    expect(past()).toBe(2);
+    expect(btn("Keyframe")).not.toBeSelected();
+    await act(() => { useEditorStore.getState().undo(); });
+    expect(clipPins()).toHaveLength(1);
+  });
+
+  test("Edit: Animate opens the clip animation sheet", async () => {
+    await renderBar();
+    await act(() => { useEditorStore.getState().select("a"); });
+    expect(screen.queryByRole("button", { name: "Combo" })).toBeNull();
+    await fireEvent.press(btn("Animate"));
+    expect(btn("Combo")).toBeTruthy();
+    await fireEvent.press(btn("Fade"));
+    expect(useEditorStore.getState().project!.clips[0].animation.in).toEqual({ id: "fade", duration: 0.5 });
+  });
+
+  test("Text: a selected text enables both inside its range; Keyframe is off outside it", async () => {
+    withOverlays();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectOverlay("t1"); useEditorStore.getState().seek(2); });
+    expect(screen.getByRole("tab", { name: "Text" })).toBeSelected();
+    expect(btn("Animate")).toBeEnabled();
+    expect(btn("Keyframe")).toBeEnabled();
+    await act(() => { useEditorStore.getState().seek(1); });
+    expect(btn("Keyframe")).toBeEnabled();
+    await act(() => { useEditorStore.getState().seek(3); });
+    expect(btn("Keyframe")).toBeEnabled();
+    await act(() => { useEditorStore.getState().seek(0.5); });
+    expect(btn("Keyframe")).toBeDisabled();
+    await act(() => { useEditorStore.getState().seek(5); });
+    expect(btn("Keyframe")).toBeDisabled();
+    expect(btn("Animate")).toBeEnabled();
+  });
+
+  test("Text: Keyframe toggles a pin on the text and Animate opens the overlay sheet", async () => {
+    withOverlays();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectOverlay("t1"); useEditorStore.getState().seek(2); });
+    await fireEvent.press(btn("Keyframe"));
+    expect(overlayPins("t1")).toHaveLength(1);
+    expect(overlayPins("t1")[0].t).toBeCloseTo(1);
+    expect(past()).toBe(1);
+    expect(btn("Keyframe")).toBeSelected();
+    await fireEvent.press(btn("Keyframe"));
+    expect(overlayPins("t1")).toHaveLength(0);
+    expect(past()).toBe(2);
+    expect(btn("Keyframe")).not.toBeSelected();
+    await fireEvent.press(btn("Animate"));
+    expect(btn("Loop")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Combo" })).toBeNull();
+    await fireEvent.press(btn("Pop"));
+    expect(useEditorStore.getState().project!.overlays[0].animation.in).toEqual({ id: "pop", duration: 0.5 });
+  });
+
+  test("a caption selection disables both", async () => {
+    withOverlays();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectOverlay("c1"); useEditorStore.getState().seek(2); });
+    expect(screen.getByRole("tab", { name: "Text" })).toBeSelected();
+    expect(btn("Animate")).toBeDisabled();
+    expect(btn("Keyframe")).toBeDisabled();
+  });
+
+  test("Stickers: a selected sticker enables both and Keyframe pins the sticker", async () => {
+    withOverlays();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectOverlay("s1"); useEditorStore.getState().seek(2); });
+    expect(screen.getByRole("tab", { name: "Stickers" })).toBeSelected();
+    expect(btn("Animate")).toBeEnabled();
+    await fireEvent.press(btn("Keyframe"));
+    expect(overlayPins("s1")).toHaveLength(1);
+    expect(overlayPins("t1")).toHaveLength(0);
+    await fireEvent.press(btn("Animate"));
+    expect(btn("Loop")).toBeTruthy();
+  });
+
+  test("the tools follow the group: a text selection does not enable them in Stickers or Edit, nor a sticker in Text", async () => {
+    withOverlays();
+    await renderBar();
+    await act(() => { useEditorStore.getState().selectOverlay("t1"); useEditorStore.getState().seek(2); });
+    for (const g of ["Stickers", "Edit"]) {
+      await openGroup(g);
+      expect(btn("Animate")).toBeDisabled();
+      expect(btn("Keyframe")).toBeDisabled();
+    }
+    await act(() => { useEditorStore.getState().selectOverlay("s1"); });
+    await openGroup("Text");
+    expect(btn("Animate")).toBeDisabled();
+    expect(btn("Keyframe")).toBeDisabled();
+  });
+});
