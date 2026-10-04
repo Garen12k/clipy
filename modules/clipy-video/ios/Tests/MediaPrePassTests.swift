@@ -50,6 +50,9 @@ final class MediaPrePassTests: XCTestCase {
     c.animIn = animIn; c.animOut = animOut; c.animCombo = "sway"
     var pin = ExportKeyframe(); pin.t = 1.5; pin.x = 0.2; pin.y = -0.1; pin.scale = 2; pin.rotation = 45; pin.opacity = 0.5
     c.keyframes = [ExportKeyframe(), pin]
+    var quiet = ExportGainPoint(); quiet.time = 0; quiet.gain = 0
+    var loud = ExportGainPoint(); loud.time = 1.5; loud.gain = 0.5
+    c.gain = [quiet, loud]
 
     let prepared = URL(fileURLWithPath: "/tmp/clipy-prepass-x/0-photo.mp4")
     let r = MediaPrePass.rewrite(c, preparedURL: prepared, duration: 3)
@@ -78,6 +81,11 @@ final class MediaPrePassTests: XCTestCase {
     XCTAssertEqual(r.keyframes.last?.scale, 2); XCTAssertEqual(r.keyframes.last?.rotation, 45); XCTAssertEqual(r.keyframes.last?.opacity, 0.5)
     XCTAssertEqual(ExportSession.clipMotion(r)?.animCombo, "sway")
     XCTAssertTrue(r.speedSpans.isEmpty)
+    // The gain curve is in output time as well: carried as it is.
+    XCTAssertEqual(r.gain.count, 2)
+    XCTAssertEqual(r.gain.first?.time, 0); XCTAssertEqual(r.gain.first?.gain, 0)
+    XCTAssertEqual(r.gain.last?.time, 1.5); XCTAssertEqual(r.gain.last?.gain, 0.5)
+    XCTAssertEqual(ExportSession.clipGain(r), [GainPoint(time: 0, gain: 0), GainPoint(time: 1.5, gain: 0.5)])
   }
 
   /// A curve's spans are in playback order — the order the prepared (reversed) file runs in — so they are kept as is.
@@ -98,6 +106,7 @@ final class MediaPrePassTests: XCTestCase {
     let r = MediaPrePass.rewrite(clip(reversed: true), preparedURL: URL(fileURLWithPath: "/tmp/r.mp4"), duration: 3)
     XCTAssertNil(r.animIn); XCTAssertNil(r.animOut); XCTAssertNil(r.animCombo)
     XCTAssertTrue(r.keyframes.isEmpty)
+    XCTAssertTrue(r.gain.isEmpty)
     XCTAssertNil(ExportSession.clipMotion(r))
   }
 

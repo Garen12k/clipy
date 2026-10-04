@@ -4,7 +4,8 @@ import { clipDuration } from "./timeline";
 
 /**
  * Every audio gain in the app: fades, ducking, and the gain curves the export plays (spec section 3).
- * Mirrored by AudioMix.swift: keep constants and formulas identical. Pure maths — no React, no store.
+ * Mirrored by AudioMix.swift (constants, `fitFades`, `fadeEnvelope`, `voiceIntervals`, `duckFactorAt`): keep them identical. The curves
+ * are built here only — the export request carries them and Swift just draws ramps. Pure maths — no React, no store.
  * Track times are project seconds; clip times are clip-local OUTPUT seconds. Volumes above 1 are kept (the export can
  * boost; the preview caps at 1 elsewhere).
  */
@@ -203,4 +204,82 @@ export function clipGainCurve(c: Clip): GainPoint[] {
   if (c.muted || isPhoto(c)) return [{ time: 0, gain: 0 }, { time: roundTime(length), gain: 0 }];
   const fades = fitFades(c.fadeIn, c.fadeOut, length);
   return curveFrom([0, fades.in, length - fades.out, length], (time) => clipGainAt(c, time));
+}
+
+/**
+ * The export's safety fade for music that is still playing when the video ends: over the last `seconds` (or the whole kept part
+ * when that is shorter). A track counts as playing to the end when it ends no more than `slack` seconds before the video does.
+ */
+export const END_FADE = { seconds: 1, slack: 0.01 };
+
+/**
+ * A piecewise-linear curve read at `time`: exact on a breakpoint, a straight line between two, the first / last gain outside.
+ * 0 for an empty curve or a non-finite time.
+ */
+export function gainOnCurve(curve: GainPoint[], time: number): number {
+  if (curve.length === 0 || !Number.isFinite(time)) return 0;
+  if (time <= curve[0].time) return curve[0].gain;
+  for (let i = 1; i < curve.length; i++) {
+    const a = curve[i - 1];
+    const b = curve[i];
+    if (time === b.time) return b.gain;
+    if (time < b.time) return a.gain + (b.gain - a.gain) * ((time - a.time) / (b.time - a.time));
+  }
+  return curve[curve.length - 1].gain;
+}
+
+/**
+ * The part of a curve inside `[from, to]`: its breakpoints there, unchanged, plus an interpolated breakpoint at each cut (on the
+ * time grid). Empty when nothing of the curve is inside, or what is left has no length on the time grid.
+ */
+export function cutCurve(curve: GainPoint[], from: number, to: number): GainPoint[] {
+  if (curve.length === 0 || !Number.isFinite(from) || !Number.isFinite(to)) return [];
+  const lo = Math.max(from, curve[0].time);
+  const hi = Math.min(to, curve[curve.length - 1].time);
+  if (!(hi > lo)) return [];
+  const inside = curve.map((b) => b.time).filter((time) => time > lo && time < hi);
+  const out = curveFrom([lo, ...inside, hi], (time) => gainOnCurve(curve, time));
+  return out.length < 2 ? [] : out;
+}
+
+/**
+ * The curve with its last `seconds` before `endTime` multiplied by a linear ramp from 1 down to 0 (never longer than the curve
+ * before `endTime`). The result is piecewise linear again: a breakpoint where the ramp starts and one at `endTime`; where the
+ * curve itself slopes inside the ramp the product is a parabola (second derivative 2 × slope / seconds), so that stretch gets
+ * extra breakpoints, spaced like `overlapStep`, to stay within CURVE_TOLERANCE. A broken `endTime` / `seconds`, no fade, or a
+ * curve of fewer than two points → the curve as it is.
+ */
+export function withEndFade(curve: GainPoint[], endTime: number, seconds: number): GainPoint[] {
+  if (curve.length < 2 || !Number.isFinite(endTime)) return curve;
+  const length = Math.min(finitePositive(seconds), endTime - curve[0].time);
+  if (!(length > 0)) return curve;
+  const from = endTime - length;
+  const factor = (time: number): number => (time <= from ? 1 : time >= endTime ? 0 : (endTime - time) / length);
+  const marks = [...new Set([...curve.map((b) => b.time), from, endTime])].sort((a, b) => a - b);
+  const times = [...marks];
+  for (let i = 1; i < marks.length; i++) {
+    const lo = marks[i - 1];
+    const hi = marks[i];
+    if (lo < from || hi > endTime) continue;
+    const slope = Math.abs((gainOnCurve(curve, hi) - gainOnCurve(curve, lo)) / (hi - lo));
+    if (!(slope > 0)) continue;
+    const step = Math.max(CURVE_MIN_STEP, Math.min(CURVE_STEP, CURVE_STEP_SAFETY * Math.sqrt((4 * CURVE_TOLERANCE * length) / slope)));
+    for (let k = 1; k <= CURVE_MAX_POINTS && lo + k * step < hi - EDGE_EPSILON; k++) times.push(roundTime(lo + k * step));
+  }
+  return curveFrom(times, (time) => gainOnCurve(curve, time) * factor(time));
+}
+
+/**
+ * The gain curve the export plays for a track in a video `total` seconds long (composition seconds): `trackGainCurve` cut to
+ * `[0, total]`; empty when nothing of the track is inside. Music that is still playing when the video ends (END_FADE.slack),
+ * has no fade-out of its own and is not silent there gets the END_FADE safety fade, so it never stops dead.
+ */
+export function exportTrackCurve(p: Project, t: AudioTrack, total: number): GainPoint[] {
+  const cut = cutCurve(trackGainCurve(p, t), 0, total);
+  if (cut.length < 2) return [];
+  const last = cut[cut.length - 1];
+  const playsToTheEnd = t.kind === "music" && trackEnd(t) >= total - END_FADE.slack;
+  const ownFadeOut = fitFades(t.fadeIn, t.fadeOut, trackLength(t)).out > 0;
+  if (!playsToTheEnd || ownFadeOut || !(last.gain > 0)) return cut;
+  return withEndFade(cut, last.time, END_FADE.seconds);
 }

@@ -85,11 +85,17 @@ struct ExportSpeedSpan: Record {
   @Field var speed: Double = 1
 }
 
+/// One breakpoint of a gain curve built by the app (`audioMix.ts`): the export draws a volume ramp between each two.
+struct ExportGainPoint: Record {
+  @Field var time: Double = 0                      // seconds: clip-local OUTPUT time for a clip, composition time for an audio track
+  @Field var gain: Double = 1                      // 0 = silent, 1 = as recorded, above 1 = boosted
+}
+
 struct ExportClip: Record {
   @Field var sourceUri: String = ""
   @Field var trimStart: Double = 0
   @Field var trimEnd: Double = 0
-  @Field var volume: Double = 1
+  @Field var volume: Double = 1                    // the mix uses `gain`; these two only stand in when `gain` is empty
   @Field var muted: Bool = false
   @Field var speed: Double = 1                     // output duration = (trimEnd − trimStart) / speed
   @Field var filter: String?                       // JS `null` → nil (no filter)
@@ -108,6 +114,7 @@ struct ExportClip: Record {
   @Field var animCombo: String?                    // one of `ANIM_COMBO_IDS`; set → In / Out are not played
   @Field var keyframes: [ExportKeyframe] = []      // non-empty → they give x / y / scale / rotation / opacity
   @Field var speedSpans: [ExportSpeedSpan] = []    // a speed curve, in PLAYBACK order; empty → constant `speed`
+  @Field var gain: [ExportGainPoint] = []          // the clip's own sound over its output time (volume, mute, fades); empty → flat `volume` / `muted`
 }
 
 /// `TextStyle` with shadow / glow flattened: a nil colour = that feature is off. The defaults are the neutral style.
@@ -161,19 +168,21 @@ struct ExportOverlay: Record {
   @Field var highlightColor: String?               // captions only; JS `null` → nil (no word highlight)
 }
 
-struct ExportAudio: Record {
+/// One audio track (music, voice-over or sound effect): source `[trimStart, trimEnd)` placed at `start` (composition
+/// seconds), already clipped to the video by the app.
+struct ExportAudioTrack: Record {
   @Field var sourceUri: String = ""
   @Field var start: Double = 0
   @Field var trimStart: Double = 0
   @Field var trimEnd: Double = 0
-  @Field var volume: Double = 1
+  @Field var gain: [ExportGainPoint] = []          // composition seconds; volume, fades, ducking and the end fade included; empty → gain 1
 }
 
 struct ExportRequest: Record {
   @Field var clips: [ExportClip] = []
   @Field var overlays: [ExportOverlay] = []
   @Field var effects: [ExportEffect] = []
-  @Field var audio: ExportAudio?               // JS `null` → nil (no music)
+  @Field var audioTracks: [ExportAudioTrack] = []   // every audio track, mixed with the clips' own sound
   @Field var aspectRatio: String = "9:16"
   @Field var resolution: Int = 1080
   @Field var outputPath: String = ""
@@ -232,8 +241,10 @@ private struct PlacedClip {
 }
 
 /// One export job. Builds an AVMutableComposition from trimmed clips, aspect-fills each into the render size, and writes an .mp4.
-/// Phase 2: per-clip volume/mute and an optional music track (audio mix, 1 s fade-out at the end), plus text overlays
-/// rendered with Core Animation (`AVVideoCompositionCoreAnimationTool`).
+/// Phase 2: text overlays rendered with Core Animation (`AVVideoCompositionCoreAnimationTool`).
+/// Audio: the clips' own sound on two composition tracks and one more composition track per request audio track,
+/// mixed with volume ramps drawn from the request's gain curves (`AudioMix.ramps`). The curves come ready-made from
+/// the app (volume, mute, fades, ducking, the fade at the end of the video): nothing here changes a gain.
 /// Speed curves: a clip with `speedSpans` is inserted once and retimed span by span (`SpeedSpans`, `insertRetimed`).
 /// Phase 3: per-clip speed (`scaleTimeRange`), Core Image filters and transitions through `ClipyCompositor`, with clips
 /// alternating between two video tracks (A/B) so a transition's two clips overlap; emoji/shape stickers as layers.
@@ -337,6 +348,34 @@ final class ExportSession {
 
   /// Seconds → CMTime at the timescale every Phase 1–3 computation uses.
   static func time(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: 600) }
+
+  /// A request gain curve as the maths uses it (`AudioMix.usable`). A request without a curve gets one flat point at
+  /// `fallback` (non-finite → 0, negative → 0).
+  static func gainPoints(_ points: [ExportGainPoint], fallback: Double) -> [GainPoint] {
+    let curve: [GainPoint] = AudioMix.usable(points.map { (p: ExportGainPoint) -> GainPoint in GainPoint(time: p.time, gain: p.gain) })
+    if !curve.isEmpty { return curve }
+    return [GainPoint(time: 0, gain: fallback.isFinite ? max(0, fallback) : 0)]
+  }
+
+  /// A clip's own-sound curve in clip-local output seconds; without one, its `volume` / `muted` as a flat gain.
+  static func clipGain(_ c: ExportClip) -> [GainPoint] {
+    return gainPoints(c.gain, fallback: c.muted ? 0 : c.volume)
+  }
+
+  /// Draws `ramps` (in time order) on one track's mix parameters, a volume ramp each — a flat stretch is a ramp with
+  /// equal ends. No two ramps overlap: one that would start before the previous one ended starts where that ended,
+  /// and one with no length on the 1/600 s grid is skipped. Before the first ramp the volume is that ramp's start.
+  static func applyRamps(_ ramps: [GainRamp], to params: AVMutableAudioMixInputParameters) {
+    var drawnTo: CMTime? = nil
+    for r in ramps {
+      let end = time(r.end)
+      let start = CMTimeMaximum(time(r.start), drawnTo ?? .zero)
+      guard CMTimeCompare(end, start) > 0 else { continue }
+      if drawnTo == nil, CMTimeCompare(start, .zero) > 0 { params.setVolume(Float(r.from), at: .zero) }
+      params.setVolumeRamp(fromStartVolume: Float(r.from), toEndVolume: Float(r.to), timeRange: CMTimeRange(start: start, end: end))
+      drawnTo = end
+    }
+  }
 
   /// A request clip's speed curve as the maths uses it (unplayable spans dropped); empty for a constant-speed clip.
   static func speedSpans(_ c: ExportClip) -> [SpeedSpan] {
@@ -768,7 +807,8 @@ final class ExportSession {
     ]
     var videoEnd: [CMTime] = [.zero, .zero]
     var audioEnd: [CMTime] = [.zero, .zero]
-    var audioVolumes: [[(at: CMTime, volume: Float)]] = [[], []]
+    var audioUsed: [Bool] = [false, false]         // the clip audio track holds at least one clip's sound
+    var audioRamps: [[GainRamp]] = [[], []]        // each clip's gain curve as ramps over its own audio range, in clip order
     var placed: [PlacedClip] = []
     var cursor = CMTime.zero
     let holdFrame = CMTime(value: 1, timescale: ExportSession.frameRate)
@@ -854,7 +894,10 @@ final class ExportSession {
             let audioCuts = Self.retimeCuts(from: (source: shared.start, output: aStart), to: (source: shared.end, output: aEnd), interior: interior)
             if (try? insertRetimed(audioTrack, of: srcAudio, cuts: audioCuts)) == true {
               audioEnd[k] = aEnd
-              audioVolumes[k].append((at: aStart, volume: c.clip.muted ? 0 : Float(max(0, c.clip.volume))))
+              // The clip's gain curve at `bodyStart + time`, over exactly this clip's audio on the track (so the
+              // ramps of two clips never overlap); in a transition handle the curve's first / last gain holds.
+              audioUsed[k] = true
+              audioRamps[k].append(contentsOf: AudioMix.ramps(from: Self.clipGain(c.clip), offset: bodyStart.seconds, over: aStart.seconds, to: aEnd.seconds))
             }
           }
         }
@@ -889,8 +932,10 @@ final class ExportSession {
           let aEnd = CMTimeMinimum(mainStart + Self.time((shared.end - source.start).seconds * outPerSource), mainEnd)
           if (try? insertScaled(audioTrack, shared, of: srcAudio, from: aStart, to: aEnd)) == true {
             audioEnd[k] = aEnd
-            // Volume / mute takes effect at the clip's scaled start on its audio track.
-            audioVolumes[k].append((at: aStart, volume: c.clip.muted ? 0 : Float(max(0, c.clip.volume))))
+            // The clip's gain curve at `bodyStart + time`, over exactly this clip's audio on the track (so the ramps
+            // of two clips never overlap); in a transition handle the curve's first / last gain holds.
+            audioUsed[k] = true
+            audioRamps[k].append(contentsOf: AudioMix.ramps(from: Self.clipGain(c.clip), offset: bodyStart.seconds, over: aStart.seconds, to: aEnd.seconds))
           }
         }
       }
@@ -905,38 +950,35 @@ final class ExportSession {
     var mixParams: [AVAudioMixInputParameters] = []
     for k in 0..<2 {
       guard let audioTrack = audioTracks[k] else { continue }
-      if audioVolumes[k].isEmpty { composition.removeTrack(audioTrack); continue }
-      // Per-clip volume / mute on the clip audio tracks.
+      if !audioUsed[k] { composition.removeTrack(audioTrack); continue }
+      // Each clip's own-sound gain curve (volume, mute, fades) on the clip audio tracks.
       let params = AVMutableAudioMixInputParameters(track: audioTrack)
-      for entry in audioVolumes[k] { params.setVolume(entry.volume, at: entry.at) }
+      Self.applyRamps(audioRamps[k], to: params)
       mixParams.append(params)
     }
 
-    // Music: a second audio track starting at `audio.start`, trimmed, clamped to the video's length.
-    if let audio = request.audio {
+    // Audio tracks (music, voice-overs, sound effects): one composition track each, the trimmed source placed at
+    // `start` and clamped to the file's and the video's length, played with the request's gain curve (composition
+    // seconds). A track that cannot be used fails the export, as a bad music file always did: an invalid URI and a
+    // file without an audio track throw `sessionFailed`, and a file that cannot be read throws AVFoundation's error.
+    for audio in request.audioTracks {
       if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
-      guard let musicURL = URL(string: audio.sourceUri) else { throw ExportError.sessionFailed("Invalid music URI: \(audio.sourceUri)") }
-      let musicAsset = AVURLAsset(url: musicURL)
-      guard let srcMusic = try await musicAsset.loadTracks(withMediaType: .audio).first else { throw ExportError.sessionFailed("No audio track in \(audio.sourceUri)") }
-      let musicAssetDuration = try await musicAsset.load(.duration)
-      let insertAt = CMTime(seconds: max(0, audio.start), preferredTimescale: 600)
-      let srcEnd = CMTimeMinimum(CMTime(seconds: max(0, audio.trimEnd), preferredTimescale: 600), musicAssetDuration)
-      let srcStart = CMTimeMinimum(CMTime(seconds: max(0, audio.trimStart), preferredTimescale: 600), srcEnd)
-      // musicDur = min(trimEnd − trimStart, total − start); computed in CMTime so rounding never overshoots.
-      let musicDur = CMTimeMinimum(CMTimeSubtract(srcEnd, srcStart), CMTimeSubtract(total, insertAt))
-      if CMTimeCompare(musicDur, .zero) > 0,
-         let musicTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-        try musicTrack.insertTimeRange(CMTimeRange(start: srcStart, duration: musicDur), of: srcMusic, at: insertAt)
-        let volume = Float(max(0, audio.volume))
-        let params = AVMutableAudioMixInputParameters(track: musicTrack)
-        params.setVolume(volume, at: .zero)
-        // If the music plays to the end of the video, fade it out linearly over the last second.
-        if (insertAt + musicDur).seconds >= total.seconds - 0.01 {
-          let fade = CMTimeMinimum(CMTime(seconds: 1, preferredTimescale: 600), musicDur)
-          params.setVolumeRamp(fromStartVolume: volume, toEndVolume: 0, timeRange: CMTimeRange(start: CMTimeSubtract(total, fade), duration: fade))
-        }
-        mixParams.append(params)
-      }
+      guard let audioURL = URL(string: audio.sourceUri) else { throw ExportError.sessionFailed("Invalid music URI: \(audio.sourceUri)") }
+      let audioAsset = AVURLAsset(url: audioURL)
+      guard let srcAudio = try await audioAsset.loadTracks(withMediaType: .audio).first else { throw ExportError.sessionFailed("No audio track in \(audio.sourceUri)") }
+      let assetDuration = try await audioAsset.load(.duration)
+      let insertAt = Self.time(max(0, audio.start))
+      let srcEnd = CMTimeMinimum(Self.time(max(0, audio.trimEnd)), assetDuration)
+      let srcStart = CMTimeMinimum(Self.time(max(0, audio.trimStart)), srcEnd)
+      // length = min(trimEnd − trimStart, total − start); computed in CMTime so rounding never overshoots.
+      let length = CMTimeMinimum(CMTimeSubtract(srcEnd, srcStart), CMTimeSubtract(total, insertAt))
+      guard CMTimeCompare(length, .zero) > 0,
+            let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else { continue }
+      try track.insertTimeRange(CMTimeRange(start: srcStart, duration: length), of: srcAudio, at: insertAt)
+      // Flat at the curve's first / last gain outside its breakpoints; a request without a curve plays at gain 1.
+      let params = AVMutableAudioMixInputParameters(track: track)
+      Self.applyRamps(AudioMix.ramps(from: Self.gainPoints(audio.gain, fallback: 1), offset: 0, over: insertAt.seconds, to: (insertAt + length).seconds), to: params)
+      mixParams.append(params)
     }
 
     // 4. Compositor instructions, contiguous over [0, total]: clip i alone on [bodyStart + halfIn, bodyEnd − halfOut),

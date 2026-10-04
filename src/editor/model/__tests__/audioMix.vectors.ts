@@ -143,3 +143,19 @@ export const CLIP_CURVE_VECTORS: ClipCurveVector[] = [
   { name: "fitted fades", trimStart: 0, trimEnd: 2, speed: 1, volume: 1, muted: false, fadeIn: 3, fadeOut: 1,
     curve: [{ time: 0, gain: 0 }, { time: 1.5, gain: 1 }, { time: 2, gain: 0 }] },
 ];
+
+// withEndFade(curve, endTime, seconds): the last `seconds` before `endTime` multiplied by a linear ramp to 0
+export const END_FADE_VECTORS: { name: string; curve: { time: number; gain: number }[]; endTime: number; seconds: number; expect: { time: number; gain: number }[] }[] = [
+  { name: "flat", curve: [{ time: 0, gain: 1 }, { time: 10, gain: 1 }], endTime: 10, seconds: 1,
+    expect: [{ time: 0, gain: 1 }, { time: 9, gain: 1 }, { time: 10, gain: 0 }] },
+  { name: "flat, quieter, not starting at 0", curve: [{ time: 2, gain: 0.8 }, { time: 4, gain: 0.8 }], endTime: 4, seconds: 1,
+    expect: [{ time: 2, gain: 0.8 }, { time: 3, gain: 0.8 }, { time: 4, gain: 0 }] },
+  // shorter than the fade: the fade is the whole curve
+  { name: "shorter than the fade", curve: [{ time: 3, gain: 1 }, { time: 3.5, gain: 1 }], endTime: 3.5, seconds: 1,
+    expect: [{ time: 3, gain: 1 }, { time: 3.5, gain: 0 }] },
+  // a step down inside the fade (flat on both sides of a breakpoint pair): 8.5 → 0.5 * 0.5, 8.75 → 0.5 * 0.25
+  { name: "breakpoints inside the fade", curve: [{ time: 0, gain: 1 }, { time: 8, gain: 1 }, { time: 8.5, gain: 0.5 }, { time: 8.75, gain: 0.5 }, { time: 9, gain: 0.5 }], endTime: 9, seconds: 0.5,
+    expect: [{ time: 0, gain: 1 }, { time: 8, gain: 1 }, { time: 8.5, gain: 0.5 }, { time: 8.75, gain: 0.25 }, { time: 9, gain: 0 }] },
+  { name: "no fade", curve: [{ time: 0, gain: 1 }, { time: 10, gain: 1 }], endTime: 10, seconds: 0,
+    expect: [{ time: 0, gain: 1 }, { time: 10, gain: 1 }] },
+];

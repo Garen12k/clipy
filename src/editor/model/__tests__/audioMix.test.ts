@@ -1,6 +1,6 @@
-import { clipGainAt, clipGainCurve, duckFactorAt, fadeEnvelope, fitFades, trackGainAt, trackGainCurve, voiceIntervals } from "../audioMix";
+import { clipGainAt, clipGainCurve, cutCurve, duckFactorAt, END_FADE, exportTrackCurve, fadeEnvelope, fitFades, gainOnCurve, trackGainAt, trackGainCurve, voiceIntervals, withEndFade } from "../audioMix";
 import { DUCKING, makeAudioTrack, makeClip, makePhotoClip, makeProject, type AudioTrack, type Project } from "../types";
-import { CLIP_CURVE_VECTORS, CURVE_VECTORS, DUCK_VECTORS, ENVELOPE_VECTORS, FINE_OVERLAP_CURVE, FIT_VECTORS, INTERVAL_EXPECT, INTERVAL_TRACKS,
+import { CLIP_CURVE_VECTORS, CURVE_VECTORS, DUCK_VECTORS, END_FADE_VECTORS, ENVELOPE_VECTORS, FINE_OVERLAP_CURVE, FIT_VECTORS, INTERVAL_EXPECT, INTERVAL_TRACKS,
   OVERLAP_CURVE, type MixTrack } from "./audioMix.vectors";
 
 const track = (id: string, m: MixTrack): AudioTrack => makeAudioTrack({ id, sourceDuration: 60, ...m });
@@ -242,6 +242,131 @@ describe("clip gains", () => {
     for (let i = 0; i <= 200; i++) {
       const at = (4 * i) / 200;
       expect(interpolate(curve, at)).toBeCloseTo(clipGainAt(c, at), 9);
+    }
+  });
+});
+
+describe("gainOnCurve", () => {
+  const curve = [{ time: 1, gain: 0.1 }, { time: 3, gain: 0.3 }, { time: 4, gain: 0 }];
+  it("reads the curve between breakpoints and is exact on them", () => {
+    expect(gainOnCurve(curve, 2)).toBeCloseTo(0.2, 12);
+    expect(gainOnCurve(curve, 1)).toBe(0.1);
+    expect(gainOnCurve(curve, 3)).toBe(0.3);       // not 0.1 + (0.3 − 0.1), which is a hair above
+    expect(gainOnCurve(curve, 3.5)).toBeCloseTo(0.15, 12);
+  });
+  it("is the first / last gain outside, and 0 for no curve or a non-finite time", () => {
+    expect(gainOnCurve(curve, 0)).toBe(0.1);
+    expect(gainOnCurve(curve, 9)).toBe(0);
+    expect(gainOnCurve([], 1)).toBe(0);
+    expect(gainOnCurve(curve, NaN)).toBe(0);
+  });
+});
+
+describe("cutCurve", () => {
+  const curve = [{ time: 1, gain: 0 }, { time: 3, gain: 0.8 }, { time: 10, gain: 0.8 }, { time: 11, gain: 0 }];
+  it("leaves a curve inside the range as it is", () => {
+    expect(cutCurve(curve, 0, 20)).toEqual(curve);
+    expect(cutCurve(curve, 1, 11)).toEqual(curve);
+  });
+  it("cuts with an interpolated breakpoint at each cut", () => {
+    const cut = cutCurve(curve, 2, 10.5);
+    expect(cut.map((b) => b.time)).toEqual([2, 3, 10, 10.5]);
+    [0.4, 0.8, 0.8, 0.4].forEach((g, i) => expect(cut[i].gain).toBeCloseTo(g, 12));
+    expect(cutCurve(curve, 0, 5)).toEqual([{ time: 1, gain: 0 }, { time: 3, gain: 0.8 }, { time: 5, gain: 0.8 }]);
+  });
+  it("puts the cut on the 4-decimal time grid", () => {
+    expect(cutCurve([{ time: 0, gain: 1 }, { time: 9, gain: 1 }], 0, 10 / 3)).toEqual([{ time: 0, gain: 1 }, { time: 3.3333, gain: 1 }]);
+  });
+  it("is empty when nothing of the curve is inside", () => {
+    expect(cutCurve(curve, 11, 20)).toEqual([]);
+    expect(cutCurve(curve, 12, 20)).toEqual([]);
+    expect(cutCurve(curve, -5, 1)).toEqual([]);
+    expect(cutCurve(curve, 5, 5)).toEqual([]);
+    expect(cutCurve([], 0, 5)).toEqual([]);
+    expect(cutCurve(curve, 0, NaN)).toEqual([]);
+    expect(cutCurve(curve, 2, 2.00001)).toEqual([]);       // both ends round to the same time
+  });
+});
+
+describe("withEndFade", () => {
+  it.each(END_FADE_VECTORS)("$name", (v) => {
+    const out = withEndFade(v.curve, v.endTime, v.seconds);
+    expect(out.map((b) => b.time)).toEqual(v.expect.map((b) => b.time));
+    out.forEach((b, i) => expect(b.gain).toBeCloseTo(v.expect[i].gain, 9));
+  });
+  it("returns the curve unchanged for a broken fade or fewer than two points", () => {
+    const flat = [{ time: 0, gain: 1 }, { time: 4, gain: 1 }];
+    expect(withEndFade(flat, 4, NaN)).toEqual(flat);
+    expect(withEndFade(flat, NaN, 1)).toEqual(flat);
+    expect(withEndFade(flat, 4, -1)).toEqual(flat);
+    expect(withEndFade([{ time: 0, gain: 1 }], 0, 1)).toEqual([{ time: 0, gain: 1 }]);
+  });
+  it("stays within 0.01 of curve × ramp where the curve itself slopes inside the fade (extra breakpoints)", () => {
+    // a duck ramp at volume 2 (2 → 0.6 over 7.2 … 7.5) inside the last second
+    const curve = [{ time: 0, gain: 2 }, { time: 7.2, gain: 2 }, { time: 7.5, gain: 0.6 }, { time: 8, gain: 0.6 }];
+    const out = withEndFade(curve, 8, 1);
+    expect(out[out.length - 1]).toEqual({ time: 8, gain: 0 });
+    for (let i = 1; i < out.length; i++) expect(out[i].time).toBeGreaterThan(out[i - 1].time);
+    expect(out.filter((b) => b.time > 7.2 && b.time < 7.5).length).toBeGreaterThan(2);
+    for (let i = 0; i <= 800; i++) {
+      const time = i / 100;
+      const want = interpolate(curve, time) * Math.min(1, 8 - time);
+      expect(Math.abs((time === 0 ? out[0].gain : interpolate(out, time)) - want)).toBeLessThanOrEqual(0.01);
+    }
+  });
+});
+
+describe("exportTrackCurve", () => {
+  const curveOf = (m: Partial<MixTrack>, total: number, others: MixTrack[] = [], ducking = false) => {
+    const { p, t } = projectOf({ start: 0, trimStart: 0, trimEnd: 9, volume: 1, kind: "music", fadeIn: 0, fadeOut: 0, ...m }, others, ducking);
+    return exportTrackCurve(p, t, total);
+  };
+  it("fades over the last second, at most (the old automatic fade)", () => {
+    expect(END_FADE).toEqual({ seconds: 1, slack: 0.01 });
+  });
+  it("a track that ends before the video ends keeps its curve", () => {
+    expect(curveOf({ trimEnd: 5 }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 5, gain: 1 }]);
+    expect(curveOf({ start: 1, trimEnd: 10, volume: 0.8, fadeIn: 2, fadeOut: 1 }, 20)).toEqual(CURVE_VECTORS[1].curve);
+  });
+  it("music cut by the end of the video is cut there and fades over its last second", () => {
+    expect(curveOf({}, 8)).toEqual([{ time: 0, gain: 1 }, { time: 7, gain: 1 }, { time: 8, gain: 0 }]);
+    expect(curveOf({ start: 7.5, volume: 0.5 }, 8)).toEqual([{ time: 7.5, gain: 0.5 }, { time: 8, gain: 0 }]);
+  });
+  it("music that ends with the video (within 0.01 s) fades too, as it always did", () => {
+    expect(curveOf({ trimEnd: 8 }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 7, gain: 1 }, { time: 8, gain: 0 }]);
+    expect(curveOf({ trimEnd: 7.995 }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 6.995, gain: 1 }, { time: 7.995, gain: 0 }]);
+    expect(curveOf({ trimEnd: 7.9 }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 7.9, gain: 1 }]);
+  });
+  it("music with its own fade-out gets no extra fade: the curve is only cut", () => {
+    const cut = curveOf({ fadeOut: 1 }, 8.5);       // own fade over 8 … 9
+    expect(cut.map((b) => b.time)).toEqual([0, 8, 8.5]);
+    [1, 1, 0.5].forEach((g, i) => expect(cut[i].gain).toBeCloseTo(g, 9));
+  });
+  it("voice-overs and sound effects are cut without a fade", () => {
+    expect(curveOf({ kind: "voice" }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 8, gain: 1 }]);
+    expect(curveOf({ kind: "sfx" }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 8, gain: 1 }]);
+  });
+  it("silent music is left flat", () => {
+    expect(curveOf({ volume: 0 }, 8)).toEqual([{ time: 0, gain: 0 }, { time: 8, gain: 0 }]);
+  });
+  it("is empty for a track outside the video", () => {
+    expect(curveOf({ start: 8 }, 8)).toEqual([]);
+    expect(curveOf({ start: 12 }, 8)).toEqual([]);
+    expect(curveOf({ trimEnd: 0 }, 8)).toEqual([]);
+    expect(curveOf({}, 0)).toEqual([]);
+  });
+  it("a track starting before 0 is cut at 0", () => {
+    expect(curveOf({ start: -2, trimEnd: 5, kind: "sfx" }, 8)).toEqual([{ time: 0, gain: 1 }, { time: 3, gain: 1 }]);
+  });
+  it("ducked music cut by the end: ducking and the end fade multiply", () => {
+    const voice: MixTrack = { start: 7.5, trimStart: 0, trimEnd: 1.5, volume: 1, kind: "voice", fadeIn: 0, fadeOut: 0 };
+    const { p, t } = projectOf({ start: 0, trimStart: 0, trimEnd: 10, volume: 1, kind: "music", fadeIn: 0, fadeOut: 0 }, [voice], true);
+    const curve = exportTrackCurve(p, t, 8);
+    expect(curve[0]).toEqual({ time: 0, gain: 1 });
+    expect(curve[curve.length - 1]).toEqual({ time: 8, gain: 0 });
+    for (let i = 0; i < 800; i++) {
+      const time = (i + 0.5) / 100;
+      expect(Math.abs(interpolate(curve, time) - trackGainAt(p, t, time) * Math.min(1, 8 - time))).toBeLessThanOrEqual(0.01);
     }
   });
 });
