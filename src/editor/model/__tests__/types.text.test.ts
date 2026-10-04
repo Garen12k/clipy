@@ -97,7 +97,7 @@ describe("factories give fresh defaults", () => {
     expect(a.highlightColor).toBeNull();
   });
   test("linesToCaptions", () => {
-    const [x, y] = linesToCaptions([{ text: "a", start: 0, end: 1 }, { text: "b", start: 1, end: 2 }], (() => { let i = 0; return () => `c${i++}`; })());
+    const [x, y] = linesToCaptions([{ text: "a", start: 0, end: 1, words: [] }, { text: "b", start: 1, end: 2, words: [] }], (() => { let i = 0; return () => `c${i++}`; })());
     expect(x.style).toEqual(DEFAULT_TEXT_STYLE);
     expect(x.style).not.toBe(y.style);
     expect(x.words).not.toBe(y.words);

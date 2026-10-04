@@ -4,7 +4,7 @@ import { join, relative, sep } from "path";
 const ROOT = join(__dirname, "..", "..");
 /** Files whose hex values are user content (burned into video or picked by the user), not UI chrome. */
 const ALLOW = new Set([
-  "src/theme/theme.ts", "src/editor/effects.ts", "src/editor/templates.ts", "src/editor/model/types.ts", "src/editor/model/effectMath.ts", "src/editor/model/adjust.ts", "src/editor/model/overlayLayout.ts",
+  "src/theme/theme.ts", "src/editor/effects.ts", "src/editor/templates.ts", "src/editor/textTemplates.ts", "src/editor/model/types.ts", "src/editor/model/effectMath.ts", "src/editor/model/adjust.ts", "src/editor/model/overlayLayout.ts",
   "src/editor/components/ColorRow.tsx", "src/editor/components/FilterLayer.tsx", "src/editor/components/OverlayText.tsx",
   "src/editor/components/TextPanel.tsx", "src/editor/components/CaptionStyleSheet.tsx", "src/editor/components/TransitionLayer.tsx",
 ]);
