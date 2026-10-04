@@ -11,7 +11,8 @@ import { Body } from "@/src/ui/Text";
 
 /**
  * Whether the preview only approximates the current frame: the clip has a filter (at a strength above 0), the playhead is in a
- * transition window, the clip is reversed (the preview plays forwards), any Adjust value is non-zero, a
+ * transition window, the clip is reversed (the preview plays forwards), the clip has a speed curve (the rate
+ * switches step by step, which can hitch, and the sound changes pitch in steps), any Adjust value is non-zero, a
  * timeline effect covers the playhead, or its blur background is visible — the picture, placed where its motion puts it at the
  * playhead, does not cover the frame or is not fully opaque (the rule `ClipFrame` draws the background by).
  */
@@ -19,7 +20,7 @@ export function needsPreviewTag(p: Project, playhead: number): boolean {
   const hit = clipAt(p, playhead);
   if (!hit) return false;
   const c = hit.clip;
-  if ((c.filter && c.filterIntensity > 0) || c.reversed || isInTransitionWindow(p, playhead)) return true;
+  if ((c.filter && c.filterIntensity > 0) || c.reversed || c.speedCurve !== null || isInTransitionWindow(p, playhead)) return true;
   if (adjustNeedsTag(c.adjust) || activeEffects(p.effects, playhead).length > 0) return true;
   if (c.background.type !== "blur") return false;
   const f = frameSize(p);

@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
 // A fake expo-video player that models AVPlayer: assigning a non-zero playbackRate starts playback
-// (expo-video's setter does `ref.rate = playbackRate` unconditionally on iOS).
+// (expo-video's setter does `ref.rate = playbackRate` unconditionally on iOS). The native property is a Float, so
+// reading it back rounds (0.3 comes back as 0.30000001…).
 jest.mock("expo-video", () => {
   const { View } = require("react-native");
   let rate = 1;
@@ -11,11 +12,12 @@ jest.mock("expo-video", () => {
   const mockPlayer = {
     listeners,
     seeks: [] as number[], // every currentTime write, in order
+    rates: [] as number[], // every playbackRate write, in order
     playing: false, loop: false, timeUpdateEventInterval: 0, muted: false, audioMixingMode: "auto", volume: 1, preservesPitch: true,
     get currentTime() { return time; },
     set currentTime(v: number) { time = v; mockPlayer.seeks.push(v); },
-    get playbackRate() { return rate; },
-    set playbackRate(v: number) { rate = v; if (v !== 0) mockPlayer.playing = true; },
+    get playbackRate() { return Math.fround(rate); },
+    set playbackRate(v: number) { rate = v; mockPlayer.rates.push(v); if (v !== 0) mockPlayer.playing = true; },
     play: jest.fn(() => { mockPlayer.playing = true; }),
     pause: jest.fn(() => { mockPlayer.playing = false; }),
     replaceAsync: jest.fn(async () => {}),
@@ -23,7 +25,7 @@ jest.mock("expo-video", () => {
   };
   return { __mockPlayer: mockPlayer, useVideoPlayer: () => mockPlayer, VideoView: View };
 });
-import { replaceClipMedia, setClipAnimation, setClipSpeed, setClipTransform } from "@/src/editor/model/ops";
+import { replaceClipMedia, setClipAnimation, setClipReversed, setClipSpeed, setClipSpeedCurve, setClipTransform } from "@/src/editor/model/ops";
 import { StyleSheet } from "react-native";
 import { FILTERS } from "@/src/editor/effects";
 import { shakeOffset } from "@/src/editor/model/effectMath";
@@ -31,7 +33,7 @@ import { DEFAULT_ADJUST, makeClip, makeEffect, makeOverlay, makePhotoClip, makeP
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
 
-type MockPlayer = { playing: boolean; currentTime: number; seeks: number[]; play: jest.Mock; pause: jest.Mock; replaceAsync: jest.Mock; listeners: Record<string, (e: unknown) => void> };
+type MockPlayer = { playing: boolean; currentTime: number; playbackRate: number; seeks: number[]; rates: number[]; play: jest.Mock; pause: jest.Mock; replaceAsync: jest.Mock; listeners: Record<string, (e: unknown) => void> };
 const player = (jest.requireMock("expo-video") as { __mockPlayer: MockPlayer }).__mockPlayer;
 const layout = () => fireEvent(screen.getByLabelText("Preview"), "layout", { nativeEvent: { layout: { width: 270, height: 480 } } });
 
@@ -39,7 +41,10 @@ beforeEach(() => {
   jest.clearAllMocks();
   player.playing = false;
   player.currentTime = 0;
+  player.playbackRate = 1; // as on a fresh player
+  player.playing = false;
   player.seeks.length = 0;
+  player.rates.length = 0;
   useEditorStore.getState().reset();
   useEditorStore.getState().setProject(makeProject({ clips: [
     makeClip({ id: "a", sourceDuration: 4, speed: 2 }),
@@ -453,5 +458,157 @@ describe("clip motion (animations and keyframes)", () => {
     expect("opacity" in box()).toBe(false);
     expect(screen.getByTestId("preview-video")).toBe(video);
     expect(player.replaceAsync).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("speed curves: the playback rate follows the steps", () => {
+  // Hero over 8 s of source: 1 s slices at 1, 2, 3, 0.5, 0.5, 3, 2, 1 → output boundaries 1, 1.5, 1.833, 3.833, 5.833, 6.167, 6.667.
+  const curved = (id: "hero" | "bullet" | "flashIn" = "hero") =>
+    useEditorStore.getState().setProject(setClipSpeedCurve(makeProject({ clips: [makeClip({ id: "k", sourceDuration: 8 })] }), "k", id));
+  const ready = async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+  };
+  const tick = (currentTime: number) => act(() => { player.listeners.timeUpdate?.({ currentTime }); });
+
+  test("paused: the rate is the step's speed at each playhead, and the player never starts", async () => {
+    curved();
+    await ready();
+    for (const [t, rate] of [[0.5, 1], [1.2, 2], [1.6, 3], [2.5, 0.5], [6, 3], [7, 1]] as const) {
+      await act(() => { useEditorStore.getState().seek(t); });
+      expect(player.playbackRate).toBe(rate);
+      expect(player.playing).toBe(false);
+    }
+    expect(player.play).not.toHaveBeenCalled();
+  });
+
+  test("paused: scrubbing inside one step seeks through the curve and writes no rate", async () => {
+    curved();
+    await ready();
+    await act(() => { useEditorStore.getState().seek(2); }); // in the first 0.5× step (source 3–4, output 1.833–3.833)
+    player.rates.length = 0; player.seeks.length = 0;
+    await act(() => { useEditorStore.getState().seek(2.5); });
+    await act(() => { useEditorStore.getState().seek(3.5); });
+    expect(player.rates).toEqual([]);
+    expect(player.seeks).toHaveLength(2);
+    expect(player.seeks[0]).toBeCloseTo(3 + (2.5 - (1 + 0.5 + 1 / 3)) * 0.5, 9);
+    expect(player.seeks[1]).toBeCloseTo(3 + (3.5 - (1 + 0.5 + 1 / 3)) * 0.5, 9);
+  });
+
+  test("playing: a timeUpdate that crosses a step boundary changes the rate once, with no seek, pause or play", async () => {
+    curved();
+    await ready();
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    player.rates.length = 0; player.seeks.length = 0; player.pause.mockClear(); player.play.mockClear();
+    await tick(0.5);
+    await tick(0.9);
+    expect(player.rates).toEqual([]); // still in the 1× step
+    await tick(1.1); // source 1.1 → playhead 1.05, in the 2× step
+    expect(useEditorStore.getState().playhead).toBeCloseTo(1.05, 9);
+    expect(player.rates).toEqual([2]);
+    await tick(1.5);
+    await tick(1.9);
+    expect(player.rates).toEqual([2]); // same step: nothing written
+    await tick(2.2);
+    await tick(3.4); // source 3.4 → the 0.5× step
+    expect(player.rates).toEqual([2, 3, 0.5]);
+    expect(player.seeks).toEqual([]);
+    expect(player.pause).not.toHaveBeenCalled();
+    expect(player.play).not.toHaveBeenCalled();
+    expect(player.playing).toBe(true);
+    expect(useEditorStore.getState().isPlaying).toBe(true);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+  });
+
+  test("a rate the native Float cannot hold exactly (0.3) is still written once per step, playing or paused", async () => {
+    curved("bullet"); // 3.5 ×3, 0.3 ×2, 3.5 ×3 over 1 s slices
+    await ready();
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    await tick(2.9);
+    player.rates.length = 0;
+    for (const t of [3.1, 3.2, 3.3, 3.4, 4.5]) await tick(t);
+    expect(player.rates).toEqual([0.3]);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    player.rates.length = 0; player.pause.mockClear();
+    for (const x of [0.1, 0.2, 0.3]) await act(() => { useEditorStore.getState().applyTransient((p) => setClipTransform(p, "k", { x })); });
+    expect(player.rates).toEqual([]);
+    expect(player.pause).not.toHaveBeenCalled();
+  });
+
+  test("the last step's rate holds to the clip's end and playback ends there", async () => {
+    curved();
+    await ready();
+    await act(() => { useEditorStore.getState().seek(7); });
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    player.rates.length = 0;
+    await tick(7.6);
+    await tick(8.1);
+    expect(player.rates).toEqual([]);
+    expect(useEditorStore.getState().isPlaying).toBe(false);
+  });
+
+  test("a reversed curved clip (previewed forwards) takes the rate of the step the player is actually in", async () => {
+    curved("flashIn"); // 4, 3, 2, 1.5, 1, 1, 1, 1 in source order
+    useEditorStore.getState().apply((p) => setClipReversed(p, "k", true));
+    await ready();
+    expect(player.playbackRate).toBe(4); // the preview shows source 0 at playhead 0
+    await act(() => { useEditorStore.getState().seek(0.3); }); // forwards: past the 0.25 s the first slice takes
+    expect(player.playbackRate).toBe(3);
+  });
+
+  test("picking a curve while paused applies its rate at the playhead and leaves the player paused; the video view is not remounted", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "k", sourceDuration: 8 })] }));
+    await ready();
+    const video = screen.getByTestId("preview-video");
+    await act(() => { useEditorStore.getState().seek(1.2); });
+    expect(player.rates).toEqual([]);
+    await act(() => { useEditorStore.getState().apply((p) => setClipSpeedCurve(p, "k", "hero")); });
+    expect(player.rates).toEqual([2]);
+    expect(player.playing).toBe(false);
+    await act(() => { useEditorStore.getState().apply((p) => setClipSpeedCurve(p, "k", null)); });
+    expect(player.rates).toEqual([2, 1]);
+    expect(player.playing).toBe(false);
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    expect(player.replaceAsync).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("preview-tag")).toBeNull();
+  });
+
+  test("the Preview tag shows on a curved clip", async () => {
+    curved();
+    await ready();
+    expect(screen.getByTestId("preview-tag")).toBeTruthy();
+  });
+});
+
+describe("constant-speed clips: the rate is written exactly as before", () => {
+  // The default project: a (2×, 0–2 s), b (1×, 2–6 s, same file), c (0.5×).
+  test("one write on arriving at a clip whose speed differs, none while scrubbing or playing inside it", async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+    expect(player.rates).toEqual([2]);
+    for (const t of [0.5, 1, 1.9]) await act(() => { useEditorStore.getState().seek(t); });
+    expect(player.rates).toEqual([2]);
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    player.seeks.length = 0;
+    for (const t of [3.9, 3.95]) await act(() => { player.listeners.timeUpdate?.({ currentTime: t }); });
+    expect(player.rates).toEqual([2]);
+    expect(player.seeks).toEqual([]);
+    await act(() => { player.listeners.timeUpdate?.({ currentTime: 4 }); }); // a's end → b (1×), same file
+    expect(player.rates).toEqual([2, 1]);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+  });
+
+  test("a project at 1× never writes the rate", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "n", sourceDuration: 4 })] }));
+    await render(<PreviewPlayer />);
+    await layout();
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+    for (const t of [0.5, 2, 3.5]) await act(() => { useEditorStore.getState().seek(t); });
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    await act(() => { player.listeners.timeUpdate?.({ currentTime: 3.7 }); });
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    expect(player.rates).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
+import { SPEED_CURVES } from "@/src/editor/effects";
 import { clipStartTimes, outputOffsetOf } from "@/src/editor/model/timeline";
 import { isPhoto, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -20,6 +21,8 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
   const slotWidth = thumbInterval(pixelsPerSecond) * pixelsPerSecond;
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const photo = isPhoto(clip);
+  // One badge slot for speed: the curve's label when a curve is set, else the constant speed when it is not 1×.
+  const speedBadge = clip.speedCurve ? SPEED_CURVES[clip.speedCurve.id].label : clip.speed !== 1 ? formatSpeed(clip.speed) : null;
   const showDots = selected && clip.keyframes.length > 0;
   // Where this clip starts on the timeline (a dot press seeks to start + the pin's output offset). Only read while dots show.
   const clipStart = useEditorStore((s) => {
@@ -59,9 +62,9 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
         </View>
       )}
       <View style={{ position: "absolute", bottom: 4, left: 4, flexDirection: "row", gap: 4 }}>
-        {clip.speed !== 1 && (
+        {speedBadge !== null && (
           <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
-            <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>{formatSpeed(clip.speed)}</Text>
+            <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>{speedBadge}</Text>
           </View>
         )}
         {clip.reversed && (
