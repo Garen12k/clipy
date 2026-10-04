@@ -1,6 +1,6 @@
 import { CAPTION_STYLE } from "@/src/editor/effects";
 import { sourceToOutput } from "./timeline";
-import type { Clip, TextOverlay } from "./types";
+import { makeOverlay, type Clip, type TextOverlay } from "./types";
 
 export interface Segment { text: string; start: number; end: number }
 export interface Line { text: string; start: number; end: number }
@@ -36,5 +36,5 @@ export function segmentsToOutput(clip: Clip, clipStart: number, segments: Segmen
 }
 
 export function linesToCaptions(lines: Line[], newId: () => string): TextOverlay[] {
-  return lines.map((l) => ({ id: newId(), kind: "caption", text: l.text, ...CAPTION_STYLE, scale: 1, rotation: 0, start: l.start, end: l.end }));
+  return lines.map((l) => makeOverlay({ id: newId(), kind: "caption", text: l.text, ...CAPTION_STYLE, scale: 1, rotation: 0, start: l.start, end: l.end }));
 }

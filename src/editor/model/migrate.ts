@@ -1,6 +1,6 @@
 import { normaliseTransitions } from "./ops";
 import {
-  clampAdjust, clampCrop, clampNum, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
+  clampAdjust, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
   type Clip, type ClipAdjust, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type EffectItem, type Overlay, type PostRecord, type Project, type ShapeId,
 } from "./types";
 
@@ -23,8 +23,14 @@ function normaliseSticker(o: Record<string, unknown>): Overlay | null {
   return { ...o, emoji, shape } as unknown as Overlay;
 }
 
+/** Animation + keyframes repaired; captions are forced to none (they are generated, never animated). */
+function withMotion(o: Record<string, unknown>): Overlay {
+  if (o.kind === "caption") return { ...o, animation: clampOverlayAnimation(undefined), keyframes: [] } as unknown as Overlay;
+  return { ...o, animation: clampOverlayAnimation(o.animation), keyframes: clampOverlayKeyframes(o.keyframes) } as unknown as Overlay;
+}
+
 /**
- * Brings a v2–v6 file to a safe v6 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
+ * Brings a v2–v7 file to a safe v7 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
  * null, unknown transition → dissolve (duration kept), transitions re-capped (last clip cleared), overlays get a kind, bad stickers fixed/dropped,
  * clips get kind/transform/crop/background/reversed defaults or repairs, photos forced to the photo rules, look fields (strength, adjust) clamped, effects repaired.
  */
@@ -46,16 +52,18 @@ function normaliseCurrent(raw: Raw): Raw {
     const reversed = c.reversed === true;
     const filterIntensity = typeof c.filterIntensity === "number" && Number.isFinite(c.filterIntensity) ? clampNum(c.filterIntensity, 0, 1) : 1;
     const adjust = clampAdjust(isObj(c.adjust) ? (c.adjust as Partial<ClipAdjust>) : undefined);
-    const base = { ...c, speed, filter, transitionOut, kind, transform, crop, background, reversed, filterIntensity, adjust } as Clip;
+    const animation = clampClipAnimation(c.animation);
+    const keyframes = clampClipKeyframes(c.keyframes);
+    const base = { ...c, speed, filter, transitionOut, kind, transform, crop, background, reversed, filterIntensity, adjust, animation, keyframes } as Clip;
     if (kind !== "photo") return base;
     const trimEnd = clampNum(typeof c.trimEnd === "number" && Number.isFinite(c.trimEnd) ? c.trimEnd : PHOTO.defaultSeconds, PHOTO.minSeconds, PHOTO.maxSeconds);
     return { ...base, speed: 1, muted: true, reversed: false, trimStart: 0, sourceDuration: PHOTO.maxSeconds, trimEnd };
   });
   const clips = normaliseTransitions(mapped);
   const overlays = ((raw.overlays as Array<Record<string, unknown>> | undefined) ?? []).flatMap((o): Overlay[] => {
-    if (!o.kind) return [{ ...o, kind: "text" as const } as unknown as Overlay];
-    if (o.kind === "sticker") { const s = normaliseSticker(o); return s ? [s] : []; }
-    return [o as unknown as Overlay];
+    if (!o.kind) return [withMotion({ ...o, kind: "text" as const })];
+    if (o.kind === "sticker") { const s = normaliseSticker(o); return s ? [withMotion(s as unknown as Record<string, unknown>)] : []; }
+    return [withMotion(o)];
   });
   const posts = (Array.isArray(raw.posts) ? raw.posts : []).filter((r): r is PostRecord =>
     isObj(r) && (POST_PLATFORMS as readonly unknown[]).includes(r.platform) && (typeof r.url === "string" || r.url === null) && typeof r.postedAt === "string");
@@ -77,6 +85,6 @@ export function migrateProject(raw: unknown): Project {
   if (version < 1) throw new Error("Project file is missing required fields");
   let cur = raw as Raw;
   if (version === 1) cur = v1to2(cur);
-  // v2 → v6 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
+  // v2 → v7 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
   return normaliseCurrent(cur) as unknown as Project;
 }

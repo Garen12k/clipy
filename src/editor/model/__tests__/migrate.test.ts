@@ -1,5 +1,5 @@
 import { migrateProject } from "../migrate";
-import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeClip, makeEffect, makePhotoClip, makeProject, makeSticker, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem } from "../types";
+import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker, NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem, type Overlay } from "../types";
 
 const v1 = {
   id: "p1", name: "Old", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
@@ -110,14 +110,52 @@ test("v5 → v6 adds the look defaults", () => {
   const v5 = { ...makeProject(), schemaVersion: 5, clips: [c] } as Record<string, unknown>;
   delete v5.effects;
   const p = migrateProject(v5);
-  expect(p.schemaVersion).toBe(6);
+  expect(p.schemaVersion).toBe(7);
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
 });
 
-test("v1 chain reaches schema 6 with look defaults", () => {
+test("v6 → v7 adds animation / keyframe defaults to clips and every overlay", () => {
+  const c = makeClip({ id: "a", sourceDuration: 4 }) as unknown as Record<string, unknown>;
+  delete c.animation; delete c.keyframes;
+  const t = makeOverlay({ id: "t" }) as unknown as Record<string, unknown>; delete t.animation; delete t.keyframes;
+  const s = makeSticker({ id: "s" }) as unknown as Record<string, unknown>; delete s.animation; delete s.keyframes;
+  const p = migrateProject({ ...makeProject(), schemaVersion: 6, clips: [c], overlays: [t, s] });
+  expect(p.schemaVersion).toBe(7);
+  expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
+  expect(p.overlays[0]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
+  expect(p.overlays[1]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
+});
+
+test("sanity pass repairs motion fields; idempotent", () => {
+  const kf = (t: number) => makeKeyframe({ t });
+  const bad = makeProject({
+    clips: [
+      { ...makeClip({ id: "a", sourceDuration: 4 }), animation: { in: { id: "fade", duration: 9 }, out: { id: "bogus", duration: 1 }, combo: null }, keyframes: [kf(2), kf(1), kf(1.01)] } as unknown as Clip,
+      { ...makeClip({ id: "b", sourceDuration: 4 }), animation: { in: { id: "fade", duration: 1 }, out: null, combo: "sway" }, keyframes: "no" } as unknown as Clip,
+    ],
+    overlays: [
+      { ...makeOverlay({ id: "t" }), animation: { in: null, out: { id: "pop", duration: 0.01 }, loop: "bogus" }, keyframes: [{ ...kf(0), x: 5 }] } as unknown as Overlay,
+      { ...makeSticker({ id: "s" }), animation: { in: null, out: null, loop: "blink" }, keyframes: [kf(0), kf(1)] },
+      { ...makeOverlay({ id: "cap", kind: "caption" }), animation: { in: { id: "fade", duration: 1 }, out: null, loop: "shake" }, keyframes: [kf(0)] },
+    ],
+  });
+  const p = migrateProject(bad);
+  expect(p.clips[0].animation).toEqual({ in: { id: "fade", duration: 2 }, out: null, combo: null });
+  expect(p.clips[0].keyframes.map((k) => k.t)).toEqual([1, 2]);
+  expect(p.clips[1].animation).toEqual({ in: null, out: null, combo: "sway" });
+  expect(p.clips[1].keyframes).toEqual([]);
+  expect(p.overlays[0]).toMatchObject({ animation: { in: null, out: { id: "pop", duration: 0.1 }, loop: null }, keyframes: [{ t: 0, x: 1 }] });
+  expect(p.overlays[1]).toMatchObject({ animation: { loop: "blink" } });
+  expect((p.overlays[1] as { keyframes: unknown[] }).keyframes).toHaveLength(2);
+  expect(p.overlays[2]).toMatchObject({ kind: "caption", animation: NO_OVERLAY_ANIMATION, keyframes: [] });
+  expect(migrateProject(p)).toEqual(p);
+});
+
+test("v1 chain reaches schema 7 with look and motion defaults", () => {
   const p = migrateProject(v1);
-  expect(p.schemaVersion).toBe(6);
+  expect(p.schemaVersion).toBe(7);
+  expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
 });
