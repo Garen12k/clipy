@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { migrateProject } from "../migrate";
-import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker, NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem, type Overlay, type TextOverlay } from "../types";
+import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker, NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem, type Overlay, type TextOverlay } from "../types";
 
 const v1 = {
   id: "p1", name: "Old", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
@@ -112,7 +112,7 @@ test("v5 → v6 adds the look defaults", () => {
   const v5 = { ...makeProject(), schemaVersion: 5, clips: [c] } as Record<string, unknown>;
   delete v5.effects;
   const p = migrateProject(v5);
-  expect(p.schemaVersion).toBe(9);
+  expect(p.schemaVersion).toBe(10);
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
 });
@@ -123,7 +123,7 @@ test("v6 → v7 adds animation / keyframe defaults to clips and every overlay", 
   const t = makeOverlay({ id: "t" }) as unknown as Record<string, unknown>; delete t.animation; delete t.keyframes;
   const s = makeSticker({ id: "s" }) as unknown as Record<string, unknown>; delete s.animation; delete s.keyframes;
   const p = migrateProject({ ...makeProject(), schemaVersion: 6, clips: [c], overlays: [t, s] });
-  expect(p.schemaVersion).toBe(9);
+  expect(p.schemaVersion).toBe(10);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.overlays[0]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
   expect(p.overlays[1]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
@@ -156,7 +156,7 @@ test("sanity pass repairs motion fields; idempotent", () => {
 
 test("v1 chain reaches schema 9 with look, motion and speed-curve defaults", () => {
   const p = migrateProject(v1);
-  expect(p.schemaVersion).toBe(9);
+  expect(p.schemaVersion).toBe(10);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
@@ -217,7 +217,7 @@ test("v7 → v8 adds speedCurve: null to every clip", () => {
   const ph = makePhotoClip({ id: "p" }) as unknown as Record<string, unknown>;
   delete ph.speedCurve;
   const p = migrateProject({ ...makeProject(), schemaVersion: 7, clips: [c, ph] });
-  expect(p.schemaVersion).toBe(9);
+  expect(p.schemaVersion).toBe(10);
   expect(p.clips[0]).toMatchObject({ speedCurve: null, speed: 2 });
   expect(p.clips[1]).toMatchObject({ speedCurve: null, speed: 1 });
   expect(migrateProject(v1).clips[0].speedCurve).toBeNull();
@@ -250,7 +250,7 @@ test("v8 → v9 adds style, words and highlightColor to text and captions; stick
   const c = makeOverlay({ id: "c", kind: "caption" }) as unknown as Record<string, unknown>; delete c.style; delete c.words; delete c.highlightColor;
   const s = makeSticker({ id: "s" });
   const p = migrateProject({ ...makeProject(), schemaVersion: 8, overlays: [t, c, s] });
-  expect(p.schemaVersion).toBe(9);
+  expect(p.schemaVersion).toBe(10);
   expect(p.overlays[0]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
   expect(p.overlays[1]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
   expect(p.overlays[2]).toEqual(s);
@@ -306,4 +306,50 @@ test("a caption whose length is not a number loads with finite word times; hex c
   const source = readFileSync(join(__dirname, "../migrate.ts"), "utf8");
   expect(source).not.toContain("0-9a-fA-F");
   expect(source).toContain("isHexColor(bg.color)");
+});
+
+test("v9 → v10: the single track becomes music with no fades; clips fades 0; ducking off; no markers", () => {
+  const track = makeAudioTrack({ id: "a", sourceDuration: 8 }) as unknown as Record<string, unknown>;
+  delete track.kind; delete track.fadeIn; delete track.fadeOut;
+  const clip = makeClip({ id: "c", sourceDuration: 5 }) as unknown as Record<string, unknown>;
+  delete clip.fadeIn; delete clip.fadeOut;
+  const raw = { ...makeProject(), schemaVersion: 9, clips: [clip], audioTracks: [track] } as Record<string, unknown>;
+  delete raw.ducking; delete raw.beatMarkers;
+  const p = migrateProject(raw);
+  expect(p.schemaVersion).toBe(10);
+  expect(p.audioTracks[0]).toMatchObject({ id: "a", kind: "music", fadeIn: 0, fadeOut: 0, volume: 1 });
+  expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
+  expect(p.ducking).toBe(false);
+  expect(p.beatMarkers).toEqual([]);
+  expect(migrateProject(p)).toEqual(p);
+});
+
+test("sanity pass repairs audio kinds, fades, track count, clip fades, ducking and markers; idempotent", () => {
+  const tracks = Array.from({ length: 14 }, (_, i) => makeAudioTrack({ id: `a${i}`, sourceDuration: 5 }));
+  tracks[0] = { ...tracks[0], kind: "podcast", fadeIn: 9, fadeOut: -2 } as never;
+  tracks[1] = { ...tracks[1], kind: "sfx", fadeIn: NaN, fadeOut: "x" } as never;
+  tracks[2] = { ...tracks[2], kind: "voice", fadeIn: 1.5, fadeOut: 2 };
+  const photo = makePhotoClip({ id: "ph" });
+  const bad = makeProject({
+    clips: [{ ...makeClip({ id: "c", sourceDuration: 5 }), fadeIn: 7, fadeOut: NaN } as never, { ...photo, fadeIn: 2, fadeOut: 1 }],
+    audioTracks: tracks, ducking: "yes" as never, beatMarkers: [3, 1, 1.01, NaN, -4, 2] as never,
+  });
+  const p = migrateProject(bad);
+  expect(p.audioTracks).toHaveLength(12);
+  expect(p.audioTracks.map((t) => t.id)).toEqual(tracks.slice(0, 12).map((t) => t.id));
+  expect(p.audioTracks[0]).toMatchObject({ kind: "music", fadeIn: 5, fadeOut: 0 });
+  expect(p.audioTracks[1]).toMatchObject({ kind: "sfx", fadeIn: 0, fadeOut: 0 });
+  expect(p.audioTracks[2]).toMatchObject({ kind: "voice", fadeIn: 1.5, fadeOut: 2 });
+  expect(p.clips[0]).toMatchObject({ fadeIn: 5, fadeOut: 0 });
+  expect(p.clips[1]).toMatchObject({ kind: "photo", fadeIn: 0, fadeOut: 0 });
+  expect(p.ducking).toBe(false);
+  expect(p.beatMarkers).toEqual([1, 2, 3]);
+  expect(migrateProject({ ...bad, ducking: true }).ducking).toBe(true);
+  expect(migrateProject(p)).toEqual(p);
+});
+
+test("a v1 file reaches v10 with the audio defaults", () => {
+  const p = migrateProject(v1);
+  expect(p).toMatchObject({ schemaVersion: 10, ducking: false, beatMarkers: [], audioTracks: [] });
+  expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
 });

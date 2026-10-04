@@ -2,7 +2,7 @@ export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 9 as const;
+export const SCHEMA_VERSION = 10 as const;
 export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
 export type PostPlatform = (typeof POST_PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
@@ -12,7 +12,13 @@ export const FONT_IDS = ["bangers", "anton", "oswald", "montserrat", "pacifico",
 export type FontId = (typeof FONT_IDS)[number];
 export type Align = "left" | "center" | "right";
 export const OVERLAY_LIMITS = { fontScale: [0.02, 0.25] as const, scale: [0.2, 5] as const, minDuration: 0.2 };
-export const AUDIO_LIMITS = { minDuration: 0.5, volume: [0, 2] as const };
+export const AUDIO_KINDS = ["music", "voice", "sfx"] as const;
+export type AudioKind = (typeof AUDIO_KINDS)[number];
+export const AUDIO_LIMITS = { minDuration: 0.5, volume: [0, 2] as const, maxTracks: 12, fade: [0, 5] as const, sfxMinDuration: 0.1 };
+/** Music gain while a voice track is audible; seconds to ramp down / up. */
+export const DUCKING = { level: 0.3, ramp: 0.3 };
+export const BEAT_LIMITS = { max: 300, minGap: 0.05 };
+export const minAudioDuration = (kind: AudioKind): number => (kind === "sfx" ? AUDIO_LIMITS.sfxMinDuration : AUDIO_LIMITS.minDuration);
 export const CLIP_VOLUME = [0, 2] as const;
 
 export const FILTER_IDS = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage",
@@ -106,6 +112,8 @@ export interface Clip {
   animation: ClipAnimation;      // default none
   keyframes: Keyframe[];         // sorted by t (SOURCE seconds); default []
   speedCurve: SpeedCurve | null; // default null; photos always null; a curve means `speed` is 1 (model/timeline.ts does the maths)
+  fadeIn: number;                // seconds of OUTPUT time, 0–5; photos always 0
+  fadeOut: number;               // same
 }
 export const isPhoto = (c: Clip) => c.kind === "photo";
 
@@ -312,11 +320,32 @@ export const isSticker = (o: Overlay): o is StickerOverlay => o.kind === "sticke
 export interface AudioTrack {
   id: string; sourceUri: string; title: string; sourceDuration: number;
   start: number; trimStart: number; trimEnd: number; volume: number;
+  kind: AudioKind;   // default "music"
+  fadeIn: number;    // seconds, 0–5
+  fadeOut: number;   // seconds, 0–5 (fitting both to the length is the mixing maths' job, not the model's)
+}
+
+/** A finite number clamped to AUDIO_LIMITS.fade; anything else → 0. */
+export const clampFade = (v: unknown): number => (isNum(v) ? clampNum(v, AUDIO_LIMITS.fade[0], AUDIO_LIMITS.fade[1]) : 0);
+
+/** Finite, ≥ 0, sorted, rounded to 3 decimals; one closer than `minGap` to the previous KEPT one is dropped; at most `max` kept. Idempotent. */
+export function clampBeatMarkers(v: unknown): number[] {
+  if (!Array.isArray(v)) return [];
+  const sorted = v.filter((x): x is number => isNum(x) && x >= 0).map((x) => Math.round(x * 1000) / 1000).sort((a, b) => a - b);
+  const out: number[] = [];
+  for (const t of sorted) {
+    if (out.length > 0 && t - out[out.length - 1] < BEAT_LIMITS.minGap - 1e-9) continue;
+    out.push(t);
+    if (out.length === BEAT_LIMITS.max) break;
+  }
+  return out;
 }
 
 export interface Project {
   id: string; name: string; createdAt: string; updatedAt: string; aspectRatio: AspectRatio;
   clips: Clip[]; overlays: Overlay[]; audioTracks: AudioTrack[]; posts: PostRecord[]; effects: EffectItem[]; schemaVersion: typeof SCHEMA_VERSION;
+  ducking: boolean;       // default false
+  beatMarkers: number[];  // project seconds, sorted, unique within BEAT_LIMITS.minGap
 }
 
 /** Shared factory for real code: a full-length video clip with every default. */
@@ -324,7 +353,7 @@ export function newVideoClip(a: Pick<Clip, "id" | "sourceUri" | "sourceDuration"
   return { ...a, trimStart: 0, trimEnd: a.sourceDuration, speed: 1, filter: null, volume: 1, muted: false,
     transitionOut: { type: "none", duration: 0 }, kind: "video", transform: { ...DEFAULT_TRANSFORM }, crop: { ...FULL_CROP },
     background: { ...BLACK_BACKGROUND }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
-    animation: { ...NO_CLIP_ANIMATION }, keyframes: [], speedCurve: null };
+    animation: { ...NO_CLIP_ANIMATION }, keyframes: [], speedCurve: null, fadeIn: 0, fadeOut: 0 };
 }
 /** A still-image clip: default length, silent, speed 1, never reversed. */
 export function newPhotoClip(a: Pick<Clip, "id" | "sourceUri" | "width" | "height"> & { seconds?: number }): Clip {
@@ -348,11 +377,11 @@ export function makeSticker(partial: Partial<StickerOverlay> & Pick<StickerOverl
     animation: { ...NO_OVERLAY_ANIMATION }, keyframes: [], ...partial };
 }
 export function makeAudioTrack(partial: Partial<AudioTrack> & Pick<AudioTrack, "id" | "sourceDuration">): AudioTrack {
-  return { sourceUri: `file:///media/${partial.id}.m4a`, title: "Track", start: 0, trimStart: 0, trimEnd: partial.sourceDuration, volume: 1, ...partial };
+  return { sourceUri: `file:///media/${partial.id}.m4a`, title: "Track", start: 0, trimStart: 0, trimEnd: partial.sourceDuration, volume: 1, kind: "music", fadeIn: 0, fadeOut: 0, ...partial };
 }
 export function makeProject(partial: Partial<Project> = {}): Project {
   return { id: "p1", name: "Project 1", createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
-    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], posts: [], effects: [], schemaVersion: SCHEMA_VERSION, ...partial };
+    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], posts: [], effects: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [], ...partial };
 }
 
 export function aspectRatioValue(r: AspectRatio): number {

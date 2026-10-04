@@ -11,7 +11,7 @@ jest.mock("@react-native-community/slider", () => { const { View } = require("re
 import * as DocumentPicker from "expo-document-picker";
 import { audioDuration } from "@/src/projects/audioInfo";
 import { useToast } from "@/src/ui/Toast";
-import { makeClip, makeProject } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { MusicSheet } from "../components/MusicSheet";
 
@@ -33,7 +33,7 @@ test("My files picks a document, measures its duration and imports it", async ()
 });
 
 test("with a track present shows the current-track view and Remove clears it", async () => {
-  useEditorStore.getState().apply((p) => ({ ...p, audioTracks: [{ id: "m", sourceUri: "file:///p/m.mp3", title: "Loop", sourceDuration: 20, start: 0, trimStart: 0, trimEnd: 20, volume: 1 }] }));
+  useEditorStore.getState().apply((p) => ({ ...p, audioTracks: [makeAudioTrack({ id: "m", sourceUri: "file:///p/m.mp3", title: "Loop", sourceDuration: 20 })] }));
   await render(<MusicSheet visible onClose={() => {}} />);
   expect(screen.getByText("Loop")).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "Remove" }));
