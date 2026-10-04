@@ -1,5 +1,5 @@
 import { migrateProject } from "../migrate";
-import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker, NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem, type Overlay } from "../types";
+import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker, NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem, type Overlay, type TextOverlay } from "../types";
 
 const v1 = {
   id: "p1", name: "Old", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
@@ -110,7 +110,7 @@ test("v5 → v6 adds the look defaults", () => {
   const v5 = { ...makeProject(), schemaVersion: 5, clips: [c] } as Record<string, unknown>;
   delete v5.effects;
   const p = migrateProject(v5);
-  expect(p.schemaVersion).toBe(8);
+  expect(p.schemaVersion).toBe(9);
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
 });
@@ -121,7 +121,7 @@ test("v6 → v7 adds animation / keyframe defaults to clips and every overlay", 
   const t = makeOverlay({ id: "t" }) as unknown as Record<string, unknown>; delete t.animation; delete t.keyframes;
   const s = makeSticker({ id: "s" }) as unknown as Record<string, unknown>; delete s.animation; delete s.keyframes;
   const p = migrateProject({ ...makeProject(), schemaVersion: 6, clips: [c], overlays: [t, s] });
-  expect(p.schemaVersion).toBe(8);
+  expect(p.schemaVersion).toBe(9);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.overlays[0]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
   expect(p.overlays[1]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
@@ -152,9 +152,9 @@ test("sanity pass repairs motion fields; idempotent", () => {
   expect(migrateProject(p)).toEqual(p);
 });
 
-test("v1 chain reaches schema 8 with look, motion and speed-curve defaults", () => {
+test("v1 chain reaches schema 9 with look, motion and speed-curve defaults", () => {
   const p = migrateProject(v1);
-  expect(p.schemaVersion).toBe(8);
+  expect(p.schemaVersion).toBe(9);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
@@ -215,7 +215,7 @@ test("v7 → v8 adds speedCurve: null to every clip", () => {
   const ph = makePhotoClip({ id: "p" }) as unknown as Record<string, unknown>;
   delete ph.speedCurve;
   const p = migrateProject({ ...makeProject(), schemaVersion: 7, clips: [c, ph] });
-  expect(p.schemaVersion).toBe(8);
+  expect(p.schemaVersion).toBe(9);
   expect(p.clips[0]).toMatchObject({ speedCurve: null, speed: 2 });
   expect(p.clips[1]).toMatchObject({ speedCurve: null, speed: 1 });
   expect(migrateProject(v1).clips[0].speedCurve).toBeNull();
@@ -240,5 +240,42 @@ test("sanity pass repairs speed curves; a curve forces speed 1; photos never hav
   expect(p.clips[3].speedCurve).toBeNull();
   expect(p.clips[4].speedCurve).toBeNull();
   expect(p.clips[5]).toMatchObject({ kind: "photo", speed: 1, speedCurve: null });
+  expect(migrateProject(p)).toEqual(p);
+});
+
+test("v8 → v9 adds style, words and highlightColor to text and captions; stickers untouched", () => {
+  const t = makeOverlay({ id: "t" }) as unknown as Record<string, unknown>; delete t.style; delete t.words; delete t.highlightColor;
+  const c = makeOverlay({ id: "c", kind: "caption" }) as unknown as Record<string, unknown>; delete c.style; delete c.words; delete c.highlightColor;
+  const s = makeSticker({ id: "s" });
+  const p = migrateProject({ ...makeProject(), schemaVersion: 8, overlays: [t, c, s] });
+  expect(p.schemaVersion).toBe(9);
+  expect(p.overlays[0]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
+  expect(p.overlays[1]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
+  expect(p.overlays[2]).toEqual(s);
+  expect(p.overlays[2]).not.toHaveProperty("style");
+  expect((p.overlays[0] as TextOverlay).style).not.toBe(DEFAULT_TEXT_STYLE);
+  expect(migrateProject(v1).overlays).toEqual([]);
+});
+
+test("sanity pass repairs text style, caption words and highlight; idempotent", () => {
+  const words = [{ text: "b", start: 1, end: 2 }, { text: "a", start: 0, end: 1 }];
+  const bad = makeProject({
+    overlays: [
+      { ...makeOverlay({ id: "t" }), style: { opacity: 9, letterSpacing: "x", outlineColor: "red", shadow: { color: "bad" }, glow: 3 }, words, highlightColor: "#FF0000" } as unknown as Overlay,
+      { ...makeOverlay({ id: "c1", kind: "caption", text: "a b", start: 0, end: 5 }), words, highlightColor: "#00FF00" },
+      { ...makeOverlay({ id: "c2", kind: "caption", text: "a b c", start: 0, end: 5 }), words, highlightColor: "green" } as unknown as Overlay,
+      { ...makeOverlay({ id: "c3", kind: "caption", text: "a b", start: 0, end: 1.5 }), words, style: "junk" } as unknown as Overlay,
+      makeSticker({ id: "s" }),
+    ],
+  });
+  const p = migrateProject(bad);
+  expect(p.overlays[0]).toMatchObject({
+    style: { opacity: 1, letterSpacing: 0, outlineColor: null, shadow: DEFAULT_SHADOW, glow: null }, words: [], highlightColor: null,
+  });
+  expect(p.overlays[1]).toMatchObject({ words: [{ text: "a", start: 0, end: 1 }, { text: "b", start: 1, end: 2 }], highlightColor: "#00FF00" });
+  expect(p.overlays[2]).toMatchObject({ words: [], highlightColor: null });
+  expect((p.overlays[3] as TextOverlay).style).toEqual(DEFAULT_TEXT_STYLE);
+  expect((p.overlays[3] as TextOverlay).words[1]).toEqual({ text: "b", start: 1, end: 1.5 });
+  expect(p.overlays[4]).not.toHaveProperty("words");
   expect(migrateProject(p)).toEqual(p);
 });
