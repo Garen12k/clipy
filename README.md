@@ -265,6 +265,23 @@ Everything here is in the **Audio** group of the toolbar.
 export mixes them exactly. The sound effects are made by `scripts/generate-sfx.mjs`. The export side is Swift
 that has never been compiled.
 
+## Layers
+
+Everything here is in the **Edit** group of the toolbar.
+
+- **Overlay** - pick a photo or a video. It is added as a layer on top of the main video at the playhead,
+  small and in the middle, with its own bar on a **layers** lane of the timeline. Up to 8 layers; at most
+  2 *video* layers can play at the same moment (photo layers are not limited that way).
+- **Select** a layer by tapping it on the preview or tapping its bar. Pinch, drag and twist it on the
+  preview. Long-press its bar to move it in time; drag the bar's ends to trim. **Forward** / **Back**
+  change which layer is on top.
+- **Tools on a layer** - Trim, Transform, Animate, Keyframe, Crop, Replace, Reverse, Duplicate, Delete,
+  Filter, Adjust, Speed and Volume. Split, Freeze, Ratio, Transition and Background do not apply to layers.
+- **Opacity** (0 to 100 %) and **Mask** (None, Rounded, Circle) work on layers and on normal clips.
+
+**Preview vs export.** Each video layer is a separate video player in the preview, so playback may hitch
+on older phones. The export is Swift that has never been compiled.
+
 ## First native build — things to check
 
 When the first EAS build exists, compare the export against the preview and check these Look items:
@@ -300,3 +317,12 @@ Text and captions items:
 22. **Fades and ducking.** The fade and ducking ramps sound right.
 23. **Several tracks** mix without clipping.
 24. **End of video.** A music track cut by the end of the video fades out over its last second.
+
+Layers, opacity and masks items:
+
+23. **Layers in the export** appear in the right place, order and size.
+24. **Mask edges** are clean and turn with the layer.
+25. **A see-through layer** blends correctly with what is beneath it.
+26. **Layer sound** is heard and stays in sync.
+27. **Two video layers at once** export correctly.
+28. **A layer running past the end** of the video is cut cleanly.
