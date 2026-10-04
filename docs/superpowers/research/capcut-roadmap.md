@@ -56,17 +56,17 @@
 | CapCut tool | Clipy | Preview | Effort | Notes |
 |---|---|---|---|---|
 | One music track, volume, clip volume / mute | Have | Yes | — | |
-| Several audio tracks | Missing | Yes | M | |
-| Fade in / fade out | Missing | Yes | S | |
-| Voice-over recording | Missing | Yes | M | expo-audio recording works in Expo Go |
-| Sound-effects library | Missing | Yes | M | needs bundled CC0 sounds (the music library is still empty too) |
+| Several audio tracks | Have | Yes | M | |
+| Fade in / fade out | Have | Yes | S | |
+| Voice-over recording | Have | Yes | M | expo-audio recording works in Expo Go |
+| Sound-effects library | Have | Yes | M | 10 synthesized |
 | Extract audio from a video | Missing | Approx | M | export only |
 | Audio speed / pitch | Missing | Yes | S | |
-| Beat markers (manual; auto later) | Missing | Yes | M | auto-detect is L |
+| Beat markers (manual; auto later) | Have | Yes | M | auto-detect is L |
 | Noise reduction, enhance voice, isolate voice | Missing | No | XL | ML |
 | Voice effects / voice changer | Missing | No | L | audio units; export only |
 | Text-to-speech | Missing | Yes | M | on-device iOS voices |
-| Auto ducking (music dips under speech) | Missing | Approx | M | |
+| Auto ducking (music dips under speech) | Have | Approx | M | |
 
 ## E — Layers
 

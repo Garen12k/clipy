@@ -1,7 +1,7 @@
 # CapCut group D — Audio: design
 
 **Date:** 2026-10-04
-**Status:** Approved by the user ("yes")
+**Status:** Implemented 2026-10-04 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Roadmap:** `docs/superpowers/research/capcut-roadmap.md`, group D
 **Builds on:** schema v9
 
@@ -84,6 +84,8 @@ export function clipGainCurve(c: Clip): { time: number; gain: number }[]   // ti
 ## 7. Export
 
 `ExportRequest.audio` (single) is replaced by `audioTracks: { sourceUri, start, trimStart, trimEnd, gain: { time, gain }[] }[]` — the gain curve already includes volume, fades and ducking, so Swift only draws ramps; each clip gains `gain: { time, gain }[]` (clip-local output seconds). Swift: one composition audio track per request track, `setVolumeRamp(fromStartVolume:toEndVolume:timeRange:)` between consecutive breakpoints; clip audio gets the same from the clip's curve mapped to composition time. `AudioMix.swift` exists for parity and for XCTests of the same curves. The existing end-of-video music fade-out stays as a final safety ramp only when the track runs to the end with no fade-out of its own.
+
+**As built.** The gain curves are computed in TypeScript (`audioMix.ts`), including the end-of-video safety fade for music; Swift only draws ramps. Fades stored on a track are clamped to half its length when it is trimmed. A voice track at volume 0 does not duck. A bad audio file fails the export (as a bad music file did).
 
 ## 8. Testing
 
