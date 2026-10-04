@@ -2,7 +2,7 @@ import {
   ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, makeClip, makeKeyframe, makeOverlay, makePhotoClip, makeSticker,
   type AnimComboId, type AnimInId, type AnimLoopId,
 } from "../types";
-import { clipDuration, freezeSourceTime, outputOffsetOf, sourceTimeAt } from "../timeline";
+import { clipDuration, curveSteps, freezeSourceTime, outputOffsetOf, sourceTimeAt } from "../timeline";
 import {
   IDENTITY_DELTA, MOTION, animComboDelta, animInDelta, animLoopDelta, animOutDelta, clipBaseAt, combine, easeOut, edgeDurations,
   hasClipMotion, hasOverlayMotion, overlayBaseAt, resolveClipMotion, resolveOverlayMotion, sampleKeyframes, smooth,
@@ -170,8 +170,49 @@ describe("clipBaseAt", () => {
   });
 });
 
+describe("clipBaseAt on a speed curve: pins ease in OUTPUT time, as the export does", () => {
+  const pins = [makeKeyframe({ t: 0, x: 0 }), makeKeyframe({ t: 8, x: 1 })];
+  const bullet = (over: object = {}) => {
+    const c = makeClip({ id: "b", sourceDuration: 8, keyframes: pins, ...over });
+    return { ...c, speedCurve: { id: "bullet" as const, steps: curveSteps("bullet", c.trimStart, c.trimEnd) } };
+  };
+  const outputPins = (c: ReturnType<typeof bullet>) => c.keyframes.map((k) => ({ ...k, t: outputOffsetOf(c, k.t) })).sort((a, b) => a.t - b.t);
+
+  test("Bullet on 8 s: at the frame showing source 3 s the value is the output-time ease, not the source-time one", () => {
+    const c = bullet();
+    const offset = outputOffsetOf(c, 3);
+    expect(sourceTimeAt(c, offset)).toBeCloseTo(3, 9);
+    const want = sampleKeyframes(outputPins(c), offset)!;
+    expect(clipBaseAt(c, offset)).toEqual(want);
+    expect(resolveClipMotion(c, offset).transform.x).toBe(want.x);
+    expect(want.x).not.toBeCloseTo(sampleKeyframes(pins, 3)!.x, 3);   // the two eases really differ here
+    expect(want.x).toBeCloseTo(smooth(offset / clipDuration(c)), 9);
+  });
+  test("a reversed curved clip: the pins run in reversed order", () => {
+    const c = bullet({ reversed: true });
+    const mapped = outputPins(c);
+    expect(mapped.map((k) => k.x)).toEqual([1, 0]);
+    for (const source of [1, 3, 4.5, 7]) {
+      const offset = outputOffsetOf(c, source);
+      expect(clipBaseAt(c, offset)).toEqual(sampleKeyframes(mapped, offset)!);
+    }
+    expect(clipBaseAt(c, 0).x).toBe(1);
+    expect(clipBaseAt(c, clipDuration(c)).x).toBe(0);
+  });
+  test("constant-speed clips are unchanged, bit for bit (an empty step list is no curve)", () => {
+    const plain = makeClip({ id: "c", sourceDuration: 10, trimStart: 1, trimEnd: 9, speed: 1.5, keyframes: KEY_PINS });
+    for (const c of [plain, { ...plain, reversed: true }, { ...plain, speed: 1, speedCurve: { id: "hero" as const, steps: [] } }]) {
+      for (const offset of [0, 0.7, 1.3, 2.9, 5]) {
+        const want = sampleKeyframes(c.keyframes, sourceTimeAt(c, offset))!;
+        const got = clipBaseAt(c, offset);
+        for (const f of KEYS) expect(got[f]).toBe(want[f]);
+      }
+    }
+  });
+});
+
 describe("resolveClipMotion", () => {
-  const still = { scale: 2, x: 0.1, y: -0.3, rotation: 90, flipH: true, flipV: false };
+  const still ={ scale: 2, x: 0.1, y: -0.3, rotation: 90, flipH: true, flipV: false };
 
   test("a default clip returns its own transform values and opacity 1", () => {
     const c = makeClip({ id: "c", sourceDuration: 10, transform: still });

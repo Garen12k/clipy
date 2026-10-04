@@ -1,4 +1,5 @@
 import { DEFAULT_ADJUST, makeClip, makeEffect, makeKeyframe, makePhotoClip, makeProject, type Clip } from "@/src/editor/model/types";
+import { setClipSpeedCurve } from "@/src/editor/model/ops";
 import { needsPreviewTag } from "../components/PreviewTag";
 
 const one = (over: Partial<Clip>) => makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4, ...over })] });
@@ -74,4 +75,15 @@ describe("a blur background behind a clip with motion", () => {
     expect(needsPreviewTag(one({ ...blur, animation: slide }), 2)).toBe(false);
     expect(needsPreviewTag(one({ background: { type: "color", color: "#FF0000" }, animation: slide }), 0.2)).toBe(false);
   });
+});
+
+test("a clip with a speed curve needs the tag; clearing the curve drops it", () => {
+  const curved = setClipSpeedCurve(one({}), "a", "hero");
+  expect(needsPreviewTag(curved, 0)).toBe(true);
+  expect(needsPreviewTag(curved, 1)).toBe(true);
+  expect(needsPreviewTag(setClipSpeedCurve(curved, "a", null), 1)).toBe(false);
+  expect(needsPreviewTag(one({ speed: 2 }), 1)).toBe(false); // a constant speed is exact
+});
+test("a curve with no steps counts as no curve (the rule timeline.ts goes by)", () => {
+  expect(needsPreviewTag(one({ speedCurve: { id: "hero", steps: [] } }), 1)).toBe(false);
 });

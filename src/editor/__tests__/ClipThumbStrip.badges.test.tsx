@@ -1,5 +1,7 @@
 import { render, screen } from "@testing-library/react-native";
-import { makeClip, makePhotoClip } from "@/src/editor/model/types";
+jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
+import { setClipSpeedCurve } from "@/src/editor/model/ops";
+import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { ClipThumbStrip } from "../components/ClipThumbStrip";
 
 test("shows speed and filter badges when set", async () => {
@@ -32,4 +34,11 @@ test("no reverse or photo badge by default", async () => {
 test("a photo clip shows a photo badge", async () => {
   await render(<ClipThumbStrip clip={makePhotoClip({ id: "p" })} pixelsPerSecond={50} selected={false} missing={false} onPress={() => {}} />);
   expect(screen.getByLabelText("Photo")).toBeTruthy();
+});
+
+test("a clip with a speed curve shows the curve's label in the speed badge slot, not a speed", async () => {
+  const curved = setClipSpeedCurve(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] }), "a", "jumpCut").clips[0];
+  await render(<ClipThumbStrip clip={curved} pixelsPerSecond={50} selected={false} missing={false} onPress={() => {}} />);
+  expect(screen.getByText("Jump cut")).toBeTruthy();
+  expect(screen.queryByText("1×")).toBeNull();
 });

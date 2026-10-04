@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { ANIM_COMBO, ANIM_IN, ANIM_LOOP, CAPTION_STYLE, EFFECTS, FILTERS, SHAPES, STICKER_EMOJI_SCALE, STICKER_SHAPE_SCALE, TRANSITIONS } from "../effects";
-import { ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, EFFECT_IDS, FILTER_IDS, SHAPE_IDS, TRANSITION_TYPES } from "../model/types";
+import { ANIM_COMBO, ANIM_IN, ANIM_LOOP, CAPTION_STYLE, EFFECTS, FILTERS, SHAPES, SPEED_CURVES, STICKER_EMOJI_SCALE, STICKER_SHAPE_SCALE, TRANSITIONS } from "../effects";
+import { ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, EFFECT_IDS, FILTER_IDS, SHAPE_IDS, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_TYPES } from "../model/types";
 
 const swift = readFileSync(join(__dirname, "../../../modules/clipy-video/ios/Effects.swift"), "utf8");
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -91,4 +91,21 @@ test("every transition type except none / dissolve has its own case inside Clipy
   const expected = TRANSITION_TYPES.filter((t) => t !== "none" && t !== "dissolve");
   expect([...cases].sort()).toEqual([...expected].sort());   // no missing, duplicate or unknown case
   expect(body).toMatch(/default:\s*\n\s*return dissolve\(/);   // unknown types (and "dissolve") still dissolve
+});
+
+test("speed curve presets: six of them, eight speeds each inside the speed limits, as specified", () => {
+  expect(SPEED_CURVE_IDS).toHaveLength(6);
+  expect(Object.keys(SPEED_CURVES).sort()).toEqual([...SPEED_CURVE_IDS].sort());
+  for (const id of SPEED_CURVE_IDS) {
+    expect(SPEED_CURVES[id].label.length).toBeGreaterThan(0);
+    expect(SPEED_CURVES[id].shape).toHaveLength(SPEED_CURVE_LIMITS.slices);
+    for (const s of SPEED_CURVES[id].shape) { expect(s).toBeGreaterThanOrEqual(SPEED_LIMITS[0]); expect(s).toBeLessThanOrEqual(SPEED_LIMITS[1]); }
+  }
+  expect(SPEED_CURVE_IDS.map((id) => SPEED_CURVES[id].label)).toEqual(["Montage", "Hero", "Bullet", "Jump cut", "Flash in", "Flash out"]);
+  expect(SPEED_CURVES.montage.shape).toEqual([2.5, 2.5, 0.5, 2.5, 2.5, 0.5, 2.5, 2.5]);
+  expect(SPEED_CURVES.hero.shape).toEqual([1, 2, 3, 0.5, 0.5, 3, 2, 1]);
+  expect(SPEED_CURVES.bullet.shape).toEqual([3.5, 3.5, 3.5, 0.3, 0.3, 3.5, 3.5, 3.5]);
+  expect(SPEED_CURVES.jumpCut.shape).toEqual([1, 4, 1, 4, 1, 4, 1, 4]);
+  expect(SPEED_CURVES.flashIn.shape).toEqual([4, 3, 2, 1.5, 1, 1, 1, 1]);
+  expect(SPEED_CURVES.flashOut.shape).toEqual([1, 1, 1, 1, 1.5, 2, 3, 4]);
 });

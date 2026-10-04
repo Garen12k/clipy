@@ -43,7 +43,7 @@
 | CapCut tool | Clipy | Preview | Effort | Notes |
 |---|---|---|---|---|
 | Speed: constant | Have | Yes | — | CapCut range 0.1–100×; Clipy 0.25–4× |
-| Speed curves (Montage, Bullet, Hero, Jump cut, Flash in / out, custom points) | Missing | Approx | L | preview steps through rates |
+| Speed curves (Montage, Bullet, Hero, Jump cut, Flash in / out, custom points) | Have (6 presets) | Approx | L | preview steps through rates |
 | Clip animations In / Out / Combo | Have | Yes | M | ~10 each |
 | Text and sticker animations In / Out / Loop | Have | Yes | M | ~10 each |
 | Keyframes (position, scale, rotation, opacity; ease in / out) | Have | Yes | L | builds on A's transform |

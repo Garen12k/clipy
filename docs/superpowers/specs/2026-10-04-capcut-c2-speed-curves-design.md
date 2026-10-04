@@ -1,7 +1,7 @@
 # CapCut group C, round 2 — Speed curves: design
 
 **Date:** 2026-10-04
-**Status:** Approved by the user (round 2 of group C: six presets; "continue")
+**Status:** Implemented 2026-10-04 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Builds on:** schema v7 (group C round 1)
 
 ## 1. What the user gets
@@ -38,6 +38,13 @@ Rules:
 - Steps are absolute source times, so **trim** and **split** keep the steps as they are (each half keeps the part of the curve that covers it); source time before the first step uses the first step's speed, after the last step the last step's speed.
 - **Replace** re-applies the same preset across the new clip's range. **Freeze**: the still has no curve. **Reverse**: allowed; the steps stay on their pictures and play in mirrored order. Photos refuse curves.
 - Step speeds are clamped to `SPEED_LIMITS` (0.25–4); at most 64 steps; a step shorter than 0.01 s of source is dropped by the sanity pass.
+
+As built:
+- A preset is refused (with a message) when the clip is too short for it. Choosing None always works; on a very short piece it lowers the constant speed so the clip keeps the minimum length.
+- In the preview, a reversed curved clip uses the forward step speeds (the preview plays reversed clips forwards).
+- Replace re-spreads the preset over the new clip, so the clip's length can change.
+- Setting any constant speed — including a template that sets speed 1 — clears the curve.
+- On a curved clip, keyframes ease between pins in output time (as the export does).
 
 Migration v7 → v8 adds `speedCurve: null`. Sanity pass: unknown id → null; non-finite / out-of-range steps repaired or dropped; unsorted steps sorted; an empty step list → null; a photo → null; a curve forces `speed` to 1.
 

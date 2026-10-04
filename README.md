@@ -212,6 +212,13 @@ Animations and keyframes. Everything shows exactly in the preview (no "Preview" 
   pin; the app moves smoothly between pins. Diamonds show on the selected clip strip or text pill, and
   tapping one jumps there. Tap the tool while on a pin to remove it.
 
+- **Speed curves** (Effects, Speed, Curve tab) - six presets: Montage, Hero, Bullet, Jump cut, Flash in,
+  Flash out (or None). A curve makes the clip speed up and slow down in steps, so its length on the
+  timeline changes, and the strip's badge shows the curve's name. Moving the Normal slider removes the
+  curve. Photos have no speed. Trim and split keep the curve on its pictures; Replace spreads the preset
+  over the new clip. The preview changes speed as it plays, so a curved clip shows the "Preview" tag
+  (speed changes can hitch and the sound changes pitch in steps).
+
 The exported video does the same, but that Swift has never been compiled.
 
 ## First native build — things to check
@@ -233,3 +240,4 @@ When the first EAS build exists, compare the export against the preview and chec
 9. **Core Animation keyframes in the export.** Check that the export tool honours the sampled keyframes at all: an animated text or sticker must move in the exported file, not sit still or be missing.
 10. **Fading clip.** A fading clip should fade over its background (black / colour / blur): half way through a Fade the picture and the background are mixed half and half.
 11. **Rotation direction** of Spin and of keyframed rotation.
+12. **Speed curves.** A curved clip's exported length equals its length on the timeline; there is no black frame or gap between steps or next to a transition; and the clip's sound stays in sync after retiming.

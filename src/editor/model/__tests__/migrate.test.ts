@@ -110,7 +110,7 @@ test("v5 → v6 adds the look defaults", () => {
   const v5 = { ...makeProject(), schemaVersion: 5, clips: [c] } as Record<string, unknown>;
   delete v5.effects;
   const p = migrateProject(v5);
-  expect(p.schemaVersion).toBe(7);
+  expect(p.schemaVersion).toBe(8);
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
 });
@@ -121,7 +121,7 @@ test("v6 → v7 adds animation / keyframe defaults to clips and every overlay", 
   const t = makeOverlay({ id: "t" }) as unknown as Record<string, unknown>; delete t.animation; delete t.keyframes;
   const s = makeSticker({ id: "s" }) as unknown as Record<string, unknown>; delete s.animation; delete s.keyframes;
   const p = migrateProject({ ...makeProject(), schemaVersion: 6, clips: [c], overlays: [t, s] });
-  expect(p.schemaVersion).toBe(7);
+  expect(p.schemaVersion).toBe(8);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.overlays[0]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
   expect(p.overlays[1]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
@@ -152,9 +152,9 @@ test("sanity pass repairs motion fields; idempotent", () => {
   expect(migrateProject(p)).toEqual(p);
 });
 
-test("v1 chain reaches schema 7 with look and motion defaults", () => {
+test("v1 chain reaches schema 8 with look, motion and speed-curve defaults", () => {
   const p = migrateProject(v1);
-  expect(p.schemaVersion).toBe(7);
+  expect(p.schemaVersion).toBe(8);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
@@ -206,5 +206,39 @@ test("sanity pass repairs look fields; idempotent", () => {
   expect(p.effects[2]).toMatchObject({ start: 0 });
   expect(p.effects[2].end - p.effects[2].start).toBeGreaterThanOrEqual(0.2 - 1e-9);
   expect(p.effects[3].intensity).toBe(1);
+  expect(migrateProject(p)).toEqual(p);
+});
+
+test("v7 → v8 adds speedCurve: null to every clip", () => {
+  const c = makeClip({ id: "a", sourceDuration: 4, speed: 2 }) as unknown as Record<string, unknown>;
+  delete c.speedCurve;
+  const ph = makePhotoClip({ id: "p" }) as unknown as Record<string, unknown>;
+  delete ph.speedCurve;
+  const p = migrateProject({ ...makeProject(), schemaVersion: 7, clips: [c, ph] });
+  expect(p.schemaVersion).toBe(8);
+  expect(p.clips[0]).toMatchObject({ speedCurve: null, speed: 2 });
+  expect(p.clips[1]).toMatchObject({ speedCurve: null, speed: 1 });
+  expect(migrateProject(v1).clips[0].speedCurve).toBeNull();
+});
+
+test("sanity pass repairs speed curves; a curve forces speed 1; photos never have one; idempotent", () => {
+  const base = makeClip({ id: "a", sourceDuration: 8 });
+  const steps = [{ from: 0, speed: 2 }, { from: 4, speed: 0.5 }];
+  const bad = makeProject({ clips: [
+    { ...base, speed: 3, speedCurve: { id: "hero", steps } },                                                             // valid curve → speed forced to 1
+    { ...base, id: "b", speed: 2, speedCurve: { id: "bogus", steps } } as unknown as Clip,                                // unknown id → null, speed kept
+    { ...base, id: "c", speedCurve: { id: "bullet", steps: [{ from: 4, speed: 9 }, { from: 0, speed: 0.01 }, { from: Number.NaN, speed: 1 }, { from: 2, speed: "x" }] } } as unknown as Clip,
+    { ...base, id: "d", speedCurve: { id: "montage", steps: [] } },                                                       // empty → null
+    { ...base, id: "e", speedCurve: "hero" } as unknown as Clip,
+    { ...makePhotoClip({ id: "p" }), speedCurve: { id: "hero", steps } },                                                 // photo → null
+  ] });
+  const p = migrateProject(bad);
+  expect(p.clips[0]).toMatchObject({ speed: 1, speedCurve: { id: "hero", steps } });
+  expect(p.clips[1]).toMatchObject({ speed: 2, speedCurve: null });
+  expect(p.clips[2].speedCurve).toEqual({ id: "bullet", steps: [{ from: 0, speed: 0.25 }, { from: 4, speed: 4 }] });      // sorted, clamped, junk dropped
+  expect(p.clips[2].speed).toBe(1);
+  expect(p.clips[3].speedCurve).toBeNull();
+  expect(p.clips[4].speedCurve).toBeNull();
+  expect(p.clips[5]).toMatchObject({ kind: "photo", speed: 1, speedCurve: null });
   expect(migrateProject(p)).toEqual(p);
 });

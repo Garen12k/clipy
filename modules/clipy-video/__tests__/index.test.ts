@@ -11,6 +11,8 @@ jest.mock("expo-modules-core", () => {
 });
 
 import { requireOptionalNativeModule } from "expo-modules-core";
+import { resolveClipMotion, sampleKeyframes } from "@/src/editor/model/motion";
+import { curveSteps, outputOffsetOf } from "@/src/editor/model/timeline";
 import { DEFAULT_ADJUST, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeSticker } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportClip, toExportEffect, toExportOverlay, transcribe } from "../index";
 
@@ -43,7 +45,7 @@ describe("export API", () => {
         kind: "video" as const, sourceWidth: 1080, sourceHeight: 1920,
         transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
         background: { type: "black" as const, color: null }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
-        animIn: null, animOut: null, animCombo: null, keyframes: [] }],
+        animIn: null, animOut: null, animCombo: null, keyframes: [], speedSpans: [] }],
       effects: [{ type: "glitch", start: 0, end: 1, intensity: 0.7 }],
       overlays: [{
         kind: "text" as const, text: "Hi", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#fff",
@@ -82,7 +84,7 @@ describe("toExportClip", () => {
       transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
       background: { type: "black", color: null }, reversed: false,
       filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
-      animIn: null, animOut: null, animCombo: null, keyframes: [],
+      animIn: null, animOut: null, animCombo: null, keyframes: [], speedSpans: [],
     });
   });
   it("maps filter strength and adjust values", () => {
@@ -156,6 +158,52 @@ describe("toExportClip", () => {
     const e = toExportClip(c);
     expect(e.keyframes[0]).not.toBe(c.keyframes[0]);
     expect(e.animIn).not.toBe(c.animation.in);
+  });
+
+  describe("speed spans", () => {
+    const flashIn = () => {
+      const c = makeClip({ id: "a", sourceDuration: 8 });
+      return { ...c, speedCurve: { id: "flashIn" as const, steps: curveSteps("flashIn", c.trimStart, c.trimEnd) } };
+    };
+    it("sends no spans for a constant-speed clip, whatever its speed or direction", () => {
+      expect(toExportClip(makeClip({ id: "a", sourceDuration: 4 })).speedSpans).toEqual([]);
+      expect(toExportClip(makeClip({ id: "a", sourceDuration: 4, speed: 2, reversed: true })).speedSpans).toEqual([]);
+      expect(toExportClip(makePhotoClip({ id: "p", seconds: 3 })).speedSpans).toEqual([]);
+    });
+    it("sends a curved clip's spans in playback order, with speed 1", () => {
+      const e = toExportClip(flashIn());
+      expect(e.speed).toBe(1);
+      expect(e.speedSpans).toEqual([4, 3, 2, 1.5, 1, 1, 1, 1].map((speed) => ({ duration: 1, speed })));
+    });
+    it("sends a reversed curved clip's spans back to front", () => {
+      const e = toExportClip({ ...flashIn(), reversed: true });
+      expect(e.reversed).toBe(true);
+      expect(e.speedSpans).toEqual([1, 1, 1, 1, 1.5, 2, 3, 4].map((speed) => ({ duration: 1, speed })));
+    });
+    it("treats a curve with no steps as constant speed: no spans", () => {
+      const c = makeClip({ id: "a", sourceDuration: 4 });
+      expect(toExportClip({ ...c, speedCurve: { id: "hero", steps: [] } }).speedSpans).toEqual([]);
+    });
+    it("keyframes on a curved clip: the preview shows what the exported pins give at that output time", () => {
+      const pins = [makeKeyframe({ t: 0, x: 0 }), makeKeyframe({ t: 8, x: 1 })];
+      const base = makeClip({ id: "b", sourceDuration: 8, keyframes: pins });
+      const bullet = { ...base, speedCurve: { id: "bullet" as const, steps: curveSteps("bullet", 0, 8) } };
+      for (const c of [bullet, { ...bullet, reversed: true }, { ...bullet, trimStart: 1.5, trimEnd: 6.5 }]) {
+        const exported = toExportClip(c).keyframes;
+        for (const source of [2, 3, 4.25, 6]) {
+          const offset = outputOffsetOf(c, source);
+          const want = sampleKeyframes(exported, offset)!;
+          const got = resolveClipMotion(c, offset);
+          expect({ x: got.transform.x, y: got.transform.y, scale: got.transform.scale, rotation: got.transform.rotation, opacity: got.opacity }).toEqual(want);
+        }
+      }
+      // Bullet, forward, source 3 s: far from the 37.5 % a source-time ease would give.
+      expect(resolveClipMotion(bullet, outputOffsetOf(bullet, 3)).transform.x).not.toBeCloseTo(sampleKeyframes(pins, 3)!.x, 2);
+    });
+    it("sends only the spans inside the trim", () => {
+      const e = toExportClip({ ...flashIn(), trimStart: 2.5, trimEnd: 4 });
+      expect(e.speedSpans).toEqual([{ duration: 0.5, speed: 2 }, { duration: 1, speed: 1.5 }]);
+    });
   });
 });
 

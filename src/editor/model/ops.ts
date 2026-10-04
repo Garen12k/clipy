@@ -1,14 +1,14 @@
 import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
-import { clipAt, clipDuration, sourceTimeAt, splitSourceRanges } from "./timeline";
+import { clipAt, clipDuration, curveSteps, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
-  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_LIMITS, aspectRatioValue, clampAdjust, clampAnimEdge, clampClipAnimation, clampClipKeyframes, clampCrop, clampOverlayAnimation, clampOverlayKeyframes, clampTransform,
+  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_LIMITS, aspectRatioValue, clampAdjust, clampAnimEdge, clampClipAnimation, clampClipKeyframes, clampCrop, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTransform,
   CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
-  MIN_CLIP_SECONDS, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_LIMITS, TRANSITION_LIMITS,
+  MIN_CLIP_SECONDS, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   type AnimEdge, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem, type FilterId,
-  type Keyframe, type Overlay, type OverlayAnimation, type Project, type StickerOverlay, type TextOverlay, type TransitionType,
+  type Keyframe, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TransitionType,
 } from "./types";
 import { totalDuration } from "./timeline";
 import type { Template } from "../templates";
@@ -55,8 +55,9 @@ export function splitClipAt(p: Project, outputTime: number): Project {
     return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
   }
   const { left: l, right: r } = splitSourceRanges(clip, offsetInClip);
-  const left: Clip = { ...clip, trimStart: l[0], trimEnd: l[1], transitionOut: NO_TRANSITION, ...leftMotion };
-  const right: Clip = { ...clip, id: newId(), trimStart: r[0], trimEnd: r[1], adjust: { ...clip.adjust }, ...rightMotion };
+  // A speed curve is in absolute source time: each half keeps the whole curve (its own copy) and plays the part its trim covers.
+  const left: Clip = { ...clip, trimStart: l[0], trimEnd: l[1], transitionOut: NO_TRANSITION, ...leftMotion, speedCurve: copyCurve(clip.speedCurve) };
+  const right: Clip = { ...clip, id: newId(), trimStart: r[0], trimEnd: r[1], adjust: { ...clip.adjust }, ...rightMotion, speedCurve: copyCurve(clip.speedCurve) };
   return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
 }
 
@@ -73,6 +74,7 @@ function rebasePins(pins: Keyframe[], by: number, head: (before: Keyframe[]) => 
 
 const copyEdge = (e: AnimEdge | null): AnimEdge | null => (e ? { ...e } : null);
 const copyPins = (k: Keyframe[]): Keyframe[] => k.map((e) => ({ ...e }));
+const copyCurve = (v: SpeedCurve | null): SpeedCurve | null => (v ? { id: v.id, steps: v.steps.map((s) => ({ ...s })) } : null);
 const copyClipAnimation = (a: ClipAnimation): ClipAnimation => ({ in: copyEdge(a.in), out: copyEdge(a.out), combo: a.combo });
 const copyOverlayAnimation = (a: OverlayAnimation): OverlayAnimation => ({ in: copyEdge(a.in), out: copyEdge(a.out), loop: a.loop });
 
@@ -89,7 +91,7 @@ export function trimClip(p: Project, clipId: string, trimStart: number, trimEnd:
   }
   const start = Math.max(0, Math.min(trimStart, c.sourceDuration));
   const end = Math.max(0, Math.min(trimEnd, c.sourceDuration));
-  if (end - start < MIN_CLIP_SECONDS * c.speed - 1e-9) return p;
+  if (spanTooShort(c, start, end, MIN_CLIP_SECONDS)) return p;   // a speed curve keeps its steps: they are absolute source times
   if (start === c.trimStart && end === c.trimEnd) return p;
   const clips = p.clips.slice();
   clips[i] = { ...c, trimStart: start, trimEnd: end };
@@ -117,7 +119,7 @@ export function duplicateClip(p: Project, clipId: string): Project {
   if (i < 0) return p;
   const src = p.clips[i];
   const copy: Clip = { ...src, id: newId(), transitionOut: NO_TRANSITION, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background }, adjust: { ...src.adjust },
-    animation: copyClipAnimation(src.animation), keyframes: copyPins(src.keyframes) };
+    animation: copyClipAnimation(src.animation), keyframes: copyPins(src.keyframes), speedCurve: copyCurve(src.speedCurve) };
   return touch(p, { clips: [...p.clips.slice(0, i + 1), copy, ...p.clips.slice(i + 1)] });
 }
 
@@ -311,18 +313,60 @@ export function normaliseTransitions(clips: Clip[]): Clip[] {
   return changed ? out : clips;
 }
 
+/** `speed` (2 decimals), lowered where needed so the clip's source span still plays for MIN_CLIP_SECONDS. */
+function cappedSpeed(c: Clip, speed: number): number {
+  const maxForMin = (c.trimEnd - c.trimStart) / MIN_CLIP_SECONDS;   // speed at which output hits 0.1 s
+  // Round the cap DOWN so rounding never pushes output under 0.1 s; the 1e-9 absorbs float noise (0.3 / 0.1 = 2.9999…).
+  return Math.min(r2(speed), Math.floor(maxForMin * 100 + 1e-9) / 100);
+}
+
 export function setClipSpeed(p: Project, clipId: string, speed: number): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
   if (i < 0) return p;
   const c = p.clips[i];
   if (isPhoto(c)) return p;
-  let s = clamp(speed, SPEED_LIMITS);
-  const maxForMin = (c.trimEnd - c.trimStart) / MIN_CLIP_SECONDS;   // speed at which output hits 0.1 s
-  // Round the cap DOWN so rounding never pushes output under 0.1 s; the 1e-9 absorbs float noise (0.3 / 0.1 = 2.9999…).
-  s = Math.min(r2(s), Math.floor(maxForMin * 100 + 1e-9) / 100);
-  if (s === c.speed) return p;
-  const clips = p.clips.slice(); clips[i] = { ...c, speed: s };
+  if (!Number.isFinite(speed)) return p;
+  const s = cappedSpeed(c, clamp(speed, SPEED_LIMITS));
+  if (s === c.speed && c.speedCurve === null) return p;
+  const clips = p.clips.slice(); clips[i] = { ...c, speed: s, speedCurve: null };   // a constant speed and a curve are exclusive
   return touch(p, { clips: normaliseTransitions(clips) });
+}
+
+/**
+ * A preset writes its steps across the clip's current [trimStart, trimEnd] and sets `speed` to 1; `null` clears the curve (speed
+ * stays 1). Same project when nothing changes (the same preset with the same steps, or clearing no curve). Refused: photos, an unknown
+ * id, and a curve that would leave the clip shorter than MIN_CLIP_SECONDS.
+ */
+export function setClipSpeedCurve(p: Project, clipId: string, id: SpeedCurveId | null): Project {
+  const i = p.clips.findIndex((c) => c.id === clipId);
+  if (i < 0) return p;
+  const c = p.clips[i];
+  if (isPhoto(c)) return p;
+  let next: Clip;
+  if (id === null) {
+    if (c.speedCurve === null) return p;
+    // "None" always works. A short piece of a slow part of the curve would be under MIN_CLIP_SECONDS at speed 1, so it gets the
+    // highest constant speed that keeps the minimum (the cap `setClipSpeed` applies), never under the slowest speed there is.
+    next = { ...c, speedCurve: null, speed: clamp(cappedSpeed(c, 1), SPEED_LIMITS) };
+  } else {
+    if (!(SPEED_CURVE_IDS as readonly string[]).includes(id)) return p;
+    const speedCurve = presetCurve(c, id, c.trimStart, c.trimEnd);
+    if (!speedCurve) return p;
+    if (c.speed === 1 && sameJson(speedCurve, c.speedCurve)) return p;
+    next = { ...c, speed: 1, speedCurve };
+    if (clipDuration(next) < MIN_CLIP_SECONDS - 1e-9) return p;
+  }
+  const clips = p.clips.slice(); clips[i] = next;
+  return touch(p, { clips: normaliseTransitions(clips) });
+}
+
+/**
+ * The preset's steps across [trimStart, trimEnd], through the sanity rule so what is stored reloads unchanged. Null when the range
+ * is too short to hold every slice (the sanity rule merges steps under `minStep`): a collapsed curve is never stored.
+ */
+function presetCurve(c: Pick<Clip, "kind">, id: SpeedCurveId, trimStart: number, trimEnd: number): SpeedCurve | null {
+  const curve = clampSpeedCurve({ id, steps: curveSteps(id, trimStart, trimEnd) }, c);
+  return curve && curve.steps.length >= SPEED_CURVE_LIMITS.slices ? curve : null;
 }
 
 export function setClipFilter(p: Project, clipId: string, filter: FilterId | null): Project {
@@ -509,13 +553,16 @@ export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "
   const base: Clip = { ...old, sourceUri: media.sourceUri, width: media.width, height: media.height, kind: media.kind, trimStart: 0, transform, keyframes: [] };
   let next: Clip;
   if (media.kind === "photo") {
-    next = { ...base, speed: 1, muted: true, reversed: false, sourceDuration: PHOTO.maxSeconds, trimEnd: clamp(prevOut, [PHOTO.minSeconds, PHOTO.maxSeconds]) };
+    next = { ...base, speed: 1, speedCurve: null, muted: true, reversed: false, sourceDuration: PHOTO.maxSeconds, trimEnd: clamp(prevOut, [PHOTO.minSeconds, PHOTO.maxSeconds]) };
   } else if (isPhoto(old)) {
     // A photo runs at speed 1, so its source length is its output length.
     next = { ...base, sourceDuration: media.sourceDuration, speed: 1, muted: false, reversed: false, trimEnd: Math.min(media.sourceDuration, prevOut) };
   } else {
-    // Same speed, so the old source span is exactly the previous output length × speed.
-    next = { ...base, sourceDuration: media.sourceDuration, trimEnd: Math.min(media.sourceDuration, old.trimEnd - old.trimStart) };
+    // Same speed (or the same curve, re-applied below), so the new clip takes the old clip's SOURCE span where the new media allows it.
+    const trimEnd = Math.min(media.sourceDuration, old.trimEnd - old.trimStart);
+    // A curve's steps sit on the old media's source times: the same preset is written again across the new range.
+    const speedCurve = old.speedCurve ? presetCurve(base, old.speedCurve.id, 0, trimEnd) : null;
+    next = { ...base, sourceDuration: media.sourceDuration, trimEnd, speedCurve };
   }
   if (next.kind === "video" && clipDuration(next) < MIN_CLIP_SECONDS - 1e-9) return p;
   const clips = p.clips.slice(); clips[i] = next;

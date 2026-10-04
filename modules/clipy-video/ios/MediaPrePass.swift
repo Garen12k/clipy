@@ -90,6 +90,8 @@ enum MediaPrePass {
     out.animOut = clip.animOut
     out.animCombo = clip.animCombo
     out.keyframes = clip.keyframes
+    // Speed spans are in PLAYBACK order and the prepared file runs in playback order over the same length.
+    out.speedSpans = clip.speedSpans
     return out
   }
 

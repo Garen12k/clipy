@@ -77,6 +77,21 @@ final class MediaPrePassTests: XCTestCase {
     XCTAssertEqual(r.keyframes.last?.t, 1.5); XCTAssertEqual(r.keyframes.last?.x, 0.2); XCTAssertEqual(r.keyframes.last?.y, -0.1)
     XCTAssertEqual(r.keyframes.last?.scale, 2); XCTAssertEqual(r.keyframes.last?.rotation, 45); XCTAssertEqual(r.keyframes.last?.opacity, 0.5)
     XCTAssertEqual(ExportSession.clipMotion(r)?.animCombo, "sway")
+    XCTAssertTrue(r.speedSpans.isEmpty)
+  }
+
+  /// A curve's spans are in playback order — the order the prepared (reversed) file runs in — so they are kept as is.
+  func testRewriteKeepsTheSpeedSpansAsTheyAre() {
+    var c = clip(reversed: true)
+    var a = ExportSpeedSpan(); a.duration = 1; a.speed = 4
+    var b = ExportSpeedSpan(); b.duration = 2; b.speed = 0.5
+    c.speedSpans = [a, b]
+    let r = MediaPrePass.rewrite(c, preparedURL: URL(fileURLWithPath: "/tmp/r.mp4"), duration: 3)
+    XCTAssertEqual(r.speedSpans.count, 2)
+    XCTAssertEqual(r.speedSpans.first?.duration, 1); XCTAssertEqual(r.speedSpans.first?.speed, 4)
+    XCTAssertEqual(r.speedSpans.last?.duration, 2); XCTAssertEqual(r.speedSpans.last?.speed, 0.5)
+    XCTAssertEqual(ExportSession.speedSpans(r), [SpeedSpan(duration: 1, speed: 4), SpeedSpan(duration: 2, speed: 0.5)])
+    XCTAssertEqual(c.speedSpans.count, 2)
   }
 
   func testRewriteOfAClipWithoutMotionHasNone() {

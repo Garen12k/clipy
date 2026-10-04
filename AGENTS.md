@@ -13,7 +13,7 @@ This is an Expo/React Native mobile application. Prioritize mobile-first pattern
 - Clip placement: keep src/editor/model/clipLayout.ts and modules/clipy-video/ios/ClipLayout.swift identical (constants and vectors); no other code computes cover / fit.
 - Look maths: keep src/editor/model/adjust.ts ↔ modules/clipy-video/ios/Adjust.swift and src/editor/model/effectMath.ts ↔ EffectMath.swift identical (constants and vectors).
 - Motion maths: keep src/editor/model/motion.ts ↔ modules/clipy-video/ios/Motion.swift identical (constants, ids and vectors); nothing else computes animation or keyframe values.
-- Effects registry: keep `src/editor/effects.ts` and `modules/clipy-video/ios/Effects.swift` identical (ids, shape paths, sticker scales); only `src/editor/model/timeline.ts` may multiply/divide by clip `speed`.
+- Effects registry: keep `src/editor/effects.ts` and `modules/clipy-video/ios/Effects.swift` identical (ids, shape paths, sticker scales); only `src/editor/model/timeline.ts` may multiply/divide by clip `speed` or use `speedCurve` steps.
 
 ## Expo has changed — do not trust your training data
 
