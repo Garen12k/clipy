@@ -7,13 +7,15 @@ export const LANE_GAP = 4;
 /** The audio kinds that have at least one track, in lane order (music, voice, sfx). Empty when the project has no audio. */
 export const audioLaneKinds = (p: Pick<Project, "audioTracks">): AudioKind[] => AUDIO_KINDS.filter((k) => p.audioTracks.some((t) => t.kind === k));
 /**
- * Height of the whole timeline: the clip area, the text / sticker lane, one lane per audio kind in use and the effects lane.
- * A project with no audio still shows one (empty) music lane, so the count never goes below one. Lanes only ever add height.
+ * Height of the whole timeline: the clip area, the layers lane (only when the project has layers), the text / sticker lane, one lane
+ * per audio kind in use and the effects lane. A project with no audio still shows one (empty) music lane, so the count never goes
+ * below one. Lanes only ever add height.
  */
-export const timelineHeight = (audioLaneCount: number): number => CLIP_AREA_HEIGHT + (2 + Math.max(1, audioLaneCount)) * (LANE_HEIGHT + LANE_GAP);
-/** The height with one audio lane. */
+export const timelineHeight = (audioLaneCount: number, hasLayerLane = false): number =>
+  CLIP_AREA_HEIGHT + (2 + Math.max(1, audioLaneCount) + (hasLayerLane ? 1 : 0)) * (LANE_HEIGHT + LANE_GAP);
+/** The height with one audio lane and no layers lane. */
 export const TIMELINE_HEIGHT = timelineHeight(1);
-/** Lanes under the clips, top to bottom: 0 text / stickers, then the audio lanes (1 …), then effects. */
+/** Lanes under the clips, top to bottom: the layers lane first when there is one, then text / stickers, the audio lanes and effects. Index 0 is the first lane shown. */
 export const laneTop = (index: number): number => CLIP_AREA_HEIGHT + index * (LANE_HEIGHT + LANE_GAP);
 export const STRIP_HEIGHT = 64;
 export const THUMB_WIDTH = 64;

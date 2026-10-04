@@ -19,6 +19,13 @@ test("audio lane colours: one per kind, all different from the other lanes", () 
   expect(new Set(lanes).size).toBe(lanes.length);
 });
 
+test("layer lane colour: a muted steel blue, different from every other lane and from the timeline's own blues", () => {
+  expect(theme.colors.laneLayer).toBe("#7F93B8");
+  const c = theme.colors;
+  const others = [c.laneText, c.laneSticker, c.laneMusic, c.laneEffect, c.laneVoice, c.laneSfx, c.sea, c.seaLight, c.textMuted, c.surfaceAlt];
+  expect(others).not.toContain(c.laneLayer);
+});
+
 test("old tokens are gone", () => {
   for (const k of ["highlight", "straw", "accentPressed"]) expect(k in theme.colors).toBe(false);
   expect("heading" in theme.fonts).toBe(false);

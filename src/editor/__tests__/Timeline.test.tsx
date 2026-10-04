@@ -2,7 +2,7 @@ import { Dimensions, StyleSheet } from "react-native";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn(async () => null) }));
-import { makeAudioTrack, makeClip, makeEffect, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { Timeline } from "../components/Timeline";
@@ -79,6 +79,39 @@ test("a project with only a voice track shows just the voice lane, at the one-la
   await render(<Timeline />);
   expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["overlay-lane", "voice-lane", "effect-lane"]);
   expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: TIMELINE_HEIGHT });
+});
+
+test("a project with layers gets a layers lane right under the clips; only heights change", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })],
+    layers: [makeLayer({ id: "l1", sourceDuration: 4, start: 1 }), { ...makePhotoClip({ id: "l2" }), start: 30 }] }));   // l2 lies past the project's end
+  await render(<Timeline />);
+  const scroll = screen.getByTestId("timeline-scroll");
+  expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["layer-lane", "overlay-lane", "music-lane", "effect-lane"]);
+  const height = timelineHeight(1, true);
+  expect(height).toBe(TIMELINE_HEIGHT + LANE_HEIGHT + LANE_GAP);
+  // The same container style as without layers apart from the height: no width, no extra padding.
+  expect(scroll.props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height, flexDirection: "column" });
+  expect(StyleSheet.flatten(screen.getByTestId("layer-lane").props.style)).toEqual({ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP });
+  // Bars are out of the flow, so they cannot widen the scroll content — not even one past the last clip.
+  const bars = within(scroll).getAllByTestId(/^layer-bar-l\d$/);
+  expect(bars).toHaveLength(2);
+  for (const bar of bars) expect(StyleSheet.flatten(bar.props.style).position).toBe("absolute");
+  expect(scrollHandlers(scroll)).toEqual(SCROLL_HANDLERS);
+  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height });
+  expect(screen.getByTestId("timeline-playhead")).toHaveStyle({ height: height - 16, top: 8, left: Dimensions.get("window").width / 2 - 1 });
+});
+
+test("the layers lane goes away with the last layer, and stacks with the audio lanes", async () => {
+  const withLayer = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], layers: [makeLayer({ id: "l1", sourceDuration: 4 })],
+    audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 }), makeAudioTrack({ id: "v", kind: "voice", sourceDuration: 5 })] });
+  useEditorStore.getState().setProject(withLayer);
+  await render(<Timeline />);
+  expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["layer-lane", "overlay-lane", "music-lane", "voice-lane", "effect-lane"]);
+  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: timelineHeight(2, true) });
+  await act(() => { useEditorStore.getState().setProject({ ...withLayer, layers: [] }); });
+  expect(screen.queryByTestId("layer-lane")).toBeNull();
+  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: timelineHeight(2) });
+  expect(screen.getByTestId("timeline-scroll").props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height: timelineHeight(2), flexDirection: "column" });
 });
 
 // Jest has no layout, so this pins the stand-ins for the content width: the tile is absolutely positioned and the paddings are untouched.

@@ -66,6 +66,15 @@ test("timelineHeight: the clip area, the overlay lane, the audio lanes (never fe
   expect(laneTop(4)).toBe(120 + 4 * lane);
 });
 
+test("timelineHeight: the layers lane adds one lane's height, only when there is one", () => {
+  const lane = LANE_HEIGHT + LANE_GAP;
+  expect(timelineHeight(1, false)).toBe(216);
+  expect(timelineHeight(0, true)).toBe(216 + lane);
+  expect(timelineHeight(1, true)).toBe(248);
+  expect(timelineHeight(3, true)).toBe(280 + lane);
+  expect(TIMELINE_HEIGHT).toBe(216);
+});
+
 test("thumbTimes on a curved clip: the source time under each output-second mark", () => {
   // hero on 0–8: 1, 2, 3, 0.5, 0.5, 3, 2, 1 → 7.667 s on screen; marks at 0 … 7 s.
   const hero = { ...makeClip({ id: "h", sourceDuration: 8 }), speedCurve: { id: "hero" as const, steps: curveSteps("hero", 0, 8) } };
