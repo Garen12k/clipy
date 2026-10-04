@@ -35,3 +35,23 @@ test("Post to… closes the export modal, then opens the Post screen for the exp
   expect(router.dismiss).toHaveBeenCalledWith();
   expect(router.push).toHaveBeenCalledWith({ pathname: "/post", params: { fileUri: "file:///out.mp4", durationSec: "21", mimeType: "video/mp4", projectId: "p1", title: "Beach day" } });
 });
+
+describe("cover hand-off", () => {
+  const press = async () => {
+    (isBackendConfigured as jest.Mock).mockReturnValue(true);
+    await render(<ExportScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "Post to…" }));
+    return (router.push as jest.Mock).mock.calls[0][0].params;
+  };
+  test("a cover time goes along in whole milliseconds", async () => {
+    useEditorStore.getState().setProject(makeProject({ id: "p1", name: "Beach day", clips: [makeClip({ id: "a", sourceDuration: 21 })], cover: { time: 5, title: "" } }));
+    expect((await press()).coverMs).toBe("5000");
+  });
+  test("a cover time past the exported length is clamped to it", async () => {
+    useEditorStore.getState().setProject(makeProject({ id: "p1", name: "Beach day", clips: [makeClip({ id: "a", sourceDuration: 21 })], cover: { time: 99, title: "" } }));
+    expect((await press()).coverMs).toBe("21000");
+  });
+  test("no cover, no key", async () => {
+    expect("coverMs" in (await press())).toBe(false);
+  });
+});

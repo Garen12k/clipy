@@ -8,7 +8,7 @@ const ok = { fileUri: CACHE, durationSec: "21", mimeType: "video/mp4", projectId
 beforeEach(() => { (fileSize as jest.Mock).mockReset().mockReturnValue(14000000); });
 
 test("a valid export: size read from disk, values passed through", () => {
-  expect(videoFromParams({ ...ok, fileSize: "1" })).toEqual({ video: { fileUri: CACHE, durationSec: 21, fileSize: 14000000, mimeType: "video/mp4" }, projectId: "p1", title: "Beach day" });
+  expect(videoFromParams({ ...ok, fileSize: "1" })).toEqual({ video: { fileUri: CACHE, durationSec: 21, fileSize: 14000000, mimeType: "video/mp4" }, projectId: "p1", title: "Beach day", coverMs: null });
   expect(fileSize).toHaveBeenCalledWith(CACHE); // the fileSize param is never trusted
 });
 
@@ -56,4 +56,17 @@ test("defaults and limits: MIME type defaults to video/mp4, title is cut to 100,
   expect(r.title).toBe("x".repeat(100));
   expect(r.projectId).toBeNull();
   expect(videoFromParams({ fileUri: CACHE, durationSec: "21", mimeType: "video/quicktime" })!.title).toBeNull();
+});
+
+test("coverMs is a whole number of milliseconds inside the video; anything else is null and the rest stays valid", () => {
+  expect(videoFromParams({ ...ok, coverMs: "2500" })!.coverMs).toBe(2500);
+  expect(videoFromParams({ ...ok, coverMs: "0" })!.coverMs).toBe(0);
+  expect(videoFromParams({ ...ok, coverMs: "21000" })!.coverMs).toBe(21000);
+  expect(videoFromParams(ok)!.coverMs).toBeNull();
+  for (const bad of ["-1", "abc", "2.5", "21001", ""]) {
+    const t = videoFromParams({ ...ok, coverMs: bad });
+    expect(t).not.toBeNull();
+    expect(t!.coverMs).toBeNull();
+    expect(t!.projectId).toBe("p1");
+  }
 });

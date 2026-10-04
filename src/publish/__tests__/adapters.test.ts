@@ -144,3 +144,8 @@ describe("x", () => {
     expect(note("https://example.com")).toBe(LINK_NOTE);
   });
 });
+
+test("only instagram carries the cover frame, as a thumbnail offset in milliseconds", () => {
+  expect(clientAdapters.instagram!.coverOptions!(2500)).toEqual({ thumbOffsetMs: 2500 });
+  for (const id of ["youtube", "tiktok", "facebook", "x"] as const) expect(clientAdapters[id]!.coverOptions).toBeUndefined();
+});

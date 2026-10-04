@@ -672,3 +672,38 @@ test("a fileSize param is ignored: the size is always read from the file", async
   await render(<PostScreen />);
   expect(screen.getByText("0:21 · 9 MB")).toBeTruthy();
 });
+
+describe("cover frame", () => {
+  const igOn = () => {
+    const a = accounts(); a.platforms[2] = acct("instagram", { available: true, connected: true, name: "@me" });
+    (useAccounts as jest.Mock).mockReturnValue(a);
+  };
+  const YT = { title: "Beach day", privacy: "public" };
+  test("Post and Retry send thumbOffsetMs to Instagram only", async () => {
+    igOn(); mockParams = { ...baseParams, coverMs: "2500" };
+    const p = post(); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([
+      { platform: "youtube", caption: "", options: YT },
+      { platform: "instagram", caption: "", options: { thumbOffsetMs: 2500 } },
+    ]);
+  });
+  test("Retry sends it again", async () => {
+    igOn(); mockParams = { ...baseParams, coverMs: "2500" };
+    const p = post({ rows: { ...rows(), instagram: { ...IDLE_ROW, phase: "failed", message: "x", resumable: false } } }); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "Retry Instagram" }));
+    expect(p.retry).toHaveBeenCalledWith({ platform: "instagram", caption: "", options: { thumbOffsetMs: 2500 } });
+  });
+  test("without a cover nothing is added", async () => {
+    igOn();
+    const p = post(); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([
+      { platform: "youtube", caption: "", options: YT },
+      { platform: "instagram", caption: "", options: {} },
+    ]);
+  });
+});

@@ -13,6 +13,7 @@ export const instagram: ClientAdapter = {
   id: "instagram",
   captionMax: CAPTION_MAX,
   hasOptions: false,
+  coverOptions: (coverMs) => ({ thumbOffsetMs: coverMs }),
   defaultOptions: () => ({}),
   validate(video, caption) {
     if (video.durationSec < MIN_DURATION_SEC) return "Instagram Reels must be at least 3 seconds.";

@@ -436,3 +436,19 @@ test("no token or secret in a publish error message", async () => {
   const e = (await instagram.status(ctx([st("FINISHED"), fail(400, { code: 100, message: `Invalid parameter access_token=${token}` }), st("FINISHED")]).ctx, token, REF).catch((x: unknown) => x)) as PlatformError;
   expect(e.message).not.toContain(token);
 });
+
+describe("prepare: thumb_offset", () => {
+  const sent = async (options: Record<string, unknown>) => {
+    const { ctx: c, calls } = ctx([igMe({ id: "ig1", username: "me" }), ok({ id: "c1", uri: UPLOAD })]);
+    await instagram.prepare(c, "ptok", { ...INPUT, options });
+    return form(calls[1].init);
+  };
+  const BASE = { media_type: "REELS", upload_type: "resumable", caption: "Beach day", share_to_feed: "true", access_token: "ptok" };
+  test.each([[2500, "2500"], [2499.6, "2500"], [0, "0"], [21000, "21000"]])("%j becomes thumb_offset %j", async (v, s) => {
+    expect(await sent({ thumbOffsetMs: v })).toEqual({ ...BASE, thumb_offset: s });
+  });
+  test.each([[-1], [NaN], [Infinity], ["2500"], [21001], [null]])("%j is ignored, not an error", async (v) => {
+    expect(await sent({ thumbOffsetMs: v })).toEqual(BASE);
+  });
+  test("no option at all", async () => { expect(await sent({})).toEqual(BASE); });
+});
