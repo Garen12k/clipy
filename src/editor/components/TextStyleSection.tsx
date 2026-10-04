@@ -42,7 +42,7 @@ export function TextStyleSection({ style, outline, onBegin, onPatch, onPatchTran
     <View style={{ gap: theme.space.lg }}>
       {slider("style-opacity-slider", `Opacity ${pct(style.opacity)} %`, L.opacity, style.opacity, (v) => ({ opacity: v }))}
       {slider("style-letter-spacing-slider", `Letter spacing ${pct(style.letterSpacing)}`, L.letterSpacing, style.letterSpacing, (v) => ({ letterSpacing: v }))}
-      {slider("style-line-spacing-slider", `Line spacing ${style.lineSpacing.toFixed(1)}×`, L.lineSpacing, style.lineSpacing, (v) => ({ lineSpacing: v }))}
+      {slider("style-line-spacing-slider", `Line spacing ${style.lineSpacing.toFixed(2)}×`, L.lineSpacing, style.lineSpacing, (v) => ({ lineSpacing: v }))}
 
       {outline && (<>
         <Body>Outline colour</Body>
@@ -50,7 +50,7 @@ export function TextStyleSection({ style, outline, onBegin, onPatch, onPatchTran
           <Chip label="Auto" selected={style.outlineColor === null} onPress={() => onPatch({ outlineColor: null })} />
           <View testID="style-outline-color"><ColorRow value={style.outlineColor ?? ""} onChange={(outlineColor) => onPatch({ outlineColor })} /></View>
         </View>
-        {slider("style-outline-width-slider", `Thickness ${style.outlineWidth.toFixed(1)}×`, L.outlineWidth, style.outlineWidth, (v) => ({ outlineWidth: v }))}
+        {slider("style-outline-width-slider", `Thickness ${style.outlineWidth.toFixed(2)}×`, L.outlineWidth, style.outlineWidth, (v) => ({ outlineWidth: v }))}
       </>)}
 
       <View style={ROW}>

@@ -1,8 +1,9 @@
 import Slider from "@react-native-community/slider";
+import { useState } from "react";
 import { ScrollView, Switch, View } from "react-native";
 import { CAPTION_STYLE } from "@/src/editor/effects";
 import { applyCaptionPreset, setCaptionStyleForAll } from "@/src/editor/model/ops";
-import { aspectRatioValue, DEFAULT_TEXT_STYLE, makeOverlay, type CaptionWord, type TextOverlay, type TextStyle } from "@/src/editor/model/types";
+import { aspectRatioValue, makeOverlay, type CaptionWord, type Project, type TextOverlay, type TextStyle } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/src/editor/textTemplates";
 import { theme } from "@/src/theme/theme";
@@ -16,7 +17,7 @@ import { CollapsibleTextStyle } from "./TextStyleSection";
 
 type Props = { visible: boolean; onClose: () => void };
 
-/** The built-in sample: captions cannot be generated in Expo Go, so the look is shown here. Five words spread evenly over 2.5 s. */
+/** The built-in sample: captions cannot be generated in Expo Go, so the look is shown here (see the draft below). Five words spread evenly over 2.5 s. */
 const SAMPLE_TEXT = "This is how captions look";
 const SAMPLE_LENGTH = 2.5;
 const SAMPLE_WORDS: CaptionWord[] = SAMPLE_TEXT.split(" ").map((text, i, all) => ({ text, start: (i * SAMPLE_LENGTH) / all.length, end: ((i + 1) * SAMPLE_LENGTH) / all.length }));
@@ -24,19 +25,34 @@ const SAMPLE_WORDS: CaptionWord[] = SAMPLE_TEXT.split(" ").map((text, i, all) =>
 const SAMPLE_TIME = (SAMPLE_WORDS[1].start + SAMPLE_WORDS[1].end) / 2;
 const SAMPLE_WIDTH = 320;
 const SAMPLE_HEIGHT = 180;
+/** The frame the sample is a window onto is never shorter than this, so the caption (sized against the frame's height) stays readable in a wide project. */
+const SAMPLE_MIN_FRAME_HEIGHT = 260;
+const NO_CAPTIONS_NOTE = "Preview only — captions need the full app build";
+/** The look captions are generated with. */
+const newDraft = (): TextOverlay => makeOverlay({ id: "caption-draft", kind: "caption", text: SAMPLE_TEXT, ...CAPTION_STYLE,
+  background: CAPTION_STYLE.background ? { ...CAPTION_STYLE.background } : null, start: 0, end: SAMPLE_LENGTH });
 
 export function CaptionStyleSheet({ visible, onClose }: Props) {
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const caption = useEditorStore((s) => s.project?.overlays.find((o): o is TextOverlay => o.kind === "caption"));
   const ratio = useEditorStore((s) => s.project?.aspectRatio ?? "9:16");
-  // No caption yet: the controls show the look captions are generated with and write nothing (there is nothing to restyle).
-  const style = caption ?? CAPTION_STYLE;
-  const textStyle = caption?.style ?? DEFAULT_TEXT_STYLE;
-  const highlightColor = caption?.highlightColor ?? null;
+  // No caption yet (always the case in Expo Go): the same controls restyle a local draft, so the sample still shows every look.
+  // Nothing is written to the project and no undo step is made; the draft lives as long as the sheet's owner.
+  const [draft, setDraft] = useState(newDraft);
+  const style = caption ?? draft;
+  const textStyle = style.style;
+  const highlightColor = style.highlightColor;
   type StylePatch = Parameters<typeof setCaptionStyleForAll>[1];
-  const patch = (p: StylePatch) => apply((x) => setCaptionStyleForAll(x, p));
+  /** The same model ops either way: on the project's captions, or on the draft standing in as the only caption. */
+  const write = (op: (x: Project) => Project, commit: (op: (x: Project) => Project) => void) => {
+    if (caption) return commit(op);
+    const host = useEditorStore.getState().project;
+    if (host) setDraft((d) => (op({ ...host, overlays: [d] }).overlays[0] as TextOverlay | undefined) ?? d);
+  };
+  const patch = (p: StylePatch) => write((x) => setCaptionStyleForAll(x, p), apply);
   // Slider drags: one undo step per drag (beginTransaction on start, transient updates while sliding).
-  const patchTransient = (p: StylePatch) => applyTransient((x) => setCaptionStyleForAll(x, p));
+  const patchTransient = (p: StylePatch) => write((x) => setCaptionStyleForAll(x, p), applyTransient);
+  const begin = () => { if (caption) beginTransaction(); };
   const opacityPatch = (v: number) => ({ background: { color: style.background?.color ?? CONTENT_BLACK, opacity: v } });
   // The sample is a window onto the middle of a frame of the project's shape, so the caption has its real size against the frame's width.
   const sample = makeOverlay({ id: "caption-sample", kind: "caption", text: SAMPLE_TEXT, fontId: style.fontId, fontScale: style.fontScale, color: style.color,
@@ -46,11 +62,11 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
   return (
     <Sheet visible={visible} onClose={onClose} title="Caption style" height="85%">
       <ScrollView testID="caption-style-scroll" keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: theme.space.lg, paddingBottom: theme.space.xl }}>
-        <TemplateStrip tiles={CAPTION_PRESET_TILES} onPick={(presetId) => apply((x) => applyCaptionPreset(x, presetId))} />
-        {!caption && <Body muted>Add captions to style them</Body>}
+        <TemplateStrip tiles={CAPTION_PRESET_TILES} onPick={(presetId) => write((x) => applyCaptionPreset(x, presetId), apply)} />
+        {!caption && <Body muted>{NO_CAPTIONS_NOTE}</Body>}
         <View style={{ alignItems: "center" }}>
           <TextSample testID="caption-sample" overlay={sample} time={SAMPLE_TIME} width={SAMPLE_WIDTH} height={SAMPLE_HEIGHT}
-            frameHeight={Math.max(SAMPLE_HEIGHT, SAMPLE_WIDTH / aspectRatioValue(ratio))} backgroundColor={theme.colors.sea} />
+            frameHeight={Math.max(SAMPLE_MIN_FRAME_HEIGHT, SAMPLE_WIDTH / aspectRatioValue(ratio))} backgroundColor={theme.colors.sea} />
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Body>Highlight spoken word</Body>
@@ -64,7 +80,7 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
         <View>
           <Body muted>Size {Math.round(style.fontScale * 100)}%</Body>
           <Slider testID="caption-size-slider" minimumValue={0.02} maximumValue={0.1} value={style.fontScale}
-            onSlidingStart={beginTransaction} onValueChange={(v) => patchTransient({ fontScale: v })}
+            onSlidingStart={begin} onValueChange={(v) => patchTransient({ fontScale: v })}
             onSlidingComplete={(v) => patchTransient({ fontScale: v })}
             minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
         </View>
@@ -78,7 +94,7 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
         {style.background && (<>
           <ColorRow value={style.background.color} onChange={(color) => patch({ background: { color, opacity: style.background!.opacity } })} />
           <Slider testID="caption-opacity-slider" minimumValue={0.2} maximumValue={1} value={style.background.opacity}
-            onSlidingStart={beginTransaction} onValueChange={(v) => patchTransient(opacityPatch(v))}
+            onSlidingStart={begin} onValueChange={(v) => patchTransient(opacityPatch(v))}
             onSlidingComplete={(v) => patchTransient(opacityPatch(v))}
             minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
         </>)}
@@ -87,7 +103,7 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
           <Switch accessibilityLabel="Outline" value={style.outline} onValueChange={(outline) => patch({ outline })} trackColor={{ true: theme.colors.accent }} />
         </View>
         <NumField label="Y %" value={Math.round(style.y * 100)} onCommit={(v) => patch({ y: v / 100 })} />
-        <CollapsibleTextStyle style={textStyle} outline={style.outline} onBegin={beginTransaction}
+        <CollapsibleTextStyle style={textStyle} outline={style.outline} onBegin={begin}
           onPatch={(sp: Partial<TextStyle>) => patch({ style: sp })} onPatchTransient={(sp: Partial<TextStyle>) => patchTransient({ style: sp })} />
       </ScrollView>
     </Sheet>

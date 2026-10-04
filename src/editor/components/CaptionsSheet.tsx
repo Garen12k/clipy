@@ -29,6 +29,8 @@ export function CaptionsSheet({ visible, onClose }: Props) {
           <View style={{ gap: theme.space.sm }}>
             <Body>Captions need the native build</Body>
             <Body muted>Transcription runs on your iPhone with Apple&apos;s speech recognizer, which Expo Go can&apos;t load.</Body>
+            {/* The looks can still be tried here: the style sheet previews them on its sample. */}
+            <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
           </View>
         )}
 

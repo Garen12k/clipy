@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react-native";
-jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, onSlidingStart, onValueChange, onSlidingComplete }: { testID?: string; onSlidingStart?: () => void; onValueChange?: (v: number) => void; onSlidingComplete?: (v: number) => void }) => <View testID={testID} onTouchStart={() => onSlidingStart?.()} onTouchMove={(v: number) => onValueChange?.(v)} onTouchEnd={(v: number) => onSlidingComplete?.(v)} />; });
+jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, step, onSlidingStart, onValueChange, onSlidingComplete }: { testID?: string; step?: number; onSlidingStart?: () => void; onValueChange?: (v: number) => void; onSlidingComplete?: (v: number) => void }) => <View testID={testID} step={step} onTouchStart={() => onSlidingStart?.()} onTouchMove={(v: number) => onValueChange?.(v)} onTouchEnd={(v: number) => onSlidingComplete?.(v)} />; });
 import { DEFAULT_GLOW, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, type TextStyle } from "@/src/editor/model/types";
 import { CollapsibleTextStyle, TextStyleSection } from "../components/TextStyleSection";
 
@@ -17,9 +17,16 @@ async function drag(testID: string, values: number[]) {
 
 test("labels show rounded values", async () => {
   await show({ opacity: 0.8, letterSpacing: 0.1, lineSpacing: 1.5, outlineWidth: 2, shadow: { ...DEFAULT_SHADOW }, glow: { ...DEFAULT_GLOW } }, true);
-  for (const label of ["Opacity 80 %", "Letter spacing 10", "Line spacing 1.5×", "Thickness 2.0×", "Shadow opacity 60 %", "Distance 6", "Blur 10", "Size 25"]) {
+  for (const label of ["Opacity 80 %", "Letter spacing 10", "Line spacing 1.50×", "Thickness 2.00×", "Shadow opacity 60 %", "Distance 6", "Blur 10", "Size 25"]) {
     expect(screen.getByText(label)).toBeTruthy();
   }
+});
+
+test("line spacing and thickness show two decimals, as fine as the sliders' 0.01 step", async () => {
+  await show({ lineSpacing: 1.25, outlineWidth: 0.75 }, true);
+  expect(screen.getByText("Line spacing 1.25×")).toBeTruthy();
+  expect(screen.getByText("Thickness 0.75×")).toBeTruthy();
+  for (const id of ["style-line-spacing-slider", "style-outline-width-slider"]) expect(screen.getByTestId(id).props.step).toBe(0.01);
 });
 
 test.each([

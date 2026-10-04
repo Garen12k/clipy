@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import { join } from "path";
 import { migrateProject } from "../migrate";
 import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker, NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem, type Overlay, type TextOverlay } from "../types";
 
@@ -291,4 +293,17 @@ test("sanity pass: an unknown fontId on a text or caption becomes montserrat; va
   }));
   expect(p.overlays.map((o) => (o as TextOverlay).fontId)).toEqual(["montserrat", "montserrat", "dancingScript", "bangers"]);
   expect(migrateProject(p)).toEqual(p);
+});
+
+test("a caption whose length is not a number loads with finite word times; hex colours have one checker", () => {
+  const words = [{ text: "Your", start: 0, end: 0.5 }, { text: "text", start: 0.5, end: 1 }];
+  for (const [start, end] of [[NaN, 2], [0, NaN], [-Infinity, Infinity], [Infinity, Infinity]]) {
+    const raw = { ...makeProject({ clips: [makeClip({ id: "a", sourceDuration: 5 })] }), overlays: [{ ...makeOverlay({ id: "c", kind: "caption", words }), start, end }] };
+    const out = (migrateProject(raw).overlays[0] as TextOverlay).words;
+    expect(out.map((x) => x.text)).toEqual(["Your", "text"]);
+    for (const x of out) { expect(Number.isFinite(x.start)).toBe(true); expect(Number.isFinite(x.end)).toBe(true); }
+  }
+  const source = readFileSync(join(__dirname, "../migrate.ts"), "utf8");
+  expect(source).not.toContain("0-9a-fA-F");
+  expect(source).toContain("isHexColor(bg.color)");
 });

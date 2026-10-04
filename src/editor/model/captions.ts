@@ -1,6 +1,6 @@
 import { CAPTION_STYLE } from "@/src/editor/effects";
 import { sourceToOutput } from "./timeline";
-import { clampCaptionWords, makeOverlay, type Clip, type TextOverlay } from "./types";
+import { captionLength, clampCaptionWords, makeOverlay, type Clip, type TextOverlay } from "./types";
 
 export interface Segment { text: string; start: number; end: number }
 /** `words`: the segments merged into the line (trimmed text, same time base as the line); `text` is their texts joined by single spaces. */
@@ -42,6 +42,6 @@ export function linesToCaptions(lines: Line[], newId: () => string): TextOverlay
   return lines.map((l) => {
     const words = l.words.map((w) => ({ text: w.text, start: r3(w.start - l.start), end: r3(w.end - l.start) }));
     return makeOverlay({ id: newId(), kind: "caption", text: l.text, ...CAPTION_STYLE, scale: 1, rotation: 0, start: l.start, end: l.end,
-      words: clampCaptionWords(words, l.text, l.end - l.start) });
+      words: clampCaptionWords(words, l.text, captionLength(l.start, l.end)) });
   });
 }

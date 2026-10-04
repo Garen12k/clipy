@@ -85,9 +85,12 @@ Eight open-licence Google fonts added as bundled files in `assets/fonts` (and to
 - Captions keep their words when restyled; editing a caption's text clears its words (that caption shows no highlight).
 
 **As built:**
-- A template replaces the whole look, and sets an animation only when it defines one.
+- A template replaces the whole look, entrance and loop animation included: they become the template's, or none when it defines none. The exit animation and the keyframes are left alone.
 - The caption sheet has an Outline switch.
-- With no captions, the sheet shows "Add captions to style them" and its controls change nothing.
+- With no captions, the sheet shows "Preview only — captions need the full app build": its controls restyle a local draft (the sample reacts) and write nothing to the project, so no undo step. The sheet can be opened from the Expo Go fallback card too.
+- Re-running the captions keeps the look of the captions they replace (style and highlight included).
+- A clip look (group A) that restyles texts / captions puts their outline colour back to automatic.
+- Style numbers are stored with two decimals.
 - Trimming a caption's start shifts its word highlight.
 - Permanent Marker is Apache-2.0 (the other fonts are OFL).
 

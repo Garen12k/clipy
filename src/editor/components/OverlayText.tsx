@@ -9,8 +9,8 @@ import type { TextOverlay } from "@/src/editor/model/types";
  */
 type Props = { overlay: TextOverlay; frameW: number; frameH: number; opacity?: number; frameOnly?: boolean; time?: number; children?: React.ReactNode };
 
-/** Preview only: React Native on iOS skips hit-testing for views with alpha below 0.01, so a fully see-through text could not be tapped. */
-const MIN_VIEW_OPACITY = 0.02;
+/** Preview only: React Native on iOS skips hit-testing for views with alpha below 0.01, so a fully see-through or faded overlay could not be tapped. Shared with `OverlayLayer`. */
+export const MIN_VIEW_OPACITY = 0.02;
 const NO_OFFSET = { width: 0, height: 0 };
 
 /**
@@ -18,6 +18,9 @@ const NO_OFFSET = { width: 0, height: 0 };
  * React Native draws one shadow per `Text`, so glow, shadow and outline are identical `Text` layers stacked under the fill
  * (bottom → top: glow, shadow, outline, fill). The fill is the one in normal flow that sizes the box. A text with none of them is one `Text`;
  * an outline alone rides on the fill as its halo.
+ * iOS can clip a text shadow at the `Text`'s own frame, so each under-layer reaches `room` px beyond the fill's content box on every side
+ * and pads the same amount back in: its content box — and so its wrapping — stays exactly the fill's.
+ * Every layer draws the same string (`plain`), so they all wrap alike.
  */
 export function OverlayText({ overlay: o, frameW, frameH, opacity, frameOnly, time, children }: Props) {
   const l = layoutOverlay(o, frameW, frameH);
@@ -26,32 +29,37 @@ export function OverlayText({ overlay: o, frameW, frameH, opacity, frameOnly, ti
   const halo = (color: string, radius: number) => ({ textShadowColor: color, textShadowRadius: radius, textShadowOffset: NO_OFFSET });
   const outline = o.outline ? halo(l.outlineColor, l.outlineWidth) : null;
   const stacked = l.glow !== null || l.shadow !== null;
-  const under = { position: "absolute", left: l.padding, top: l.padding, right: l.padding, bottom: l.padding, ...metrics } as const;
+  // The largest reach among the glow's radius, the shadow's offset + blur and the outline's width, in whole pixels.
+  const room = Math.ceil(Math.max(l.glow?.radius ?? 0, l.shadow ? Math.max(Math.abs(l.shadow.dx), Math.abs(l.shadow.dy)) + l.shadow.blur : 0, o.outline ? l.outlineWidth : 0));
+  const inset = l.padding - room;
+  const under = { position: "absolute", left: inset, top: inset, right: inset, bottom: inset, padding: room, ...metrics } as const;
+  const spans = wordSpans(o, time);
+  const plain = spans ? o.words.map((w) => w.text).join(" ") : o.text;
   const faded = frameOnly ? undefined : opacity === undefined && l.opacity === 1 ? undefined : Math.max(MIN_VIEW_OPACITY, (opacity ?? 1) * l.opacity);
   return (
     <View testID={frameOnly ? `overlay-base-${o.id}` : `overlay-${o.id}`} pointerEvents="box-none"
       style={{ position: "absolute", left: l.centerX, top: l.centerY, width: 0, height: 0, alignItems: "center", justifyContent: "center", transform: [{ rotate: `${l.rotation}deg` }], ...(faded === undefined ? null : { opacity: faded }) }}>
       <View style={{ position: "absolute", maxWidth: l.maxWidth, padding: l.padding, borderRadius: l.padding / 2 }}>
         {o.background && !frameOnly && <View pointerEvents="none" style={{ position: "absolute", inset: 0, backgroundColor: o.background.color, opacity: o.background.opacity, borderRadius: l.padding / 2 }} />}
-        {!frameOnly && l.glow && <Text testID={`overlay-glow-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.glow.color, ...halo(l.glow.color, l.glow.radius) }}>{o.text}</Text>}
+        {!frameOnly && l.glow && <Text testID={`overlay-glow-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.glow.color, ...halo(l.glow.color, l.glow.radius) }}>{plain}</Text>}
         {!frameOnly && l.shadow && (
           <Text testID={`overlay-shadow-${o.id}`} aria-hidden pointerEvents="none"
-            style={{ ...under, color: l.shadow.color, opacity: l.shadow.opacity, textShadowColor: l.shadow.color, textShadowRadius: l.shadow.blur, textShadowOffset: { width: l.shadow.dx, height: l.shadow.dy } }}>{o.text}</Text>
+            style={{ ...under, color: l.shadow.color, opacity: l.shadow.opacity, textShadowColor: l.shadow.color, textShadowRadius: l.shadow.blur, textShadowOffset: { width: l.shadow.dx, height: l.shadow.dy } }}>{plain}</Text>
         )}
-        {!frameOnly && stacked && outline && <Text testID={`overlay-outline-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.outlineColor, ...outline }}>{o.text}</Text>}
+        {!frameOnly && stacked && outline && <Text testID={`overlay-outline-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.outlineColor, ...outline }}>{plain}</Text>}
         {frameOnly
-          ? <Text aria-hidden pointerEvents="none" style={{ ...metrics, opacity: 0 }}>{o.text}</Text>
-          : <Text style={{ ...metrics, color: o.color, ...(stacked ? null : outline) }}>{fillContent(o, time)}</Text>}
+          ? <Text aria-hidden pointerEvents="none" style={{ ...metrics, opacity: 0 }}>{plain}</Text>
+          : <Text style={{ ...metrics, color: o.color, ...(stacked ? null : outline) }}>{spans ?? plain}</Text>}
         {children}
       </View>
     </View>
   );
 }
 
-/** A caption with word timings and a highlight colour: one span per word, the spoken one in the highlight colour. Anything else: the plain string. */
-function fillContent(o: TextOverlay, time: number | undefined): React.ReactNode {
+/** A caption with word timings and a highlight colour: one span per word (single spaces between), the spoken one in the highlight colour. Anything else: null. */
+function wordSpans(o: TextOverlay, time: number | undefined): React.ReactNode[] | null {
   const highlight = o.highlightColor;
-  if (o.kind !== "caption" || o.words.length === 0 || !highlight) return o.text;
+  if (o.kind !== "caption" || o.words.length === 0 || !highlight) return null;
   const t = time === undefined ? null : time - o.start;
   return o.words.flatMap((w, i) => {
     const span = <Text key={i} style={t !== null && t >= w.start && t < w.end ? { color: highlight } : undefined}>{w.text}</Text>;

@@ -1,10 +1,12 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { StyleSheet } from "react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { DEFAULT_TEXT_STYLE, makeClip, makeOverlay, makeProject, type TextOverlay, type TextStyle } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { OverlayLayer } from "../components/OverlayLayer";
-import { OverlayText } from "../components/OverlayText";
+import { MIN_VIEW_OPACITY, OverlayText } from "../components/OverlayText";
 
 // Frame 200 × 400, fontScale 0.1 → font 40 px, line height 48 px, base outline 2 / 450 × 400 = 1.7778 px.
 const W = 200, H = 400;
@@ -58,7 +60,8 @@ describe("stacked layers", () => {
     await show(text({ style: style({ glow: GLOW }) }));
     expect(layersPresent()).toEqual(["overlay-glow-t"]);
     const glow = screen.getByTestId("overlay-glow-t", hidden);
-    expect(flat(glow)).toEqual({ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, fontFamily: FAMILY, fontSize: 40, lineHeight: 48, textAlign: "center",
+    // Room for the halo: 20 px beyond the box on every side, given back as padding.
+    expect(flat(glow)).toEqual({ position: "absolute", left: -20, top: -20, right: -20, bottom: -20, padding: 20, fontFamily: FAMILY, fontSize: 40, lineHeight: 48, textAlign: "center",
       color: RED, textShadowColor: RED, textShadowRadius: 20, textShadowOffset: { width: 0, height: 0 } });
     expect(glow.props.children).toBe("Hello");
     expect(glow.props["aria-hidden"]).toBe(true);
@@ -71,7 +74,8 @@ describe("stacked layers", () => {
     await show(text({ style: style({ shadow: SHADOW }) }));
     expect(layersPresent()).toEqual(["overlay-shadow-t"]);
     const shadow = screen.getByTestId("overlay-shadow-t", hidden);
-    expect(flat(shadow)).toEqual({ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, fontFamily: FAMILY, fontSize: 40, lineHeight: 48, textAlign: "center",
+    // Reach = offset + blur = 12.8284 px, in whole pixels.
+    expect(flat(shadow)).toEqual({ position: "absolute", left: -13, top: -13, right: -13, bottom: -13, padding: 13, fontFamily: FAMILY, fontSize: 40, lineHeight: 48, textAlign: "center",
       color: BLUE, opacity: 0.6, textShadowColor: BLUE, textShadowRadius: 10, textShadowOffset: { width: 2.8284, height: 2.8284 } });
     expect(shadow.props["aria-hidden"]).toBe(true);
     expect(shadow.props.pointerEvents).toBe("none");
@@ -80,7 +84,7 @@ describe("stacked layers", () => {
   test("with a shadow or glow the outline gets its own layer and the fill carries no shadow", async () => {
     await show(text({ outline: true, style: style({ shadow: SHADOW, outlineColor: GREEN, outlineWidth: 2 }) }));
     expect(layersPresent()).toEqual(["overlay-shadow-t", "overlay-outline-t"]);
-    expect(flat(screen.getByTestId("overlay-outline-t", hidden))).toEqual({ position: "absolute", left: 0, top: 0, right: 0, bottom: 0,
+    expect(flat(screen.getByTestId("overlay-outline-t", hidden))).toEqual({ position: "absolute", left: -13, top: -13, right: -13, bottom: -13, padding: 13,
       fontFamily: FAMILY, fontSize: 40, lineHeight: 48, textAlign: "center",
       color: GREEN, textShadowColor: GREEN, textShadowRadius: 3.5556, textShadowOffset: { width: 0, height: 0 } });
     expect("textShadowColor" in flat(screen.getByText("Hello"))).toBe(false);
@@ -92,9 +96,29 @@ describe("stacked layers", () => {
     const order = box.children.map((c) => c.props.testID ?? (c.props.children === "Hello" ? "fill" : "background"));
     expect(order).toEqual(["background", "overlay-glow-t", "overlay-shadow-t", "overlay-outline-t", "fill"]);
     expect(textCount()).toBe(4);
-    // Inside the padding (0.25 × 40 = 10 px), so every layer has the fill's width and wraps the same.
-    for (const id of layerIds) expect(screen.getByTestId(id, hidden)).toHaveStyle({ left: 10, top: 10, right: 10, bottom: 10 });
+    // The box's padding is 0.25 × 40 = 10 px and the largest reach is the glow's 20 px: every layer starts 20 px outside the fill's
+    // content box and pads 20 px back in, so its content box — and therefore its wrapping — is the fill's.
+    for (const id of layerIds) {
+      const s = flat(screen.getByTestId(id, hidden)) as Record<string, number>;
+      expect(s).toMatchObject({ left: -10, top: -10, right: -10, bottom: -10, padding: 20 });
+      for (const side of ["left", "top", "right", "bottom"] as const) expect(s[side] + s.padding).toBe(10);
+    }
     expect(screen.getByTestId("overlay-outline-t", hidden)).toHaveStyle({ color: BLACK, textShadowColor: BLACK, textShadowRadius: 1.7778 });
+  });
+
+  test.each([
+    ["glow only", { style: style({ glow: GLOW }) }, 20],
+    ["shadow only", { style: style({ shadow: SHADOW }) }, 13],
+    ["a thick outline beside a small glow", { outline: true, style: style({ outlineWidth: 3, glow: { color: RED, size: 0.05 } }) }, 6],   // outline 5.3333 px > glow 2 px
+    ["outline off: its width does not count", { style: style({ outlineWidth: 3, glow: { color: RED, size: 0.05 } }) }, 2],
+  ] as const)("the room around the under-layers is the largest reach: %s", async (_name, p, reach) => {
+    await show(text({ background: { color: BLACK, opacity: 1 }, ...p }));
+    for (const id of layersPresent()) {
+      const s = flat(screen.getByTestId(id, hidden)) as Record<string, number>;
+      expect(s.padding).toBe(reach);
+      for (const side of ["left", "top", "right", "bottom"] as const) expect(s[side]).toBe(10 - reach);
+    }
+    expect(layersPresent().length).toBeGreaterThan(0);
   });
 
   test("letter spacing and line spacing are on every layer and on the fill", async () => {
@@ -185,6 +209,19 @@ describe("caption word highlight", () => {
     expect(screen.getByTestId("overlay-outline-t", hidden).props.children).toBe("one two three");
     expect(colours()).toEqual([YELLOW, undefined, undefined]);
   });
+
+  test("when the fill is word spans, every layer and the frame copy draw the words joined by single spaces", async () => {
+    // The stored text may hold other whitespace (the words only have to match it whitespace-normalised).
+    const spaced = caption({ text: "one  two\nthree", outline: true, style: style({ glow: GLOW, shadow: SHADOW }) });
+    const view = await show(spaced, { time: 2 });
+    for (const id of layerIds) expect(screen.getByTestId(id, hidden).props.children).toBe("one two three");
+    expect(colours()).toEqual([YELLOW, undefined, undefined]);
+    await view.rerender(<OverlayText overlay={spaced} frameW={W} frameH={H} frameOnly />);
+    expect(screen.getByText("one two three", hidden).props.children).toBe("one two three");
+    // Without spans (no highlight) every layer draws the stored text as it is.
+    await view.rerender(<OverlayText overlay={{ ...spaced, highlightColor: null }} frameW={W} frameH={H} time={2} />);
+    for (const id of layerIds) expect(screen.getByTestId(id, hidden).props.children).toBe("one  two\nthree");
+  });
 });
 
 describe("in the overlay layer", () => {
@@ -204,6 +241,14 @@ describe("in the overlay layer", () => {
     expect(colours()).toEqual([YELLOW, undefined]);
     await act(() => { useEditorStore.getState().seek(2.6); });
     expect(colours()).toEqual([undefined, YELLOW]);
+  });
+
+  test("one opacity floor shared by the text and the layer", async () => {
+    expect(MIN_VIEW_OPACITY).toBe(0.02);
+    const read = (file: string) => readFileSync(join(__dirname, "../components", file), "utf8");
+    expect(read("OverlayLayer.tsx")).not.toMatch(/const MIN_VIEW_OPACITY/);
+    expect(read("OverlayLayer.tsx")).toMatch(/import \{[^}]*MIN_VIEW_OPACITY[^}]*\} from "\.\/OverlayText"/);
+    expect(read("OverlayText.tsx").match(/const MIN_VIEW_OPACITY/g)).toHaveLength(1);
   });
 
   test("a fully transparent text keeps its tap target", async () => {

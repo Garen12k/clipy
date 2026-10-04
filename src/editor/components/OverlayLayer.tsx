@@ -2,14 +2,11 @@ import { Pressable, View } from "react-native";
 import { hasOverlayMotion, overlayBaseAt, resolveOverlayMotion, type KeyValues } from "@/src/editor/model/motion";
 import { isSticker, type Overlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { OverlayText } from "./OverlayText";
+import { MIN_VIEW_OPACITY, OverlayText } from "./OverlayText";
 import { SelectionFrame } from "./SelectionFrame";
 import { StickerView } from "./StickerView";
 
 type Props = { frameW: number; frameH: number; onOpenPanel: (overlayId: string) => void };
-
-/** Preview only: React Native on iOS skips hit-testing for views with alpha below 0.01, so a fully faded overlay could not be tapped. */
-const MIN_VIEW_OPACITY = 0.02;
 
 /** The overlay drawn at another placement (a display copy; the project is not changed). */
 const placed = <T extends Overlay>(o: T, v: KeyValues): T => ({ ...o, x: v.x, y: v.y, scale: v.scale, rotation: v.rotation });

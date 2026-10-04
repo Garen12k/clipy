@@ -1,10 +1,11 @@
 let mockIdCounter = 0;
 jest.mock("@/src/lib/id", () => ({ newId: jest.fn(() => `t${++mockIdCounter}`) }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { isSticker, makeClip, makeOverlay, makeProject } from "../types";
+import { isSticker, makeClip, makeOverlay, makeProject, type TextOverlay } from "../types";
 import { totalDuration } from "../timeline";
-import { applyTemplate } from "../ops";
+import { applyCaptionPreset, applyTemplate, applyTextTemplate } from "../ops";
 import { TEMPLATES } from "../../templates";
+import { CAPTION_PRESETS, TEXT_TEMPLATES } from "../../textTemplates";
 
 const a = makeClip({ id: "a", sourceDuration: 4 });
 const b = makeClip({ id: "b", sourceDuration: 4 });
@@ -82,4 +83,16 @@ test("title and sticker never outlast the project", () => {
   // sped up: 1 s at 1.5× = 0.667 s
   const fast = applyTemplate(tiny, hype, "project", null);
   for (const o of fast.overlays) expect(o.end).toBeLessThanOrEqual(totalDuration(fast));
+});
+
+test("a project look resets the outline colour of the texts and captions it restyles to automatic, and keeps the rest of the style", () => {
+  const styled = applyCaptionPreset(applyTextTemplate(p, "txt", "outlineOnly"), "karaoke");   // white edge on the text, black edge on the caption
+  const out = applyTemplate(styled, TEMPLATES.retro, "project", null);
+  const [cap, txt] = out.overlays as TextOverlay[];
+  expect(txt).toMatchObject({ color: TEMPLATES.retro.text.color, outline: true });
+  expect(txt.style).toEqual({ ...TEXT_TEMPLATES.outlineOnly.patch.style, outlineColor: null });
+  expect(cap.style).toEqual({ ...CAPTION_PRESETS.karaoke.patch.style, outlineColor: null });
+  expect(cap.highlightColor).toBe(CAPTION_PRESETS.karaoke.patch.highlightColor);
+  // Clip scope restyles no text, so it leaves the colour alone.
+  expect((applyTemplate(styled, TEMPLATES.retro, "clip", "a").overlays[1] as TextOverlay).style.outlineColor).toBe("#FFFFFF");
 });

@@ -1,7 +1,8 @@
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { CAPTION_STYLE } from "@/src/editor/effects";
 import { linesToCaptions, mergeSegmentsIntoLines, segmentsToOutput } from "../captions";
-import { replaceCaptions, setCaptionStyleForAll } from "../ops";
+import { CAPTION_PRESETS } from "@/src/editor/textTemplates";
+import { applyCaptionPreset, replaceCaptions, setCaptionStyleForAll } from "../ops";
 import { curveSteps } from "../timeline";
 import { clampCaptionWords, makeClip, makeOverlay, makeProject, type TextOverlay } from "../types";
 
@@ -109,5 +110,45 @@ describe("caption words", () => {
     expect(first.words).toEqual([w("one", 0, 0.5), w("two", 0.5, 1)]);
     expect(last).toMatchObject({ start: 9.5, end: 10, words: [w("late", 0, 0.5)] });
     for (const c of [first, last]) expect(c.words).toEqual(clampCaptionWords(c.words, c.text, c.end - c.start));
+  });
+});
+
+describe("final review", () => {
+  test("linesToCaptions: a word reaching the line's end is clamped without float residue (3.4 - 3)", () => {
+    const caps = linesToCaptions([{ text: "a b", start: 3, end: 3.4, words: [w("a", 3, 3.2), w("b", 3.2, 3.9)] }], () => "c");
+    expect(caps[0].words).toEqual([w("a", 0, 0.2), w("b", 0.2, 0.4)]);
+  });
+
+  test("replaceCaptions gives the new captions the look of the ones they replace, with their own words", () => {
+    let o = 0;
+    const base = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [makeOverlay({ id: "t" }),
+      ...linesToCaptions([{ text: "old one", start: 0, end: 1, words: [w("old", 0, 0.5), w("one", 0.5, 1)] }, { text: "old two", start: 1, end: 2, words: [] }], () => `o${++o}`)] });
+    const styled = setCaptionStyleForAll(applyCaptionPreset(base, "karaoke"), { align: "left", x: 0.3, y: 0.7 });
+    const look = styled.overlays[1] as TextOverlay;
+    let n = 0;
+    const fresh = linesToCaptions([
+      { text: "new words here", start: 2, end: 4, words: [w("new", 2, 2.5), w("words", 2.5, 3), w("here", 3, 4)] },
+      { text: "again", start: 5, end: 6, words: [w("again", 5, 6)] },
+    ], () => `n${++n}`);
+    const next = replaceCaptions(styled, fresh);
+    const caps = next.overlays.slice(1) as TextOverlay[];
+    expect(next.overlays.map((x) => x.id)).toEqual(["t", "n1", "n2"]);
+    const k = CAPTION_PRESETS.karaoke.patch;
+    for (const c of caps) {
+      expect(c).toMatchObject({ kind: "caption", fontId: k.fontId, fontScale: k.fontScale, color: k.color, background: null, outline: true,
+        align: "left", x: 0.3, y: 0.7, style: k.style, highlightColor: k.highlightColor });
+      expect(c.style).not.toBe(look.style);
+    }
+    expect(caps[0].style).not.toBe(caps[1].style);
+    expect(caps.map((c) => c.text)).toEqual(["new words here", "again"]);
+    expect(caps[0].words).toEqual([w("new", 0, 0.5), w("words", 0.5, 1), w("here", 1, 2)]);
+    expect(caps[1].words).toEqual([w("again", 0, 1)]);
+    // A background is copied, never shared.
+    const bar = replaceCaptions(applyCaptionPreset(styled, "classicBar"), fresh).overlays.slice(1) as TextOverlay[];
+    expect(bar[0].background).toEqual(CAPTION_PRESETS.classicBar.patch.background);
+    expect(bar[0].background).not.toBe(bar[1].background);
+    // No captions before: the generated look, as always.
+    const first = replaceCaptions(makeProject({ clips: base.clips, overlays: [makeOverlay({ id: "t" })] }), fresh).overlays[1];
+    expect(first).toMatchObject({ ...CAPTION_STYLE, highlightColor: null });
   });
 });

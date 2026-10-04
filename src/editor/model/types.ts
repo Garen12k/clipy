@@ -270,11 +270,17 @@ export function clampTextStyle(v: unknown): TextStyle {
   };
 }
 
+/** A caption's length for `clampCaptionWords`: in milliseconds like every stored time (3.4 − 3 is 0.4, not 0.3999…); 0 when it is not a number. */
+export function captionLength(start: number, end: number): number {
+  const length = end - start;
+  return Number.isFinite(length) ? Math.round(length * 1000) / 1000 : 0;
+}
+
 /** Entries need non-empty text and finite times (clamped to [0, length], end ≥ start); sorted by start. If the words joined with single spaces
  *  do not equal the caption's text (whitespace-normalised) the words are stale → []. Idempotent. */
 export function clampCaptionWords(v: unknown, text: string, length: number): CaptionWord[] {
   if (!Array.isArray(v)) return [];
-  const hi = Math.max(0, length);
+  const hi = Number.isFinite(length) ? Math.max(0, length) : 0;
   const words: CaptionWord[] = [];
   for (const e of v) {
     if (!isRec(e) || typeof e.text !== "string" || e.text.trim().length === 0 || !isNum(e.start) || !isNum(e.end)) continue;

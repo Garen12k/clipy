@@ -6,8 +6,8 @@ import { DEFAULT_TEXT_STYLE, type FontId, type OverlayAnimation, type TextOverla
  * Not to be confused with `templates.ts`, the one-tap looks for clips.
  */
 
-/** A template REPLACES the whole look (never a merge), so tapping one after another leaves nothing behind. `animation`, when present,
- *  is applied with the rules of `setOverlayAnimation`; when absent the text keeps the animation it has. */
+/** A template REPLACES the whole look (never a merge), so tapping one after another leaves nothing behind. That includes the entrance
+ *  and the loop animation: what `animation` does not name of the two is cleared. The exit animation is kept unless `animation` names one. */
 export interface TextTemplatePatch {
   fontId: FontId; color: string; background: { color: string; opacity: number } | null; outline: boolean; style: TextStyle;
   animation?: Partial<OverlayAnimation>;

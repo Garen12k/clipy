@@ -1,10 +1,9 @@
 import { normaliseTransitions } from "./ops";
 import {
-  clampAdjust, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, FONT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, isHexColor, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
+  captionLength, clampAdjust, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, FONT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, isHexColor, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
   type Clip, type ClipAdjust, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type EffectItem, type Overlay, type PostRecord, type Project, type ShapeId,
 } from "./types";
 
-const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 type Raw = Record<string, unknown> & { clips: unknown[] };
 
@@ -37,7 +36,7 @@ function withTextStyle(o: Overlay): Overlay {
   if (o.kind !== "caption") return { ...o, fontId, style, words: [], highlightColor: null };
   const text = typeof o.text === "string" ? o.text : "";
   const start = typeof o.start === "number" ? o.start : 0, end = typeof o.end === "number" ? o.end : 0;
-  return { ...o, fontId, style, words: clampCaptionWords(o.words, text, end - start), highlightColor: isHexColor(o.highlightColor) ? o.highlightColor : null };
+  return { ...o, fontId, style, words: clampCaptionWords(o.words, text, captionLength(start, end)), highlightColor: isHexColor(o.highlightColor) ? o.highlightColor : null };
 }
 
 /**
@@ -60,7 +59,7 @@ function normaliseCurrent(raw: Raw): Raw {
     const crop = clampCrop(isObj(c.crop) ? (c.crop as CropRect) : FULL_CROP);
     const bg = c.background as Record<string, unknown> | undefined;
     const background: ClipBackground = isObj(bg) && bg.type === "blur" ? { type: "blur" }
-      : isObj(bg) && bg.type === "color" && typeof bg.color === "string" && HEX_COLOR.test(bg.color) ? { type: "color", color: bg.color }
+      : isObj(bg) && bg.type === "color" && isHexColor(bg.color) ? { type: "color", color: bg.color }
       : { type: "black" };
     const reversed = c.reversed === true;
     const filterIntensity = typeof c.filterIntensity === "number" && Number.isFinite(c.filterIntensity) ? clampNum(c.filterIntensity, 0, 1) : 1;
