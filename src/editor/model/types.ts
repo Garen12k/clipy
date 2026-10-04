@@ -2,7 +2,15 @@ export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 12 as const;
+export const SCHEMA_VERSION = 13 as const;
+export const EXPORT_FPS = [24, 30, 60] as const;
+export type ExportFps = (typeof EXPORT_FPS)[number];
+export const EXPORT_QUALITIES = ["high", "small"] as const;
+export type ExportQuality = (typeof EXPORT_QUALITIES)[number];
+export interface ExportSettings { fps: ExportFps; quality: ExportQuality }
+export const DEFAULT_EXPORT_SETTINGS: ExportSettings = { fps: 30, quality: "high" };
+export interface Cover { time: number; title: string }   // project seconds; title may be ""
+export const COVER_LIMITS = { titleMax: 40 };
 export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
 export type PostPlatform = (typeof POST_PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
@@ -160,6 +168,22 @@ export function clampEffectRect(v: unknown): EffectRect {
   const w = clampNum(v.w, REGION_LIMITS.min, 1);
   const h = clampNum(v.h, REGION_LIMITS.min, 1);
   return { x: clampNum(v.x, 0, 1 - w), y: clampNum(v.y, 0, 1 - h), w, h };
+}
+/** Known fps and quality or the defaults; always a fresh object, unknown keys dropped. */
+export function clampExportSettings(v: unknown): ExportSettings {
+  const r = isRec(v) ? v : {};
+  return {
+    fps: (EXPORT_FPS as readonly unknown[]).includes(r.fps) ? (r.fps as ExportFps) : DEFAULT_EXPORT_SETTINGS.fps,
+    quality: (EXPORT_QUALITIES as readonly unknown[]).includes(r.quality) ? (r.quality as ExportQuality) : DEFAULT_EXPORT_SETTINGS.quality,
+  };
+}
+/** Not a string → ""; trimmed, cut to COVER_LIMITS.titleMax whole characters (code points), trimmed again so a cut leaves no trailing space. */
+export const clampCoverTitle = (v: unknown): string =>
+  (typeof v === "string" ? Array.from(v.trim()).slice(0, COVER_LIMITS.titleMax).join("").trim() : "");
+/** `total` = the project's length in seconds. Round first, then clamp (that order makes it idempotent). */
+export function clampCover(v: unknown, total: number): Cover | null {
+  if (!isRec(v) || !isNum(v.time)) return null;
+  return { time: clampNum(Math.round(v.time * 1000) / 1000, 0, isNum(total) ? Math.max(0, total) : 0), title: clampCoverTitle(v.title) };
 }
 export const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const finiteOr = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
@@ -385,6 +409,8 @@ export interface Project {
   layers: LayerClip[];    // drawn in list order (later = on top)
   ducking: boolean;       // default false
   beatMarkers: number[];  // project seconds, sorted, unique within BEAT_LIMITS.minGap
+  exportSettings: ExportSettings;   // default { fps: 30, quality: "high" }
+  cover: Cover | null;              // default null = the first frame, no title
 }
 
 /** Shared factory for real code: a full-length video clip with every default. */
@@ -438,7 +464,8 @@ export function makeAudioTrack(partial: Partial<AudioTrack> & Pick<AudioTrack, "
 }
 export function makeProject(partial: Partial<Project> = {}): Project {
   return { id: "p1", name: "Project 1", createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
-    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], posts: [], effects: [], layers: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [], ...partial };
+    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], posts: [], effects: [], layers: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [],
+    exportSettings: { ...DEFAULT_EXPORT_SETTINGS }, cover: null, ...partial };
 }
 
 export function aspectRatioValue(r: AspectRatio): number {

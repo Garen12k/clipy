@@ -161,6 +161,21 @@ export function clipAt(p: Project, time: number): ClipHit | null {
   return { clip: p.clips[0], index: 0, offsetInClip: 0 };
 }
 
+/** The cover's project time as read: 0 without a cover, else the stored time clamped to the project as it is now. */
+export function coverTimeOf(p: Project): number {
+  if (!p.cover || !Number.isFinite(p.cover.time)) return 0;
+  return Math.max(0, Math.min(p.cover.time, totalDuration(p)));
+}
+/** How far before the project's end the last frame is read (a thumbnail at exactly the end of a file can fail). */
+export const LAST_FRAME_SLACK = 0.05;
+/** The main clip and the SOURCE second shown at a project time (a photo: 0); null for an empty project. */
+export function frameAt(p: Project, time: number): { clip: Clip; sourceTime: number } | null {
+  const last = Math.max(0, totalDuration(p) - LAST_FRAME_SLACK);
+  const hit = clipAt(p, Number.isFinite(time) ? Math.max(0, Math.min(time, last)) : 0);
+  if (!hit) return null;
+  return { clip: hit.clip, sourceTime: hit.clip.kind === "photo" ? 0 : sourceTimeAt(hit.clip, hit.offsetInClip) };
+}
+
 // ---- Layers: clips with their own place on the project timeline ----
 
 /** Any clip or layer by id (main clips first; ids are unique across both). The one way to find "a clip by id". */
