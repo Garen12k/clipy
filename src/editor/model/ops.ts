@@ -4,7 +4,7 @@ import { clipAt, clipDuration, curveSteps, sourceTimeAt, spanTooShort, splitSour
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
-  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
+  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
   CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   MIN_CLIP_SECONDS, minAudioDuration, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   type AnimEdge, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem, type FilterId,
@@ -260,32 +260,45 @@ type AudioPatch = Partial<Omit<AudioTrack, "id" | "sourceUri" | "sourceDuration"
 const AUDIO_NUMBER_KEYS = ["start", "trimStart", "trimEnd", "volume", "fadeIn", "fadeOut"] as const;
 
 /**
- * The track at index `i` with the patch written: trim clamped to the source and kept at least the kind's minimum long (the end yields
- * first, then the start), start ≥ 0, volume and fades clamped. The fades are stored as given — fitting them to the track's length is
- * `audioMix`'s job. Same project when nothing changes or a patched number is not finite.
+ * A track as it is stored: trim clamped to the source and kept at least the kind's minimum long (the end yields first, then the
+ * start), start ≥ 0, volume and fades clamped, an unknown kind → "music". The fades are stored as given — fitting them to the track's
+ * length is `audioMix`'s job.
  */
-function patchAudioTrack(p: Project, i: number, patch: AudioPatch): Project {
-  const t = p.audioTracks[i];
-  if (AUDIO_NUMBER_KEYS.some((k) => patch[k] !== undefined && !Number.isFinite(patch[k]))) return p;
-  const merged = { ...t, ...patch };
-  const min = minAudioDuration(merged.kind);
-  let trimEnd = Math.min(merged.trimEnd, t.sourceDuration);
-  let trimStart = Math.max(0, Math.min(merged.trimStart, trimEnd));
+function cleanAudioTrack(t: AudioTrack): AudioTrack {
+  const kind = (AUDIO_KINDS as readonly unknown[]).includes(t.kind) ? t.kind : "music";
+  const min = minAudioDuration(kind);
+  let trimEnd = Math.min(t.trimEnd, t.sourceDuration);
+  let trimStart = Math.max(0, Math.min(t.trimStart, trimEnd));
   if (trimEnd - trimStart < min) {
     if (trimStart + min <= t.sourceDuration) trimEnd = trimStart + min;
     else { trimEnd = t.sourceDuration; trimStart = Math.max(0, trimEnd - min); }
   }
-  const next: AudioTrack = { ...merged, trimStart: r3(trimStart), trimEnd: r3(trimEnd), start: r3(Math.max(0, merged.start)),
-    volume: clamp(merged.volume, AUDIO_LIMITS.volume), fadeIn: r2(clampFade(merged.fadeIn)), fadeOut: r2(clampFade(merged.fadeOut)) };
+  return { ...t, kind, trimStart: r3(trimStart), trimEnd: r3(trimEnd), start: r3(Math.max(0, t.start)),
+    volume: clamp(t.volume, AUDIO_LIMITS.volume), fadeIn: r2(clampFade(t.fadeIn)), fadeOut: r2(clampFade(t.fadeOut)) };
+}
+
+/**
+ * The track at index `i` with the patch written and cleaned (`cleanAudioTrack`). A key set to `undefined` is ignored (it would wipe
+ * the stored value). Same project when nothing changes or a patched number is not finite.
+ */
+function patchAudioTrack(p: Project, i: number, patch: AudioPatch): Project {
+  const t = p.audioTracks[i];
+  const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as AudioPatch;
+  if (AUDIO_NUMBER_KEYS.some((k) => defined[k] !== undefined && !Number.isFinite(defined[k]))) return p;
+  const next = cleanAudioTrack({ ...t, ...defined });
   if (sameJson(next, t)) return p;
   const audioTracks = p.audioTracks.slice(); audioTracks[i] = next;
   return touch(p, { audioTracks });
 }
 
-/** Adds a track (music, voice-over or sound effect). Refused (same project) at AUDIO_LIMITS.maxTracks or when the id is already there. */
+/**
+ * Adds a track (music, voice-over or sound effect), cleaned (`cleanAudioTrack`). Refused (same project) at AUDIO_LIMITS.maxTracks, when
+ * the id is already there, or when its start, trims, volume or source length is not a finite number.
+ */
 export function addAudioTrack(p: Project, track: AudioTrack): Project {
   if (p.audioTracks.length >= AUDIO_LIMITS.maxTracks || p.audioTracks.some((t) => t.id === track.id)) return p;
-  return touch(p, { audioTracks: [...p.audioTracks, track] });
+  if (![track.start, track.trimStart, track.trimEnd, track.volume, track.sourceDuration].every(Number.isFinite)) return p;
+  return touch(p, { audioTracks: [...p.audioTracks, cleanAudioTrack(track)] });
 }
 
 /** See `patchAudioTrack` for the rules. Unknown id → same project. */
@@ -352,12 +365,13 @@ const BEAT_REMOVE_REACH = 0.25;
 
 /**
  * A marker at `time` (clamped to the project, 3 decimals), kept sorted. Refused (same project) at BEAT_LIMITS.max, for a non-finite
- * time, and closer than BEAT_LIMITS.minGap to an existing marker — the loader's own rule (`clampBeatMarkers`), so what is stored
+ * time, on a project with no length (no clips), and closer than BEAT_LIMITS.minGap to an existing marker — the loader's own rule (`clampBeatMarkers`), so what is stored
  * reloads unchanged.
  */
 export function addBeatMarker(p: Project, time: number): Project {
-  if (!Number.isFinite(time) || p.beatMarkers.length >= BEAT_LIMITS.max) return p;
-  const t = r3(clamp(time, [0, totalDuration(p)]));
+  const total = totalDuration(p);
+  if (!Number.isFinite(time) || total <= 0 || p.beatMarkers.length >= BEAT_LIMITS.max) return p;
+  const t = r3(clamp(time, [0, total]));
   if (p.beatMarkers.some((m) => Math.abs(m - t) < BEAT_LIMITS.minGap - 1e-9)) return p;
   const at = p.beatMarkers.findIndex((m) => m > t);
   return touch(p, { beatMarkers: at < 0 ? [...p.beatMarkers, t] : [...p.beatMarkers.slice(0, at), t, ...p.beatMarkers.slice(at)] });

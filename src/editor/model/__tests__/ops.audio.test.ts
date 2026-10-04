@@ -25,6 +25,36 @@ describe("addAudioTrack", () => {
     expect(addAudioTrack(full, music)).toBe(full);
     expect(addAudioTrack(p, music)).toBe(p);
   });
+
+  test("validates what it stores: non-finite start / trims / volume refused; fades clamped; unknown kind → music", () => {
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      for (const key of ["start", "trimStart", "trimEnd", "volume"] as const) {
+        expect(addAudioTrack(base, { ...music, [key]: bad })).toBe(base);
+      }
+    }
+    const odd = { ...music, fadeIn: 9, fadeOut: NaN, kind: "podcast" } as unknown as typeof music;
+    expect(addAudioTrack(base, odd).audioTracks).toEqual([{ ...music, fadeIn: 5, fadeOut: 0, kind: "music" }]);
+    expect(addAudioTrack(base, { ...sfx, fadeIn: -1 }).audioTracks[0]).toEqual({ ...sfx, fadeIn: 0 });
+  });
+});
+
+describe("a patch key explicitly set to undefined is ignored", () => {
+  const faded = makeProject({ clips: base.clips, audioTracks: [{ ...music, start: 3, trimStart: 1, trimEnd: 20, fadeIn: 1, fadeOut: 2 }] });
+  const first = faded.audioTracks[0];
+
+  test("only undefined keys → same project", () => {
+    expect(updateAudioTrackById(faded, "m1", { start: undefined })).toBe(faded);
+    expect(updateAudioTrackById(faded, "m1", { trimStart: undefined, trimEnd: undefined })).toBe(faded);
+    expect(updateAudioTrackById(faded, "m1", { volume: undefined, fadeIn: undefined, fadeOut: undefined })).toBe(faded);
+    expect(updateAudioTrack(faded, { start: undefined, title: undefined, kind: undefined })).toBe(faded);
+  });
+
+  test("an undefined key beside a real one leaves its value alone", () => {
+    expect(updateAudioTrackById(faded, "m1", { fadeIn: undefined, volume: 0.5 }).audioTracks[0]).toEqual({ ...first, volume: 0.5 });
+    expect(updateAudioTrackById(faded, "m1", { start: undefined, trimEnd: 10 }).audioTracks[0]).toEqual({ ...first, trimEnd: 10 });
+    expect(updateAudioTrackById(faded, "m1", { trimEnd: undefined, trimStart: undefined, start: 5 }).audioTracks[0]).toEqual({ ...first, start: 5 });
+    expect(updateAudioTrack(faded, { fadeOut: undefined, kind: undefined, volume: 2 }).audioTracks[0]).toEqual({ ...first, volume: 2 });
+  });
 });
 
 describe("updateAudioTrackById", () => {
@@ -106,7 +136,7 @@ describe("deprecated single-track ops", () => {
     expect(two.audioTracks).toEqual([music, voice]);
     const upd = updateAudioTrack(two, { trimStart: 29.8, trimEnd: 99, start: -2, volume: 9 });
     expect(upd.audioTracks[0]).toMatchObject({ id: "m1", trimStart: 29.5, trimEnd: 30, start: 0, volume: 2 });
-    expect(upd.audioTracks[1]).toBe(voice);
+    expect(upd.audioTracks[1]).toBe(two.audioTracks[1]);   // the other track keeps its object
     expect(removeAudioTrack(two).audioTracks).toEqual([voice]);
     expect(updateAudioTrack(base, { volume: 1 })).toBe(base);
     expect(removeAudioTrack(base)).toBe(base);
@@ -185,6 +215,12 @@ describe("beat markers", () => {
     expect(addBeatMarker(p, Infinity)).toBe(p);
     const long = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 100 })], beatMarkers: Array.from({ length: BEAT_LIMITS.max }, (_, i) => i * 0.1) });
     expect(addBeatMarker(long, 50.05)).toBe(long);
+  });
+
+  test("a project with no clips (length 0) takes no marker", () => {
+    const empty = makeProject({ audioTracks: [music] });
+    expect(addBeatMarker(empty, 0)).toBe(empty);
+    expect(addBeatMarker(empty, 3)).toBe(empty);
   });
 
   test("removeBeatMarkerNear removes the nearest marker within 0.25 s", () => {
