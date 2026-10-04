@@ -10,13 +10,36 @@ import { clipDuration } from "./timeline";
  */
 export interface GainPoint { time: number; gain: number }
 
-/** Where a fade overlaps a duck ramp the gain is a product of two lines (a parabola): the curve gets a breakpoint this often there. */
+/**
+ * Where a fade overlaps a duck ramp the gain is a product of two lines (a parabola), so the curve gets extra breakpoints there:
+ * at most CURVE_STEP apart, never closer than CURVE_MIN_STEP, at most CURVE_MAX_POINTS per overlap, spaced so the curve stays
+ * within CURVE_TOLERANCE of the true gain (see `overlapStep`).
+ */
 export const CURVE_STEP = 0.05;
+export const CURVE_MIN_STEP = 0.005;
+export const CURVE_MAX_POINTS = 400;
+export const CURVE_TOLERANCE = 0.01;
 /** Curve times are rounded to this many decimals (and de-duplicated); gains are not rounded. */
 export const CURVE_DECIMALS = 4;
+/** Slack for deciding whether a time is inside a track: `start + length − start` is not always `length` in floating point. */
+const EDGE_EPSILON = 1e-9;
 
 const finitePositive = (v: number): number => (Number.isFinite(v) && v > 0 ? v : 0);
 const roundTime = (v: number): number => { const k = 10 ** CURVE_DECIMALS; return Math.round(v * k) / k; };
+
+/**
+ * Spacing of the extra breakpoints where a fade of `fade` (fitted) seconds overlaps a duck ramp, for a track at `volume`.
+ * There the gain is volume × (x / fade) × (level + (1 − level) × y / ramp): a parabola with second derivative 2a,
+ * a = volume × (1 − level) / (fade × ramp). A straight line across a step h is off by at most a × h² / 4, so
+ * h = sqrt(4 × tolerance × fade × ramp / ((1 − level) × volume)) keeps it within the tolerance. Below the CURVE_MIN_STEP floor
+ * the overlap itself (never longer than the fade) is the step, and a × fade² / 4 is still under the tolerance for volume ≤ 2.
+ * CURVE_STEP_SAFETY shortens the step a little because the extra points are then moved onto the 4-decimal time grid.
+ */
+export const CURVE_STEP_SAFETY = 0.9;
+function overlapStep(volume: number, fade: number): number {
+  const exact = Math.sqrt((4 * CURVE_TOLERANCE * fade * DUCKING.ramp) / ((1 - DUCKING.level) * Math.max(volume, 1e-6)));
+  return Math.max(CURVE_MIN_STEP, Math.min(CURVE_STEP, CURVE_STEP_SAFETY * exact));
+}
 
 /** Scaled fades so fadeIn + fadeOut ≤ length: negative / non-finite → 0; both shrink by `length / (in + out)` when they do not fit. */
 export function fitFades(fadeIn: number, fadeOut: number, length: number): { in: number; out: number } {
@@ -42,11 +65,14 @@ export function fadeEnvelope(local: number, length: number, fadeIn: number, fade
   return Math.min(1, up, down);
 }
 
-/** Intervals of project time during which any voice track is audible: `[start, trackEnd]` each, merged when they touch or overlap, sorted. */
+/**
+ * Intervals of project time during which any voice track is audible: `[start, trackEnd]` each, merged when they touch or overlap,
+ * sorted. A voice at volume 0 (or a broken volume) is not audible and is left out.
+ */
 export function voiceIntervals(tracks: AudioTrack[]): [number, number][] {
   const spans: [number, number][] = [];
   for (const t of tracks) {
-    if (t.kind !== "voice") continue;
+    if (t.kind !== "voice" || finitePositive(t.volume) === 0) continue;
     const end = trackEnd(t);
     if (Number.isFinite(t.start) && Number.isFinite(end) && end > t.start) spans.push([t.start, end]);
   }
@@ -81,19 +107,25 @@ export function duckFactorAt(intervals: [number, number][], time: number): numbe
 const isDucked = (p: Project, t: AudioTrack): boolean => p.ducking && t.kind === "music";
 const trackLength = (t: AudioTrack): number => finitePositive(t.trimEnd - t.trimStart);
 
-/** The gain on the closed span `[start, end]`: at the very end this is the limit from inside, which the curve's last breakpoint uses. */
+/**
+ * The gain on the closed span `[start, end]`, the local time clamped into `[0, length]` (`end − start` can be a hair above
+ * `length` in floating point): at the very end this is the limit from inside, which the curve's last breakpoint uses.
+ */
 function trackGainInside(t: AudioTrack, intervals: [number, number][] | null, time: number): number {
-  const fade = fadeEnvelope(time - t.start, trackLength(t), t.fadeIn, t.fadeOut);
-  return finitePositive(t.volume) * fade * (intervals ? duckFactorAt(intervals, time) : 1);
+  const length = trackLength(t);
+  const local = Math.min(Math.max(time - t.start, 0), length);
+  return finitePositive(t.volume) * fadeEnvelope(local, length, t.fadeIn, t.fadeOut) * (intervals ? duckFactorAt(intervals, time) : 1);
 }
 
 /**
  * A track's total gain at a project time: volume × fade envelope × (ducking factor for music when the project ducks).
- * 0 outside `[start, end)` — exactly at the end the track is over — and for a non-finite time.
+ * 0 outside `[start, end)` — exactly at the end the track is over — and for a non-finite time. "Outside" is decided on the
+ * local time with EDGE_EPSILON of slack, so a time at the start is never lost to rounding and the end is always over.
  */
 export function trackGainAt(p: Project, t: AudioTrack, time: number): number {
   if (!Number.isFinite(time) || !Number.isFinite(t.start)) return 0;
-  if (time < t.start || time >= t.start + trackLength(t)) return 0;
+  const local = time - t.start;
+  if (local < -EDGE_EPSILON || local >= trackLength(t) - EDGE_EPSILON) return 0;
   return trackGainInside(t, isDucked(p, t) ? voiceIntervals(p.audioTracks) : null, time);
 }
 
@@ -103,12 +135,19 @@ export function clipGainAt(c: Clip, offsetInClip: number): number {
   return finitePositive(c.volume) * fadeEnvelope(offsetInClip, clipDuration(c), c.fadeIn, c.fadeOut);
 }
 
-/** Sorted (time, gain) points from raw times: gains are taken at the raw time, times are rounded, the first of equal times is kept. */
+/**
+ * Sorted (time, gain) points from raw times: gains are taken at the raw time, times are rounded. Of points that round to the
+ * same time the first is kept — except at the very start, where the LATER gain wins (a fade-in too short to survive the
+ * rounding must not turn into a ramp up to the next breakpoint; the mirror case at the end keeps the earlier gain).
+ */
 function curveFrom(times: number[], gainAt: (time: number) => number): GainPoint[] {
   const out: GainPoint[] = [];
   for (const raw of [...times].sort((a, b) => a - b)) {
     const time = roundTime(raw);
-    if (out.length > 0 && out[out.length - 1].time === time) continue;
+    if (out.length > 0 && out[out.length - 1].time === time) {
+      if (out.length === 1) out[0].gain = gainAt(raw);
+      continue;
+    }
     out.push({ time, gain: gainAt(raw) });
   }
   return out;
@@ -120,8 +159,8 @@ function curveFrom(times: number[], gainAt: (time: number) => number): GainPoint
  * 0 after a fade-out, the plateau otherwise) and, for ducked music, every ramp boundary strictly inside the track plus the
  * time two neighbouring ramps cross (the lower of two lines has a kink there). Between breakpoints the true gain is linear,
  * so the curve equals `trackGainAt` — except where a fade overlaps a duck ramp: that product is a parabola, and extra
- * breakpoints every CURVE_STEP seconds keep the curve within 0.01 of `trackGainAt` (at volume 1 with a fade of 0.15 s or
- * longer; the worst case, for shorter fades, is 0.03 × volume). An empty curve for a track with no length.
+ * breakpoints every `overlapStep` seconds (0.05 s at most, finer for short or loud fades) keep the curve within
+ * CURVE_TOLERANCE (0.01) of `trackGainAt` for any volume up to 2 and any fade. An empty curve for a track with no length.
  */
 export function trackGainCurve(p: Project, t: AudioTrack): GainPoint[] {
   const length = trackLength(t);
@@ -132,7 +171,10 @@ export function trackGainCurve(p: Project, t: AudioTrack): GainPoint[] {
   const intervals = isDucked(p, t) ? voiceIntervals(p.audioTracks) : null;
   const times = [start, start + fades.in, end - fades.out, end];
   if (intervals) {
-    const fadeSpans: [number, number][] = [[start, start + fades.in], [end - fades.out, end]];
+    const volume = finitePositive(t.volume);
+    const fadeSpans: { from: number; to: number; step: number }[] = [
+      { from: start, to: start + fades.in, step: overlapStep(volume, fades.in) },
+      { from: end - fades.out, to: end, step: overlapStep(volume, fades.out) }];
     intervals.forEach(([from, to], i) => {
       const rampSpans: [number, number][] = [[from - DUCKING.ramp, from], [to, to + DUCKING.ramp]];
       times.push(rampSpans[0][0], from, to, rampSpans[1][1]);
@@ -140,9 +182,10 @@ export function trackGainCurve(p: Project, t: AudioTrack): GainPoint[] {
       if (next && next[0] - to < 2 * DUCKING.ramp) times.push((to + next[0]) / 2);
       for (const ramp of rampSpans) {
         for (const fade of fadeSpans) {
-          const lo = Math.max(ramp[0], fade[0]);
-          const hi = Math.min(ramp[1], fade[1]);
-          for (let k = 1; lo + k * CURVE_STEP < hi - 1e-9; k++) times.push(lo + k * CURVE_STEP);
+          const lo = Math.max(ramp[0], fade.from);
+          const hi = Math.min(ramp[1], fade.to);
+          // these are samples of a smooth stretch, not kinks: put them on the time grid so their gains are exact where they are played
+          for (let k = 1; k <= CURVE_MAX_POINTS && lo + k * fade.step < hi - EDGE_EPSILON; k++) times.push(roundTime(lo + k * fade.step));
         }
       }
     });

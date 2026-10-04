@@ -92,6 +92,21 @@ export const CURVE_VECTORS: CurveVector[] = [
       { start: 4.4, trimStart: 0, trimEnd: 1.6, volume: 1, kind: "voice", fadeIn: 0, fadeOut: 0 }],
     curve: [{ time: 0, gain: 1 }, { time: 1.7, gain: 1 }, { time: 2, gain: 0.3 }, { time: 4, gain: 0.3 }, { time: 4.1, gain: 0.5333333333333333 },
       { time: 4.2, gain: 0.7666666666666666 }, { time: 4.3, gain: 0.5333333333333333 }, { time: 4.4, gain: 0.3 }, { time: 6, gain: 0.3 }, { time: 6.3, gain: 1 }, { time: 10, gain: 1 }] },
+  // times that binary floating point cannot hold exactly (0.086 + 0.2 - 0.086 is a hair above 0.2): the end keeps the plateau
+  { name: "non-representable start, no fades", ducking: false,
+    track: { start: 0.086, trimStart: 0, trimEnd: 0.2, volume: 1, kind: "music", fadeIn: 0, fadeOut: 0 },
+    others: [],
+    curve: [{ time: 0.086, gain: 1 }, { time: 0.286, gain: 1 }] },
+  // the same track with a 0.1 s fade-out: 0.286 - 0.1 = 0.186, ending at exactly 0
+  { name: "non-representable start, fade-out", ducking: false,
+    track: { start: 0.086, trimStart: 0, trimEnd: 0.2, volume: 1, kind: "music", fadeIn: 0, fadeOut: 0.1 },
+    others: [],
+    curve: [{ time: 0.086, gain: 1 }, { time: 0.186, gain: 1 }, { time: 0.286, gain: 0 }] },
+  // a silent voice (volume 0) is not audible, so it does not duck
+  { name: "silent voice does not duck", ducking: true,
+    track: { start: 0, trimStart: 0, trimEnd: 10, volume: 1, kind: "music", fadeIn: 0, fadeOut: 0 },
+    others: [{ start: 2, trimStart: 0, trimEnd: 2, volume: 0, kind: "voice", fadeIn: 0, fadeOut: 0 }],
+    curve: [{ time: 0, gain: 1 }, { time: 10, gain: 1 }] },
   // a voice track is never ducked, and the music under a voice that starts before it begins already ducked
   { name: "music starting under a voice", ducking: true,
     track: { start: 3, trimStart: 0, trimEnd: 4, volume: 1, kind: "music", fadeIn: 0, fadeOut: 0 },
@@ -100,11 +115,18 @@ export const CURVE_VECTORS: CurveVector[] = [
 ];
 
 // Breakpoint times only: a 1 s fade-in (0 … 1) overlapping the ramp down (0.5 … 0.8) to a voice at 0.8 … 3 — the product of the two
-// is quadratic there, so the curve gets a breakpoint every 0.05 s across the overlap
+// is quadratic there, so the curve gets extra breakpoints across the overlap: every min(0.05, 0.9 * sqrt(0.04 * 1 * 0.3 / (0.7 * 1)) = 0.118) s
 export const OVERLAP_CURVE = {
   track: { start: 0, trimStart: 0, trimEnd: 10, volume: 1, kind: "music", fadeIn: 1, fadeOut: 0 } as MixTrack,
   others: [{ start: 0.8, trimStart: 0, trimEnd: 2.2, volume: 1, kind: "voice", fadeIn: 0, fadeOut: 0 }] as MixTrack[],
   times: [0, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 1, 3, 3.3, 10],
+};
+// A short, loud fade needs a finer step: volume 2, a 0.1 s fade-out (5.9 … 6) under the ramp up (5.8 … 6.1) from a voice at 3 … 5.8:
+// step = 0.9 * sqrt(0.04 * 0.1 * 0.3 / (0.7 * 2)) = 0.9 * 0.029277… = 0.0263493… -> 5.9 + 0.0263493 k for k = 1, 2, 3 (rounded to 4 decimals)
+export const FINE_OVERLAP_CURVE = {
+  track: { start: 0, trimStart: 0, trimEnd: 6, volume: 2, kind: "music", fadeIn: 0, fadeOut: 0.1 } as MixTrack,
+  others: [{ start: 3, trimStart: 0, trimEnd: 2.8, volume: 1, kind: "voice", fadeIn: 0, fadeOut: 0 }] as MixTrack[],
+  times: [0, 2.7, 3, 5.8, 5.9, 5.9263, 5.9527, 5.979, 6],
 };
 
 export interface ClipCurveVector { name: string; trimStart: number; trimEnd: number; speed: number; volume: number; muted: boolean; fadeIn: number; fadeOut: number; curve: { time: number; gain: number }[] }
