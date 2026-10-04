@@ -2,7 +2,7 @@ export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 10 as const;
+export const SCHEMA_VERSION = 11 as const;
 export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
 export type PostPlatform = (typeof POST_PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
@@ -39,6 +39,11 @@ export interface SpeedStep { from: number; speed: number }
 export interface SpeedCurve { id: SpeedCurveId; steps: SpeedStep[] }
 /** A preset is `slices` equal steps; a stored curve holds at most `maxSteps`; a step shorter than `minStep` source seconds is dropped. */
 export const SPEED_CURVE_LIMITS = { slices: 8, maxSteps: 64, minStep: 0.01 };
+
+export const MASK_IDS = ["none", "rounded", "circle"] as const;
+export type MaskId = (typeof MASK_IDS)[number];
+export const LAYER_LIMITS = { max: 8, maxVideoAtOnce: 2, defaultScale: 0.4, minDuration: 0.3 };
+export const MASK = { roundedRadius: 0.12 };   // corner radius as a fraction of the picture box's shorter side
 
 export const CLIP_KINDS = ["video", "photo"] as const;
 export type ClipKind = (typeof CLIP_KINDS)[number];
@@ -114,7 +119,11 @@ export interface Clip {
   speedCurve: SpeedCurve | null; // default null; photos always null; a curve means `speed` is 1 (model/timeline.ts does the maths)
   fadeIn: number;                // seconds of OUTPUT time, 0–5; photos always 0
   fadeOut: number;               // same
+  opacity: number;               // 0–1, default 1
+  mask: MaskId;                  // default "none"
 }
+/** A layer is a clip with a place on the project timeline. */
+export interface LayerClip extends Clip { start: number }   // project seconds
 export const isPhoto = (c: Clip) => c.kind === "photo";
 
 /** Rotation in degrees, wrapped into (−180, 180]. */
@@ -123,6 +132,8 @@ export function normaliseRotation(deg: number): number {
   const m = ((deg % 360) + 360) % 360;   // [0, 360)
   return m > 180 ? m - 360 : m;
 }
+/** A finite number clamped to 0–1; anything else → 1. */
+export const clampOpacity = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1);
 export const clampNum = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const finiteOr = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
 
@@ -344,6 +355,7 @@ export function clampBeatMarkers(v: unknown): number[] {
 export interface Project {
   id: string; name: string; createdAt: string; updatedAt: string; aspectRatio: AspectRatio;
   clips: Clip[]; overlays: Overlay[]; audioTracks: AudioTrack[]; posts: PostRecord[]; effects: EffectItem[]; schemaVersion: typeof SCHEMA_VERSION;
+  layers: LayerClip[];    // drawn in list order (later = on top)
   ducking: boolean;       // default false
   beatMarkers: number[];  // project seconds, sorted, unique within BEAT_LIMITS.minGap
 }
@@ -353,7 +365,7 @@ export function newVideoClip(a: Pick<Clip, "id" | "sourceUri" | "sourceDuration"
   return { ...a, trimStart: 0, trimEnd: a.sourceDuration, speed: 1, filter: null, volume: 1, muted: false,
     transitionOut: { type: "none", duration: 0 }, kind: "video", transform: { ...DEFAULT_TRANSFORM }, crop: { ...FULL_CROP },
     background: { ...BLACK_BACKGROUND }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
-    animation: { ...NO_CLIP_ANIMATION }, keyframes: [], speedCurve: null, fadeIn: 0, fadeOut: 0 };
+    animation: { ...NO_CLIP_ANIMATION }, keyframes: [], speedCurve: null, fadeIn: 0, fadeOut: 0, opacity: 1, mask: "none" };
 }
 /** A still-image clip: default length, silent, speed 1, never reversed. */
 export function newPhotoClip(a: Pick<Clip, "id" | "sourceUri" | "width" | "height"> & { seconds?: number }): Clip {
@@ -366,6 +378,23 @@ export function makeClip(partial: Partial<Clip> & Pick<Clip, "id" | "sourceDurat
 export function makePhotoClip(partial: Partial<Clip> & Pick<Clip, "id"> & { seconds?: number }): Clip {
   const { seconds, ...rest } = partial;
   return { ...newPhotoClip({ sourceUri: `file:///media/${partial.id}.jpg`, width: 1080, height: 1920, seconds, ...rest }), ...rest };
+}
+export function makeLayer(partial: Partial<LayerClip> & Pick<LayerClip, "id" | "sourceDuration">): LayerClip {
+  return { start: 0, ...makeClip(partial), ...partial };
+}
+/** A new layer from a clip: every nested value copied, centred at the default scale, no transition. */
+export function newLayer(clip: Clip, start: number): LayerClip {
+  const edge = (e: AnimEdge | null) => (e ? { ...e } : null);
+  return {
+    ...clip,
+    transform: { ...clip.transform, scale: LAYER_LIMITS.defaultScale, x: 0, y: 0 },
+    crop: { ...clip.crop }, background: { ...clip.background }, adjust: { ...clip.adjust },
+    animation: { in: edge(clip.animation.in), out: edge(clip.animation.out), combo: clip.animation.combo },
+    keyframes: clip.keyframes.map((k) => ({ ...k })),
+    speedCurve: clip.speedCurve ? { ...clip.speedCurve, steps: clip.speedCurve.steps.map((s) => ({ ...s })) } : null,
+    transitionOut: { type: "none", duration: 0 },
+    start: Math.round(Math.max(0, start) * 1000) / 1000,
+  };
 }
 export function makeOverlay(partial: Partial<TextOverlay> & Pick<TextOverlay, "id">): TextOverlay {
   return { kind: "text", text: "Your text", fontId: "bangers", fontScale: 0.07, color: "#F4F4F5", background: null, outline: true,
@@ -381,7 +410,7 @@ export function makeAudioTrack(partial: Partial<AudioTrack> & Pick<AudioTrack, "
 }
 export function makeProject(partial: Partial<Project> = {}): Project {
   return { id: "p1", name: "Project 1", createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
-    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], posts: [], effects: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [], ...partial };
+    aspectRatio: "9:16", clips: [], overlays: [], audioTracks: [], posts: [], effects: [], layers: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [], ...partial };
 }
 
 export function aspectRatioValue(r: AspectRatio): number {

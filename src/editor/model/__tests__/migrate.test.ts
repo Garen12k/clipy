@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { migrateProject } from "../migrate";
-import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker, NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem, type Overlay, type TextOverlay } from "../types";
+import { CROP_MIN, DEFAULT_ADJUST, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, FILTER_IDS, FULL_CROP, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker, NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, PHOTO, SCHEMA_VERSION, type Clip, type EffectItem, type Overlay, type TextOverlay } from "../types";
 
 const v1 = {
   id: "p1", name: "Old", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z",
@@ -112,7 +112,7 @@ test("v5 → v6 adds the look defaults", () => {
   const v5 = { ...makeProject(), schemaVersion: 5, clips: [c] } as Record<string, unknown>;
   delete v5.effects;
   const p = migrateProject(v5);
-  expect(p.schemaVersion).toBe(10);
+  expect(p.schemaVersion).toBe(11);
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
 });
@@ -123,7 +123,7 @@ test("v6 → v7 adds animation / keyframe defaults to clips and every overlay", 
   const t = makeOverlay({ id: "t" }) as unknown as Record<string, unknown>; delete t.animation; delete t.keyframes;
   const s = makeSticker({ id: "s" }) as unknown as Record<string, unknown>; delete s.animation; delete s.keyframes;
   const p = migrateProject({ ...makeProject(), schemaVersion: 6, clips: [c], overlays: [t, s] });
-  expect(p.schemaVersion).toBe(10);
+  expect(p.schemaVersion).toBe(11);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.overlays[0]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
   expect(p.overlays[1]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
@@ -156,7 +156,7 @@ test("sanity pass repairs motion fields; idempotent", () => {
 
 test("v1 chain reaches schema 9 with look, motion and speed-curve defaults", () => {
   const p = migrateProject(v1);
-  expect(p.schemaVersion).toBe(10);
+  expect(p.schemaVersion).toBe(11);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
@@ -217,7 +217,7 @@ test("v7 → v8 adds speedCurve: null to every clip", () => {
   const ph = makePhotoClip({ id: "p" }) as unknown as Record<string, unknown>;
   delete ph.speedCurve;
   const p = migrateProject({ ...makeProject(), schemaVersion: 7, clips: [c, ph] });
-  expect(p.schemaVersion).toBe(10);
+  expect(p.schemaVersion).toBe(11);
   expect(p.clips[0]).toMatchObject({ speedCurve: null, speed: 2 });
   expect(p.clips[1]).toMatchObject({ speedCurve: null, speed: 1 });
   expect(migrateProject(v1).clips[0].speedCurve).toBeNull();
@@ -250,7 +250,7 @@ test("v8 → v9 adds style, words and highlightColor to text and captions; stick
   const c = makeOverlay({ id: "c", kind: "caption" }) as unknown as Record<string, unknown>; delete c.style; delete c.words; delete c.highlightColor;
   const s = makeSticker({ id: "s" });
   const p = migrateProject({ ...makeProject(), schemaVersion: 8, overlays: [t, c, s] });
-  expect(p.schemaVersion).toBe(10);
+  expect(p.schemaVersion).toBe(11);
   expect(p.overlays[0]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
   expect(p.overlays[1]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
   expect(p.overlays[2]).toEqual(s);
@@ -316,7 +316,7 @@ test("v9 → v10: the single track becomes music with no fades; clips fades 0; d
   const raw = { ...makeProject(), schemaVersion: 9, clips: [clip], audioTracks: [track] } as Record<string, unknown>;
   delete raw.ducking; delete raw.beatMarkers;
   const p = migrateProject(raw);
-  expect(p.schemaVersion).toBe(10);
+  expect(p.schemaVersion).toBe(11);
   expect(p.audioTracks[0]).toMatchObject({ id: "a", kind: "music", fadeIn: 0, fadeOut: 0, volume: 1 });
   expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
   expect(p.ducking).toBe(false);
@@ -354,8 +354,63 @@ test("an audio track that is an array (or not an object at all) is dropped", () 
   expect(p.audioTracks.map((t) => t.id)).toEqual(["ok"]);
 });
 
-test("a v1 file reaches v10 with the audio defaults", () => {
+test("a v1 file reaches v11 with the audio defaults", () => {
   const p = migrateProject(v1);
-  expect(p).toMatchObject({ schemaVersion: 10, ducking: false, beatMarkers: [], audioTracks: [] });
+  expect(p).toMatchObject({ schemaVersion: 11, ducking: false, beatMarkers: [], audioTracks: [] });
   expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
+});
+
+describe("v11 — layers, opacity, mask", () => {
+  const raw = (over: Record<string, unknown> = {}) => ({ ...makeProject(), schemaVersion: 10, ...over }) as Record<string, unknown>;
+  const strip = (c: Clip) => { const { opacity: _o, mask: _m, ...rest } = c; return rest; };
+
+  test("v10 gets opacity 1, mask none and no layers", () => {
+    const p = migrateProject(raw({ clips: [strip(makeClip({ id: "a", sourceDuration: 5 }))], layers: undefined }));
+    expect(p.schemaVersion).toBe(11);
+    expect(p.layers).toEqual([]);
+    expect(p.clips[0]).toMatchObject({ opacity: 1, mask: "none" });
+  });
+
+  test("opacity is clamped (non-finite → 1) and an unknown mask becomes none", () => {
+    const c = (id: string, opacity: unknown, mask: unknown) => ({ ...makeClip({ id, sourceDuration: 5 }), opacity, mask });
+    const p = migrateProject(raw({ clips: [c("a", 4, "circle"), c("b", -1, "star"), c("c", NaN, 7), c("d", "x", "rounded")] }));
+    expect(p.clips.map((x) => [x.opacity, x.mask])).toEqual([[1, "circle"], [0, "none"], [1, "none"], [1, "rounded"]]);
+  });
+
+  test("layers go through the clip repairs, a finite start >= 0 and no transition", () => {
+    const l = { ...makeLayer({ id: "l1", sourceDuration: 5, start: -2 }), speed: 99, opacity: 3, mask: "x", transitionOut: { type: "fade", duration: 1 } };
+    const l2 = { ...makeLayer({ id: "l2", sourceDuration: 5 }), start: NaN };
+    const l3 = { ...makeLayer({ id: "l3", sourceDuration: 5 }), start: 4 };
+    const p = migrateProject(raw({ layers: [l, l2, l3] }));
+    expect(p.layers[0]).toMatchObject({ id: "l1", start: 0, speed: 1, opacity: 1, mask: "none", transitionOut: { type: "none", duration: 0 } });
+    expect(p.layers[1].start).toBe(0);
+    expect(p.layers[2]).toMatchObject({ start: 4, transform: DEFAULT_TRANSFORM });
+  });
+
+  test("layers with a duplicate id (of a layer or a main clip) are dropped, junk entries too, and at most 8 stay", () => {
+    const clips = [makeClip({ id: "c", sourceDuration: 5 })];
+    const layers = [makeLayer({ id: "a", sourceDuration: 5 }), makeLayer({ id: "a", sourceDuration: 5 }), makeLayer({ id: "c", sourceDuration: 5 }), null, 4, [], "s"];
+    expect(migrateProject(raw({ clips, layers })).layers.map((l) => l.id)).toEqual(["a"]);
+    const many = Array.from({ length: 12 }, (_, i) => makeLayer({ id: `l${i}`, sourceDuration: 5 }));
+    expect(migrateProject(raw({ layers: many })).layers.map((l) => l.id)).toEqual(many.slice(0, 8).map((l) => l.id));
+  });
+
+  test("three overlapping video layers are NOT dropped by the sanity pass", () => {
+    const layers = [0, 1, 2].map((i) => makeLayer({ id: `l${i}`, sourceDuration: 5, start: 0 }));
+    expect(migrateProject(raw({ layers })).layers).toHaveLength(3);
+  });
+
+  test("a photo layer is forced to the photo rules", () => {
+    const ph = { ...makePhotoClip({ id: "p" }), start: 1, speed: 3, reversed: true };
+    expect(migrateProject(raw({ layers: [ph] })).layers[0]).toMatchObject({ kind: "photo", speed: 1, reversed: false, muted: true, start: 1 });
+  });
+
+  test("is idempotent", () => {
+    const once = migrateProject(raw({ layers: [{ ...makeLayer({ id: "l", sourceDuration: 5, start: 2 }), opacity: 0.4, mask: "circle" }] }));
+    expect(migrateProject(JSON.parse(JSON.stringify(once)))).toEqual(once);
+  });
+
+  test("a v1 file reaches v11 with no layers", () => {
+    expect(migrateProject(v1).layers).toEqual([]);
+  });
 });
