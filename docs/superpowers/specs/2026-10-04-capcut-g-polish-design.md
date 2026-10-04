@@ -6,7 +6,7 @@
 
 ## 1. What the user gets
 
-1. **Export options:** frame rate 24 / 30 / 60 and quality Standard / High beside the resolution choice, remembered per project.
+1. **Export options:** frame rate 24 / 30 / 60 and quality High / Smaller file beside the resolution choice, remembered per project.
 2. **Cover:** pick the frame that represents the video, put a short title on it, save it to Photos; the drafts list shows it; Instagram uses that frame as the Reel's cover.
 3. **Snapping:** bars on the timeline click onto the playhead, clip cuts, other bars' edges and beat markers while they are moved or trimmed.
 4. **Multi-select:** select several main clips and delete, duplicate, filter, speed-change or change the volume of all of them in one step.
@@ -21,14 +21,14 @@ Out of scope: cloud sync, CapCut-style full-edit templates, a snapping on / off 
 export const SCHEMA_VERSION = 13 as const;
 export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
-export const EXPORT_QUALITIES = ["standard", "high"] as const;
+export const EXPORT_QUALITIES = ["high", "small"] as const;
 export type ExportQuality = (typeof EXPORT_QUALITIES)[number];
 export interface ExportSettings { fps: ExportFps; quality: ExportQuality }
-export const DEFAULT_EXPORT_SETTINGS: ExportSettings = { fps: 30, quality: "standard" };
+export const DEFAULT_EXPORT_SETTINGS: ExportSettings = { fps: 30, quality: "high" };
 export interface Cover { time: number; title: string }   // project seconds; title may be ""
 export const COVER_LIMITS = { titleMax: 40 };
 // Project gains:
-exportSettings: ExportSettings;   // default { fps: 30, quality: "standard" }
+exportSettings: ExportSettings;   // default { fps: 30, quality: "high" }
 cover: Cover | null;              // default null = the first frame, no title
 ```
 
@@ -36,7 +36,7 @@ The resolution stays what it is today — screen state of the export screen (108
 
 Migration v12 → v13 adds the defaults. Sanity pass (every load):
 
-- `exportSettings`: an fps not in `EXPORT_FPS` → 30; a quality not in `EXPORT_QUALITIES` → "standard"; not an object → the default.
+- `exportSettings`: an fps not in `EXPORT_FPS` → 30; a quality not in `EXPORT_QUALITIES` → "high"; not an object → the default.
 - `cover`: not an object, or `time` not a finite number → `null`. Otherwise `time` is rounded to 3 decimals and clamped to `[0, project length]`; `title` is trimmed, cut to 40 whole characters (code points) and trimmed again (so a cut never leaves a trailing space); a title that is not a string → `""`.
 
 Helpers in `src/editor/model/timeline.ts`:
@@ -46,9 +46,10 @@ Helpers in `src/editor/model/timeline.ts`:
 
 ## 3. Export options
 
-- `src/export/estimate.ts` owns the bitrate: `exportBitrate(res, settings)` = `BITRATE_MBPS[res] × 1e6 × FPS_BITRATE_FACTOR[fps] × QUALITY_BITRATE_FACTOR[quality]`, rounded, in bits per second, with `FPS_BITRATE_FACTOR = { 24: 0.9, 30: 1, 60: 1.5 }` and `QUALITY_BITRATE_FACTOR = { standard: 1, high: 1.5 }`. `estimateBytes(duration, res, settings)` = `duration × exportBitrate / 8`; the free-space check and the "Estimated size" line use it.
-- The request gains `fps` and `bitrate` (the number above). Swift: the video composition's frame duration is `CMTime(1, fps)` (an fps outside 24 / 30 / 60 → 30).
-- **Bitrate in the export.** The engine exports with `AVAssetExportSession` (it needs the Core Animation tool for text and stickers, which an `AVAssetWriter` pipeline cannot use), and that class has no bitrate setting. The nearest control is `fileLengthLimit`: the engine sets it to `(bitrate + 256 000 audio) × seconds / 8` bytes, which makes the session lower its bitrate to fit. It is a ceiling, not a target: a video that is naturally smaller is unchanged. `bitrate` 0 (an old JS bundle) → no limit, today's path. One Swift constant (`ExportSession.limitsFileLength`) switches the limit off if the first build shows it misbehaving.
+- **The default is exactly today's export.** 30 fps + High sends `fps: 30, bitrate: 0`, and with those values the Swift runs the code path it runs today: the frame duration is `CMTime(1, 30)` as before and **no file-length limit is set**. High never sets a limit at any frame rate. Only "Smaller file" uses the new, untested limit.
+- `src/export/estimate.ts` owns the numbers: `exportBitrate(res, settings)` = `BITRATE_MBPS[res] × 1e6 × FPS_BITRATE_FACTOR[fps] × QUALITY_BITRATE_FACTOR[quality]`, rounded, in bits per second, with `FPS_BITRATE_FACTOR = { 24: 0.9, 30: 1, 60: 1.5 }` and `QUALITY_BITRATE_FACTOR = { high: 1, small: 0.6 }`. `estimateBytes(duration, res, settings)` = `duration × exportBitrate / 8`; the free-space check and the "Estimated size" line use it. So High shows today's estimate (times the frame-rate factor) and Smaller file shows the capped estimate (60 % of it). `requestBitrate(res, settings)` is what the request carries: `0` for High, `exportBitrate(res, settings)` for Smaller file.
+- The request gains `fps` and `bitrate` (`requestBitrate`). Swift: the video composition's frame duration is `CMTime(1, fps)` (an fps outside 24 / 30 / 60 → 30).
+- **Smaller file.** The engine exports with `AVAssetExportSession` (it needs the Core Animation tool for text and stickers, which an `AVAssetWriter` pipeline cannot use), and that class has no bitrate setting. The nearest control is `fileLengthLimit`: when `bitrate` is above 0 the engine sets it to `(bitrate + 256 000 audio) × seconds / 8` bytes, which makes the session lower its bitrate to fit. It is a ceiling, not a target: a video that is naturally smaller is unchanged. `bitrate` 0 → the property is never touched. One Swift constant (`ExportSession.limitsFileLength`) switches the limit off for Smaller file too, if the first build shows it misbehaving.
 - Text / sticker motion is still sampled 30 times a second at every frame rate (Core Animation interpolates between samples).
 - The settings are **not** undo steps (like post records): changing them in the export screen writes the project directly and survives undo / redo.
 
@@ -96,7 +97,7 @@ One light haptic when a snap is entered (not while it is held, not when it is le
 
 ## 7. Screens
 
-- **Export screen:** three chip rows — Resolution (as today), Frame rate (`24 fps`, `30 fps`, `60 fps`), Quality (`Standard`, `High`) — then the estimated size.
+- **Export screen:** three chip rows — Resolution (as today), Frame rate (`24 fps`, `30 fps`, `60 fps`), Quality (`High`, `Smaller file`) — then the estimated size.
 - **Edit tools:** `…, duplicate, delete, select, ratio, cover`.
 - **Timeline:** the snap guide line; clips toggle in select mode.
 - **Drafts list card:** cover frame and cover title.
@@ -107,7 +108,7 @@ Model: migration and sanity pass, `coverTimeOf` / `frameAt`, `snap.ts` (hand-com
 
 ## 9. Risks
 
-- `fileLengthLimit` is the only bitrate lever on `AVAssetExportSession` and is unverified here: it may be approximate, and Standard now caps exports that were uncapped before. First-build check; `limitsFileLength` is the off switch.
+- `fileLengthLimit` is the only bitrate lever on `AVAssetExportSession` and is unverified here: it may be approximate or misbehave. It is used only by "Smaller file"; the default (High) export never sets it, so the default path is today's. First-build check; `limitsFileLength` is the off switch.
 - A 60 fps export doubles the compositor's work; sources are still mostly 30 fps (frames repeat).
 - The saved cover image is a screen capture scaled to 1080 px wide, not a render of the export engine: filters, effects, layers and text overlays of the project are not on it.
 - `thumb_offset` is documented by Meta in milliseconds; never sent live yet.

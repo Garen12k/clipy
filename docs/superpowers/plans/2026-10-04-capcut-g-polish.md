@@ -4,7 +4,7 @@
 
 **Goal:** Frame-rate and quality choices for the export, a cover (frame + title) per project that the drafts list and Instagram use, snapping for every timeline bar, and multi-select for main clips.
 
-**Architecture:** Schema v13 adds `Project.exportSettings` and `Project.cover`. Bitrate maths lives in `src/export/estimate.ts` and is sent to the engine as a number; snap maths lives in one new pure module `src/editor/model/snap.ts` with a small gesture-side helper (`src/editor/snapping.ts`); multi-select is one store field plus a generic `forClips` op that folds the existing single-clip ops over a list. The Swift change is two lines of behaviour (frame duration, file-length limit).
+**Architecture:** Schema v13 adds `Project.exportSettings` and `Project.cover`. Bitrate maths lives in `src/export/estimate.ts` and is sent to the engine as a number (0 = no limit, the default); snap maths lives in one new pure module `src/editor/model/snap.ts` with a small gesture-side helper (`src/editor/snapping.ts`); multi-select is one store field plus a generic `forClips` op that folds the existing single-clip ops over a list. The Swift change is two lines of behaviour (frame duration, file-length limit).
 
 **Tech Stack:** Expo SDK 57, TypeScript strict, Zustand, react-native-gesture-handler, `@react-native-community/slider`, `react-native-view-shot` (new, Task 5), `expo-media-library/legacy`, Jest + RNTL v14; Swift / AVFoundation (uncompiled); Supabase Edge Function code tested under Node.
 
@@ -14,7 +14,7 @@
 
 - **iPhone only.** No Android or web configuration, files or code paths.
 - **Expo Go must keep working:** the native module `modules/clipy-video` is absent there; nothing in this round may require it outside the export itself. `react-native-view-shot` is in Expo Go (SDK 57 docs); its use still fails gracefully.
-- **Projects without these features are unchanged:** defaults `exportSettings { fps: 30, quality: "standard" }`, `cover null`; same preview tree. (The export of a default project now carries a file-length limit — spec §3 — and nothing else differs.)
+- **Projects without these features are unchanged:** defaults `exportSettings { fps: 30, quality: "high" }`, `cover null`; same preview tree. **The default export (30 fps + High) is exactly today's:** the request carries `fps: 30, bitrate: 0`, the Swift frame duration is `CMTime(1, 30)` and no file-length limit is set. Only "Smaller file" takes the new capped path.
 - UI from `src/ui/` and `src/theme/theme.ts` only; **no hex literals** in screens (`src/__tests__/noHexLiterals.test.ts`).
 - A clip or layer by id is resolved with `findItem` / `itemOffsetAt` — never `project.clips.find` (multi-select deliberately works on main clips only and says so through `mainClipIds`).
 - **Only `src/editor/model/timeline.ts` multiplies / divides by `speed` or reads `speedCurve` steps.** New code gets lengths and source times from `clipDuration`, `clipStartTimes`, `layerEnd`, `sourceAfter`, `frameAt`.
@@ -64,19 +64,19 @@ import { clampCover, clampCoverTitle, clampExportSettings, COVER_LIMITS, DEFAULT
 test("schema is v13 and a new project has the polish defaults", () => {
   expect(SCHEMA_VERSION).toBe(13);
   expect(EXPORT_FPS).toEqual([24, 30, 60]);
-  expect(EXPORT_QUALITIES).toEqual(["standard", "high"]);
+  expect(EXPORT_QUALITIES).toEqual(["high", "small"]);
   expect(COVER_LIMITS.titleMax).toBe(40);
   const p = makeProject();
-  expect(p).toMatchObject({ schemaVersion: 13, exportSettings: { fps: 30, quality: "standard" }, cover: null });
+  expect(p).toMatchObject({ schemaVersion: 13, exportSettings: { fps: 30, quality: "high" }, cover: null });
   expect(p.exportSettings).not.toBe(DEFAULT_EXPORT_SETTINGS);   // its own object
 });
 
 test("clampExportSettings keeps known values and repairs the rest", () => {
-  expect(clampExportSettings({ fps: 60, quality: "high" })).toEqual({ fps: 60, quality: "high" });
-  expect(clampExportSettings({ fps: 24, quality: "ultra", extra: 1 })).toEqual({ fps: 24, quality: "standard" });
-  expect(clampExportSettings({ fps: 25, quality: "high" })).toEqual({ fps: 30, quality: "high" });
-  expect(clampExportSettings({ fps: "60" })).toEqual({ fps: 30, quality: "standard" });
-  for (const junk of [null, undefined, 7, "x", []]) expect(clampExportSettings(junk)).toEqual({ fps: 30, quality: "standard" });
+  expect(clampExportSettings({ fps: 60, quality: "small" })).toEqual({ fps: 60, quality: "small" });
+  expect(clampExportSettings({ fps: 24, quality: "ultra", extra: 1 })).toEqual({ fps: 24, quality: "high" });
+  expect(clampExportSettings({ fps: 25, quality: "small" })).toEqual({ fps: 30, quality: "small" });
+  expect(clampExportSettings({ fps: "60" })).toEqual({ fps: 30, quality: "high" });
+  for (const junk of [null, undefined, 7, "x", []]) expect(clampExportSettings(junk)).toEqual({ fps: 30, quality: "high" });
 });
 
 test("clampCoverTitle trims, cuts to 40 whole characters and never ends with a space", () => {
@@ -155,10 +155,10 @@ test("v12 → v13 adds export settings and no cover; the sanity pass repairs bot
   const clips = [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 6, speed: 2 })];   // 4 + 6 / 2 = 7 s
   const v12 = { ...makeProject({ clips }), schemaVersion: 12 } as Record<string, unknown>;
   delete v12.exportSettings; delete v12.cover;
-  expect(migrateProject(v12)).toMatchObject({ schemaVersion: 13, exportSettings: { fps: 30, quality: "standard" }, cover: null });
+  expect(migrateProject(v12)).toMatchObject({ schemaVersion: 13, exportSettings: { fps: 30, quality: "high" }, cover: null });
 
-  const bad = migrateProject({ ...makeProject({ clips }), exportSettings: { fps: 25, quality: "high" }, cover: { time: 99, title: "  " + "t".repeat(50) } });
-  expect(bad.exportSettings).toEqual({ fps: 30, quality: "high" });
+  const bad = migrateProject({ ...makeProject({ clips }), exportSettings: { fps: 25, quality: "small" }, cover: { time: 99, title: "  " + "t".repeat(50) } });
+  expect(bad.exportSettings).toEqual({ fps: 30, quality: "small" });
   expect(bad.cover).toEqual({ time: 7, title: "t".repeat(40) });
   expect(migrateProject(JSON.parse(JSON.stringify(bad)))).toEqual(bad);
 
@@ -168,7 +168,7 @@ test("v12 → v13 adds export settings and no cover; the sanity pass repairs bot
 });
 ```
 
-Also: extend the existing "v1 chain" test with `expect(p).toMatchObject({ exportSettings: { fps: 30, quality: "standard" }, cover: null })`.
+Also: extend the existing "v1 chain" test with `expect(p).toMatchObject({ exportSettings: { fps: 30, quality: "high" }, cover: null })`.
 
 - [ ] **Step 2: Run** `npx.cmd jest src/editor/model` → FAIL (missing exports, schema 12).
 - [ ] **Step 3: Implement.**
@@ -393,21 +393,21 @@ test("selecting anything else leaves the mode; deselecting does not; reset clear
 });
 
 test("setExportSettings writes the project without an undo step and survives undo / redo", () => {
-  st().setExportSettings({ fps: 60, quality: "high" });
-  expect(st().project?.exportSettings).toEqual({ fps: 60, quality: "high" });
+  st().setExportSettings({ fps: 60, quality: "small" });
+  expect(st().project?.exportSettings).toEqual({ fps: 60, quality: "small" });
   expect(st().past).toHaveLength(0);
   expect(st().dirty).toBe(true);
   st().apply((x) => setAspectRatio(x, "1:1"));
-  st().setExportSettings({ fps: 24, quality: "high" });
+  st().setExportSettings({ fps: 24, quality: "small" });
   st().undo();
-  expect(st().project).toMatchObject({ aspectRatio: "9:16", exportSettings: { fps: 24, quality: "high" } });
+  expect(st().project).toMatchObject({ aspectRatio: "9:16", exportSettings: { fps: 24, quality: "small" } });
   st().redo();
-  expect(st().project).toMatchObject({ aspectRatio: "1:1", exportSettings: { fps: 24, quality: "high" } });
+  expect(st().project).toMatchObject({ aspectRatio: "1:1", exportSettings: { fps: 24, quality: "small" } });
 });
 
 test("setExportSettings: unchanged or junk that clamps to what is stored does nothing", () => {
-  st().setExportSettings({ fps: 30, quality: "standard" });
-  st().setExportSettings({ fps: 25, quality: "ultra" } as never);   // clamps to 30 / standard = stored
+  st().setExportSettings({ fps: 30, quality: "high" });
+  st().setExportSettings({ fps: 25, quality: "ultra" } as never);   // clamps to 30 / high = stored
   expect(st().dirty).toBe(false);
   expect(st().project).toBe(p);
 });
@@ -477,13 +477,15 @@ export function setCover(p: Project, cover: Cover | null): Project {
 ```ts
 // estimate.ts
 export const FPS_BITRATE_FACTOR: Record<ExportFps, number> = { 24: 0.9, 30: 1, 60: 1.5 };
-export const QUALITY_BITRATE_FACTOR: Record<ExportQuality, number> = { standard: 1, high: 1.5 };
-export const QUALITY_LABELS: Record<ExportQuality, string> = { standard: "Standard", high: "High" };
+export const QUALITY_BITRATE_FACTOR: Record<ExportQuality, number> = { high: 1, small: 0.6 };
+export const QUALITY_LABELS: Record<ExportQuality, string> = { high: "High", small: "Smaller file" };
 export const exportBitrate = (res: Resolution, s: ExportSettings = DEFAULT_EXPORT_SETTINGS): number   // video bits per second, rounded
 export const estimateBytes = (durationSec: number, res: Resolution, s: ExportSettings = DEFAULT_EXPORT_SETTINGS): number
+/** What the request carries: 0 (no limit — today's export) for High, the capped bitrate for Smaller file. */
+export const requestBitrate = (res: Resolution, s: ExportSettings = DEFAULT_EXPORT_SETTINGS): number
 // modules/clipy-video/index.ts — ExportRequest gains:
 fps: ExportFps;      // frames per second of the exported video
-bitrate: number;     // video bits per second the export may use (0 = no limit)
+bitrate: number;     // `requestBitrate`: 0 = no file-length limit (High, the default); above 0 = the video bits per second the file may use (Smaller file)
 // useExport.ts
 start: (resolution: Resolution, settings?: ExportSettings) => Promise<void>   // settings default: project.exportSettings
 // ExportScreenBody.tsx — prop type becomes:
@@ -493,44 +495,52 @@ start: (r: Resolution, s: ExportSettings) => void
 - [ ] **Step 1: Failing tests.** Append to `estimate.test.ts` (merge the import into the file's existing one):
 
 ```ts
-import { exportBitrate, FPS_BITRATE_FACTOR, QUALITY_BITRATE_FACTOR } from "../estimate";
+import { exportBitrate, FPS_BITRATE_FACTOR, QUALITY_BITRATE_FACTOR, requestBitrate } from "../estimate";
 
 test("exportBitrate = resolution bitrate × fps factor × quality factor, in bits per second", () => {
   expect(FPS_BITRATE_FACTOR).toEqual({ 24: 0.9, 30: 1, 60: 1.5 });
-  expect(QUALITY_BITRATE_FACTOR).toEqual({ standard: 1, high: 1.5 });
-  expect(exportBitrate(1080)).toBe(10_000_000);                                    // the default: 30 fps, standard
-  expect(exportBitrate(1080, { fps: 30, quality: "high" })).toBe(15_000_000);      // 10 × 1.5
-  expect(exportBitrate(1080, { fps: 60, quality: "high" })).toBe(22_500_000);      // 10 × 1.5 × 1.5
-  expect(exportBitrate(720, { fps: 24, quality: "standard" })).toBe(4_500_000);    // 5 × 0.9
-  expect(exportBitrate(2160, { fps: 60, quality: "standard" })).toBe(52_500_000);  // 35 × 1.5
+  expect(QUALITY_BITRATE_FACTOR).toEqual({ high: 1, small: 0.6 });
+  expect(exportBitrate(1080)).toBe(10_000_000);                                    // the default: 30 fps, High — today's number
+  expect(exportBitrate(1080, { fps: 30, quality: "small" })).toBe(6_000_000);      // 10 × 0.6
+  expect(exportBitrate(1080, { fps: 60, quality: "small" })).toBe(9_000_000);      // 10 × 1.5 × 0.6
+  expect(exportBitrate(1080, { fps: 60, quality: "high" })).toBe(15_000_000);      // 10 × 1.5
+  expect(exportBitrate(720, { fps: 24, quality: "small" })).toBe(2_700_000);       // 5 × 0.9 × 0.6
+  expect(exportBitrate(2160, { fps: 60, quality: "high" })).toBe(52_500_000);      // 35 × 1.5
 });
 
 test("estimateBytes follows the settings; without them it is what it always was", () => {
   expect(estimateBytes(60, 1080)).toBe(75_000_000);                                    // 60 × 10e6 / 8
-  expect(estimateBytes(8, 1080, { fps: 60, quality: "high" })).toBe(22_500_000);       // 8 × 22.5e6 / 8
-  expect(estimateBytes(30, 720, { fps: 24, quality: "standard" })).toBe(16_875_000);   // 30 × 4.5e6 / 8
+  expect(estimateBytes(8, 1080, { fps: 60, quality: "small" })).toBe(9_000_000);       // 8 × 9e6 / 8
+  expect(estimateBytes(30, 720, { fps: 24, quality: "small" })).toBe(10_125_000);      // 30 × 2.7e6 / 8
+});
+
+test("requestBitrate: High never limits the file (0 = today's export); Smaller file sends the capped bitrate", () => {
+  expect(requestBitrate(1080)).toBe(0);                                            // the default
+  for (const fps of [24, 30, 60] as const) for (const res of [720, 1080, 2160] as const) expect(requestBitrate(res, { fps, quality: "high" })).toBe(0);
+  expect(requestBitrate(1080, { fps: 30, quality: "small" })).toBe(6_000_000);     // = exportBitrate
+  expect(requestBitrate(720, { fps: 24, quality: "small" })).toBe(2_700_000);
 });
 ```
 
-`ExportScreenBody.test.tsx` — new cases (the existing ones stay; the existing `expect(start).toHaveBeenCalledWith(720)` becomes `toHaveBeenCalledWith(720, { fps: 30, quality: "standard" })`):
-1. *idle shows the three rows with the project's choices selected:* project with `exportSettings: { fps: 24, quality: "high" }` → `getByRole("button", { name: "24 fps" })` and `"High"` are selected (`toBeSelected()`), `"30 fps"`, `"60 fps"`, `"Standard"` are not; text `Estimated size: 51 MB` (30 s × 13.5 Mbps / 8 = 50.6 MB).
-2. *picking a frame rate and a quality updates the estimate, is remembered and is what Export starts with:* put the project in the store (`useEditorStore.getState().setProject(project)`), render with a 30 s default project → `Estimated size: 38 MB` (37.5) → press `60 fps`, `High` → `Estimated size: 84 MB` (30 × 22.5 / 8 = 84.4) → `useEditorStore.getState().project?.exportSettings` equals `{ fps: 60, quality: "high" }` and `past` has length 0 → press `Export` → `start` called with `(1080, { fps: 60, quality: "high" })`.
+`ExportScreenBody.test.tsx` — new cases (the existing ones stay; the existing `expect(start).toHaveBeenCalledWith(720)` becomes `toHaveBeenCalledWith(720, { fps: 30, quality: "high" })`):
+1. *idle shows the three rows with the project's choices selected:* a default project → `30 fps` and `High` are selected (`toBeSelected()`); a project with `exportSettings: { fps: 24, quality: "small" }` → `getByRole("button", { name: "24 fps" })` and `"Smaller file"` are selected, `"30 fps"`, `"60 fps"`, `"High"` are not; text `Estimated size: 20 MB` (30 s × 5.4 Mbps / 8 = 20.25 MB; 5.4 = 10 × 0.9 × 0.6).
+2. *picking a frame rate and a quality updates the estimate, is remembered and is what Export starts with:* put the project in the store (`useEditorStore.getState().setProject(project)`), render with a 30 s default project → `Estimated size: 38 MB` (30 × 10 / 8 = 37.5 — today's number) → press `60 fps` → `Estimated size: 56 MB` (30 × 15 / 8 = 56.25) → press `Smaller file` → `Estimated size: 34 MB` (30 × 9 / 8 = 33.75) → `useEditorStore.getState().project?.exportSettings` equals `{ fps: 60, quality: "small" }` and `past` has length 0 → press `Export` → `start` called with `(1080, { fps: 60, quality: "small" })`.
 3. *the rows are also shown (and work) when native is unavailable* (status `"unavailable"`): the chips render; no Export button.
 4. *the finish line is unchanged:* `1080p · 0:30`.
 
-`useExport.test.ts` — new cases: (a) `start(1080)` on a project with `exportSettings { fps: 60, quality: "high" }` sends `fps: 60, bitrate: 22_500_000`; (b) `start(720, { fps: 24, quality: "standard" })` sends `fps: 24, bitrate: 4_500_000` whatever the project holds; (c) the free-space check uses the settings: `freeBytes` just under `2 × estimateBytes(total, 1080, high60)` → the "Not enough free space" error. Update the whole-request `toEqual` at the top of the file with `fps: 30, bitrate: 10_000_000`.
+`useExport.test.ts` — new cases: (a) **the default export is today's request:** `start(1080)` on a default project sends `fps: 30, bitrate: 0` (and every other field as before); (b) `start(1080)` on a project with `exportSettings { fps: 60, quality: "small" }` sends `fps: 60, bitrate: 9_000_000`; (c) `start(720, { fps: 24, quality: "high" })` sends `fps: 24, bitrate: 0` whatever the project holds; (d) the free-space check uses the settings: `freeBytes` just under `2 × estimateBytes(total, 1080, { fps: 60, quality: "high" })` → the "Not enough free space" error. Update the whole-request `toEqual` at the top of the file with `fps: 30, bitrate: 0`.
 
 - [ ] **Step 2: Run** → FAIL.
 - [ ] **Step 3: Implement.**
-  - `estimate.ts`: the constants above; `exportBitrate = (res, s = DEFAULT_EXPORT_SETTINGS) => Math.round(BITRATE_MBPS[res] * 1e6 * FPS_BITRATE_FACTOR[s.fps] * QUALITY_BITRATE_FACTOR[s.quality])`; `estimateBytes = (d, res, s = DEFAULT_EXPORT_SETTINGS) => (d * exportBitrate(res, s)) / 8`.
+  - `estimate.ts`: the constants above; `exportBitrate = (res, s = DEFAULT_EXPORT_SETTINGS) => Math.round(BITRATE_MBPS[res] * 1e6 * FPS_BITRATE_FACTOR[s.fps] * QUALITY_BITRATE_FACTOR[s.quality])`; `estimateBytes = (d, res, s = DEFAULT_EXPORT_SETTINGS) => (d * exportBitrate(res, s)) / 8`. `requestBitrate = (res, s = DEFAULT_EXPORT_SETTINGS) => (s.quality === "small" ? exportBitrate(res, s) : 0)`.
   - `index.ts`: the two `ExportRequest` fields (import `ExportFps`).
-  - `useExport.ts`: `start = useCallback(async (resolution: Resolution, settings: ExportSettings = project?.exportSettings ?? DEFAULT_EXPORT_SETTINGS) => …`; `need = estimateBytes(total, resolution, settings) * 2`; the request gets `fps: settings.fps, bitrate: exportBitrate(resolution, settings)`.
+  - `useExport.ts`: `start = useCallback(async (resolution: Resolution, settings: ExportSettings = project?.exportSettings ?? DEFAULT_EXPORT_SETTINGS) => …`; `need = estimateBytes(total, resolution, settings) * 2`; the request gets `fps: settings.fps, bitrate: requestBitrate(resolution, settings)`.
   - `ExportScreenBody.tsx`: `const [settings, setSettings] = useState<ExportSettings>(project.exportSettings)`; `const change = (patch: Partial<ExportSettings>) => { const next = { ...settings, ...patch }; setSettings(next); useEditorStore.getState().setExportSettings(next); }`. Inside the existing idle / unavailable block, after the resolution row and its 4K note: `<Body muted>Frame rate</Body>` + a chip row over `EXPORT_FPS` (label `` `${f} fps` ``, `selected={settings.fps === f}`, `onPress={() => change({ fps: f })}`); `<Body muted>Quality</Body>` + a chip row over `EXPORT_QUALITIES` (label `QUALITY_LABELS[q]`); the estimate line becomes `formatBytes(estimateBytes(duration, res, settings))`; Export calls `start(res, settings)`. Same `Chip`, `theme.space` gaps as the resolution row.
 - [ ] **Step 4:** `npm run typecheck`; `npm test`. **Step 5: Commit** `feat(export): frame rate and quality choices, remembered per project`.
 
 ---
 
-### Task 4: Swift — frame rate and file-length limit
+### Task 4: Swift — frame rate and the "Smaller file" limit
 
 **Depends on:** Task 1 (constants). The request field names are fixed above (`fps`, `bitrate`); Task 3 need not be merged.
 
@@ -549,7 +559,7 @@ static let frameRate: Int32 = 30                  // unchanged: the default rate
 static let frameRates: [Int32] = [24, 30, 60]     // = EXPORT_FPS in src/editor/model/types.ts
 static func frameRate(for fps: Int) -> Int32
 static let audioAllowance: Double = 256_000       // bits per second added to the limit for the sound track
-static let limitsFileLength = true                // the one switch: false → never set a limit
+static let limitsFileLength = true                // the one switch for the "Smaller file" path: false → never set a limit
 static func fileLengthLimit(bitrate: Double, seconds: Double) -> Int64?
 ```
 
@@ -572,7 +582,7 @@ test("the engine knows exactly the frame rates the app offers, and the same defa
   expect(code).toMatch(/@Field var bitrate: Double = 0\b/);
 });
 
-test("the request's frame rate drives the composition; the bitrate becomes a file-length limit behind one switch", () => {
+test("the request's frame rate drives the composition; a bitrate above 0 becomes a file-length limit behind one switch", () => {
   expect(code).toContain("let fps = Self.frameRate(for: request.fps)");
   expect(code).toContain("videoComposition.frameDuration = CMTime(value: 1, timescale: fps)");
   expect(code).not.toContain("videoComposition.frameDuration = CMTime(value: 1, timescale: ExportSession.frameRate)");
@@ -580,6 +590,16 @@ test("the request's frame rate drives the composition; the bitrate becomes a fil
   expect(code).toContain("static let audioAllowance: Double = 256_000");
   expect(code).toContain("let seconds = CMTimeGetSeconds(composition.duration)");
   expect(code).toContain("if let limit = Self.fileLengthLimit(bitrate: request.bitrate, seconds: seconds) { session.fileLengthLimit = limit }");
+});
+
+test("the default request (30 fps, bitrate 0) takes today's path: 30 fps frame duration, no file-length limit", () => {
+  // The record's defaults are the default request; `frameRate(for: 30)` is 30, so the frame duration is CMTime(1, 30) as before.
+  expect(code).toMatch(/@Field var fps: Int = 30\b/);
+  expect(code).toMatch(/@Field var bitrate: Double = 0\b/);
+  expect(code).toMatch(/return frameRates\.contains\(rate\) \? rate : frameRate\b/);
+  // The limit is assigned in exactly one place, and that place is skipped when the bitrate is not above 0.
+  expect(code.match(/\.fileLengthLimit = /g)).toHaveLength(1);
+  expect(code).toMatch(/guard limitsFileLength, bitrate\.isFinite, seconds\.isFinite, bitrate > 0, seconds > 0 else \{ return nil \}/);
 });
 ```
 
@@ -596,7 +616,7 @@ static func frameRate(for fps: Int) -> Int32 {
 }
 /// Bits per second allowed for the sound on top of the video bitrate when the file length is limited.
 static let audioAllowance: Double = 256_000
-/// `AVAssetExportSession` has no bitrate setting; `fileLengthLimit` is the nearest control. Set to false to export without it.
+/// `AVAssetExportSession` has no bitrate setting; `fileLengthLimit` is the nearest control. Only a request with a bitrate above 0 ("Smaller file") uses it; set to false to never use it.
 static let limitsFileLength = true
 /// Bytes the exported file may take: (video bitrate + audio allowance) × seconds / 8, rounded up. Nil = no limit.
 static func fileLengthLimit(bitrate: Double, seconds: Double) -> Int64? {
@@ -605,13 +625,13 @@ static func fileLengthLimit(bitrate: Double, seconds: Double) -> Int64? {
 }
 ```
 
-In `start(_:)`: `let fps = Self.frameRate(for: request.fps)` beside `renderSize`; `videoComposition.frameDuration = CMTime(value: 1, timescale: fps)`; right after `session.shouldOptimizeForNetworkUse = true`, on two lines exactly as the parity test pins them: `let seconds = CMTimeGetSeconds(composition.duration)` and `if let limit = Self.fileLengthLimit(bitrate: request.bitrate, seconds: seconds) { session.fileLengthLimit = limit }`. The existing `static let frameRate: Int32 = 30` line keeps no trailing comment (two tests match it up to the line end). `holdFrame` stays `1 / ExportSession.frameRate` (it is a source-edge length, not the output rate). Update the `frameRate` doc comment (default rate; hold frame; overlay sampling) and the two record fields with comments.
+In `start(_:)`: `let fps = Self.frameRate(for: request.fps)` beside `renderSize`; `videoComposition.frameDuration = CMTime(value: 1, timescale: fps)`; right after `session.shouldOptimizeForNetworkUse = true`, on two lines exactly as the parity test pins them: `let seconds = CMTimeGetSeconds(composition.duration)` and `if let limit = Self.fileLengthLimit(bitrate: request.bitrate, seconds: seconds) { session.fileLengthLimit = limit }`. The existing `static let frameRate: Int32 = 30` line keeps no trailing comment (two tests match it up to the line end). **Guard — the default request must take today's path:** with `fps: 30` the composition's frame duration is `CMTime(value: 1, timescale: 30)`, the value it has today, and with `bitrate: 0` `fileLengthLimit(…)` returns nil, so `session.fileLengthLimit` is never assigned (do not assign it anywhere else, and do not give it a "no limit" value). No other statement of `start(_:)` changes. `holdFrame` stays `1 / ExportSession.frameRate` (it is a source-edge length, not the output rate). Update the `frameRate` doc comment (default rate; hold frame; overlay sampling) and the two record fields with comments.
 
-XCTests in `ExportSessionTests.swift`: `frameRate(for:)` → 24, 30, 60 map to themselves, 25 / 0 / -1 / 1000 → 30; `fileLengthLimit(bitrate: 10_000_000, seconds: 8)` = 10 256 000 bytes ((10 000 000 + 256 000) × 8 / 8); `bitrate: 0`, `seconds: 0`, `.nan`, `.infinity` → nil; `ExportRequest()` defaults `fps == 30`, `bitrate == 0`.
+XCTests in `ExportSessionTests.swift`: `frameRate(for:)` → 24, 30, 60 map to themselves, 25 / 0 / -1 / 1000 → 30; **default path:** `ExportRequest()` has `fps == 30`, `bitrate == 0`, `ExportSession.frameRate(for: ExportRequest().fps) == ExportSession.frameRate` and `ExportSession.fileLengthLimit(bitrate: ExportRequest().bitrate, seconds: 8) == nil`; **Smaller file:** `fileLengthLimit(bitrate: 6_000_000, seconds: 8)` = 6 256 000 bytes ((6 000 000 + 256 000) × 8 / 8); `seconds: 0`, a negative bitrate, `.nan`, `.infinity` → nil.
 
-Verify by reading: `fileLengthLimit` is `var fileLengthLimit: Int64` on `AVAssetExportSession`; `Int32(clamping:)`; `@Field` with `Int` / `Double` defaults against `node_modules/expo-modules-core/ios` (Records). List in the report: unverified APIs (`fileLengthLimit` behaviour with a custom compositor and an animation tool).
+Verify by reading: `fileLengthLimit` is `var fileLengthLimit: Int64` on `AVAssetExportSession`; `Int32(clamping:)`; `@Field` with `Int` / `Double` defaults against `node_modules/expo-modules-core/ios` (Records). State in the report that you re-read `start(_:)` and that a request with `fps: 30, bitrate: 0` executes the same statements with the same values as before this task. List in the report: unverified APIs (`fileLengthLimit` behaviour with a custom compositor and an animation tool).
 
-- [ ] **Step 3:** `npm run typecheck`; `npm test`. **Step 4: Commit** `feat(ios): export frame rate and file-length limit from the request (uncompiled)`.
+- [ ] **Step 3:** `npm run typecheck`; `npm test`. **Step 4: Commit** `feat(ios): export frame rate; file-length limit for "Smaller file" only (uncompiled)`.
 
 ---
 
@@ -1008,8 +1028,8 @@ export function MultiSelectBar(): React.JSX.Element | null
 **Files:** `README.md`, `AGENTS.md`, the spec's Status line and a new "As built" list in it, `docs/superpowers/research/capcut-roadmap.md`.
 
 - [ ] **Step 1** —
-  - README: a new "Polish" section after "Layers" (Export options: what frame rate and quality do, that quality is a file-size ceiling; Cover: the tool, Save to Photos, the drafts list, Instagram only; Snapping: what snaps to what; Multi-select: how to enter and leave). "Posting" section: one line — the cover frame is sent to Instagram as the Reel's thumbnail; the other platforms pick their own.
-  - README "First native build — things to check", new items: **Frame rate** (a 24 and a 60 fps export report that rate and play smoothly; text animations still move); **Quality / file size** (Standard and High exports play to the END, High is larger than Standard, neither is far above the estimate — if an export is cut short or fails, set `ExportSession.limitsFileLength` to false); **60 fps export time** on a long project; **Cover on Instagram** (the Reel's cover is the chosen frame — `thumb_offset` is in milliseconds).
+  - README: a new "Polish" section after "Layers" (Export options: what frame rate does; High is the export as it always was; "Smaller file" asks the engine to keep the file under a size limit, a ceiling that is untested until the first build; Cover: the tool, Save to Photos, the drafts list, Instagram only; Snapping: what snaps to what; Multi-select: how to enter and leave). "Posting" section: one line — the cover frame is sent to Instagram as the Reel's thumbnail; the other platforms pick their own.
+  - README "First native build — things to check", new items: **Frame rate** (a 24 and a 60 fps export report that rate and play smoothly; text animations still move); **Smaller file** (a "Smaller file" export plays to the END, is smaller than the same export at High and not far above its estimate — if it is cut short or fails, set `ExportSession.limitsFileLength` to false; a High export is unaffected either way); **60 fps export time** on a long project; **Cover on Instagram** (the Reel's cover is the chosen frame — `thumb_offset` is in milliseconds).
   - AGENTS.md "This repo": `- Export options: keep EXPORT_FPS (src/editor/model/types.ts) ↔ ExportSession.frameRates identical; the bitrate is computed only in src/export/estimate.ts and sent in the request.` and `- Snapping: only src/editor/model/snap.ts computes snap targets and snapped times; bars use createSnapper (src/editor/snapping.ts).`
   - Spec: Status → `Implemented 2026-10-04 (Swift export unverified until an EAS build exists; on-device checklist pending)`; add an **As built** list under §7 with every deviation the task reports recorded (existing tests changed for snapping, anything the installed `react-native-view-shot` typings forced, etc.).
   - Roadmap group G: "Frame-rate and quality choice" → Have; "Cover / thumbnail editor" → Have; "Timeline snapping, multi-select" → Have (multi-select: main clips).
@@ -1018,7 +1038,7 @@ export function MultiSelectBar(): React.JSX.Element | null
 
 **Device checklist (user, Expo Go)** — start with `npx expo start --go --port 8090`, open the app on the iPhone, open a project with at least three clips, one text and one song.
 
-1. Tap **Export**. You should see three rows: Resolution, Frame rate, Quality. Tap **60 fps** and **High** — the estimated size grows. Close the export sheet, open it again: 60 fps and High are still chosen.
+1. Tap **Export**. You should see three rows: Resolution, Frame rate, Quality — **30 fps** and **High** are chosen. Tap **60 fps**: the estimated size grows. Tap **Smaller file**: it shrinks. Close the export sheet, open it again: 60 fps and Smaller file are still chosen.
 2. In the editor open **Edit** and scroll the tool row to the end. Tap **Cover**.
 3. Drag the slider — the picture changes. Type a title — it appears on the picture. Tap **Save to Photos** and allow access: the picture with the title is in the Photos app.
 4. Tap **Done**. Go back to the list of projects: the card shows the cover picture and the title.
