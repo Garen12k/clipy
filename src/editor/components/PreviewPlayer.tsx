@@ -9,7 +9,7 @@ import { aspectRatioValue, isPhoto, type Clip } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
 import { useEditorStore } from "@/src/editor/store";
 import { usePhotoPlayback } from "@/src/editor/usePhotoPlayback";
-import { canHandOver, nextPreloadTarget } from "@/src/editor/previewHandoff";
+import { canHandOver, keepRolling, nextPreloadTarget, shouldStartEarly, type StandbyState } from "@/src/editor/previewHandoff";
 import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -53,7 +53,7 @@ type PlayerSlot = {
   pendingSeek: number | null;
   /**
    * The source time the player was last seeked to while it stood still; null once it may have moved (playing, a timeUpdate,
-   * a new source), so the next paused seek always lands.
+   * a new source), so the next paused seek always lands. While `rolling` it keeps the time the player was started from.
    */
   lastSeek: number | null;
   appliedVolume: number | null;
@@ -65,11 +65,19 @@ type PlayerSlot = {
   appliedRate: number;
   /** The player's last reported status was `readyToPlay` (false from the moment a new file is asked for). */
   ready: boolean;
+  /**
+   * Standby only: it was started early (silent) from `lastSeek`, just before the cut onto `loadedClipId`, and is playing towards the
+   * hand-over. Cleared when it takes over, or when it is stopped because the cut is not coming after all.
+   */
+  rolling: boolean;
 };
+/** A slot as the hand-over decisions read it. */
+const standbyState = (slot: PlayerSlot): StandbyState =>
+  ({ clipId: slot.loadedClipId, sourceUri: slot.loadedSourceUri, seekedTo: slot.lastSeek, ready: slot.ready, pendingSeek: slot.pendingSeek, rolling: slot.rolling });
 /** A fresh player's slot. The standby player is created muted at volume 0; the active one's sound is written on first use. */
 const newSlot = (standby: boolean): PlayerSlot => ({
   loadedClipId: null, loadedSourceUri: null, pendingSeek: null, lastSeek: null,
-  appliedVolume: standby ? 0 : null, appliedMuted: standby ? true : null, appliedRate: 1, ready: false,
+  appliedVolume: standby ? 0 : null, appliedMuted: standby ? true : null, appliedRate: 1, ready: false, rolling: false,
 });
 
 export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: string) => void }) {
@@ -86,6 +94,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   // Two players, created once for the life of this component and released by the hook when it unmounts. One is ACTIVE (it drives the
   // picture, the sound and the playhead); the other is the STANDBY: paused and silent, holding the next clip's file at that clip's
   // first frame, so a cut between two files is a hand-over instead of a reload (a reload hangs the picture for 0.2–0.3 s on device).
+  // A ready player still needs 0.2–0.3 s after play() to get going, so the standby one is started, silent, that long before the cut.
   // preservesPitch is stored on the player and applied by expo-video to every item it loads: set it once.
   const first = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = false; p.audioMixingMode = "mixWithOthers"; p.preservesPitch = true; });
   const second = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = true; p.volume = 0; p.audioMixingMode = "mixWithOthers"; p.preservesPitch = true; });
@@ -99,14 +108,16 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   // The photo clip the active player was last paused for; null while a video is under the playhead.
   const pausedForPhotoId = useRef<string | null>(null);
 
-  /** Writes the active player's rate for `offsetInClip` of `clip` unless it already runs at it; true when it wrote. */
-  const applyRate = (clip: Clip, offsetInClip: number): boolean => {
-    const slot = slots[active.current];
+  /** Writes player `i`'s rate for `offsetInClip` of `clip` unless it already runs at it; true when it wrote. */
+  const applyRateTo = (i: number, clip: Clip, offsetInClip: number): boolean => {
+    const slot = slots[i];
     const rate = previewRate(clip, offsetInClip);
     if (slot.appliedRate === rate) return false;
-    players[active.current].playbackRate = rate; slot.appliedRate = rate;
+    players[i].playbackRate = rate; slot.appliedRate = rate;
     return true;
   };
+  /** The same for the active player. */
+  const applyRate = (clip: Clip, offsetInClip: number): boolean => applyRateTo(active.current, clip, offsetInClip);
   /** Writes player `i`'s volume and mute unless they are already in place (the volume only once it has moved enough). */
   const applySound = (i: number, muted: boolean, volume: number) => {
     const slot = slots[i];
@@ -156,8 +167,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     // undo, a Replace or a seek into the middle of a clip takes the load / seek path below on the active player, as ever).
     // The roles swap here, before anything is written, so the clip's sound and rate below go to the player that will show it.
     const standby = slots[1 - active.current];
-    const handOver = arriving && isPlaying
-      && canHandOver({ clipId: standby.loadedClipId, sourceUri: standby.loadedSourceUri, seekedTo: standby.lastSeek, ready: standby.ready, pendingSeek: standby.pendingSeek }, hit);
+    const handOver = arriving && isPlaying && canHandOver(standbyState(standby), hit);
     if (handOver) active.current = 1 - active.current;
     const slot = slots[active.current];
     const player = players[active.current];
@@ -179,10 +189,12 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     // crosses); `startPlayer` applies it when playback starts. A constant-speed clip's rate is written paused or not, as ever.
     const rateChanged = (isPlaying || !hasSpeedCurve(hit.clip)) && applyRate(hit.clip, hit.offsetInClip);
     if (handOver) {
-      // The new player already stands on the clip's first frame: start it, then stop and silence the one that showed the last
-      // clip (its rate is left alone: a rate write would start it again), and point the view at the new one.
+      // The new player already stands on the clip's first frame, or was started from it a moment ago (rolling: no second play();
+      // the playhead follows its timeUpdates from wherever it has got to). Start it if need be, then stop and silence the one that
+      // showed the last clip (its rate is left alone: a rate write would start it again), and point the view at the new one.
       slot.lastSeek = null;
-      player.play();
+      if (!slot.rolling) player.play();
+      slot.rolling = false;
       players[1 - active.current].pause();
       applySound(1 - active.current, true, 0);
       setActiveIndex(active.current);
@@ -217,17 +229,25 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     }
   }, [hit?.clip.id, hit?.clip.kind, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, hit?.clip.reversed, hit?.clip.speed, hit?.clip.speedCurve, hit?.clip.fadeIn, hit?.clip.fadeOut, recording, playhead, isPlaying, missing, project, first, second, seek, setPlaying]);
 
-  // Prepare the standby player for the next clip: load its file unless it already holds it, and stand on the clip's first frame.
+  // The standby player. Prepare it for the next clip: load its file unless it already holds it, and stand on the clip's first frame.
+  // Then, while playing, start it (silent, at the next clip's rate) once the current clip is down to its last HANDOFF_LEAD, so it is
+  // already moving at the cut; and stop it again if that cut is not coming after all (a pause, a seek away, an edit, the next clip
+  // changing) — it is then seeked back to the clip's start by the preload below, and never handed over from where it had got to.
   // Declared after the effect above, so after a hand-over it is the player that just left the screen that prepares the clip after.
-  // It re-runs with every edit (`project`), so every write is guarded by what the slot remembers; it never plays, pauses, or writes
-  // a rate (that would start the player) or the sound (the standby player is silent until it takes over).
-  const hitIndex = hit ? hit.index : -1;
+  // It re-runs with every playhead tick and every edit, so every write is guarded by what the slot remembers: one play(), one
+  // pause(), one seek, one rate write. It never writes the sound (the standby player is silent until it takes over).
   useEffect(() => {
-    if (!project || hitIndex < 0) return;
-    const target = nextPreloadTarget(project, hitIndex, missing);
-    if (!target) return;
-    const slot = slots[1 - active.current];
-    const player = players[1 - active.current];
+    const i = 1 - active.current;
+    const slot = slots[i];
+    const player = players[i];
+    const target = project && hit ? nextPreloadTarget(project, hit.index, missing) : null;
+    if (slot.rolling) {
+      if (keepRolling(hit, target, standbyState(slot), isPlaying)) return;
+      player.pause();
+      slot.rolling = false;
+      slot.lastSeek = null; // it has moved: the preload below seeks it back
+    }
+    if (!hit || !target) return;
     slot.loadedClipId = target.clip.id;
     if (slot.loadedSourceUri !== target.clip.sourceUri) {
       slot.loadedSourceUri = target.clip.sourceUri;
@@ -239,7 +259,13 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     }
     if (slot.pendingSeek !== null) slot.pendingSeek = target.sourceTime;
     else if (slot.lastSeek !== target.sourceTime) { player.currentTime = target.sourceTime; slot.lastSeek = target.sourceTime; }
-  }, [project, hitIndex, missing, first, second, slots]);
+    if (shouldStartEarly(hit, target, standbyState(slot), isPlaying)) {
+      // The rate first (written once: the hand-over finds it in place), then play. `lastSeek` stays: where it was started from.
+      applyRateTo(i, target.clip, 0);
+      player.play();
+      slot.rolling = true;
+    }
+  }, [project, hit, isPlaying, missing, first, second, slots]);
 
   // Play / pause toggles. Crossing between clips while playing is handled by the effects above.
   useEffect(() => {
