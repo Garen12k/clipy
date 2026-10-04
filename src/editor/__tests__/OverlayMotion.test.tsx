@@ -60,9 +60,9 @@ describe("overlay motion in the preview", () => {
     expect(screen.getByText("🔥")).toHaveStyle({ fontSize: 0.12 * H * 1.5 });
   });
 
-  test("a fade In at its start is fully transparent and keeps its tap target", async () => {
+  test("a fade In at its start is drawn at the 0.02 floor (iOS does not hit-test views below 0.01) and keeps its tap target", async () => {
     await show([makeOverlay({ id: "t", text: "Fade", start: 1, end: 5, animation: { in: { id: "fade", duration: 0.5 }, out: null, loop: null } })], 1);
-    expect(styleOf("overlay-t").opacity).toBe(0);
+    expect(styleOf("overlay-t").opacity).toBe(0.02);
     await fireEvent.press(screen.getByLabelText("Overlay Fade"));
     expect(store().selectedOverlayId).toBe("t");
   });
@@ -153,6 +153,82 @@ describe("selection frame with motion", () => {
     });
     expect(ov("k").keyframes[1].rotation).toBeCloseTo(65, 6);
     expect(ov("k").rotation).toBe(0);
+  });
+
+  test("a quarter twist the other way snaps to −90, not 270", async () => {
+    await show([keyedSticker()], 0, "k");                                  // on the first pin: rotation 0
+    const { rotate } = gestures("k");
+    await act(() => {
+      rotate.handlers.onStart({ rotation: 0 });
+      rotate.handlers.onUpdate({ rotation: -Math.PI / 2 + 0.01 });         // within 3° of the quarter turn
+      rotate.handlers.onFinalize({}, true);
+    });
+    expect(ov("k").keyframes[0].rotation).toBe(-90);
+  });
+
+  test("a pure drag keeps a pin's full turns", async () => {
+    await show([makeSticker({ id: "k", start: 0, end: 4, keyframes: [pin(0, { rotation: 720 })] })], 1, "k");
+    const { pan } = gestures("k");
+    await act(() => {
+      pan.handlers.onStart({ translationX: 0, translationY: 0 });
+      pan.handlers.onUpdate({ translationX: 20, translationY: 0 });
+      pan.handlers.onFinalize({}, true);
+    });
+    expect(ov("k").keyframes.map((f) => f.rotation)).toEqual([720, 720]);
+    expect(ov("k").keyframes[1].x).toBeCloseTo(0.6, 9);
+  });
+
+  test("a gesture that changes nothing writes no pin and opens no undo step", async () => {
+    await show([keyedSticker()], 1, "k");
+    const { pan, pinch, rotate } = gestures("k");
+    await act(() => {
+      pan.handlers.onStart({ translationX: 0, translationY: 0 });
+      pinch.handlers.onStart({ scale: 1 });
+      rotate.handlers.onStart({ rotation: 0 });
+      pan.handlers.onUpdate({ translationX: 0, translationY: 0 });
+      pinch.handlers.onUpdate({ scale: 1 });
+      rotate.handlers.onUpdate({ rotation: 0 });
+      pan.handlers.onFinalize({}, true);
+      pinch.handlers.onFinalize({}, true);
+      rotate.handlers.onFinalize({}, true);
+    });
+    expect(ov("k").keyframes.map((f) => f.t)).toEqual([0, 2]);
+    expect(store().past).toHaveLength(0);
+  });
+
+  test("a gesture that began but never started does not split the undo step or move the pin time", async () => {
+    await show([keyedSticker()], 1, "k");
+    const { pan, pinch, rotate } = gestures("k");
+    await act(() => {
+      pan.handlers.onStart({ translationX: 0, translationY: 0 });
+      pan.handlers.onUpdate({ translationX: 20, translationY: 0 });
+      pinch.handlers.onFinalize({}, false);                                // the pinch never activated
+      store().seek(1.5);
+      rotate.handlers.onStart({ rotation: 0 });
+      rotate.handlers.onUpdate({ rotation: 0.5 });
+      rotate.handlers.onFinalize({}, true);
+      pan.handlers.onFinalize({}, true);
+    });
+    expect(ov("k").keyframes.map((f) => f.t)).toEqual([0, 1, 2]);
+    expect(store().past).toHaveLength(1);
+  });
+
+  test("the unseen base copy takes no touches itself", async () => {
+    await show([slideText(), { ...keyedSticker(), id: "h", emoji: null, shape: "heart" }], 1, "t");
+    const hidden = within(screen.getByTestId("overlay-base-t")).getByText("Slide", { includeHiddenElements: true });
+    expect(hidden.props.pointerEvents).toBe("none");
+  });
+
+  test("another overlay appearing, or the frame appearing, never remounts a moving overlay", async () => {
+    await show([makeOverlay({ id: "e", text: "Early", start: 2, end: 5 }), keyedSticker(), slideText()], 1);
+    const sticker = screen.getByTestId("sticker-k");
+    const text = screen.getByTestId("overlay-t");
+    await act(() => { store().seek(2.5); });
+    expect(screen.getByText("Early")).toBeTruthy();
+    await act(() => { store().selectOverlay("k"); });
+    expect(screen.getByTestId("sticker-base-k")).toBeTruthy();
+    expect(screen.getByTestId("sticker-k")).toBe(sticker);
+    expect(screen.getByTestId("overlay-t")).toBe(text);
   });
 
   test("a drag without keyframes moves x / y as before", async () => {

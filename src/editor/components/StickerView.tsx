@@ -16,8 +16,8 @@ export function StickerView({ sticker: s, frameW, frameH, opacity, frameOnly, ch
       <View style={{ position: "absolute" }}>
         {frameOnly ? (
           s.shape
-            ? <View style={{ width: box, height: box }} />
-            : <Text aria-hidden style={{ fontSize, lineHeight: fontSize * 1.2, opacity: 0 }}>{s.emoji ?? "?"}</Text>
+            ? <View pointerEvents="none" style={{ width: box, height: box }} />
+            : <Text aria-hidden pointerEvents="none" style={{ fontSize, lineHeight: fontSize * 1.2, opacity: 0 }}>{s.emoji ?? "?"}</Text>
         ) : s.shape ? (
           <Svg width={box} height={box} viewBox="0 0 100 100"><Path testID={`sticker-shape-${s.id}`} d={SHAPES[s.shape].path} fill={s.color} /></Svg>
         ) : (

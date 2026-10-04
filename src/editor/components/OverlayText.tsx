@@ -16,7 +16,7 @@ export function OverlayText({ overlay: o, frameW, frameH, opacity, frameOnly, ch
       <View style={{ position: "absolute", maxWidth: l.maxWidth, padding: l.padding, borderRadius: l.padding / 2 }}>
         {o.background && !frameOnly && <View pointerEvents="none" style={{ position: "absolute", inset: 0, backgroundColor: o.background.color, opacity: o.background.opacity, borderRadius: l.padding / 2 }} />}
         {frameOnly
-          ? <Text aria-hidden style={{ fontFamily: FONTS[o.fontId].family, fontSize: l.fontSize, lineHeight: l.lineHeight, textAlign: o.align, opacity: 0 }}>{o.text}</Text>
+          ? <Text aria-hidden pointerEvents="none" style={{ fontFamily: FONTS[o.fontId].family, fontSize: l.fontSize, lineHeight: l.lineHeight, textAlign: o.align, opacity: 0 }}>{o.text}</Text>
           : <Text style={{ fontFamily: FONTS[o.fontId].family, fontSize: l.fontSize, lineHeight: l.lineHeight, color: o.color, textAlign: o.align, ...(outline ?? {}) }}>{o.text}</Text>}
         {children}
       </View>
