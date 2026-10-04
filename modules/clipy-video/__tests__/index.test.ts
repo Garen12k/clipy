@@ -11,7 +11,8 @@ jest.mock("expo-modules-core", () => {
 });
 
 import { requireOptionalNativeModule } from "expo-modules-core";
-import { curveSteps } from "@/src/editor/model/timeline";
+import { resolveClipMotion, sampleKeyframes } from "@/src/editor/model/motion";
+import { curveSteps, outputOffsetOf } from "@/src/editor/model/timeline";
 import { DEFAULT_ADJUST, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeSticker } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportClip, toExportEffect, toExportOverlay, transcribe } from "../index";
 
@@ -178,6 +179,26 @@ describe("toExportClip", () => {
       const e = toExportClip({ ...flashIn(), reversed: true });
       expect(e.reversed).toBe(true);
       expect(e.speedSpans).toEqual([1, 1, 1, 1, 1.5, 2, 3, 4].map((speed) => ({ duration: 1, speed })));
+    });
+    it("treats a curve with no steps as constant speed: no spans", () => {
+      const c = makeClip({ id: "a", sourceDuration: 4 });
+      expect(toExportClip({ ...c, speedCurve: { id: "hero", steps: [] } }).speedSpans).toEqual([]);
+    });
+    it("keyframes on a curved clip: the preview shows what the exported pins give at that output time", () => {
+      const pins = [makeKeyframe({ t: 0, x: 0 }), makeKeyframe({ t: 8, x: 1 })];
+      const base = makeClip({ id: "b", sourceDuration: 8, keyframes: pins });
+      const bullet = { ...base, speedCurve: { id: "bullet" as const, steps: curveSteps("bullet", 0, 8) } };
+      for (const c of [bullet, { ...bullet, reversed: true }, { ...bullet, trimStart: 1.5, trimEnd: 6.5 }]) {
+        const exported = toExportClip(c).keyframes;
+        for (const source of [2, 3, 4.25, 6]) {
+          const offset = outputOffsetOf(c, source);
+          const want = sampleKeyframes(exported, offset)!;
+          const got = resolveClipMotion(c, offset);
+          expect({ x: got.transform.x, y: got.transform.y, scale: got.transform.scale, rotation: got.transform.rotation, opacity: got.opacity }).toEqual(want);
+        }
+      }
+      // Bullet, forward, source 3 s: far from the 37.5 % a source-time ease would give.
+      expect(resolveClipMotion(bullet, outputOffsetOf(bullet, 3)).transform.x).not.toBeCloseTo(sampleKeyframes(pins, 3)!.x, 2);
     });
     it("sends only the spans inside the trim", () => {
       const e = toExportClip({ ...flashIn(), trimStart: 2.5, trimEnd: 4 });

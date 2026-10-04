@@ -4,13 +4,10 @@ import { coversFrame, placeClip } from "@/src/editor/model/clipLayout";
 import { activeEffects } from "@/src/editor/model/effectMath";
 import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
 import { frameSize } from "@/src/editor/model/ops";
-import { clipAt, isInTransitionWindow } from "@/src/editor/model/timeline";
-import type { Clip, Project } from "@/src/editor/model/types";
+import { clipAt, hasSpeedCurve, isInTransitionWindow } from "@/src/editor/model/timeline";
+import type { Project } from "@/src/editor/model/types";
 import { theme } from "@/src/theme/theme";
 import { Body } from "@/src/ui/Text";
-
-/** True when the clip plays on a speed curve. An empty step list counts as no curve — the rule `timeline.ts` goes by. */
-export const hasSpeedCurve = (c: Clip): boolean => c.speedCurve !== null && c.speedCurve.steps.length > 0;
 
 /**
  * Whether the preview only approximates the current frame: the clip has a filter (at a strength above 0), the playhead is in a

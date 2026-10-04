@@ -81,13 +81,17 @@ function SpeedBody({ clip, onClose }: { clip: Clip; onClose: () => void }) {
   const sliderTint = curveId ? theme.colors.textMuted : theme.colors.accent;
 
   const pickCurve = (id: SpeedCurveId | null) => {
-    if (id === curveId) return;
     const project = useEditorStore.getState().project;
     if (!project) return;
+    // Picking the active preset again is not skipped: the op re-spreads it over the clip's current trim.
     const next = setClipSpeedCurve(project, clip.id, id);
-    // The op hands back the same project when it refuses: the preset would leave the clip shorter than a clip may be.
-    // The toast lives on the screen under this sheet's Modal, so the sheet closes first.
-    if (next === project) { onClose(); useToast.getState().show("This clip is too short for a speed curve."); return; }
+    if (next === project) {
+      // The same project for the tile that is already selected: nothing to change — silently.
+      if (id === curveId) return;
+      // Otherwise the op refused: the preset would leave the clip shorter than a clip may be.
+      // The toast lives on the screen under this sheet's Modal, so the sheet closes first.
+      onClose(); useToast.getState().show("This clip is too short for a speed curve."); return;
+    }
     haptic("light");
     apply(() => next);
   };

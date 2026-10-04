@@ -43,6 +43,8 @@ As built:
 - A preset is refused (with a message) when the clip is too short for it. Choosing None always works; on a very short piece it lowers the constant speed so the clip keeps the minimum length.
 - In the preview, a reversed curved clip uses the forward step speeds (the preview plays reversed clips forwards).
 - Replace re-spreads the preset over the new clip, so the clip's length can change.
+- Setting any constant speed — including a template that sets speed 1 — clears the curve.
+- On a curved clip, keyframes ease between pins in output time (as the export does).
 
 Migration v7 → v8 adds `speedCurve: null`. Sanity pass: unknown id → null; non-finite / out-of-range steps repaired or dropped; unsorted steps sorted; an empty step list → null; a photo → null; a curve forces `speed` to 1.
 

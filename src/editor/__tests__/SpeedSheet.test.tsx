@@ -5,6 +5,7 @@ import * as Haptics from "expo-haptics";
 import { StyleSheet } from "react-native";
 import { SPEED_CURVES } from "@/src/editor/effects";
 import { setClipSpeedCurve } from "@/src/editor/model/ops";
+import { curveSteps } from "@/src/editor/model/timeline";
 import { makeClip, makeProject, SPEED_CURVE_IDS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
@@ -97,6 +98,31 @@ describe("curve tiles", () => {
     await press("Montage");
     expect(past()).toBe(1);
     expect(impact).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("re-picking the active preset after the trim changed re-spreads it over the new trim, as one undo step", async () => {
+    const { apply } = useEditorStore.getState();
+    apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "a" ? { ...c, trimStart: 2, trimEnd: 6 } : c)) }));
+    apply((p) => setClipSpeedCurve(p, "a", "hero"));
+    apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "a" ? { ...c, trimStart: 0, trimEnd: 8 } : c)) }));
+    expect(clip().speedCurve?.steps.map((s) => s.from)).toEqual([2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5]);
+    const onClose = jest.fn();
+    await render(<SpeedSheet clipId="a" visible onClose={onClose} />);
+    const before = past();
+    impact.mockClear();
+    await press("Hero");
+    expect(clip().speedCurve).toEqual({ id: "hero", steps: curveSteps("hero", 0, 8) });
+    expect(past()).toBe(before + 1);
+    expect(impact).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBeNull();
+    // Tapping it again changes nothing, silently.
+    impact.mockClear();
+    await press("Hero");
+    expect(past()).toBe(before + 1);
+    expect(impact).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
     expect(useToast.getState().message).toBeNull();
   });
 

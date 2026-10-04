@@ -1,7 +1,7 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { FONTS } from "@/src/editor/fonts";
 import { edgeDurations } from "@/src/editor/model/motion";
-import { clipDuration, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
+import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
 import { isSticker, type AnimEdge, type Align, type AspectRatio, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type Overlay } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
@@ -60,7 +60,7 @@ export function toExportClip(c: Clip): ExportClip {
     filterIntensity: c.filterIntensity, adjust: { ...c.adjust },
     animIn: toEdge(c.animation.in, edges.in), animOut: toEdge(c.animation.out, edges.out), animCombo: c.animation.combo,
     keyframes: outputKeyframes(c, length),
-    speedSpans: c.speedCurve ? playbackSpans(c) : [],
+    speedSpans: hasSpeedCurve(c) ? playbackSpans(c) : [],
   };
 }
 export interface ExportEffect { type: string; start: number; end: number; intensity: number }

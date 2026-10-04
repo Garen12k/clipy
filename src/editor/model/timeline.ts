@@ -10,6 +10,9 @@ export type SpeedSpan = { from: number; to: number; speed: number };
 /** The curve's steps, or null for a constant-speed clip (an empty step list counts as no curve). */
 const stepsOf = (c: Clip): SpeedStep[] | null => (c.speedCurve && c.speedCurve.steps.length > 0 ? c.speedCurve.steps : null);
 
+/** True when the clip plays on a speed curve — the one rule everything outside this file goes by (an empty step list is no curve). */
+export const hasSpeedCurve = (c: Clip): boolean => stepsOf(c) !== null;
+
 /** Eight equal slices of [trimStart, trimEnd] with the preset's speeds (clamped to SPEED_LIMITS). */
 export function curveSteps(id: SpeedCurveId, trimStart: number, trimEnd: number): SpeedStep[] {
   const slice = (trimEnd - trimStart) / SPEED_CURVE_LIMITS.slices;

@@ -1,5 +1,5 @@
 import type { AnimComboId, AnimInId, AnimLoopId, Clip, ClipTransform, Keyframe, Overlay } from "./types";
-import { clipDuration, sourceTimeAt } from "./timeline";
+import { clipDuration, hasSpeedCurve, outputOffsetOf, sourceTimeAt } from "./timeline";
 
 /**
  * Where a clip / text / sticker is and how opaque it is at a time: keyframes plus animation presets (spec section 4).
@@ -152,9 +152,15 @@ function edgeDelta(inEdge: Edge, outEdge: Edge, local: number, length: number, d
 }
 const lengthOf = (seconds: number): number => (Number.isFinite(seconds) && seconds > 0 ? seconds : 0);
 
-/** Base values of a clip at an output offset: keyframes (sampled at the source time) or the static transform with opacity 1. */
+/**
+ * Base values of a clip at an output offset: keyframes (sampled at the source time) or the static transform with opacity 1.
+ * On a speed curve source and output time are only piecewise proportional, so the pins are moved to output-local time (ascending —
+ * a reversed clip reverses them) and sampled at the offset: exactly what the export does with the pins it is sent.
+ */
 export function clipBaseAt(clip: Clip, offsetInClip: number): KeyValues {
-  const keyed = sampleKeyframes(clip.keyframes, sourceTimeAt(clip, offsetInClip));
+  const keyed = hasSpeedCurve(clip)
+    ? sampleKeyframes(clip.keyframes.map((k) => ({ ...k, t: outputOffsetOf(clip, k.t) })).sort((a, b) => a.t - b.t), offsetInClip)
+    : sampleKeyframes(clip.keyframes, sourceTimeAt(clip, offsetInClip));
   if (keyed) return keyed;
   const t = clip.transform;
   return { x: t.x, y: t.y, scale: t.scale, rotation: t.rotation, opacity: 1 };

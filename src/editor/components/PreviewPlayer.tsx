@@ -2,7 +2,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
-import { clipAt, clipStartTimes, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
+import { clipAt, clipStartTimes, hasSpeedCurve, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue, isPhoto, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { usePhotoPlayback } from "@/src/editor/usePhotoPlayback";
@@ -15,7 +15,7 @@ import { ClipGestures } from "./ClipGestures";
 import { EffectOverlays, useEffectTransform } from "./EffectLayer";
 import { FilterLayer } from "./FilterLayer";
 import { OverlayLayer } from "./OverlayLayer";
-import { hasSpeedCurve, needsPreviewTag, PreviewTag } from "./PreviewTag";
+import { needsPreviewTag, PreviewTag } from "./PreviewTag";
 import { TransitionLayer } from "./TransitionLayer";
 
 /** The view the effect transform is applied to: exactly the preview frame, so it scales about the frame's centre. */

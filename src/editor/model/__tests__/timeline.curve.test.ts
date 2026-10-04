@@ -1,6 +1,6 @@
 import { makeClip, makeProject, type Clip } from "../types";
 import {
-  clipAt, clipDuration, curveSteps, freezeSourceTime, outputOffsetOf, outputToSource, playbackSpans, rateAt, sourceTimeAt, sourceToOutput,
+  clipAt, clipDuration, curveSteps, freezeSourceTime, hasSpeedCurve, outputOffsetOf, outputToSource, playbackSpans, rateAt, sourceTimeAt, sourceToOutput,
   speedSpans, splitSourceRanges, totalDuration,
 } from "../timeline";
 
@@ -12,6 +12,13 @@ const curved = (id: Parameters<typeof curveSteps>[0], partial: Partial<Clip> = {
 // hero on 0–8: speeds 1, 2, 3, 0.5, 0.5, 3, 2, 1 for the 1 s slices.
 // Output lengths 1, 0.5, 1/3, 2, 2, 1/3, 0.5, 1 → boundaries 0, 1, 1.5, 11/6, 23/6, 35/6, 37/6, 20/3, 23/3.
 const hero = curved("hero");
+
+test("hasSpeedCurve: a curve with steps; null and an empty step list are constant speed", () => {
+  const plain = makeClip({ id: "c", sourceDuration: 8, speed: 2 });
+  expect(hasSpeedCurve(curved("hero"))).toBe(true);
+  expect(hasSpeedCurve(plain)).toBe(false);
+  expect(hasSpeedCurve({ ...plain, speedCurve: { id: "hero", steps: [] } })).toBe(false);
+});
 const HERO_DURATION = 1 + 0.5 + 0.3333333333 + 2 + 2 + 0.3333333333 + 0.5 + 1;   // 7.6666666666
 // flashIn on 0–8: 4, 3, 2, 1.5, 1, 1, 1, 1 → 0.25 + 1/3 + 0.5 + 2/3 + 4 = 5.75
 const flashIn = curved("flashIn");
