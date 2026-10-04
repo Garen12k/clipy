@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import { FONTS } from "@/src/editor/fonts";
-import { layoutOverlay } from "@/src/editor/model/overlayLayout";
+import { contrastFor, layoutOverlay } from "@/src/editor/model/overlayLayout";
 import type { TextOverlay } from "@/src/editor/model/types";
 
 /** `opacity`: the animated opacity (left out = no opacity style). `frameOnly`: an unseen copy that only gives the selection frame its place and size. */
@@ -24,9 +24,5 @@ export function OverlayText({ overlay: o, frameW, frameH, opacity, frameOnly, ch
   );
 }
 
-/** Black outline for light text, white for dark. */
-export function contrastFor(hex: string): string {
-  const n = parseInt(hex.replace("#", "").slice(0, 6), 16);
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? "#000000" : "#FFFFFF";
-}
+/** Lives in the mirrored layout pair now; re-exported so existing imports keep working. */
+export { contrastFor } from "@/src/editor/model/overlayLayout";

@@ -110,6 +110,28 @@ struct ExportClip: Record {
   @Field var speedSpans: [ExportSpeedSpan] = []    // a speed curve, in PLAYBACK order; empty → constant `speed`
 }
 
+/// `TextStyle` with shadow / glow flattened: a nil colour = that feature is off. The defaults are the neutral style.
+struct ExportTextStyle: Record {
+  @Field var opacity: Double = 1
+  @Field var letterSpacing: Double = 0             // fraction of the font size
+  @Field var lineSpacing: Double = 1               // × the normal line height
+  @Field var outlineColor: String?                 // JS `null` → nil (automatic contrast colour)
+  @Field var outlineWidth: Double = 1              // × the base outline width
+  @Field var shadowColor: String?                  // JS `null` → nil (no shadow)
+  @Field var shadowOpacity: Double = 0
+  @Field var shadowDistance: Double = 0            // fraction of the font size
+  @Field var shadowBlur: Double = 0                // fraction of the font size
+  @Field var glowColor: String?                    // JS `null` → nil (no glow)
+  @Field var glowSize: Double = 0                  // fraction of the font size
+}
+
+/// One spoken word of a caption.
+struct ExportCaptionWord: Record {
+  @Field var text: String = ""
+  @Field var start: Double = 0
+  @Field var end: Double = 0
+}
+
 struct ExportOverlay: Record {
   @Field var kind: String = "text"                 // text | caption | sticker
   @Field var emoji: String?                        // sticker: emoji character(s)
@@ -133,6 +155,10 @@ struct ExportOverlay: Record {
   @Field var animOut: ExportAnimEdge?
   @Field var animLoop: String?                     // one of `ANIM_LOOP_IDS`
   @Field var keyframes: [ExportKeyframe] = []      // t = seconds since the overlay's start
+  // Text style, caption words and highlight: `OverlayLayout.layout` turns the style into pixels.
+  @Field var style: ExportTextStyle = ExportTextStyle()
+  @Field var words: [ExportCaptionWord] = []       // captions only; start / end = seconds since the caption's start
+  @Field var highlightColor: String?               // captions only; JS `null` → nil (no word highlight)
 }
 
 struct ExportAudio: Record {
@@ -173,14 +199,6 @@ extension UIColor {
     let n: UInt32 = digits.count == 6 ? (UInt32(digits, radix: 16) ?? 0xFFFFFF) : 0xFFFFFF
     self.init(red: CGFloat((n >> 16) & 0xFF) / 255, green: CGFloat((n >> 8) & 0xFF) / 255, blue: CGFloat(n & 0xFF) / 255, alpha: 1)
   }
-}
-
-/// Mirror of `contrastFor` in src/editor/components/OverlayText.tsx: black outline for light text, white for dark.
-func contrastFor(hex: String) -> String {
-  let digits = String(hex.replacingOccurrences(of: "#", with: "").prefix(6))
-  let n = UInt32(digits, radix: 16) ?? 0          // TS: parseInt → NaN → channels 0 → "#FFFFFF"
-  let r = Double((n >> 16) & 255), g = Double((n >> 8) & 255), b = Double(n & 255)
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? "#000000" : "#FFFFFF"
 }
 
 /// A clip after its asset has been loaded and its trim clamped to the source.
