@@ -13,6 +13,12 @@ test("Grand Voyage tokens", () => {
   expect(theme.motion).toMatchObject({ press: 120, fade: 200, stagger: 40, minLoading: 1200, fontTimeout: 5000 });
 });
 
+test("audio lane colours: one per kind, all different from the other lanes", () => {
+  expect(theme.colors).toMatchObject({ laneMusic: "#3BA7C9", laneVoice: "#4FA89B", laneSfx: "#E0916A" });
+  const lanes = [theme.colors.laneText, theme.colors.laneSticker, theme.colors.laneMusic, theme.colors.laneEffect, theme.colors.laneVoice, theme.colors.laneSfx];
+  expect(new Set(lanes).size).toBe(lanes.length);
+});
+
 test("old tokens are gone", () => {
   for (const k of ["highlight", "straw", "accentPressed"]) expect(k in theme.colors).toBe(false);
   expect("heading" in theme.fonts).toBe(false);

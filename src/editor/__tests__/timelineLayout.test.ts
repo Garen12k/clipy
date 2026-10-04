@@ -1,6 +1,7 @@
 import { curveSteps } from "@/src/editor/model/timeline";
 import { makeClip } from "@/src/editor/model/types";
-import { indexFromDrop, LANE_GAP, LANE_HEIGHT, laneTop, stripWidth, thumbInterval, thumbTimes, TIMELINE_HEIGHT } from "../timelineLayout";
+import { makeAudioTrack, makeProject } from "@/src/editor/model/types";
+import { audioLaneKinds, indexFromDrop, LANE_GAP, LANE_HEIGHT, laneTop, stripWidth, thumbInterval, thumbTimes, TIMELINE_HEIGHT, timelineHeight } from "../timelineLayout";
 
 const c = makeClip({ id: "a", sourceDuration: 10, trimStart: 2, trimEnd: 6 }); // 4 s
 
@@ -43,6 +44,26 @@ test("lanes sit under the clip strip", () => {
   expect(laneTop(0)).toBe(120);
   expect(laneTop(1)).toBe(120 + LANE_HEIGHT + LANE_GAP);
   expect(laneTop(2)).toBe(120 + 2 * (LANE_HEIGHT + LANE_GAP));
+});
+
+test("audioLaneKinds: the kinds in use, always in the order music, voice, sfx", () => {
+  const t = (id: string, kind: "music" | "voice" | "sfx") => makeAudioTrack({ id, kind, sourceDuration: 5 });
+  expect(audioLaneKinds(makeProject())).toEqual([]);
+  expect(audioLaneKinds(makeProject({ audioTracks: [t("a", "voice"), t("b", "voice")] }))).toEqual(["voice"]);
+  expect(audioLaneKinds(makeProject({ audioTracks: [t("a", "sfx"), t("b", "music")] }))).toEqual(["music", "sfx"]);
+  expect(audioLaneKinds(makeProject({ audioTracks: [t("a", "sfx"), t("b", "voice"), t("c", "music"), t("d", "sfx")] }))).toEqual(["music", "voice", "sfx"]);
+});
+
+test("timelineHeight: the clip area, the overlay lane, the audio lanes (never fewer than one) and the effects lane", () => {
+  const lane = LANE_HEIGHT + LANE_GAP;
+  expect(timelineHeight(0)).toBe(216);   // no audio: one empty music lane, the height before audio lanes
+  expect(timelineHeight(1)).toBe(216);
+  expect(timelineHeight(1)).toBe(TIMELINE_HEIGHT);
+  expect(timelineHeight(2)).toBe(216 + lane);
+  expect(timelineHeight(3)).toBe(216 + 2 * lane);
+  expect(timelineHeight(3)).toBe(280);
+  // The effects lane comes after the audio lanes.
+  expect(laneTop(4)).toBe(120 + 4 * lane);
 });
 
 test("thumbTimes on a curved clip: the source time under each output-second mark", () => {
