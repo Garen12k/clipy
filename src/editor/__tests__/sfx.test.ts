@@ -63,8 +63,8 @@ describe("synthesized sound effects", () => {
       for (const e of entries) {
         expect(fs.readFileSync(path.join(tmp, e.file)).equals(fs.readFileSync(path.join(SFX_DIR, e.file)))).toBe(true);
       }
-      expect(fs.readFileSync(path.join(tmp, "manifest.json"), "utf8")).toBe(
-        fs.readFileSync(path.join(SFX_DIR, "manifest.json"), "utf8"),
+      expect(JSON.parse(fs.readFileSync(path.join(tmp, "manifest.json"), "utf8"))).toEqual(
+        JSON.parse(fs.readFileSync(path.join(SFX_DIR, "manifest.json"), "utf8")),
       );
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });

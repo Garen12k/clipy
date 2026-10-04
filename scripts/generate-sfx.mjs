@@ -1,7 +1,7 @@
 // Generates the bundled sound effects: ten mono 44.1 kHz 16-bit PCM WAV files plus manifest.json.
 // Usage: node scripts/generate-sfx.mjs [outDir]   (default: assets/sfx)
 // Plain Node, no dependencies. Fully deterministic: noise comes from a seeded LCG, nothing reads
-// the clock or Math.random, so running it twice gives byte-identical files.
+// the clock or Math.random, so running it twice gives byte-identical .wav files (manifest.json is the same JSON).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
