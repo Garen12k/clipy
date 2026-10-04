@@ -16,8 +16,21 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const projectDir = (id: string) => `${root}/${id}`;
   const jsonPath = (id: string) => `${projectDir(id)}/project.json`;
   const thumbPath = (id: string) => `${projectDir(id)}/thumb.jpg`;
-  const coverPath = (id: string, time: number) => `${projectDir(id)}/cover-${Math.round(time * 1000)}.jpg`;
-  const isCoverName = (name: string) => /^cover-\d+\.jpg$/.test(name);
+  /** Any text as part of a file name. */
+  const namePart = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, "_");
+  const stemOf = (uri: string) => (uri.split("/").pop() ?? "").replace(/\.[A-Za-z0-9]+$/, "");
+  const ms = (seconds: number) => Math.round(seconds * 1000);
+  /**
+   * The cover picture's file, named after the frame it holds — cover time, clip, source file and source time — so a
+   * change of the frame under the cover (a trim, a reorder, replaced media) is another name: a picture is never
+   * rewritten under a name it already had (Image caches by uri). Null without a cover or without a frame.
+   */
+  const coverFrame = (p: Project) => {
+    const f = p.cover ? frameAt(p, coverTimeOf(p)) : null;
+    return f ? { ...f, path: `${projectDir(p.id)}/cover-${ms(coverTimeOf(p))}-${namePart(f.clip.id)}-${namePart(stemOf(f.clip.sourceUri))}-${ms(f.sourceTime)}.jpg` } : null;
+  };
+  /** Every cover file this app has written, the older `cover-<ms>.jpg` included. */
+  const isCoverName = (name: string) => /^cover-[A-Za-z0-9_-]+\.jpg$/.test(name);
 
   function parse(text: string): Project { return migrateProject(JSON.parse(text)); }
 
@@ -47,18 +60,16 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   }
 
   /**
-   * The drafts list's picture of the cover: `cover-<ms>.jpg` holds the frame at the cover time (read clamped), written
-   * only when missing. Older cover files go once the new one is there; a project without a cover keeps none.
+   * The drafts list's picture of the cover: the file `coverFrame` names holds the frame at the cover time (read clamped),
+   * written only when missing. Older cover files go once the new one is there; a project without a cover keeps none.
    */
   async function writeCover(p: Project): Promise<void> {
     try {
       const names = await fs.list(projectDir(p.id));
-      const want = p.cover ? coverPath(p.id, coverTimeOf(p)) : null;
-      if (want && !(await fs.exists(want))) {
-        const f = frameAt(p, coverTimeOf(p));
-        if (!f) return;
-        await fs.copy(f.clip.kind === "photo" ? f.clip.sourceUri : await deps.thumbnail(f.clip.sourceUri, Math.round(f.sourceTime * 1000)), want);
-      }
+      const f = coverFrame(p), want = f?.path ?? null;
+      if (p.cover && !f) return;
+      if (f && !(await fs.exists(f.path)))
+        await fs.copy(f.clip.kind === "photo" ? f.clip.sourceUri : await deps.thumbnail(f.clip.sourceUri, ms(f.sourceTime)), f.path);
       for (const name of names) {
         const path = `${projectDir(p.id)}/${name}`;
         if (isCoverName(name) && path !== want) await fs.remove(path);
@@ -116,7 +127,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     for (const id of await fs.list(root)) {
       try {
         const p = parse(await fs.readText(jsonPath(id)));
-        const cover = p.cover ? coverPath(id, coverTimeOf(p)) : null;
+        const cover = coverFrame(p)?.path ?? null;
         out.push({ id: p.id, name: p.name, durationSec: totalDuration(p), updatedAt: p.updatedAt,
           thumbUri: cover && (await fs.exists(cover)) ? cover : (await fs.exists(thumbPath(id))) ? thumbPath(id) : null, broken: false,
           postedTo: POST_PLATFORMS.filter((pl) => p.posts.some((r) => r.platform === pl)), coverTitle: p.cover?.title ?? "" });

@@ -16,7 +16,7 @@ jest.mock("expo-audio", () => ({
   requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: "granted", canAskAgain: true, expires: "never" })),
 }));
 // Cover sheet deps (EditorToolbar always renders CoverSheet): a capture that returns a temp file, Photos permission granted.
-jest.mock("react-native-view-shot", () => ({ captureRef: jest.fn(async () => "file:///tmp/capture.jpg") }));
+jest.mock("react-native-view-shot", () => ({ captureRef: jest.fn(async () => "file:///tmp/capture.jpg"), releaseCapture: jest.fn() }));
 jest.mock("expo-media-library/legacy", () => ({ requestPermissionsAsync: jest.fn(async () => ({ granted: true })), saveToLibraryAsync: jest.fn(async () => {}) }));
 jest.mock("expo-document-picker", () => ({ getDocumentAsync: async () => ({ canceled: true }) }));
 jest.mock("expo-asset", () => ({ Asset: { fromModule: () => ({ downloadAsync: async () => {}, localUri: null, uri: "" }) } }));
