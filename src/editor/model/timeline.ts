@@ -7,6 +7,12 @@ export const outputToSource = (c: Clip, offsetInClip: number): number => c.trimS
 /** Source-file seconds shown at `offsetInClip`: mirrored inside the trim span when the clip is reversed. Also where a split cuts. */
 export const freezeSourceTime = (c: Clip, offsetInClip: number): number =>
   c.reversed ? c.trimEnd - offsetInClip * c.speed : outputToSource(c, offsetInClip);
+/** Reversed-aware source time for an output offset — `freezeSourceTime` under the name motion code reads best with. */
+export const sourceTimeAt = freezeSourceTime;
+/** Inverse of `sourceTimeAt`: the output offset at which a source time shows (may fall outside [0, clipDuration]). */
+export function outputOffsetOf(c: Clip, sourceTime: number): number {
+  return (c.reversed ? c.trimEnd - sourceTime : sourceTime - c.trimStart) / c.speed;
+}
 
 /** Source spans of the two halves of a split at `offsetInClip`: `left` plays first in the output. Reversed clips play their span backwards. */
 export function splitSourceRanges(c: Clip, offsetInClip: number): { left: [number, number]; right: [number, number] } {
