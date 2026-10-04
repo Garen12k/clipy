@@ -1,6 +1,6 @@
 import { normaliseTransitions } from "./ops";
 import {
-  clampAdjust, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, isHexColor, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
+  clampAdjust, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, FONT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, isHexColor, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
   type Clip, type ClipAdjust, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type EffectItem, type Overlay, type PostRecord, type Project, type ShapeId,
 } from "./types";
 
@@ -33,10 +33,11 @@ function withMotion(o: Record<string, unknown>): Overlay {
 function withTextStyle(o: Overlay): Overlay {
   if (o.kind === "sticker") return o;
   const style = clampTextStyle((o as unknown as Record<string, unknown>).style);
-  if (o.kind !== "caption") return { ...o, style, words: [], highlightColor: null };
+  const fontId = (FONT_IDS as readonly unknown[]).includes((o as unknown as Record<string, unknown>).fontId) ? o.fontId : "montserrat";
+  if (o.kind !== "caption") return { ...o, fontId, style, words: [], highlightColor: null };
   const text = typeof o.text === "string" ? o.text : "";
   const start = typeof o.start === "number" ? o.start : 0, end = typeof o.end === "number" ? o.end : 0;
-  return { ...o, style, words: clampCaptionWords(o.words, text, end - start), highlightColor: isHexColor(o.highlightColor) ? o.highlightColor : null };
+  return { ...o, fontId, style, words: clampCaptionWords(o.words, text, end - start), highlightColor: isHexColor(o.highlightColor) ? o.highlightColor : null };
 }
 
 /**

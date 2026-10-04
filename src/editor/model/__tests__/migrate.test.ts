@@ -279,3 +279,16 @@ test("sanity pass repairs text style, caption words and highlight; idempotent", 
   expect(p.overlays[4]).not.toHaveProperty("words");
   expect(migrateProject(p)).toEqual(p);
 });
+
+test("sanity pass: an unknown fontId on a text or caption becomes montserrat; valid ids untouched", () => {
+  const p = migrateProject(makeProject({
+    overlays: [
+      { ...makeOverlay({ id: "a" }), fontId: "comicSans" } as unknown as Overlay,
+      { ...makeOverlay({ id: "b", kind: "caption", text: "x", start: 0, end: 1 }), fontId: 7 } as unknown as Overlay,
+      makeOverlay({ id: "c", fontId: "dancingScript" as never }),
+      makeOverlay({ id: "d", fontId: "bangers" }),
+    ],
+  }));
+  expect(p.overlays.map((o) => (o as TextOverlay).fontId)).toEqual(["montserrat", "montserrat", "dancingScript", "bangers"]);
+  expect(migrateProject(p)).toEqual(p);
+});

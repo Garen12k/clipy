@@ -7,7 +7,8 @@ export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"
 export type PostPlatform = (typeof POST_PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<PostPlatform, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook", x: "X" };
 export interface PostRecord { platform: PostPlatform; url: string | null; postedAt: string }
-export const FONT_IDS = ["bangers", "anton", "oswald", "montserrat", "pacifico", "permanentMarker", "lobster", "roboto"] as const;
+export const FONT_IDS = ["bangers", "anton", "oswald", "montserrat", "pacifico", "permanentMarker", "lobster", "roboto",
+  "bebasNeue", "poppins", "playfair", "fredoka", "caveat", "pressStart", "righteous", "dancingScript"] as const;
 export type FontId = (typeof FONT_IDS)[number];
 export type Align = "left" | "center" | "right";
 export const OVERLAY_LIMITS = { fontScale: [0.02, 0.25] as const, scale: [0.2, 5] as const, minDuration: 0.2 };
