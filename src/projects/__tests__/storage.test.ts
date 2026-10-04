@@ -1,4 +1,4 @@
-import { SCHEMA_VERSION } from "@/src/editor/model/types";
+import { makeClip, makePhotoClip, makeProject, SCHEMA_VERSION, type Project } from "@/src/editor/model/types";
 import { memoryFs } from "../fs";
 import { makeStorage, type PickedAsset } from "../storage";
 
@@ -225,4 +225,146 @@ test("extension: a photo prefers the uri extension (converted JPEG with a .HEIC 
   expect(clips[0].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id1.jpg`);
   expect(clips[1].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id2.mov`);
   expect(clips[2].sourceUri).toBe(`${fs.documentDir}projects/proj/media/id3.heic`);
+});
+
+describe("cover file", () => {
+  const dir = "file:///doc/projects/id1";
+  const a = makeClip({ id: "a", sourceDuration: 4 });
+  const b = makeClip({ id: "b", sourceDuration: 6 });
+  const withCover = (cover: Project["cover"] = { time: 5, title: "Trip" }, clips = [a, b]) => makeProject({ id: "id1", clips, cover });
+  /** A saved project with today's thumbnail in its folder. */
+  async function saved(p: Project) {
+    const s = setup();
+    await s.storage.saveProject(p);
+    s.fs.files.set(`${dir}/thumb.jpg`, "THUMB");
+    return s;
+  }
+  const covers = (fs: { files: Map<string, string> }, folder = dir) => [...fs.files.keys()].filter((f) => f.startsWith(`${folder}/cover-`)).sort();
+
+  test("writeCover writes the frame at the cover time and removes older cover files", async () => {
+    const p = withCover();
+    const { fs, storage, thumbnail } = await saved(p);
+    fs.files.set(`${dir}/cover-2000.jpg`, "OLD");
+    const json = fs.files.get(`${dir}/project.json`);
+    await storage.writeCover(p);
+    expect(thumbnail).toHaveBeenCalledTimes(1);
+    expect(thumbnail).toHaveBeenCalledWith(b.sourceUri, 1000);
+    expect(covers(fs)).toEqual([`${dir}/cover-5000-b-b-1000.jpg`]);
+    expect(fs.files.get(`${dir}/cover-5000-b-b-1000.jpg`)).toBe("JPEG");
+    expect(fs.files.get(`${dir}/thumb.jpg`)).toBe("THUMB");
+    expect(fs.files.get(`${dir}/project.json`)).toBe(json);
+  });
+
+  test("writeCover does nothing when the file is already there", async () => {
+    const p = withCover();
+    const { fs, storage, thumbnail } = await saved(p);
+    await storage.writeCover(p);
+    await storage.writeCover(p);
+    expect(thumbnail).toHaveBeenCalledTimes(1);
+    expect(covers(fs)).toEqual([`${dir}/cover-5000-b-b-1000.jpg`]);
+  });
+
+  test("a photo at the cover time is copied, without the video thumbnailer", async () => {
+    const ph = makePhotoClip({ id: "ph", seconds: 3 });
+    const p = withCover({ time: 5, title: "" }, [a, ph]);
+    const { fs, storage, thumbnail } = await saved(p);
+    fs.files.set(ph.sourceUri, "PHOTO");
+    await storage.writeCover(p);
+    expect(thumbnail).not.toHaveBeenCalled();
+    expect(covers(fs)).toEqual([`${dir}/cover-5000-ph-ph-0.jpg`]);
+    expect(fs.files.get(`${dir}/cover-5000-ph-ph-0.jpg`)).toBe("PHOTO");
+  });
+
+  test("no cover removes every cover file and keeps the thumbnail", async () => {
+    const p = withCover(null);
+    const { fs, storage, thumbnail } = await saved(p);
+    fs.files.set(`${dir}/cover-2000.jpg`, "OLD");
+    fs.files.set(`${dir}/cover-5000-b-b-1000.jpg`, "OLD");
+    await storage.writeCover(p);
+    expect(covers(fs)).toEqual([]);
+    expect(thumbnail).not.toHaveBeenCalled();
+    expect(fs.files.get(`${dir}/thumb.jpg`)).toBe("THUMB");
+  });
+
+  test("a cover time past the end is read clamped: the last frame", async () => {
+    const p = withCover({ time: 99, title: "Trip" });
+    const { fs, storage, thumbnail } = await saved(p);
+    await storage.writeCover(p);
+    expect(thumbnail).toHaveBeenCalledWith(b.sourceUri, 5950);
+    expect(covers(fs)).toEqual([`${dir}/cover-10000-b-b-5950.jpg`]);
+  });
+
+  test("a failing thumbnail warns once, does not throw, writes nothing and keeps the old cover file", async () => {
+    const p = withCover();
+    const { fs, storage, thumbnail } = await saved(p);
+    fs.files.set(`${dir}/cover-2000.jpg`, "OLD");
+    thumbnail.mockRejectedValueOnce(new Error("no frame"));
+    await expect(storage.writeCover(p)).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(covers(fs)).toEqual([`${dir}/cover-2000.jpg`]);
+  });
+
+  test("listProjects shows the cover file and title; the thumbnail when the file is missing or there is no cover", async () => {
+    const p = withCover();
+    const { fs, storage } = await saved(p);
+    expect((await storage.listProjects())[0]).toMatchObject({ thumbUri: `${dir}/thumb.jpg`, coverTitle: "Trip" });
+    await storage.writeCover(p);
+    expect((await storage.listProjects())[0]).toMatchObject({ thumbUri: `${dir}/cover-5000-b-b-1000.jpg`, coverTitle: "Trip" });
+    await storage.saveProject({ ...p, cover: null });
+    expect((await storage.listProjects())[0]).toMatchObject({ thumbUri: `${dir}/thumb.jpg`, coverTitle: "" });
+    await fs.writeText("file:///doc/projects/bad/project.json", "{");
+    expect((await storage.listProjects()).find((s) => s.id === "bad")).toMatchObject({ broken: true, thumbUri: null, coverTitle: "" });
+  });
+
+  test("the same cover time over a different clip is a new file (never the old name), and the old one goes", async () => {
+    const p = withCover();
+    const { fs, storage, thumbnail } = await saved(p);
+    await storage.writeCover(p);
+    // The clips change places (b 0–6, a 6–10): second 5 is still in b, at its source second 5.
+    const swapped = { ...p, clips: [b, a] };
+    await storage.saveProject(swapped);
+    await storage.writeCover(swapped);
+    expect(thumbnail).toHaveBeenCalledTimes(2);
+    expect(thumbnail).toHaveBeenLastCalledWith(b.sourceUri, 5000);
+    expect(covers(fs)).toEqual([`${dir}/cover-5000-b-b-5000.jpg`]);
+    expect((await storage.listProjects())[0].thumbUri).toBe(`${dir}/cover-5000-b-b-5000.jpg`);
+    // Another clip under the same second.
+    const c = makeClip({ id: "c", sourceDuration: 8 });
+    const other = { ...p, clips: [a, c] };
+    await storage.saveProject(other);
+    await storage.writeCover(other);
+    expect(thumbnail).toHaveBeenLastCalledWith(c.sourceUri, 1000);
+    expect(covers(fs)).toEqual([`${dir}/cover-5000-c-c-1000.jpg`]);
+  });
+
+  test("trimming a clip before the cover time, or replacing the clip's media, gives a new file", async () => {
+    const p = withCover();
+    const { fs, storage } = await saved(p);
+    await storage.writeCover(p);
+    // a is cut to its last 3 seconds: second 5 is now b's source second 2.
+    const trimmed = { ...p, clips: [{ ...a, trimStart: 1 }, b] };
+    await storage.writeCover(trimmed);
+    expect(covers(fs)).toEqual([`${dir}/cover-5000-b-b-2000.jpg`]);
+    // Replace keeps the clip's id; the picture is another file's.
+    const replaced = { ...trimmed, clips: [trimmed.clips[0], { ...b, sourceUri: "file:///doc/projects/id1/media/new one.mov" }] };
+    await storage.writeCover(replaced);
+    expect(covers(fs)).toEqual([`${dir}/cover-5000-b-new_one-2000.jpg`]);
+    // A new failure keeps the file that is there (the list falls back to thumb.jpg, since its name is no longer the cover's).
+    const again = { ...replaced, cover: { time: 6, title: "Trip" } };
+    await storage.saveProject(again);
+    fs.copy = jest.fn(async () => { throw new Error("disk full"); });
+    await storage.writeCover(again);
+    expect(covers(fs)).toEqual([`${dir}/cover-5000-b-new_one-2000.jpg`]);
+    expect((await storage.listProjects())[0].thumbUri).toBe(`${dir}/thumb.jpg`);
+  });
+
+  test("duplicateProject copies the cover file", async () => {
+    const p = withCover();
+    const { fs, storage } = await saved(p);
+    for (const c of p.clips) fs.files.set(c.sourceUri, "V");
+    await storage.writeCover(p);
+    const copy = await storage.duplicateProject("id1");
+    expect(covers(fs, `file:///doc/projects/${copy.id}`)).toEqual([`file:///doc/projects/${copy.id}/cover-5000-b-b-1000.jpg`]);
+    expect((await storage.listProjects()).find((s) => s.id === copy.id)).toMatchObject({ thumbUri: `file:///doc/projects/${copy.id}/cover-5000-b-b-1000.jpg`, coverTitle: "Trip" });
+  });
 });

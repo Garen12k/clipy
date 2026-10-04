@@ -1,5 +1,5 @@
 import { PlatformError } from "../errors.ts";
-import type { AdapterCtx, PublishResult, ServerAdapter } from "../types.ts";
+import type { AdapterCtx, PrepareInput, PublishResult, ServerAdapter } from "../types.ts";
 import { exchangeForUserAndPages, graph, META_SECRETS, metaAuthUrl, metaIsAuthError, ruploadTarget } from "./meta.ts";
 
 /**
@@ -18,6 +18,19 @@ const MAX_CAPTION = 2200;
 const RETRY_CODES = new Set(["-1", "-2", "24"]);
 /** 9007 / 2207027: "The media is not ready for publishing, please wait" — nothing was published; keep polling. */
 const NOT_READY = "9007";
+
+/**
+ * The Reel's cover frame: `thumb_offset`, milliseconds into the video, default 0
+ * (https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media/). Anything that is not
+ * a finite number inside the video — from 0 up to, not including, its length in whole milliseconds — is ignored rather than
+ * failing the post.
+ */
+const thumbOffset = (input: PrepareInput): string | null => {
+  const v = input.options.thumbOffsetMs;
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const ms = Math.round(v);
+  return v >= 0 && ms < input.durationSec * 1000 ? String(ms) : null;
+};
 
 const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
@@ -175,8 +188,9 @@ export const instagram: ServerAdapter = {
   },
   async prepare(c, token, input) {
     const { id: igUserId } = await igAccount(c, token);
+    const offset = thumbOffset(input);
     const r = await ig<{ id?: unknown; uri?: unknown }>(c, `/${encodeURIComponent(igUserId)}/media`, {
-      method: "POST", token, params: { media_type: "REELS", upload_type: "resumable", caption: cutCaption(input.caption), share_to_feed: "true" },
+      method: "POST", token, params: { media_type: "REELS", upload_type: "resumable", caption: cutCaption(input.caption), share_to_feed: "true", ...(offset !== null ? { thumb_offset: offset } : {}) },
     });
     const containerId = text(r.id);
     if (!containerId || !text(r.uri)) throw new PlatformError("instagram", 502, "Instagram did not return an upload address.");

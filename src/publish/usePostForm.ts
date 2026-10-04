@@ -28,7 +28,7 @@ export interface PlatformView {
 type Job = Omit<PostJob, "video">;
 
 /** Caption, per-platform selection / options / validation, and the reconnect → resume flow of the Post screen. */
-export function usePostForm(video: VideoInfo, platforms: PlatformStatus[], title: string | null, rows: Record<PlatformId, RowState>, refresh: () => Promise<void>) {
+export function usePostForm(video: VideoInfo, platforms: PlatformStatus[], title: string | null, rows: Record<PlatformId, RowState>, refresh: () => Promise<void>, coverMs: number | null = null) {
   const [caption, setCaption] = useState("");
   const [ticked, setTicked] = useState<Partial<Record<PlatformId, boolean>>>({});
   const [options, setOptions] = useState<Partial<Record<PlatformId, Record<string, unknown>>>>({});
@@ -79,7 +79,7 @@ export function usePostForm(video: VideoInfo, platforms: PlatformStatus[], title
       canResume: rows[status.id]?.phase === "needsReconnect" && returned.has(status.id) && !reason,
     };
   });
-  const jobFor = (v: PlatformView): Job => ({ platform: v.status.id, caption, options: v.options });
+  const jobFor = (v: PlatformView): Job => ({ platform: v.status.id, caption, options: coverMs !== null && v.adapter?.coverOptions ? { ...v.options, ...v.adapter.coverOptions(coverMs) } : v.options });
   // Rows that already ran keep their own Retry / Resume / View; Post only sends the fresh ones.
   const jobs = views.filter((v) => v.canPost && (rows[v.status.id]?.phase ?? "idle") === "idle").map(jobFor);
 

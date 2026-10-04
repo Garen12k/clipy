@@ -14,6 +14,7 @@ import { CutMarker } from "./CutMarker";
 import { EffectLane } from "./EffectLane";
 import { LayerLane } from "./LayerLane";
 import { OverlayLane } from "./OverlayLane";
+import { SnapGuide } from "./SnapGuide";
 
 type Props = { renderStripExtras?: (clipId: string, index: number) => React.ReactNode; onCutPress?: (index: number) => void };
 
@@ -24,6 +25,8 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
   const playhead = useEditorStore((s) => s.playhead);
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const selectedId = useEditorStore((s) => s.selectedClipId);
+  /** Multi-select mode: a tap on a clip toggles it (no seek, no single selection) and the gold border marks the chosen clips. */
+  const multi = useEditorStore((s) => s.multiSelect);
   const missing = useEditorStore((s) => s.missingSourceUris);
   const { seek, select, setZoom } = useEditorStore.getState();
 
@@ -71,8 +74,8 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           contentContainerStyle={{ paddingHorizontal: pad, height, flexDirection: "column" }}>
           <View style={{ height: CLIP_AREA_HEIGHT, flexDirection: "row", alignItems: "center" }}>
             {project.clips.map((clip, i) => (
-              <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
-                onPress={() => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
+              <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={multi ? multi.includes(clip.id) : clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
+                onPress={multi ? () => useEditorStore.getState().toggleMultiSelect(clip.id) : () => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
                 {renderStripExtras?.(clip.id, i)}
               </ClipThumbStrip>
             ))}
@@ -89,6 +92,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           <OverlayLane />
           {audioLanes.map((kind) => <AudioLane key={kind} kind={kind} />)}
           <EffectLane />
+          <SnapGuide left={pad} height={height} />
         </ScrollView>
         <View testID="timeline-playhead" pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: height - 16, backgroundColor: theme.colors.text, borderRadius: 1 }} />
       </View>

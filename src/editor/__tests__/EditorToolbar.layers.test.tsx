@@ -20,7 +20,7 @@ const openGroup = async (name: string) => { await fireEvent.press(screen.getByRo
 const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
 const select = (id: string | null) => act(() => { state().select(id); });
 const photoLayer = (id: string, start = 0): LayerClip => ({ ...makePhotoClip({ id }), start });
-const EDIT = ["Split", "Trim", "Transform", "Animate", "Keyframe", "Crop", "Overlay", "Opacity", "Mask", "Blend", "Green screen", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Ratio"];
+const EDIT = ["Split", "Trim", "Transform", "Animate", "Keyframe", "Crop", "Overlay", "Opacity", "Mask", "Blend", "Green screen", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Select", "Ratio"];
 
 beforeEach(() => {
   pick.mockReset(); importMedia.mockReset();

@@ -56,7 +56,7 @@ describe("export API", () => {
         style: { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadowColor: null, shadowOpacity: 0, shadowDistance: 0, shadowBlur: 0, glowColor: null, glowSize: 0 },
         words: [], highlightColor: null,
       }],
-      audioTracks: [{ sourceUri: "file:///m.m4a", start: 0, trimStart: 0, trimEnd: 2, gain: [{ time: 0, gain: 1 }, { time: 2, gain: 1 }] }], aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4",
+      audioTracks: [{ sourceUri: "file:///m.m4a", start: 0, trimStart: 0, trimEnd: 2, gain: [{ time: 0, gain: 1 }, { time: 2, gain: 1 }] }], aspectRatio: "9:16" as const, resolution: 1080 as const, fps: 30 as const, bitrate: 0, outputPath: "/tmp/out.mp4",
     };
     await expect(exportTimeline(req)).resolves.toBe("job1");
     expect(native.exportTimeline).toHaveBeenCalledWith(req);

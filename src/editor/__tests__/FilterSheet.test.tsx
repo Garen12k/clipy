@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
 jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, disabled, onSlidingStart, onValueChange }: { testID?: string; disabled?: boolean; onSlidingStart?: () => void; onValueChange?: (v: number) => void }) => <View testID={testID} accessibilityState={{ disabled: !!disabled }} onTouchStart={() => onSlidingStart?.()} onTouchMove={() => onValueChange?.(0.8)} />; });
-import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { FilterSheet } from "../components/FilterSheet";
 
@@ -57,4 +57,29 @@ test("Apply to all clips copies the filter and its strength", async () => {
   await fireEvent(slider, "touchStart"); await fireEvent(slider, "touchMove");
   await fireEvent.press(screen.getByRole("button", { name: "Apply to all clips" }));
   expect(useEditorStore.getState().project!.clips.map((c) => [c.filter, c.filterIntensity])).toEqual([["warm", 0.8], ["warm", 0.8]]);
+});
+
+test("without clipIds the title is Filter and Apply to all clips is offered", async () => {
+  await render(<FilterSheet clipId="a" visible onClose={() => {}} />);
+  expect(screen.getByRole("header", { name: "Filter" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Apply to all clips" })).toBeTruthy();
+});
+
+test("clipIds: a tile and the slider write every listed main clip, one undo step each; a layer id is skipped; no Apply to all", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 }), makePhotoClip({ id: "c" })], layers: [makeLayer({ id: "l", sourceDuration: 2 })] }));
+  await render(<FilterSheet clipId="a" clipIds={["a", "c", "l"]} visible onClose={() => {}} />);
+  expect(screen.getByRole("header", { name: "Filter · 2 clips" })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Apply to all clips" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "Warm" }));
+  const st = () => useEditorStore.getState();
+  expect(st().project!.clips.map((c) => c.filter)).toEqual(["warm", null, "warm"]);
+  expect(st().project!.layers[0].filter).toBeNull();
+  expect(st().past).toHaveLength(1);
+  const slider = screen.getByTestId("filter-strength");
+  await fireEvent(slider, "touchStart"); await fireEvent(slider, "touchMove"); await fireEvent(slider, "touchMove");
+  expect(st().project!.clips.map((c) => c.filterIntensity)).toEqual([0.8, 1, 0.8]);
+  expect(st().project!.layers[0].filterIntensity).toBe(1);
+  expect(st().past).toHaveLength(2);
+  await act(() => { st().undo(); });
+  expect(st().project!.clips.map((c) => [c.filter, c.filterIntensity])).toEqual([["warm", 1], [null, 1], ["warm", 1]]);
 });

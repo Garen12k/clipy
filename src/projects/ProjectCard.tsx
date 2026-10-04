@@ -6,7 +6,7 @@ import { PLATFORM_LABELS } from "@/src/editor/model/types";
 import { editedLabel, formatDuration } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { PressableScale } from "@/src/ui/PressableScale";
-import { Body } from "@/src/ui/Text";
+import { Body, Title } from "@/src/ui/Text";
 import { useReducedMotion } from "@/src/ui/useReducedMotion";
 import type { ProjectSummary } from "./storage";
 
@@ -30,6 +30,11 @@ export function ProjectCard({ summary, index, onPress, onLongPress }: Props) {
             <Body weight="semi" style={{ fontSize: 11, color: theme.colors.accent }}>{formatDuration(summary.durationSec)}</Body>
           </View>
         )}
+        {summary.coverTitle ? (
+          // Drawn as on the cover itself (CoverFrame): the title font, as typed.
+          <Title testID="project-cover-title" size={15} numberOfLines={2}
+            style={{ position: "absolute", left: theme.space.sm, right: theme.space.sm, bottom: 56, textAlign: "center", textTransform: "none", letterSpacing: 0 }}>{summary.coverTitle}</Title>
+        ) : null}
         <LinearGradient colors={["transparent", theme.colors.scrimStrong]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.md, paddingTop: theme.space.xl }}>
           <Body weight="semi" numberOfLines={1} style={{ color: summary.broken ? theme.colors.danger : theme.colors.text }}>{summary.name}</Body>
           <Body muted style={{ fontSize: 11 }}>{secondLine}</Body>

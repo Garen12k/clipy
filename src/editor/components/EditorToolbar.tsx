@@ -26,6 +26,7 @@ import { BeatsSheet } from "./BeatsSheet";
 import { CaptionsSheet } from "./CaptionsSheet";
 import { ChromaSheet } from "./ChromaSheet";
 import { ClipAnimationSheet } from "./ClipAnimationSheet";
+import { CoverSheet } from "./CoverSheet";
 import { CropScreen } from "./CropScreen";
 import { EffectSheet } from "./EffectSheet";
 import { EffectStrengthSheet } from "./EffectStrengthSheet";
@@ -34,6 +35,7 @@ import { RatioSheet } from "./RatioSheet";
 import { SpeedSheet } from "./SpeedSheet";
 import { FilterSheet } from "./FilterSheet";
 import { MaskSheet } from "./MaskSheet";
+import { MultiSelectBar } from "./MultiSelectBar";
 import { OpacitySheet } from "./OpacitySheet";
 import { StickerPanel } from "./StickerPanel";
 import { StickerSheet } from "./StickerSheet";
@@ -63,7 +65,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | "opacity" | "mask" | "blend" | "chroma" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | "opacity" | "mask" | "blend" | "chroma" | "cover" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useItemClip(selectedId);
   /** A layer is selected: the main-track tools (Split, Freeze, Ratio, Transition, Background) do not apply. */
@@ -79,6 +81,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const selectedEffectId = useEditorStore((s) => s.selectedEffectId);
   const selectedAudioId = useEditorStore((s) => s.selectedAudioId);
   const ducking = useEditorStore((s) => !!s.project?.ducking);
+  const multi = useEditorStore((s) => s.multiSelect !== null);
   useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind, effectId: selectedEffectId, audioId: selectedAudioId }, cur) ?? cur); }, [selectedId, overlayKind, selectedEffectId, selectedAudioId]);
 
   // Animate / Keyframe act on what the open group edits: Edit → the selected clip, Text → a selected text (not a caption), Stickers → a selected sticker.
@@ -202,7 +205,9 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     freeze: { label: "Freeze", icon: "snow", disabled: noSel || layerSel || photoSel || freezeBusy, onPress: () => { haptic("light"); void freeze(); } },
     duplicate: { label: "Duplicate", icon: "copy", disabled: noSel, onPress: duplicateSelected },
     delete: { label: "Delete", icon: "trash", disabled: noSel, onPress: () => { if (selectedId) { haptic("medium"); apply((p) => deleteClip(p, selectedId)); } } },
+    select: { label: "Select", icon: "checkmark-done", disabled: clipCount < 2, onPress: () => { haptic("light"); useEditorStore.getState().enterMultiSelect(); } },
     ratio: { label: "Ratio", icon: "phone-portrait", disabled: layerSel, onPress: () => setSheet("ratio") },
+    cover: { label: "Cover", icon: "image-outline", disabled: !hasClips, onPress: () => setSheet("cover") },
     filter: { label: "Filter", icon: "color-filter", disabled: noSel, onPress: () => setSheet("filter") },
     speed: { label: "Speed", icon: "speedometer", disabled: noSel || photoSel, onPress: () => setSheet("speed") },
     transition: { label: "Transition", icon: "swap-horizontal", disabled: noSel || layerSel || selectedIndex === clipCount - 1, onPress: () => onTransitionChange(selectedIndex) },
@@ -230,6 +235,9 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const tools = group === "effects" && selectedEffectId ? SELECTED_EFFECT_TOOLS : group === "audio" && selectedAudioId ? SELECTED_AUDIO_TOOLS
     : group === "edit" && layerSel ? [...SELECTED_LAYER_TOOLS, ...active.tools] : active.tools;
 
+  // Multi-select: the action bar takes the toolbar's place. This component stays mounted, so the open group survives the mode.
+  if (multi) return <MultiSelectBar />;
+
   return (
     <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: Math.max(insets.bottom, theme.space.sm) }}>
       <Animated.View key={group} entering={reduced ? undefined : FadeIn.duration(150)}
@@ -242,6 +250,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
         {TOOL_GROUPS.map((g) => <ToolButton key={g.id} role="tab" label={g.label} icon={g.icon} active={g.id === group} onPress={() => { if (g.id !== group) haptic("light"); setGroup(g.id); }} />)}
       </View>
       <RatioSheet visible={sheet === "ratio"} onClose={() => setSheet(null)} />
+      <CoverSheet visible={sheet === "cover"} onClose={() => setSheet(null)} />
       <TrimSheet clipId={selectedId} visible={sheet === "trim"} onClose={() => setSheet(null)} />
       <SpeedSheet clipId={selectedId} visible={sheet === "speed"} onClose={() => setSheet(null)} />
       <FilterSheet clipId={selectedId} visible={sheet === "filter"} onClose={() => setSheet(null)} />

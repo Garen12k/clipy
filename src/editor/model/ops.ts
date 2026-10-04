@@ -4,10 +4,10 @@ import { clipAt, clipDuration, curveSteps, findItem, layerEnd, sourceAfter, sour
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
-  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
+  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
   clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
-  type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem,
+  type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
   type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
 } from "./types";
@@ -118,13 +118,51 @@ export function deleteClip(p: Project, clipId: string): Project {
   return touch(p, { clips: normaliseTransitions(p.clips.filter((c) => c.id !== clipId)) });
 }
 
+const copyOfClip = (src: Clip): Clip => ({ ...src, id: newId(), transitionOut: NO_TRANSITION, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background }, adjust: { ...src.adjust },
+  animation: copyClipAnimation(src.animation), keyframes: copyPins(src.keyframes), speedCurve: copyCurve(src.speedCurve), chroma: copyChroma(src.chroma) });
+
 export function duplicateClip(p: Project, clipId: string): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
   if (i < 0) return duplicateLayer(p, clipId);   // a layer's id: the layer is copied
-  const src = p.clips[i];
-  const copy: Clip = { ...src, id: newId(), transitionOut: NO_TRANSITION, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background }, adjust: { ...src.adjust },
-    animation: copyClipAnimation(src.animation), keyframes: copyPins(src.keyframes), speedCurve: copyCurve(src.speedCurve), chroma: copyChroma(src.chroma) };
-  return touch(p, { clips: [...p.clips.slice(0, i + 1), copy, ...p.clips.slice(i + 1)] });
+  return touch(p, { clips: [...p.clips.slice(0, i + 1), copyOfClip(p.clips[i]), ...p.clips.slice(i + 1)] });
+}
+
+/** The ids that are MAIN clips (layers and unknown ids are left out), in timeline order, once each. */
+export function mainClipIds(p: Project, ids: readonly string[]): string[] {
+  const want = new Set(ids);
+  return p.clips.filter((c) => want.has(c.id)).map((c) => c.id);
+}
+
+/** One single-clip op run on every given main clip. One project comes out, so one `apply` is one undo step; the same project when nothing changes. */
+export function forClips(p: Project, ids: readonly string[], op: (p: Project, id: string) => Project): Project {
+  const out = mainClipIds(p, ids).reduce(op, p);
+  // Each step refit the effects against its own intermediate length, so the order of the clips would decide which effects survive.
+  // Refit once, from the original effects, against the final length.
+  if (out.clips === p.clips) return out;
+  const effects = fitEffects(p.effects, totalDuration(out));
+  return effects === out.effects ? out : { ...out, effects };
+}
+
+/** Multi-select Delete. Deleting every clip is allowed, as `deleteClip` allows it. */
+export function deleteClips(p: Project, ids: readonly string[]): Project {
+  const gone = new Set(mainClipIds(p, ids));
+  if (gone.size === 0) return p;
+  return touch(p, { clips: normaliseTransitions(p.clips.filter((c) => !gone.has(c.id))) });
+}
+
+/** Multi-select Duplicate: each copy right after its original (the copy `duplicateClip` makes). */
+export function duplicateClips(p: Project, ids: readonly string[]): Project {
+  const want = new Set(mainClipIds(p, ids));
+  if (want.size === 0) return p;
+  return touch(p, { clips: p.clips.flatMap((c) => (want.has(c.id) ? [c, copyOfClip(c)] : [c])) });
+}
+
+/** The cover (through `clampCover` against the project's length) or null for none. Same project when nothing changes or the time is not finite. */
+export function setCover(p: Project, cover: Cover | null): Project {
+  if (cover === null) return p.cover === null ? p : touch(p, { cover: null });
+  const next = clampCover(cover, totalDuration(p));
+  if (!next) return p;
+  return p.cover && p.cover.time === next.time && p.cover.title === next.title ? p : touch(p, { cover: next });
 }
 
 export function setAspectRatio(p: Project, ratio: AspectRatio): Project {

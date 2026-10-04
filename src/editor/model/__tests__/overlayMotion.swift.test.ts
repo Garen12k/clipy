@@ -29,10 +29,11 @@ test("OverlayMotion.swift is pure maths: Foundation only, no layers", () => {
 
 test("the sampler has the agreed signature and samples 30 times per second", () => {
   expect(motion).toContain("static func samples(start: Double, end: Double, fps: Double, resolve: (Double) -> KeyValues) -> [(time: Double, values: KeyValues)]");
-  // The rate is named once (`ExportSession.frameRate`) and shared by the composition's frame duration, the hold frame and the sampler.
+  // The rate is named once (`ExportSession.frameRate`) and shared by the hold frame and the sampler; the composition's frame
+  // duration follows the request's frame rate (`fps`, which is `ExportSession.frameRate` unless the request asks for 24 or 60).
   expect(motion).toMatch(/static let fps: Double = Double\(ExportSession\.frameRate\)\n/);
   expect(session).toMatch(/static let frameRate: Int32 = 30\n/);
-  expect(session).toContain("videoComposition.frameDuration = CMTime(value: 1, timescale: ExportSession.frameRate)");
+  expect(session).toContain("videoComposition.frameDuration = CMTime(value: 1, timescale: fps)");
   expect(session).toContain("let holdFrame = CMTime(value: 1, timescale: ExportSession.frameRate)");
   expect(session).not.toMatch(/timescale: 30\)/);
 });

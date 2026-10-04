@@ -2,7 +2,7 @@ import { StyleSheet } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { ProjectCard } from "../ProjectCard";
 
-const summary = { id: "p1", name: "Beach day", durationSec: 21, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] as ("youtube" | "tiktok")[] };
+const summary = { id: "p1", name: "Beach day", durationSec: 21, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] as ("youtube" | "tiktok")[], coverTitle: "" };
 
 test("shows name, duration badge and edited line; press and long-press work", async () => {
   const onPress = jest.fn(), onLongPress = jest.fn();
@@ -32,4 +32,11 @@ test("posted platforms replace the edited line", async () => {
   await render(<ProjectCard summary={{ ...summary, postedTo: ["youtube", "tiktok"] }} index={0} onPress={jest.fn()} onLongPress={jest.fn()} />);
   expect(screen.getByText("Posted · YouTube, TikTok")).toBeTruthy();
   expect(screen.queryByText("Edited today")).toBeNull();
+});
+
+test("a cover title is drawn on the card; none without one", async () => {
+  const { rerender } = await render(<ProjectCard summary={{ ...summary, coverTitle: "Trip" }} index={0} onPress={jest.fn()} onLongPress={jest.fn()} />);
+  expect(screen.getByTestId("project-cover-title")).toHaveTextContent("Trip");
+  await rerender(<ProjectCard summary={summary} index={0} onPress={jest.fn()} onLongPress={jest.fn()} />);
+  expect(screen.queryByTestId("project-cover-title")).toBeNull();
 });

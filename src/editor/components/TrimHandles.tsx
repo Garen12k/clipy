@@ -1,18 +1,27 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { sourceAfter, xToTime } from "@/src/editor/model/timeline";
+import { clipDuration, clipStartTimes, sourceAfter, timeToX, xToTime } from "@/src/editor/model/timeline";
 import { trimClip } from "@/src/editor/model/ops";
-import { clampNum, isPhoto, MIN_CLIP_SECONDS, PHOTO, type Clip } from "@/src/editor/model/types";
+import { clampNum, isPhoto, MIN_CLIP_SECONDS, PHOTO, type Clip, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { createSnapper, sameTime } from "../snapping";
 import { STRIP_HEIGHT } from "../timelineLayout";
 
 const snap = (t: number) => Math.round(t * 10) / 10;
 
-export function trimFromDrag(clip: Clip, edge: "start" | "end", startValue: number, translationX: number, pps: number) {
+/** Where clip `id` ends on the timeline (null: not a main clip). */
+const clipEndOf = (p: Project, id: string): number | null => {
+  const i = p.clips.findIndex((c) => c.id === id);
+  return i < 0 ? null : clipStartTimes(p)[i] + clipDuration(p.clips[i]);
+};
+
+/** `exact` (the drag has snapped to a target): the dragged value is not rounded to 0.1 s, which would pull it off the target. The bounds are the same. */
+export function trimFromDrag(clip: Clip, edge: "start" | "end", startValue: number, translationX: number, pps: number, exact = false) {
   // The drag is an output-seconds delta; timeline.ts turns it into a source time (speed and speed curves live there).
-  const raw = snap(sourceAfter(clip, startValue, xToTime(translationX, pps)));
+  const dragged = sourceAfter(clip, startValue, xToTime(translationX, pps));
+  const raw = exact ? dragged : snap(dragged);
   // A photo has no start to trim: its end handle sets its length.
   if (isPhoto(clip)) return { trimStart: 0, trimEnd: clampNum(raw, PHOTO.minSeconds, PHOTO.maxSeconds) };
   if (edge === "start") {
@@ -26,15 +35,34 @@ export function trimFromDrag(clip: Clip, edge: "start" | "end", startValue: numb
 function Handle({ clip, edge }: { clip: Clip; edge: "start" | "end" }) {
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const store = useEditorStore.getState();
-  const startRef = useRef(edge === "start" ? clip.trimStart : clip.trimEnd);
+  // The trim value and the clip's end on the timeline when the drag began (one object: gesture callbacks get copies of reassigned variables).
+  const startRef = useRef({ value: edge === "start" ? clip.trimStart : clip.trimEnd, end: 0 });
+  const snapper = useRef(createSnapper()).current;
+  useEffect(() => () => snapper.end(), [snapper]);   // removed mid-drag: the guide goes with the handle
   const pan = Gesture.Pan().activeOffsetX([-4, 4])
-    .onStart(() => { const c = useEditorStore.getState().project?.clips.find((x) => x.id === clip.id); startRef.current = edge === "start" ? (c?.trimStart ?? 0) : (c?.trimEnd ?? 0); store.beginTransaction(); })
-    .onUpdate((e) => {
-      const c = useEditorStore.getState().project?.clips.find((x) => x.id === clip.id);
-      if (!c) return;
-      const { trimStart, trimEnd } = trimFromDrag(c, edge, startRef.current, e.translationX, pps);
-      store.applyTransient((p) => trimClip(p, clip.id, trimStart, trimEnd));
+    .onStart(() => {
+      const p = useEditorStore.getState().project, c = p?.clips.find((x) => x.id === clip.id);
+      startRef.current = { value: edge === "start" ? (c?.trimStart ?? 0) : (c?.trimEnd ?? 0), end: (p && clipEndOf(p, clip.id)) ?? 0 };
+      store.beginTransaction();
+      snapper.begin(null, true); snapper.rest(startRef.current.end);
     })
+    .onUpdate((e) => {
+      const p = useEditorStore.getState().project, c = p?.clips.find((x) => x.id === clip.id);
+      if (!p || !c) return;
+      // Either handle moves the clip's END on the timeline (the track ripples): the start handle the other way. That end is what
+      // snaps; its snapped time goes back into a drag distance. A snap the trim would clamp away is not taken, and a frame that
+      // does not snap keeps the finger's own distance and the 0.1 s rounding, exactly as before.
+      const { value, end } = startRef.current, way = edge === "end" ? 1 : -1;
+      const txOf = (to: number) => timeToX((to - end) * way, pps);
+      const lands = (s: number, target: number) => {
+        const r = trimFromDrag(c, edge, value, txOf(s), pps, true), at = clipEndOf(trimClip(p, clip.id, r.trimStart, r.trimEnd), clip.id);
+        return at !== null && sameTime(at, target);
+      };
+      const to = snapper.time(end + way * xToTime(e.translationX, pps), lands);
+      const { trimStart, trimEnd } = snapper.snapped() ? trimFromDrag(c, edge, value, txOf(to), pps, true) : trimFromDrag(c, edge, value, e.translationX, pps);
+      store.applyTransient((q) => trimClip(q, clip.id, trimStart, trimEnd));
+    })
+    .onFinalize(() => snapper.end())
     .runOnJS(true);
   return (
     <GestureDetector gesture={pan}>

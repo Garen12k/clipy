@@ -4,7 +4,7 @@ import { clipGainCurve, exportTrackCurve, type GainPoint } from "@/src/editor/mo
 import { trackEnd } from "@/src/editor/model/audioSync";
 import { edgeDurations } from "@/src/editor/model/motion";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
-import { DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
+import { DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type ExportFps, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -126,6 +126,8 @@ export interface ExportRequest {
   audioTracks: ExportAudioTrack[];
   aspectRatio: AspectRatio;
   resolution: Resolution;
+  fps: ExportFps;      // frames per second of the exported video
+  bitrate: number;     // `requestBitrate`: 0 = no file-length limit (High, the default); above 0 = the video bits per second the file may use (Smaller file)
   outputPath: string;
 }
 function overlayMotion(o: Overlay): Pick<ExportOverlay, "animIn" | "animOut" | "animLoop" | "keyframes"> {

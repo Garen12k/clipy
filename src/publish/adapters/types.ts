@@ -16,4 +16,6 @@ export interface ClientAdapter {
   doneNote?: string;
   /** False when the platform has no per-post options (no "options" button). Default true. */
   hasOptions?: boolean;
+  /** Per-post options that carry the project's cover frame (milliseconds into the video); only platforms that accept a frame offset define it. */
+  coverOptions?(coverMs: number): Record<string, unknown>;
 }

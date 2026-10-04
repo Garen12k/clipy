@@ -12,9 +12,11 @@ export function useLoadProject(id: string) {
       .catch((e: unknown) => { if (alive) setState({ status: "error", error: e instanceof Error ? e.message : String(e) }); });
     return () => {
       alive = false;
-      // Flush edits the autosave debounce hasn't written yet, then clear the editor.
+      // Flush edits the autosave debounce hasn't written yet, then (after that save) refresh the cover file the drafts
+      // list shows, and clear the editor.
       const s = useEditorStore.getState();
-      if (s.dirty && s.project) setLastFlush(storage.saveProject(s.project).catch((e: unknown) => console.warn("flush save failed", e)));
+      const p = s.project;
+      if (p) setLastFlush((s.dirty ? storage.saveProject(p) : Promise.resolve()).then(() => storage.writeCover(p)).catch((e: unknown) => console.warn("flush save failed", e)));
       s.reset();
     };
   }, [id]);

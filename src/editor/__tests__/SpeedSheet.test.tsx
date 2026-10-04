@@ -6,7 +6,7 @@ import { StyleSheet } from "react-native";
 import { SPEED_CURVES } from "@/src/editor/effects";
 import { setClipSpeedCurve } from "@/src/editor/model/ops";
 import { curveSteps } from "@/src/editor/model/timeline";
-import { makeClip, makeProject, SPEED_CURVE_IDS } from "@/src/editor/model/types";
+import { makeClip, makeLayer, makePhotoClip, makeProject, SPEED_CURVE_IDS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { useToast } from "@/src/ui/Toast";
@@ -236,4 +236,60 @@ describe("length label", () => {
 test("renders nothing when the clip is gone", async () => {
   await render(<SpeedSheet clipId="zzz" visible onClose={() => {}} />);
   expect(screen.queryByText("Speed")).toBeNull();
+});
+
+test("without clipIds the title is Speed", async () => {
+  await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+  expect(screen.getByRole("header", { name: "Speed" })).toBeTruthy();
+});
+
+describe("clipIds (multi-select)", () => {
+  const speeds = () => useEditorStore.getState().project!.clips.map((c) => c.speed);
+  const curves = () => useEditorStore.getState().project!.clips.map((c) => c.speedCurve?.id ?? null);
+  beforeEach(() => {
+    // a: 8 s, b: 6 s, s: 0.12 s (too short for Flash in), p: a photo; l: a layer.
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 }), makeClip({ id: "b", sourceDuration: 6 }), makeClip({ id: "s", sourceDuration: 0.12 }), makePhotoClip({ id: "p" })],
+      layers: [makeLayer({ id: "l", sourceDuration: 2 })] }));
+  });
+
+  test("a chip and the slider write every listed video clip, one undo step each; photos and a layer id are skipped", async () => {
+    await render(<SpeedSheet clipId="a" clipIds={["a", "b", "p", "l"]} visible onClose={() => {}} />);
+    expect(screen.getByRole("header", { name: "Speed · 3 clips" })).toBeTruthy();
+    await press("2×");
+    expect(speeds()).toEqual([2, 2, 1, 1]);
+    expect(useEditorStore.getState().project!.layers[0].speed).toBe(1);
+    expect(past()).toBe(1);
+    expect(screen.getByText("Clip length 4.0 s")).toBeTruthy();   // the shown clip only
+    const slider = screen.getByTestId("speed-slider");
+    await fireEvent(slider, "touchStart"); await fireEvent(slider, "touchMove"); await fireEvent(slider, "touchMove");
+    expect(speeds()).toEqual([1.5, 1.5, 1, 1]);
+    expect(past()).toBe(2);
+    await act(() => { useEditorStore.getState().undo(); });
+    expect(speeds()).toEqual([2, 2, 1, 1]);
+  });
+
+  test("a curve tile sets the curve on the clips that can take it, in one undo step; the too-short one is skipped silently", async () => {
+    const onClose = jest.fn();
+    await render(<SpeedSheet clipId="a" clipIds={["a", "b", "s", "p"]} visible onClose={onClose} />);
+    await press("Curve");
+    await press("Flash in");
+    expect(curves()).toEqual(["flashIn", "flashIn", null, null]);
+    expect(past()).toBe(1);
+    expect(impact).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("when no listed clip can take the curve the sheet closes with a toast and nothing changes", async () => {
+    const onClose = jest.fn();
+    await render(<SpeedSheet clipId="s" clipIds={["s", "p"]} visible onClose={onClose} />);
+    await press("Curve");
+    await press("None");                                          // the shown clip's own tile: silent
+    expect(onClose).not.toHaveBeenCalled();
+    await press("Flash in");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(useToast.getState().message).toBe("These clips are too short for a speed curve.");
+    expect(past()).toBe(0);
+    expect(impact).not.toHaveBeenCalled();
+  });
 });

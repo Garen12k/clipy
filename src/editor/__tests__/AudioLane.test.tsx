@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import * as Haptics from "expo-haptics";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { makeAudioTrack, makeClip, makeEffect, makeProject } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makeLayer, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { AudioLane } from "../components/AudioLane";
+import { useSnapGuide } from "../snapping";
 
 const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 20 })], effects: [makeEffect({ id: "e1", start: 1, end: 3 })],
   audioTracks: [
@@ -136,4 +138,86 @@ test("the selected bar is drawn above its neighbours, so its handles can be reac
   await act(() => { useEditorStore.getState().selectAudio("x"); });
   expect(screen.getByTestId("audio-bar-x")).toHaveStyle({ zIndex: 1 });
   expect(screen.getByTestId("audio-bar-y")).toHaveStyle({ zIndex: 0 });
+});
+
+describe("snapping", () => {
+  // The project of model/__tests__/snap.test.ts. Main track a 0–4, b 4–7. Text o 1–2.5. Sticker s 6–6.5. Music m 0.5–9.5. Layer l 3–5.
+  // Effect e 5.5–6.5. Beats 2 and 6. Playhead 3.3. Zoom 80 → an edge within 0.1 s of a target snaps.
+  const snapProject = makeProject({
+    clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 6, speed: 2 })],
+    overlays: [makeOverlay({ id: "o", start: 1, end: 2.5 }), makeSticker({ id: "s", start: 6, end: 6.5 })],
+    audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 9, start: 0.5 })],
+    layers: [makeLayer({ id: "l", sourceDuration: 2, start: 3 })],
+    effects: [makeEffect({ id: "e", start: 5.5, end: 6.5 })],
+    beatMarkers: [2, 6],
+  });
+  const buzz = Haptics.impactAsync as jest.Mock;
+  const guide = () => useSnapGuide.getState().time;
+  type SnapG = { handlers: { onStart: () => void; onUpdate: (e: { translationX: number }) => void; onEnd?: () => void; onFinalize: () => void } };
+  /** One whole gesture at zoom 80, `seconds` of drag per frame; returns what was showing just before the finger lifted. */
+  const snapDrag = async (g: SnapG, ...seconds: number[]) => {
+    await act(() => { g.handlers.onStart(); for (const s of seconds) g.handlers.onUpdate({ translationX: s * 80 }); });
+    const held = { guide: guide(), buzzes: buzz.mock.calls.length };
+    await act(() => { g.handlers.onEnd?.(); g.handlers.onFinalize(); });
+    expect(guide()).toBeNull();
+    expect(useEditorStore.getState().past).toHaveLength(1);
+    return held;
+  };
+  beforeEach(() => {
+    useEditorStore.getState().reset(); useEditorStore.getState().setProject(snapProject); useEditorStore.getState().seek(3.3); useEditorStore.getState().setZoom(80);
+    useSnapGuide.setState({ time: null }); buzz.mockClear();
+  });
+  const m = () => useEditorStore.getState().project!.audioTracks.find((v) => v.id === "m")!;
+  const handle = async (label: string) => { await act(() => { useEditorStore.getState().selectAudio("m"); }); return screen.getByLabelText(label).props.gesture as SnapG; };
+
+  test("a move snaps the start onto the text's start", async () => {
+    await render(<AudioLane kind="music" />);
+    const held = await snapDrag(screen.getByTestId("audio-bar-m").props.gesture as SnapG, 0.46);   // start 0.96 → 1
+    expect(m()).toMatchObject({ start: 1, trimStart: 0, trimEnd: 9 });
+    expect(held).toEqual({ guide: 1, buzzes: 1 });
+  });
+
+  test("the end handle snaps the bar's end to the project's end", async () => {
+    await render(<AudioLane kind="music" />);
+    const held = await snapDrag(await handle("Music end handle"), -2.46);   // end 7.04 → 7
+    expect(m()).toMatchObject({ start: 0.5, trimStart: 0, trimEnd: 6.5 });
+    expect(held).toEqual({ guide: 7, buzzes: 1 });
+  });
+
+  test("the start handle moves the bar's END (the start stays), so the end is what snaps", async () => {
+    await render(<AudioLane kind="music" />);
+    const held = await snapDrag(await handle("Music start handle"), 2.46);   // end 9.5 − 2.46 = 7.04 → 7
+    expect(m()).toMatchObject({ start: 0.5, trimStart: 2.5, trimEnd: 9 });
+    expect(held).toEqual({ guide: 7, buzzes: 1 });
+  });
+
+  test("a snap past the end of the song is not taken", async () => {
+    // The song is already at its full length: its end (9.5) cannot reach the beat at 9.55.
+    useEditorStore.getState().setProject({ ...snapProject, beatMarkers: [2, 6, 9.55] });
+    useEditorStore.getState().seek(3.3); useEditorStore.getState().setZoom(80);
+    await render(<AudioLane kind="music" />);
+    const held = await snapDrag(await handle("Music end handle"), 0.03);   // end 9.53 → 9.55, which the op clamps back to 9.5
+    expect(m()).toMatchObject({ start: 0.5, trimStart: 0, trimEnd: 9 });
+    expect(held).toEqual({ guide: null, buzzes: 0 });
+  });
+
+  test("touching a handle also begins the body's pan, which fails: its finalize does not stop the handle snapping", async () => {
+    await render(<AudioLane kind="music" />);
+    const g = await handle("Music end handle");
+    await act(() => { g.handlers.onStart(); (screen.getByTestId("audio-bar-m").props.gesture as SnapG).handlers.onFinalize(); g.handlers.onUpdate({ translationX: -2.46 * 80 }); });   // end 7.04 → 7
+    expect(m()).toMatchObject({ start: 0.5, trimStart: 0, trimEnd: 6.5 });
+    expect(guide()).toBe(7);
+    expect(buzz).toHaveBeenCalledTimes(1);
+    await act(() => { g.handlers.onFinalize(); });
+    expect(guide()).toBeNull();
+  });
+
+  test("a bar removed in the middle of a drag takes its guide with it", async () => {
+    const view = await render(<AudioLane kind="music" />);
+    const g = await handle("Music end handle");
+    await act(() => { g.handlers.onStart(); g.handlers.onUpdate({ translationX: -2.46 * 80 }); });
+    expect(guide()).toBe(7);
+    await view.unmount();
+    expect(guide()).toBeNull();
+  });
 });

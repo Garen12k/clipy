@@ -241,6 +241,8 @@ struct ExportRequest: Record {
   @Field var aspectRatio: String = "9:16"
   @Field var resolution: Int = 1080
   @Field var outputPath: String = ""
+  @Field var fps: Int = 30                          // 24 | 30 | 60 (anything else → 30); a request without it exports at 30
+  @Field var bitrate: Double = 0                    // video bits per second the file may use ("Smaller file"); 0 or absent = no limit
 }
 
 enum ExportError: Error, LocalizedError {
@@ -308,9 +310,31 @@ private struct PlacedClip {
 /// Events go through `onEvent`: `progress` (repeating), then exactly one of `done` / `cancelled` / `error`.
 /// Errors thrown from `start` are NOT emitted here — the caller (the module) turns them into an `error` event.
 final class ExportSession {
-  /// Frames per second of the exported video: the composition's frame duration, the still "hold" frame of a
-  /// transition handle and the sampling of text / sticker motion (`OverlayMotion.fps`) all use this one rate.
+  /// The default frames per second of the exported video (a request asks for another rate with `fps`). Whatever
+  /// rate the request asks for, the still "hold" frame of a transition handle (a length of source, not an output
+  /// rate) and the sampling of text / sticker motion (`OverlayMotion.fps`) stay at this one rate.
   static let frameRate: Int32 = 30
+  /// The frame rates a request may ask for (`EXPORT_FPS` in src/editor/model/types.ts); anything else exports at `frameRate`.
+  static let frameRates: [Int32] = [24, 30, 60]
+  static func frameRate(for fps: Int) -> Int32 {
+    let rate = Int32(clamping: fps)
+    return frameRates.contains(rate) ? rate : frameRate
+  }
+  /// Bits per second allowed for the sound on top of the video bitrate when the file length is limited.
+  static let audioAllowance: Double = 256_000
+  /// `AVAssetExportSession` has no bitrate setting; `fileLengthLimit` is the nearest control. Only a request with a
+  /// bitrate above 0 ("Smaller file") uses it; set to false to never use it.
+  static let limitsFileLength = true
+  /// Bytes the exported file may take: (video bitrate + audio allowance) × seconds / 8, rounded up. Nil = no limit
+  /// (a bitrate or length that is 0, negative or not finite — the default request among them).
+  /// The limit is a ceiling the session tries to respect, not a target bitrate: a file that would be smaller anyway
+  /// is not changed by it, and Apple documents that the result may still come out somewhat over it.
+  static func fileLengthLimit(bitrate: Double, seconds: Double) -> Int64? {
+    guard limitsFileLength, bitrate.isFinite, seconds.isFinite, bitrate > 0, seconds > 0 else { return nil }
+    let bytes = ((bitrate + audioAllowance) * seconds / 8).rounded(.up)
+    guard bytes < Double(Int64.max) else { return nil }   // too large to be a limit (and `Int64(_:)` would trap)
+    return Int64(bytes)
+  }
 
   let id = UUID().uuidString
   private let lock = NSLock()
@@ -814,6 +838,7 @@ final class ExportSession {
     guard let outputURL = Self.fileURL(from: request.outputPath) else { throw ExportError.badOutputPath }
     guard !request.clips.isEmpty else { throw ExportError.sessionFailed("Nothing to export") }
     let renderSize = Self.renderSize(aspect: request.aspectRatio, resolution: request.resolution)
+    let fps = Self.frameRate(for: request.fps)       // 30 unless the request asks for 24 or 60
 
     // 0. Pre-pass: photos → video, reversed clips → reversed copies, in a per-export temp folder. The folder is
     //    removed when this function exits (failure, cancel) unless the export was handed off, in which case the
@@ -1190,7 +1215,7 @@ final class ExportSession {
     let videoComposition = AVMutableVideoComposition()
     videoComposition.customVideoCompositorClass = ClipyCompositor.self
     videoComposition.renderSize = renderSize
-    videoComposition.frameDuration = CMTime(value: 1, timescale: ExportSession.frameRate)
+    videoComposition.frameDuration = CMTime(value: 1, timescale: fps)
     videoComposition.instructions = instructions
 
     // Text, caption and sticker overlays, composited on top of the video by Core Animation.
@@ -1226,6 +1251,10 @@ final class ExportSession {
       session.audioMix = mix
     }
     session.shouldOptimizeForNetworkUse = true
+    // "Smaller file" only: a request with a bitrate above 0 caps the file's length. Without one (the default) the
+    // limit is nil and the session's `fileLengthLimit` is never touched.
+    let seconds = CMTimeGetSeconds(composition.duration)
+    if let limit = Self.fileLengthLimit(bitrate: request.bitrate, seconds: seconds) { session.fileLengthLimit = limit }
 
     lock.lock()
     let cancelledBeforeExport = isCancelled

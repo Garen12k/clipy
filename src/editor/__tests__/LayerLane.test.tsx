@@ -1,12 +1,14 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import * as Haptics from "expo-haptics";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { layerEnd } from "@/src/editor/model/timeline";
-import { makeAudioTrack, makeClip, makeLayer, makeOverlay, makePhotoClip, makeProject, type LayerClip } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker, type LayerClip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { useToast } from "@/src/ui/Toast";
 import { layerTrimFromDrag } from "../components/LayerBar";
 import { LayerLane } from "../components/LayerLane";
+import { useSnapGuide } from "../snapping";
 
 const TOAST = "Only two video layers can play at the same time.";
 const photoLayer = (id: string, start: number, seconds = 3): LayerClip => ({ ...makePhotoClip({ id, seconds }), start });
@@ -274,4 +276,107 @@ test("a very short layer is drawn 12 pt wide without a label and stays tappable;
   expect(st().selectedClipId).toBe("t");
   expect(screen.getByLabelText("Layer start handle")).toHaveStyle({ left: 0, width: 6 });
   expect(screen.getByLabelText("Layer end handle")).toHaveStyle({ right: 0, width: 6 });
+});
+
+describe("snapping", () => {
+  // The project of model/__tests__/snap.test.ts. Main track a 0–4, b 4–7. Text o 1–2.5. Sticker s 6–6.5. Music m 0.5–9.5. Layer l 3–5.
+  // Effect e 5.5–6.5. Beats 2 and 6. Playhead 3.3. Zoom 80 → an edge within 0.1 s of a target snaps.
+  const snapProject = makeProject({
+    clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 6, speed: 2 })],
+    overlays: [makeOverlay({ id: "o", start: 1, end: 2.5 }), makeSticker({ id: "s", start: 6, end: 6.5 })],
+    audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 9, start: 0.5 })],
+    layers: [makeLayer({ id: "l", sourceDuration: 4, trimEnd: 2, start: 3 })],
+    effects: [makeEffect({ id: "e", start: 5.5, end: 6.5 })],
+    beatMarkers: [2, 6],
+  });
+  const buzz = Haptics.impactAsync as jest.Mock;
+  const guide = () => useSnapGuide.getState().time;
+  type SnapG = { handlers: { onStart: () => void; onUpdate: (e: { translationX: number }) => void; onEnd?: () => void; onFinalize: () => void } };
+  /** One whole gesture at zoom 80, `seconds` of drag per frame; returns what was showing just before the finger lifted. */
+  const snapDrag = async (g: SnapG, ...seconds: number[]) => {
+    await act(() => { g.handlers.onStart(); for (const s of seconds) g.handlers.onUpdate({ translationX: s * 80 }); });
+    const held = { guide: guide(), buzzes: buzz.mock.calls.length };
+    await act(() => { g.handlers.onEnd?.(); g.handlers.onFinalize(); });
+    expect(guide()).toBeNull();
+    expect(useEditorStore.getState().past).toHaveLength(1);
+    return held;
+  };
+  beforeEach(() => {
+    useEditorStore.getState().reset(); useEditorStore.getState().setProject(snapProject); useEditorStore.getState().seek(3.3); useEditorStore.getState().setZoom(80);
+    useSnapGuide.setState({ time: null }); buzz.mockClear();
+  });
+  const l = () => layer("l");
+  const snapHandle = async (id: string, which: "start" | "end") => (await handleOf(id, which)) as unknown as SnapG;
+  const bar = (id: string) => gestureOf(screen.getByTestId(`layer-bar-${id}`)) as unknown as SnapG;
+
+  test("a move snaps the start onto the playhead", async () => {
+    await render(<LayerLane />);
+    // start 3.27 → 0.03 from the playhead at 3.3; the end 5.27 is near nothing
+    const held = await snapDrag(bar("l"), 0.27);
+    expect(l()).toMatchObject({ start: 3.3, trimStart: 0, trimEnd: 2 });
+    expect(held).toEqual({ guide: 3.3, buzzes: 1 });
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  test("a move onto the beat: the bar starts at 2", async () => {
+    await render(<LayerLane />);
+    const held = await snapDrag(bar("l"), -0.96);   // start 2.04 → 2 (and the end 4.04 → the cut at 4: the same place)
+    expect(l().start).toBe(2);
+    expect(held.buzzes).toBe(1);
+    expect([2, 4]).toContain(held.guide);
+  });
+
+  test("the end handle snaps the end to the effect's start", async () => {
+    await render(<LayerLane />);
+    const held = await snapDrag(await snapHandle("l", "end"), 0.46);   // end 5.46 → 5.5
+    expect(l().start).toBe(3);
+    expect(l().trimEnd).toBeCloseTo(2.5, 9);
+    expect(held).toEqual({ guide: 5.5, buzzes: 1 });
+  });
+
+  test("the start handle snaps the start to the playhead; the end stays", async () => {
+    await render(<LayerLane />);
+    const held = await snapDrag(await snapHandle("l", "start"), 0.27);   // start 3.27 → 3.3
+    expect(l().trimStart).toBeCloseTo(0.3, 9);
+    expect(l().start).toBeCloseTo(3.3, 9);
+    expect(layerEnd(l())).toBeCloseTo(5, 9);
+    expect(held).toEqual({ guide: 3.3, buzzes: 1 });
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  test("a snap the two-layers rule refuses is not taken, and the refusal is announced as before", async () => {
+    // x and y fill 0–4, so z (6–10) may not start before 4. A beat at 3.95 lies inside the refused stretch.
+    useEditorStore.getState().setProject(makeProject({ clips: [main], beatMarkers: [3.95], layers: [
+      makeLayer({ id: "x", sourceDuration: 4, start: 0 }), makeLayer({ id: "y", sourceDuration: 4, start: 0 }),
+      makeLayer({ id: "z", sourceDuration: 10, trimStart: 4, trimEnd: 8, start: 6 }) ] }));
+    useEditorStore.getState().setZoom(80);
+    await render(<LayerLane />);
+    // 4.02 → snaps onto the others' end at 4 (allowed: touching). Then 3.96 → the beat at 3.95: refused, as is 3.96 itself.
+    const held = await snapDrag(bar("z"), -1.98, -2.04);
+    expect(layer("z").start).toBe(4);
+    expect(held).toEqual({ guide: null, buzzes: 1 });
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(show).toHaveBeenCalledWith(TOAST);
+  });
+
+
+  test("touching a handle also begins the body's pan, which fails: its finalize does not stop the handle snapping", async () => {
+    await render(<LayerLane />);
+    const g = await snapHandle("l", "end");
+    await act(() => { g.handlers.onStart(); bar("l").handlers.onFinalize(); g.handlers.onUpdate({ translationX: 0.46 * 80 }); });   // end 5.46 → 5.5
+    expect(l().trimEnd).toBeCloseTo(2.5, 9);
+    expect(guide()).toBe(5.5);
+    expect(buzz).toHaveBeenCalledTimes(1);
+    await act(() => { g.handlers.onEnd?.(); g.handlers.onFinalize(); });
+    expect(guide()).toBeNull();
+  });
+
+  test("a bar removed in the middle of a drag takes its guide with it", async () => {
+    const view = await render(<LayerLane />);
+    const g = await snapHandle("l", "end");
+    await act(() => { g.handlers.onStart(); g.handlers.onUpdate({ translationX: 0.46 * 80 }); });
+    expect(guide()).toBe(5.5);
+    await view.unmount();
+    expect(guide()).toBeNull();
+  });
 });

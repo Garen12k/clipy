@@ -1,13 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { moveLayer, trimLayer } from "@/src/editor/model/ops";
-import { clipDuration, sourceAfter, timeToX, xToTime } from "@/src/editor/model/timeline";
+import { clipDuration, layerEnd, sourceAfter, timeToX, xToTime } from "@/src/editor/model/timeline";
 import { clampNum, isPhoto, LAYER_LIMITS, PHOTO, type LayerClip, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { useToast } from "@/src/ui/Toast";
+import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { LANE_HEIGHT } from "../timelineLayout";
 
 const HANDLE_W = 12;
@@ -62,13 +63,19 @@ export function LayerBar({ layer: l, missing = false, selected, overlapping = fa
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const store = useEditorStore.getState();
   // Drag state lives in a ref object: gesture callbacks each get their own copy of captured variables.
-  const dragRef = useRef({ start: l.start, trimStart: l.trimStart, trimEnd: l.trimEnd, refused: false });
+  const dragRef = useRef({ start: l.start, end: layerEnd(l), trimStart: l.trimStart, trimEnd: l.trimEnd, refused: false });
   const current = (p: Project | null) => p?.layers.find((v) => v.id === l.id);
   const snap = () => {
     const cur = current(useEditorStore.getState().project);
-    if (cur) dragRef.current = { start: cur.start, trimStart: cur.trimStart, trimEnd: cur.trimEnd, refused: false };
+    if (cur) dragRef.current = { start: cur.start, end: layerEnd(cur), trimStart: cur.trimStart, trimEnd: cur.trimEnd, refused: false };
     store.beginTransaction();
   };
+  // Snapping: one snapper per gesture (see `createBarSnappers`). A snap counts only when the op really leaves the dragged edge on the target:
+  // one the op clamps away or refuses (the overlap rule) is not taken, and the frame is the finger's own.
+  const snappers = useRef(createBarSnappers()).current;
+  useEffect(() => () => endSnappers(snappers), [snappers]);   // removed mid-drag: the guide goes with the bar
+  const begin = (which: keyof BarSnappers, ...edges: ("start" | "end")[]) => () => { snap(); snappers[which].begin(l.id); snappers[which].rest(...edges.map((k) => dragRef.current[k])); };
+  const on = (q: Project, target: number, ...edges: ("start" | "end")[]) => { const v = current(q); return !!v && edges.some((k) => sameTime(k === "start" ? v.start : layerEnd(v), target)); };
   /** One frame of a drag. `wants` says whether the frame asks for a change: an op that then returns the same project has refused it. */
   const apply = (translationX: number, op: (p: Project, cur: LayerClip) => { next: Project; wants: boolean }) =>
     store.applyTransient((p) => {
@@ -88,18 +95,24 @@ export function LayerBar({ layer: l, missing = false, selected, overlapping = fa
   const gestures = useMemo(() => {
     const trim = (handle: "left" | "right") => (e: { translationX: number }) =>
       apply(e.translationX, (p, cur) => {
-        const t = layerTrimFromDrag(cur, handle, dragRef.current, e.translationX, pps);
-        return { next: trimLayer(p, l.id, t.trimStart, t.trimEnd, t.anchor), wants: Math.abs(t.trimStart - cur.trimStart) > SAME || Math.abs(t.trimEnd - cur.trimEnd) > SAME };
+        // The edge this handle moves on screen: the bar's start (left) or its end (right). Its snapped time goes back into a drag
+        // distance for `layerTrimFromDrag`; a frame that does not snap keeps the finger's own distance, exactly as before.
+        const edge = handle === "left" ? "start" : "end", from = dragRef.current[edge], snapper = snappers[handle];
+        const at = (tx: number) => { const t = layerTrimFromDrag(cur, handle, dragRef.current, tx, pps); return { t, next: trimLayer(p, l.id, t.trimStart, t.trimEnd, t.anchor) }; };
+        const to = snapper.time(from + xToTime(e.translationX, pps), (s, target) => on(at(timeToX(s - from, pps)).next, target, edge));
+        const { t, next } = at(snapper.snapped() ? timeToX(to - from, pps) : e.translationX);
+        return { next, wants: Math.abs(t.trimStart - cur.trimStart) > SAME || Math.abs(t.trimEnd - cur.trimEnd) > SAME };
       });
-    const move = Gesture.Pan().activateAfterLongPress(150).onStart(snap)
+    const move = Gesture.Pan().activateAfterLongPress(150).onStart(begin("move", "start", "end"))
       .onUpdate((e) => apply(e.translationX, (p, cur) => {
-        const start = Math.max(0, dragRef.current.start + xToTime(e.translationX, pps));
+        const place = (s: number) => moveLayer(p, l.id, Math.max(0, s));
+        const start = Math.max(0, snappers.move.move(dragRef.current.start + xToTime(e.translationX, pps), clipDuration(cur), (s, target) => on(place(s), target, "start", "end")));
         // The op keeps 3 decimals: a start that rounds to where the bar already is asks for nothing.
-        return { next: moveLayer(p, l.id, start), wants: Math.abs(Math.round(start * 1000) / 1000 - cur.start) > SAME };
+        return { next: place(start), wants: Math.abs(Math.round(start * 1000) / 1000 - cur.start) > SAME };
       }))
-      .onEnd(finish).runOnJS(true);
-    const left = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(snap).onUpdate(trim("left")).onEnd(finish).runOnJS(true);
-    const right = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(snap).onUpdate(trim("right")).onEnd(finish).runOnJS(true);
+      .onEnd(finish).onFinalize(() => snappers.move.end()).runOnJS(true);
+    const left = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("left", "start")).onUpdate(trim("left")).onEnd(finish).onFinalize(() => snappers.left.end()).runOnJS(true);
+    const right = Gesture.Pan().activeOffsetX([-3, 3]).blocksExternalGesture(move).onStart(begin("right", "end")).onUpdate(trim("right")).onEnd(finish).onFinalize(() => snappers.right.end()).runOnJS(true);
     return { move, left, right };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [l.id, pps]);

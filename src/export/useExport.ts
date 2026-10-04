@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normaliseTransitions } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
-import { EFFECT_END_SLACK, type Project } from "@/src/editor/model/types";
+import { clampExportSettings, DEFAULT_EXPORT_SETTINGS, EFFECT_END_SLACK, type ExportSettings, type Project } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
-import { estimateBytes, exportableAudio, exportableClips, exportableLayers, type Resolution } from "./estimate";
+import { estimateBytes, exportableAudio, exportableClips, exportableLayers, requestBitrate, type Resolution } from "./estimate";
 
 export type ExportState = { status: "idle" | "unavailable" | "exporting" | "done" | "error"; progress: number; fileUri?: string; message?: string };
 
@@ -27,8 +27,9 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
     return () => sub.remove();
   }, []);
 
-  const start = useCallback(async (resolution: Resolution) => {
+  const start = useCallback(async (resolution: Resolution, chosen: ExportSettings = project?.exportSettings ?? DEFAULT_EXPORT_SETTINGS) => {
     jobId.current = null;
+    const settings = clampExportSettings(chosen);   // the native side traps on a non-whole fps / bitrate
     if (!project || !isNativeAvailable()) return;
     const filtered = exportableClips(project, missingSourceUris);
     if (filtered.length === 0) { setState({ status: "error", progress: 0, message: "Add at least one clip first." }); return; }
@@ -36,7 +37,7 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
     setState({ status: "exporting", progress: 0 });
     try {
       const total = clips.reduce((s, c) => s + clipDuration(c), 0);
-      const need = estimateBytes(total, resolution) * 2;
+      const need = estimateBytes(total, resolution, settings) * 2;
       if ((await expoFs.freeBytes()) < need) { setState({ status: "error", progress: 0, message: "Not enough free space on this iPhone for the export." }); return; }
       await expoFs.mkdir(`${expoFs.cacheDir}exports`);
       const outputPath = `${expoFs.cacheDir}exports/${project.id}-${Date.now()}.mp4`;
@@ -54,7 +55,7 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
           .filter((e) => e.end - e.start >= EFFECT_END_SLACK)
           .map(toExportEffect),
         audioTracks,
-        aspectRatio: project.aspectRatio, resolution, outputPath,
+        aspectRatio: project.aspectRatio, resolution, fps: settings.fps, bitrate: requestBitrate(resolution, settings), outputPath,
       });
     } catch (e) { setState({ status: "error", progress: 0, message: e instanceof Error ? e.message : String(e) }); }
   }, [project, missingSourceUris]);

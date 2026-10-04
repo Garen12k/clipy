@@ -29,7 +29,7 @@ const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.te
 const small = { fontSize: 12 } as const;
 const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
 
-export function PostScreenBody({ target: { video, projectId, title } }: { target: PostTarget }) {
+export function PostScreenBody({ target: { video, projectId, title, coverMs } }: { target: PostTarget }) {
   const session = useSession();
   const signedIn = session.status === "signedIn";
   const accounts = useAccounts(signedIn);
@@ -40,7 +40,7 @@ export function PostScreenBody({ target: { video, projectId, title } }: { target
     if (projectId && store.project?.id === projectId) store.addPostRecord({ platform, url, postedAt: nowIso() });
   }, [projectId]);
   const { rows, busy, start, retry, cancel } = usePost(video, onPosted);
-  const form = usePostForm(video, accounts.platforms, title, rows, accounts.refresh);
+  const form = usePostForm(video, accounts.platforms, title, rows, accounts.refresh, coverMs);
   const [optionsFor, setOptionsFor] = useState<PlatformId | null>(null);
   useLeaveGuard(busy, cancel);
 

@@ -1,6 +1,7 @@
 import { normaliseTransitions } from "./ops";
+import { clipDuration } from "./timeline";
 import {
-  AUDIO_KINDS, AUDIO_LIMITS, BLEND_IDS, clampChroma, clampEffectRect, isRegionEffect, clampOpacity, LAYER_LIMITS, MASK_IDS, captionLength, clampBeatMarkers, clampFade, clampAdjust, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, FONT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, isHexColor, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
+  clampCover, clampExportSettings, AUDIO_KINDS, AUDIO_LIMITS, BLEND_IDS, clampChroma, clampEffectRect, isRegionEffect, clampOpacity, LAYER_LIMITS, MASK_IDS, captionLength, clampBeatMarkers, clampFade, clampAdjust, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampNum, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform, CLIP_KINDS, DEFAULT_TRANSFORM, EFFECT_IDS, FONT_IDS, EFFECT_LIMITS, FILTER_IDS, FULL_CROP, isHexColor, PHOTO, POST_PLATFORMS, SCHEMA_VERSION, SHAPE_IDS, SPEED_LIMITS, TRANSITION_TYPES,
   type AudioKind, type AudioTrack, type BlendId, type Clip, type ClipAdjust, type ClipBackground, type ClipKind, type ClipTransform, type CropRect, type EffectItem, type LayerClip, type MaskId, type Overlay, type PostRecord, type Project, type ShapeId,
 } from "./types";
 
@@ -84,12 +85,12 @@ function normaliseLayers(v: unknown, taken: Set<string>): LayerClip[] {
 }
 
 /**
- * Brings a v2–v12 file to a safe v12 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
+ * Brings a v2–v13 file to a safe v13 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
  * null, unknown transition → dissolve (duration kept), transitions re-capped (last clip cleared), overlays get a kind, bad stickers fixed/dropped,
  * clips get kind/transform/crop/background/reversed defaults or repairs, photos forced to the photo rules, look fields (strength, adjust) clamped, effects repaired,
  * speed curves repaired (a curve forces speed 1; photos never have one), audio tracks get a known kind and clamped fades (at most maxTracks kept), clips get clamped fades (photos 0), clips get opacity / mask repaired, layers are repaired like clips with a start (see normaliseLayers),
  * layers keep a known blend (main clips are forced to normal), green screens are valid or null, region effects always have a clamped rect (other effects none),
- * ducking is a boolean and beat markers are sorted, spaced and capped.
+ * ducking is a boolean and beat markers are sorted, spaced and capped, export settings are known values, the cover is inside the project or null.
  */
 function normaliseCurrent(raw: Raw): Raw {
   const mapped = (raw.clips as Clip[]).map((c) => normaliseClip(c));
@@ -115,7 +116,8 @@ function normaliseCurrent(raw: Raw): Raw {
     kind: (AUDIO_KINDS as readonly unknown[]).includes(a.kind) ? (a.kind as AudioKind) : "music",
     fadeIn: clampFade(a.fadeIn), fadeOut: clampFade(a.fadeOut),
   }));
-  return { ...raw, clips, layers, overlays, effects, audioTracks, posts, ducking: raw.ducking === true, beatMarkers: clampBeatMarkers(raw.beatMarkers), schemaVersion: SCHEMA_VERSION };
+  return { ...raw, clips, layers, overlays, effects, audioTracks, posts, ducking: raw.ducking === true, beatMarkers: clampBeatMarkers(raw.beatMarkers), schemaVersion: SCHEMA_VERSION,
+    exportSettings: clampExportSettings(raw.exportSettings), cover: clampCover(raw.cover, clips.reduce((s, c) => s + clipDuration(c), 0)) };
 }
 
 /** Upgrades any supported project file to the current schema. Throws readable errors for bad input. */
@@ -126,6 +128,6 @@ export function migrateProject(raw: unknown): Project {
   if (version < 1) throw new Error("Project file is missing required fields");
   let cur = raw as Raw;
   if (version === 1) cur = v1to2(cur);
-  // v2 → v12 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
+  // v2 → v13 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
   return normaliseCurrent(cur) as unknown as Project;
 }
