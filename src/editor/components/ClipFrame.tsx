@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Image, View } from "react-native";
 import { coversFrame, placeClip } from "@/src/editor/model/clipLayout";
-import { isPhoto, type Clip } from "@/src/editor/model/types";
+import { isPhoto, type Clip, type ClipTransform } from "@/src/editor/model/types";
 import { getThumb } from "./thumbnails";
 
 /** The empty-frame colour the export also draws behind a clip (user content, not UI chrome). */
@@ -29,10 +29,15 @@ function useBlurStill(clip: Clip, wanted: boolean): string | null {
  * Draws one clip in a frame of `frameW`×`frameH`: its background (only where the picture leaves the frame
  * uncovered), then the cropped picture placed by `placeClip`. A video's picture is `children` (the single
  * `VideoView`, `contentFit="fill"`); a photo's picture is an `Image` and `children` are ignored.
+ * `transform` / `opacity` are the clip's motion at the playhead (animations, keyframes): the transform replaces the
+ * clip's own for placement, the opacity fades the picture only. Both absent for a clip without motion. Only styles
+ * change with them — the tree stays the same, so the `VideoView` never remounts.
  */
-export function ClipFrame({ clip, frameW, frameH, children }: { clip: Clip; frameW: number; frameH: number; children?: ReactNode }) {
-  const placed = placeClip({ width: clip.width, height: clip.height }, clip.crop, clip.transform, frameW, frameH);
-  const showBackground = !coversFrame(placed, frameW, frameH);
+export function ClipFrame({ clip, frameW, frameH, transform, opacity, children }:
+  { clip: Clip; frameW: number; frameH: number; transform?: ClipTransform; opacity?: number; children?: ReactNode }) {
+  const placed = placeClip({ width: clip.width, height: clip.height }, clip.crop, transform ?? clip.transform, frameW, frameH);
+  // A see-through picture shows the clip's own background behind it, as the export does.
+  const showBackground = !coversFrame(placed, frameW, frameH) || (opacity !== undefined && opacity < 1);
   const blurStill = useBlurStill(clip, showBackground && clip.background.type === "blur");
   const contentW = placed.width / clip.crop.w, contentH = placed.height / clip.crop.h;
 
@@ -49,6 +54,7 @@ export function ClipFrame({ clip, frameW, frameH, children }: { clip: Clip; fram
           position: "absolute", overflow: "hidden",
           left: placed.centerX - placed.width / 2, top: placed.centerY - placed.height / 2, width: placed.width, height: placed.height,
           transform: [{ rotate: `${placed.rotation}deg` }, { scaleX: placed.flipH ? -1 : 1 }, { scaleY: placed.flipV ? -1 : 1 }],
+          ...(opacity === undefined ? null : { opacity }),
         }}>
         <View testID="clip-content" style={{ position: "absolute", left: -clip.crop.x * contentW, top: -clip.crop.y * contentH, width: contentW, height: contentH }}>
           {isPhoto(clip)

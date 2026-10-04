@@ -46,3 +46,43 @@ test("renders nothing without a clip", async () => {
   await render(<TransformSheet clipId={null} visible onClose={() => {}} />);
   expect(screen.queryByText("Transform")).toBeNull();
 });
+
+describe("a clip with keyframes", () => {
+  const pin = (t: number, over: Partial<{ x: number; y: number; scale: number; rotation: number; opacity: number }> = {}) =>
+    ({ t, x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, ...over });
+  const start = [pin(0, { x: 0.2, scale: 2 }), pin(2, { x: 0.4, scale: 2 })];
+  const pins = (i = 0) => useEditorStore.getState().project!.clips[i].keyframes;
+  beforeEach(() => {
+    useEditorStore.getState().setProject(makeProject({ clips: [
+      makeClip({ id: "a", sourceDuration: 4, width: 1920, height: 1080, keyframes: start }),
+      makeClip({ id: "b", sourceDuration: 4, keyframes: start }),
+    ] }));
+  });
+
+  test("Fit, Fill and Reset write the pin at the playhead, each as one undo step, and leave the static transform alone", async () => {
+    useEditorStore.getState().seek(1);
+    const project = useEditorStore.getState().project!;
+    await render(<TransformSheet clipId="a" visible onClose={() => {}} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Fill" }));
+    expect(pins().map((k) => k.t)).toEqual([0, 1, 2]);
+    expect(pins()[1]).toEqual(pin(1));
+    expect(useEditorStore.getState().past).toHaveLength(1);
+    await fireEvent.press(screen.getByRole("button", { name: "Fit" }));
+    expect(pins()).toEqual(fitClip(project, "a", 1).clips[0].keyframes);
+    expect(pins()[1].scale).toBeLessThan(1);
+    await fireEvent.press(screen.getByRole("button", { name: "Reset" }));
+    expect(pins()).toHaveLength(3);
+    expect(pins()[1]).toEqual(pin(1));
+    expect(pins()[0]).toEqual(start[0]);
+    expect(t()).toEqual({ scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false });
+    expect(useEditorStore.getState().past).toHaveLength(3);
+  });
+
+  test("with the playhead on another clip, Fit / Fill / Reset leave the pins alone", async () => {
+    useEditorStore.getState().seek(1); // on clip a
+    await render(<TransformSheet clipId="b" visible onClose={() => {}} />);
+    for (const name of ["Fit", "Fill", "Reset"]) await fireEvent.press(screen.getByRole("button", { name }));
+    expect(pins(1)).toEqual(start);
+    expect(pins(0)).toEqual(start);
+  });
+});

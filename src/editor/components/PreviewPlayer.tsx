@@ -1,6 +1,7 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
+import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
 import { clipAt, clipStartTimes, outputToSource, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue, isPhoto } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -164,6 +165,8 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const ratio = aspectRatioValue(project.aspectRatio);
   const total = totalDuration(project);
   const empty = project.clips.length === 0;
+  // Animations and keyframes at the playhead; null (no overrides at all) for a clip without any.
+  const motion = hit && hasClipMotion(hit.clip) ? resolveClipMotion(hit.clip, hit.offsetInClip) : null;
 
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.md }}>
@@ -183,7 +186,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
           // Timeline effects shake / zoom only the picture. This view is always there (its transform comes
           // and goes) so an effect starting or ending never remounts the VideoView; the frame above clips it.
           <View testID="effect-transform" pointerEvents="none" style={[effectFill, effectTransform]}>
-            <ClipFrame clip={hit.clip} frameW={frame.w} frameH={frame.h}>
+            <ClipFrame clip={hit.clip} frameW={frame.w} frameH={frame.h} transform={motion?.transform} opacity={motion?.opacity}>
               <VideoView testID="preview-video" player={player} style={{ width: "100%", height: "100%" }} contentFit="fill" nativeControls={false} />
             </ClipFrame>
           </View>

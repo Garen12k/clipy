@@ -2,7 +2,7 @@ jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async
 import { render, screen } from "@testing-library/react-native";
 import { StyleSheet, Text } from "react-native";
 import { getThumb } from "@/src/editor/components/thumbnails";
-import { fitScale } from "@/src/editor/model/clipLayout";
+import { fitScale, placeClip } from "@/src/editor/model/clipLayout";
 import { makeClip, makePhotoClip, type Clip } from "@/src/editor/model/types";
 import { ClipFrame } from "../components/ClipFrame";
 
@@ -81,4 +81,46 @@ test("a photo is drawn as an Image and children are ignored", async () => {
   await render(<ClipFrame clip={clip} frameW={W} frameH={H}><Text>video</Text></ClipFrame>);
   expect(screen.getByTestId("clip-photo").props.source).toEqual({ uri: clip.sourceUri });
   expect(screen.queryByText("video")).toBeNull();
+});
+
+describe("motion overrides (transform / opacity)", () => {
+  const moved = { scale: 0.5, x: 0.25, y: -0.1, rotation: 40, flipH: false, flipV: true };
+
+  test("a transform override places the picture instead of the clip's own transform", async () => {
+    const clip = makeClip({ id: "a", sourceDuration: 4 });
+    await render(<ClipFrame clip={clip} frameW={W} frameH={H} transform={moved} />);
+    const placed = placeClip({ width: clip.width, height: clip.height }, clip.crop, moved, W, H);
+    const box = style("clip-box");
+    expect(box.left).toBeCloseTo(placed.centerX - placed.width / 2);
+    expect(box.top).toBeCloseTo(placed.centerY - placed.height / 2);
+    expect(box.width).toBeCloseTo(W * 0.5);
+    expect(box.transform).toEqual([{ rotate: "40deg" }, { scaleX: 1 }, { scaleY: -1 }]);
+    expect(screen.getByTestId("clip-background")).toBeTruthy(); // the override no longer covers the frame
+  });
+
+  test("opacity goes on the picture box only; the background stays opaque", async () => {
+    await render(<ClipFrame clip={landscape()} frameW={W} frameH={H} opacity={0.4} />);
+    expect(style("clip-box").opacity).toBe(0.4);
+    expect(style("clip-background").opacity).toBeUndefined();
+    expect(style("clip-content").opacity).toBeUndefined();
+  });
+
+  test("a covering clip shows its background while its opacity is below 1, and not at 1", async () => {
+    const clip = makeClip({ id: "a", sourceDuration: 4, background: { type: "color", color: "#00FF00" } });
+    const view = await render(<ClipFrame clip={clip} frameW={W} frameH={H} opacity={0.5} />);
+    expect(style("clip-background")).toMatchObject({ backgroundColor: "#00FF00" });
+    await view.rerender(<ClipFrame clip={clip} frameW={W} frameH={H} opacity={1} />);
+    expect(screen.queryByTestId("clip-background")).toBeNull();
+    expect(style("clip-box").opacity).toBe(1);
+  });
+
+  test("without overrides the picture box carries no opacity (the tree is as before)", async () => {
+    const clip = makeClip({ id: "a", sourceDuration: 4 });
+    const plain = await render(<ClipFrame clip={clip} frameW={W} frameH={H}><Text>video</Text></ClipFrame>);
+    expect("opacity" in style("clip-box")).toBe(false);
+    const before = JSON.stringify(plain.toJSON());
+    await plain.rerender(<ClipFrame clip={clip} frameW={W} frameH={H} transform={undefined} opacity={undefined}><Text>video</Text></ClipFrame>);
+    expect(JSON.stringify(plain.toJSON())).toBe(before);
+    expect(Object.keys(style("clip-box")).sort()).toEqual(["height", "left", "overflow", "position", "top", "transform", "width"]);
+  });
 });
