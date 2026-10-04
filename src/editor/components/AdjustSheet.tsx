@@ -4,6 +4,7 @@ import { ScrollView } from "react-native";
 import { resetClipAdjust, setAdjustForAllClips, setClipAdjust } from "@/src/editor/model/ops";
 import { ADJUST_KEYS, ADJUST_RANGE, isNeutralAdjust, type AdjustKey } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
@@ -17,7 +18,8 @@ export const ADJUST_LABELS: Record<AdjustKey, string> = {
 };
 
 export function AdjustSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
-  const clip = useEditorStore((s) => s.project?.clips.find((c) => c.id === clipId) ?? null);
+  const clip = useItemClip(clipId);
+  const layer = useIsLayer(clipId);
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const [key, setKey] = useState<AdjustKey>("brightness");
   if (!clip) return null;
@@ -27,7 +29,9 @@ export function AdjustSheet({ clipId, visible, onClose }: { clipId: string | nul
   const neutral = isNeutralAdjust(clip.adjust);
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Adjust" action={{ label: "Apply to all", onPress: () => { haptic("light"); apply((p) => setAdjustForAllClips(p, clip.adjust)); } }}>
+    <Sheet visible={visible} onClose={onClose} title="Adjust"
+      // "Apply to all" writes the main clips: it is not offered for a layer.
+      action={layer ? undefined : { label: "Apply to all", onPress: () => { haptic("light"); apply((p) => setAdjustForAllClips(p, clip.adjust)); } }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.sm }}>
         {ADJUST_KEYS.map((k) => (
           <Chip key={k} label={clip.adjust[k] !== 0 ? `${ADJUST_LABELS[k]} •` : ADJUST_LABELS[k]} accessibilityLabel={ADJUST_LABELS[k]} selected={key === k} onPress={() => setKey(k)} />

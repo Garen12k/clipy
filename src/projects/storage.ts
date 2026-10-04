@@ -1,6 +1,6 @@
 import { totalDuration } from "@/src/editor/model/timeline";
 import { migrateProject } from "@/src/editor/model/migrate";
-import { newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AudioKind, type AudioTrack, type Clip, type PostPlatform, type Project } from "@/src/editor/model/types";
+import { newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AudioKind, type AudioTrack, type Clip, type LayerClip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
 
 export interface PickedAsset { uri: string; kind: "video" | "photo"; durationSec: number; width: number; height: number; fileName?: string }
@@ -29,7 +29,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   async function loadProject(id: string) {
     const project = parse(await fs.readText(jsonPath(id)));
     const missingSourceUris: string[] = [];
-    for (const uri of new Set([...project.clips.map((c) => c.sourceUri), ...project.audioTracks.map((a) => a.sourceUri)]))
+    for (const uri of new Set([...project.clips.map((c) => c.sourceUri), ...project.layers.map((l) => l.sourceUri), ...project.audioTracks.map((a) => a.sourceUri)]))
       if (!(await fs.exists(uri))) missingSourceUris.push(uri);
     return { project, missingSourceUris };
   }
@@ -82,7 +82,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       await fs.remove(projectDir(id)).catch(() => {});
       throw new Error("Couldn't import any of the selected items.");
     }
-    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], effects: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [] };
+    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], effects: [], layers: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [] };
     await saveProject(project);
     await writeThumb(project);
     return { project, failed };
@@ -112,13 +112,19 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       await fs.copy(c.sourceUri, dest);
       clips.push({ ...c, sourceUri: dest });
     }
+    const layers: LayerClip[] = [];
+    for (const l of project.layers) {
+      const dest = l.sourceUri.replace(projectDir(id), projectDir(copyId));
+      await fs.copy(l.sourceUri, dest);
+      layers.push({ ...l, sourceUri: dest });
+    }
     const audioTracks: AudioTrack[] = [];
     for (const a of project.audioTracks) {
       const dest = a.sourceUri.replace(projectDir(id), projectDir(copyId));
       await fs.copy(a.sourceUri, dest);
       audioTracks.push({ ...a, sourceUri: dest });
     }
-    const copy: Project = { ...project, id: copyId, name: `${project.name} copy`, clips, audioTracks, createdAt: deps.nowIso(), updatedAt: deps.nowIso(), posts: [] };
+    const copy: Project = { ...project, id: copyId, name: `${project.name} copy`, clips, layers, audioTracks, createdAt: deps.nowIso(), updatedAt: deps.nowIso(), posts: [] };
     await saveProject(copy);
     if (await fs.exists(thumbPath(id))) await fs.copy(thumbPath(id), thumbPath(copyId));
     return copy;

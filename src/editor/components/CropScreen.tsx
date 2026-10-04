@@ -3,9 +3,10 @@ import { Image, Modal, ScrollView, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { applyPreset, CROP_PRESETS, panToCorner, panToMove, type CropCorner, type CropPresetId } from "@/src/editor/model/cropBox";
 import { setClipCrop } from "@/src/editor/model/ops";
-import { clipAt, outputToSource } from "@/src/editor/model/timeline";
+import { itemOffsetAt, outputToSource } from "@/src/editor/model/timeline";
 import { FULL_CROP, isPhoto, type Clip, type CropRect } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
@@ -44,8 +45,8 @@ function useStill(clip: Clip): string | null {
   const [thumb, setThumb] = useState<string | null>(null);
   const [time] = useState(() => {
     const s = useEditorStore.getState();
-    const hit = s.project ? clipAt(s.project, s.playhead) : null;
-    return hit && hit.clip.id === clip.id ? outputToSource(clip, hit.offsetInClip) : clip.trimStart;
+    const offset = s.project ? itemOffsetAt(s.project, clip.id, s.playhead) : null;
+    return offset !== null ? outputToSource(clip, offset) : clip.trimStart;
   });
   useEffect(() => {
     if (photo) return;
@@ -57,12 +58,12 @@ function useStill(clip: Clip): string | null {
 }
 
 /**
- * Full-screen crop tool for one clip: a draggable box over an unrotated, unflipped still of the clip.
+ * Full-screen crop tool for one clip or layer: a draggable box over an unrotated, unflipped still of the clip.
  * Pan inside the box moves it; pan on a corner resizes it (locked to the chosen preset's shape). The working
  * crop is local; `Done` applies it as one undo step (none when unchanged), `Cancel` discards it.
  */
 export function CropScreen({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
-  const clip = useEditorStore((s) => (clipId ? s.project?.clips.find((c) => c.id === clipId) ?? null : null));
+  const clip = useItemClip(clipId);
   // A new editor per opening (key bumped while rendering, so the first frame is already fresh): the working
   // crop always starts from the clip's current crop. The content itself stays mounted while the Modal
   // slides away — the Modal keeps rendering it until the native dismissal finishes.

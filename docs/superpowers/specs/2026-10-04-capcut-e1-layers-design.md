@@ -1,7 +1,7 @@
 # CapCut group E, round 1 — Picture-in-picture, opacity, masks: design
 
 **Date:** 2026-10-04
-**Status:** Approved by the user ("yes", two rounds: layers + opacity + masks first; blend modes, green screen and blur box second)
+**Status:** Implemented 2026-10-04 (Swift export unverified until an EAS build exists; on-device checklist pending)
 **Roadmap:** `docs/superpowers/research/capcut-roadmap.md`, group E
 **Builds on:** schema v10
 
@@ -66,6 +66,17 @@ Every existing op that edits one clip by id (transform, crop, filter, adjust, an
 - **Timeline:** one "layers" lane (only when the project has layers) showing a bar per layer (photo / video thumbnail tint, title "Layer"), movable by long-press drag and trimmable by its handles, like audio bars. Overlapping bars stack with the selected one on top.
 - **Preview:** layers visible at the playhead are drawn above the main clip and below text / stickers, each placed by `placeClip` in the frame with its own motion, opacity and mask. A selected layer shows the gold frame and takes the pinch / drag / twist gestures; tapping a layer selects it (topmost first).
 - **Opacity sheet:** one slider 0–100 %. **Mask sheet:** three tiles.
+
+**As built:**
+- An overlay added with the playhead at the very end (or within 2 s of it) is placed 2 s before the end so it is visible.
+- "Apply to all" in the Filter / Adjust / Animation sheets is hidden when the sheet is opened on a layer.
+- Tapping a layer selects it even while playing.
+- The tap area of a masked layer is its full rectangle.
+- Layers stay visible on the last frame.
+- Layers are drawn above the main transition: a transition between two main clips never dims or covers a layer (preview and export).
+- Tapping the layer that is already selected plays / pauses, like a tap on the preview (so a full-frame layer does not block the preview tap).
+- A layer left beyond the end of the video after main clips are deleted stays in the project but cannot be reached until the video is long enough again. It still counts toward the 8-layer limit.
+- Duplicating a layer whose copy would start at or after the end of the video is refused ("There's no room after this layer.").
 
 ## 6. Preview playback
 

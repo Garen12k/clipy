@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { PLACE_VECTORS } from "./clipLayout.vectors";
+import { MASK } from "../types";
+import { MASK_VECTORS, PLACE_VECTORS } from "./clipLayout.vectors";
 
 const iosDir = join(__dirname, "../../../../modules/clipy-video/ios");
 const swift = readFileSync(join(iosDir, "ClipLayout.swift"), "utf8");
@@ -27,6 +28,10 @@ test("ClipLayout.swift uses the same tolerances as clipLayout.ts", () => {
   expect(swiftNumber("coverageEpsilon")).toBe(0.5);
 });
 
+test("ClipLayout.swift uses the same rounded-mask radius as MASK.roundedRadius", () => {
+  expect(swiftNumber("maskRoundedRadius")).toBe(MASK.roundedRadius);
+});
+
 /** The text of one `static func` in ClipLayout.swift, up to the next declaration. */
 const swiftBody = (fn: string): string => {
   const start = swift.indexOf(`static func ${fn}(`);
@@ -40,10 +45,13 @@ test("the tolerances are used where clipLayout.ts uses them", () => {
   expect(swiftBody("coversFrame")).toMatch(/straightAngleTolerance/);
   expect(swiftBody("coversFrame")).toMatch(/coverageEpsilon/);
   expect(swiftBody("coversFrame")).not.toMatch(/0\.5/);
+  expect(swiftBody("maskRadius")).toMatch(/maskRoundedRadius \* side/);
+  expect(swiftBody("maskRadius")).toMatch(/side \/ 2/);
+  expect(swiftBody("maskRadius")).not.toMatch(/0\.12/);
 });
 
 test("ClipLayout.swift mirrors every clipLayout.ts function (except the TS-only snapping)", () => {
-  for (const fn of ["isQuarterTurn", "croppedSize", "coverFactor", "fitScale", "placeClip", "coversFrame"]) {
+  for (const fn of ["isQuarterTurn", "croppedSize", "coverFactor", "fitScale", "placeClip", "maskRadius", "coversFrame"]) {
     expect(swift).toMatch(new RegExp(`static func ${fn}\\(`));
   }
 });
@@ -65,5 +73,19 @@ describe("the Swift test table embeds every PLACE_VECTORS case", () => {
     expect(expected).toContain(
       `ClipPlacement(width: ${fmt(p.width)}, height: ${fmt(p.height)}, centerX: ${fmt(p.centerX)}, centerY: ${fmt(p.centerY)}, rotation: ${fmt(p.rotation)}, flipH: ${p.flipH}, flipV: ${p.flipV})`,
     );
+  });
+});
+
+describe("the Swift test table embeds every MASK_VECTORS case", () => {
+  it("has the same number of cases", () => {
+    expect([...table.matchAll(/MaskVector\(name: "/g)]).toHaveLength(MASK_VECTORS.length);
+  });
+  it.each(MASK_VECTORS.map((v) => [v.name, v] as const))("%s", (name, v) => {
+    expect(table).toContain(
+      `MaskVector(name: "${name}", width: ${fmt(v.placed.width)}, height: ${fmt(v.placed.height)}, mask: "${v.mask}", expect: ${fmt(v.expect)})`,
+    );
+  });
+  it("the vectors are run against ClipLayout.maskRadius", () => {
+    expect(table).toMatch(/ClipLayout\.maskRadius\(v\.width, v\.height, v\.mask\)/);
   });
 });

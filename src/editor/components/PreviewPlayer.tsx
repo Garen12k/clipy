@@ -1,9 +1,10 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { clipGainAt } from "@/src/editor/model/audioMix";
-import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
-import { clipAt, clipDuration, clipStartTimes, hasSpeedCurve, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
+import { layerHit } from "@/src/editor/model/layerHit";
+import { resolveClipMotion } from "@/src/editor/model/motion";
+import { clipAt, clipDuration, clipStartTimes, findItem, hasSpeedCurve, itemOffsetAt, layersAt, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue, isPhoto, type Clip } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
 import { useEditorStore } from "@/src/editor/store";
@@ -12,10 +13,11 @@ import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePr
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { AdjustLayer } from "./AdjustLayer";
-import { ClipFrame } from "./ClipFrame";
+import { ClipFrame, clipFrameMotion } from "./ClipFrame";
 import { ClipGestures } from "./ClipGestures";
 import { EffectOverlays, useEffectTransform } from "./EffectLayer";
 import { FilterLayer } from "./FilterLayer";
+import { LayerStack } from "./LayerStack";
 import { OverlayLayer } from "./OverlayLayer";
 import { needsPreviewTag, PreviewTag } from "./PreviewTag";
 import { TransitionLayer } from "./TransitionLayer";
@@ -201,13 +203,26 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const ratio = aspectRatioValue(project.aspectRatio);
   const total = totalDuration(project);
   const empty = project.clips.length === 0;
-  // Animations and keyframes at the playhead; null (no overrides at all) for a clip without any.
-  const motion = hit && hasClipMotion(hit.clip) ? resolveClipMotion(hit.clip, hit.offsetInClip) : null;
+  // Animations, keyframes and the clip's own opacity at the playhead; no overrides at all for a default clip.
+  const motion = hit ? clipFrameMotion(hit.clip, hit.offsetInClip) : null;
 
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.md }}>
       <Pressable
-        onPress={() => {
+        onPress={(e?: GestureResponderEvent) => {
+          // A tap on a layer's picture (the topmost one there) selects it; with a layer selected, a tap anywhere else deselects it.
+          // A tap on the layer that is already selected is an ordinary tap on the preview (play / pause): a layer filling the
+          // frame must not swallow every tap.
+          // Texts and stickers sit above with their own Pressables, so a tap on one of them never gets here.
+          const s = useEditorStore.getState();
+          if (s.project && frame.w > 0 && frame.h > 0) {
+            const p = s.project, at = s.playhead;
+            // Relative to the view the touch landed in: this frame, or the gesture area that covers it exactly.
+            const point = { x: e?.nativeEvent?.locationX ?? NaN, y: e?.nativeEvent?.locationY ?? NaN };
+            const layerId = layerHit(layersAt(p, at), point, frame.w, frame.h, (l) => resolveClipMotion(l, itemOffsetAt(p, l.id, at) ?? 0));
+            if (layerId && layerId !== s.selectedClipId) { s.select(layerId); return; }
+            if (!layerId && s.selectedClipId && findItem(p, s.selectedClipId)?.layer) { s.select(null); return; }
+          }
           if (useEditorStore.getState().selectedOverlayId) { selectOverlay(null); return; }
           if (useEditorStore.getState().selectedEffectId) { useEditorStore.getState().selectEffect(null); return; }
           if (useEditorStore.getState().selectedAudioId) { useEditorStore.getState().selectAudio(null); return; }
@@ -230,8 +245,12 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         )}
         <FilterLayer filter={hit?.clip.filter ?? null} intensity={hit?.clip.filterIntensity} />
         {hit && <AdjustLayer adjust={hit.clip.adjust} />}
-        <EffectOverlays />
+        {/* The transition's dip covers the main picture only: the export draws the layers over the already-transitioned main frame. */}
         <TransitionLayer />
+        {/* Layers sit above the main clip's look layers and its transition, and below everything else. They take the picture's effect
+            transform (so they shake / zoom with it) in a view of their own: the main VideoView's place in the tree does not depend on them. */}
+        {hit && frame.w > 0 && <LayerStack frameW={frame.w} frameH={frame.h} style={effectTransform} />}
+        <EffectOverlays />
         {frame.w > 0 && <ClipGestures frameW={frame.w} frameH={frame.h} />}
         {frame.w > 0 && <OverlayLayer frameW={frame.w} frameH={frame.h} onOpenPanel={(id) => onOpenPanel?.(id)} />}
         <PreviewTag visible={needsPreviewTag(project, playhead)} />

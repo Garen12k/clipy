@@ -1,10 +1,10 @@
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
-import { render, screen } from "@testing-library/react-native";
+import { render, screen, within } from "@testing-library/react-native";
 import { StyleSheet, Text } from "react-native";
 import { getThumb } from "@/src/editor/components/thumbnails";
-import { fitScale, placeClip } from "@/src/editor/model/clipLayout";
-import { makeClip, makePhotoClip, type Clip } from "@/src/editor/model/types";
-import { ClipFrame } from "../components/ClipFrame";
+import { fitScale, maskRadius, placeClip } from "@/src/editor/model/clipLayout";
+import { makeClip, makeKeyframe, makePhotoClip, type Clip } from "@/src/editor/model/types";
+import { ClipFrame, clipFrameMotion } from "../components/ClipFrame";
 
 const W = 1080, H = 1920;
 const style = (id: string) => StyleSheet.flatten(screen.getByTestId(id).props.style);
@@ -81,6 +81,78 @@ test("a photo is drawn as an Image and children are ignored", async () => {
   await render(<ClipFrame clip={clip} frameW={W} frameH={H}><Text>video</Text></ClipFrame>);
   expect(screen.getByTestId("clip-photo").props.source).toEqual({ uri: clip.sourceUri });
   expect(screen.queryByText("video")).toBeNull();
+});
+
+describe("masks", () => {
+  const small = { scale: 0.5, x: 0, y: 0, rotation: 0, flipH: false, flipV: false };
+
+  test("rounded: the picture box gets 12 % of its shorter side as corner radius and stays clipped", async () => {
+    const clip = makeClip({ id: "a", sourceDuration: 4, mask: "rounded", transform: small });
+    await render(<ClipFrame clip={clip} frameW={W} frameH={H} />);
+    const placed = placeClip({ width: clip.width, height: clip.height }, clip.crop, small, W, H);
+    expect(style("clip-box").borderRadius).toBeCloseTo(maskRadius(placed, "rounded"), 10);
+    expect(style("clip-box").borderRadius).toBeCloseTo(0.12 * 540, 10);
+    expect(style("clip-box").overflow).toBe("hidden");
+  });
+
+  test("circle: half the shorter side, following a motion transform override", async () => {
+    const clip = landscape({ mask: "circle" });
+    const view = await render(<ClipFrame clip={clip} frameW={W} frameH={H} />);
+    expect(style("clip-box").borderRadius).toBeCloseTo(607.5 / 2, 10);
+    await view.rerender(<ClipFrame clip={clip} frameW={W} frameH={H} transform={{ ...clip.transform, scale: clip.transform.scale / 2 }} />);
+    expect(style("clip-box").borderRadius).toBeCloseTo(607.5 / 4, 10);
+  });
+
+  test("a masked clip that covers the frame shows its background around the rounded corners", async () => {
+    const clip = makeClip({ id: "a", sourceDuration: 4, mask: "rounded", background: { type: "color", color: "#00FF00" } });
+    await render(<ClipFrame clip={clip} frameW={W} frameH={H} />);
+    expect(style("clip-background")).toMatchObject({ backgroundColor: "#00FF00" });
+    expect(style("clip-background").borderRadius).toBeUndefined();
+  });
+
+  test("mask none adds no radius key and no background (the default tree)", async () => {
+    await render(<ClipFrame clip={makeClip({ id: "a", sourceDuration: 4 })} frameW={W} frameH={H} />);
+    expect("borderRadius" in style("clip-box")).toBe(false);
+    expect(screen.queryByTestId("clip-background")).toBeNull();
+  });
+});
+
+describe("transparent (layers) and overlayChildren", () => {
+  test("transparent: never a background node — uncovered, see-through or masked — and no blur still is fetched", async () => {
+    const clip = landscape({ mask: "circle", background: { type: "blur" } });
+    await render(<ClipFrame clip={clip} frameW={W} frameH={H} transparent opacity={0.5}><Text>video</Text></ClipFrame>);
+    expect(screen.queryByTestId("clip-background")).toBeNull();
+    expect(screen.queryByTestId("clip-background-blur")).toBeNull();
+    expect(getThumb).not.toHaveBeenCalled();
+    expect(style("clip-box").opacity).toBe(0.5);
+    expect(screen.getByText("video")).toBeTruthy();
+  });
+
+  test("overlayChildren are drawn inside the picture box, after the picture, for videos and photos", async () => {
+    const view = await render(<ClipFrame clip={makeClip({ id: "a", sourceDuration: 4 })} frameW={W} frameH={H} overlayChildren={<Text>look</Text>}><Text>video</Text></ClipFrame>);
+    expect(within(screen.getByTestId("clip-box")).getByText("look")).toBeTruthy();
+    expect(within(screen.getByTestId("clip-content")).queryByText("look")).toBeNull();
+    expect(JSON.stringify(view.toJSON()).indexOf("look")).toBeGreaterThan(JSON.stringify(view.toJSON()).indexOf("video"));
+    await view.rerender(<ClipFrame clip={makePhotoClip({ id: "p" })} frameW={W} frameH={H} overlayChildren={<Text>look</Text>} />);
+    expect(within(screen.getByTestId("clip-box")).getByText("look")).toBeTruthy();
+  });
+});
+
+describe("clipFrameMotion: what a clip passes to its frame", () => {
+  test("a default clip passes nothing", () => {
+    expect(clipFrameMotion(makeClip({ id: "a", sourceDuration: 4 }), 1)).toEqual({});
+  });
+  test("a static opacity below 1 passes the opacity only", () => {
+    expect(clipFrameMotion(makeClip({ id: "a", sourceDuration: 4, opacity: 0.4 }), 1)).toEqual({ opacity: 0.4 });
+  });
+  test("a clip with motion passes its transform and its opacity × the clip's own", () => {
+    const clip = makeClip({ id: "a", sourceDuration: 4, opacity: 0.5, keyframes: [makeKeyframe({ t: 0, x: 0.25, opacity: 0.5 })] });
+    const m = clipFrameMotion(clip, 1);
+    expect(m.transform).toMatchObject({ x: 0.25, scale: 1 });
+    expect(m.opacity).toBeCloseTo(0.25, 10);
+    const plain = clipFrameMotion(makeClip({ id: "a", sourceDuration: 4, keyframes: [makeKeyframe({ t: 0 })] }), 1);
+    expect(plain.opacity).toBe(1); // with motion the opacity is always passed, as before
+  });
 });
 
 describe("motion overrides (transform / opacity)", () => {

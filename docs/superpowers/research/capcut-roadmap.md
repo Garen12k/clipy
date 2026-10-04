@@ -72,10 +72,10 @@
 
 | CapCut tool | Clipy | Preview | Effort | Notes |
 |---|---|---|---|---|
-| Overlay / picture-in-picture (video or photo on top) | Missing | Yes | L | second video player in preview |
-| Opacity | Missing | Yes | S | |
+| Overlay / picture-in-picture (video or photo on top) | Have | Yes | L | second video player in preview |
+| Opacity | Have | Yes | S | |
 | Blend modes | Missing | No | M | export only |
-| Masks (circle, rectangle, linear, star, heart, mirror; feather, invert) | Missing | Approx | L | |
+| Masks (circle, rectangle, linear, star, heart, mirror; feather, invert) | Have | Approx | L | 3 shapes; no feather |
 | Chroma key (green screen) | Missing | No | L | Core Image; export only |
 | Remove background / auto cutout | Missing | No | XL | Vision person segmentation; iOS 15+; export only |
 | Mosaic / blur a region | Missing | Approx | M | |

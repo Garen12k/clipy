@@ -1,4 +1,4 @@
-import type { ClipTransform, CropRect } from "./types";
+import { MASK, type ClipTransform, type CropRect, type MaskId } from "./types";
 
 export interface Size { width: number; height: number }
 export interface PlacedClip { width: number; height: number; centerX: number; centerY: number; rotation: number; flipH: boolean; flipV: boolean }
@@ -28,6 +28,17 @@ export function fitScale(source: Size, crop: CropRect, rotation: number, frameW:
 export function placeClip(source: Size, crop: CropRect, t: ClipTransform, frameW: number, frameH: number): PlacedClip {
   const c = croppedSize(source, crop), k = coverFactor(source, crop, t.rotation, frameW, frameH) * t.scale;
   return { width: c.width * k, height: c.height * k, centerX: frameW / 2 + t.x * frameW, centerY: frameH / 2 + t.y * frameH, rotation: t.rotation, flipH: t.flipH, flipV: t.flipV };
+}
+/**
+ * Corner radius (pixels) of the placed picture box for a mask: none → 0, rounded → MASK.roundedRadius × the shorter side,
+ * circle → half the shorter side (a square box becomes a circle, any other a pill). An unknown mask or a box without a size → 0.
+ */
+export function maskRadius(placed: { width: number; height: number }, mask: MaskId): number {
+  const side = Math.min(placed.width, placed.height);
+  if (!(side > 0) || !Number.isFinite(side)) return 0;
+  if (mask === "rounded") return MASK.roundedRadius * side;
+  if (mask === "circle") return side / 2;
+  return 0;
 }
 /** Whether the picture hides the whole frame (only decidable cheaply for upright / quarter-turned pictures; anything else shows background). */
 export function coversFrame(p: PlacedClip, frameW: number, frameH: number): boolean {

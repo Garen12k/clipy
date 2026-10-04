@@ -115,6 +115,41 @@ struct ExportClip: Record {
   @Field var keyframes: [ExportKeyframe] = []      // non-empty → they give x / y / scale / rotation / opacity
   @Field var speedSpans: [ExportSpeedSpan] = []    // a speed curve, in PLAYBACK order; empty → constant `speed`
   @Field var gain: [ExportGainPoint] = []          // the clip's own sound over its output time (volume, mute, fades); empty → flat `volume` / `muted`
+  @Field var opacity: Double = 1                   // the picture's STATIC opacity 0…1; multiplied with the motion (keyframe / animation) opacity
+  @Field var mask: String = "none"                 // none | rounded | circle (unknown → none): the picture box's corners
+}
+
+/// A picture-in-picture layer: a clip (every `ExportClip` field, same names and defaults) placed on the timeline at
+/// `start`. Records cannot inherit, so the fields are repeated — keep the two lists in step (guarded by
+/// layersExport.swift.test.ts). Its `transition` and `background` are ignored: a layer has neither.
+/// `clip` (in MediaPrePass.swift, next to `rewrite`) turns it into a clip record.
+struct ExportLayer: Record {
+  @Field var sourceUri: String = ""
+  @Field var trimStart: Double = 0
+  @Field var trimEnd: Double = 0
+  @Field var volume: Double = 1
+  @Field var muted: Bool = false
+  @Field var speed: Double = 1
+  @Field var filter: String?
+  @Field var transition: ExportTransition = ExportTransition()
+  @Field var kind: String = "video"
+  @Field var sourceWidth: Double = 0
+  @Field var sourceHeight: Double = 0
+  @Field var transform: ExportClipTransform = ExportClipTransform()
+  @Field var crop: ExportCrop = ExportCrop()
+  @Field var background: ExportBackground = ExportBackground()
+  @Field var reversed: Bool = false
+  @Field var filterIntensity: Double = 1
+  @Field var adjust: ExportAdjust = ExportAdjust()
+  @Field var animIn: ExportAnimEdge?
+  @Field var animOut: ExportAnimEdge?
+  @Field var animCombo: String?
+  @Field var keyframes: [ExportKeyframe] = []
+  @Field var speedSpans: [ExportSpeedSpan] = []
+  @Field var gain: [ExportGainPoint] = []
+  @Field var opacity: Double = 1
+  @Field var mask: String = "none"
+  @Field var start: Double = 0                     // composition seconds; the layer may run past the end of the video
 }
 
 /// `TextStyle` with shadow / glow flattened: a nil colour = that feature is off. The defaults are the neutral style.
@@ -180,6 +215,7 @@ struct ExportAudioTrack: Record {
 
 struct ExportRequest: Record {
   @Field var clips: [ExportClip] = []
+  @Field var layers: [ExportLayer] = []             // picture-in-picture layers, in draw order (later = on top)
   @Field var overlays: [ExportOverlay] = []
   @Field var effects: [ExportEffect] = []
   @Field var audioTracks: [ExportAudioTrack] = []   // every audio track, mixed with the clips' own sound
@@ -248,6 +284,8 @@ private struct PlacedClip {
 /// Speed curves: a clip with `speedSpans` is inserted once and retimed span by span (`SpeedSpans`, `insertRetimed`).
 /// Phase 3: per-clip speed (`scaleTimeRange`), Core Image filters and transitions through `ClipyCompositor`, with clips
 /// alternating between two video tracks (A/B) so a transition's two clips overlap; emoji/shape stickers as layers.
+/// Picture-in-picture layers: one more video track each (and one audio track for its sound), drawn over the main
+/// frame by `ClipyCompositor` from the `overlays` of each instruction (`InstructionSplit.attach`).
 /// Events go through `onEvent`: `progress` (repeating), then exactly one of `done` / `cancelled` / `error`.
 /// Errors thrown from `start` are NOT emitted here — the caller (the module) turns them into an `error` event.
 final class ExportSession {
@@ -712,6 +750,35 @@ final class ExportSession {
     return isCancelled
   }
 
+  /// Loads one clip's (or layer's) asset and clamps its trim to the source. Throws when the file has no video
+  /// track, cannot be read, or the clamped range is empty.
+  private static func load(_ clip: ExportClip, renderSize: CGSize) async throws -> LoadedClip {
+    guard let url = URL(string: clip.sourceUri) else { throw ExportError.noVideoTrack(clip.sourceUri) }
+    let asset = AVURLAsset(url: url)
+    guard let srcVideo = try await asset.loadTracks(withMediaType: .video).first else { throw ExportError.noVideoTrack(clip.sourceUri) }
+    let (preferredTransform, naturalSize, videoRange) = try await srcVideo.load(.preferredTransform, .naturalSize, .timeRange)
+    // Clamp the trim range to the source so insertTimeRange never reads past the end.
+    let duration = try await asset.load(.duration)
+    let end = min(clip.trimEnd, duration.seconds)
+    let start = max(0, min(clip.trimStart, end))
+    guard end - start > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(clip.sourceUri)") }
+    let speed = clip.speed.isFinite && clip.speed > 0 ? clip.speed : 1
+    // A speed curve: its spans made to cover exactly the clamped range (the real file may be shorter than the app
+    // believed). No spans → constant speed, exactly as before.
+    let spans = SpeedSpans.fitted(Self.speedSpans(clip), to: end - start)
+    let outDur = spans.isEmpty ? Self.time((end - start) / speed) : Self.time(SpeedSpans.outputSeconds(spans))
+    guard CMTimeCompare(outDur, .zero) > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(clip.sourceUri)") }
+    let srcAudio = try await asset.loadTracks(withMediaType: .audio).first
+    var audioRange: CMTimeRange? = nil
+    if let srcAudio { audioRange = try? await srcAudio.load(.timeRange) }
+    return LoadedClip(
+      clip: clip, srcVideo: srcVideo, srcAudio: srcAudio, audioRange: audioRange,
+      transform: Self.ciFillTransform(preferredTransform: preferredTransform, naturalSize: naturalSize, renderSize: renderSize),
+      orient: Self.ciOrientTransform(preferredTransform: preferredTransform, naturalSize: naturalSize),
+      start: start, end: end, sourceEnd: CMTimeMinimum(duration, videoRange.end),
+      speed: speed, spans: spans, outDur: outDur)
+  }
+
   func start(_ request: ExportRequest) async throws {
     guard let outputURL = Self.fileURL(from: request.outputPath) else { throw ExportError.badOutputPath }
     guard !request.clips.isEmpty else { throw ExportError.sessionFailed("Nothing to export") }
@@ -720,32 +787,49 @@ final class ExportSession {
     // 0. Pre-pass: photos → video, reversed clips → reversed copies, in a per-export temp folder. The folder is
     //    removed when this function exits (failure, cancel) unless the export was handed off, in which case the
     //    export's completion handler removes it once AVAssetExportSession has finished reading the files.
-    let jobs = MediaPrePass.plan(request.clips)
+    //    Layers are prepared like clips (as clip records; their starts are kept beside them). A layer that cannot
+    //    be prepared is left out of the video; a clip that cannot be prepared fails the export, as before.
+    var layers: [ExportClip] = request.layers.map { (l: ExportLayer) -> ExportClip in l.clip }
+    let layerStarts: [Double] = request.layers.map { (l: ExportLayer) -> Double in l.start }
+    var unpreparedLayers = Set<Int>()
+    let jobs = MediaPrePass.plan(request.clips, layers: layers)
     let hasJobs = !jobs.isEmpty
     var clips = request.clips
     var prepFolder: URL? = nil
     var handedOff = false
     defer { if !handedOff, let prepFolder { MediaPrePass.removeFolder(prepFolder) } }
     if hasJobs {
-      let folder: URL
-      do { folder = try MediaPrePass.makeFolder(exportId: id) } catch { throw MediaPrePass.failure(for: jobs[0].kind) }
+      // The folder cannot be made: a clip that needs it fails the export, as before. When only layers need it they
+      // are left out of the video (like any layer that cannot be prepared) and the export goes on without a folder.
+      var folder: URL? = nil
+      do { folder = try MediaPrePass.makeFolder(exportId: id) } catch {
+        guard jobs.allSatisfy({ $0.layer }) else { throw MediaPrePass.failure(for: jobs[0].kind) }
+        for job in jobs { unpreparedLayers.insert(job.clipIndex) }
+      }
       prepFolder = folder
-      for (j, job) in jobs.enumerated() {
-        if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
-        let prepared = folder.appendingPathComponent("\(j)-\(job.kind == .photo ? "photo" : "reverse").mp4")
-        var lastSent = -1.0
-        let report: (Double) -> Void = { fraction in
-          let p = MediaPrePass.prePassProgress(job: j, jobCount: jobs.count, fraction: fraction)
-          guard p - lastSent >= 0.005 else { return }   // at most ~40 progress events for the whole pre-pass
-          lastSent = p
-          self.onEvent(["jobId": self.id, "type": "progress", "progress": p])
-        }
-        do {
-          let seconds = try await MediaPrePass.run(job, clip: clips[job.clipIndex], to: prepared, renderSize: renderSize,
-                                                   isCancelled: { self.cancelledFlag }, progress: report)
-          clips[job.clipIndex] = MediaPrePass.rewrite(clips[job.clipIndex], preparedURL: prepared, duration: seconds)
-        } catch is PrePassCancelled {
-          onEvent(["jobId": id, "type": "cancelled"]); return
+      if let folder {
+        for (j, job) in jobs.enumerated() {
+          if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
+          let prepared = folder.appendingPathComponent("\(j)-\(job.kind == .photo ? "photo" : "reverse").mp4")
+          var lastSent = -1.0
+          let report: (Double) -> Void = { fraction in
+            let p = MediaPrePass.prePassProgress(job: j, jobCount: jobs.count, fraction: fraction)
+            guard p - lastSent >= 0.005 else { return }   // at most ~40 progress events for the whole pre-pass
+            lastSent = p
+            self.onEvent(["jobId": self.id, "type": "progress", "progress": p])
+          }
+          let input = job.layer ? layers[job.clipIndex] : clips[job.clipIndex]
+          do {
+            let seconds = try await MediaPrePass.run(job, clip: input, to: prepared, renderSize: renderSize,
+                                                     isCancelled: { self.cancelledFlag }, progress: report)
+            let rewritten = MediaPrePass.rewrite(input, preparedURL: prepared, duration: seconds)
+            if job.layer { layers[job.clipIndex] = rewritten } else { clips[job.clipIndex] = rewritten }
+          } catch is PrePassCancelled {
+            onEvent(["jobId": id, "type": "cancelled"]); return
+          } catch {
+            guard job.layer else { throw error }
+            unpreparedLayers.insert(job.clipIndex)
+          }
         }
       }
     }
@@ -755,30 +839,8 @@ final class ExportSession {
     var loaded: [LoadedClip] = []
     for clip in clips {
       if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
-      guard let url = URL(string: clip.sourceUri) else { throw ExportError.noVideoTrack(clip.sourceUri) }
-      let asset = AVURLAsset(url: url)
-      guard let srcVideo = try await asset.loadTracks(withMediaType: .video).first else { throw ExportError.noVideoTrack(clip.sourceUri) }
-      let (preferredTransform, naturalSize, videoRange) = try await srcVideo.load(.preferredTransform, .naturalSize, .timeRange)
-      // Clamp the trim range to the source so insertTimeRange never reads past the end.
-      let duration = try await asset.load(.duration)
-      let end = min(clip.trimEnd, duration.seconds)
-      let start = max(0, min(clip.trimStart, end))
-      guard end - start > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(clip.sourceUri)") }
-      let speed = clip.speed.isFinite && clip.speed > 0 ? clip.speed : 1
-      // A speed curve: its spans made to cover exactly the clamped range (the real file may be shorter than the app
-      // believed). No spans → constant speed, exactly as before.
-      let spans = SpeedSpans.fitted(Self.speedSpans(clip), to: end - start)
-      let outDur = spans.isEmpty ? Self.time((end - start) / speed) : Self.time(SpeedSpans.outputSeconds(spans))
-      guard CMTimeCompare(outDur, .zero) > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(clip.sourceUri)") }
-      let srcAudio = try await asset.loadTracks(withMediaType: .audio).first
-      var audioRange: CMTimeRange? = nil
-      if let srcAudio { audioRange = try? await srcAudio.load(.timeRange) }
-      loaded.append(LoadedClip(
-        clip: clip, srcVideo: srcVideo, srcAudio: srcAudio, audioRange: audioRange,
-        transform: Self.ciFillTransform(preferredTransform: preferredTransform, naturalSize: naturalSize, renderSize: renderSize),
-        orient: Self.ciOrientTransform(preferredTransform: preferredTransform, naturalSize: naturalSize),
-        start: start, end: end, sourceEnd: CMTimeMinimum(duration, videoRange.end),
-        speed: speed, spans: spans, outDur: outDur))
+      let one = try await Self.load(clip, renderSize: renderSize)
+      loaded.append(one)
     }
     let n = loaded.count
 
@@ -981,6 +1043,73 @@ final class ExportSession {
       mixParams.append(params)
     }
 
+    // Layers (picture in picture), in draw order: each on a video track of its own, placed at its `start` with no
+    // transition handles, retimed with the clips' helper (a constant speed is a single span, so `insertRetimed`
+    // then does what `insertScaled` does) and cut at the end of the video — a layer may run past it. A layer whose
+    // file cannot be used, or that starts before 0 or at / after the end of the video, is left out. Its sound goes on an audio
+    // track of its own, cut at the same points, with its gain curve counted from the layer's start (a prepared
+    // photo / reversed file has no sound). Without layers nothing here runs.
+    var placedLayers: [PlacedOverlay] = []
+    for (i, layer) in layers.enumerated() {
+      if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
+      // A start before 0 is never sent (the editor keeps starts at 0 or later): such a layer is left out rather than moved.
+      guard !unpreparedLayers.contains(i), layerStarts[i].isFinite, layerStarts[i] >= 0 else { continue }
+      let at = Self.time(max(0, layerStarts[i]))
+      guard CMTimeCompare(at, total) < 0, let c = try? await Self.load(layer, renderSize: renderSize) else { continue }
+      let length = CMTimeMinimum(c.outDur, total - at)
+      let end = at + length
+      // The source played during `length`: all of it, or — when the layer is cut short — its spans up to the cut.
+      let whole: [SpeedSpan] = c.spans.isEmpty ? [SpeedSpan(duration: c.end - c.start, speed: c.speed)] : c.spans
+      let kept: [SpeedSpan] = CMTimeCompare(length, c.outDur) < 0
+        ? SpeedSpans.fitted(whole, to: SpeedSpans.sourceSeconds(whole, output: length.seconds))
+        : whole
+      var sourceLength = 0.0
+      for s in kept { sourceLength += s.duration }
+      let source = CMTimeRange(start: Self.time(c.start), end: CMTimeMinimum(Self.time(c.start + sourceLength), c.sourceEnd))
+      guard CMTimeCompare(length, .zero) > 0, CMTimeCompare(source.duration, .zero) > 0,
+            let track = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { continue }
+      // Every cut between two spans, counted from the layer's own first frame (no head handle).
+      let plan = SpeedSpans.plan(kept, head: 0, tail: 0)
+      let interior: [(source: CMTime, output: CMTime)] = plan.ranges.dropFirst().map { (r: SpeedRange) -> (source: CMTime, output: CMTime) in
+        (source: source.start + ExportSession.time(r.start), output: at + ExportSession.time(r.outputStart))
+      }
+      let cuts = Self.retimeCuts(from: (source: source.start, output: at), to: (source: source.end, output: end), interior: interior)
+      guard (try? insertRetimed(track, of: c.srcVideo, cuts: cuts)) == true else { composition.removeTrack(track); continue }
+
+      if let srcAudio = c.srcAudio, let audioRange = c.audioRange {
+        let shared = CMTimeRangeGetIntersection(source, otherRange: audioRange)
+        if CMTimeCompare(shared.duration, .zero) > 0,
+           let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+          let aStart = Self.retimedTime(shared.start, cuts: cuts)
+          let aEnd = CMTimeMinimum(Self.retimedTime(shared.end, cuts: cuts), end)
+          let audioCuts = Self.retimeCuts(from: (source: shared.start, output: aStart), to: (source: shared.end, output: aEnd), interior: interior)
+          if (try? insertRetimed(audioTrack, of: srcAudio, cuts: audioCuts)) == true {
+            // The layer's gain curve at `at + time`; flat at its first / last gain outside its breakpoints.
+            let params = AVMutableAudioMixInputParameters(track: audioTrack)
+            Self.applyRamps(AudioMix.ramps(from: Self.clipGain(c.clip), offset: at.seconds, over: aStart.seconds, to: aEnd.seconds), to: params)
+            mixParams.append(params)
+          } else {
+            composition.removeTrack(audioTrack)
+          }
+        }
+      }
+
+      // How the compositor draws it. Motion is resolved against the layer's FULL length (`outDur`), as in the
+      // preview: a layer cut by the end of the video simply stops, its Out animation is not moved earlier.
+      let l = c.clip
+      let spec = LayerSpec(
+        trackID: track.trackID, fill: c.transform, orient: c.orient,
+        crop: ClipCrop(x: CGFloat(l.crop.x), y: CGFloat(l.crop.y), w: CGFloat(l.crop.w), h: CGFloat(l.crop.h)),
+        transform: ClipTransform(
+          scale: CGFloat(l.transform.scale), x: CGFloat(l.transform.x), y: CGFloat(l.transform.y),
+          rotation: CGFloat(l.transform.rotation), flipH: l.transform.flipH, flipV: l.transform.flipV),
+        background: .black,
+        filter: l.filter, filterIntensity: l.filterIntensity, adjust: l.adjust.values,
+        opacity: l.opacity, mask: l.mask, transparent: true,
+        motion: ExportSession.clipMotion(l), clipStart: at.seconds, clipLength: c.outDur.seconds)
+      placedLayers.append(PlacedOverlay(spec: spec, range: CMTimeRange(start: at, end: end)))
+    }
+
     // 4. Compositor instructions, contiguous over [0, total]: clip i alone on [bodyStart + halfIn, bodyEnd − halfOut),
     //    then the window around cut i, [bodyEnd − half, bodyEnd + half), with the outgoing and incoming layers.
     //    A layer also knows where its clip's own range sits in composition time — `bodyStart` (the cursor before the
@@ -995,6 +1124,7 @@ final class ExportSession {
           rotation: CGFloat(c.transform.rotation), flipH: c.transform.flipH, flipV: c.transform.flipV),
         background: LayerBackground(type: c.background.type, color: c.background.color),
         filter: c.filter, filterIntensity: c.filterIntensity, adjust: c.adjust.values,
+        opacity: c.opacity, mask: c.mask,
         motion: ExportSession.clipMotion(c), clipStart: placed[i].bodyStart.seconds, clipLength: loaded[i].outDur.seconds)
     }
     //    Each instruction also carries the timeline effects overlapping its range (project time = composition time).
@@ -1020,6 +1150,9 @@ final class ExportSession {
           effects: effects(in: window)))
       }
     }
+    //    Layers: the instructions are cut at every layer start / end inside them and each piece lists the layers
+    //    shown during it. Without layers the list stays exactly as built above.
+    if !placedLayers.isEmpty { instructions = InstructionSplit.attach(placedLayers, to: instructions) }
 
     let videoComposition = AVMutableVideoComposition()
     videoComposition.customVideoCompositorClass = ClipyCompositor.self

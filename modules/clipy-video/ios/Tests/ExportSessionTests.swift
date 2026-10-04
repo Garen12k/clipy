@@ -283,6 +283,57 @@ final class ExportSessionTests: XCTestCase {
     XCTAssertEqual(duration, 3, accuracy: 0.2)
   }
 
+  private func export(_ request: ExportRequest) async throws -> [String: Any] {
+    let finished = expectation(description: "export")
+    var result: [String: Any] = [:]
+    let session = ExportSession { payload in if (payload["type"] as? String) != "progress" { result = payload; finished.fulfill() } }
+    try await session.start(request)
+    await fulfillment(of: [finished], timeout: 60)
+    return result
+  }
+
+  /// Picture-in-picture layers over a 3 s main clip: a see-through circle layer from 0.5 s to 2 s, a rounded layer
+  /// with a speed curve that starts at 2 s and runs past the end (cut there), one that starts after the end and one
+  /// whose file does not exist (both left out). The video keeps the main clip's length.
+  func testExportsLayersOverTheMainVideo() async throws {
+    let main = try await makeClip(seconds: 3, color: .red)
+    let small = try await makeClip(seconds: 2, color: .blue)
+    let out = FileManager.default.temporaryDirectory.appendingPathComponent("out-\(UUID().uuidString).mp4")
+    var request = ExportRequest()
+    request.clips = [ExportClip()]
+    request.clips[0].sourceUri = main.absoluteString; request.clips[0].trimStart = 0; request.clips[0].trimEnd = 3
+    request.clips[0].opacity = 0.9; request.clips[0].mask = "rounded"
+
+    func layer(start: Double, uri: String) -> ExportLayer {
+      var l = ExportLayer()
+      l.sourceUri = uri; l.trimStart = 0; l.trimEnd = 2; l.start = start
+      var t = ExportClipTransform(); t.scale = 0.4; t.x = 0.2; t.y = -0.2; t.rotation = 15
+      l.transform = t
+      return l
+    }
+    var circle = layer(start: 0.5, uri: small.absoluteString)
+    circle.trimEnd = 1.5; circle.opacity = 0.6; circle.mask = "circle"; circle.filter = "mono"
+    var fadeIn = ExportAnimEdge(); fadeIn.id = "fade"; fadeIn.duration = 0.3
+    circle.animIn = fadeIn
+    var curved = layer(start: 2, uri: small.absoluteString)
+    curved.mask = "rounded"
+    var fast = ExportSpeedSpan(); fast.duration = 1; fast.speed = 2
+    var slow = ExportSpeedSpan(); slow.duration = 1; slow.speed = 0.5
+    curved.speedSpans = [fast, slow]                                // 2.5 s long from 2 s: cut at 3 s
+    let late = layer(start: 3.5, uri: small.absoluteString)
+    let missing = layer(start: 1, uri: "file:///no/such/layer.mp4")
+    request.layers = [circle, curved, late, missing]
+    request.aspectRatio = "9:16"; request.resolution = 720; request.outputPath = out.absoluteString
+
+    let result = try await export(request)
+    XCTAssertEqual(result["type"] as? String, "done", "\(result)")
+    let asset = AVURLAsset(url: out)
+    let duration = try await asset.load(.duration).seconds
+    XCTAssertEqual(duration, 3, accuracy: 0.2)
+    let video = try await asset.loadTracks(withMediaType: .video)
+    XCTAssertEqual(video.count, 1)
+  }
+
   /// A speed curve: clip 1 (2 s) plays its first second at ×2 and its second at ×0.5 → 0.5 + 2 = 2.5 s, with a 0.5 s
   /// dissolve into clip 2 (2 s, constant speed): 4.5 s in all. The spans the app sent cover 2.4 s — more than the
   /// file has — so the last span is shortened to fit.

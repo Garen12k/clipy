@@ -1,5 +1,5 @@
 import { SPEED_CURVES } from "../effects";
-import { clampNum, SPEED_CURVE_LIMITS, SPEED_LIMITS, type Clip, type Project, type SpeedCurveId, type SpeedStep } from "./types";
+import { clampNum, SPEED_CURVE_LIMITS, SPEED_LIMITS, type Clip, type LayerClip, type Project, type SpeedCurveId, type SpeedStep } from "./types";
 
 // Speed arithmetic lives ONLY in this file. A clip either has one constant `speed` or a speed curve: constant-speed steps in SOURCE
 // time (step i covers [steps[i].from, steps[i + 1].from); the first step also covers everything before it, the last everything after).
@@ -159,6 +159,52 @@ export function clipAt(p: Project, time: number): ClipHit | null {
     if (t >= starts[i]) return { clip: p.clips[i], index: i, offsetInClip: t - starts[i] };
   }
   return { clip: p.clips[0], index: 0, offsetInClip: 0 };
+}
+
+// ---- Layers: clips with their own place on the project timeline ----
+
+/** Any clip or layer by id (main clips first; ids are unique across both). The one way to find "a clip by id". */
+export function findItem(p: Project, id: string): { clip: Clip; layer: boolean } | null {
+  const clip = p.clips.find((c) => c.id === id);
+  if (clip) return { clip, layer: false };
+  const layer = p.layers.find((l) => l.id === id);
+  return layer ? { clip: layer, layer: true } : null;
+}
+
+/** Project time at which a layer ends: start + its output length (it may be past the project's end). */
+export const layerEnd = (l: LayerClip): number => l.start + clipDuration(l);
+
+/** How far (seconds) before the project's end its last frame is taken: at and past the end, layers are looked up at `total − this`. */
+const LAST_FRAME_EPSILON = 1e-6;
+
+/**
+ * A layer is on screen from its start up to (not including) its end. At and past the project's end the project's LAST frame is
+ * shown (as `clipAt` keeps showing the last main clip): a layer still running there stays on screen; its rest is never shown.
+ */
+const layerShowsAt = (l: LayerClip, time: number, total: number): boolean => {
+  const t = time >= total ? total - LAST_FRAME_EPSILON : time;
+  return l.start <= t && t < layerEnd(l);
+};
+
+/** The layers on screen at a project time, in draw order (list order: later = on top). */
+export function layersAt(p: Project, time: number): LayerClip[] {
+  const total = totalDuration(p);
+  return p.layers.filter((l) => layerShowsAt(l, time, total));
+}
+
+/**
+ * The item's local output offset at a project time, or null when it is not on screen then. A main clip: `clipAt`'s offset when the clip
+ * under `time` is that clip (at and past the project's end that is the last clip, at its end). A layer: `time − start` while it shows
+ * (at and past the project's end: the project's end − start, for a layer still running there).
+ */
+export function itemOffsetAt(p: Project, id: string, time: number): number | null {
+  if (!Number.isFinite(time)) return null;
+  const hit = clipAt(p, time);
+  if (hit && hit.clip.id === id) return hit.offsetInClip;
+  if (p.clips.some((c) => c.id === id)) return null;
+  const layer = p.layers.find((l) => l.id === id);
+  const total = totalDuration(p);
+  return layer && layerShowsAt(layer, time, total) ? Math.min(time, total) - layer.start : null;
 }
 
 /** The transition window the playhead is inside (if any): which cut, and progress 0→1 across it, centred on the cut. */

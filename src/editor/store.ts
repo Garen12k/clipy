@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { fitEffects } from "./model/ops";
-import { totalDuration } from "./model/timeline";
+import { findItem, totalDuration } from "./model/timeline";
 import type { EffectItem, PostRecord, Project } from "./model/types";
 
 export const HISTORY_LIMIT = 50;
@@ -53,7 +53,8 @@ const initial = {
 };
 
 function afterChange(s: EditorState, next: Project): Partial<EditorState> {
-  const selected = s.selectedClipId && next.clips.some((c) => c.id === s.selectedClipId) ? s.selectedClipId : null;
+  // `selectedClipId` holds a main clip's or a layer's id.
+  const selected = s.selectedClipId && findItem(next, s.selectedClipId) ? s.selectedClipId : null;
   const selectedOverlay = s.selectedOverlayId && next.overlays.some((o) => o.id === s.selectedOverlayId) ? s.selectedOverlayId : null;
   const selectedEffect = s.selectedEffectId && next.effects.some((e) => e.id === s.selectedEffectId) ? s.selectedEffectId : null;
   const selectedAudio = s.selectedAudioId && next.audioTracks.some((t) => t.id === s.selectedAudioId) ? s.selectedAudioId : null;

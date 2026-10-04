@@ -1,0 +1,28 @@
+import Slider from "@react-native-community/slider";
+import { setClipOpacity } from "@/src/editor/model/ops";
+import { useEditorStore } from "@/src/editor/store";
+import { useItemClip } from "@/src/editor/useItem";
+import { theme } from "@/src/theme/theme";
+import { Sheet } from "@/src/ui/Sheet";
+import { Body } from "@/src/ui/Text";
+
+/** One slider for the selected clip's or layer's own opacity (0–1, shown as 0–100 %); one undo step per drag. */
+export function OpacitySheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
+  const clip = useItemClip(clipId);
+  const { beginTransaction, applyTransient } = useEditorStore.getState();
+  if (!clip) return null;
+
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Opacity">
+      <Slider
+        testID="opacity-slider"
+        minimumValue={0} maximumValue={1} step={0.01}
+        value={clip.opacity}
+        onSlidingStart={beginTransaction}
+        onValueChange={(v) => applyTransient((p) => setClipOpacity(p, clip.id, v))}
+        minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent}
+      />
+      <Body muted style={{ fontSize: 12 }}>Opacity {Math.round(clip.opacity * 100)} %</Body>
+    </Sheet>
+  );
+}

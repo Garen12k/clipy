@@ -4,6 +4,27 @@ import type { PlacedClip, Size } from "../clipLayout";
 /** Shared with the Swift mirror (Task 12): keep expected values as plain numeric literals. */
 export interface PlaceVector { name: string; source: Size; crop: CropRect; transform: ClipTransform; frame: [number, number]; expect: PlacedClip }
 
+/**
+ * `maskRadius` cases. A separate table from PLACE_VECTORS (which the parity test counts against the Swift table): the Swift mirror of
+ * `maskRadius` and its copy of these cases come with the export task. Expected values are plain numeric literals.
+ */
+export interface MaskVector { name: string; placed: Size; mask: "none" | "rounded" | "circle"; expect: number }
+
+export const MASK_VECTORS: MaskVector[] = [
+  { name: "none is square-cornered", placed: { width: 1080, height: 1920 }, mask: "none", expect: 0 },
+  // 0.12 * min(1080, 1920) = 129.6
+  { name: "rounded on a portrait box", placed: { width: 1080, height: 1920 }, mask: "rounded", expect: 129.6 },
+  // 0.12 * min(1080, 607.5) = 72.9
+  { name: "rounded on a landscape box", placed: { width: 1080, height: 607.5 }, mask: "rounded", expect: 72.9 },
+  // min(400, 400) / 2 = 200
+  { name: "circle on a square box", placed: { width: 400, height: 400 }, mask: "circle", expect: 200 },
+  // min(432, 768) / 2 = 216: a pill
+  { name: "circle on a portrait box is a pill", placed: { width: 432, height: 768 }, mask: "circle", expect: 216 },
+  // min(1080, 607.5) / 2 = 303.75
+  { name: "circle on a landscape box", placed: { width: 1080, height: 607.5 }, mask: "circle", expect: 303.75 },
+  { name: "an empty box has no radius", placed: { width: 0, height: 300 }, mask: "circle", expect: 0 },
+];
+
 const FULL: CropRect = { x: 0, y: 0, w: 1, h: 1 };
 const ID: ClipTransform = { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false };
 

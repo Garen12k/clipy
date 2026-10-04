@@ -1,3 +1,4 @@
+import { makeLayer } from "@/src/editor/model/types";
 import { memoryFs } from "../fs";
 import { makeStorage } from "../storage";
 
@@ -46,4 +47,31 @@ test("importAudio takes an optional kind", async () => {
   fs.files.set("file:///picked/rec.m4a", "M4A");
   const track = await storage.importAudio("p1", { uri: "file:///picked/rec.m4a", title: "rec.m4a", durationSec: 3 }, "voice");
   expect(track).toMatchObject({ kind: "voice", fadeIn: 0, fadeOut: 0 });
+});
+
+test("loadProject reports a missing layer file", async () => {
+  const fs = memoryFs();
+  let n = 0;
+  const storage = makeStorage(fs, { thumbnail: async () => "x", newId: () => `id${++n}`, nowIso: () => "2026-10-01T10:00:00.000Z" });
+  const { project } = await storage.createProject("P", []);
+  const layer = makeLayer({ id: "L", sourceDuration: 4, sourceUri: `${storage.projectDir(project.id)}/media/L.mp4` });
+  fs.files.set(layer.sourceUri, "V");
+  await storage.saveProject({ ...project, layers: [layer] });
+  expect((await storage.loadProject(project.id)).missingSourceUris).toEqual([]);
+  fs.files.delete(layer.sourceUri);
+  expect((await storage.loadProject(project.id)).missingSourceUris).toEqual([layer.sourceUri]);
+});
+
+test("duplicateProject copies layers and their media", async () => {
+  const fs = memoryFs();
+  let n = 0;
+  const storage = makeStorage(fs, { thumbnail: async () => "x", newId: () => `id${++n}`, nowIso: () => "2026-10-01T10:00:00.000Z" });
+  const { project } = await storage.createProject("P", []);
+  const layer = makeLayer({ id: "L", sourceDuration: 4, start: 2, sourceUri: `${storage.projectDir(project.id)}/media/L.mp4` });
+  fs.files.set(layer.sourceUri, "V");
+  await storage.saveProject({ ...project, layers: [layer] });
+  const copy = await storage.duplicateProject(project.id);
+  expect(copy.layers).toHaveLength(1);
+  expect(copy.layers[0]).toMatchObject({ id: "L", start: 2, sourceUri: `${storage.projectDir(copy.id)}/media/L.mp4` });
+  expect(fs.files.get(copy.layers[0].sourceUri)).toBe("V");
 });

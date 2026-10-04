@@ -1,6 +1,6 @@
-import { coverFactor, coversFrame, fitScale, isQuarterTurn, placeClip, SNAP, snapTransform } from "../clipLayout";
-import { DEFAULT_TRANSFORM, FULL_CROP } from "../types";
-import { PLACE_VECTORS } from "./clipLayout.vectors";
+import { coverFactor, coversFrame, fitScale, isQuarterTurn, maskRadius, placeClip, SNAP, snapTransform } from "../clipLayout";
+import { DEFAULT_TRANSFORM, FULL_CROP, MASK, MASK_IDS } from "../types";
+import { MASK_VECTORS, PLACE_VECTORS } from "./clipLayout.vectors";
 
 const PORTRAIT = { width: 1080, height: 1920 };
 const LANDSCAPE = { width: 1920, height: 1080 };
@@ -16,6 +16,21 @@ describe("placeClip vectors", () => {
     expect(p.rotation).toBe(v.expect.rotation);
     expect(p.flipH).toBe(v.expect.flipH);
     expect(p.flipV).toBe(v.expect.flipV);
+  });
+});
+
+describe("maskRadius vectors", () => {
+  it.each(MASK_VECTORS.map((v) => [v.name, v] as const))("%s", (_n, v) => expect(maskRadius(v.placed, v.mask)).toBeCloseTo(v.expect, 6));
+  it("covers every mask id", () => expect(new Set(MASK_VECTORS.map((v) => v.mask))).toEqual(new Set(MASK_IDS)));
+  it("uses MASK.roundedRadius and takes a placed clip", () => {
+    const placed = place({ scale: 0.4 });
+    expect(maskRadius(placed, "rounded")).toBeCloseTo(MASK.roundedRadius * placed.width, 6);
+    expect(maskRadius(placed, "circle")).toBeCloseTo(placed.width / 2, 6);
+  });
+  it("is 0 for an unknown mask or a broken box", () => {
+    expect(maskRadius({ width: 100, height: 100 }, "star" as never)).toBe(0);
+    expect(maskRadius({ width: NaN, height: 100 }, "circle")).toBe(0);
+    expect(maskRadius({ width: -50, height: 100 }, "rounded")).toBe(0);
   });
 });
 

@@ -12,6 +12,7 @@ import { BeatTicks } from "./BeatTicks";
 import { ClipThumbStrip } from "./ClipThumbStrip";
 import { CutMarker } from "./CutMarker";
 import { EffectLane } from "./EffectLane";
+import { LayerLane } from "./LayerLane";
 import { OverlayLane } from "./OverlayLane";
 
 type Props = { renderStripExtras?: (clipId: string, index: number) => React.ReactNode; onCutPress?: (index: number) => void };
@@ -54,7 +55,9 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
   // One audio lane per kind in use; with no audio, one empty music lane. Lanes change the height only — never the scroll width or paddings.
   const kinds = audioLaneKinds(project);
   const audioLanes = kinds.length > 0 ? kinds : (["music"] as const);
-  const height = timelineHeight(audioLanes.length);
+  // The layers lane exists only while the project has layers.
+  const hasLayers = project.layers.length > 0;
+  const height = timelineHeight(audioLanes.length, hasLayers);
 
   return (
     <GestureDetector gesture={pinch}>
@@ -82,6 +85,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
             <AddClipTile left={timeToX(totalDuration(project), pps) + theme.space.sm} />
             <BeatTicks />
           </View>
+          {hasLayers && <LayerLane />}
           <OverlayLane />
           {audioLanes.map((kind) => <AudioLane key={kind} kind={kind} />)}
           <EffectLane />

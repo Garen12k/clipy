@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
 // A fake expo-video player that models AVPlayer: assigning a non-zero playbackRate starts playback
@@ -25,11 +25,17 @@ jest.mock("expo-video", () => {
   };
   return { __mockPlayer: mockPlayer, useVideoPlayer: () => mockPlayer, VideoView: View };
 });
-import { replaceClipMedia, setClipAnimation, setClipReversed, setClipSpeed, setClipSpeedCurve, setClipTransform } from "@/src/editor/model/ops";
+// A video layer's own player is covered by LayerStack.test.tsx; here the fake above is the main player alone, so a layer's video is
+// a plain view (the shared fake would otherwise take the layer's writes as the main player's).
+jest.mock("../components/LayerVideo", () => {
+  const { View } = require("react-native");
+  return { LayerVideo: ({ layer }: { layer: { id: string } }) => <View testID={`layer-video-${layer.id}`} /> };
+});
+import { replaceClipMedia, setClipAnimation, setClipMask, setClipOpacity, setClipReversed, setClipSpeed, setClipSpeedCurve, setClipTransform } from "@/src/editor/model/ops";
 import { StyleSheet } from "react-native";
 import { FILTERS } from "@/src/editor/effects";
 import { shakeOffset } from "@/src/editor/model/effectMath";
-import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, type Clip } from "@/src/editor/model/types";
+import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeLayer, makeOverlay, makePhotoClip, makeProject, type Clip, type LayerClip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
 
@@ -460,7 +466,7 @@ describe("look layers (filter strength, adjust, effects)", () => {
     expect(StyleSheet.flatten(screen.getByTestId("effect-transform").props.style).transform).toBeUndefined();
   });
 
-  test("the layers stack in order: picture → filter → adjust → effect colours → transition → text", async () => {
+  test("the layers stack in order: picture → filter → adjust → transition → effect colours → text", async () => {
     useEditorStore.getState().setProject(makeProject({
       clips: [
         makeClip({ id: "a", sourceDuration: 4, filter: "vintage", filterIntensity: 0.5, adjust: { ...DEFAULT_ADJUST, brightness: 1, vignette: 1 }, transitionOut: { type: "fade", duration: 1 } }),
@@ -473,7 +479,7 @@ describe("look layers (filter strength, adjust, effects)", () => {
     await render(<PreviewPlayer />);
     await layout();
     const all = ids(tree());
-    const order = ["effect-transform", "preview-video", "filter-tint", "adjust-light", "adjust-vignette", "effect-layer-0", "transition-layer", "overlay-t", "preview-tag"];
+    const order = ["effect-transform", "preview-video", "filter-tint", "adjust-light", "adjust-vignette", "transition-layer", "effect-layer-0", "overlay-t", "preview-tag"];
     expect(order.map((id) => all.indexOf(id))).toEqual([...order.map((id) => all.indexOf(id))].sort((x, y) => x - y));
     expect(order.filter((id) => !all.includes(id))).toEqual([]);
     // The filter layers carry the clip's strength.
@@ -512,6 +518,121 @@ describe("look layers (filter strength, adjust, effects)", () => {
   });
 });
 
+describe("layers, opacity and masks", () => {
+  type Json = { props: { testID?: string }; children: (Json | string)[] | null };
+  const ids = (node: Json | string | null, out: string[] = []): string[] => {
+    if (!node || typeof node === "string") return out;
+    if (node.props.testID) out.push(node.props.testID);
+    for (const c of node.children ?? []) ids(c, out);
+    return out;
+  };
+  const find = (node: Json | string | null, id: string): Json | null => {
+    if (!node || typeof node === "string") return null;
+    if (node.props.testID === id) return node;
+    for (const c of node.children ?? []) { const hit = find(c, id); if (hit) return hit; }
+    return null;
+  };
+  const tree = () => screen.toJSON() as unknown as Json;
+  const mainBox = () => StyleSheet.flatten(within(screen.getByTestId("effect-transform")).getByTestId("clip-box").props.style);
+  const small = { scale: 0.4, x: 0, y: 0, rotation: 0, flipH: false, flipV: false };
+  const photo = (id: string, start: number): LayerClip => ({ ...makePhotoClip({ id, seconds: 2 }), transform: small, start });
+  const setLayers = (layers: LayerClip[]) => act(() => { useEditorStore.getState().apply((p) => ({ ...p, layers })); });
+
+  test("a project without layers renders the tree it always did: no layer nodes, only the picture in the shaken view", async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    expect(ids(tree()).filter((id) => /^layer-/.test(id))).toEqual([]);
+    expect(ids(find(tree(), "effect-transform"))).toEqual(["effect-transform", "clip-box", "clip-content", "preview-video"]);
+    expect(Object.keys(mainBox()).sort()).toEqual(["height", "left", "overflow", "position", "top", "transform", "width"]);
+  });
+
+  test("draw order: main picture → its filter / adjust → transition → layers in list order → effect colours → text", async () => {
+    // The export draws the layers over the already-transitioned main frame: the transition's dip must not dim them.
+    useEditorStore.getState().setProject(makeProject({
+      clips: [
+        makeClip({ id: "a", sourceDuration: 4, filter: "vintage", filterIntensity: 0.5, adjust: { ...DEFAULT_ADJUST, brightness: 1 }, transitionOut: { type: "fade", duration: 1 } }),
+        makeClip({ id: "b", sourceDuration: 4 }),
+      ],
+      layers: [photo("one", 3), { ...makeLayer({ id: "two", sourceDuration: 4, start: 3 }), transform: small }],
+      overlays: [makeOverlay({ id: "t", start: 0, end: 8 })],
+      effects: [makeEffect({ id: "f", type: "flash", start: 3, end: 5, intensity: 1 }), makeEffect({ id: "s", type: "shake", start: 3, end: 5, intensity: 1 })],
+    }));
+    useEditorStore.getState().seek(3.6);
+    await render(<PreviewPlayer />);
+    await layout();
+    const all = ids(tree());
+    const order = ["effect-transform", "preview-video", "filter-tint", "adjust-light", "transition-layer", "layer-stack", "layer-one", "layer-two", "layer-video-two", "effect-layer-0", "overlay-t", "preview-tag"];
+    expect(order.filter((id) => !all.includes(id))).toEqual([]);
+    expect(order.map((id) => all.indexOf(id))).toEqual([...order.map((id) => all.indexOf(id))].sort((x, y) => x - y));
+    // The layers shake with the picture: their stack carries the same transform. The main clip's look layers stay off the layers.
+    const shaken = StyleSheet.flatten(screen.getByTestId("effect-transform").props.style).transform;
+    expect(shaken).toBeDefined();
+    expect(StyleSheet.flatten(screen.getByTestId("layer-stack").props.style).transform).toEqual(shaken);
+    expect(ids(find(tree(), "layer-stack")).filter((id) => /^(filter-|adjust-|effect-layer|transition-|overlay-|clip-background)/.test(id))).toEqual([]);
+    expect(ids(find(tree(), "effect-transform")).filter((id) => /^layer-/.test(id))).toEqual([]);
+    expect(screen.getByTestId("layer-stack").props.pointerEvents).toBe("none");
+  });
+
+  test("layers appearing, changing and disappearing never remount the main video view or reload its file", async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    const video = screen.getByTestId("preview-video");
+    await setLayers([photo("one", 0)]);
+    expect(screen.getByTestId("layer-one")).toBeTruthy();
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    await setLayers([photo("one", 0), { ...makeLayer({ id: "two", sourceDuration: 4, start: 0.5 }), transform: small }]);
+    await act(() => { useEditorStore.getState().seek(1); });
+    expect(screen.getByTestId("layer-video-two")).toBeTruthy();
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    await act(() => { useEditorStore.getState().seek(1.9); }); // "one" (0–2) still on
+    await act(() => { useEditorStore.getState().seek(0.2); }); // "two" gone
+    expect(screen.queryByTestId("layer-two")).toBeNull();
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    await setLayers([]);
+    expect(screen.queryByTestId("layer-stack")).toBeNull();
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    expect(player.replaceAsync).toHaveBeenCalledTimes(1);
+    expect(ids(find(tree(), "effect-transform"))).toEqual(["effect-transform", "clip-box", "clip-content", "preview-video"]);
+  });
+
+  test("a main clip's static opacity fades its picture over its background; back at 1 the default styles return", async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    const video = screen.getByTestId("preview-video");
+    await act(() => { useEditorStore.getState().apply((p) => setClipOpacity(p, "a", 0.4)); });
+    expect(mainBox().opacity).toBe(0.4);
+    expect(mainBox()).toMatchObject({ left: 0, top: 0, width: 270, height: 480 }); // no transform override
+    expect(screen.getByTestId("clip-background")).toBeTruthy();
+    await act(() => { useEditorStore.getState().apply((p) => setClipOpacity(p, "a", 1)); });
+    expect("opacity" in mainBox()).toBe(false);
+    expect(screen.queryByTestId("clip-background")).toBeNull();
+    expect(screen.getByTestId("preview-video")).toBe(video);
+  });
+
+  test("a main clip's mask rounds its picture box and shows the background around it, without a remount", async () => {
+    await render(<PreviewPlayer />);
+    await layout();
+    const video = screen.getByTestId("preview-video");
+    await act(() => { useEditorStore.getState().apply((p) => setClipMask(p, "a", "circle")); });
+    expect(mainBox().borderRadius).toBe(135);
+    expect(screen.getByTestId("clip-background")).toBeTruthy();
+    await act(() => { useEditorStore.getState().apply((p) => setClipMask(p, "a", "none")); });
+    expect("borderRadius" in mainBox()).toBe(false);
+    expect(screen.getByTestId("preview-video")).toBe(video);
+  });
+
+  test("the Preview tag shows while a layer with a filter is at the playhead", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], layers: [{ ...photo("one", 2), filter: "vintage" }] }));
+    await render(<PreviewPlayer />);
+    await layout();
+    expect(screen.queryByTestId("preview-tag")).toBeNull();
+    await act(() => { useEditorStore.getState().seek(3); });
+    expect(screen.getByTestId("preview-tag")).toBeTruthy();
+    await act(() => { useEditorStore.getState().seek(5); });
+    expect(screen.queryByTestId("preview-tag")).toBeNull();
+  });
+});
+
 test("tapping the preview with an effect selected deselects it without starting playback; the next tap plays", async () => {
   useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], effects: [makeEffect({ id: "e1", start: 0, end: 2 })] }));
   useEditorStore.getState().selectEffect("e1");
@@ -532,6 +653,138 @@ test("tapping the preview with an audio track selected deselects it without star
   expect(useEditorStore.getState().isPlaying).toBe(false);
   await fireEvent.press(screen.getByLabelText("Preview"));
   expect(useEditorStore.getState().isPlaying).toBe(true);
+});
+
+describe("tapping layers on the preview", () => {
+  const st = () => useEditorStore.getState();
+  const tf = (x: number, rotation = 0) => ({ scale: 0.4, x, y: 0, rotation, flipH: false, flipV: false });
+  /** A photo layer whose 108×192 box sits around (135 + x·270, 240) in the 270×480 frame. */
+  const photo = (id: string, x: number, start = 0, over: Partial<LayerClip> = {}): LayerClip => ({ ...makePhotoClip({ id, seconds: 2 }), transform: tf(x), start, ...over });
+  const mount = async (layers: LayerClip[]) => {
+    st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], layers, overlays: [makeOverlay({ id: "t", text: "Hi", start: 0, end: 8 })] }));
+    await render(<PreviewPlayer />);
+    await layout();
+  };
+  const tap = (x: number, y: number) => fireEvent.press(screen.getByLabelText("Preview"), { nativeEvent: { locationX: x, locationY: y } });
+
+  test("a tap on a layer's picture selects it and does not start playback; it then takes the gestures", async () => {
+    await mount([photo("one", 0)]);
+    await tap(135, 240);
+    expect(st().selectedClipId).toBe("one");
+    expect(st().isPlaying).toBe(false);
+    expect(screen.getByTestId("clip-gesture-area")).toBeTruthy();
+    expect(screen.getByTestId("clip-selection-frame")).toHaveStyle({ left: 81, top: 144, width: 108, height: 192 });
+  });
+
+  test("where layers overlap, the topmost (drawn last) is selected", async () => {
+    await mount([photo("low", 0), photo("top", 0.2)]); // low spans x 81–189, top 135–243
+    await tap(160, 240);
+    expect(st().selectedClipId).toBe("top");
+    await tap(100, 240);
+    expect(st().selectedClipId).toBe("low");
+    await tap(230, 240);
+    expect(st().selectedClipId).toBe("top");
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("a turned layer is hit by its turned box", async () => {
+    await mount([photo("one", 0, 0, { transform: tf(0, 45) })]);
+    await tap(135, 150); // inside the upright box only
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(true);
+    await tap(205, 240); // inside the turned box only
+    expect(st().selectedClipId).toBe("one");
+  });
+
+  test("a tap beside every layer, nothing selected: plays / pauses as it always did", async () => {
+    await mount([photo("one", 0)]);
+    await tap(20, 20);
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(true);
+    await tap(20, 20);
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("a tap on the already-selected layer plays / pauses and keeps it selected (a full-frame layer does not block the preview tap)", async () => {
+    await mount([photo("full", 0, 0, { transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false } })]);
+    await tap(20, 20);
+    expect(st().selectedClipId).toBe("full");
+    expect(st().isPlaying).toBe(false);
+    await tap(20, 20);
+    expect(st().selectedClipId).toBe("full");
+    expect(st().isPlaying).toBe(true);
+    await tap(200, 400);
+    expect(st().selectedClipId).toBe("full");
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("with a layer selected: a tap on it toggles play and keeps it, a tap elsewhere deselects it without playing, the next one plays", async () => {
+    await mount([photo("one", 0)]);
+    await tap(135, 240);
+    await tap(150, 250);
+    expect(st().selectedClipId).toBe("one");
+    expect(st().isPlaying).toBe(true);
+    await tap(150, 250);
+    expect(st().isPlaying).toBe(false);
+    await tap(20, 20);
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(false);
+    expect(screen.queryByTestId("clip-gesture-area")).toBeNull();
+    await tap(20, 20);
+    expect(st().isPlaying).toBe(true);
+  });
+
+  test("a selected layer that is not on screen is deselected by a tap anywhere", async () => {
+    await mount([photo("late", 0, 4)]); // on screen 4–6
+    await act(() => { st().select("late"); });
+    await tap(135, 240); // where it would be: it is not drawn now
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("a layer that is not on screen at the playhead, or all but invisible, is not hit", async () => {
+    await mount([photo("late", 0, 4), photo("ghost", 0, 0, { opacity: 0.01 })]);
+    await tap(135, 240);
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(true);
+  });
+
+  test("with a main clip selected a tap beside the layers still plays and keeps the selection; a tap on a layer selects the layer", async () => {
+    await mount([photo("one", 0)]);
+    await act(() => { st().select("a"); });
+    await tap(20, 20);
+    expect(st().selectedClipId).toBe("a");
+    expect(st().isPlaying).toBe(true);
+    await tap(135, 240);
+    expect(st().selectedClipId).toBe("one");
+  });
+
+  test("a tap on a layer while a text is selected selects the layer (the selection stays exclusive)", async () => {
+    await mount([photo("one", 0)]);
+    await act(() => { st().selectOverlay("t"); });
+    await tap(135, 240);
+    expect(st().selectedClipId).toBe("one");
+    expect(st().selectedOverlayId).toBeNull();
+    expect(st().isPlaying).toBe(false);
+  });
+
+  test("a tap that carries no position hits no layer", async () => {
+    await mount([photo("one", 0)]);
+    await fireEvent.press(screen.getByLabelText("Preview"));
+    expect(st().selectedClipId).toBeNull();
+    expect(st().isPlaying).toBe(true);
+  });
+
+  test("a layer's keyframed place at the playhead is what is hit", async () => {
+    const kf = (t: number, x: number) => ({ t, x, y: 0, scale: 0.4, rotation: 0, opacity: 1 });
+    await mount([{ ...makeLayer({ id: "v", sourceDuration: 4, start: 0, keyframes: [kf(0, 0), kf(2, 0.4)] }), transform: tf(0) }]);
+    await act(() => { st().seek(2); }); // the picture is now around x = 243
+    await tap(135, 240);
+    expect(st().selectedClipId).toBeNull();
+    await act(() => { st().setPlaying(false); });
+    await tap(243, 240);
+    expect(st().selectedClipId).toBe("v");
+  });
 });
 
 describe("clip motion (animations and keyframes)", () => {
