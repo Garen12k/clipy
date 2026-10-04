@@ -23,11 +23,11 @@ jest.mock("expo-video", () => {
   };
   return { __mockPlayer: mockPlayer, useVideoPlayer: () => mockPlayer, VideoView: View };
 });
-import { replaceClipMedia, setClipSpeed, setClipTransform } from "@/src/editor/model/ops";
+import { replaceClipMedia, setClipAnimation, setClipSpeed, setClipTransform } from "@/src/editor/model/ops";
 import { StyleSheet } from "react-native";
 import { FILTERS } from "@/src/editor/effects";
 import { shakeOffset } from "@/src/editor/model/effectMath";
-import { DEFAULT_ADJUST, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { DEFAULT_ADJUST, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
 
@@ -395,4 +395,63 @@ test("tapping the preview with an effect selected deselects it without starting 
   expect(useEditorStore.getState().isPlaying).toBe(false);
   await fireEvent.press(screen.getByLabelText("Preview"));
   expect(useEditorStore.getState().isPlaying).toBe(true);
+});
+
+describe("clip motion (animations and keyframes)", () => {
+  const box = () => StyleSheet.flatten(screen.getByTestId("clip-box").props.style);
+  const pin = (t: number, over: Partial<{ x: number; y: number; scale: number; rotation: number; opacity: number }> = {}) =>
+    ({ t, x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, ...over });
+  const one = (over: Partial<Clip> & { id: string }) => useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ ...over, sourceDuration: 4 })] }));
+
+  test("a default project passes no overrides: the picture box has no opacity and sits on the frame", async () => {
+    one({ id: "a" });
+    await render(<PreviewPlayer />);
+    await layout();
+    expect("opacity" in box()).toBe(false);
+    expect(box()).toMatchObject({ left: 0, top: 0, width: 270, height: 480 });
+    expect(screen.queryByTestId("clip-background")).toBeNull();
+  });
+
+  test("a fade In shows the picture at opacity 0 at the clip's start (over its background) and 1 after the In", async () => {
+    one({ id: "a", animation: { in: { id: "fade", duration: 1 }, out: null, combo: null } });
+    await render(<PreviewPlayer />);
+    await layout();
+    expect(box().opacity).toBe(0);
+    expect(screen.getByTestId("clip-background")).toBeTruthy();
+    await act(() => { useEditorStore.getState().seek(0.5); });
+    expect(box().opacity).toBeCloseTo(1 - 0.5 ** 3, 10); // easeOut(0.5)
+    await act(() => { useEditorStore.getState().seek(2); });
+    expect(box().opacity).toBe(1);
+    expect(screen.queryByTestId("clip-background")).toBeNull();
+  });
+
+  test("a keyframed clip moves between its pins", async () => {
+    one({ id: "a", keyframes: [pin(0), pin(2, { x: 0.4 })] });
+    await render(<PreviewPlayer />);
+    await layout();
+    expect(box().left).toBeCloseTo(0, 10);
+    await act(() => { useEditorStore.getState().seek(1); });
+    expect(box().left).toBeCloseTo(0.2 * 270, 10); // smooth(0.5) = 0.5
+    await act(() => { useEditorStore.getState().seek(3); });
+    expect(box().left).toBeCloseTo(0.4 * 270, 10); // holds after the last pin
+  });
+
+  test("motion starting, changing and ending never remounts the video view", async () => {
+    one({ id: "a" });
+    await render(<PreviewPlayer />);
+    await layout();
+    const video = screen.getByTestId("preview-video");
+    await act(() => { useEditorStore.getState().apply((p) => setClipAnimation(p, "a", { in: { id: "fade", duration: 1 } })); });
+    expect(box().opacity).toBe(0);
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    await act(() => { useEditorStore.getState().seek(0.5); });
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    await act(() => { useEditorStore.getState().seek(2); });
+    expect(box().opacity).toBe(1);
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    await act(() => { useEditorStore.getState().apply((p) => setClipAnimation(p, "a", { in: null })); });
+    expect("opacity" in box()).toBe(false);
+    expect(screen.getByTestId("preview-video")).toBe(video);
+    expect(player.replaceAsync).toHaveBeenCalledTimes(1);
+  });
 });

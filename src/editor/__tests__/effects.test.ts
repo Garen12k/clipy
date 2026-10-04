@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { CAPTION_STYLE, EFFECTS, FILTERS, SHAPES, STICKER_EMOJI_SCALE, STICKER_SHAPE_SCALE, TRANSITIONS } from "../effects";
-import { EFFECT_IDS, FILTER_IDS, SHAPE_IDS, TRANSITION_TYPES } from "../model/types";
+import { ANIM_COMBO, ANIM_IN, ANIM_LOOP, CAPTION_STYLE, EFFECTS, FILTERS, SHAPES, STICKER_EMOJI_SCALE, STICKER_SHAPE_SCALE, TRANSITIONS } from "../effects";
+import { ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, EFFECT_IDS, FILTER_IDS, SHAPE_IDS, TRANSITION_TYPES } from "../model/types";
 
 const swift = readFileSync(join(__dirname, "../../../modules/clipy-video/ios/Effects.swift"), "utf8");
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -64,6 +64,16 @@ test("effects registry covers every effect id; labels as specified", () => {
   expect(EFFECT_IDS.map((id) => EFFECTS[id].label)).toEqual(["Glitch", "Shake", "Zoom pulse", "Blur", "VHS", "Light leak", "Flash", "RGB split", "Old film", "Glow"]);
   expect(TRANSITIONS.slide.label).toBe("Slide left");
   expect(TRANSITIONS.slideRight.label).toBe("Slide right");
+});
+
+test("animation registries cover every id with the specified labels", () => {
+  expect(ANIM_IN_IDS).toHaveLength(10); expect(ANIM_COMBO_IDS).toHaveLength(6); expect(ANIM_LOOP_IDS).toHaveLength(6);
+  for (const id of ANIM_IN_IDS) { expect(ANIM_IN[id].label.length).toBeGreaterThan(0); expect(ANIM_IN[id].icon.length).toBeGreaterThan(0); }
+  for (const id of ANIM_COMBO_IDS) { expect(ANIM_COMBO[id].label.length).toBeGreaterThan(0); expect(ANIM_COMBO[id].icon.length).toBeGreaterThan(0); }
+  for (const id of ANIM_LOOP_IDS) { expect(ANIM_LOOP[id].label.length).toBeGreaterThan(0); expect(ANIM_LOOP[id].icon.length).toBeGreaterThan(0); }
+  expect(ANIM_IN_IDS.map((id) => ANIM_IN[id].label)).toEqual(["Fade", "Slide left", "Slide right", "Slide up", "Slide down", "Zoom in", "Zoom out", "Spin", "Pop", "Rise"]);
+  expect(ANIM_COMBO_IDS.map((id) => ANIM_COMBO[id].label)).toEqual(["Slow zoom in", "Slow zoom out", "Pan left", "Pan right", "Sway", "Pulse"]);
+  expect(ANIM_LOOP_IDS.map((id) => ANIM_LOOP[id].label)).toEqual(["Wiggle", "Pulse", "Spin", "Float", "Blink", "Shake"]);
 });
 
 test("every non-none filter id has a recipe case in Effects.swift filterChain", () => {

@@ -15,7 +15,7 @@ jest.mock("@/src/lib/id", () => ({ newId: () => "split-right" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { exportTimeline } from "@/modules/clipy-video";
 import { insertFreezeFrame, setClipReversed, setTransition, splitClipAt } from "@/src/editor/model/ops";
-import { makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useExport } from "../useExport";
 
 const a = makeClip({ id: "a", sourceDuration: 4, volume: 1.5, muted: true, speed: 2, filter: "warm", transitionOut: { type: "fade", duration: 0.5 } });
@@ -141,4 +141,15 @@ test("effects clip to the clips actually exported, and a project with none sends
   const { result: r2 } = await renderHook(() => useExport(project, []));
   await act(() => r2.current.start(1080));
   expect((exportTimeline as jest.Mock).mock.calls[0][0].effects).toEqual([]);
+});
+
+test("clip and overlay motion reaches the export request", async () => {
+  const clip = makeClip({ id: "m", sourceDuration: 8, speed: 2, keyframes: [makeKeyframe({ t: 2, x: 0.2 })], animation: { in: { id: "fade", duration: 0.5 }, out: null, combo: null } });
+  const st = makeSticker({ id: "ms", start: 0, end: 2, animation: { in: null, out: null, loop: "wiggle" }, keyframes: [makeKeyframe({ t: 1, scale: 2 })] });
+  const { result } = await renderHook(() => useExport(makeProject({ id: "p9", clips: [clip], overlays: [st] }), []));
+  await act(() => result.current.start(1080));
+  const req = (exportTimeline as jest.Mock).mock.calls[0][0];
+  expect(req.clips[0]).toMatchObject({ animIn: { id: "fade", duration: 0.5 }, keyframes: [makeKeyframe({ t: 1, x: 0.2 })] });
+  expect(req.clips[0]).not.toHaveProperty("outputDuration");
+  expect(req.overlays[0]).toMatchObject({ animLoop: "wiggle", keyframes: [makeKeyframe({ t: 1, scale: 2 })] });
 });

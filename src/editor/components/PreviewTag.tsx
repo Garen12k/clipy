@@ -2,6 +2,7 @@ import { View } from "react-native";
 import { adjustNeedsTag } from "@/src/editor/model/adjust";
 import { coversFrame, placeClip } from "@/src/editor/model/clipLayout";
 import { activeEffects } from "@/src/editor/model/effectMath";
+import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
 import { frameSize } from "@/src/editor/model/ops";
 import { clipAt, isInTransitionWindow } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
@@ -11,7 +12,8 @@ import { Body } from "@/src/ui/Text";
 /**
  * Whether the preview only approximates the current frame: the clip has a filter (at a strength above 0), the playhead is in a
  * transition window, the clip is reversed (the preview plays forwards), any Adjust value is non-zero, a
- * timeline effect covers the playhead, or its blur background is visible.
+ * timeline effect covers the playhead, or its blur background is visible — the picture, placed where its motion puts it at the
+ * playhead, does not cover the frame or is not fully opaque (the rule `ClipFrame` draws the background by).
  */
 export function needsPreviewTag(p: Project, playhead: number): boolean {
   const hit = clipAt(p, playhead);
@@ -21,7 +23,9 @@ export function needsPreviewTag(p: Project, playhead: number): boolean {
   if (adjustNeedsTag(c.adjust) || activeEffects(p.effects, playhead).length > 0) return true;
   if (c.background.type !== "blur") return false;
   const f = frameSize(p);
-  return !coversFrame(placeClip({ width: c.width, height: c.height }, c.crop, c.transform, f.width, f.height), f.width, f.height);
+  const motion = hasClipMotion(c) ? resolveClipMotion(c, hit.offsetInClip) : null;
+  if (motion && motion.opacity < 1) return true;
+  return !coversFrame(placeClip({ width: c.width, height: c.height }, c.crop, motion ? motion.transform : c.transform, f.width, f.height), f.width, f.height);
 }
 
 /** Small chip shown over the preview when the current frame is an approximation of the export (see `needsPreviewTag`). */

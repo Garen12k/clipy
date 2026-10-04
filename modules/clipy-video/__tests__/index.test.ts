@@ -11,8 +11,8 @@ jest.mock("expo-modules-core", () => {
 });
 
 import { requireOptionalNativeModule } from "expo-modules-core";
-import { DEFAULT_ADJUST, makeClip, makeEffect, makePhotoClip } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportClip, toExportEffect, transcribe } from "../index";
+import { DEFAULT_ADJUST, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeSticker } from "@/src/editor/model/types";
+import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportClip, toExportEffect, toExportOverlay, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -42,12 +42,14 @@ describe("export API", () => {
       clips: [{ sourceUri: "file:///a.mov", trimStart: 0, trimEnd: 2, volume: 1, muted: false, speed: 1, filter: null, transition: { type: "none", duration: 0 },
         kind: "video" as const, sourceWidth: 1080, sourceHeight: 1920,
         transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
-        background: { type: "black" as const, color: null }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST } }],
+        background: { type: "black" as const, color: null }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
+        animIn: null, animOut: null, animCombo: null, keyframes: [] }],
       effects: [{ type: "glitch", start: 0, end: 1, intensity: 0.7 }],
       overlays: [{
         kind: "text" as const, text: "Hi", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#fff",
         backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center" as const, emoji: null, shape: null,
         x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 2,
+        animIn: null, animOut: null, animLoop: null, keyframes: [],
       }],
       audio: null, aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4",
     };
@@ -80,6 +82,7 @@ describe("toExportClip", () => {
       transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
       background: { type: "black", color: null }, reversed: false,
       filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
+      animIn: null, animOut: null, animCombo: null, keyframes: [],
     });
   });
   it("maps filter strength and adjust values", () => {
@@ -123,5 +126,67 @@ describe("toExportClip", () => {
     expect(e.transition).not.toBe(c.transitionOut);
     expect(e.background).not.toBe(c.background);
     expect(e.adjust).not.toBe(c.adjust);
+  });
+
+  it("sends keyframes of a sped-up clip as output-local seconds", () => {
+    const e = toExportClip(makeClip({ id: "a", sourceDuration: 8, speed: 2, keyframes: [makeKeyframe({ t: 2, x: 0.1 }), makeKeyframe({ t: 6, scale: 2 })] }));
+    expect(e).not.toHaveProperty("outputDuration");   // nothing native reads it: the composition knows the clip's length
+    expect(e.keyframes).toEqual([makeKeyframe({ t: 1, x: 0.1 }), makeKeyframe({ t: 3, scale: 2 })]);
+  });
+  it("sends a reversed clip's pins in reversed order", () => {
+    const e = toExportClip(makeClip({ id: "a", sourceDuration: 4, reversed: true, keyframes: [makeKeyframe({ t: 1, x: 0.1 }), makeKeyframe({ t: 3, x: 0.3 })] }));
+    expect(e.keyframes).toEqual([makeKeyframe({ t: 1, x: 0.3 }), makeKeyframe({ t: 3, x: 0.1 })]);
+  });
+  it("keeps the pins inside the clip plus the nearest one on each side, unclamped", () => {
+    const keyframes = [0, 1, 2, 4, 6, 7, 8].map((t) => makeKeyframe({ t, x: t / 10 }));
+    const e = toExportClip(makeClip({ id: "a", sourceDuration: 10, trimStart: 2, trimEnd: 6, keyframes }));
+    expect(e.keyframes.map((k) => k.t)).toEqual([-1, 0, 2, 4, 5]);
+    expect(e.keyframes.map((k) => k.x)).toEqual([0.1, 0.2, 0.4, 0.6, 0.7]);
+  });
+  it("sends clip animation edges scaled to the clip length, or null for a zero edge", () => {
+    const e = toExportClip(makeClip({ id: "a", sourceDuration: 1, animation: { in: { id: "fade", duration: 1 }, out: { id: "zoomOut", duration: 1 }, combo: null } }));
+    expect(e).toMatchObject({ animIn: { id: "fade", duration: 0.5 }, animOut: { id: "zoomOut", duration: 0.5 }, animCombo: null });
+    const z = toExportClip(makeClip({ id: "a", sourceDuration: 4, animation: { in: { id: "fade", duration: 0 }, out: null, combo: null } }));
+    expect(z.animIn).toBeNull();
+    const c = toExportClip(makeClip({ id: "a", sourceDuration: 4, animation: { in: null, out: null, combo: "sway" } }));
+    expect(c.animCombo).toBe("sway");
+  });
+  it("sends fresh keyframe and edge copies", () => {
+    const c = makeClip({ id: "a", sourceDuration: 4, keyframes: [makeKeyframe({ t: 1 })], animation: { in: { id: "fade", duration: 0.5 }, out: null, combo: null } });
+    const e = toExportClip(c);
+    expect(e.keyframes[0]).not.toBe(c.keyframes[0]);
+    expect(e.animIn).not.toBe(c.animation.in);
+  });
+});
+
+describe("toExportOverlay", () => {
+  it("maps a default text overlay, whole", () => {
+    expect(toExportOverlay(makeOverlay({ id: "o", fontId: "anton" }))).toEqual({
+      kind: "text", text: "Your text", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#F4F4F5",
+      backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center", emoji: null, shape: null,
+      x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 3,
+      animIn: null, animOut: null, animLoop: null, keyframes: [],
+    });
+  });
+  it("maps a default sticker, whole", () => {
+    expect(toExportOverlay(makeSticker({ id: "s" }))).toEqual({
+      kind: "sticker", text: "", fontPostScriptName: "", fontScale: 0, color: "#F5C542",
+      backgroundColor: null, backgroundOpacity: 0, outline: false, align: "center", emoji: "⭐", shape: null,
+      x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 3,
+      animIn: null, animOut: null, animLoop: null, keyframes: [],
+    });
+  });
+  it("sends overlay animation scaled to its length and keyframes as stored", () => {
+    const kf = [makeKeyframe({ t: 0.5, x: 0.2 }), makeKeyframe({ t: 1, opacity: 0.5 })];
+    const e = toExportOverlay(makeSticker({ id: "s", start: 1, end: 2, keyframes: kf,
+      animation: { in: { id: "pop", duration: 1 }, out: { id: "fade", duration: 1 }, loop: "wiggle" } }));
+    expect(e).toMatchObject({ animIn: { id: "pop", duration: 0.5 }, animOut: { id: "fade", duration: 0.5 }, animLoop: "wiggle" });
+    expect(e.keyframes).toEqual(kf);
+    expect(e.keyframes[0]).not.toBe(kf[0]);
+  });
+  it("sends no motion for a caption", () => {
+    const e = toExportOverlay(makeOverlay({ id: "c", kind: "caption", fontId: "anton", keyframes: [makeKeyframe({ t: 0 })],
+      animation: { in: { id: "fade", duration: 0.5 }, out: null, loop: "pulse" } }));
+    expect(e).toMatchObject({ animIn: null, animOut: null, animLoop: null, keyframes: [] });
   });
 });

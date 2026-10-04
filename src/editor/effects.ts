@@ -1,4 +1,4 @@
-import type { EffectId, FilterId, ShapeId, TextOverlay, TransitionType } from "./model/types";
+import type { AnimComboId, AnimInId, AnimLoopId, EffectId, FilterId, ShapeId, TextOverlay, TransitionType } from "./model/types";
 import type { IoniconName } from "./toolGroups";
 
 export interface FilterPreview { tint: string; tintOpacity: number; saturation: number; brightness: number }
@@ -44,6 +44,38 @@ export const EFFECTS: Record<EffectId, { label: string; icon: IoniconName }> = {
   rgbSplit:  { label: "RGB split",  icon: "layers-outline" },
   oldFilm:   { label: "Old film",   icon: "film-outline" },
   glow:      { label: "Glow",       icon: "bulb-outline" },
+};
+
+/** Entry / exit animations (clips, text, stickers). The motion maths lives in model/motion.ts. */
+export const ANIM_IN: Record<AnimInId, { label: string; icon: IoniconName }> = {
+  fade:       { label: "Fade",        icon: "contrast-outline" },
+  slideLeft:  { label: "Slide left",  icon: "arrow-back-outline" },
+  slideRight: { label: "Slide right", icon: "arrow-forward-outline" },
+  slideUp:    { label: "Slide up",    icon: "arrow-up-outline" },
+  slideDown:  { label: "Slide down",  icon: "arrow-down-outline" },
+  zoomIn:     { label: "Zoom in",     icon: "add-circle-outline" },
+  zoomOut:    { label: "Zoom out",    icon: "remove-circle-outline" },
+  spin:       { label: "Spin",        icon: "sync-outline" },
+  pop:        { label: "Pop",         icon: "sparkles-outline" },
+  rise:       { label: "Rise",        icon: "trending-up-outline" },
+};
+/** Whole-clip animations (clips only). */
+export const ANIM_COMBO: Record<AnimComboId, { label: string; icon: IoniconName }> = {
+  zoomInSlow:  { label: "Slow zoom in",  icon: "expand-outline" },
+  zoomOutSlow: { label: "Slow zoom out", icon: "contract-outline" },
+  panLeft:     { label: "Pan left",      icon: "arrow-back-circle-outline" },
+  panRight:    { label: "Pan right",     icon: "arrow-forward-circle-outline" },
+  sway:        { label: "Sway",          icon: "swap-horizontal-outline" },
+  pulse:       { label: "Pulse",         icon: "pulse-outline" },
+};
+/** Looping animations (text and stickers only). */
+export const ANIM_LOOP: Record<AnimLoopId, { label: string; icon: IoniconName }> = {
+  wiggle: { label: "Wiggle", icon: "musical-notes-outline" },
+  pulse:  { label: "Pulse",  icon: "heart-outline" },
+  spin:   { label: "Spin",   icon: "refresh-outline" },
+  float:  { label: "Float",  icon: "cloud-outline" },
+  blink:  { label: "Blink",  icon: "eye-outline" },
+  shake:  { label: "Shake",  icon: "phone-portrait-outline" },
 };
 
 /** 100×100 box, absolute M/L/C/Q/Z only — copied verbatim into Effects.swift. */

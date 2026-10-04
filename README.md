@@ -198,6 +198,22 @@ with coloured layers and movement, and shows the "Preview" tag. The exported vid
 
 All of the export side is Swift that has never been compiled.
 
+## Motion
+
+Animations and keyframes. Everything shows exactly in the preview (no "Preview" tag).
+
+- **Clip animations** (Edit, Animate) - **In** and **Out**: Fade, Slide left / right / up / down, Zoom in,
+  Zoom out, Spin, Pop, Rise, with a **Length** slider. Or one **Combo**: Slow zoom in, Slow zoom out,
+  Pan left, Pan right, Sway, Pulse. "Apply to all clips" copies it everywhere.
+- **Text and sticker animations** (Text or Stickers, Animate) - **In**, **Out** and **Loop**: Wiggle,
+  Pulse, Spin, Float, Blink, Shake. Captions do not animate.
+- **Keyframes** (the diamond "Keyframe" tool in Edit, Text and Stickers) - tap it to pin the position,
+  size, rotation and opacity at the playhead. Move the playhead, then pinch / drag / twist to add another
+  pin; the app moves smoothly between pins. Diamonds show on the selected clip strip or text pill, and
+  tapping one jumps there. Tap the tool while on a pin to remove it.
+
+The exported video does the same, but that Swift has never been compiled.
+
 ## First native build — things to check
 
 When the first EAS build exists, compare the export against the preview and check these Look items:
@@ -211,3 +227,9 @@ When the first EAS build exists, compare the export against the preview and chec
 3. **Grain look.**
 4. **VHS scan lines** (the generator is unverified).
 5. **Spin and slide directions** of the new transitions.
+6. **Text and sticker animations** use sampled Core Animation keyframes. Check timing, direction, and that an animated text is hidden before and after its time.
+7. **Resized text.** When a text's size is keyframed or animated, the export scales the laid-out lines while the preview re-wraps the text. Compare the two with a large pinned text (two lines, pinned from small to big).
+8. **Sharpness of scaled-up text.** A text or sticker that grows (a pin with a bigger scale, Pop, Pulse) should stay sharp in the export, not blurry.
+9. **Core Animation keyframes in the export.** Check that the export tool honours the sampled keyframes at all: an animated text or sticker must move in the exported file, not sit still or be missing.
+10. **Fading clip.** A fading clip should fade over its background (black / colour / blur): half way through a Fade the picture and the background are mixed half and half.
+11. **Rotation direction** of Spin and of keyframed rotation.

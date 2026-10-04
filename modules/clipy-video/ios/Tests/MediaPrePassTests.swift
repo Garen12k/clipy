@@ -45,6 +45,11 @@ final class MediaPrePassTests: XCTestCase {
     c.filterIntensity = 0.4
     var adjust = ExportAdjust(); adjust.brightness = 0.5; adjust.grain = 0.25
     c.adjust = adjust
+    var animIn = ExportAnimEdge(); animIn.id = "zoomIn"; animIn.duration = 0.5
+    var animOut = ExportAnimEdge(); animOut.id = "fade"; animOut.duration = 0.25
+    c.animIn = animIn; c.animOut = animOut; c.animCombo = "sway"
+    var pin = ExportKeyframe(); pin.t = 1.5; pin.x = 0.2; pin.y = -0.1; pin.scale = 2; pin.rotation = 45; pin.opacity = 0.5
+    c.keyframes = [ExportKeyframe(), pin]
 
     let prepared = URL(fileURLWithPath: "/tmp/clipy-prepass-x/0-photo.mp4")
     let r = MediaPrePass.rewrite(c, preparedURL: prepared, duration: 3)
@@ -63,6 +68,22 @@ final class MediaPrePassTests: XCTestCase {
     XCTAssertEqual(r.background.type, "color"); XCTAssertEqual(r.background.color, "#FF0000")
     XCTAssertEqual(r.filterIntensity, 0.4)
     XCTAssertEqual(r.adjust.brightness, 0.5); XCTAssertEqual(r.adjust.grain, 0.25); XCTAssertEqual(r.adjust.contrast, 0)
+    // Motion is in the clip's output time, so the prepared (forward) file keeps it as it is.
+    XCTAssertEqual(r.animIn?.id, "zoomIn"); XCTAssertEqual(r.animIn?.duration, 0.5)
+    XCTAssertEqual(r.animOut?.id, "fade"); XCTAssertEqual(r.animOut?.duration, 0.25)
+    XCTAssertEqual(r.animCombo, "sway")
+    XCTAssertEqual(r.keyframes.count, 2)
+    XCTAssertEqual(r.keyframes.first?.t, 0); XCTAssertEqual(r.keyframes.first?.scale, 1); XCTAssertEqual(r.keyframes.first?.opacity, 1)
+    XCTAssertEqual(r.keyframes.last?.t, 1.5); XCTAssertEqual(r.keyframes.last?.x, 0.2); XCTAssertEqual(r.keyframes.last?.y, -0.1)
+    XCTAssertEqual(r.keyframes.last?.scale, 2); XCTAssertEqual(r.keyframes.last?.rotation, 45); XCTAssertEqual(r.keyframes.last?.opacity, 0.5)
+    XCTAssertEqual(ExportSession.clipMotion(r)?.animCombo, "sway")
+  }
+
+  func testRewriteOfAClipWithoutMotionHasNone() {
+    let r = MediaPrePass.rewrite(clip(reversed: true), preparedURL: URL(fileURLWithPath: "/tmp/r.mp4"), duration: 3)
+    XCTAssertNil(r.animIn); XCTAssertNil(r.animOut); XCTAssertNil(r.animCombo)
+    XCTAssertTrue(r.keyframes.isEmpty)
+    XCTAssertNil(ExportSession.clipMotion(r))
   }
 
   /// `@Field` is a class: the rewrite must build a new record, never write through a copy of the original.

@@ -1,4 +1,4 @@
-import { DEFAULT_ADJUST, makeClip, makeEffect, makePhotoClip, makeProject, type Clip } from "@/src/editor/model/types";
+import { DEFAULT_ADJUST, makeClip, makeEffect, makeKeyframe, makePhotoClip, makeProject, type Clip } from "@/src/editor/model/types";
 import { needsPreviewTag } from "../components/PreviewTag";
 
 const one = (over: Partial<Clip>) => makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4, ...over })] });
@@ -47,4 +47,31 @@ test("a photo at the default fill needs no tag", () => {
 });
 test("an empty project needs no tag", () => {
   expect(needsPreviewTag(makeProject(), 0)).toBe(false);
+});
+
+describe("a blur background behind a clip with motion", () => {
+  const blur = { background: { type: "blur" as const } };
+  test("keyframed small: the blur shows, so the tag does — only while the picture is small", () => {
+    const p = one({ ...blur, keyframes: [makeKeyframe({ t: 0, scale: 0.5 }), makeKeyframe({ t: 2, scale: 1 })] });
+    expect(needsPreviewTag(p, 0)).toBe(true);
+    expect(needsPreviewTag(p, 1)).toBe(true);
+    expect(needsPreviewTag(p, 3)).toBe(false);
+  });
+  test("the static transform is hidden by the pins: a keyframed picture that covers needs no tag", () => {
+    const small = { scale: 0.5, x: 0, y: 0, rotation: 0, flipH: false, flipV: false };
+    expect(needsPreviewTag(one({ ...blur, transform: small, keyframes: [makeKeyframe({ t: 0 })] }), 1)).toBe(false);
+    expect(needsPreviewTag(one({ ...blur, transform: small }), 1)).toBe(true);
+  });
+  test("fading: a see-through picture shows the blur", () => {
+    const fade = one({ ...blur, animation: { in: { id: "fade", duration: 1 }, out: null, combo: null } });
+    expect(needsPreviewTag(fade, 0.5)).toBe(true);
+    expect(needsPreviewTag(fade, 2)).toBe(false);
+    expect(needsPreviewTag(one({ ...blur, keyframes: [makeKeyframe({ t: 0, opacity: 0.5 })] }), 1)).toBe(true);
+  });
+  test("an animation that moves the picture off the frame shows the blur; a colour background never needs the tag", () => {
+    const slide = { in: { id: "slideLeft" as const, duration: 1 }, out: null, combo: null };
+    expect(needsPreviewTag(one({ ...blur, animation: slide }), 0.2)).toBe(true);
+    expect(needsPreviewTag(one({ ...blur, animation: slide }), 2)).toBe(false);
+    expect(needsPreviewTag(one({ background: { type: "color", color: "#FF0000" }, animation: slide }), 0.2)).toBe(false);
+  });
 });

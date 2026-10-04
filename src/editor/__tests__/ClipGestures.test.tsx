@@ -1,6 +1,7 @@
 import { act, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import * as Haptics from "expo-haptics";
+import { StyleSheet } from "react-native";
 import { placeClip } from "@/src/editor/model/clipLayout";
 import { setClipTransform } from "@/src/editor/model/ops";
 import { DEFAULT_TRANSFORM, makeClip, makeOverlay, makeProject } from "@/src/editor/model/types";
@@ -217,5 +218,141 @@ describe("createClipGestureSession", () => {
     s.finish("pinch");
     expect(tf()).toEqual(DEFAULT_TRANSFORM);
     expect(store().past).toHaveLength(0);
+  });
+});
+
+describe("clips with motion", () => {
+  const pin = (t: number, over: Partial<{ x: number; y: number; scale: number; rotation: number; opacity: number }> = {}) =>
+    ({ t, x: 0, y: 0, scale: 1, rotation: 0, opacity: 1, ...over });
+  const keyed = (keyframes = [pin(0), pin(2, { x: 0.4 })]) =>
+    store().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4, keyframes }), makeClip({ id: "b", sourceDuration: 4 })] }));
+  const pins = () => store().project!.clips[0].keyframes;
+
+  test("a drag on a keyframed clip upserts one pin at the playhead, as one undo step, and leaves the static transform alone", () => {
+    keyed();
+    store().seek(1); // base x = 0.2
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan");
+    for (const dx of [9, 18, 27]) s.update("pan", { dx, dy: 0 });
+    s.finish("pan");
+    expect(pins()).toHaveLength(3);
+    expect(pins()[1].t).toBe(1);
+    expect(pins()[1].x).toBeCloseTo(0.3, 10);
+    expect(pins()[1]).toMatchObject({ y: 0, scale: 1, rotation: 0, opacity: 1 });
+    expect(pins()[0]).toEqual(pin(0));
+    expect(pins()[2]).toEqual(pin(2, { x: 0.4 }));
+    expect(tf()).toEqual(DEFAULT_TRANSFORM);
+    expect(store().past).toHaveLength(1);
+    store().undo();
+    expect(pins()).toHaveLength(2);
+  });
+
+  test("the pin stays at the moment the gesture started even if the playhead moves meanwhile", () => {
+    keyed();
+    store().seek(1);
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 27, dy: 0 });
+    store().seek(1.5);
+    s.update("pan", { dx: 54, dy: 0 });
+    expect(pins().map((k) => k.t)).toEqual([0, 1, 2]);
+    expect(pins()[1].x).toBeCloseTo(0.4, 10);
+  });
+
+  test("a drag on an existing pin updates it", () => {
+    keyed();
+    store().seek(2);
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 0, dy: 48 }); s.finish("pan");
+    expect(pins()).toHaveLength(2);
+    expect(pins()[1].x).toBeCloseTo(0.4, 10);
+    expect(pins()[1].y).toBeCloseTo(0.1, 10);
+  });
+
+  test("a touch that changes nothing adds no pin and no undo step", () => {
+    keyed([pin(0), pin(2)]);
+    store().seek(1);
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 1, dy: 0 }); s.finish("pan"); // snaps back to the centre
+    expect(pins()).toHaveLength(2);
+    expect(store().past).toHaveLength(0);
+  });
+
+  test("a drag keeps a pin's un-normalised rotation (a keyframed full turn)", () => {
+    keyed([pin(0), pin(2, { rotation: 720 })]);
+    store().seek(2);
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 54, dy: 0 }); s.finish("pan");
+    expect(pins()[1].rotation).toBe(720);
+    expect(pins()[1].x).toBeCloseTo(0.2, 10);
+    s.start("rotate"); s.update("rotate", { rotation: Math.PI / 6 }); s.finish("rotate");
+    expect(pins()[1].rotation).toBeCloseTo(750, 8);
+  });
+
+  test("a pure vertical drag keeps the interpolated x and rotation, even inside their magnet zones", () => {
+    keyed([pin(0, { x: 0.01, rotation: 2 }), pin(2, { x: 0.01, rotation: 2 })]);
+    store().seek(1);
+    const impact = Haptics.impactAsync as jest.Mock;
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 0, dy: 48 }); s.finish("pan");
+    expect(pins()).toHaveLength(3);
+    expect(pins()[1]).toMatchObject({ t: 1, x: 0.01, rotation: 2, scale: 1 });
+    expect(pins()[1].y).toBeCloseTo(0.1, 10);
+    expect(impact).not.toHaveBeenCalled(); // no magnet engaged: x and rotation were not snapped
+  });
+
+  test("a pinch alone keeps an interpolated scale's neighbours: x, y and rotation are untouched", () => {
+    keyed([pin(0, { x: 0.01, y: -0.015, rotation: 88 }), pin(2, { x: 0.01, y: -0.015, rotation: 88 })]);
+    store().seek(1);
+    const s = createClipGestureSession("a", W, H);
+    s.start("pinch"); s.update("pinch", { scale: 2 }); s.finish("pinch");
+    expect(pins()[1]).toMatchObject({ t: 1, x: 0.01, y: -0.015, rotation: 88, scale: 2 });
+  });
+
+  test("a twist of more than half a turn accumulates: the pin does not flip to the short way round", () => {
+    keyed([pin(0, { rotation: 10 }), pin(2, { rotation: 10 })]);
+    store().seek(1);
+    const s = createClipGestureSession("a", W, H);
+    s.start("rotate"); s.update("rotate", { rotation: (200 * Math.PI) / 180 }); s.finish("rotate");
+    expect(pins()[1].rotation).toBeCloseTo(210, 8);
+    expect(pins()[1].x).toBe(0);
+  });
+
+  test("a twist on a keyframed clip still snaps to the nearest right angle, without wrapping", () => {
+    keyed([pin(0), pin(2)]);
+    store().seek(1);
+    const s = createClipGestureSession("a", W, H);
+    s.start("rotate"); s.update("rotate", { rotation: (268.5 * Math.PI) / 180 }); s.finish("rotate");
+    expect(pins()[1].rotation).toBe(270);
+  });
+
+  test("without keyframes a pure vertical drag still snaps x and rotation, and a 200° twist is normalised (as before)", () => {
+    store().apply((p) => setClipTransform(p, "a", { x: 0.01, rotation: 2 }));
+    const s = createClipGestureSession("a", W, H);
+    s.start("pan"); s.update("pan", { dx: 0, dy: 48 }); s.finish("pan");
+    expect(tf()).toMatchObject({ x: 0, rotation: 0 });
+    s.start("rotate"); s.update("rotate", { rotation: (200 * Math.PI) / 180 }); s.finish("rotate");
+    expect(tf().rotation).toBeCloseTo(-160, 8);
+  });
+
+  test("the gold frame follows the base (keyframed) placement as the playhead moves", async () => {
+    keyed();
+    store().select("a");
+    store().seek(1);
+    await render(<ClipGestures frameW={W} frameH={H} />);
+    expect(StyleSheet.flatten(screen.getByTestId("clip-selection-frame").props.style).left).toBeCloseTo(54, 8);
+    await act(() => { store().seek(2); });
+    expect(StyleSheet.flatten(screen.getByTestId("clip-selection-frame").props.style).left).toBeCloseTo(108, 8);
+  });
+
+  test("an animation without keyframes: gestures edit the static transform and the frame shows the static placement", async () => {
+    store().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4, animation: { in: { id: "slideLeft", duration: 1 }, out: null, combo: null } })] }));
+    store().select("a"); // playhead 0: the animated picture is a whole frame to the right
+    await render(<ClipGestures frameW={W} frameH={H} />);
+    expect(screen.getByTestId("clip-selection-frame")).toHaveStyle({ left: 0, top: 0, width: W, height: H });
+    const s = createClipGestureSession("a", W, H);
+    await act(() => { s.start("pan"); s.update("pan", { dx: 54, dy: 0 }); s.finish("pan"); });
+    expect(tf().x).toBeCloseTo(0.2, 10);
+    expect(pins()).toEqual([]);
+    expect(store().past).toHaveLength(1);
   });
 });
