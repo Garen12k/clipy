@@ -4,7 +4,7 @@ import { coversFrame, placeClip } from "@/src/editor/model/clipLayout";
 import { activeEffects } from "@/src/editor/model/effectMath";
 import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
 import { frameSize } from "@/src/editor/model/ops";
-import { clipAt, hasSpeedCurve, isInTransitionWindow } from "@/src/editor/model/timeline";
+import { clipAt, hasSpeedCurve, isInTransitionWindow, layersAt } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
 import { theme } from "@/src/theme/theme";
 import { Body } from "@/src/ui/Text";
@@ -22,6 +22,8 @@ export function needsPreviewTag(p: Project, playhead: number): boolean {
   const c = hit.clip;
   if ((c.filter && c.filterIntensity > 0) || c.reversed || hasSpeedCurve(c) || isInTransitionWindow(p, playhead)) return true;
   if (adjustNeedsTag(c.adjust) || activeEffects(p.effects, playhead).length > 0) return true;
+  // A layer on screen whose own look or timing the preview only approximates (the same rules as for the clip above).
+  if (layersAt(p, playhead).some((l) => (l.filter && l.filterIntensity > 0) || adjustNeedsTag(l.adjust) || l.reversed || hasSpeedCurve(l))) return true;
   if (c.background.type !== "blur") return false;
   const f = frameSize(p);
   const motion = hasClipMotion(c) ? resolveClipMotion(c, hit.offsetInClip) : null;

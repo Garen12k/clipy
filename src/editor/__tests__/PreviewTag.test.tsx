@@ -1,4 +1,4 @@
-import { DEFAULT_ADJUST, makeClip, makeEffect, makeKeyframe, makePhotoClip, makeProject, type Clip } from "@/src/editor/model/types";
+import { DEFAULT_ADJUST, makeClip, makeEffect, makeKeyframe, makeLayer, makePhotoClip, makeProject, type Clip, type LayerClip } from "@/src/editor/model/types";
 import { setClipSpeedCurve } from "@/src/editor/model/ops";
 import { needsPreviewTag } from "../components/PreviewTag";
 
@@ -84,6 +84,29 @@ test("a clip with a speed curve needs the tag; clearing the curve drops it", () 
   expect(needsPreviewTag(setClipSpeedCurve(curved, "a", null), 1)).toBe(false);
   expect(needsPreviewTag(one({ speed: 2 }), 1)).toBe(false); // a constant speed is exact
 });
+describe("layers at the playhead", () => {
+  const withLayer = (over: Partial<LayerClip>) => makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], layers: [makeLayer({ id: "l", sourceDuration: 2, start: 2, ...over })] });
+  test("a plain layer needs no tag", () => {
+    expect(needsPreviewTag(withLayer({}), 3)).toBe(false);
+    expect(needsPreviewTag(withLayer({ opacity: 0.5, mask: "circle", speed: 2 }), 2.5)).toBe(false);
+  });
+  test("a filter, an adjust value, reverse or a speed curve on a layer needs the tag — only while the layer is on screen", () => {
+    const looks: Partial<LayerClip>[] = [{ filter: "vintage" }, { adjust: { ...DEFAULT_ADJUST, contrast: 0.2 } }, { reversed: true }];
+    for (const over of looks) {
+      const p = withLayer(over);
+      expect(needsPreviewTag(p, 3)).toBe(true);
+      expect(needsPreviewTag(p, 1)).toBe(false);
+      expect(needsPreviewTag(p, 4.5)).toBe(false);
+    }
+    const curved = setClipSpeedCurve(withLayer({}), "l", "hero");
+    expect(needsPreviewTag(curved, 2.5)).toBe(true);
+    expect(needsPreviewTag(curved, 1)).toBe(false);
+  });
+  test("a layer's filter at strength 0 does not count", () => {
+    expect(needsPreviewTag(withLayer({ filter: "vintage", filterIntensity: 0 }), 3)).toBe(false);
+  });
+});
+
 test("a curve with no steps counts as no curve (the rule timeline.ts goes by)", () => {
   expect(needsPreviewTag(one({ speedCurve: { id: "hero", steps: [] } }), 1)).toBe(false);
 });

@@ -2,7 +2,6 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { clipGainAt } from "@/src/editor/model/audioMix";
-import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
 import { clipAt, clipDuration, clipStartTimes, hasSpeedCurve, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue, isPhoto, type Clip } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
@@ -12,10 +11,11 @@ import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePr
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { AdjustLayer } from "./AdjustLayer";
-import { ClipFrame } from "./ClipFrame";
+import { ClipFrame, clipFrameMotion } from "./ClipFrame";
 import { ClipGestures } from "./ClipGestures";
 import { EffectOverlays, useEffectTransform } from "./EffectLayer";
 import { FilterLayer } from "./FilterLayer";
+import { LayerStack } from "./LayerStack";
 import { OverlayLayer } from "./OverlayLayer";
 import { needsPreviewTag, PreviewTag } from "./PreviewTag";
 import { TransitionLayer } from "./TransitionLayer";
@@ -201,8 +201,8 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const ratio = aspectRatioValue(project.aspectRatio);
   const total = totalDuration(project);
   const empty = project.clips.length === 0;
-  // Animations and keyframes at the playhead; null (no overrides at all) for a clip without any.
-  const motion = hit && hasClipMotion(hit.clip) ? resolveClipMotion(hit.clip, hit.offsetInClip) : null;
+  // Animations, keyframes and the clip's own opacity at the playhead; no overrides at all for a default clip.
+  const motion = hit ? clipFrameMotion(hit.clip, hit.offsetInClip) : null;
 
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.md }}>
@@ -230,6 +230,9 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         )}
         <FilterLayer filter={hit?.clip.filter ?? null} intensity={hit?.clip.filterIntensity} />
         {hit && <AdjustLayer adjust={hit.clip.adjust} />}
+        {/* Layers sit above the main clip's look layers and below everything else. They take the picture's effect transform (so they
+            shake / zoom with it) in a view of their own: the main VideoView's place in the tree does not depend on them. */}
+        {hit && frame.w > 0 && <LayerStack frameW={frame.w} frameH={frame.h} style={effectTransform} />}
         <EffectOverlays />
         <TransitionLayer />
         {frame.w > 0 && <ClipGestures frameW={frame.w} frameH={frame.h} />}
