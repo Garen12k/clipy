@@ -1,8 +1,10 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { FONTS } from "@/src/editor/fonts";
+import { clipGainCurve, exportTrackCurve, type GainPoint } from "@/src/editor/model/audioMix";
+import { trackEnd } from "@/src/editor/model/audioSync";
 import { edgeDurations } from "@/src/editor/model/motion";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
-import { DEFAULT_TEXT_STYLE, isSticker, type AnimEdge, type Align, type AspectRatio, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type Overlay, type TextStyle } from "@/src/editor/model/types";
+import { DEFAULT_TEXT_STYLE, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -42,7 +44,24 @@ export interface ExportOverlay {
   words: ExportCaptionWord[];      // captions only; [] otherwise
   highlightColor: string | null;   // captions only; null = no word highlight
 }
-export interface ExportAudio { sourceUri: string; start: number; trimStart: number; trimEnd: number; volume: number }
+/** One breakpoint of a piecewise-linear gain curve (`audioMix.ts`); the native side only draws ramps between them. */
+export type ExportGainPoint = GainPoint;
+/**
+ * One audio track as the export plays it: source `[trimStart, trimEnd)` inserted at `start` (composition seconds), already
+ * clipped to the exported video; `gain` is in composition seconds and includes volume, fades, ducking and the end-of-video fade.
+ */
+export interface ExportAudioTrack { sourceUri: string; start: number; trimStart: number; trimEnd: number; gain: ExportGainPoint[] }
+/** The track clipped to a video `total` seconds long, or null when nothing of it is inside (the gain maths is `exportTrackCurve`). */
+export function toExportAudioTrack(p: Project, t: AudioTrack, total: number): ExportAudioTrack | null {
+  const gain = exportTrackCurve(p, t, total);
+  if (gain.length < 2) return null;
+  const early = Math.max(0, -t.start);   // seconds of the track before the video starts
+  return {
+    sourceUri: t.sourceUri, start: early > 0 ? 0 : t.start, trimStart: t.trimStart + early,
+    trimEnd: trackEnd(t) > total ? t.trimStart + (total - t.start) : t.trimEnd,
+    gain,
+  };
+}
 export interface ExportClip {
   sourceUri: string; trimStart: number; trimEnd: number; volume: number; muted: boolean;
   speed: number; filter: string | null; transition: { type: string; duration: number };
@@ -54,6 +73,7 @@ export interface ExportClip {
   animIn: ExportAnimEdge | null; animOut: ExportAnimEdge | null; animCombo: string | null;
   keyframes: ExportKeyframe[];   // clip-local OUTPUT seconds, ascending; the pins inside the clip plus the nearest one each side
   speedSpans: ExportSpeedSpan[]; // a speed curve as constant-speed spans in PLAYBACK order; [] = constant speed (`speed`)
+  gain: ExportGainPoint[];       // the clip's own sound: clip-local OUTPUT seconds; volume, mute and fades included (the export mixes with this)
 }
 /** Pins converted to output-local seconds, sorted, trimmed to [0, length] plus the last one before 0 and the first one after length. */
 function outputKeyframes(c: Clip, length: number): ExportKeyframe[] {
@@ -77,6 +97,7 @@ export function toExportClip(c: Clip): ExportClip {
     animIn: toEdge(c.animation.in, edges.in), animOut: toEdge(c.animation.out, edges.out), animCombo: c.animation.combo,
     keyframes: outputKeyframes(c, length),
     speedSpans: hasSpeedCurve(c) ? playbackSpans(c) : [],
+    gain: clipGainCurve(c),
   };
 }
 export interface ExportEffect { type: string; start: number; end: number; intensity: number }
@@ -87,7 +108,7 @@ export interface ExportRequest {
   clips: ExportClip[];
   overlays: ExportOverlay[];
   effects: ExportEffect[];
-  audio: ExportAudio | null;
+  audioTracks: ExportAudioTrack[];
   aspectRatio: AspectRatio;
   resolution: Resolution;
   outputPath: string;

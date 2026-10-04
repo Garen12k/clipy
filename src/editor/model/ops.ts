@@ -4,9 +4,9 @@ import { clipAt, clipDuration, curveSteps, sourceTimeAt, spanTooShort, splitSour
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
-  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_LIMITS, aspectRatioValue, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
+  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
   CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
-  MIN_CLIP_SECONDS, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
+  MIN_CLIP_SECONDS, minAudioDuration, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   type AnimEdge, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem, type FilterId,
   type Keyframe, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
 } from "./types";
@@ -43,9 +43,10 @@ export function splitClipAt(p: Project, outputTime: number): Project {
   const min = isPhoto(clip) ? PHOTO.minSeconds : MIN_CLIP_SECONDS;
   if (offsetInClip < min || d - offsetInClip < min) return p;
   // Motion: the left half keeps In, the right half keeps Out, a Combo stays on both; every pin stays on both (pins are in source time).
+  // Sound: the left half keeps the fade in, the right half the fade out.
   const a = clip.animation;
-  const leftMotion = { animation: { in: copyEdge(a.in), out: null, combo: a.combo }, keyframes: copyPins(clip.keyframes) };
-  const rightMotion = { animation: { in: null, out: copyEdge(a.out), combo: a.combo }, keyframes: copyPins(clip.keyframes) };
+  const leftMotion = { animation: { in: copyEdge(a.in), out: null, combo: a.combo }, keyframes: copyPins(clip.keyframes), fadeOut: 0 };
+  const rightMotion = { animation: { in: null, out: copyEdge(a.out), combo: a.combo }, keyframes: copyPins(clip.keyframes), fadeIn: 0 };
   if (isPhoto(clip)) {
     const cut = offsetInClip;   // photos run at speed 1 from 0
     const left: Clip = { ...clip, trimEnd: cut, transitionOut: NO_TRANSITION, ...leftMotion };
@@ -251,27 +252,129 @@ export function duplicateOverlay(p: Project, id: string): Project {
   return touch(p, { overlays: [...p.overlays.slice(0, i + 1), copy, ...p.overlays.slice(i + 1)] });
 }
 
-export function setAudioTrack(p: Project, track: AudioTrack): Project {
-  return touch(p, { audioTracks: [track] });
-}
+// ---- Audio: tracks, clip fades, ducking, beat markers ----
+// Audio tracks and beat markers sit in project time and are never moved or dropped by clip edits (same rule as overlays); a track may
+// run past the project's end.
 
-export function updateAudioTrack(p: Project, patch: Partial<Omit<AudioTrack, "id" | "sourceUri" | "sourceDuration">>): Project {
-  const t = p.audioTracks[0];
-  if (!t) return p;
-  const merged = { ...t, ...patch };
-  let trimEnd = Math.min(merged.trimEnd, t.sourceDuration);
-  let trimStart = Math.max(0, Math.min(merged.trimStart, trimEnd));
-  if (trimEnd - trimStart < AUDIO_LIMITS.minDuration) {
-    if (trimStart + AUDIO_LIMITS.minDuration <= t.sourceDuration) trimEnd = trimStart + AUDIO_LIMITS.minDuration;
-    else { trimEnd = t.sourceDuration; trimStart = Math.max(0, trimEnd - AUDIO_LIMITS.minDuration); }
+type AudioPatch = Partial<Omit<AudioTrack, "id" | "sourceUri" | "sourceDuration">>;
+const AUDIO_NUMBER_KEYS = ["start", "trimStart", "trimEnd", "volume", "fadeIn", "fadeOut"] as const;
+
+/**
+ * A track as it is stored: trim clamped to the source and kept at least the kind's minimum long (the end yields first, then the
+ * start), start ≥ 0, volume and fades clamped, an unknown kind → "music". The fades are stored as given — fitting them to the track's
+ * length is `audioMix`'s job.
+ */
+function cleanAudioTrack(t: AudioTrack): AudioTrack {
+  const kind = (AUDIO_KINDS as readonly unknown[]).includes(t.kind) ? t.kind : "music";
+  const min = minAudioDuration(kind);
+  let trimEnd = Math.min(t.trimEnd, t.sourceDuration);
+  let trimStart = Math.max(0, Math.min(t.trimStart, trimEnd));
+  if (trimEnd - trimStart < min) {
+    if (trimStart + min <= t.sourceDuration) trimEnd = trimStart + min;
+    else { trimEnd = t.sourceDuration; trimStart = Math.max(0, trimEnd - min); }
   }
-  const next: AudioTrack = { ...merged, trimStart: r3(trimStart), trimEnd: r3(trimEnd), start: r3(Math.max(0, merged.start)), volume: clamp(merged.volume, AUDIO_LIMITS.volume) };
-  if (JSON.stringify(next) === JSON.stringify(t)) return p;
-  return touch(p, { audioTracks: [next] });
+  return { ...t, kind, trimStart: r3(trimStart), trimEnd: r3(trimEnd), start: r3(Math.max(0, t.start)),
+    volume: clamp(t.volume, AUDIO_LIMITS.volume), fadeIn: r2(clampFade(t.fadeIn)), fadeOut: r2(clampFade(t.fadeOut)) };
 }
 
-export function removeAudioTrack(p: Project): Project {
-  return p.audioTracks.length === 0 ? p : touch(p, { audioTracks: [] });
+/**
+ * The track at index `i` with the patch written and cleaned (`cleanAudioTrack`). The fades are kept as the user set them however
+ * short the track is trimmed (this runs on every frame of a trim drag: shrinking them here would lose them for good) — `audioMix`
+ * fits them to the length. A key set to `undefined` is ignored (it would wipe the stored value). Same project when nothing
+ * changes or a patched number is not finite.
+ */
+function patchAudioTrack(p: Project, i: number, patch: AudioPatch): Project {
+  const t = p.audioTracks[i];
+  const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as AudioPatch;
+  if (AUDIO_NUMBER_KEYS.some((k) => defined[k] !== undefined && !Number.isFinite(defined[k]))) return p;
+  const next = cleanAudioTrack({ ...t, ...defined });
+  if (sameJson(next, t)) return p;
+  const audioTracks = p.audioTracks.slice(); audioTracks[i] = next;
+  return touch(p, { audioTracks });
+}
+
+/**
+ * Adds a track (music, voice-over or sound effect), cleaned (`cleanAudioTrack`). Refused (same project) at AUDIO_LIMITS.maxTracks, when
+ * the id is already there, or when its start, trims, volume or source length is not a finite number.
+ */
+export function addAudioTrack(p: Project, track: AudioTrack): Project {
+  if (p.audioTracks.length >= AUDIO_LIMITS.maxTracks || p.audioTracks.some((t) => t.id === track.id)) return p;
+  if (![track.start, track.trimStart, track.trimEnd, track.volume, track.sourceDuration].every(Number.isFinite)) return p;
+  return touch(p, { audioTracks: [...p.audioTracks, cleanAudioTrack(track)] });
+}
+
+/** See `patchAudioTrack` for the rules. Unknown id → same project. */
+export function updateAudioTrackById(p: Project, id: string, patch: Partial<Pick<AudioTrack, "start" | "trimStart" | "trimEnd" | "volume" | "fadeIn" | "fadeOut">>): Project {
+  const i = p.audioTracks.findIndex((t) => t.id === id);
+  return i < 0 ? p : patchAudioTrack(p, i, patch);
+}
+
+/** The bar drag: only the start moves (never below 0; the track may run past the project's end). */
+export function moveAudioTrack(p: Project, id: string, newStart: number): Project {
+  return updateAudioTrackById(p, id, { start: newStart });
+}
+
+export function deleteAudioTrack(p: Project, id: string): Project {
+  if (!p.audioTracks.some((t) => t.id === id)) return p;
+  return touch(p, { audioTracks: p.audioTracks.filter((t) => t.id !== id) });
+}
+
+/** The copy (new id) starts where the original ends and sits right after it in the list. Refused at AUDIO_LIMITS.maxTracks. */
+export function duplicateAudioTrack(p: Project, id: string): Project {
+  const i = p.audioTracks.findIndex((t) => t.id === id);
+  if (i < 0 || p.audioTracks.length >= AUDIO_LIMITS.maxTracks) return p;
+  const src = p.audioTracks[i];
+  const copy: AudioTrack = { ...src, id: newId(), start: r3(src.start + (src.trimEnd - src.trimStart)) };
+  return touch(p, { audioTracks: [...p.audioTracks.slice(0, i + 1), copy, ...p.audioTracks.slice(i + 1)] });
+}
+
+/**
+ * Fade in / out of a video clip's own sound, in seconds of output time, clamped to AUDIO_LIMITS.fade (stored as given: `audioMix` fits
+ * them to the clip's length). Photos are refused; a non-finite value leaves the project unchanged.
+ */
+export function setClipFade(p: Project, clipId: string, patch: { fadeIn?: number; fadeOut?: number }): Project {
+  if ([patch.fadeIn, patch.fadeOut].some((v) => v !== undefined && !Number.isFinite(v))) return p;
+  return updateClip(p, clipId, (c) => {
+    if (isPhoto(c)) return c;
+    const fadeIn = patch.fadeIn === undefined ? c.fadeIn : r2(clampFade(patch.fadeIn));
+    const fadeOut = patch.fadeOut === undefined ? c.fadeOut : r2(clampFade(patch.fadeOut));
+    return fadeIn === c.fadeIn && fadeOut === c.fadeOut ? c : { ...c, fadeIn, fadeOut };
+  });
+}
+
+/** Auto ducking: music dips while a voice-over plays (the maths is in `audioMix`). */
+export function setDucking(p: Project, on: boolean): Project {
+  return p.ducking === on ? p : touch(p, { ducking: on });
+}
+
+/** How close (seconds) a time must be to a beat marker for `removeBeatMarkerNear` to take it. */
+const BEAT_REMOVE_REACH = 0.25;
+
+/**
+ * A marker at `time` (clamped to the project, 3 decimals), kept sorted. Refused (same project) at BEAT_LIMITS.max, for a non-finite
+ * time, on a project with no length (no clips), and closer than BEAT_LIMITS.minGap to an existing marker — the loader's own rule (`clampBeatMarkers`), so what is stored
+ * reloads unchanged.
+ */
+export function addBeatMarker(p: Project, time: number): Project {
+  const total = totalDuration(p);
+  if (!Number.isFinite(time) || total <= 0 || p.beatMarkers.length >= BEAT_LIMITS.max) return p;
+  const t = r3(clamp(time, [0, total]));
+  if (p.beatMarkers.some((m) => Math.abs(m - t) < BEAT_LIMITS.minGap - 1e-9)) return p;
+  const at = p.beatMarkers.findIndex((m) => m > t);
+  return touch(p, { beatMarkers: at < 0 ? [...p.beatMarkers, t] : [...p.beatMarkers.slice(0, at), t, ...p.beatMarkers.slice(at)] });
+}
+
+/** Removes the marker nearest to `time` when it is within 0.25 s of it; otherwise the same project. */
+export function removeBeatMarkerNear(p: Project, time: number): Project {
+  if (!Number.isFinite(time)) return p;
+  let best = -1;
+  p.beatMarkers.forEach((m, i) => { if (best < 0 || Math.abs(m - time) < Math.abs(p.beatMarkers[best] - time)) best = i; });
+  if (best < 0 || Math.abs(p.beatMarkers[best] - time) > BEAT_REMOVE_REACH + 1e-9) return p;
+  return touch(p, { beatMarkers: p.beatMarkers.filter((_, i) => i !== best) });
+}
+
+export function clearBeatMarkers(p: Project): Project {
+  return p.beatMarkers.length === 0 ? p : touch(p, { beatMarkers: [] });
 }
 
 export function setClipVolume(p: Project, clipId: string, volume: number): Project {
@@ -584,7 +687,7 @@ export function setBackgroundForAllClips(p: Project, bg: ClipBackground): Projec
 }
 
 /**
- * Swaps a clip's media and keeps its edits (id, filter, transform, crop, background, transition, sound for videos).
+ * Swaps a clip's media and keeps its edits (id, filter, transform, crop, background, transition, sound and its fades for videos).
  * The new clip keeps the old one's timeline length where the new media allows it. A video too short for a clip is refused.
  */
 export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "sourceUri" | "sourceDuration" | "width" | "height" | "kind">): Project {
@@ -598,7 +701,7 @@ export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "
   const base: Clip = { ...old, sourceUri: media.sourceUri, width: media.width, height: media.height, kind: media.kind, trimStart: 0, transform, keyframes: [] };
   let next: Clip;
   if (media.kind === "photo") {
-    next = { ...base, speed: 1, speedCurve: null, muted: true, reversed: false, sourceDuration: PHOTO.maxSeconds, trimEnd: clamp(prevOut, [PHOTO.minSeconds, PHOTO.maxSeconds]) };
+    next = { ...base, speed: 1, speedCurve: null, muted: true, reversed: false, fadeIn: 0, fadeOut: 0, sourceDuration: PHOTO.maxSeconds, trimEnd: clamp(prevOut, [PHOTO.minSeconds, PHOTO.maxSeconds]) };
   } else if (isPhoto(old)) {
     // A photo runs at speed 1, so its source length is its output length.
     next = { ...base, sourceDuration: media.sourceDuration, speed: 1, muted: false, reversed: false, trimEnd: Math.min(media.sourceDuration, prevOut) };

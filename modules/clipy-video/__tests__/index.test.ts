@@ -13,8 +13,8 @@ jest.mock("expo-modules-core", () => {
 import { requireOptionalNativeModule } from "expo-modules-core";
 import { resolveClipMotion, sampleKeyframes } from "@/src/editor/model/motion";
 import { curveSteps, outputOffsetOf } from "@/src/editor/model/timeline";
-import { DEFAULT_ADJUST, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeSticker } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportClip, toExportEffect, toExportOverlay, transcribe } from "../index";
+import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportOverlay, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -45,7 +45,7 @@ describe("export API", () => {
         kind: "video" as const, sourceWidth: 1080, sourceHeight: 1920,
         transform: { scale: 1, x: 0, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0, y: 0, w: 1, h: 1 },
         background: { type: "black" as const, color: null }, reversed: false, filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
-        animIn: null, animOut: null, animCombo: null, keyframes: [], speedSpans: [] }],
+        animIn: null, animOut: null, animCombo: null, keyframes: [], speedSpans: [], gain: [{ time: 0, gain: 1 }, { time: 2, gain: 1 }] }],
       effects: [{ type: "glitch", start: 0, end: 1, intensity: 0.7 }],
       overlays: [{
         kind: "text" as const, text: "Hi", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#fff",
@@ -55,7 +55,7 @@ describe("export API", () => {
         style: { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadowColor: null, shadowOpacity: 0, shadowDistance: 0, shadowBlur: 0, glowColor: null, glowSize: 0 },
         words: [], highlightColor: null,
       }],
-      audio: null, aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4",
+      audioTracks: [{ sourceUri: "file:///m.m4a", start: 0, trimStart: 0, trimEnd: 2, gain: [{ time: 0, gain: 1 }, { time: 2, gain: 1 }] }], aspectRatio: "9:16" as const, resolution: 1080 as const, outputPath: "/tmp/out.mp4",
     };
     await expect(exportTimeline(req)).resolves.toBe("job1");
     expect(native.exportTimeline).toHaveBeenCalledWith(req);
@@ -87,6 +87,27 @@ describe("toExportClip", () => {
       background: { type: "black", color: null }, reversed: false,
       filterIntensity: 1, adjust: { ...DEFAULT_ADJUST },
       animIn: null, animOut: null, animCombo: null, keyframes: [], speedSpans: [],
+      gain: [{ time: 0, gain: 1 }, { time: 4, gain: 1 }],
+    });
+  });
+  describe("gain", () => {
+    it("sends the clip's own-sound gain curve in clip-local output seconds: fades at speed 2", () => {
+      const e = toExportClip(makeClip({ id: "a", sourceDuration: 10, trimStart: 1, trimEnd: 9, speed: 2, volume: 1.5, fadeIn: 1, fadeOut: 2 }));
+      expect(e.gain).toEqual([{ time: 0, gain: 0 }, { time: 1, gain: 1.5 }, { time: 2, gain: 1.5 }, { time: 4, gain: 0 }]);
+      expect(e).toMatchObject({ volume: 1.5, muted: false });
+    });
+    it("sends a flat 0 curve for a muted clip and for a photo", () => {
+      expect(toExportClip(makeClip({ id: "a", sourceDuration: 4, volume: 1.5, muted: true, fadeIn: 1 })).gain).toEqual([{ time: 0, gain: 0 }, { time: 4, gain: 0 }]);
+      expect(toExportClip(makePhotoClip({ id: "p", seconds: 3 })).gain).toEqual([{ time: 0, gain: 0 }, { time: 3, gain: 0 }]);
+    });
+    it("covers a curved clip's output length", () => {
+      const c = makeClip({ id: "a", sourceDuration: 8, volume: 0.5 });
+      const curved = { ...c, speedCurve: { id: "flashIn" as const, steps: curveSteps("flashIn", c.trimStart, c.trimEnd) } };
+      const e = toExportClip(curved);
+      const length = e.speedSpans.reduce((sum, x) => sum + x.duration / x.speed, 0);
+      expect(e.gain.map((b) => b.gain)).toEqual([0.5, 0.5]);
+      expect(e.gain[0].time).toBe(0);
+      expect(e.gain[1].time).toBeCloseTo(length, 4);
     });
   });
   it("maps filter strength and adjust values", () => {
@@ -278,5 +299,46 @@ describe("toExportOverlay", () => {
     });
     expect(e.words).not.toBe(words);
     expect(e.words[0]).not.toBe(words[0]);
+  });
+});
+
+describe("toExportAudioTrack", () => {
+  const music = makeAudioTrack({ id: "m", sourceDuration: 30, start: 1, trimStart: 2, trimEnd: 12, volume: 0.8, fadeIn: 2, fadeOut: 1 });   // 1 … 11
+  it("maps a track inside the video whole: source range as stored, gain curve in composition seconds", () => {
+    expect(toExportAudioTrack(makeProject({ audioTracks: [music] }), music, 20)).toEqual({
+      sourceUri: "file:///media/m.m4a", start: 1, trimStart: 2, trimEnd: 12,
+      gain: [{ time: 1, gain: 0 }, { time: 3, gain: 0.8 }, { time: 10, gain: 0.8 }, { time: 11, gain: 0 }],
+    });
+  });
+  it("clips a track that runs past the end: trimEnd reduced, the curve cut there; music cut while still audible ends on silence (the safety fade), its own fade-out or not", () => {
+    const e = toExportAudioTrack(makeProject({ audioTracks: [music] }), music, 10.5)!;
+    expect(e).toMatchObject({ start: 1, trimStart: 2, trimEnd: 11.5 });
+    const times = e.gain.map((b) => b.time);
+    expect(times.slice(0, 3)).toEqual([1, 3, 9.5]);   // the safety fade starts a second before the cut
+    expect(times).toContain(10);                       // where the track's own fade-out starts
+    expect(e.gain[2].gain).toBeCloseTo(0.8, 9);
+    expect(e.gain[e.gain.length - 1]).toEqual({ time: 10.5, gain: 0 });
+    // a voice-over cut the same way keeps its interpolated last breakpoint
+    const voice = { ...music, id: "v", kind: "voice" as const };
+    const v = toExportAudioTrack(makeProject({ audioTracks: [voice] }), voice, 10.5)!;
+    expect(v.gain.map((b) => b.time)).toEqual([1, 3, 10, 10.5]);
+    expect(v.gain[3].gain).toBeCloseTo(0.4, 9);
+  });
+  it("clips a track that starts before 0", () => {
+    const sfx = makeAudioTrack({ id: "s", sourceDuration: 5, kind: "sfx", start: -2 });
+    expect(toExportAudioTrack(makeProject({ audioTracks: [sfx] }), sfx, 20)).toEqual({
+      sourceUri: "file:///media/s.m4a", start: 0, trimStart: 2, trimEnd: 5, gain: [{ time: 0, gain: 1 }, { time: 3, gain: 1 }],
+    });
+  });
+  it("is null for a track outside the video or with no length", () => {
+    const late = makeAudioTrack({ id: "l", sourceDuration: 5, start: 10 });
+    expect(toExportAudioTrack(makeProject({ audioTracks: [late] }), late, 10)).toBeNull();
+    const empty = makeAudioTrack({ id: "e", sourceDuration: 5, trimStart: 2, trimEnd: 2 });
+    expect(toExportAudioTrack(makeProject({ audioTracks: [empty] }), empty, 10)).toBeNull();
+  });
+  it("sends a fresh curve", () => {
+    const a = toExportAudioTrack(makeProject({ audioTracks: [music] }), music, 20)!;
+    const b = toExportAudioTrack(makeProject({ audioTracks: [music] }), music, 20)!;
+    expect(a.gain).not.toBe(b.gain);
   });
 });

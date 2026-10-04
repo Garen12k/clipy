@@ -4,7 +4,7 @@ import {
 } from "../types";
 
 test("registries have the spec sizes", () => {
-  expect(SCHEMA_VERSION).toBe(9);
+  expect(SCHEMA_VERSION).toBe(10);
   expect(FILTER_IDS).toHaveLength(20);
   expect(TRANSITION_TYPES).toHaveLength(11);
   expect(EFFECT_IDS).toHaveLength(10);

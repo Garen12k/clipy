@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { normaliseTransitions } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
 import { EFFECT_END_SLACK, type Project } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportClip, toExportEffect, toExportOverlay } from "@/modules/clipy-video";
+import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
 import { estimateBytes, exportableAudio, exportableClips, type Resolution } from "./estimate";
 
@@ -40,7 +40,10 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
       if ((await expoFs.freeBytes()) < need) { setState({ status: "error", progress: 0, message: "Not enough free space on this iPhone for the export." }); return; }
       await expoFs.mkdir(`${expoFs.cacheDir}exports`);
       const outputPath = `${expoFs.cacheDir}exports/${project.id}-${Date.now()}.mp4`;
-      const audioTrack = exportableAudio(project, missingSourceUris);
+      // Only tracks that are exported take part in the mix (a voice-over whose file is gone does not duck the music);
+      // each is clipped to the exported duration, and one wholly outside it is dropped.
+      const mixed: Project = { ...project, audioTracks: exportableAudio(project, missingSourceUris) };
+      const audioTracks = mixed.audioTracks.map((t) => toExportAudioTrack(mixed, t, total)).filter((t): t is ExportAudioTrack => t !== null);
       jobId.current = await exportTimeline({
         clips: clips.map(toExportClip),
         overlays: project.overlays.filter((o) => o.end > o.start).map(toExportOverlay),
@@ -48,7 +51,7 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
           .map((e) => ({ ...e, start: Math.max(0, e.start), end: Math.min(total, e.end) }))
           .filter((e) => e.end - e.start >= EFFECT_END_SLACK)
           .map(toExportEffect),
-        audio: audioTrack ? { sourceUri: audioTrack.sourceUri, start: audioTrack.start, trimStart: audioTrack.trimStart, trimEnd: audioTrack.trimEnd, volume: audioTrack.volume } : null,
+        audioTracks,
         aspectRatio: project.aspectRatio, resolution, outputPath,
       });
     } catch (e) { setState({ status: "error", progress: 0, message: e instanceof Error ? e.message : String(e) }); }

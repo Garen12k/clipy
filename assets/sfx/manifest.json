@@ -1,0 +1,64 @@
+{
+  "sounds": [
+    {
+      "id": "whoosh",
+      "label": "Whoosh",
+      "file": "whoosh.wav",
+      "durationSec": 0.6
+    },
+    {
+      "id": "swoosh",
+      "label": "Swoosh",
+      "file": "swoosh.wav",
+      "durationSec": 0.35
+    },
+    {
+      "id": "pop",
+      "label": "Pop",
+      "file": "pop.wav",
+      "durationSec": 0.12
+    },
+    {
+      "id": "click",
+      "label": "Click",
+      "file": "click.wav",
+      "durationSec": 0.1
+    },
+    {
+      "id": "ding",
+      "label": "Ding",
+      "file": "ding.wav",
+      "durationSec": 0.9
+    },
+    {
+      "id": "beep",
+      "label": "Beep",
+      "file": "beep.wav",
+      "durationSec": 0.2
+    },
+    {
+      "id": "riser",
+      "label": "Riser",
+      "file": "riser.wav",
+      "durationSec": 1.5
+    },
+    {
+      "id": "drop",
+      "label": "Drop",
+      "file": "drop.wav",
+      "durationSec": 0.7
+    },
+    {
+      "id": "tick",
+      "label": "Tick",
+      "file": "tick.wav",
+      "durationSec": 0.1
+    },
+    {
+      "id": "chime",
+      "label": "Chime",
+      "file": "chime.wav",
+      "durationSec": 1.2
+    }
+  ]
+}

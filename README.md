@@ -245,6 +245,26 @@ word highlight.
 The outline is a soft halo in the preview and a hard stroke in the export. The export is Swift that has
 never been compiled.
 
+## Audio
+
+Everything here is in the **Audio** group of the toolbar.
+
+- **Add audio** opens a sheet with four tabs: **Music** (the bundled list, still empty), **Files** (pick an
+  audio file), **Effects** (ten built-in sounds: Whoosh, Swoosh, Pop, Click, Ding, Beep, Riser, Drop, Tick,
+  Chime - free to use, and basic-sounding) and **Record** (a voice-over).
+- **Voice-over** - the video plays with all other sound muted while you talk. The recording lands on the
+  timeline where you started.
+- **Tracks** - up to 12. Each is a bar on its own lane (music, voice, sound effects). Tap a bar to select it:
+  **Add audio**, **Volume**, **Fade** (in and out, up to 5 s each), **Duplicate**, **Delete**. Long-press a bar to move it;
+  drag its handles to trim.
+- **Clip sound** - a clip's own sound also has **Fade in** and **Fade out** (in the clip's Volume sheet).
+- **Ducking** - a switch in the Audio tools: music dips to 30 % while a voice-over plays.
+- **Beats** - tap along to drop beat markers, shown as ticks on the timeline.
+
+**Preview vs export.** In Expo Go several sounds can drift slightly against the video in the preview; the
+export mixes them exactly. The sound effects are made by `scripts/generate-sfx.mjs`. The export side is Swift
+that has never been compiled.
+
 ## First native build — things to check
 
 When the first EAS build exists, compare the export against the preview and check these Look items:
@@ -275,3 +295,8 @@ Text and captions items:
 17. **Text opacity** together with a shadow or glow.
 18. **Caption word highlight** timing, and that the lit word does not look heavier than the rest.
 19. **Captions are generated with word timings** (so the highlight has something to follow).
+20. **Microphone prompt.** It appears with the right text, and a voice-over records real sound. If recordings are silent, look for an "[expo-video] Failed to set audio session category" warning: the video player may be resetting the audio session.
+21. **Voice-over sync.** A voice-over stays in sync with the picture in the export.
+22. **Fades and ducking.** The fade and ducking ramps sound right.
+23. **Several tracks** mix without clipping.
+24. **End of video.** A music track cut by the end of the video fades out over its last second.

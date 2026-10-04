@@ -76,6 +76,12 @@ final class ExportSessionTests: XCTestCase {
     return url
   }
 
+  private func gainPoint(_ time: Double, _ gain: Double) -> ExportGainPoint {
+    var p = ExportGainPoint()
+    p.time = time; p.gain = gain
+    return p
+  }
+
   func testExportsWithTextAndMusic() async throws {
     let a = try await makeClip(seconds: 2, color: .red)
     let b = try await makeClip(seconds: 2, color: .blue)
@@ -88,9 +94,10 @@ final class ExportSessionTests: XCTestCase {
     var overlay = ExportOverlay()
     overlay.text = "Hi"; overlay.start = 0; overlay.end = 4
     request.overlays = [overlay]
-    var audio = ExportAudio()
-    audio.sourceUri = tone.absoluteString; audio.start = 0; audio.trimStart = 0; audio.trimEnd = 2; audio.volume = 1
-    request.audio = audio
+    var audio = ExportAudioTrack()
+    audio.sourceUri = tone.absoluteString; audio.start = 0; audio.trimStart = 0; audio.trimEnd = 2
+    audio.gain = [gainPoint(0, 1), gainPoint(2, 1)]
+    request.audioTracks = [audio]
     request.aspectRatio = "9:16"; request.resolution = 720; request.outputPath = out.absoluteString
 
     let finished = expectation(description: "export")
@@ -107,7 +114,8 @@ final class ExportSessionTests: XCTestCase {
     XCTAssertFalse(audioTracks.isEmpty, "music should produce an audio track")
   }
 
-  /// Music starting at 3 s in a 4 s video: clamped to the video end (1 s of music) and faded out over that second.
+  /// Music starting at 3 s in a 4 s video, as the app sends it: clipped to the video's end (1 s of music) with a gain
+  /// curve fading over that second. The track still asks for 2 s, so the export clamps it to the video as well.
   func testExportsMusicClampedToVideoEndWithFade() async throws {
     let a = try await makeClip(seconds: 2, color: .red)
     let b = try await makeClip(seconds: 2, color: .blue)
@@ -117,9 +125,10 @@ final class ExportSessionTests: XCTestCase {
     request.clips = [ExportClip(), ExportClip()]
     request.clips[0].sourceUri = a.absoluteString; request.clips[0].trimStart = 0; request.clips[0].trimEnd = 2
     request.clips[1].sourceUri = b.absoluteString; request.clips[1].trimStart = 0; request.clips[1].trimEnd = 2
-    var audio = ExportAudio()
-    audio.sourceUri = tone.absoluteString; audio.start = 3; audio.trimStart = 0; audio.trimEnd = 2; audio.volume = 1
-    request.audio = audio
+    var audio = ExportAudioTrack()
+    audio.sourceUri = tone.absoluteString; audio.start = 3; audio.trimStart = 0; audio.trimEnd = 2
+    audio.gain = [gainPoint(3, 1), gainPoint(4, 0)]
+    request.audioTracks = [audio]
     request.aspectRatio = "9:16"; request.resolution = 720; request.outputPath = out.absoluteString
 
     let finished = expectation(description: "export")
@@ -134,6 +143,65 @@ final class ExportSessionTests: XCTestCase {
     XCTAssertEqual(duration, 4, accuracy: 0.2)
     let audioTracks = try await asset.loadTracks(withMediaType: .audio)
     XCTAssertFalse(audioTracks.isEmpty, "clamped music should still produce an audio track")
+  }
+
+  /// Several audio tracks at once (music with fades, a voice-over, a track with no curve at all) over clips that carry
+  /// their own gain curves: every track becomes a composition track with its ramps, and the export completes.
+  func testExportsSeveralAudioTracksWithGainCurves() async throws {
+    let a = try await makeClip(seconds: 2, color: .red)
+    let b = try await makeClip(seconds: 2, color: .blue)
+    let music = try await makeTone(seconds: 4)
+    let voice = try await makeTone(seconds: 1)
+    let out = FileManager.default.temporaryDirectory.appendingPathComponent("out-\(UUID().uuidString).mp4")
+    var request = ExportRequest()
+    request.clips = [ExportClip(), ExportClip()]
+    request.clips[0].sourceUri = a.absoluteString; request.clips[0].trimStart = 0; request.clips[0].trimEnd = 2
+    request.clips[0].gain = [gainPoint(0, 0), gainPoint(0.5, 1), gainPoint(2, 1)]
+    request.clips[1].sourceUri = b.absoluteString; request.clips[1].trimStart = 0; request.clips[1].trimEnd = 2
+    request.clips[1].gain = [gainPoint(0, 0), gainPoint(2, 0)]
+    var ducked = ExportAudioTrack()
+    ducked.sourceUri = music.absoluteString; ducked.start = 0; ducked.trimStart = 0; ducked.trimEnd = 4
+    ducked.gain = [gainPoint(0, 0), gainPoint(0.5, 0.8), gainPoint(0.7, 0.8), gainPoint(1, 0.24), gainPoint(2, 0.24), gainPoint(2.3, 0.8), gainPoint(3, 0.8), gainPoint(4, 0)]
+    var spoken = ExportAudioTrack()
+    spoken.sourceUri = voice.absoluteString; spoken.start = 1; spoken.trimStart = 0; spoken.trimEnd = 1
+    spoken.gain = [gainPoint(1, 1.5), gainPoint(2, 1.5)]
+    var plain = ExportAudioTrack()
+    plain.sourceUri = voice.absoluteString; plain.start = 2.5; plain.trimStart = 0.25; plain.trimEnd = 0.75
+    request.audioTracks = [ducked, spoken, plain]
+    request.aspectRatio = "9:16"; request.resolution = 720; request.outputPath = out.absoluteString
+
+    let finished = expectation(description: "export")
+    var result: [String: Any] = [:]
+    let session = ExportSession { payload in if (payload["type"] as? String) != "progress" { result = payload; finished.fulfill() } }
+    try await session.start(request)
+    await fulfillment(of: [finished], timeout: 60)
+
+    XCTAssertEqual(result["type"] as? String, "done", "\(result)")
+    let asset = AVURLAsset(url: out)
+    let duration = try await asset.load(.duration).seconds
+    XCTAssertEqual(duration, 4, accuracy: 0.2)
+    let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+    XCTAssertFalse(audioTracks.isEmpty, "the audio tracks should produce an audio track")
+  }
+
+  /// A bad audio file fails the export, as a bad music file always did.
+  func testAnAudioTrackThatCannotBeLoadedFailsTheExport() async throws {
+    let a = try await makeClip(seconds: 2, color: .red)
+    var request = ExportRequest()
+    request.clips = [ExportClip()]
+    request.clips[0].sourceUri = a.absoluteString; request.clips[0].trimStart = 0; request.clips[0].trimEnd = 2
+    var silent = ExportAudioTrack()
+    silent.sourceUri = a.absoluteString; silent.start = 0; silent.trimStart = 0; silent.trimEnd = 2   // a video without sound
+    request.audioTracks = [silent]
+    request.aspectRatio = "9:16"; request.resolution = 720
+    request.outputPath = FileManager.default.temporaryDirectory.appendingPathComponent("out-\(UUID().uuidString).mp4").absoluteString
+    let session = ExportSession { _ in }
+    do {
+      try await session.start(request)
+      XCTFail("a file without an audio track should fail the export")
+    } catch {
+      XCTAssertEqual((error as? ExportError)?.errorDescription, "No sound in audio file \(a.absoluteString)")
+    }
   }
 
   func testExportsTwoClipsAt720pPortrait() async throws {

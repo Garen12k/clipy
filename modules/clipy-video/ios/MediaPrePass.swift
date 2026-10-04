@@ -92,6 +92,8 @@ enum MediaPrePass {
     out.keyframes = clip.keyframes
     // Speed spans are in PLAYBACK order and the prepared file runs in playback order over the same length.
     out.speedSpans = clip.speedSpans
+    // The gain curve is in the clip's OUTPUT time too (a prepared file has no sound; carried so the record stays whole).
+    out.gain = clip.gain
     return out
   }
 

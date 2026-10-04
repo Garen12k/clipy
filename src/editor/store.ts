@@ -17,8 +17,11 @@ interface EditorState {
   selectedClipId: string | null;
   selectedOverlayId: string | null;
   selectedEffectId: string | null;
+  selectedAudioId: string | null;
   playhead: number;
   isPlaying: boolean;
+  /** A voice-over is being recorded: the preview's audio players and the video are silent. Transient — not saved, not undoable. */
+  recording: boolean;
   pixelsPerSecond: number;
   past: Project[];
   future: Project[];
@@ -35,15 +38,17 @@ interface EditorState {
   select: (id: string | null) => void;
   selectOverlay: (id: string | null) => void;
   selectEffect: (id: string | null) => void;
+  selectAudio: (id: string | null) => void;
   seek: (t: number) => void;
   setPlaying: (b: boolean) => void;
+  setRecording: (v: boolean) => void;
   setZoom: (pps: number) => void;
   markSaved: () => void;
   reset: () => void;
 }
 
 const initial = {
-  project: null, missingSourceUris: [], selectedClipId: null, selectedOverlayId: null, selectedEffectId: null, playhead: 0, isPlaying: false,
+  project: null, missingSourceUris: [], selectedClipId: null, selectedOverlayId: null, selectedEffectId: null, selectedAudioId: null, playhead: 0, isPlaying: false, recording: false,
   pixelsPerSecond: DEFAULT_PPS, past: [], future: [], dirty: false,
 };
 
@@ -51,7 +56,8 @@ function afterChange(s: EditorState, next: Project): Partial<EditorState> {
   const selected = s.selectedClipId && next.clips.some((c) => c.id === s.selectedClipId) ? s.selectedClipId : null;
   const selectedOverlay = s.selectedOverlayId && next.overlays.some((o) => o.id === s.selectedOverlayId) ? s.selectedOverlayId : null;
   const selectedEffect = s.selectedEffectId && next.effects.some((e) => e.id === s.selectedEffectId) ? s.selectedEffectId : null;
-  return { project: next, dirty: true, selectedClipId: selected, selectedOverlayId: selectedOverlay, selectedEffectId: selectedEffect, playhead: Math.min(s.playhead, totalDuration(next)) };
+  const selectedAudio = s.selectedAudioId && next.audioTracks.some((t) => t.id === s.selectedAudioId) ? s.selectedAudioId : null;
+  return { project: next, dirty: true, selectedClipId: selected, selectedOverlayId: selectedOverlay, selectedEffectId: selectedEffect, selectedAudioId: selectedAudio, playhead: Math.min(s.playhead, totalDuration(next)) };
 }
 
 const sameItems = (a: EffectItem[], b: EffectItem[]) => a === b || (a.length === b.length && a.every((e, i) => e === b[i]));
@@ -114,14 +120,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,
-  select: (id) => set(id ? { selectedClipId: id, selectedOverlayId: null, selectedEffectId: null } : { selectedClipId: null }),
-  selectOverlay: (id) => set(id ? { selectedOverlayId: id, selectedClipId: null, selectedEffectId: null } : { selectedOverlayId: null }),
-  selectEffect: (id) => set(id ? { selectedEffectId: id, selectedClipId: null, selectedOverlayId: null } : { selectedEffectId: null }),
+  // Selection is exclusive across clip / overlay / effect / audio: selecting one clears the others; deselecting (null) clears only its own.
+  select: (id) => set(id ? { selectedClipId: id, selectedOverlayId: null, selectedEffectId: null, selectedAudioId: null } : { selectedClipId: null }),
+  selectOverlay: (id) => set(id ? { selectedOverlayId: id, selectedClipId: null, selectedEffectId: null, selectedAudioId: null } : { selectedOverlayId: null }),
+  selectEffect: (id) => set(id ? { selectedEffectId: id, selectedClipId: null, selectedOverlayId: null, selectedAudioId: null } : { selectedEffectId: null }),
+  selectAudio: (id) => set(id ? { selectedAudioId: id, selectedClipId: null, selectedOverlayId: null, selectedEffectId: null } : { selectedAudioId: null }),
   seek: (t) => {
     const p = get().project;
     set({ playhead: Math.max(0, Math.min(t, p ? totalDuration(p) : 0)) });
   },
   setPlaying: (b) => set({ isPlaying: b }),
+  setRecording: (v) => set({ recording: v }),
   setZoom: (pps) => set({ pixelsPerSecond: Math.max(MIN_PPS, Math.min(MAX_PPS, pps)) }),
   markSaved: () => set({ dirty: false }),
   reset: () => set({ ...initial }),

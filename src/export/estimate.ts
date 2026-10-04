@@ -1,5 +1,5 @@
 import { clipDuration } from "@/src/editor/model/timeline";
-import type { Clip, Project } from "@/src/editor/model/types";
+import type { AudioTrack, Clip, Project } from "@/src/editor/model/types";
 
 export type Resolution = 720 | 1080 | 2160;
 export const RESOLUTIONS: { value: Resolution; label: string }[] = [{ value: 720, label: "720p" }, { value: 1080, label: "1080p" }, { value: 2160, label: "4K" }];
@@ -15,8 +15,8 @@ export function exportableClips(project: Project, missingSourceUris: string[]): 
 }
 /** Length of the exported video in seconds (what the finish screen shows and the Post screen receives). */
 export const exportDuration = (project: Project, missingSourceUris: string[]): number => exportableClips(project, missingSourceUris).reduce((s, c) => s + clipDuration(c), 0);
-/** The music track to export, or `null` if there is none or its source file is missing. */
-export const exportableAudio = (p: Project, missing: string[]) => { const t = p.audioTracks[0]; return t && !missing.includes(t.sourceUri) ? t : null; };
+/** The audio tracks that go into the export, in order: every track whose source file still exists. */
+export const exportableAudio = (p: Project, missing: string[]): AudioTrack[] => p.audioTracks.filter((t) => !missing.includes(t.sourceUri));
 export function formatBytes(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)} GB`;
   return `${Math.round(n / 1e6)} MB`;

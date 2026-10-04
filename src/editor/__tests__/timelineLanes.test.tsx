@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { makeAudioTrack, makeClip, makeEffect, makeOverlay, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { MusicLane } from "../components/MusicLane";
+import { AudioLane } from "../components/AudioLane";
 import { OverlayLane } from "../components/OverlayLane";
 
 const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })],
@@ -20,15 +20,15 @@ test("overlay pill is placed by time and selects on press", async () => {
 });
 
 test("music bar is placed by start and trimmed length", async () => {
-  await render(<MusicLane />);
-  expect(screen.getByTestId("music-bar")).toHaveStyle({ left: 50, width: 200 });
+  await render(<AudioLane kind="music" />);
+  expect(screen.getByTestId("audio-bar-m")).toHaveStyle({ left: 50, width: 200 });
   expect(screen.getByText("Song")).toBeTruthy();
 });
 
 test("tapping the music bar deselects a selected effect", async () => {
   useEditorStore.getState().setProject({ ...p, effects: [makeEffect({ id: "e1", start: 1, end: 3 })] });
   useEditorStore.getState().selectEffect("e1");
-  await render(<MusicLane />);
-  await fireEvent.press(screen.getByTestId("music-bar"));
+  await render(<AudioLane kind="music" />);
+  await fireEvent.press(screen.getByTestId("audio-bar-m"));
   expect(useEditorStore.getState().selectedEffectId).toBeNull();
 });

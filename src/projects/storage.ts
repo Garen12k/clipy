@@ -1,6 +1,6 @@
 import { totalDuration } from "@/src/editor/model/timeline";
 import { migrateProject } from "@/src/editor/model/migrate";
-import { newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AudioTrack, type Clip, type PostPlatform, type Project } from "@/src/editor/model/types";
+import { newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AudioKind, type AudioTrack, type Clip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
 
 export interface PickedAsset { uri: string; kind: "video" | "photo"; durationSec: number; width: number; height: number; fileName?: string }
@@ -82,7 +82,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       await fs.remove(projectDir(id)).catch(() => {});
       throw new Error("Couldn't import any of the selected items.");
     }
-    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], effects: [], schemaVersion: SCHEMA_VERSION };
+    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], effects: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [] };
     await saveProject(project);
     await writeThumb(project);
     return { project, failed };
@@ -124,13 +124,13 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     return copy;
   }
 
-  async function importAudio(projectId: string, a: { uri: string; title: string; durationSec: number }): Promise<AudioTrack> {
+  async function importAudio(projectId: string, a: { uri: string; title: string; durationSec: number }, kind: AudioKind = "music"): Promise<AudioTrack> {
     const id = deps.newId();
     const m = /\.([A-Za-z0-9]+)$/.exec(a.title) ?? /\.([A-Za-z0-9]+)$/.exec(a.uri);
     const dest = `${projectDir(projectId)}/media/${id}.${(m?.[1] ?? "m4a").toLowerCase()}`;
     await fs.mkdir(`${projectDir(projectId)}/media`);
     await fs.copy(a.uri, dest);
-    return { id, sourceUri: dest, title: a.title, sourceDuration: a.durationSec, start: 0, trimStart: 0, trimEnd: a.durationSec, volume: 1 };
+    return { id, sourceUri: dest, title: a.title, sourceDuration: a.durationSec, start: 0, trimStart: 0, trimEnd: a.durationSec, volume: 1, kind, fadeIn: 0, fadeOut: 0 };
   }
 
   async function renameProject(id: string, name: string): Promise<void> {

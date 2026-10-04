@@ -1,9 +1,11 @@
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
+import { clipGainAt } from "@/src/editor/model/audioMix";
 import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
-import { clipAt, clipStartTimes, hasSpeedCurve, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
+import { clipAt, clipDuration, clipStartTimes, hasSpeedCurve, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue, isPhoto, type Clip } from "@/src/editor/model/types";
+import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
 import { useEditorStore } from "@/src/editor/store";
 import { usePhotoPlayback } from "@/src/editor/usePhotoPlayback";
 import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
@@ -39,6 +41,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const playhead = useEditorStore((s) => s.playhead);
   const isPlaying = useEditorStore((s) => s.isPlaying);
   const missing = useEditorStore((s) => s.missingSourceUris);
+  const recording = useEditorStore((s) => s.recording);
   const { seek, setPlaying, selectOverlay } = useEditorStore.getState();
   const [frame, setFrame] = useState({ w: 0, h: 0 });
   const effectTransform = useEffectTransform(frame.w, frame.h);
@@ -110,10 +113,13 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     // This effect also re-runs for edits that don't concern the player (e.g. every frame of a transform
     // gesture replaces `project`), so each native write below is skipped when it would change nothing.
     // expo-video caps player.volume at 1; values above 1 are only honoured in the export.
-    // A reversed clip is silent in the export, so it plays muted here too.
-    const muted = hit.clip.muted || hit.clip.reversed;
-    const volume = muted ? 0 : Math.min(1, hit.clip.volume);
-    if (appliedVolume.current !== volume) { player.volume = volume; appliedVolume.current = volume; }
+    // A reversed clip is silent in the export, so it plays muted here too; so does every clip while a voice-over is recorded.
+    // Otherwise the volume is the clip's gain at the playhead (volume × its fades): while playing, each timeUpdate moves the
+    // playhead, this effect re-runs, and the volume is written only once it has moved enough (shouldWriteVolume) — never a
+    // seek, a pause or state. An un-faded clip's gain is its volume everywhere: one write, as ever.
+    const muted = recording || hit.clip.muted || hit.clip.reversed;
+    const volume = muted ? 0 : Math.min(PREVIEW_VOLUME_CAP, clipGainAt(hit.clip, Math.min(hit.offsetInClip, clipDuration(hit.clip))));
+    if (shouldWriteVolume(appliedVolume.current, volume)) { player.volume = volume; appliedVolume.current = volume; }
     if (appliedMuted.current !== muted) { player.muted = muted; appliedMuted.current = muted; }
     // expo-video's playbackRate setter assigns AVPlayer.rate, and a non-zero rate starts playback: only
     // assign it when it changes, and re-assert the paused state so a paused scrub never starts the player.
@@ -149,7 +155,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       if (pendingSeek.current !== null) pendingSeek.current = sourceTime; // land the pending seek where the user scrubbed to
       else if (lastSeek.current !== sourceTime) seekPlayer(sourceTime);
     }
-  }, [hit?.clip.id, hit?.clip.kind, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, hit?.clip.reversed, hit?.clip.speed, hit?.clip.speedCurve, playhead, isPlaying, missing, project, player, seek, setPlaying]);
+  }, [hit?.clip.id, hit?.clip.kind, hit?.clip.sourceUri, hit?.clip.trimStart, hit?.clip.trimEnd, hit?.clip.volume, hit?.clip.muted, hit?.clip.reversed, hit?.clip.speed, hit?.clip.speedCurve, hit?.clip.fadeIn, hit?.clip.fadeOut, recording, playhead, isPlaying, missing, project, player, seek, setPlaying]);
 
   // Play / pause toggles. Crossing between clips while playing is handled by the effect above.
   useEffect(() => {
@@ -204,6 +210,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         onPress={() => {
           if (useEditorStore.getState().selectedOverlayId) { selectOverlay(null); return; }
           if (useEditorStore.getState().selectedEffectId) { useEditorStore.getState().selectEffect(null); return; }
+          if (useEditorStore.getState().selectedAudioId) { useEditorStore.getState().selectAudio(null); return; }
           if (empty) return;
           if (!isPlaying && playhead >= total) seek(0);
           setPlaying(!isPlaying);
