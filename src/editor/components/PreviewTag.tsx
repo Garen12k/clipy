@@ -5,9 +5,12 @@ import { activeEffects } from "@/src/editor/model/effectMath";
 import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
 import { frameSize } from "@/src/editor/model/ops";
 import { clipAt, isInTransitionWindow } from "@/src/editor/model/timeline";
-import type { Project } from "@/src/editor/model/types";
+import type { Clip, Project } from "@/src/editor/model/types";
 import { theme } from "@/src/theme/theme";
 import { Body } from "@/src/ui/Text";
+
+/** True when the clip plays on a speed curve. An empty step list counts as no curve — the rule `timeline.ts` goes by. */
+export const hasSpeedCurve = (c: Clip): boolean => c.speedCurve !== null && c.speedCurve.steps.length > 0;
 
 /**
  * Whether the preview only approximates the current frame: the clip has a filter (at a strength above 0), the playhead is in a
@@ -20,7 +23,7 @@ export function needsPreviewTag(p: Project, playhead: number): boolean {
   const hit = clipAt(p, playhead);
   if (!hit) return false;
   const c = hit.clip;
-  if ((c.filter && c.filterIntensity > 0) || c.reversed || c.speedCurve !== null || isInTransitionWindow(p, playhead)) return true;
+  if ((c.filter && c.filterIntensity > 0) || c.reversed || hasSpeedCurve(c) || isInTransitionWindow(p, playhead)) return true;
   if (adjustNeedsTag(c.adjust) || activeEffects(p.effects, playhead).length > 0) return true;
   if (c.background.type !== "blur") return false;
   const f = frameSize(p);

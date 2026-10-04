@@ -69,12 +69,12 @@ export function SpeedSheet({ clipId, visible, onClose }: { clipId: string | null
   return (
     <Sheet visible={visible} onClose={onClose} title="Speed">
       {/* Mounted only while the sheet is open (and per clip), so it opens on the tab the clip's speed lives on. */}
-      <SpeedBody key={clip.id} clip={clip} />
+      <SpeedBody key={clip.id} clip={clip} onClose={onClose} />
     </Sheet>
   );
 }
 
-function SpeedBody({ clip }: { clip: Clip }) {
+function SpeedBody({ clip, onClose }: { clip: Clip; onClose: () => void }) {
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const curveId = clip.speedCurve?.id ?? null;
   const [tab, setTab] = useState<Tab>(curveId ? "curve" : "normal");
@@ -83,11 +83,13 @@ function SpeedBody({ clip }: { clip: Clip }) {
   const pickCurve = (id: SpeedCurveId | null) => {
     if (id === curveId) return;
     const project = useEditorStore.getState().project;
-    // The op hands back the same project when it refuses: the preset would leave the clip shorter than a clip may be.
     if (!project) return;
-    if (setClipSpeedCurve(project, clip.id, id) === project) { useToast.getState().show("This clip is too short for a speed curve."); return; }
+    const next = setClipSpeedCurve(project, clip.id, id);
+    // The op hands back the same project when it refuses: the preset would leave the clip shorter than a clip may be.
+    // The toast lives on the screen under this sheet's Modal, so the sheet closes first.
+    if (next === project) { onClose(); useToast.getState().show("This clip is too short for a speed curve."); return; }
     haptic("light");
-    apply((p) => setClipSpeedCurve(p, clip.id, id));
+    apply(() => next);
   };
 
   return (
@@ -107,7 +109,7 @@ function SpeedBody({ clip }: { clip: Clip }) {
           <Slider testID="speed-slider" minimumValue={SPEED_LIMITS[0]} maximumValue={SPEED_LIMITS[1]} step={0.05} value={clip.speed}
             onSlidingStart={beginTransaction} onValueChange={(v) => applyTransient((p) => setClipSpeed(p, clip.id, v))}
             minimumTrackTintColor={sliderTint} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={sliderTint} />
-          <Body muted style={{ fontSize: CAPTION_SIZE }}>Audio keeps its pitch in the exported video.</Body>
+          {curveId ? null : <Body muted style={{ fontSize: CAPTION_SIZE }}>Audio keeps its pitch in the exported video.</Body>}
         </>
       ) : (
         <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", rowGap: theme.space.xs }}>

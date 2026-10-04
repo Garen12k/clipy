@@ -84,3 +84,6 @@ test("a clip with a speed curve needs the tag; clearing the curve drops it", () 
   expect(needsPreviewTag(setClipSpeedCurve(curved, "a", null), 1)).toBe(false);
   expect(needsPreviewTag(one({ speed: 2 }), 1)).toBe(false); // a constant speed is exact
 });
+test("a curve with no steps counts as no curve (the rule timeline.ts goes by)", () => {
+  expect(needsPreviewTag(one({ speedCurve: { id: "hero", steps: [] } }), 1)).toBe(false);
+});

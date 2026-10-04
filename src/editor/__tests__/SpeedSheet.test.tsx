@@ -100,15 +100,31 @@ describe("curve tiles", () => {
     expect(useToast.getState().message).toBeNull();
   });
 
-  test("a preset that would make the clip too short is refused with a toast and no haptic", async () => {
-    await render(<SpeedSheet clipId="s" visible onClose={() => {}} />);
+  test("a preset that would make the clip too short is refused: the sheet closes, then a toast shows; no haptic", async () => {
+    // The toast host sits on the screen under the sheet's Modal, so the sheet has to be closed before the message shows.
+    const order: string[] = [];
+    const onClose = jest.fn(() => { order.push("close"); });
+    const unsub = useToast.subscribe((t) => { if (t.message) order.push("toast"); });
+    await render(<SpeedSheet clipId="s" visible onClose={onClose} />);
     await press("Curve");
     await press("Flash in");
+    unsub();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(["close", "toast"]);
     expect(clip(1).speedCurve).toBeNull();
     expect(past()).toBe(0);
     expect(useToast.getState().message).toBe("This clip is too short for a speed curve.");
     expect(impact).not.toHaveBeenCalled();
     expect(tile("None")).toBeSelected();
+  });
+
+  test("an accepted pick does not close the sheet", async () => {
+    const onClose = jest.fn();
+    await render(<SpeedSheet clipId="a" visible onClose={onClose} />);
+    await press("Curve");
+    await press("Hero");
+    await press("None");
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   test("each preset draws eight bars, speed / 4 of the sparkline's height; None draws a flat line", async () => {
@@ -146,6 +162,7 @@ describe("Normal tab while a curve is active", () => {
     expect(slider.props.value).toBe(1);
     expect(slider.props.thumbTintColor).toBe(theme.colors.textMuted);
     expect(screen.getByText("A curve is active — moving this slider removes it.")).toBeTruthy();
+    expect(screen.queryByText("Audio keeps its pitch in the exported video.")).toBeNull(); // only the curve note
     expect(tile("1×")).not.toBeSelected();
   });
 
@@ -159,6 +176,7 @@ describe("Normal tab while a curve is active", () => {
     expect(clip().speed).toBe(1.5);
     expect(past()).toBe(before + 1);
     expect(screen.queryByText("A curve is active — moving this slider removes it.")).toBeNull();
+    expect(screen.getByText("Audio keeps its pitch in the exported video.")).toBeTruthy();
     expect(screen.getByTestId("speed-slider").props.thumbTintColor).toBe(theme.colors.accent);
     await act(() => { useEditorStore.getState().undo(); });
     expect(clip().speedCurve?.id).toBe("hero");

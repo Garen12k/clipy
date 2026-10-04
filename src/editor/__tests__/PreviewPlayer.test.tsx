@@ -472,15 +472,54 @@ describe("speed curves: the playback rate follows the steps", () => {
   };
   const tick = (currentTime: number) => act(() => { player.listeners.timeUpdate?.({ currentTime }); });
 
-  test("paused: the rate is the step's speed at each playhead, and the player never starts", async () => {
+  /** Arms the next `play()`; the returned getter gives the rate writes that had been made by the time it ran. */
+  const ratesAtPlay = () => { let seen: number[] | null = null; player.play.mockImplementationOnce(() => { seen = player.rates.slice(); player.playing = true; }); return () => seen; };
+
+  test("paused: scrubbing across step boundaries writes no rate and never pauses again or starts the player", async () => {
     curved();
     await ready();
-    for (const [t, rate] of [[0.5, 1], [1.2, 2], [1.6, 3], [2.5, 0.5], [6, 3], [7, 1]] as const) {
+    player.rates.length = 0; player.pause.mockClear();
+    for (const t of [0.5, 1.2, 1.6, 2.5, 6, 7, 0.2]) { // crosses 1, 1.5, 1.833 … and back
       await act(() => { useEditorStore.getState().seek(t); });
-      expect(player.playbackRate).toBe(rate);
       expect(player.playing).toBe(false);
     }
+    expect(player.rates).toEqual([]);
+    expect(player.pause).not.toHaveBeenCalled();
     expect(player.play).not.toHaveBeenCalled();
+  });
+
+  test("pressing play after a paused scrub writes the current step's rate exactly once, before play()", async () => {
+    curved();
+    await ready();
+    for (const t of [1.2, 1.6, 2.5]) await act(() => { useEditorStore.getState().seek(t); }); // three boundaries; ends in the 0.5× step
+    expect(player.rates).toEqual([]);
+    player.seeks.length = 0;
+    const atPlay = ratesAtPlay();
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    expect(atPlay()).toEqual([0.5]); // already written when play() ran
+    expect(player.rates).toEqual([0.5]);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(player.seeks).toEqual([]);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    // Pausing and playing again inside the same step writes nothing more.
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    expect(player.rates).toEqual([0.5]);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+  });
+
+  test("playing from a load: the rate of the step is applied before play() once the source is ready", async () => {
+    curved();
+    useEditorStore.getState().seek(1.2); // the 2× step
+    await render(<PreviewPlayer />);
+    await layout();
+    expect(player.rates).toEqual([]); // paused, still loading
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    player.play.mockClear();
+    const atPlay = ratesAtPlay();
+    await act(() => { player.listeners.statusChange?.({ status: "readyToPlay" }); });
+    expect(atPlay()).toEqual([2]);
+    expect(player.rates).toEqual([2]);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
   });
 
   test("paused: scrubbing inside one step seeks through the curve and writes no rate", async () => {
@@ -552,22 +591,24 @@ describe("speed curves: the playback rate follows the steps", () => {
     curved("flashIn"); // 4, 3, 2, 1.5, 1, 1, 1, 1 in source order
     useEditorStore.getState().apply((p) => setClipReversed(p, "k", true));
     await ready();
-    expect(player.playbackRate).toBe(4); // the preview shows source 0 at playhead 0
-    await act(() => { useEditorStore.getState().seek(0.3); }); // forwards: past the 0.25 s the first slice takes
-    expect(player.playbackRate).toBe(3);
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    expect(player.rates).toEqual([4]); // the preview shows source 0 at playhead 0
+    await tick(1.2); // source 1.2: the second slice
+    expect(player.rates).toEqual([4, 3]);
+    await act(() => { useEditorStore.getState().setPlaying(false); });
   });
 
-  test("picking a curve while paused applies its rate at the playhead and leaves the player paused; the video view is not remounted", async () => {
+  test("picking and clearing a curve while paused writes no rate and leaves the player paused; the video view is not remounted", async () => {
     useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "k", sourceDuration: 8 })] }));
     await ready();
     const video = screen.getByTestId("preview-video");
     await act(() => { useEditorStore.getState().seek(1.2); });
     expect(player.rates).toEqual([]);
     await act(() => { useEditorStore.getState().apply((p) => setClipSpeedCurve(p, "k", "hero")); });
-    expect(player.rates).toEqual([2]);
+    expect(player.rates).toEqual([]);
     expect(player.playing).toBe(false);
     await act(() => { useEditorStore.getState().apply((p) => setClipSpeedCurve(p, "k", null)); });
-    expect(player.rates).toEqual([2, 1]);
+    expect(player.rates).toEqual([]);
     expect(player.playing).toBe(false);
     expect(screen.getByTestId("preview-video")).toBe(video);
     expect(player.replaceAsync).toHaveBeenCalledTimes(1);

@@ -15,7 +15,7 @@ import { ClipGestures } from "./ClipGestures";
 import { EffectOverlays, useEffectTransform } from "./EffectLayer";
 import { FilterLayer } from "./FilterLayer";
 import { OverlayLayer } from "./OverlayLayer";
-import { needsPreviewTag, PreviewTag } from "./PreviewTag";
+import { hasSpeedCurve, needsPreviewTag, PreviewTag } from "./PreviewTag";
 import { TransitionLayer } from "./TransitionLayer";
 
 /** The view the effect transform is applied to: exactly the preview frame, so it scales about the frame's centre. */
@@ -60,6 +60,24 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   // The rate last written to the player (a new player runs at 1). Remembered here rather than read back from the player: the native
   // property is a Float, so a rate such as 0.3 never reads back equal and would be rewritten on every playhead tick.
   const appliedRate = useRef(1);
+  /** Writes the rate for `offsetInClip` of `clip` unless the player already runs at it; true when it wrote. */
+  const applyRate = (clip: Clip, offsetInClip: number): boolean => {
+    const rate = previewRate(clip, offsetInClip);
+    if (appliedRate.current === rate) return false;
+    player.playbackRate = rate; appliedRate.current = rate;
+    return true;
+  };
+  /**
+   * Every path that starts the player goes through here: the rate of the step under the store's playhead is applied first (a
+   * paused scrub over a curved clip leaves it unwritten), then the player plays. It moves on from wherever it was seeked to.
+   */
+  const startPlayer = () => {
+    const s = useEditorStore.getState();
+    const h = s.project ? clipAt(s.project, s.playhead) : null;
+    if (h && !isPhoto(h.clip)) applyRate(h.clip, h.offsetInClip);
+    lastSeek.current = null;
+    player.play();
+  };
 
   // preservesPitch is stored on the player and applied by expo-video to every item it loads: set it once.
   const player = useVideoPlayer(null, (p) => { p.loop = false; p.timeUpdateEventInterval = 0.05; p.muted = false; p.audioMixingMode = "mixWithOthers"; p.preservesPitch = true; });
@@ -101,9 +119,9 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     // assign it when it changes, and re-assert the paused state so a paused scrub never starts the player.
     // On a speed curve the rate is the step's under the playhead: while playing, each timeUpdate moves the playhead, this effect
     // re-runs, and the rate is written only when the playhead has entered a step with another speed — never a seek, never state.
-    const rate = previewRate(hit.clip, hit.offsetInClip);
-    const rateChanged = appliedRate.current !== rate;
-    if (rateChanged) { player.playbackRate = rate; appliedRate.current = rate; }
+    // While paused a curved clip's rate is left alone (a scrub would otherwise write it, and pause again, at every step it
+    // crosses); `startPlayer` applies it when playback starts. A constant-speed clip's rate is written paused or not, as ever.
+    const rateChanged = (isPlaying || !hasSpeedCurve(hit.clip)) && applyRate(hit.clip, hit.offsetInClip);
     if (!isPlaying && (rateChanged || player.playing)) player.pause();
     const sourceTime = outputToSource(hit.clip, hit.offsetInClip);
     // Keyed on the file too: Replace (and its undo / redo) keeps the clip id but swaps the file.
@@ -117,7 +135,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         if (pendingSeek.current !== null) pendingSeek.current = sourceTime;
         else {
           seekPlayer(sourceTime);
-          if (isPlaying) { player.play(); lastSeek.current = null; } // it moves on from here
+          if (isPlaying) startPlayer();
         }
         return;
       }
@@ -135,7 +153,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
 
   // Play / pause toggles. Crossing between clips while playing is handled by the effect above.
   useEffect(() => {
-    if (isPlaying && !photoAtPlayhead()) { lastSeek.current = null; player.play(); } else player.pause();
+    if (isPlaying && !photoAtPlayhead()) startPlayer(); else player.pause();
   }, [isPlaying, player]);
 
   // Apply the pending seek once the newly replaced source is ready, then resume playback if needed.
@@ -145,7 +163,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         player.currentTime = pendingSeek.current;
         lastSeek.current = pendingSeek.current;
         pendingSeek.current = null;
-        if (useEditorStore.getState().isPlaying && !photoAtPlayhead()) { lastSeek.current = null; player.play(); }
+        if (useEditorStore.getState().isPlaying && !photoAtPlayhead()) startPlayer();
       } else if (status === "error") {
         // Unblock timeUpdate handling even though the seek never landed, and surface the failure once.
         pendingSeek.current = null;
