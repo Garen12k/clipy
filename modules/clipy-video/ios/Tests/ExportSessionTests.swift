@@ -214,4 +214,35 @@ final class ExportSessionTests: XCTestCase {
     let duration = try await asset.load(.duration).seconds
     XCTAssertEqual(duration, 3, accuracy: 0.2)
   }
+
+  /// A speed curve: clip 1 (2 s) plays its first second at ×2 and its second at ×0.5 → 0.5 + 2 = 2.5 s, with a 0.5 s
+  /// dissolve into clip 2 (2 s, constant speed): 4.5 s in all. The spans the app sent cover 2.4 s — more than the
+  /// file has — so the last span is shortened to fit.
+  func testExportsAClipWithASpeedCurve() async throws {
+    let a = try await makeClip(seconds: 2, color: .red)
+    let b = try await makeClip(seconds: 2, color: .blue)
+    let out = FileManager.default.temporaryDirectory.appendingPathComponent("out-\(UUID().uuidString).mp4")
+    var request = ExportRequest()
+    request.clips = [ExportClip(), ExportClip()]
+    request.clips[0].sourceUri = a.absoluteString; request.clips[0].trimStart = 0; request.clips[0].trimEnd = 2
+    var fast = ExportSpeedSpan(); fast.duration = 1; fast.speed = 2
+    var slow = ExportSpeedSpan(); slow.duration = 1.4; slow.speed = 0.5
+    request.clips[0].speedSpans = [fast, slow]
+    var dissolve = ExportTransition()
+    dissolve.type = "dissolve"; dissolve.duration = 0.5
+    request.clips[0].transition = dissolve
+    request.clips[1].sourceUri = b.absoluteString; request.clips[1].trimStart = 0; request.clips[1].trimEnd = 2
+    request.aspectRatio = "9:16"; request.resolution = 720; request.outputPath = out.absoluteString
+
+    let finished = expectation(description: "export")
+    var result: [String: Any] = [:]
+    let session = ExportSession { payload in if (payload["type"] as? String) != "progress" { result = payload; finished.fulfill() } }
+    try await session.start(request)
+    await fulfillment(of: [finished], timeout: 60)
+
+    XCTAssertEqual(result["type"] as? String, "done", "\(result)")
+    let asset = AVURLAsset(url: out)
+    let duration = try await asset.load(.duration).seconds
+    XCTAssertEqual(duration, 4.5, accuracy: 0.2)
+  }
 }

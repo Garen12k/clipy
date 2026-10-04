@@ -194,10 +194,13 @@ test("the request records decode the motion fields", () => {
 test("the pre-pass rewrite carries every ExportClip field", () => {
   const body = between(prePass, "static func rewrite(", "return out");
   const fields = recordFields("ExportClip");
-  expect(fields).toEqual(expect.arrayContaining(["animIn", "animOut", "animCombo", "keyframes"]));
+  expect(fields).toEqual(expect.arrayContaining(["animIn", "animOut", "animCombo", "keyframes", "speedSpans"]));
   expect(fields).not.toContain("outputDuration");
   for (const f of fields) expect(body).toMatch(new RegExp(`\\n\\s*out\\.${f} = `));
-  for (const f of ["animIn", "animOut", "animCombo", "keyframes"]) expect(body).toContain(`out.${f} = clip.${f}\n`);
+  // Speed spans are in PLAYBACK order, which is the order a prepared (reversed) file runs in: carried as they are.
+  for (const f of ["animIn", "animOut", "animCombo", "keyframes", "speedSpans"]) expect(body).toContain(`out.${f} = clip.${f}\n`);
+  expect(between(session, "struct ExportClip: Record {", "\n}")).toMatch(/@Field var speedSpans: \[ExportSpeedSpan\] = \[\]/);
+  expect(recordFields("ExportSpeedSpan")).toEqual(["duration", "speed"]);
 });
 
 test("a LayerSpec knows its clip's motion, composition start and length", () => {

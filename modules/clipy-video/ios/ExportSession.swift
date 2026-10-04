@@ -79,6 +79,12 @@ struct ExportKeyframe: Record {
   @Field var opacity: Double = 1
 }
 
+/// One constant-speed stretch of a speed curve: `duration` SOURCE seconds played at `speed`.
+struct ExportSpeedSpan: Record {
+  @Field var duration: Double = 0
+  @Field var speed: Double = 1
+}
+
 struct ExportClip: Record {
   @Field var sourceUri: String = ""
   @Field var trimStart: Double = 0
@@ -101,6 +107,7 @@ struct ExportClip: Record {
   @Field var animOut: ExportAnimEdge?
   @Field var animCombo: String?                    // one of `ANIM_COMBO_IDS`; set → In / Out are not played
   @Field var keyframes: [ExportKeyframe] = []      // non-empty → they give x / y / scale / rotation / opacity
+  @Field var speedSpans: [ExportSpeedSpan] = []    // a speed curve, in PLAYBACK order; empty → constant `speed`
 }
 
 struct ExportOverlay: Record {
@@ -188,7 +195,15 @@ private struct LoadedClip {
   let end: Double                                  // clamped trimEnd (source seconds)
   let sourceEnd: CMTime                            // last source time that can be read (handle limit)
   let speed: Double
-  let outDur: CMTime                               // (end − start) / speed — what the clip adds to the timeline
+  let spans: [SpeedSpan]                           // a speed curve fitted to [start, end]; empty → constant `speed`
+  let outDur: CMTime                               // (end − start) / speed, or Σ span duration / speed — what the clip adds to the timeline
+}
+
+/// The cut points of one retimed insert: `source[j]` (source time) lands on `output[j]` (composition time). Both
+/// lists have the same count (≥ 2) and rise strictly; the piece between two neighbours plays at one speed.
+struct RetimeCuts {
+  let source: [CMTime]
+  let output: [CMTime]
 }
 
 /// Where one clip ended up on the composition timeline (output seconds).
@@ -201,6 +216,7 @@ private struct PlacedClip {
 /// One export job. Builds an AVMutableComposition from trimmed clips, aspect-fills each into the render size, and writes an .mp4.
 /// Phase 2: per-clip volume/mute and an optional music track (audio mix, 1 s fade-out at the end), plus text overlays
 /// rendered with Core Animation (`AVVideoCompositionCoreAnimationTool`).
+/// Speed curves: a clip with `speedSpans` is inserted once and retimed span by span (`SpeedSpans`, `insertRetimed`).
 /// Phase 3: per-clip speed (`scaleTimeRange`), Core Image filters and transitions through `ClipyCompositor`, with clips
 /// alternating between two video tracks (A/B) so a transition's two clips overlap; emoji/shape stickers as layers.
 /// Events go through `onEvent`: `progress` (repeating), then exactly one of `done` / `cancelled` / `error`.
@@ -303,6 +319,49 @@ final class ExportSession {
 
   /// Seconds → CMTime at the timescale every Phase 1–3 computation uses.
   static func time(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: 600) }
+
+  /// A request clip's speed curve as the maths uses it (unplayable spans dropped); empty for a constant-speed clip.
+  static func speedSpans(_ c: ExportClip) -> [SpeedSpan] {
+    let spans: [SpeedSpan] = c.speedSpans.map { (s: ExportSpeedSpan) -> SpeedSpan in
+      SpeedSpan(duration: s.duration, speed: s.speed)
+    }
+    return SpeedSpans.usable(spans)
+  }
+
+  /// The cut points for retiming source `[from.source, to.source]` onto composition `[from.output, to.output]`, cut
+  /// at `interior` (in order). A cut is kept only when it lies strictly after the previous kept cut and strictly
+  /// before the end, in source AND in output time — so no piece is empty (a span that rounds to nothing, or one
+  /// outside this insert, joins its neighbour) and the first / last cut are always exactly the given ends.
+  static func retimeCuts(from: (source: CMTime, output: CMTime), to: (source: CMTime, output: CMTime),
+                         interior: [(source: CMTime, output: CMTime)]) -> RetimeCuts {
+    var source: [CMTime] = [from.source]
+    var output: [CMTime] = [from.output]
+    for cut in interior {
+      guard let lastSource = source.last, let lastOutput = output.last else { break }
+      guard CMTimeCompare(cut.source, lastSource) > 0, CMTimeCompare(cut.output, lastOutput) > 0,
+            CMTimeCompare(cut.source, to.source) < 0, CMTimeCompare(cut.output, to.output) < 0 else { continue }
+      source.append(cut.source)
+      output.append(cut.output)
+    }
+    source.append(to.source)
+    output.append(to.output)
+    return RetimeCuts(source: source, output: output)
+  }
+
+  /// Where source time `t` lands in the composition: on a cut exactly that cut's output time, between two cuts in
+  /// proportion; before the first / after the last cut, that cut's output time.
+  static func retimedTime(_ t: CMTime, cuts: RetimeCuts) -> CMTime {
+    let n = min(cuts.source.count, cuts.output.count)
+    guard n >= 2 else { return cuts.output.first ?? .zero }
+    if CMTimeCompare(t, cuts.source[0]) <= 0 { return cuts.output[0] }
+    for j in 0..<(n - 1) where CMTimeCompare(t, cuts.source[j + 1]) < 0 {
+      let length = (cuts.source[j + 1] - cuts.source[j]).seconds
+      guard length > 0 else { return cuts.output[j] }
+      let fraction = (t - cuts.source[j]).seconds / length
+      return cuts.output[j] + time(fraction * (cuts.output[j + 1] - cuts.output[j]).seconds)
+    }
+    return cuts.output[n - 1]
+  }
 
   /// CoreText paragraph style (alignment + fixed line height) for the CATextLayer, which draws with CoreText.
   static func ctParagraphStyle(alignment: CTTextAlignment, lineHeight: CGFloat) -> CTParagraphStyle {
@@ -582,7 +641,10 @@ final class ExportSession {
       let start = max(0, min(clip.trimStart, end))
       guard end - start > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(clip.sourceUri)") }
       let speed = clip.speed.isFinite && clip.speed > 0 ? clip.speed : 1
-      let outDur = Self.time((end - start) / speed)
+      // A speed curve: its spans made to cover exactly the clamped range (the real file may be shorter than the app
+      // believed). No spans → constant speed, exactly as before.
+      let spans = SpeedSpans.fitted(Self.speedSpans(clip), to: end - start)
+      let outDur = spans.isEmpty ? Self.time((end - start) / speed) : Self.time(SpeedSpans.outputSeconds(spans))
       guard CMTimeCompare(outDur, .zero) > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(clip.sourceUri)") }
       let srcAudio = try await asset.loadTracks(withMediaType: .audio).first
       var audioRange: CMTimeRange? = nil
@@ -592,7 +654,7 @@ final class ExportSession {
         transform: Self.ciFillTransform(preferredTransform: preferredTransform, naturalSize: naturalSize, renderSize: renderSize),
         orient: Self.ciOrientTransform(preferredTransform: preferredTransform, naturalSize: naturalSize),
         start: start, end: end, sourceEnd: CMTimeMinimum(duration, videoRange.end),
-        speed: speed, outDur: outDur))
+        speed: speed, spans: spans, outDur: outDur))
     }
     let n = loaded.count
 
@@ -638,6 +700,28 @@ final class ExportSession {
       return true
     }
 
+    /// Inserts source `[cuts.source.first, cuts.source.last]` at `cuts.output.first` and retimes it piece by piece
+    /// (a speed curve) so that every cut lands on its output time and the insert ends exactly at `cuts.output.last`.
+    /// The pieces are scaled from the LAST to the first: scaling a piece moves only what comes after it, so the
+    /// pieces still to be scaled are where they were inserted (piece j at `first output + (source[j] − source[0])`).
+    /// Like `insertScaled`, the insert lands at or after the track's current end. False when there is nothing to insert.
+    func insertRetimed(_ track: AVMutableCompositionTrack, of srcTrack: AVAssetTrack, cuts: RetimeCuts) throws -> Bool {
+      let pieces = min(cuts.source.count, cuts.output.count) - 1
+      guard pieces >= 1 else { return false }
+      let sourceStart = cuts.source[0], sourceEnd = cuts.source[pieces]
+      let at = cuts.output[0]
+      guard CMTimeCompare(sourceEnd, sourceStart) > 0, CMTimeCompare(cuts.output[pieces], at) > 0 else { return false }
+      try track.insertTimeRange(CMTimeRange(start: sourceStart, end: sourceEnd), of: srcTrack, at: at)
+      for j in stride(from: pieces - 1, through: 0, by: -1) {
+        let length = cuts.source[j + 1] - cuts.source[j]
+        let target = cuts.output[j + 1] - cuts.output[j]
+        if CMTimeCompare(length, target) != 0 {
+          track.scaleTimeRange(CMTimeRange(start: at + (cuts.source[j] - sourceStart), duration: length), toDuration: target)
+        }
+      }
+      return true
+    }
+
     for (i, c) in loaded.enumerated() {
       let k = i % 2
       let track = videoTracks[k]
@@ -648,6 +732,53 @@ final class ExportSession {
       // The incoming clip starts at cursor − d/2 on its own track (never before that track's previous clip ends).
       let clipStart = CMTimeMaximum(bodyStart - halfIn, videoEnd[k])
       let clipEnd = bodyEnd + halfOut
+
+      // A speed curve: the same placement as below, with the main insert retimed span by span instead of once.
+      // A clip without spans skips this block and takes the constant-speed code after it, untouched.
+      if let firstSpan = c.spans.first, let lastSpan = c.spans.last {
+        // Handles in source seconds, at the speed of the nearest edge span, clamped to the source.
+        let head = max(0, min(halfIn.seconds * firstSpan.speed, c.start))
+        let tail = max(0, min(halfOut.seconds * lastSpan.speed, c.sourceEnd.seconds - c.end))
+        let plan = SpeedSpans.plan(c.spans, head: head, tail: tail)
+        let source = CMTimeRange(start: Self.time(c.start - head), end: CMTimeMinimum(Self.time(c.end + tail), c.sourceEnd))
+        guard CMTimeCompare(source.duration, .zero) > 0 else { throw ExportError.sessionFailed("Clip range is empty: \(c.clip.sourceUri)") }
+        // Real material covers [mainStart, mainEnd): the handles after retiming, never more than the window half.
+        let mainStart = CMTimeMaximum(clipStart, bodyStart - CMTimeMinimum(Self.time(plan.bodyStart), halfIn))
+        let mainEnd = CMTimeMinimum(clipEnd, bodyEnd + CMTimeMinimum(Self.time(plan.tailLength), halfOut))
+        // Every cut between two spans: its source time counted from the inserted range's start, its output time
+        // from `bodyStart` — so the clip's own range stays [bodyStart, bodyEnd) (bodyEnd = bodyStart + outDur and
+        // outDur is the spans' total), whatever the handles round to.
+        let interior: [(source: CMTime, output: CMTime)] = plan.ranges.dropFirst().map { (r: SpeedRange) -> (source: CMTime, output: CMTime) in
+          (source: source.start + ExportSession.time(r.start), output: bodyStart + ExportSession.time(r.outputStart))
+        }
+        let cuts = Self.retimeCuts(from: (source: source.start, output: mainStart), to: (source: source.end, output: mainEnd), interior: interior)
+        // Clamped handles hold the edge frame, as for a constant-speed clip.
+        let edge = CMTimeMinimum(holdFrame, source.duration)
+        _ = try insertScaled(track, CMTimeRange(start: source.start, duration: edge), of: c.srcVideo, from: clipStart, to: mainStart)
+        _ = try insertRetimed(track, of: c.srcVideo, cuts: cuts)
+        _ = try insertScaled(track, CMTimeRange(start: source.end - edge, duration: edge), of: c.srcVideo, from: mainEnd, to: clipEnd)
+        videoEnd[k] = clipEnd
+
+        // Clip audio, cut at the same points as the video: the part of the source the audio track covers, with its
+        // ends mapped through the video's cuts (exactly mainStart / mainEnd when the audio covers the whole range).
+        if let srcAudio = c.srcAudio, let audioRange = c.audioRange, let audioTrack = audioTracks[k] {
+          let shared = CMTimeRangeGetIntersection(source, otherRange: audioRange)
+          if CMTimeCompare(shared.duration, .zero) > 0 {
+            let aStart = CMTimeMaximum(Self.retimedTime(shared.start, cuts: cuts), audioEnd[k])
+            let aEnd = CMTimeMinimum(Self.retimedTime(shared.end, cuts: cuts), mainEnd)
+            let audioCuts = Self.retimeCuts(from: (source: shared.start, output: aStart), to: (source: shared.end, output: aEnd), interior: interior)
+            if (try? insertRetimed(audioTrack, of: srcAudio, cuts: audioCuts)) == true {
+              audioEnd[k] = aEnd
+              audioVolumes[k].append((at: aStart, volume: c.clip.muted ? 0 : Float(max(0, c.clip.volume))))
+            }
+          }
+        }
+
+        placed.append(PlacedClip(trackID: track.trackID, bodyStart: bodyStart, bodyEnd: bodyEnd))
+        cursor = bodyEnd                            // advance by outDur only — never by a handle
+        continue
+      }
+
       // Handles in source seconds: d/2 × speed before trimStart / after trimEnd, clamped to the source.
       let head = max(0, min(halfIn.seconds * c.speed, c.start))
       let tail = max(0, min(halfOut.seconds * c.speed, c.sourceEnd.seconds - c.end))

@@ -1,7 +1,7 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { FONTS } from "@/src/editor/fonts";
 import { edgeDurations } from "@/src/editor/model/motion";
-import { clipDuration, outputOffsetOf } from "@/src/editor/model/timeline";
+import { clipDuration, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
 import { isSticker, type AnimEdge, type Align, type AspectRatio, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type Overlay } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
@@ -12,6 +12,8 @@ export type ExportEvent = { jobId: string } & (
   | { type: "cancelled" });
 
 export interface ExportAnimEdge { id: string; duration: number }
+/** `duration` source seconds played at `speed`. */
+export interface ExportSpeedSpan { duration: number; speed: number }
 export interface ExportKeyframe { t: number; x: number; y: number; scale: number; rotation: number; opacity: number }
 const copyKeyframe = (k: Keyframe): ExportKeyframe => ({ t: k.t, x: k.x, y: k.y, scale: k.scale, rotation: k.rotation, opacity: k.opacity });
 const toEdge = (e: AnimEdge | null, duration: number): ExportAnimEdge | null => (e && duration > 0 ? { id: e.id, duration } : null);
@@ -35,6 +37,7 @@ export interface ExportClip {
   filterIntensity: number; adjust: ClipAdjust;
   animIn: ExportAnimEdge | null; animOut: ExportAnimEdge | null; animCombo: string | null;
   keyframes: ExportKeyframe[];   // clip-local OUTPUT seconds, ascending; the pins inside the clip plus the nearest one each side
+  speedSpans: ExportSpeedSpan[]; // a speed curve as constant-speed spans in PLAYBACK order; [] = constant speed (`speed`)
 }
 /** Pins converted to output-local seconds, sorted, trimmed to [0, length] plus the last one before 0 and the first one after length. */
 function outputKeyframes(c: Clip, length: number): ExportKeyframe[] {
@@ -57,6 +60,7 @@ export function toExportClip(c: Clip): ExportClip {
     filterIntensity: c.filterIntensity, adjust: { ...c.adjust },
     animIn: toEdge(c.animation.in, edges.in), animOut: toEdge(c.animation.out, edges.out), animCombo: c.animation.combo,
     keyframes: outputKeyframes(c, length),
+    speedSpans: c.speedCurve ? playbackSpans(c) : [],
   };
 }
 export interface ExportEffect { type: string; start: number; end: number; intensity: number }
