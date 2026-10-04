@@ -1,5 +1,6 @@
 import Slider from "@react-native-community/slider";
 import { Switch, View } from "react-native";
+import { isKeyable } from "@/src/editor/model/chroma";
 import { setClipChroma } from "@/src/editor/model/ops";
 import { CHROMA, CHROMA_PRESETS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -38,6 +39,7 @@ export function ChromaSheet({ clipId, visible, onClose }: { clipId: string | nul
           {CHROMA_PRESETS.map((hex, i) => <Chip key={hex} label={PRESET_LABELS[i]} selected={on && same(color, hex)} disabled={!on} onPress={() => pickColor(hex)} />)}
         </View>
         <ColorRow value={color} onChange={pickColor} />
+        {on && !isKeyable(color) ? <Body muted style={{ fontSize: 12 }}>This colour is too grey to remove. Pick a stronger colour.</Body> : null}
         <Slider
           testID="chroma-strength"
           minimumValue={0} maximumValue={1} step={0.01}

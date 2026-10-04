@@ -1,7 +1,7 @@
 import type { EffectId, EffectItem } from "./types";
 
 /**
- * Deterministic time functions behind the ten timeline effects (spec 4.2). Mirrored by EffectMath.swift:
+ * Deterministic time functions behind the timeline effects (spec 4.2). Mirrored by EffectMath.swift:
  * keep constants and formulas identical. `t` = seconds since the effect's start, `d` = its duration, `k` = intensity.
  */
 export const EFFECT = {

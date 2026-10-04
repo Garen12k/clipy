@@ -69,3 +69,10 @@ export function chromaAlpha(r: number, g: number, b: number, key: string, streng
   const alpha = (d - tol) / CHROMA.soft;
   return Math.min(1, Math.max(0, alpha));
 }
+
+/** Whether a key colour can remove anything: a valid colour that is not grey (the same test `chromaAlpha` applies to the key). */
+export function isKeyable(key: string): boolean {
+  const rgb = hexToRgb(key);
+  if (!rgb) return false;
+  return rgbToHsv(rgb.r, rgb.g, rgb.b).s >= CHROMA.minSat;
+}

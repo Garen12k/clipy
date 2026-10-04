@@ -131,4 +131,13 @@ describe("ChromaSheet", () => {
     await view.rerender(<ChromaSheet clipId="gone" visible onClose={() => {}} />);
     expect(screen.queryByLabelText("Green screen")).toBeNull();
   });
+
+  test("a colour too grey to remove shows a hint; a keyable colour does not", async () => {
+    state().apply((p) => ({ ...p, layers: [{ ...p.layers[0], chroma: { color: "#FFFFFF", strength: 0.5 } }] }));
+    const view = await render(<ChromaSheet clipId="L" visible onClose={() => {}} />);
+    expect(screen.getByText("This colour is too grey to remove. Pick a stronger colour.")).toBeTruthy();
+    state().apply((p) => ({ ...p, layers: [{ ...p.layers[0], chroma: { color: "#00FF00", strength: 0.5 } }] }));
+    await view.rerender(<ChromaSheet clipId="L" visible onClose={() => {}} />);
+    expect(screen.queryByText("This colour is too grey to remove. Pick a stronger colour.")).toBeNull();
+  });
 });
