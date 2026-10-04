@@ -4,7 +4,7 @@ import { clipGainCurve, exportTrackCurve, type GainPoint } from "@/src/editor/mo
 import { trackEnd } from "@/src/editor/model/audioSync";
 import { edgeDurations } from "@/src/editor/model/motion";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
-import { DEFAULT_TEXT_STYLE, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
+import { DEFAULT_TEXT_STYLE, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -76,6 +76,8 @@ export interface ExportClip {
   gain: ExportGainPoint[];       // the clip's own sound: clip-local OUTPUT seconds; volume, mute and fades included (the export mixes with this)
   opacity: number;               // the clip's STATIC opacity 0–1; keyframe opacity travels in `keyframes` and the native side multiplies the two
   mask: MaskId;
+  blend: BlendId;                // how the clip composites over what is beneath it; main clips are always "normal"
+  chroma: { color: string; strength: number } | null;   // green-screen key; null = none
 }
 /** A layer as the export draws it: a clip placed on the timeline at `start` (composition seconds). */
 export type ExportLayer = ExportClip & { start: number };
@@ -103,15 +105,16 @@ export function toExportClip(c: Clip): ExportClip {
     speedSpans: hasSpeedCurve(c) ? playbackSpans(c) : [],
     gain: clipGainCurve(c),
     opacity: c.opacity, mask: c.mask,
+    blend: c.blend, chroma: c.chroma ? { color: c.chroma.color, strength: c.chroma.strength } : null,
   };
 }
 /** A layer has no transition or background of its own (both are ignored by the native side), so they are sent neutral. */
 export function toExportLayer(l: LayerClip): ExportLayer {
   return { ...toExportClip(l), start: l.start, transition: { type: "none", duration: 0 }, background: { type: "black", color: null } };
 }
-export interface ExportEffect { type: string; start: number; end: number; intensity: number }
+export interface ExportEffect { type: string; start: number; end: number; intensity: number; rect: { x: number; y: number; w: number; h: number } | null }
 export function toExportEffect(e: EffectItem): ExportEffect {
-  return { type: e.type, start: e.start, end: e.end, intensity: e.intensity };
+  return { type: e.type, start: e.start, end: e.end, intensity: e.intensity, rect: e.rect ? { ...e.rect } : null };
 }
 export interface ExportRequest {
   clips: ExportClip[];
