@@ -377,15 +377,30 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
     "lighten": "CILightenBlendMode", "darken": "CIDarkenBlendMode",
   ]
 
-  /// The layer `picture` blended onto `running` (an opaque full frame) with `mode`, cropped to the frame `rect`:
-  /// the blend filter with the picture as its input and the running frame as its background, and then — so that
-  /// nothing outside the picture can change, whatever a filter does where its input is transparent — that result
-  /// kept only where the picture has alpha (`CIBlendWithAlphaMask`), with the running frame everywhere else.
+  /// The layer `picture` blended onto `running` (an opaque full frame) with `mode`, cropped to the frame `rect`.
+  /// With the picture's colour Cs and alpha αs and the running frame B, the result is
+  /// `αs · Blend(Cs, B) + (1 − αs) · B` — the picture's alpha counts ONCE:
+  ///  1. `solid`: the picture made opaque, its colour kept (`CIColorMatrix` with the alpha row zeroed and an alpha
+  ///     bias of 1). `picture` is premultiplied (Cs·αs, αs); `CIColorMatrix` is one of the filters that work on
+  ///     unpremultiplied colour — it divides by alpha, applies the matrix and multiplies by the NEW alpha — so the
+  ///     output is (Cs, 1), not the darkened (Cs·αs, 1). Where αs is 0 there is no colour to recover (black), and
+  ///     step 3 gives that pixel no weight. The bias makes the result opaque everywhere, hence the crop.
+  ///     UNVERIFIED until first build: that `CIColorMatrix` unpremultiplies first. If it did not, soft edges of a
+  ///     blended layer would be too dark (never wrong where the picture is opaque).
+  ///  2. `mixed`: the blend filter with `solid` as its input and the running frame as its background — both
+  ///     opaque, so this is plain Blend(Cs, B).
+  ///  3. `mixed` kept in proportion to the picture's own alpha (`CIBlendWithAlphaMask`, the mask being the picture
+  ///     itself), with the running frame for the rest — so nothing outside the picture can change either.
+  /// (Handing the blend filter the picture with its alpha, as before, weighted soft edges by αs twice.)
   /// Nil (the caller draws the picture source-over, as for normal) for an unknown mode or a missing filter / key.
   static func blended(_ picture: CIImage, over running: CIImage, mode: String, rect: CGRect) -> CIImage? {
     let top = picture.cropped(to: rect)
     guard let name = blendFilters[mode],
-          let mixed = Adjust.filtered(top, name, [kCIInputBackgroundImageKey: running]),
+          let solid = Adjust.filtered(top, "CIColorMatrix", [
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1),
+          ]),
+          let mixed = Adjust.filtered(solid.cropped(to: rect), name, [kCIInputBackgroundImageKey: running]),
           let inside = Adjust.filtered(mixed.cropped(to: rect), "CIBlendWithAlphaMask", [
             kCIInputBackgroundImageKey: running,
             "inputMaskImage": top,

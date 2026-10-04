@@ -249,7 +249,10 @@ test("the compositor: one placement chain for still and moving clips; a fade is 
   expect(placed).toContain("guard opacity < 1 else { return over }");
   expect(placed).toContain("guard opacity > 0 else { return behind }");
   expect(placed).toContain("return dissolve(from: behind, to: over, progress: CGFloat(opacity)).cropped(to: rect)");
-  expect(all).not.toMatch(/inputAVector/);
+  // No alpha arithmetic anywhere in the fade. The one place that sets an alpha row is `blended` (a layer's blend mode), which makes
+  // its picture opaque for the blend filter — checked by chroma.parity.test.ts.
+  expect(placed).not.toMatch(/inputAVector/);
+  expect(all.replace(code(between(compositor, "static func blended(", "\n  }\n")), "")).not.toMatch(/inputAVector/);
   expect(all).not.toMatch(/static func faded\(/);
   expect(table).not.toMatch(/ClipyCompositor\.faded\(/);
   expect(table).not.toMatch(/movingFrame\([^)]*motion:/);

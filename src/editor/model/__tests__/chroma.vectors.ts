@@ -1,4 +1,7 @@
-/** Shared with the Swift mirror (Chroma.swift tests): keep expected values as plain numeric literals. */
+/**
+ * Shared with the Swift mirror (Chroma.swift tests): keep expected values as plain numeric literals.
+ * The Swift table (Tests/ChromaTests.swift) compares every result with a 1e-9 tolerance, never with `==`.
+ */
 export interface HsvVector { name: string; r: number; g: number; b: number; h: number; s: number; v: number }
 export interface HexVector { name: string; hex: string; rgb: { r: number; g: number; b: number } | null }
 export interface HueDistanceVector { a: number; b: number; d: number }
@@ -20,6 +23,9 @@ export const HSV_VECTORS: HsvVector[] = [
   { name: "yellow-green", r: 0.5, g: 1, b: 0, h: 90, s: 1, v: 1 },                       // 60 * ((0 - 0.5) / 1 + 2) = 60 * 1.5
   { name: "red towards magenta (wraps)", r: 1, g: 0, b: 0.25, h: 345, s: 1, v: 1 },      // 60 * (0 - 0.25) / 1 = -15 -> 345
   { name: "half-dark green", r: 0, g: 0.5, b: 0, h: 120, s: 1, v: 0.5 },
+  // max is b (the third branch): max 1, min 0, delta 1 -> s 1, v 1
+  { name: "violet", r: 0.5, g: 0, b: 1, h: 270, s: 1, v: 1 },    // 60 * ((0.5 - 0) / 1 + 4) = 60 * 4.5
+  { name: "azure", r: 0, g: 0.5, b: 1, h: 210, s: 1, v: 1 },     // 60 * ((0 - 0.5) / 1 + 4) = 60 * 3.5
   // inputs are clamped to 0-1; a non-finite input counts as 0
   { name: "out of range -> red", r: 2, g: -1, b: 0, h: 0, s: 1, v: 1 },
   { name: "NaN / Infinity -> 0 (green)", r: NaN, g: 1, b: Infinity, h: 120, s: 1, v: 1 },
@@ -74,12 +80,17 @@ export const ALPHA_VECTORS: AlphaVector[] = [
   { name: "black", r: 0, g: 0, b: 0, key: "#00FF00", strength: 1, alpha: 1 },
   { name: "near-black green", r: 0, g: 0.1, b: 0, key: "#00FF00", strength: 1, alpha: 1 },             // s 1, v 0.1 < 0.2
   { name: "pale green", r: 0.8, g: 1, b: 0.8, key: "#00FF00", strength: 1, alpha: 1 },                 // s = 0.2 / 1 = 0.2 < 0.25
+  // exactly ON a cut-off is not below it, so the pixel is keyed: both are hue 120, d = 0 -> (0 - 36) / 10 < 0 -> 0
+  { name: "green with value exactly 0.2", r: 0, g: 0.2, b: 0, key: "#00FF00", strength: 0.5, alpha: 0 },            // s 1, v 0.2: 0.2 < 0.2 is false
+  { name: "green with saturation exactly 0.25", r: 0.75, g: 1, b: 0.75, key: "#00FF00", strength: 0.5, alpha: 0 },  // s = (1 - 0.75) / 1 = 0.25: 0.25 < 0.25 is false
   // the blue key: hue 240
   { name: "pure blue, blue key", r: 0, g: 0, b: 1, key: "#0000FF", strength: 0.5, alpha: 0 },
   { name: "pure green, blue key", r: 0, g: 1, b: 0, key: "#0000FF", strength: 1, alpha: 1 },           // d = 120: (120 - 60) / 10 -> 1
   { name: "pure blue, green key", r: 0, g: 0, b: 1, key: "#00FF00", strength: 1, alpha: 1 },
   // the hue distance wraps: red key (hue 0), pixel (1, 0, 0.25) hue 345, d = 15
   { name: "wrap-around, strength 0 (ramp)", r: 1, g: 0, b: 0.25, key: "#FF0000", strength: 0, alpha: 0.3 },   // (15 - 12) / 10
+  // the same distance on the other side: pixel (1, 0.25, 0), max is r: hue 60 * (0.25 - 0) / 1 = 15, d = 15, tol 12
+  { name: "red key, hue 15, strength 0 (ramp)", r: 1, g: 0.25, b: 0, key: "#FF0000", strength: 0, alpha: 0.3 },   // (15 - 12) / 10
   // strength is clamped to 0-1
   { name: "strength above 1 = 1", r: 0.75, g: 1, b: 0, key: "#00FF00", strength: 5, alpha: 0 },        // tol 60, d 45
   { name: "strength below 0 = 0", r: 0.5, g: 1, b: 0, key: "#00FF00", strength: -3, alpha: 1 },        // tol 12, d 30

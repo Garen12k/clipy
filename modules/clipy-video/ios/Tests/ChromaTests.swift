@@ -4,7 +4,8 @@ import XCTest
 @testable import ClipyVideo
 
 /// The vectors of src/editor/model/__tests__/chroma.vectors.ts. The tables below are checked against the TS vectors
-/// by src/editor/model/__tests__/chroma.parity.test.ts — keep the literals identical.
+/// by src/editor/model/__tests__/chroma.parity.test.ts — keep the literals identical. Results are compared with a
+/// 1e-9 tolerance, never with `==`.
 struct ChromaHsvVector {
   let name: String
   let r: Double
@@ -51,6 +52,8 @@ let chromaHsvVectors: [ChromaHsvVector] = [
   ChromaHsvVector(name: "yellow-green", r: 0.5, g: 1, b: 0, h: 90, s: 1, v: 1),
   ChromaHsvVector(name: "red towards magenta (wraps)", r: 1, g: 0, b: 0.25, h: 345, s: 1, v: 1),
   ChromaHsvVector(name: "half-dark green", r: 0, g: 0.5, b: 0, h: 120, s: 1, v: 0.5),
+  ChromaHsvVector(name: "violet", r: 0.5, g: 0, b: 1, h: 270, s: 1, v: 1),
+  ChromaHsvVector(name: "azure", r: 0, g: 0.5, b: 1, h: 210, s: 1, v: 1),
   ChromaHsvVector(name: "out of range -> red", r: 2, g: -1, b: 0, h: 0, s: 1, v: 1),
   ChromaHsvVector(name: "NaN / Infinity -> 0 (green)", r: .nan, g: 1, b: .infinity, h: 120, s: 1, v: 1),
 ]
@@ -94,10 +97,13 @@ let chromaAlphaVectors: [ChromaAlphaVector] = [
   ChromaAlphaVector(name: "black", r: 0, g: 0, b: 0, key: "#00FF00", strength: 1, alpha: 1),
   ChromaAlphaVector(name: "near-black green", r: 0, g: 0.1, b: 0, key: "#00FF00", strength: 1, alpha: 1),
   ChromaAlphaVector(name: "pale green", r: 0.8, g: 1, b: 0.8, key: "#00FF00", strength: 1, alpha: 1),
+  ChromaAlphaVector(name: "green with value exactly 0.2", r: 0, g: 0.2, b: 0, key: "#00FF00", strength: 0.5, alpha: 0),
+  ChromaAlphaVector(name: "green with saturation exactly 0.25", r: 0.75, g: 1, b: 0.75, key: "#00FF00", strength: 0.5, alpha: 0),
   ChromaAlphaVector(name: "pure blue, blue key", r: 0, g: 0, b: 1, key: "#0000FF", strength: 0.5, alpha: 0),
   ChromaAlphaVector(name: "pure green, blue key", r: 0, g: 1, b: 0, key: "#0000FF", strength: 1, alpha: 1),
   ChromaAlphaVector(name: "pure blue, green key", r: 0, g: 0, b: 1, key: "#00FF00", strength: 1, alpha: 1),
   ChromaAlphaVector(name: "wrap-around, strength 0 (ramp)", r: 1, g: 0, b: 0.25, key: "#FF0000", strength: 0, alpha: 0.3),
+  ChromaAlphaVector(name: "red key, hue 15, strength 0 (ramp)", r: 1, g: 0.25, b: 0, key: "#FF0000", strength: 0, alpha: 0.3),
   ChromaAlphaVector(name: "strength above 1 = 1", r: 0.75, g: 1, b: 0, key: "#00FF00", strength: 5, alpha: 0),
   ChromaAlphaVector(name: "strength below 0 = 0", r: 0.5, g: 1, b: 0, key: "#00FF00", strength: -3, alpha: 1),
   ChromaAlphaVector(name: "grey key, pure green", r: 0, g: 1, b: 0, key: "#808080", strength: 1, alpha: 1),
@@ -150,7 +156,7 @@ final class ChromaTests: XCTestCase {
   }
 
   func testRgbToHsvMatchesTheVectors() {
-    XCTAssertEqual(chromaHsvVectors.count, 15)
+    XCTAssertEqual(chromaHsvVectors.count, 17)
     for v in chromaHsvVectors {
       let got = Chroma.rgbToHsv(v.r, v.g, v.b)
       XCTAssertEqual(got.h, v.h, accuracy: 1e-9, v.name)
@@ -164,10 +170,10 @@ final class ChromaTests: XCTestCase {
     for v in chromaHexVectors {
       let got = Chroma.hexToRgb(v.hex)
       guard let want = v.rgb else { XCTAssertTrue(got == nil, v.name); continue }
-      guard let got else { XCTFail(v.name); continue }
-      XCTAssertEqual(got.r, want[0], accuracy: 1e-12, v.name)
-      XCTAssertEqual(got.g, want[1], accuracy: 1e-12, v.name)
-      XCTAssertEqual(got.b, want[2], accuracy: 1e-12, v.name)
+      guard let have = got else { XCTFail(v.name); continue }
+      XCTAssertEqual(have.r, want[0], accuracy: 1e-12, v.name)
+      XCTAssertEqual(have.g, want[1], accuracy: 1e-12, v.name)
+      XCTAssertEqual(have.b, want[2], accuracy: 1e-12, v.name)
     }
     // ASCII hex digits only, and nothing around them.
     XCTAssertTrue(Chroma.hexToRgb(" #00FF00") == nil)
@@ -183,7 +189,7 @@ final class ChromaTests: XCTestCase {
   }
 
   func testAlphaMatchesTheVectors() {
-    XCTAssertEqual(chromaAlphaVectors.count, 28)
+    XCTAssertEqual(chromaAlphaVectors.count, 31)
     for v in chromaAlphaVectors {
       XCTAssertEqual(Chroma.alpha(r: v.r, g: v.g, b: v.b, hex: v.key, strength: v.strength), v.alpha, accuracy: 1e-9, v.name)
     }
@@ -325,6 +331,27 @@ final class ChromaTests: XCTestCase {
     let img = ClipyCompositor.overlayFrame(layer(blend: "multiply", opacity: 0.5), source: black, over: red, time: 0, size: size)
     XCTAssertEqual(rgba(img, 32, 18).r, 0.5, accuracy: 0.05)
     XCTAssertEqual(rgba(img, 2, 2).r, 1, accuracy: 0.03)
+  }
+
+  /// A half-transparent picture counts half, not a quarter: αs · Blend(Cs, B) + (1 − αs) · B. Black at half alpha
+  /// multiplied onto red is half-way to black; white at half alpha screened onto black is half-way to white (which
+  /// also shows that the picture's colour is not darkened by its alpha before the blend).
+  func testAHalfTransparentPictureIsBlendedAtHalfWeight() throws {
+    let halfBlack = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0.5)).cropped(to: rect)
+    let onRed = try XCTUnwrap(ClipyCompositor.blended(halfBlack, over: red, mode: "multiply", rect: rect))
+    XCTAssertEqual(onRed.extent, rect)
+    XCTAssertEqual(rgba(onRed, 32, 18).r, 0.5, accuracy: 0.05)
+    XCTAssertEqual(rgba(onRed, 32, 18).a, 1, accuracy: 0.03)
+    let halfWhite = CIImage(color: CIColor(red: 1, green: 1, blue: 1, alpha: 0.5)).cropped(to: rect)
+    let onBlack = try XCTUnwrap(ClipyCompositor.blended(halfWhite, over: black, mode: "screen", rect: rect))
+    XCTAssertEqual(rgba(onBlack, 32, 18).r, 0.5, accuracy: 0.05)
+    XCTAssertEqual(rgba(onBlack, 32, 18).g, 0.5, accuracy: 0.05)
+    XCTAssertEqual(rgba(onBlack, 32, 18).a, 1, accuracy: 0.03)
+    // A fully transparent picture changes nothing, whatever its colour.
+    let clear = CIImage(color: CIColor(red: 1, green: 1, blue: 1, alpha: 0)).cropped(to: rect)
+    let untouched = try XCTUnwrap(ClipyCompositor.blended(clear, over: red, mode: "screen", rect: rect))
+    XCTAssertEqual(rgba(untouched, 32, 18).r, 1, accuracy: 0.03)
+    XCTAssertEqual(rgba(untouched, 32, 18).g, 0, accuracy: 0.03)
   }
 
   func testAnUnknownBlendModeIsNotBlended() {

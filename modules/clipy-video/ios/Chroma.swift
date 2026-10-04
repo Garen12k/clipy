@@ -118,8 +118,9 @@ enum Chroma {
     return Double(Int((unit(strength) * 100).rounded())) / 100
   }
 
-  /// The colour cube for `CIColorCube`: `cube × cube × cube` entries of four Float32 each, PREMULTIPLIED RGBA —
-  /// for the lattice colour (r, g, b) with `a = alpha(...)`, the entry is (r·a, g·a, b·a, a).
+  /// The colour cube for `CIColorCubeWithColorSpace`: `cube × cube × cube` entries of four Float32 each,
+  /// PREMULTIPLIED RGBA — for the lattice colour (r, g, b) with `a = alpha(...)`, the entry is (r·a, g·a, b·a, a).
+  /// The lattice colours are DISPLAY (sRGB-encoded) values, the ones chroma.ts keys: `apply` names that space.
   /// ORDER (as Apple documents `inputCubeData`: columns and rows indexed by red and green, planes by blue): RED
   /// varies fastest, then green, then blue — entry index = red + green·N + blue·N². Unverified until first build.
   /// Nil when the key is not `#RRGGBB`.
@@ -160,15 +161,26 @@ enum Chroma {
   }
 
   /// `image` with the key colour made see-through (premultiplied), cropped to the image's own extent. The picture
-  /// handed in is opaque (the green screen runs before the mask), which is what `CIColorCube` expects of its input.
-  /// A key that cannot key anything, an image without a finite extent, or a Core Image without the filter / its two
-  /// keys → `image` itself, unchanged.
+  /// handed in is opaque (the green screen runs before the mask), which is what a colour cube expects of its input.
+  ///
+  /// The cube is looked up in DISPLAY values: `CIColorCubeWithColorSpace` with sRGB as its colour space. The keying
+  /// maths (hue, saturation, value and their cut-offs) is written for the sRGB-encoded numbers a colour picker
+  /// shows — `#00FF00` is (0, 1, 0) there — while Core Image's working space is linear, where the same pixel has
+  /// other numbers and a plain `CIColorCube` would compare the wrong ones. As Apple documents the filter, it takes
+  /// the picture into `inputColorSpace`, applies the cube and takes the result back to the working space.
+  /// Unverified until first build: the filter's name and its three keys, and that the premultiplied entries come
+  /// through that round trip as they do through `CIColorCube`.
+  ///
+  /// A key that cannot key anything, an image without a finite extent, no sRGB colour space, or a Core Image without
+  /// the filter / one of its three keys → `image` itself, unchanged.
   static func apply(to image: CIImage, key: String, strength: Double) -> CIImage {
     let extent = image.extent
     guard !extent.isInfinite, !extent.isEmpty, usableKey(key) != nil, let data = cubeData(key: key, strength: strength),
-          let keyed = Adjust.filtered(image, "CIColorCube", [
+          let space = CGColorSpace(name: CGColorSpace.sRGB),
+          let keyed = Adjust.filtered(image, "CIColorCubeWithColorSpace", [
             "inputCubeDimension": NSNumber(value: cube),
             "inputCubeData": data as NSData,
+            "inputColorSpace": space,
           ])
     else { return image }
     return keyed.cropped(to: extent)

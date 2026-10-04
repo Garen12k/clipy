@@ -95,10 +95,15 @@ describe("Chroma.swift mirrors chroma.ts", () => {
     inOrder(body, ["for blue in 0..<n {", "for green in 0..<n {", "for red in 0..<n {", "alpha(r: r, g: g, b: b, key: rgb, strength: ", "Float(r * a)", "Float(g * a)", "Float(b * a)", "Float(a)"]);
     expect(body).toMatch(/lock\.lock\(\)/);
     expect(body).toMatch(/uppercased\(\)/);
+  });
+  it("puts the cube's lattice points at i / (N − 1), so the first is 0 and the last is 1", () => {
+    const body = between(all, "static func cubeData(", "\n  }\n");
+    inOrder(body, ["let n = cube", "guard n >= 2 else { return nil }", "let top = Double(n - 1)", "let r = Double(red) / top", "let g = Double(green) / top", "let b = Double(blue) / top"]);
+  });
+  it("looks the cube up in display (sRGB) values: the keying maths is written for the colours the user sees", () => {
     const apply = between(all, "static func apply(", "\n  }\n");
-    expect(apply).toContain('"CIColorCube"');
-    expect(apply).toContain('"inputCubeDimension"');
-    expect(apply).toContain('"inputCubeData"');
+    inOrder(apply, ["CGColorSpace(name: CGColorSpace.sRGB)", '"CIColorCubeWithColorSpace"', '"inputCubeDimension": NSNumber(value: cube)', '"inputCubeData"', '"inputColorSpace": space']);
+    expect(apply).not.toContain('"CIColorCube"');
     expect(apply).toMatch(/else \{ return image \}/);
     expect(apply).toMatch(/\.cropped\(to: extent\)/);
   });
@@ -127,6 +132,12 @@ describe("the Swift test table embeds every chroma vector", () => {
   });
   it.each(HUE_DISTANCE_VECTORS.map((v) => [`${v.a} / ${v.b}`, v] as const))("hue distance: %s", (_name, v) => {
     expect(table).toContain(`ChromaHueVector(a: ${fmt(v.a)}, b: ${fmt(v.b)}, d: ${fmt(v.d)})`);
+  });
+  it("never unwraps a constant under its own name in the same scope (a redeclaration in Swift)", () => {
+    const text = code(table);
+    for (const m of text.matchAll(/guard let (\w+) else/g)) {
+      expect(text).not.toMatch(new RegExp(`\\blet ${m[1]} = `));
+    }
   });
   it("the tables are run against the Swift functions", () => {
     expect(table).toMatch(/Chroma\.alpha\(r: v\.r, g: v\.g, b: v\.b, hex: v\.key, strength: v\.strength\)/);
@@ -220,8 +231,19 @@ describe("the compositor", () => {
   });
   it("the blended picture is kept inside the picture's own alpha, over the running frame", () => {
     const body = between(all, "static func blended(", "\n  }\n");
-    inOrder(body, ["blendFilters[mode]", "Adjust.filtered(", '"CIBlendWithAlphaMask"', '"inputMaskImage"', "return inside.cropped(to: rect)"]);
+    inOrder(body, ["blendFilters[mode]", "Adjust.filtered(", '"CIBlendWithAlphaMask"', '"inputMaskImage": top', "return inside.cropped(to: rect)"]);
     expect(body).toMatch(/else \{ return nil \}/);
+  });
+  it("the blend filter gets an OPAQUE picture; the picture's alpha is used once, in the mask", () => {
+    const body = between(all, "static func blended(", "\n  }\n");
+    inOrder(body, [
+      "let top = picture.cropped(to: rect)", "blendFilters[mode]", 'let solid = Adjust.filtered(top, "CIColorMatrix"',
+      '"inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0)', '"inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 1)',
+      "Adjust.filtered(solid.cropped(to: rect), name, [kCIInputBackgroundImageKey: running])", '"CIBlendWithAlphaMask"', '"inputMaskImage": top',
+    ]);
+    // The blend filter never sees the picture with its own alpha.
+    expect(body).not.toMatch(/Adjust\.filtered\(top, name/);
+    expect(table).toMatch(/func testAHalfTransparentPictureIsBlendedAtHalfWeight\(\)/);
   });
   it("passes the effect's rectangle to the renderer", () => {
     const body = between(all, "func startRequest(", "\n  }\n");
