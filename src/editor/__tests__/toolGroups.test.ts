@@ -2,7 +2,7 @@ import { groupForSelection, TOOL_GROUPS } from "../toolGroups";
 
 test("five groups in order with the spec's tools", () => {
   expect(TOOL_GROUPS.map((g) => [g.id, g.label, g.tools])).toEqual([
-    ["edit", "Edit", ["split", "trim", "transform", "animate", "keyframe", "crop", "overlay", "opacity", "mask", "blend", "chroma", "replace", "reverse", "freeze", "duplicate", "delete", "ratio"]],
+    ["edit", "Edit", ["split", "trim", "transform", "animate", "keyframe", "crop", "overlay", "opacity", "mask", "blend", "chroma", "replace", "reverse", "freeze", "duplicate", "delete", "ratio", "cover"]],
     ["effects", "Effects", ["filter", "adjust", "effect", "speed", "transition", "templates", "background"]],
     ["text", "Text", ["text", "captions", "animate", "keyframe"]],
     ["stickers", "Stickers", ["sticker", "animate", "keyframe"]],
@@ -15,7 +15,7 @@ test("every tool appears exactly once, except Animate and Keyframe which sit in 
   const shared = ["animate", "keyframe"];
   const rest = all.filter((t) => !shared.includes(t));
   expect(new Set(rest).size).toBe(rest.length);
-  expect(rest).toHaveLength(29);
+  expect(rest).toHaveLength(30);
   for (const t of shared) expect(TOOL_GROUPS.filter((g) => (g.tools as string[]).includes(t)).map((g) => g.id)).toEqual(["edit", "text", "stickers"]);
   for (const g of TOOL_GROUPS) expect(new Set(g.tools).size).toBe(g.tools.length);
 });
@@ -59,4 +59,8 @@ test("an audio selection jumps to Audio", () => {
 test("audio sub-row tools are in no group; the old music id is gone", () => {
   const all = TOOL_GROUPS.flatMap((g) => g.tools) as string[];
   for (const t of ["audioVolume", "audioFade", "audioDuplicate", "audioDelete", "music"]) expect(all).not.toContain(t);
+});
+
+test("Cover closes the Edit list, after Ratio", () => {
+  expect(TOOL_GROUPS[0].tools.slice(-3)).toEqual(["delete", "ratio", "cover"]);
 });

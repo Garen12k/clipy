@@ -192,6 +192,22 @@ test("Transform and Background open their sheets", async () => {
   expect(screen.getByRole("button", { name: "Rotate 90°" })).toBeTruthy();
 });
 
+test("Cover closes the Edit row, needs no selection and opens the Cover sheet", async () => {
+  await renderBar();
+  const row = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
+  expect(row.slice(-2)).toEqual(["Ratio", "Cover"]);
+  expect(screen.getByRole("button", { name: "Cover" })).toBeEnabled();
+  expect(screen.queryByRole("header", { name: "Cover" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "Cover" }));
+  expect(screen.getByRole("header", { name: "Cover" })).toBeTruthy();
+});
+
+test("Cover is disabled for an empty project", async () => {
+  useEditorStore.getState().setProject(makeProject());
+  await renderBar();
+  expect(screen.getByRole("button", { name: "Cover" })).toBeDisabled();
+});
+
 const pick = pickMedia as jest.Mock;
 const importMedia = storage.importMedia as jest.Mock;
 const videoAsset = { uri: "file:///new.mov", kind: "video" as const, durationSec: 9, width: 1920, height: 1080 };

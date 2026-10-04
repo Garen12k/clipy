@@ -26,6 +26,7 @@ import { BeatsSheet } from "./BeatsSheet";
 import { CaptionsSheet } from "./CaptionsSheet";
 import { ChromaSheet } from "./ChromaSheet";
 import { ClipAnimationSheet } from "./ClipAnimationSheet";
+import { CoverSheet } from "./CoverSheet";
 import { CropScreen } from "./CropScreen";
 import { EffectSheet } from "./EffectSheet";
 import { EffectStrengthSheet } from "./EffectStrengthSheet";
@@ -63,7 +64,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | "opacity" | "mask" | "blend" | "chroma" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | "opacity" | "mask" | "blend" | "chroma" | "cover" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useItemClip(selectedId);
   /** A layer is selected: the main-track tools (Split, Freeze, Ratio, Transition, Background) do not apply. */
@@ -203,6 +204,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     duplicate: { label: "Duplicate", icon: "copy", disabled: noSel, onPress: duplicateSelected },
     delete: { label: "Delete", icon: "trash", disabled: noSel, onPress: () => { if (selectedId) { haptic("medium"); apply((p) => deleteClip(p, selectedId)); } } },
     ratio: { label: "Ratio", icon: "phone-portrait", disabled: layerSel, onPress: () => setSheet("ratio") },
+    cover: { label: "Cover", icon: "image-outline", disabled: !hasClips, onPress: () => setSheet("cover") },
     filter: { label: "Filter", icon: "color-filter", disabled: noSel, onPress: () => setSheet("filter") },
     speed: { label: "Speed", icon: "speedometer", disabled: noSel || photoSel, onPress: () => setSheet("speed") },
     transition: { label: "Transition", icon: "swap-horizontal", disabled: noSel || layerSel || selectedIndex === clipCount - 1, onPress: () => onTransitionChange(selectedIndex) },
@@ -242,6 +244,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
         {TOOL_GROUPS.map((g) => <ToolButton key={g.id} role="tab" label={g.label} icon={g.icon} active={g.id === group} onPress={() => { if (g.id !== group) haptic("light"); setGroup(g.id); }} />)}
       </View>
       <RatioSheet visible={sheet === "ratio"} onClose={() => setSheet(null)} />
+      <CoverSheet visible={sheet === "cover"} onClose={() => setSheet(null)} />
       <TrimSheet clipId={selectedId} visible={sheet === "trim"} onClose={() => setSheet(null)} />
       <SpeedSheet clipId={selectedId} visible={sheet === "speed"} onClose={() => setSheet(null)} />
       <FilterSheet clipId={selectedId} visible={sheet === "filter"} onClose={() => setSheet(null)} />

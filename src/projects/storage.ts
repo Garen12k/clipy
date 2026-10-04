@@ -1,10 +1,10 @@
-import { totalDuration } from "@/src/editor/model/timeline";
+import { coverTimeOf, frameAt, totalDuration } from "@/src/editor/model/timeline";
 import { migrateProject } from "@/src/editor/model/migrate";
 import { DEFAULT_EXPORT_SETTINGS, newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AudioKind, type AudioTrack, type Clip, type LayerClip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
 
 export interface PickedAsset { uri: string; kind: "video" | "photo"; durationSec: number; width: number; height: number; fileName?: string }
-export interface ProjectSummary { id: string; name: string; durationSec: number; updatedAt: string; thumbUri: string | null; broken: boolean; postedTo: PostPlatform[] }
+export interface ProjectSummary { id: string; name: string; durationSec: number; updatedAt: string; thumbUri: string | null; broken: boolean; postedTo: PostPlatform[]; coverTitle: string }
 export interface StorageDeps { thumbnail(uri: string, timeMs: number): Promise<string>; newId(): string; nowIso(): string }
 
 const extOf = (s?: string) => /\.([A-Za-z0-9]+)$/.exec(s ?? "")?.[1]?.toLowerCase();
@@ -16,6 +16,8 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const projectDir = (id: string) => `${root}/${id}`;
   const jsonPath = (id: string) => `${projectDir(id)}/project.json`;
   const thumbPath = (id: string) => `${projectDir(id)}/thumb.jpg`;
+  const coverPath = (id: string, time: number) => `${projectDir(id)}/cover-${Math.round(time * 1000)}.jpg`;
+  const isCoverName = (name: string) => /^cover-\d+\.jpg$/.test(name);
 
   function parse(text: string): Project { return migrateProject(JSON.parse(text)); }
 
@@ -42,6 +44,26 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       const tmp = await deps.thumbnail(first.sourceUri, Math.min(500, Math.max(0, first.sourceDuration * 1000 - 1)));
       await fs.copy(tmp, thumbPath(p.id));
     } catch (e) { console.warn("thumbnail failed", e); }
+  }
+
+  /**
+   * The drafts list's picture of the cover: `cover-<ms>.jpg` holds the frame at the cover time (read clamped), written
+   * only when missing. Older cover files go once the new one is there; a project without a cover keeps none.
+   */
+  async function writeCover(p: Project): Promise<void> {
+    try {
+      const names = await fs.list(projectDir(p.id));
+      const want = p.cover ? coverPath(p.id, coverTimeOf(p)) : null;
+      if (want && !(await fs.exists(want))) {
+        const f = frameAt(p, coverTimeOf(p));
+        if (!f) return;
+        await fs.copy(f.clip.kind === "photo" ? f.clip.sourceUri : await deps.thumbnail(f.clip.sourceUri, Math.round(f.sourceTime * 1000)), want);
+      }
+      for (const name of names) {
+        const path = `${projectDir(p.id)}/${name}`;
+        if (isCoverName(name) && path !== want) await fs.remove(path);
+      }
+    } catch (e) { console.warn("cover failed", e); }
   }
 
   async function importMedia(projectId: string, assets: PickedAsset[]): Promise<{ clips: Clip[]; failed: number }> {
@@ -94,10 +116,11 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     for (const id of await fs.list(root)) {
       try {
         const p = parse(await fs.readText(jsonPath(id)));
+        const cover = p.cover ? coverPath(id, coverTimeOf(p)) : null;
         out.push({ id: p.id, name: p.name, durationSec: totalDuration(p), updatedAt: p.updatedAt,
-          thumbUri: (await fs.exists(thumbPath(id))) ? thumbPath(id) : null, broken: false,
-          postedTo: POST_PLATFORMS.filter((pl) => p.posts.some((r) => r.platform === pl)) });
-      } catch { out.push({ id, name: "Can't open", durationSec: 0, updatedAt: "", thumbUri: null, broken: true, postedTo: [] }); }
+          thumbUri: cover && (await fs.exists(cover)) ? cover : (await fs.exists(thumbPath(id))) ? thumbPath(id) : null, broken: false,
+          postedTo: POST_PLATFORMS.filter((pl) => p.posts.some((r) => r.platform === pl)), coverTitle: p.cover?.title ?? "" });
+      } catch { out.push({ id, name: "Can't open", durationSec: 0, updatedAt: "", thumbUri: null, broken: true, postedTo: [], coverTitle: "" }); }
     }
     return out.sort((a, b) => Number(a.broken) - Number(b.broken) || b.updatedAt.localeCompare(a.updatedAt));
   }
@@ -127,6 +150,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const copy: Project = { ...project, id: copyId, name: `${project.name} copy`, clips, layers, audioTracks, createdAt: deps.nowIso(), updatedAt: deps.nowIso(), posts: [] };
     await saveProject(copy);
     if (await fs.exists(thumbPath(id))) await fs.copy(thumbPath(id), thumbPath(copyId));
+    for (const name of await fs.list(projectDir(id))) if (isCoverName(name)) await fs.copy(`${projectDir(id)}/${name}`, `${projectDir(copyId)}/${name}`);
     return copy;
   }
 
@@ -147,7 +171,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   return {
     projectDir, createProject, listProjects, loadProject, saveProject,
     deleteProject: async (id: string) => { await fs.remove(projectDir(id)); },
-    duplicateProject, renameProject, importAudio, importMedia, saveStill,
+    duplicateProject, renameProject, importAudio, importMedia, saveStill, writeCover,
   };
 }
 
