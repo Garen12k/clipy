@@ -179,7 +179,7 @@ test("the request records decode the new fields with the defaults", () => {
   const clip = between(session, "struct ExportClip: Record {", "\n}");
   expect(clip).toMatch(/@Field var filterIntensity: Double = 1\b/);
   expect(clip).toMatch(/@Field var adjust: ExportAdjust = ExportAdjust\(\)/);
-  expect(recordFields("ExportEffect")).toEqual(["type", "start", "end", "intensity"]);
+  expect(recordFields("ExportEffect")).toEqual(["type", "start", "end", "intensity", "rect"]);
   expect(between(session, "struct ExportRequest: Record {", "\n}")).toMatch(/@Field var effects: \[ExportEffect\] = \[\]/);
 });
 

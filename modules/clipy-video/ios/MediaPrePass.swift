@@ -66,6 +66,8 @@ extension ExportLayer {
     out.gain = gain
     out.opacity = opacity
     out.mask = mask
+    out.blend = blend
+    out.chroma = chroma
     return out
   }
 }
@@ -139,6 +141,9 @@ enum MediaPrePass {
     // Opacity and mask belong to the picture, whichever file it is read from.
     out.opacity = clip.opacity
     out.mask = clip.mask
+    // So do the blend mode and the green screen.
+    out.blend = clip.blend
+    out.chroma = clip.chroma
     return out
   }
 
