@@ -1,10 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
+import { clipStartTimes, outputOffsetOf } from "@/src/editor/model/timeline";
 import { isPhoto, type Clip } from "@/src/editor/model/types";
+import { useEditorStore } from "@/src/editor/store";
 import { formatSpeed } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { STRIP_HEIGHT, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
+import { KeyframeDots } from "./KeyframeDots";
 import { getThumb } from "./thumbnails";
 
 const thumbKey = (uri: string, t: number) => `${uri}@${t}`;
@@ -17,6 +20,13 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
   const slotWidth = thumbInterval(pixelsPerSecond) * pixelsPerSecond;
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const photo = isPhoto(clip);
+  const showDots = selected && clip.keyframes.length > 0;
+  // Where this clip starts on the timeline (a dot press seeks to start + the pin's output offset). Only read while dots show.
+  const clipStart = useEditorStore((s) => {
+    if (!showDots || !s.project) return 0;
+    const i = s.project.clips.findIndex((c) => c.id === clip.id);
+    return i < 0 ? 0 : clipStartTimes(s.project)[i];
+  });
 
   useEffect(() => {
     if (missing || photo) return;
@@ -70,6 +80,10 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
           </View>
         )}
       </View>
+      {showDots && (
+        <KeyframeDots times={clip.keyframes.map((k) => outputOffsetOf(clip, k.t))} width={width} pps={pixelsPerSecond}
+          onPress={(offset) => useEditorStore.getState().seek(clipStart + offset)} />
+      )}
       {children}
     </Pressable>
   );

@@ -8,6 +8,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { SHAPES } from "@/src/editor/effects";
 import { theme } from "@/src/theme/theme";
 import { LANE_HEIGHT } from "../timelineLayout";
+import { KeyframeDots } from "./KeyframeDots";
 
 const HANDLE_W = 12;
 
@@ -36,6 +37,9 @@ export function OverlayPill({ overlay: o, selected, onPress }: { overlay: Overla
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: isSticker(o) ? theme.colors.laneSticker : theme.colors.laneText,
           borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
         <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12 }}>{label}</Text>
+        {selected && o.keyframes.length > 0 && (
+          <KeyframeDots times={o.keyframes.map((k) => k.t)} width={width} pps={pps} onPress={(t) => store.seek(o.start + t)} />
+        )}
         {selected && (
           <>
             <GestureDetector gesture={gestures.left}><View accessibilityLabel="Text start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>
