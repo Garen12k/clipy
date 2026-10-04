@@ -1,4 +1,4 @@
-import type { AnimComboId, AnimInId, AnimLoopId, Clip, ClipTransform, Keyframe, Overlay } from "./types";
+import { clampOpacity, type AnimComboId, type AnimInId, type AnimLoopId, type Clip, type ClipTransform, type Keyframe, type Overlay } from "./types";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, sourceTimeAt } from "./timeline";
 
 /**
@@ -168,7 +168,8 @@ export function clipBaseAt(clip: Clip, offsetInClip: number): KeyValues {
 
 /**
  * A clip's placement and opacity at `offsetInClip` (output seconds, clamped to the clip): base + In / Out, or + Combo.
- * Flips come from the static transform; the transform is NOT clamped to TRANSFORM_LIMITS; opacity is clamped to 0–1.
+ * Flips come from the static transform; the transform is NOT clamped to TRANSFORM_LIMITS; the motion opacity is clamped to 0–1 and
+ * multiplied by the clip's own `opacity` (0–1; a default clip: × 1).
  * A non-finite offset gives the base at the clip's start with no animation.
  */
 export function resolveClipMotion(clip: Clip, offsetInClip: number): { transform: ClipTransform; opacity: number } {
@@ -184,7 +185,7 @@ export function resolveClipMotion(clip: Clip, offsetInClip: number): { transform
       : edgeDelta(a.in, a.out, local, length, MOTION.slideClip);
   }
   const v = combine(base, delta);
-  return { transform: { ...clip.transform, x: v.x, y: v.y, scale: v.scale, rotation: v.rotation }, opacity: clamp01(v.opacity) };
+  return { transform: { ...clip.transform, x: v.x, y: v.y, scale: v.scale, rotation: v.rotation }, opacity: clamp01(v.opacity) * clampOpacity(clip.opacity) };
 }
 
 /** Base values of a text / sticker at project time `time`: its keyframes (at `time − start`) or its own placement with opacity 1. */

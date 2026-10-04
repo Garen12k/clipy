@@ -1,14 +1,14 @@
 import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
-import { clipAt, clipDuration, curveSteps, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
+import { clipAt, clipDuration, curveSteps, findItem, layerEnd, sourceAfter, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampClipAnimation, clampClipKeyframes, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
-  CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
-  MIN_CLIP_SECONDS, minAudioDuration, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
+  clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   type AnimEdge, type AspectRatio, type AudioTrack, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type CropRect, type EffectId, type EffectItem, type FilterId,
-  type Keyframe, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
+  type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
 } from "./types";
 import { totalDuration } from "./timeline";
 import type { Template } from "../templates";
@@ -112,13 +112,13 @@ export function moveClip(p: Project, clipId: string, toIndex: number): Project {
 }
 
 export function deleteClip(p: Project, clipId: string): Project {
-  if (!p.clips.some((c) => c.id === clipId)) return p;
+  if (!p.clips.some((c) => c.id === clipId)) return deleteLayer(p, clipId);   // a layer's id: the layer goes
   return touch(p, { clips: normaliseTransitions(p.clips.filter((c) => c.id !== clipId)) });
 }
 
 export function duplicateClip(p: Project, clipId: string): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0) return p;
+  if (i < 0) return duplicateLayer(p, clipId);   // a layer's id: the layer is copied
   const src = p.clips[i];
   const copy: Clip = { ...src, id: newId(), transitionOut: NO_TRANSITION, transform: { ...src.transform }, crop: { ...src.crop }, background: { ...src.background }, adjust: { ...src.adjust },
     animation: copyClipAnimation(src.animation), keyframes: copyPins(src.keyframes), speedCurve: copyCurve(src.speedCurve) };
@@ -378,19 +378,12 @@ export function clearBeatMarkers(p: Project): Project {
 }
 
 export function setClipVolume(p: Project, clipId: string, volume: number): Project {
-  const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0 || isPhoto(p.clips[i])) return p;
   const v = clamp(volume, CLIP_VOLUME);
-  if (v === p.clips[i].volume) return p;
-  const clips = p.clips.slice(); clips[i] = { ...clips[i], volume: v };
-  return touch(p, { clips });
+  return updateClip(p, clipId, (c) => (isPhoto(c) || v === c.volume ? c : { ...c, volume: v }));
 }
 
 export function setClipMuted(p: Project, clipId: string, muted: boolean): Project {
-  const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0 || isPhoto(p.clips[i]) || p.clips[i].muted === muted) return p;
-  const clips = p.clips.slice(); clips[i] = { ...clips[i], muted };
-  return touch(p, { clips });
+  return updateClip(p, clipId, (c) => (isPhoto(c) || c.muted === muted ? c : { ...c, muted }));
 }
 
 const NO_TRANSITION = { type: "none" as const, duration: 0 };
@@ -431,15 +424,12 @@ function cappedSpeed(c: Clip, speed: number): number {
 }
 
 export function setClipSpeed(p: Project, clipId: string, speed: number): Project {
-  const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0) return p;
-  const c = p.clips[i];
-  if (isPhoto(c)) return p;
   if (!Number.isFinite(speed)) return p;
-  const s = cappedSpeed(c, clamp(speed, SPEED_LIMITS));
-  if (s === c.speed && c.speedCurve === null) return p;
-  const clips = p.clips.slice(); clips[i] = { ...c, speed: s, speedCurve: null };   // a constant speed and a curve are exclusive
-  return touch(p, { clips: normaliseTransitions(clips) });
+  return updateClip(p, clipId, (c) => {
+    if (isPhoto(c)) return c;
+    const s = cappedSpeed(c, clamp(speed, SPEED_LIMITS));
+    return s === c.speed && c.speedCurve === null ? c : { ...c, speed: s, speedCurve: null };   // a constant speed and a curve are exclusive
+  }, true);
 }
 
 /**
@@ -448,26 +438,21 @@ export function setClipSpeed(p: Project, clipId: string, speed: number): Project
  * id, and a curve that would leave the clip shorter than MIN_CLIP_SECONDS.
  */
 export function setClipSpeedCurve(p: Project, clipId: string, id: SpeedCurveId | null): Project {
-  const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0) return p;
-  const c = p.clips[i];
-  if (isPhoto(c)) return p;
-  let next: Clip;
-  if (id === null) {
-    if (c.speedCurve === null) return p;
-    // "None" always works. A short piece of a slow part of the curve would be under MIN_CLIP_SECONDS at speed 1, so it gets the
-    // highest constant speed that keeps the minimum (the cap `setClipSpeed` applies), never under the slowest speed there is.
-    next = { ...c, speedCurve: null, speed: clamp(cappedSpeed(c, 1), SPEED_LIMITS) };
-  } else {
-    if (!(SPEED_CURVE_IDS as readonly string[]).includes(id)) return p;
+  if (id !== null && !(SPEED_CURVE_IDS as readonly string[]).includes(id)) return p;
+  return updateClip(p, clipId, (c) => {
+    if (isPhoto(c)) return c;
+    if (id === null) {
+      if (c.speedCurve === null) return c;
+      // "None" always works. A short piece of a slow part of the curve would be under MIN_CLIP_SECONDS at speed 1, so it gets the
+      // highest constant speed that keeps the minimum (the cap `setClipSpeed` applies), never under the slowest speed there is.
+      return { ...c, speedCurve: null, speed: clamp(cappedSpeed(c, 1), SPEED_LIMITS) };
+    }
     const speedCurve = presetCurve(c, id, c.trimStart, c.trimEnd);
-    if (!speedCurve) return p;
-    if (c.speed === 1 && sameJson(speedCurve, c.speedCurve)) return p;
-    next = { ...c, speed: 1, speedCurve };
-    if (clipDuration(next) < MIN_CLIP_SECONDS - 1e-9) return p;
-  }
-  const clips = p.clips.slice(); clips[i] = next;
-  return touch(p, { clips: normaliseTransitions(clips) });
+    if (!speedCurve) return c;
+    if (c.speed === 1 && sameJson(speedCurve, c.speedCurve)) return c;
+    const next = { ...c, speed: 1, speedCurve };
+    return clipDuration(next) < MIN_CLIP_SECONDS - 1e-9 ? c : next;
+  }, true);
 }
 
 /**
@@ -480,12 +465,8 @@ function presetCurve(c: Pick<Clip, "kind">, id: SpeedCurveId, trimStart: number,
 }
 
 export function setClipFilter(p: Project, clipId: string, filter: FilterId | null): Project {
-  const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0) return p;
   const f = filter === "none" ? null : filter;
-  if (f === p.clips[i].filter) return p;
-  const clips = p.clips.slice(); clips[i] = { ...clips[i], filter: f };
-  return touch(p, { clips });
+  return updateClip(p, clipId, (c) => (f === c.filter ? c : { ...c, filter: f }));
 }
 
 export function setClipFilterIntensity(p: Project, clipId: string, intensity: number): Project {
@@ -608,14 +589,26 @@ export function frameSize(p: Project): { width: number; height: number } {
   return { width: 1080, height: 1080 / aspectRatioValue(p.aspectRatio) };
 }
 
-/** Replaces one clip with `fn(clip)`; returns the same project when the clip is missing or `fn` returns the same object. */
-function updateClip(p: Project, clipId: string, fn: (c: Clip) => Clip): Project {
+/**
+ * Replaces one clip OR layer with `fn(item)` — the one lookup every per-clip edit goes through: the id is looked for in the main clips,
+ * then in the layers. Same project when the id is missing or `fn` returns the same object.
+ * A main clip: `retime` (the edit changes the clip's length) re-normalises the transitions. A layer: only `layers` changes — `clips`
+ * keeps its identity, so none of the main-track rules run (transitions, effects past the end); the layer keeps its start and has no
+ * transition, and a change of its length or kind must keep the layer rules (`putLayer`) or the edit is refused.
+ */
+function updateClip(p: Project, clipId: string, fn: (c: Clip) => Clip, retime = false): Project {
   const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0) return p;
-  const next = fn(p.clips[i]);
-  if (next === p.clips[i]) return p;
-  const clips = p.clips.slice(); clips[i] = next;
-  return touch(p, { clips });
+  if (i >= 0) {
+    const next = fn(p.clips[i]);
+    if (next === p.clips[i]) return p;
+    const clips = p.clips.slice(); clips[i] = next;
+    return touch(p, { clips: retime ? normaliseTransitions(clips) : clips });
+  }
+  const j = p.layers.findIndex((l) => l.id === clipId);
+  if (j < 0) return p;
+  const cur = p.layers[j];
+  const next = fn(cur);
+  return next === cur ? p : putLayer(p, j, { ...next, start: cur.start, transitionOut: NO_TRANSITION });
 }
 
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -628,7 +621,7 @@ export function setClipTransform(p: Project, clipId: string, patch: Partial<Clip
   return updateClip(p, clipId, (c) => withTransform(c, clampTransform({ ...c.transform, ...patch })));
 }
 
-const hasPins = (p: Project, clipId: string): boolean => (p.clips.find((c) => c.id === clipId)?.keyframes.length ?? 0) > 0;
+const hasPins = (p: Project, clipId: string): boolean => (findItem(p, clipId)?.clip.keyframes.length ?? 0) > 0;
 
 /**
  * Fit / Fill / Reset on a clip with keyframes write the pin at the playhead (`offsetInClip`); without an offset they do nothing —
@@ -657,7 +650,7 @@ export function fitClip(p: Project, clipId: string, offsetInClip?: number): Proj
   const { width, height } = frameSize(p);
   if (hasPins(p, clipId)) {
     if (offsetInClip === undefined || !Number.isFinite(offsetInClip)) return p;
-    const c = p.clips.find((x) => x.id === clipId)!;
+    const c = findItem(p, clipId)!.clip;
     const rotation = clipBaseAt(c, pinMoment(c, offsetInClip).offset).rotation;   // the rotation shown at the playhead
     return editClipTransformAt(p, clipId, offsetInClip, { scale: fitScale(c, c.crop, rotation, width, height), x: 0, y: 0 });
   }
@@ -678,6 +671,7 @@ export function setClipCrop(p: Project, clipId: string, crop: CropRect): Project
 }
 
 export function setClipBackground(p: Project, clipId: string, bg: ClipBackground): Project {
+  if (!p.clips.some((c) => c.id === clipId)) return p;   // main track only: a layer has no background
   return updateClip(p, clipId, (c) => (sameJson(bg, c.background) ? c : { ...c, background: { ...bg } }));
 }
 
@@ -691,9 +685,11 @@ export function setBackgroundForAllClips(p: Project, bg: ClipBackground): Projec
  * The new clip keeps the old one's timeline length where the new media allows it. A video too short for a clip is refused.
  */
 export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "sourceUri" | "sourceDuration" | "width" | "height" | "kind">): Project {
-  const i = p.clips.findIndex((c) => c.id === clipId);
-  if (i < 0) return p;
-  const old = p.clips[i];
+  return updateClip(p, clipId, (old) => replacedMedia(old, media), true);
+}
+
+/** `old` with the new media (see `replaceClipMedia`), or `old` itself when the swap is refused. */
+function replacedMedia(old: Clip, media: Pick<Clip, "sourceUri" | "sourceDuration" | "width" | "height" | "kind">): Clip {
   const prevOut = clipDuration(old);
   // Pins sit on the old pictures (source time), so they go; the animation stays. The placement they showed at the clip's first frame
   // becomes the static transform (without pins it already is).
@@ -712,9 +708,7 @@ export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "
     const speedCurve = old.speedCurve ? presetCurve(base, old.speedCurve.id, 0, trimEnd) : null;
     next = { ...base, sourceDuration: media.sourceDuration, trimEnd, speedCurve };
   }
-  if (next.kind === "video" && clipDuration(next) < MIN_CLIP_SECONDS - 1e-9) return p;
-  const clips = p.clips.slice(); clips[i] = next;
-  return touch(p, { clips: normaliseTransitions(clips) });
+  return next.kind === "video" && clipDuration(next) < MIN_CLIP_SECONDS - 1e-9 ? old : next;
 }
 
 /** The clip's base placement at `offsetInClip` as a static transform: through `clampTransform`, flips kept, opacity dropped. */
@@ -725,6 +719,127 @@ function transformAt(c: Clip, offsetInClip: number): ClipTransform {
 
 export function setClipReversed(p: Project, clipId: string, reversed: boolean): Project {
   return updateClip(p, clipId, (c) => (isPhoto(c) || c.reversed === reversed ? c : { ...c, reversed }));
+}
+
+// ---- Layers (picture-in-picture), opacity and masks ----
+// A layer is a clip with a `start` on the project timeline. It is edited by id through `updateClip` like a main clip; the ops below
+// are the ones only a layer has. Layers sit in project time and are never moved or dropped by main-track edits (same rule as overlays
+// and audio): one left past the project's end is kept and shows again if the project grows.
+
+/** The largest number of VIDEO layers on screen at once (photo layers are not counted; a layer ending where another starts does not overlap it). */
+export function videoLayerOverlap(layers: LayerClip[]): number {
+  const edges: [number, number][] = [];
+  for (const l of layers) if (!isPhoto(l)) edges.push([l.start, 1], [layerEnd(l), -1]);
+  edges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);   // at the same time the end comes first: touching is not overlapping
+  let now = 0, most = 0;
+  for (const [, step] of edges) { now += step; most = Math.max(most, now); }
+  return most;
+}
+
+/** The rules a layer list must keep after `layer` (one of its entries) was added, moved or changed length: the minimum length and the overlap limit. */
+function layersOk(layers: LayerClip[], layer: LayerClip): boolean {
+  return clipDuration(layer) >= LAYER_LIMITS.minDuration - 1e-9 && videoLayerOverlap(layers) <= LAYER_LIMITS.maxVideoAtOnce;
+}
+
+/**
+ * Writes `next` over the layer at index `j`. When its place in time or what counts for the overlap rule changed (start, length,
+ * photo / video) the layer rules are re-checked and the edit is refused (same project) if they would break. Only `layers` changes.
+ */
+function putLayer(p: Project, j: number, next: LayerClip): Project {
+  const cur = p.layers[j];
+  const layers = p.layers.slice(); layers[j] = next;
+  const retimed = next.start !== cur.start || next.kind !== cur.kind || clipDuration(next) !== clipDuration(cur);
+  if (retimed && !layersOk(layers, next)) return p;
+  return touch(p, { layers });
+}
+
+/**
+ * Puts `clip` on top of the others as a layer starting at `start` (through `newLayer`: centred at the default scale, no transition).
+ * Refused (same project): a project without main clips, LAYER_LIMITS.max layers already, an id a clip or layer already has, a
+ * non-finite start, a layer shorter than the minimum, or a third video layer on screen at once.
+ */
+export function addLayer(p: Project, clip: Clip, start: number): Project {
+  if (!Number.isFinite(start) || p.clips.length === 0 || p.layers.length >= LAYER_LIMITS.max || findItem(p, clip.id)) return p;
+  const layer = newLayer(clip, start);
+  const layers = [...p.layers, layer];
+  return layersOk(layers, layer) ? touch(p, { layers }) : p;
+}
+
+/** The bar drag: only the start moves (never below 0, 3 decimals; the layer may run past the project's end). Refused where the overlap rule would break, so a drag stops at the last valid position. */
+export function moveLayer(p: Project, id: string, newStart: number): Project {
+  const j = p.layers.findIndex((l) => l.id === id);
+  if (j < 0 || !Number.isFinite(newStart)) return p;
+  const start = Math.max(0, r3(newStart));
+  return start === p.layers[j].start ? p : putLayer(p, j, { ...p.layers[j], start });
+}
+
+/**
+ * A layer's source range, by `trimClip`'s rules (clamped to the source; a photo's length is `trimEnd` within the photo limits) with
+ * the layer minimum. `anchor` says which end of the bar stays put: "end" (the tail handle moved) keeps `start`; "start" (the head
+ * handle moved) keeps the layer's END at the same project time — `start = old end − new length`, and where that would be before 0 the
+ * trim is shortened at its head so the layer starts at 0. Refused (same project): unknown id, non-finite input, too short, or the
+ * overlap rule would break.
+ */
+export function trimLayer(p: Project, id: string, trimStart: number, trimEnd: number, anchor: "start" | "end"): Project {
+  const j = p.layers.findIndex((l) => l.id === id);
+  if (j < 0 || !Number.isFinite(trimStart) || !Number.isFinite(trimEnd)) return p;
+  const cur = p.layers[j];
+  const photo = isPhoto(cur);
+  const end = layerEnd(cur);
+  let from = photo ? 0 : clamp(trimStart, [0, cur.sourceDuration]);
+  let to = photo ? clamp(trimEnd, [PHOTO.minSeconds, PHOTO.maxSeconds]) : clamp(trimEnd, [0, cur.sourceDuration]);
+  if (anchor === "start" && clipDuration({ ...cur, trimStart: from, trimEnd: to }) > end) {
+    // The layer cannot start before 0: its head (the source end of a reversed layer) takes exactly the `end` seconds there are.
+    if (photo) to = clamp(end, [PHOTO.minSeconds, PHOTO.maxSeconds]);
+    else if (cur.reversed) to = clamp(sourceAfter(cur, from, end), [0, cur.sourceDuration]);
+    else from = clamp(sourceAfter(cur, to, -end), [0, cur.sourceDuration]);
+  }
+  if (!photo && spanTooShort(cur, from, to, LAYER_LIMITS.minDuration)) return p;
+  if (from === cur.trimStart && to === cur.trimEnd) return p;
+  const next: LayerClip = { ...cur, trimStart: from, trimEnd: to };
+  // The start is not rounded here: it must put the end exactly where it was on every frame of a drag.
+  return putLayer(p, j, anchor === "start" ? { ...next, start: Math.max(0, end - clipDuration(next)) } : next);
+}
+
+export function deleteLayer(p: Project, id: string): Project {
+  if (!p.layers.some((l) => l.id === id)) return p;
+  return touch(p, { layers: p.layers.filter((l) => l.id !== id) });
+}
+
+/**
+ * The copy (new id, every nested value its own, the transform KEPT) starts where the original ends — rounded up to 3 decimals, so it
+ * never overlaps its original — and sits right above it in the list. Refused at LAYER_LIMITS.max or when the overlap rule would break.
+ */
+export function duplicateLayer(p: Project, id: string): Project {
+  const j = p.layers.findIndex((l) => l.id === id);
+  if (j < 0 || p.layers.length >= LAYER_LIMITS.max) return p;
+  const src = p.layers[j];
+  const copy: LayerClip = { ...newLayer(src, 0), id: newId(), transform: { ...src.transform }, start: Math.ceil(layerEnd(src) * 1000 - 1e-6) / 1000 };
+  const layers = [...p.layers.slice(0, j + 1), copy, ...p.layers.slice(j + 1)];
+  return layersOk(layers, copy) ? touch(p, { layers }) : p;
+}
+
+/** Bring forward / send back: swaps the layer with its neighbour in draw order (later = on top). Same project at the ends. */
+export function reorderLayer(p: Project, id: string, direction: "forward" | "back"): Project {
+  const j = p.layers.findIndex((l) => l.id === id);
+  const k = direction === "forward" ? j + 1 : j - 1;
+  if (j < 0 || k < 0 || k >= p.layers.length) return p;
+  const layers = p.layers.slice();
+  [layers[j], layers[k]] = [layers[k], layers[j]];
+  return touch(p, { layers });
+}
+
+/** A clip's or layer's own opacity, clamped to 0–1 (2 decimals). A non-finite value leaves the project unchanged. */
+export function setClipOpacity(p: Project, id: string, opacity: number): Project {
+  if (!Number.isFinite(opacity)) return p;
+  const v = r2(clampOpacity(opacity));
+  return updateClip(p, id, (c) => (c.opacity === v ? c : { ...c, opacity: v }));
+}
+
+/** A clip's or layer's mask; an unknown mask leaves the project unchanged. */
+export function setClipMask(p: Project, id: string, mask: MaskId): Project {
+  if (!(MASK_IDS as readonly string[]).includes(mask)) return p;
+  return updateClip(p, id, (c) => (c.mask === mask ? c : { ...c, mask }));
 }
 
 /**
@@ -1008,7 +1123,7 @@ export function toggleClipKeyframe(p: Project, clipId: string, offsetInClip: num
 export function editClipTransformAt(p: Project, clipId: string, offsetInClip: number,
   patch: Partial<Pick<ClipTransform, "x" | "y" | "scale" | "rotation">> & { opacity?: number }): Project {
   const values = pinPatch(patch);
-  const c = p.clips.find((x) => x.id === clipId);
+  const c = findItem(p, clipId)?.clip;
   if (!c || !values || !Number.isFinite(offsetInClip)) return p;
   if (c.keyframes.length === 0) {
     delete values.opacity;

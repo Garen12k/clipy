@@ -1,5 +1,5 @@
 import {
-  ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, makeClip, makeKeyframe, makeOverlay, makePhotoClip, makeSticker,
+  ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, makeClip, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeSticker,
   type AnimComboId, type AnimInId, type AnimLoopId,
 } from "../types";
 import { clipDuration, curveSteps, freezeSourceTime, outputOffsetOf, sourceTimeAt } from "../timeline";
@@ -218,6 +218,21 @@ describe("resolveClipMotion", () => {
     const c = makeClip({ id: "c", sourceDuration: 10, transform: still });
     for (const offset of [0, 3, 10]) expect(resolveClipMotion(c, offset)).toEqual({ transform: still, opacity: 1 });
     expect(hasClipMotion(c)).toBe(false);
+  });
+
+  test("the clip's own opacity multiplies the motion opacity (clamped 0–1; a default clip is × 1)", () => {
+    const half = makeClip({ id: "c", sourceDuration: 10, transform: still, opacity: 0.5 });
+    expect(resolveClipMotion(half, 3)).toEqual({ transform: still, opacity: 0.5 });
+    expect(resolveClipMotion(half, NaN).opacity).toBe(0.5);
+    const fading = makeClip({ id: "c", sourceDuration: 10, opacity: 0.5, animation: { in: null, out: { id: "fade", duration: 2 }, combo: null } });
+    expect(resolveClipMotion(fading, 9).opacity).toBeCloseTo(0.4375, 9);   // 0.875 × 0.5
+    expect(resolveClipMotion(fading, 10).opacity).toBe(0);
+    const keyed = makeClip({ id: "c", sourceDuration: 10, opacity: 0.4, keyframes: [makeKeyframe({ t: 0, opacity: 0.5 })] });
+    expect(resolveClipMotion(keyed, 2).opacity).toBeCloseTo(0.2, 9);
+    expect(resolveClipMotion(makeClip({ id: "c", sourceDuration: 10, opacity: 7 }), 1).opacity).toBe(1);
+    expect(resolveClipMotion(makeClip({ id: "c", sourceDuration: 10, opacity: -1 }), 1).opacity).toBe(0);
+    expect(resolveClipMotion(makeClip({ id: "c", sourceDuration: 10, opacity: NaN }), 1).opacity).toBe(1);
+    expect(resolveClipMotion(makeLayer({ id: "l", sourceDuration: 4, start: 2, opacity: 0.25 }), 1).opacity).toBe(0.25);
   });
 
   test("In runs over the first `duration` seconds, Out over the last", () => {
