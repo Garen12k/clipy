@@ -60,10 +60,13 @@ test("a typing session is a single undo step", async () => {
   expect(ov().text).toBe("Hi");
 });
 
-test("Done is disabled while the text is empty", async () => {
-  await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+test("there is one Done — the panel's ✓ — and it closes even while the text is empty (the host removes an empty text)", async () => {
+  const onClose = jest.fn();
+  await render(<TextPanel overlayId="o1" visible onClose={onClose} />);
   await fireEvent.changeText(screen.getByLabelText("Overlay text"), "");
-  expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+  expect(screen.getAllByRole("button", { name: "Done" })).toHaveLength(1);
+  await fireEvent.press(screen.getByRole("button", { name: "Done" }));
+  expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 describe("fine-tune placement on a keyframed text", () => {
