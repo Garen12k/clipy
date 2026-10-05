@@ -16,3 +16,7 @@ test("no kit slider's rest track is overridden: the kit's default is the one tha
   const overriding = readdirSync(DIR).filter((name) => /\.tsx?$/.test(name) && !ALLOW.includes(name) && readFileSync(join(DIR, name), "utf8").includes("maximumTrackTintColor")).sort();
   expect(overriding).toEqual([]);
 });
+
+test("only the Cover sheet still imports the community slider directly", () => {
+  expect(ALLOW).toEqual(["CoverSheet.tsx"]);
+});
