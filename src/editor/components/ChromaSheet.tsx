@@ -7,8 +7,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
-import { Sheet } from "@/src/ui/Sheet";
-import { Body } from "@/src/ui/Text";
+import { StripNote, StripSlider, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 import { ColorRow } from "./ColorRow";
 
 const PRESET_LABELS = ["Green", "Blue"] as const;
@@ -29,17 +28,15 @@ export function ChromaSheet({ clipId, visible, onClose }: { clipId: string | nul
   const pickColor = (hex: string) => { if (key) apply((p) => setClipChroma(p, clip.id, { color: hex, strength: key.strength })); };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Green screen">
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Body>Remove a colour</Body>
-        <Switch accessibilityLabel="Green screen" value={on} onValueChange={toggle} trackColor={{ true: theme.colors.accent }} />
-      </View>
-      <View pointerEvents={on ? "auto" : "none"} style={{ opacity: on ? 1 : 0.4, gap: theme.space.sm, marginTop: theme.space.sm }}>
-        <View style={{ flexDirection: "row", gap: theme.space.sm }}>
+    <ToolStrip visible={visible} onClose={onClose} title="Green screen"
+      note={on && !isKeyable(color) ? <StripNote numberOfLines={2}>This colour is too grey to remove. Pick a stronger colour.</StripNote> : <StripNote>Shows in the exported video</StripNote>}>
+      <StripTiles lead={<Switch accessibilityLabel="Green screen" value={on} onValueChange={toggle} trackColor={{ true: theme.colors.accent }} />}>
+        <View pointerEvents={on ? "auto" : "none"} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm, opacity: on ? 1 : 0.4 }}>
           {CHROMA_PRESETS.map((hex, i) => <Chip key={hex} label={PRESET_LABELS[i]} selected={on && same(color, hex)} disabled={!on} onPress={() => pickColor(hex)} />)}
+          <ColorRow compact value={color} onChange={pickColor} />
         </View>
-        <ColorRow value={color} onChange={pickColor} />
-        {on && !isKeyable(color) ? <Body muted style={{ fontSize: 12 }}>This colour is too grey to remove. Pick a stronger colour.</Body> : null}
+      </StripTiles>
+      <StripSlider label={`Strength ${Math.round(strength * 100)} %`}>
         <Slider
           testID="chroma-strength"
           minimumValue={0} maximumValue={1} step={0.01}
@@ -48,9 +45,7 @@ export function ChromaSheet({ clipId, visible, onClose }: { clipId: string | nul
           onValueChange={(v) => applyTransient((p) => setClipChroma(p, clip.id, { color, strength: v }))}
           minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent}
         />
-        <Body muted style={{ fontSize: 12 }}>Strength {Math.round(strength * 100)} %</Body>
-      </View>
-      <Body muted style={{ fontSize: 12, marginTop: theme.space.sm }}>Shows in the exported video</Body>
-    </Sheet>
+      </StripSlider>
+    </ToolStrip>
   );
 }

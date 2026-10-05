@@ -3,11 +3,11 @@ import { Text, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { PressableScale } from "./PressableScale";
 
-type Props = { label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; disabled?: boolean; active?: boolean; role?: "button" | "tab" };
+type Props = { label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () => void; disabled?: boolean; active?: boolean };
 
-export function ToolButton({ label, icon, onPress, disabled, active, role = "button" }: Props) {
+export function ToolButton({ label, icon, onPress, disabled, active }: Props) {
   return (
-    <PressableScale accessibilityRole={role} accessibilityLabel={label} accessibilityState={{ disabled: !!disabled, selected: !!active }}
+    <PressableScale accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled, selected: !!active }}
       disabled={disabled} onPress={onPress} style={{ alignItems: "center", width: 68, paddingVertical: theme.space.sm, opacity: disabled ? 0.35 : 1 }}>
       <View style={{ width: 40, height: 40, borderRadius: theme.radius.tile + 5, alignItems: "center", justifyContent: "center",
         backgroundColor: active ? theme.colors.accent : theme.colors.surfaceAlt }}>

@@ -4,8 +4,7 @@ import { updateAudioTrackById } from "@/src/editor/model/ops";
 import { AUDIO_LIMITS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
-import { Sheet } from "@/src/ui/Sheet";
-import { Body } from "@/src/ui/Text";
+import { StripSlider, ToolStrip } from "@/src/ui/ToolStrip";
 
 export type FadePatch = { fadeIn?: number; fadeOut?: number };
 /** What the fade sheet edits. */
@@ -25,12 +24,11 @@ export function FadeSliders({ fadeIn, fadeOut, length, onStart, onChange }: Slid
   const cap = fadeCap(length);
   const fitted = fitFades(fadeIn, fadeOut, length);
   const slider = (key: "fadeIn" | "fadeOut", label: string, testID: string, value: number) => (
-    <>
-      <Body muted>{label} {value.toFixed(1)} s</Body>
+    <StripSlider key={key} label={`${label} ${value.toFixed(1)} s`}>
       <Slider testID={testID} minimumValue={AUDIO_LIMITS.fade[0]} maximumValue={cap} step={0.05} value={value} disabled={cap <= 0}
         onSlidingStart={onStart} onValueChange={(v) => onChange({ [key]: Math.max(0, Math.min(v, cap)) })}
         minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
-    </>
+    </StripSlider>
   );
   return (
     <>
@@ -47,9 +45,9 @@ export function AudioFadeSheet({ target, visible, onClose }: { target: FadeTarge
   if (!track) return null;
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Fade">
+    <ToolStrip visible={visible} onClose={onClose} title="Fade">
       <FadeSliders fadeIn={track.fadeIn} fadeOut={track.fadeOut} length={track.trimEnd - track.trimStart}
         onStart={beginTransaction} onChange={(patch) => applyTransient((p) => updateAudioTrackById(p, track.id, patch))} />
-    </Sheet>
+    </ToolStrip>
   );
 }

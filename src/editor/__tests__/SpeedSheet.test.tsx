@@ -126,8 +126,8 @@ describe("curve tiles", () => {
     expect(useToast.getState().message).toBeNull();
   });
 
-  test("a preset that would make the clip too short is refused: the sheet closes, then a toast shows; no haptic", async () => {
-    // The toast host sits on the screen under the sheet's Modal, so the sheet has to be closed before the message shows.
+  test("a preset that would make the clip too short is refused: the strip closes, then a toast shows; no haptic", async () => {
+    // The strip closes first so the bar below it shows again, then the message.
     const order: string[] = [];
     const onClose = jest.fn(() => { order.push("close"); });
     const unsub = useToast.subscribe((t) => { if (t.message) order.push("toast"); });
@@ -228,8 +228,8 @@ describe("length label", () => {
     // Hero over 8 s: 1 s slices at 1, 2, 3, 0.5, 0.5, 3, 2, 1 → 1 + 0.5 + 0.333 + 2 + 2 + 0.333 + 0.5 + 1 = 7.67 s.
     await press("Hero");
     expect(screen.getByText("Clip length 7.7 s")).toBeTruthy();
-    await press("Normal");
-    expect(screen.getByText("Clip length 7.7 s")).toBeTruthy();
+    await press("Normal");   // the curve warning takes the header: no length line here
+    expect(screen.queryByText(/Clip length/)).toBeNull();
   });
 });
 

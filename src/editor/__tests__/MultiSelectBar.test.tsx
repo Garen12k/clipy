@@ -1,11 +1,13 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/id", () => { let n = 0; return { newId: () => `copy${++n}` }; });
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-04T10:00:00.000Z" }));
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
 import * as Haptics from "expo-haptics";
 import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { Text } from "react-native";
 import { useEditorStore } from "@/src/editor/store";
-import { MultiSelectBar } from "../components/MultiSelectBar";
+import { STRIP, ToolStrip } from "@/src/ui/ToolStrip";
+import { MULTI_BAR_HEIGHT, MultiSelectBar } from "../components/MultiSelectBar";
 
 const st = () => useEditorStore.getState();
 const clips = () => st().project!.clips;
@@ -152,4 +154,28 @@ test("Volume: reversed + normal chosen → enabled, and the sheet shows the norm
   expect(btn("Volume")).toBeEnabled();
   await press("Volume");
   expect(screen.getByText("80%")).toBeTruthy();
+});
+
+test("the bar has an explicit height; while a strip shows it hides its buttons and lifts by the difference", async () => {
+  st().enterMultiSelect(); st().toggleMultiSelect("a");
+  const view = await render(<><MultiSelectBar /><ToolStrip visible={false} onClose={() => {}} title="X"><Text>x</Text></ToolStrip></>);
+  expect(MULTI_BAR_HEIGHT).toBe(104);
+  expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: 104 + 8, marginTop: 0 });
+  expect(header("1 selected")).toBeTruthy();
+  await view.rerender(<><MultiSelectBar /><ToolStrip visible onClose={() => {}} title="X"><Text>x</Text></ToolStrip></>);
+  expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -(STRIP.height - 104) });
+  expect(screen.queryByRole("header", { name: "1 selected" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Select all" })).toBeNull();
+});
+
+test("a strip whose clip vanishes closes and does not reopen by itself later", async () => {
+  await renderWith("a", "b");
+  await press("Speed");
+  expect(header("Speed · 2 clips")).toBeTruthy();
+  // The selection changes under the strip: only the photo is left, so Speed has no clip to show.
+  await act(async () => { st().toggleMultiSelect("a"); st().toggleMultiSelect("b"); st().toggleMultiSelect("c"); });
+  expect(screen.queryByRole("header", { name: /Speed/ })).toBeNull();
+  await act(async () => { st().toggleMultiSelect("a"); });
+  expect(screen.queryByRole("header", { name: /Speed/ })).toBeNull();
+  expect(btn("Speed")).toBeEnabled();
 });

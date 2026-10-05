@@ -11,6 +11,7 @@ import { TransportRow } from "@/src/editor/components/TransportRow";
 import { TrimHandles } from "@/src/editor/components/TrimHandles";
 import type { Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { closeStrip, openStrip } from "@/src/editor/toolStrip";
 import { useAutosave } from "@/src/editor/useAutosave";
 import { useLoadProject } from "@/src/editor/useLoadProject";
 import { storage } from "@/src/projects";
@@ -28,7 +29,6 @@ export default function EditorScreen() {
   const project = useEditorStore((s) => s.project);
   const clipById = (clipId: string) => project?.clips.find((c) => c.id === clipId);
   const [panelFor, setPanelFor] = useState<{ id: string; kind: "text" | "sticker" } | null>(null);
-  const [transitionFor, setTransitionFor] = useState<number | null>(null);
 
   if (load.status === "loading") return <Screen style={{ justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></Screen>;
   if (load.status === "error") return (
@@ -38,7 +38,7 @@ export default function EditorScreen() {
   );
   return (
     <Screen>
-      <EditorTopBar onExport={() => { useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />
+      <EditorTopBar onExport={() => { closeStrip(); useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />
       <View testID="slot-preview" style={{ flex: 1 }}>
         <PreviewPlayer onOpenPanel={(overlayId) => {
           const overlay = useEditorStore.getState().project?.overlays.find((o) => o.id === overlayId);
@@ -62,12 +62,13 @@ export default function EditorScreen() {
           }}
           onCutPress={(index) => {
             const clip = project?.clips[index];
-            if (clip) useEditorStore.getState().select(clip.id);
-            setTransitionFor(index);
+            if (!clip) return;
+            useEditorStore.getState().select(clip.id);
+            openStrip("transition");
           }}
         />
       </View>
-      <EditorToolbar panelFor={panelFor} onPanelChange={setPanelFor} transitionFor={transitionFor} onTransitionChange={setTransitionFor} />
+      <EditorToolbar panelFor={panelFor} onPanelChange={setPanelFor} />
       <ToastHost />
     </Screen>
   );

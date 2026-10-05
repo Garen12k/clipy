@@ -7,15 +7,15 @@ import { useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { PressableScale } from "@/src/ui/PressableScale";
-import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
+import { StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 
 const LABELS: Record<MaskId, string> = { none: "None", rounded: "Rounded", circle: "Circle" };
 /** Tile geometry (points): the column a tile takes, its rounded box, and the square shape preview inside it. */
-const TILE_WIDTH = 84;
-const TILE_BOX = 64;
-const SHAPE = { width: 36, height: 36 };
-const LABEL_SIZE = 12;
+const TILE_WIDTH = 68;
+const TILE_BOX = 44;
+const SHAPE = { width: 26, height: 26 };
+const LABEL_SIZE = 11;
 const clearRing = { borderWidth: theme.ring.borderWidth, borderColor: "transparent" };
 
 /** The selected clip's or layer's mask: None, Rounded or Circle. Each tile draws the shape with the radius the preview and the export use. */
@@ -30,8 +30,8 @@ export function MaskSheet({ clipId, visible, onClose }: { clipId: string | null;
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Mask">
-      <View style={{ flexDirection: "row", justifyContent: "center", gap: theme.space.sm }}>
+    <ToolStrip visible={visible} onClose={onClose} title="Mask">
+      <StripTiles>
         {MASK_IDS.map((id) => {
           const selected = clip.mask === id;
           return (
@@ -44,7 +44,7 @@ export function MaskSheet({ clipId, visible, onClose }: { clipId: string | null;
             </PressableScale>
           );
         })}
-      </View>
-    </Sheet>
+      </StripTiles>
+    </ToolStrip>
   );
 }

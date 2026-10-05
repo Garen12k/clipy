@@ -1,14 +1,12 @@
 import { useState } from "react";
-import { View } from "react-native";
 import { ANIM_IN, ANIM_LOOP } from "@/src/editor/effects";
 import { setOverlayAnimation } from "@/src/editor/model/ops";
 import { ANIM_IN_IDS, ANIM_LOOP_IDS, type AnimInId, type AnimLoopId } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
-import { Sheet } from "@/src/ui/Sheet";
-import { AnimationLength, AnimationTiles, edgeDuration } from "./AnimationTiles";
+import { StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
+import { AnimationLength, AnimationTiles, animationStartX, edgeDuration } from "./AnimationTiles";
 
 type Tab = "in" | "out" | "loop";
 const TABS: { id: Tab; label: string }[] = [{ id: "in", label: "In" }, { id: "out", label: "Out" }, { id: "loop", label: "Loop" }];
@@ -34,19 +32,16 @@ export function OverlayAnimationSheet({ overlayId, visible, onClose }: { overlay
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Animation">
-      <View style={{ flexDirection: "row", gap: theme.space.sm }}>
-        {TABS.map((t) => <Chip key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}
-      </View>
-      {tab === "loop" ? (
-        <AnimationTiles ids={ANIM_LOOP_IDS} registry={ANIM_LOOP} selected={anim.loop} onPick={pickLoop} />
-      ) : (
-        <>
-          <AnimationTiles ids={ANIM_IN_IDS} registry={ANIM_IN} selected={edge?.id ?? null} onPick={(id) => pickEdge(tab, id)} />
-          <AnimationLength edge={edge} onStart={beginTransaction}
-            onChange={(v) => { if (edge) applyTransient((p) => setOverlayAnimation(p, overlay.id, { [tab]: { id: edge.id, duration: v } })); }} />
-        </>
+    <ToolStrip visible={visible} onClose={onClose} title="Animation">
+      <StripTiles key={tab} initialX={tab === "loop" ? animationStartX(ANIM_LOOP_IDS, anim.loop) : animationStartX(ANIM_IN_IDS, edge?.id ?? null)} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
+        {tab === "loop"
+          ? <AnimationTiles ids={ANIM_LOOP_IDS} registry={ANIM_LOOP} selected={anim.loop} onPick={pickLoop} />
+          : <AnimationTiles ids={ANIM_IN_IDS} registry={ANIM_IN} selected={edge?.id ?? null} onPick={(id) => pickEdge(tab, id)} />}
+      </StripTiles>
+      {tab === "loop" ? null : (
+        <AnimationLength edge={edge} onStart={beginTransaction}
+          onChange={(v) => { if (edge) applyTransient((p) => setOverlayAnimation(p, overlay.id, { [tab]: { id: edge.id, duration: v } })); }} />
       )}
-    </Sheet>
+    </ToolStrip>
   );
 }

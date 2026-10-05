@@ -12,9 +12,9 @@ import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
 import { PressableScale } from "@/src/ui/PressableScale";
-import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
+import { StripNote, StripSlider, StripTiles, ToolStrip, tilesStartX } from "@/src/ui/ToolStrip";
 
 const PRESETS = [0.25, 0.5, 1, 1.5, 2, 4];
 
@@ -24,6 +24,8 @@ const TABS: { id: Tab; label: string }[] = [{ id: "normal", label: "Normal" }, {
 /** Tile geometry (points), matching the animation tiles: the column a tile takes, its rounded box and the sparkline inside it. */
 const TILE_WIDTH = 68;
 const TILE_BOX = 44;
+/** A speed chip is about this wide (its text varies a little); only used to start the row near the selected one. */
+const PRESET_WIDTH = 64;
 const SPARK_HEIGHT = 24;
 const BAR_WIDTH = 3;
 const BAR_GAP = 1;
@@ -31,7 +33,6 @@ const BAR_GAP = 1;
 const SPARK_WIDTH = 8 * BAR_WIDTH + 7 * BAR_GAP;
 const FLAT_LINE = 2;
 const LABEL_SIZE = 11;
-const CAPTION_SIZE = 12;
 const clearRing = { borderWidth: theme.ring.borderWidth, borderColor: "transparent" };
 
 /** A preset's shape as bars (height = speed / the top speed, of the sparkline's height); "None" (no shape) is a flat line. */
@@ -74,16 +75,14 @@ export function SpeedSheet({ clipId, clipIds, visible, onClose }: { clipId: stri
   const clip = useItemClip(clipId);
   const layer = useIsLayer(clipId);
   const count = useEditorStore((s) => (clipIds && s.project ? mainClipIds(s.project, clipIds).length : 0));
-  if (!clip) return null;
-  return (
-    <Sheet visible={visible} onClose={onClose} title={clipIds ? `Speed · ${count} ${count === 1 ? "clip" : "clips"}` : "Speed"}>
-      {/* Mounted only while the sheet is open (and per clip), so it opens on the tab the clip's speed lives on. */}
-      <SpeedBody key={clip.id} clip={clip} clipIds={clipIds} layer={layer} onClose={onClose} />
-    </Sheet>
-  );
+  if (!clip || !visible) return null;
+  // Mounted only while the strip is open (and per clip), so it opens on the tab the clip's speed lives on.
+  return <SpeedBody key={clip.id} clip={clip} clipIds={clipIds} layer={layer} onClose={onClose}
+    title={clipIds ? `Speed · ${count} ${count === 1 ? "clip" : "clips"}` : "Speed"} />;
 }
 
-function SpeedBody({ clip, clipIds, layer, onClose }: { clip: Clip; clipIds?: string[]; layer: boolean; onClose: () => void }) {
+/** Renders the strip itself: it owns the tab, and the header's note depends on it. */
+function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipIds?: string[]; layer: boolean; onClose: () => void; title: string }) {
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const curveId = clip.speedCurve?.id ?? null;
   const [tab, setTab] = useState<Tab>(curveId ? "curve" : "normal");
@@ -101,7 +100,7 @@ function SpeedBody({ clip, clipIds, layer, onClose }: { clip: Clip; clipIds?: st
       if (id === curveId) return;
       // Otherwise the op refused: the preset would leave the clip shorter than a clip may be (a layer: or break the layer rules).
       // (For a multi-selection: no selected clip could take it. Clips that can are changed; the others are skipped silently.)
-      // The toast lives on the screen under this sheet's Modal, so the sheet closes first.
+      // The strip closes first, so the bar and the message show.
       onClose(); useToast.getState().show(clipIds ? "These clips are too short for a speed curve." : layer ? LAYER_REFUSED : "This clip is too short for a speed curve."); return;
     }
     haptic("light");
@@ -118,32 +117,34 @@ function SpeedBody({ clip, clipIds, layer, onClose }: { clip: Clip; clipIds?: st
     apply(() => next);
   };
 
+  // While the curve warning shows it takes the header's room (two lines), so the clip length steps aside.
+  const warn = tab === "normal" && curveId !== null;
+  const startX = tab === "normal" ? tilesStartX(PRESETS.findIndex((s) => !curveId && clip.speed === s), PRESET_WIDTH) : tilesStartX(curveId ? SPEED_CURVE_IDS.indexOf(curveId) + 1 : 0, TILE_WIDTH);
+
   return (
-    <>
-      <View style={{ flexDirection: "row", gap: theme.space.sm }}>
-        {TABS.map((t) => <Chip key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}
-      </View>
+    <ToolStrip visible onClose={onClose} title={title}
+      note={<>
+        {warn ? null : <StripNote>Clip length {clipDuration(clip).toFixed(1)} s</StripNote>}
+        {tab === "normal" ? <StripNote lines={warn ? 2 : 1}>{curveId ? "A curve is active — moving this slider removes it." : "Audio keeps its pitch in the exported video."}</StripNote> : null}
+      </>}>
+      <StripTiles key={tab} initialX={startX} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
+        {tab === "normal" ? (
+          PRESETS.map((s) => <Chip key={s} label={formatSpeed(s)} selected={!curveId && clip.speed === s} onPress={() => pickSpeed(s)} />)
+        ) : (
+          <>
+            <CurveTile id="none" label="None" shape={null} selected={curveId === null} onPress={() => pickCurve(null)} />
+            {SPEED_CURVE_IDS.map((id) => <CurveTile key={id} id={id} label={SPEED_CURVES[id].label} shape={SPEED_CURVES[id].shape} selected={curveId === id} onPress={() => pickCurve(id)} />)}
+          </>
+        )}
+      </StripTiles>
       {tab === "normal" ? (
-        <>
-          {curveId
-            ? <Body muted>A curve is active — moving this slider removes it.</Body>
-            : <Body muted>Current speed: {formatSpeed(clip.speed)}</Body>}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.sm }}>
-            {PRESETS.map((s) => <Chip key={s} label={formatSpeed(s)} selected={!curveId && clip.speed === s} onPress={() => pickSpeed(s)} />)}
-          </View>
+        <StripSlider label={curveId ? "Speed" : `Current speed: ${formatSpeed(clip.speed)}`}>
           {/* With a curve the clip's constant speed is 1, so the slider rests at 1× (muted); setClipSpeed clears the curve. */}
           <Slider testID="speed-slider" minimumValue={SPEED_LIMITS[0]} maximumValue={SPEED_LIMITS[1]} step={0.05} value={clip.speed}
             onSlidingStart={beginTransaction} onValueChange={(v) => applyTransient((p) => write(p, (q, cid) => setClipSpeed(q, cid, v)))}
             minimumTrackTintColor={sliderTint} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={sliderTint} />
-          {curveId ? null : <Body muted style={{ fontSize: CAPTION_SIZE }}>Audio keeps its pitch in the exported video.</Body>}
-        </>
-      ) : (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", rowGap: theme.space.xs }}>
-          <CurveTile id="none" label="None" shape={null} selected={curveId === null} onPress={() => pickCurve(null)} />
-          {SPEED_CURVE_IDS.map((id) => <CurveTile key={id} id={id} label={SPEED_CURVES[id].label} shape={SPEED_CURVES[id].shape} selected={curveId === id} onPress={() => pickCurve(id)} />)}
-        </View>
-      )}
-      <Body muted style={{ fontSize: CAPTION_SIZE }}>Clip length {clipDuration(clip).toFixed(1)} s</Body>
-    </>
+        </StripSlider>
+      ) : null}
+    </ToolStrip>
   );
 }
