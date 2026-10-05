@@ -1,1 +1,68 @@
-{ "tracks": [] }
+{
+  "tracks": [
+    {
+      "id": "party-sector",
+      "title": "Party Sector",
+      "file": "party-sector.mp3",
+      "durationSec": 96.1,
+      "license": "CC0",
+      "source": "https://opengameart.org/content/party-sector"
+    },
+    {
+      "id": "funked-up",
+      "title": "Funked Up",
+      "file": "funked-up.mp3",
+      "durationSec": 66.3,
+      "license": "CC0",
+      "source": "https://opengameart.org/content/funked-up"
+    },
+    {
+      "id": "happy-adventure",
+      "title": "Happy Adventure",
+      "file": "happy-adventure.mp3",
+      "durationSec": 46.8,
+      "license": "CC0",
+      "source": "https://opengameart.org/content/happy-adventure-loop"
+    },
+    {
+      "id": "bossa-nova",
+      "title": "Bossa Nova",
+      "file": "bossa-nova.mp3",
+      "durationSec": 59.6,
+      "license": "CC0",
+      "source": "https://opengameart.org/content/bossa-nova"
+    },
+    {
+      "id": "frigid-seas",
+      "title": "The Frigid Seas",
+      "file": "frigid-seas.mp3",
+      "durationSec": 69.9,
+      "license": "CC0",
+      "source": "https://opengameart.org/content/the-frigid-seas"
+    },
+    {
+      "id": "jrpg2-piano",
+      "title": "Piano",
+      "file": "jrpg2-piano.mp3",
+      "durationSec": 32.1,
+      "license": "CC0",
+      "source": "https://opengameart.org/content/jrpg2-piano"
+    },
+    {
+      "id": "field-of-dreams",
+      "title": "The Field of Dreams",
+      "file": "field-of-dreams.mp3",
+      "durationSec": 84.6,
+      "license": "CC0",
+      "source": "https://opengameart.org/content/the-field-of-dreams"
+    },
+    {
+      "id": "mandatory-overtime",
+      "title": "Mandatory Overtime",
+      "file": "mandatory-overtime.mp3",
+      "durationSec": 40.9,
+      "license": "CC0",
+      "source": "https://opengameart.org/content/mandatory-overtime"
+    }
+  ]
+}
