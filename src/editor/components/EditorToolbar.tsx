@@ -292,11 +292,11 @@ export function EditorToolbar() {
   const area = panelSize ? panelHeight(panelSize, windowH, typing) : stripShown ? STRIP.height : BAR_HEIGHT;
 
   return (
-    <View testID="editor-toolbar" style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: pad,
+    <View testID="editor-toolbar" style={{ backgroundColor: theme.elevation.bar, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: pad,
       height: area + pad, marginTop: stripShown && !typing ? -STRIP.lift : 0 }}>
       {toolShown ? null : (
-        <View testID="toolbar-row" style={{ height: BAR_HEIGHT - 1, flexDirection: "row", alignItems: "center" }}>
-          {bar === "main" ? null : <IconButton name="chevron-back" accessibilityLabel="Back to main tools" onPress={back} />}
+        <View testID="toolbar-row" style={{ height: BAR_HEIGHT - 1, flexDirection: "row", alignItems: "center", paddingLeft: bar === "main" ? 0 : theme.space.sm }}>
+          {bar === "main" ? null : <IconButton name="chevron-back-outline" accessibilityLabel="Back to main tools" onPress={back} />}
           {/* Keyed by the bar: another bar is a new mount — it starts again from the left and its tools fade in from the right; the same
               bar keeps its scroll position through re-renders and does not replay. The back arrow is outside, so it stays put. */}
           <EnterView key={bar} axis="x" testID="toolbar-tools" style={{ flex: 1, height: BAR_HEIGHT - 1 }}>

@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { Dimensions, Keyboard, Text, TextInput } from "react-native";
+import { theme } from "@/src/theme/theme";
 import { useKeyboard } from "../keyboard";
 import { PANEL, panelHeight, ToolPanel, usePanelPresence } from "../ToolPanel";
 
@@ -40,11 +41,17 @@ test("Done closes; the action runs", async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-test("the header action's small label has a touch target of at least 44 pt", async () => {
+test("the header: the ringed ✓ and the quiet action both have a 44-pt target inside it; the panel sits on the bar surface", async () => {
   await render(<ToolPanel visible onClose={() => {}} title="Text" action={{ label: "Apply to all", onPress: () => {} }}><Text>body</Text></ToolPanel>);
-  const slop = screen.getByRole("button", { name: "Apply to all" }).props.hitSlop as { top: number; bottom: number; left: number; right: number };
-  expect(slop.top + slop.bottom + 12).toBeGreaterThanOrEqual(44);      // the label is one line of 12 pt text
-  expect(slop.left + slop.right + 20).toBeGreaterThanOrEqual(44);      // … and never narrower than 20 pt
+  expect(screen.getByTestId("tool-panel-header")).toHaveStyle({ height: PANEL.header, paddingHorizontal: theme.space.gutter });
+  const done = screen.getByRole("button", { name: "Done" });
+  expect(done).toHaveStyle({ width: theme.size.done, height: theme.size.done, backgroundColor: theme.elevation.tile, borderColor: theme.colors.accent });
+  expect(theme.size.done + 2 * (done.props.hitSlop as number)).toBe(PANEL.header);            // reaches 44 and stays inside the header
+  const action = screen.getByRole("button", { name: "Apply to all" });
+  const slop = action.props.hitSlop as { top: number; bottom: number };
+  expect(action).toHaveStyle({ height: theme.size.controlCompact, minWidth: theme.size.touch });
+  expect(theme.size.controlCompact + slop.top + slop.bottom).toBe(PANEL.header);
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ backgroundColor: theme.elevation.bar });
 });
 
 test("compact is 240; a lead row is 44 and the body gives it up; the body test id can be named", async () => {

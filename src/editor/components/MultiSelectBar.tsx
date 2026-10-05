@@ -50,18 +50,18 @@ export function MultiSelectBar() {
   const pad = Math.max(insets.bottom, theme.space.sm);
 
   return (
-    <View testID="multi-select-bar" style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: pad,
+    <View testID="multi-select-bar" style={{ backgroundColor: theme.elevation.bar, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: pad,
       height: (stripShown ? STRIP.height : MULTI_BAR_HEIGHT) + pad, marginTop: stripShown ? -(STRIP.height - MULTI_BAR_HEIGHT) : 0 }}>
       {stripShown ? null : <Body weight="semi" accessibilityRole="header" style={{ textAlign: "center", paddingTop: theme.space.sm }}>{`${ids.length} selected`}</Body>}
       {stripShown ? null : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
-          <ToolButton label="Delete" icon="trash" disabled={none} onPress={() => { haptic("medium"); apply((p) => deleteClips(p, ids)); }} />
-          <ToolButton label="Duplicate" icon="copy" disabled={none} onPress={() => { haptic("light"); apply((p) => duplicateClips(p, ids)); }} />
-          <ToolButton label="Filter" icon="color-filter" disabled={none} onPress={() => setSheet("filter")} />
-          <ToolButton label="Speed" icon="speedometer" disabled={!firstVideo} onPress={() => setSheet("speed")} />
-          <ToolButton label="Volume" icon="volume-high" disabled={!firstSounding} onPress={() => setSheet("volume")} />
+          <ToolButton label="Delete" icon="trash-outline" disabled={none} onPress={() => { haptic("medium"); apply((p) => deleteClips(p, ids)); }} />
+          <ToolButton label="Duplicate" icon="copy-outline" disabled={none} onPress={() => { haptic("light"); apply((p) => duplicateClips(p, ids)); }} />
+          <ToolButton label="Filter" icon="color-filter-outline" disabled={none} onPress={() => setSheet("filter")} />
+          <ToolButton label="Speed" icon="speedometer-outline" disabled={!firstVideo} onPress={() => setSheet("speed")} />
+          <ToolButton label="Volume" icon="volume-high-outline" disabled={!firstSounding} onPress={() => setSheet("volume")} />
           <ToolButton label="Select all" icon="albums-outline" onPress={selectAllClips} />
-          <ToolButton label="Done" icon="checkmark" onPress={exitMultiSelect} />
+          <ToolButton label="Done" icon="checkmark-outline" onPress={exitMultiSelect} />
         </ScrollView>
       )}
       <FilterSheet clipId={ids[0] ?? null} clipIds={ids} visible={sheet === "filter"} onClose={() => setSheet(null)} />
