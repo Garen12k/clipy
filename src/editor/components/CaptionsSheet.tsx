@@ -5,6 +5,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { rekeyStrip } from "@/src/editor/toolStrip";
 import { useCaptions } from "@/src/editor/useCaptions";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
+import { QuietButton } from "@/src/ui/QuietButton";
 import { Body } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
@@ -54,7 +55,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
             {/* Stacked like the "done" branch: three uppercase buttons don't fit one row in a panel. */}
             <PrimaryButton compact title="Replace" onPress={start} />
             <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
-            <SecondaryButton title="Cancel" onPress={close} />
+            <QuietButton title="Cancel" onPress={close} />
           </View>
         )}
 
@@ -83,7 +84,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
                 No speech found in: {state.skipped.map((id) => `clip ${clipIds.indexOf(id) + 1}`).join(", ")}
               </Body>
             )}
-            <PrimaryButton compact title="Style captions" onPress={() => setStyling(true)} />
+            <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
           </View>
         )}
 

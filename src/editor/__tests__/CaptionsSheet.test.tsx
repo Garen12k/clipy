@@ -6,6 +6,7 @@ jest.mock("@/modules/clipy-video", () => ({ isNativeAvailable: () => mockNative,
 import { cancelTranscribe, transcribe } from "@/modules/clipy-video";
 import { makeClip, makeOverlay, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { theme } from "@/src/theme/theme";
 import { SPEECH_DENIED_MESSAGE } from "@/src/editor/useCaptions";
 import { CaptionsSheet } from "../components/CaptionsSheet";
 
@@ -42,6 +43,9 @@ test("offers Style captions next to Replace when captions already exist", async 
     const parentStyle = StyleSheet.flatten(screen.getByRole("button", { name }).parent?.props.style) ?? {};
     expect(parentStyle.flexDirection).not.toBe("row");
   }
+  // One main button on the card: Replace. Style captions is outlined, Cancel is text only.
+  expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
+  expect(screen.getByText("Cancel")).toHaveStyle({ color: theme.colors.accent });
   await fireEvent.press(screen.getByText("Style captions"));
   expect(screen.getByText("Caption style")).toBeTruthy();
 });

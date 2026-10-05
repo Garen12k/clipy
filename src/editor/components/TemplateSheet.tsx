@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { applyTemplate } from "@/src/editor/model/ops";
 import type { Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -7,6 +7,7 @@ import { pickRandomTemplate, TEMPLATE_IDS, TEMPLATES, type Template, type Templa
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
+import { PressableScale } from "@/src/ui/PressableScale";
 import { Body } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 
@@ -45,25 +46,25 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
       <Chip label="Whole project" selected={effective === "project"} onPress={() => setScope("project")} />
     </>}>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.md }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Random template" onPress={() => use(pickRandomTemplate(current))}
+        <PressableScale accessibilityRole="button" accessibilityLabel="Random template" onPress={() => use(pickRandomTemplate(current))}
           style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}>
-          <View style={{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, backgroundColor: theme.colors.surfaceAlt, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "transparent" }}>
+          <View style={[{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, backgroundColor: theme.elevation.tile, alignItems: "center", justifyContent: "center" }, theme.ringClear]}>
             <Text style={{ fontSize: 30 }}>🎲</Text>
           </View>
-          <Body style={{ fontSize: 12 }}>Random</Body>
-        </Pressable>
+          <Body style={{ fontSize: theme.type.small }}>Random</Body>
+        </PressableScale>
         {TEMPLATE_IDS.map((id) => {
           const t = TEMPLATES[id];
           const selected = current === id;
           return (
-            <Pressable key={id} accessibilityRole="button" accessibilityLabel={`Template ${t.label}`} accessibilityState={{ selected }}
+            <PressableScale key={id} lifted={selected} accessibilityRole="button" accessibilityLabel={`Template ${t.label}`} accessibilityState={{ selected }}
               onPress={() => use(t)} style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}>
-              <View style={[{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden" }, selected ? theme.ring : { borderWidth: 2, borderColor: "transparent" }]}>
+              <View style={[{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden" }, selected ? theme.ring : theme.ringClear]}>
                 <View style={{ flex: 1, backgroundColor: t.swatch[0] }} />
                 <View style={{ flex: 1, backgroundColor: t.swatch[1] }} />
               </View>
-              <Body style={{ fontSize: 12 }}>{t.label}</Body>
-            </Pressable>
+              <Body style={{ fontSize: theme.type.small }}>{t.label}</Body>
+            </PressableScale>
           );
         })}
       </View>

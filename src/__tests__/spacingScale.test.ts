@@ -8,19 +8,13 @@ const DIRS = ["src/ui", "src/editor/components"];
  * that file's line and no other. The count is exact — fewer hits than listed fails too, so the table cannot go stale.
  */
 const ALLOW: Record<string, { max: number; why: string }> = {
-  "src/ui/NumField.tsx": { max: 2, why: "round 1, task 8" },
   "src/editor/components/AudioBar.tsx": { max: 2, why: "HANDLE_W + 2 and the warning dot's padding: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/ClipThumbStrip.tsx": { max: 5, why: "the 10-pt badges on a thumbnail: 1 and 2 pt, below the 4-pt scale" },
   "src/editor/components/ColorRow.tsx": { max: 2, why: "round 1, task 7" },
   "src/editor/components/CoverSheet.tsx": { max: 1, why: "the Cover sheet is out of scope in round 1" },
   "src/editor/components/EffectPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
-  "src/editor/components/FontStrip.tsx": { max: 2, why: "round 1, task 8" },
   "src/editor/components/LayerBar.tsx": { max: 2, why: "HANDLE_W + 2 and the warning dot's padding: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/OverlayPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
-  "src/editor/components/StickerPanel.tsx": { max: 1, why: "round 1, task 8" },
-  "src/editor/components/StickerSheet.tsx": { max: 2, why: "round 1, task 8" },
-  "src/editor/components/TextPanel.tsx": { max: 2, why: "round 1, task 8" },
-  "src/editor/components/TextStyleSection.tsx": { max: 1, why: "round 1, task 8" },
   "src/editor/components/TrimSheet.tsx": { max: 1, why: "round 1, task 7" },
 };
 

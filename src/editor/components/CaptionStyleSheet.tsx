@@ -1,4 +1,3 @@
-import Slider from "@react-native-community/slider";
 import { useState } from "react";
 import { Switch, View } from "react-native";
 import { CAPTION_STYLE } from "@/src/editor/effects";
@@ -8,7 +7,8 @@ import { useEditorStore } from "@/src/editor/store";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/src/editor/textTemplates";
 import { theme } from "@/src/theme/theme";
 import { NumField } from "@/src/ui/NumField";
-import { Body } from "@/src/ui/Text";
+import { Slider } from "@/src/ui/Slider";
+import { Body, ValueLabel } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow, CONTENT_BLACK } from "./ColorRow";
 import { FontStrip } from "./FontStrip";
@@ -77,11 +77,10 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
         )}
         <FontStrip value={style.fontId} onChange={(fontId) => patch({ fontId })} />
         <View>
-          <Body muted>Size {Math.round(style.fontScale * 100)}%</Body>
+          <ValueLabel label="Size" value={`${Math.round(style.fontScale * 100)}%`} />
           <Slider testID="caption-size-slider" minimumValue={0.02} maximumValue={0.1} value={style.fontScale}
             onSlidingStart={begin} onValueChange={(v) => patchTransient({ fontScale: v })}
-            onSlidingComplete={(v) => patchTransient({ fontScale: v })}
-            minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
+            onSlidingComplete={(v) => patchTransient({ fontScale: v })} />
         </View>
         <ColorRow value={style.color} onChange={(color) => patch({ color })} />
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -94,8 +93,7 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
           <ColorRow value={style.background.color} onChange={(color) => patch({ background: { color, opacity: style.background!.opacity } })} />
           <Slider testID="caption-opacity-slider" minimumValue={0.2} maximumValue={1} value={style.background.opacity}
             onSlidingStart={begin} onValueChange={(v) => patchTransient(opacityPatch(v))}
-            onSlidingComplete={(v) => patchTransient(opacityPatch(v))}
-            minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
+            onSlidingComplete={(v) => patchTransient(opacityPatch(v))} />
         </>)}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Body>Outline</Body>
