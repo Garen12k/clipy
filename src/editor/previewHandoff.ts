@@ -57,28 +57,81 @@ const holdsStartOf = (standby: StandbyState, clip: Clip): boolean =>
 const prepared = (standby: StandbyState): boolean => standby.ready && standby.pendingSeek === null;
 
 /**
- * Whether to start the standby player now, ahead of the cut: the project is playing, the standby player is prepared for the clip to
+ * How far outside the lead window a rolling standby player may be found before it is stopped, in seconds of output time. The timer
+ * that starts it works from the last playhead tick and the clock; the next tick may place the playhead a hair earlier than that
+ * estimate, and stopping the player for it would cost a second `play()`.
+ */
+export const HANDOFF_SLACK = 0.05;
+
+/**
+ * How far (seconds) the expected time of the cut must move before the early-start timer is armed again. Every playhead tick gives a
+ * new estimate; ticks that agree with the armed timer leave it alone.
+ */
+export const HANDOFF_REARM = 0.02;
+
+/** A timer that fires this much early (seconds) still starts the standby player, instead of being armed again for the rest. */
+const TIMER_EARLY = 0.001;
+
+/** How playback stands, as far as the hand-over is concerned. */
+export type Playback = {
+  /** The project is playing. */
+  playing: boolean;
+  /**
+   * The player on screen has reported a time past the one playback started from, so its clock is running. False from Play until
+   * then: a player needs 0.2–0.3 s to get going, and a standby player started with it would be that far into the next clip at the cut.
+   */
+  moving: boolean;
+  /**
+   * Seconds since the playhead was last moved by the player on screen; 0 when it is fresh, or was put there by anything else. While
+   * playing, output time passes like the clock, so this much of the clip has been played beyond the playhead.
+   */
+  sinceTick: number;
+};
+
+/**
+ * Whether a playhead reported by the player on screen shows its clock running (`Playback.moving`): it is past the playhead playback
+ * started from by more than a seek can land off it. A player that has only just been told to play reports the time it stands at.
+ */
+export function hasMoved(startedFrom: number, playhead: number): boolean {
+  return playhead - startedFrom > EPSILON;
+}
+
+/** Output time left in the clip under the playhead, counting what has played since the playhead's last tick. */
+const outputLeft = (hit: ClipHit, playback: Playback): number => clipDuration(hit.clip) - hit.offsetInClip - playback.sinceTick;
+
+/** The standby player could be started for `target`: playing, the player on screen moving, and it stands prepared, not rolling. */
+const readyToRoll = (target: PreloadTarget | null, standby: StandbyState, playback: Playback): target is PreloadTarget =>
+  playback.playing && playback.moving && !!target && !standby.rolling && holdsStartOf(standby, target.clip) && prepared(standby);
+
+/**
+ * Whether to start the standby player now, ahead of the cut: the project is playing and the player on screen is moving (never in
+ * the pass that started playback — that cut is handed over to a standing player), the standby player is prepared for the clip to
  * preload (`target`), is not rolling yet, and the clip under the playhead (`hit`) has at most HANDOFF_LEAD of output time left. A clip
  * shorter than the lead is inside the window from its first frame.
  */
-export function shouldStartEarly(hit: ClipHit, target: PreloadTarget | null, standby: StandbyState, playing: boolean): boolean {
-  if (!playing || !target || standby.rolling) return false;
-  if (!holdsStartOf(standby, target.clip) || !prepared(standby)) return false;
-  return inHandoffLead(hit);
-}
-
-/** The clip under the playhead has at most HANDOFF_LEAD of output time left. */
-export function inHandoffLead(hit: ClipHit): boolean {
-  return clipDuration(hit.clip) - hit.offsetInClip <= HANDOFF_LEAD;
+export function shouldStartEarly(hit: ClipHit, target: PreloadTarget | null, standby: StandbyState, playback: Playback): boolean {
+  return readyToRoll(target, standby, playback) && outputLeft(hit, playback) <= HANDOFF_LEAD + TIMER_EARLY;
 }
 
 /**
- * Whether a rolling standby player may keep rolling: still playing, still inside the lead window of the clip under the playhead, and
- * the clip to preload is still the one it was started for, from the start it was started at. Anything else (a pause, a seek away, an
- * edit, the next clip changing) and it must be stopped and seeked back.
+ * How long from now (seconds) a timer should start the standby player: the output time left before the lead window, when
+ * everything `shouldStartEarly` asks for holds except that the window has not been reached. Null when there is nothing to wait for
+ * — it should start now, or not at all. The playhead only ticks every 0.05 s of MEDIA time (0.2 s of playback at 0.25×), so a tick
+ * alone can come far too late in the window; while playing, output time passes like the clock, so the timer needs no tick.
  */
-export function keepRolling(hit: ClipHit | null, target: PreloadTarget | null, standby: StandbyState, playing: boolean): boolean {
-  return playing && !!hit && !!target && holdsStartOf(standby, target.clip) && inHandoffLead(hit);
+export function earlyStartDelay(hit: ClipHit, target: PreloadTarget | null, standby: StandbyState, playback: Playback): number | null {
+  if (!readyToRoll(target, standby, playback)) return null;
+  const left = outputLeft(hit, playback);
+  return left > HANDOFF_LEAD + TIMER_EARLY ? left - HANDOFF_LEAD : null;
+}
+
+/**
+ * Whether a rolling standby player may keep rolling: still playing, still inside the lead window of the clip under the playhead
+ * (give or take HANDOFF_SLACK), and the clip to preload is still the one it was started for, from the start it was started at.
+ * Anything else (a pause, a seek away, an edit, the next clip changing) and it must be stopped and seeked back.
+ */
+export function keepRolling(hit: ClipHit | null, target: PreloadTarget | null, standby: StandbyState, playback: Playback): boolean {
+  return playback.playing && !!hit && !!target && holdsStartOf(standby, target.clip) && outputLeft(hit, playback) <= HANDOFF_LEAD + HANDOFF_SLACK;
 }
 
 /**
