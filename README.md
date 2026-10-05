@@ -420,3 +420,8 @@ Aspect ratio items:
 44. **21:9 at 4K** exports (4672 x 2002, not 5040 x 2160). If the encoder takes the full size on the test iPhone, the limit in `renderSize` (both files) can go; if even the reduced size fails, lower `maxMacroblocks`.
 45. **Old requests.** `ExportRequest` without `frameAspect` still decodes (the field keeps its default 0).
 46. **The creation sheet** appears after the photo library closes, every time (it waits 350 ms - `AFTER_PICKER_MS`); if it sometimes does not appear, raise that number.
+
+Audio cut items:
+
+47. **A split sound in the export.** Split a music track in the middle of a held note and export: there is no click, gap or doubled sound at the cut. The audio tracks are placed on a millisecond grid (`ExportSession.audioTime`, timescale 1000) while the video stays on 1/600 s; check that mixing the two in one composition exports without an error and that `testAudioTrackTimesAreOnAMillisecondGrid` passes (it assumes `CMTime(seconds:preferredTimescale:)` rounds to the nearest tick and that `CMTimeSubtract` of a 1/600 and a 1/1000 time is exact).
+48. **A split sound in the preview** (Expo Go is enough). Play across the cut of a split sound: the second piece comes in on time, with no dropout. It is started 0.22 s early and silent (`AUDIO_LEAD`); if the start of a sound that begins mid-video is clipped or runs ahead of the picture, the audio player starts faster than the video player and the lead needs a value of its own.

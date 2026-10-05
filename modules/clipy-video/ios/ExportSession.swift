@@ -461,6 +461,17 @@ final class ExportSession {
   /// Seconds → CMTime at the timescale every Phase 1–3 computation uses.
   static func time(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: 600) }
 
+  /// The grid the audio tracks (music, voice-overs, sound effects) are placed on: milliseconds, which is what the app
+  /// stores their `start`, `trimStart` and `trimEnd` in (3 decimals). On it every stored value is a whole number of
+  /// ticks, so `start + (cut − trimStart)` of the first piece of a split is exactly the `start` of the second: the two
+  /// pieces meet with no hole and no overlap. On the 1/600 s grid each of the three values was rounded on its own and
+  /// about a third of the cuts were one tick (1.67 ms) off. Only the audio-track path uses it; a composition holds
+  /// times of any timescale (CMTime is a rational number, and `CMTimeAdd` / `CMTimeSubtract` / `CMTimeMinimum` of a
+  /// 1/1000 and a 1/600 time are exact, on their common 1/3000 grid).
+  static let audioTimescale: CMTimeScale = 1000
+  /// Seconds → CMTime on the audio tracks' grid.
+  static func audioTime(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: audioTimescale) }
+
   /// A request gain curve as the maths uses it (`AudioMix.usable`). A request without a curve gets one flat point at
   /// `fallback` (non-finite → 0, negative → 0).
   static func gainPoints(_ points: [ExportGainPoint], fallback: Double) -> [GainPoint] {
@@ -1098,15 +1109,20 @@ final class ExportSession {
     // `start` and clamped to the file's and the video's length, played with the request's gain curve (composition
     // seconds). A track that cannot be used fails the export, as a bad music file always did: an invalid URI and a
     // file without an audio track throw `sessionFailed`, and a file that cannot be read throws AVFoundation's error.
+    // The insert time and the source range are built on the millisecond grid (`audioTime`), so the pieces of a split
+    // track are back to back to the sample; `total` and the file's duration keep their own timescales (the
+    // comparisons and the subtraction below are exact across timescales). The gain ramps stay on the 1/600 s grid of
+    // `applyRamps` (AudioMix merges breakpoints by that tick): a ramp's ends are within half such a tick (0.83 ms) of
+    // the track's, on the track's own mix parameters, where the volume holds before the first and after the last ramp.
     for audio in request.audioTracks {
       if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
       guard let audioURL = URL(string: audio.sourceUri) else { throw ExportError.sessionFailed("Invalid audio file URI: \(audio.sourceUri)") }
       let audioAsset = AVURLAsset(url: audioURL)
       guard let srcAudio = try await audioAsset.loadTracks(withMediaType: .audio).first else { throw ExportError.sessionFailed("No sound in audio file \(audio.sourceUri)") }
       let assetDuration = try await audioAsset.load(.duration)
-      let insertAt = Self.time(max(0, audio.start))
-      let srcEnd = CMTimeMinimum(Self.time(max(0, audio.trimEnd)), assetDuration)
-      let srcStart = CMTimeMinimum(Self.time(max(0, audio.trimStart)), srcEnd)
+      let insertAt = Self.audioTime(max(0, audio.start))
+      let srcEnd = CMTimeMinimum(Self.audioTime(max(0, audio.trimEnd)), assetDuration)
+      let srcStart = CMTimeMinimum(Self.audioTime(max(0, audio.trimStart)), srcEnd)
       // length = min(trimEnd − trimStart, total − start); computed in CMTime so rounding never overshoots.
       let length = CMTimeMinimum(CMTimeSubtract(srcEnd, srcStart), CMTimeSubtract(total, insertAt))
       guard CMTimeCompare(length, .zero) > 0,

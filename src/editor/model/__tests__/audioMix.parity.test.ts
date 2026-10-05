@@ -182,3 +182,45 @@ describe("ExportSession mixes with the curves", () => {
     expect(all).not.toMatch(/toEndVolume: 0\b/);
   });
 });
+
+describe("audio tracks are placed on a millisecond grid, so the two pieces of a split meet exactly", () => {
+  const src = code(session);
+  const loop = code(between(session, "for audio in request.audioTracks {", "\n    }\n"));
+  /** `CMTime(seconds:preferredTimescale:)` as ticks: the nearest whole tick. */
+  const ticks = (seconds: number, scale: number) => Math.round(seconds * scale);
+  const r3 = (v: number) => Math.round(v * 1000) / 1000;
+
+  it("the audio-track path builds its insert time and source range at timescale 1000; everything else stays at 600", () => {
+    expect(src).toContain("static let audioTimescale: CMTimeScale = 1000");
+    expect(src).toContain("static func audioTime(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: audioTimescale) }");
+    expect(src).toContain("static func time(_ seconds: Double) -> CMTime { CMTime(seconds: seconds, preferredTimescale: 600) }");
+    expect(loop).toContain("let insertAt = Self.audioTime(max(0, audio.start))");
+    expect(loop).toContain("let srcEnd = CMTimeMinimum(Self.audioTime(max(0, audio.trimEnd)), assetDuration)");
+    expect(loop).toContain("let srcStart = CMTimeMinimum(Self.audioTime(max(0, audio.trimStart)), srcEnd)");
+    expect(loop).not.toMatch(/Self\.time\(/);
+    // Only that loop uses the audio grid: clips, layers and ramps are untouched.
+    expect(src.split("audioTime(").length - 1).toBe(4); // the definition and the three uses
+    expect(src.split("audioTime(").length - 1 - (loop.split("audioTime(").length - 1)).toBe(1);
+  });
+
+  it("on that grid a split is contiguous: the first piece ends on the tick the second starts on, in the video and in the file", () => {
+    let holesAt600 = 0, cases = 0;
+    for (let start = 0; start < 3; start += 0.137) for (let trimStart = 0; trimStart < 2; trimStart += 0.211) for (let into = 0.3; into < 4; into += 0.173) {
+      const s = r3(start), t = r3(trimStart), cut = r3(t + into);     // stored values: 3 decimals
+      const second = r3(s + (cut - t));                               // the second piece's start, as `audioSplitPieces` stores it
+      cases++;
+      // First piece: inserted at s, source [t, cut). Second: inserted at `second`, source from cut.
+      expect(ticks(s, 1000) + (ticks(cut, 1000) - ticks(t, 1000))).toBe(ticks(second, 1000));
+      if (ticks(s, 600) + (ticks(cut, 600) - ticks(t, 600)) !== ticks(second, 600)) holesAt600++;
+    }
+    expect(cases).toBeGreaterThan(4000);
+    // What it was: on the 1/600 s grid about a third of the cuts had a one-tick hole or overlap.
+    expect(holesAt600 / cases).toBeGreaterThan(0.2);
+  });
+
+  it("the Swift tests assert the same arithmetic", () => {
+    const tests = read("Tests/ExportSessionTests.swift");
+    expect(tests).toContain("func testAudioTrackTimesAreOnAMillisecondGrid() {");
+    expect(tests).toContain("XCTAssertEqual(ExportSession.audioTimescale, 1000)");
+  });
+});

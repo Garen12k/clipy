@@ -404,6 +404,37 @@ final class ExportSessionTests: XCTestCase {
     XCTAssertNil(ExportSession.fileLengthLimit(bitrate: .greatestFiniteMagnitude, seconds: 8))   // too large for Int64
   }
 
+  /// Audio tracks are placed on a millisecond grid: every value the app stores (3 decimals) is a whole number of
+  /// ticks, so the first piece of a split ends on exactly the tick the second starts on — in the video
+  /// (`start + (cut − trimStart)`) and in the file (`cut`). On the 1/600 s grid some of these are a tick apart.
+  func testAudioTrackTimesAreOnAMillisecondGrid() {
+    XCTAssertEqual(ExportSession.audioTimescale, 1000)
+    XCTAssertEqual(ExportSession.audioTime(1.234).value, 1234)
+    XCTAssertEqual(ExportSession.audioTime(1.234).timescale, 1000)
+    func r3(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
+    var holesAt600 = 0
+    var cases = 0
+    for i in 0..<22 {
+      for j in 0..<10 {
+        for k in 0..<22 {
+          let start = r3(Double(i) * 0.137), trimStart = r3(Double(j) * 0.211)
+          let cut = r3(trimStart + 0.3 + Double(k) * 0.173)
+          let second = r3(start + (cut - trimStart))   // the second piece's start, as the app stores it
+          cases += 1
+          let firstEnd = CMTimeAdd(ExportSession.audioTime(start), CMTimeSubtract(ExportSession.audioTime(cut), ExportSession.audioTime(trimStart)))
+          XCTAssertEqual(CMTimeCompare(firstEnd, ExportSession.audioTime(second)), 0, "\(start) \(trimStart) \(cut)")
+          let oldEnd = CMTimeAdd(ExportSession.time(start), CMTimeSubtract(ExportSession.time(cut), ExportSession.time(trimStart)))
+          if CMTimeCompare(oldEnd, ExportSession.time(second)) != 0 { holesAt600 += 1 }
+        }
+      }
+    }
+    XCTAssertGreaterThan(holesAt600, cases / 5)
+    // Times of the two grids mix exactly: the video's length (1/600 s) less an audio start (1/1000 s).
+    let left = CMTimeSubtract(ExportSession.time(4.5), ExportSession.audioTime(1.234))
+    XCTAssertEqual(CMTimeCompare(left, CMTime(value: 9798, timescale: 3000)), 0)
+    XCTAssertEqual(CMTimeCompare(CMTimeMinimum(ExportSession.audioTime(2), ExportSession.time(2.5)), ExportSession.audioTime(2)), 0)
+  }
+
   /// The size for a request, as `start` computes it.
   private func size(_ aspect: String, _ frameAspect: Double, _ resolution: Int) -> CGSize {
     ExportSession.renderSize(aspect: ExportSession.aspectValue(aspect: aspect, frameAspect: frameAspect), resolution: resolution)

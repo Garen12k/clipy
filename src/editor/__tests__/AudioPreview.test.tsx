@@ -33,7 +33,7 @@ jest.mock("expo-audio", () => {
   };
 });
 import { setAudioModeAsync } from "expo-audio";
-import { deleteAudioTrack, setClipTransform, setDucking, updateAudioTrackById } from "@/src/editor/model/ops";
+import { deleteAudioTrack, setClipTransform, setDucking, splitAudioTrackAt, updateAudioTrackById } from "@/src/editor/model/ops";
 import { makeAudioTrack, makeClip, makeProject, type AudioTrack, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { AudioPreview } from "../components/AudioPreview";
@@ -446,6 +446,226 @@ describe("recording", () => {
     await act(() => { st().setRecording(false); });
     expect(playerOf("m").volume).toBe(0.8);
     expect(playerOf("s").volume).toBe(1);
+    await setPlaying(false);
+  });
+});
+
+describe("a sound that begins during playback is started early, silent, so it is already moving at its start", () => {
+  // plays 2 → 6 from 3 s into its file; binary-exact playheads
+  const later = makeAudioTrack({ id: "m", sourceDuration: 10, start: 2, trimStart: 3, trimEnd: 7, volume: 0.8 });
+
+  test("one silent start inside the lead, not before it; audible exactly at the start, with no seek and no second play()", async () => {
+    load([later]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await setPlaying(true);
+    clear();
+    await seek(1.5);
+    await seek(1.75); // 0.25 before: not yet
+    expect(p.calls).toEqual([]);
+    await seek(1.8125); // inside the lead: silenced first, then seeked to the track's first sample and started
+    expect(p.calls).toEqual([["volume", 0], ["seekTo", 3, 0, 0], ["play"]]);
+    clear();
+    for (const at of [1.875, 1.9375, 1.984375]) await seek(at);
+    expect(p.calls).toEqual([]); // rolling, silent: nothing more
+    expect(p.volume).toBe(0);
+    p.currentTime = 3.05; // it got going a little before the start
+    await seek(2);
+    expect(p.calls).toEqual([["volume", 0.8]]);
+    clear();
+    p.currentTime = 3.2;
+    await seek(2.125);
+    expect(p.calls).toEqual([]);
+    expect(p.play).toHaveBeenCalledTimes(1);
+    expect(p.pause).not.toHaveBeenCalled();
+    await seek(6.5); // past its end: paused, as ever
+    expect(p.calls).toEqual([["pause"]]);
+    await setPlaying(false);
+  });
+
+  test("a fade-in starts from the start: the early start is silent, then the volume follows the fade", async () => {
+    load([{ ...later, volume: 1, fadeIn: 2 }]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await setPlaying(true);
+    await seek(1.875);
+    clear();
+    p.currentTime = 3;
+    await seek(2);
+    expect(p.calls).toEqual([]); // the fade's first value is 0 as well
+    p.currentTime = 3.5;
+    await seek(2.5);
+    expect(p.calls).toEqual([["volume", 0.25]]);
+    await setPlaying(false);
+  });
+
+  test("a pause before the start is reached: the player is paused still silent, and the next Play starts it over with a seek", async () => {
+    load([later]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await setPlaying(true);
+    await seek(1.875);
+    clear();
+    await setPlaying(false);
+    expect(p.calls).toEqual([["pause"]]); // not un-silenced while it is still moving
+    expect(p.playing).toBe(false);
+    clear();
+    await setPlaying(true);
+    expect(p.calls).toEqual([["seekTo", 3, 0, 0], ["play"]]); // already at volume 0: not written again
+    await setPlaying(false);
+    clear();
+    await seek(1); // paused, outside: it rests at the track's own volume again
+    expect(p.calls).toEqual([["volume", 0.8]]);
+  });
+
+  test("a seek away while playing, before the start: paused; its volume comes back only once it stands still", async () => {
+    load([later]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await setPlaying(true);
+    await seek(1.875);
+    clear();
+    await seek(0.5);
+    expect(p.calls).toEqual([["pause"]]);
+    clear();
+    await seek(0.5625);
+    expect(p.calls).toEqual([["volume", 0.8]]);
+    clear();
+    await seek(1.875); // and towards the start again: a fresh seek, one play
+    expect(p.calls).toEqual([["volume", 0], ["seekTo", 3, 0, 0], ["play"]]);
+    await setPlaying(false);
+  });
+
+  test("a seek from the lead into the middle of the track: stopped, seeked there and started — never left where it had rolled to", async () => {
+    load([later]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await setPlaying(true);
+    await seek(1.875);
+    clear();
+    await seek(4);
+    expect(p.calls).toEqual([["pause"], ["seekTo", 5, 0, 0], ["play"]]);
+    expect(p.volume).toBe(0); // still silent while it is stopped and moved…
+    clear();
+    p.currentTime = 5.0625;
+    await seek(4.0625);
+    expect(p.calls).toEqual([["volume", 0.8]]); // … audible on the next tick
+    await setPlaying(false);
+  });
+
+  test("the track changes while its player rolls: moved away → paused; another place in the file → started over from there", async () => {
+    load([later]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await setPlaying(true);
+    await seek(1.875);
+    clear();
+    await act(() => { st().apply((x) => updateAudioTrackById(x, "m", { trimStart: 4 })); });
+    expect(p.calls).toEqual([["pause"], ["seekTo", 4, 0, 0], ["play"]]);
+    clear();
+    await act(() => { st().apply((x) => updateAudioTrackById(x, "m", { volume: 0.5 })); }); // nothing to do with where it starts
+    expect(p.calls).toEqual([]);
+    await act(() => { st().apply((x) => updateAudioTrackById(x, "m", { start: 5 })); });
+    expect(p.calls).toEqual([["pause"]]);
+    expect(p.playing).toBe(false);
+    await setPlaying(false);
+  });
+
+  test("the track is deleted, or the preview unmounts, while its player rolls: one guarded pause on the released player", async () => {
+    load([later, makeAudioTrack({ id: "n", sourceDuration: 10 })]);
+    const view = await render(<AudioPreview />);
+    const p = playerOf("m");
+    await setPlaying(true);
+    await seek(1.875);
+    expect(p.playing).toBe(true);
+    p.pause.mockImplementation(() => { throw new Error("Cannot use shared object that was already released"); });
+    clear();
+    await act(() => { st().apply((x) => deleteAudioTrack(x, "m")); });
+    expect(p.pause).toHaveBeenCalledTimes(1);
+    await seek(1.9375);
+    await seek(2);
+    expect(p.calls).toEqual([]); // nothing reaches the released player afterwards
+    await setPlaying(false);
+    await view.unmount();
+  });
+
+  test("its file is missing: never started early", async () => {
+    load([later], {}, [uriOf("m")]);
+    await render(<AudioPreview />);
+    await setPlaying(true);
+    await seek(1.875);
+    await seek(2);
+    expect(players[0].play).not.toHaveBeenCalled();
+    expect(players[0].seekTo).not.toHaveBeenCalled();
+    await setPlaying(false);
+  });
+
+  test("while a voice-over is recorded the early start happens all the same, and stays silent past the start", async () => {
+    load([later]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await act(() => { st().setRecording(true); });
+    await setPlaying(true);
+    clear();
+    await seek(1.875);
+    expect(p.calls).toEqual([["seekTo", 3, 0, 0], ["play"]]);
+    p.currentTime = 3;
+    await seek(2);
+    expect(p.volume).toBe(0);
+    await setPlaying(false);
+  });
+
+  test("a track at the project's start has no lead: seeked and played at Play, exactly as before", async () => {
+    load([makeAudioTrack({ id: "m", sourceDuration: 10 })]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    clear();
+    await setPlaying(true);
+    expect(p.calls).toEqual([["seekTo", 0, 0, 0], ["play"]]);
+    await setPlaying(false);
+  });
+
+  test("Play pressed inside the lead of a track: started early at once (the playhead is not moving yet)", async () => {
+    load([later]);
+    await render(<AudioPreview />);
+    const p = playerOf("m");
+    await seek(1.875);
+    clear();
+    await setPlaying(true);
+    expect(p.calls).toEqual([["volume", 0], ["seekTo", 3, 0, 0], ["play"]]);
+    await setPlaying(false);
+  });
+
+  test("the two pieces of a split: the first plays to the cut untouched, the second is rolling before it and takes over without a start", async () => {
+    load([makeAudioTrack({ id: "m", sourceDuration: 10 })]);
+    st().apply((x) => splitAudioTrackAt(x, "m", 5, "m2"));
+    expect(st().project?.audioTracks.map((t) => [t.id, t.start, t.trimStart, t.trimEnd])).toEqual([["m", 0, 0, 5], ["m2", 5, 5, 10]]);
+    await render(<AudioPreview />);
+    expect(players).toHaveLength(2); // one player per piece, both on the same file
+    const [a, b] = players;
+    await setPlaying(true);
+    expect(a.calls.slice(-2)).toEqual([["seekTo", 0, 0, 0], ["play"]]);
+    clear();
+    a.currentTime = 4.5;
+    await seek(4.5);
+    expect(b.calls).toEqual([]);
+    a.currentTime = 4.8125;
+    await seek(4.8125); // 0.1875 before the cut
+    expect(b.calls).toEqual([["volume", 0], ["seekTo", 5, 0, 0], ["play"]]);
+    a.currentTime = 4.9375;
+    await seek(4.9375);
+    expect(a.calls).toEqual([]); // the first piece: not paused, not seeked, not turned down
+    expect(a.playing).toBe(true);
+    expect(a.volume).toBe(1);
+    expect(b.playing).toBe(true);
+    expect(b.volume).toBe(0);
+    clear();
+    b.currentTime = 5;
+    await seek(5); // the cut
+    expect(a.calls).toEqual([["pause"]]);
+    expect(b.calls).toEqual([["volume", 1]]);
+    expect(b.play).toHaveBeenCalledTimes(1);
+    expect(b.seekTo).toHaveBeenCalledTimes(1);
     await setPlaying(false);
   });
 });
