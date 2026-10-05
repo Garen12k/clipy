@@ -1,7 +1,7 @@
 # Editing UI, round 1 — contextual toolbar and tool strips: design
 
 **Date:** 2026-10-05
-**Status:** Approved by the user 2026-10-05
+**Status:** Implemented 2026-10-05 (confirmed by the user on an iPhone in Expo Go)
 **Builds on:** the "Grand Voyage" UI kit (`src/ui/`, `src/theme/theme.ts`), multi-select (group G), schema v13 (no schema change in this round)
 
 ## 1. What the user gets
@@ -224,6 +224,23 @@ Text panel, Sticker sheet, Sticker panel, Add audio, Templates, Captions, Captio
 - **Timeline:** unchanged. The cut marker selects its clip and opens the Transition strip.
 - **Transport row:** the ratio pill opens the Ratio strip (it no longer owns a sheet).
 
+## 4a. As built
+
+What the code at the end of round 1 does, where it differs from or adds to the sections above. The bar table (2.2) and the tool -> bars table (2.5) match `contextFor` in `src/editor/toolbarContext.ts`, which is the only place that decides them.
+
+- **The strip rises over the timeline instead of resizing the preview.** The bottom area has an explicit height and a negative top margin of `STRIP.lift` (64 pt) while a strip shows, so it covers the timeline's two lowest lanes (the effects lane and the last audio lane). The preview and its `VideoView` never change size or remount. With Strength, Fade or a sound's Volume open, the selected bar can sit under its own strip.
+- **Bars as fixed after the first device try:** Templates and Background are on the clip bar as well as the main bar (never on the layer bar); Select sits right after Trim; Add text is on a text's and a caption's bar; Ducking and Beats are on a selected sound's bar; Beats is left out when the project has no clips; Trim is on the clip and layer bars (decision 4).
+- **The Transition strip follows its clip.** `OpenStrip` is `{ id, key }`; there is no stored cut index. The toolbar passes the selected clip's current place on the main track on every render, so moving the clip under the strip keeps the strip on it, and it closes if that clip becomes the last one. The cut marker selects the cut's left clip, then opens the strip.
+- **Opening a strip leaves multi-select** (`openStrip` calls `exitMultiSelect()` first), so the ratio pill works in that mode. Strips opened from `MultiSelectBar` (Filter, Speed, Volume) keep that bar's own state and close when the mode ends.
+- **The section** (Audio / Text without a selection) is also cleared when the project loses its last clip. Overlay Duplicate does nothing (no haptic, no undo step) when the op returns the same project.
+- **Green screen's strip has no typed colour field:** the switch, Green, Blue and the eight palette swatches, then the strength slider (`ColorRow` has a `compact` mode without the Custom colour field).
+- **Ducking stays a toggle** on the audio bar; it is not a strip.
+- **Strips have no open / close animation.** Transition's chip row does not scroll the selected chip into view when it opens (Blend, the Animation tiles and Speed do, from a start position read at mount; Speed's chips differ in width, so it uses an estimated 64 pt pitch).
+- **Still sheets (round 2):** the Effects add picker, Text, Sticker (panel and sheet), Add audio, Templates, Caption style, Captions, Cover, Beats, Trim and Crop (full screen). The Stickers button opens a sheet titled "Sticker".
+- **Momentary disabled tools** are as listed in 2.3: Keyframe, Replace / Overlay while a pick runs, Freeze while a capture runs.
+- **Dead code removed:** `TOOL_GROUPS`, `groupForSelection`, `ToolGroupId`, the `transitionFor` state and the `role` prop of `ToolButton` (it is always a button; an `active` one reports `selected`). `toolGroups.ts` keeps only `TOOL_META` and `IoniconName`.
+- **Tests that changed.** The toolbar suites lost every "disabled with no selection" and every tab / group expectation (replaced by exact bar lists and "not rendered" checks); `strips.tiles.test.tsx` no longer asserts the Background note; `SpeedSheet.test.tsx` "length label" no longer expects the clip length on Normal while a curve is active. No editor-screen test exists, so the cut marker, Export closing a strip and the `VideoView` staying mounted are checked by reading the code and on the phone.
+
 ## 5. Testing
 
 - `toolbarContext`: a table of selections → the exact tool lists; every tool id reachable; stale ids; `selectionKey`.
@@ -253,5 +270,5 @@ Text panel, Sticker sheet, Sticker panel, Add audio, Templates, Captions, Captio
 9. **The Effects add sheet stays a sheet** in round 1 (it is a picker that adds and closes; round 2).
 10. **Height:** bar 86, strip 150, lift 64 (two lanes), by negative margin on the bottom area; nothing above it moves.
 11. **Strips have no open / close animation** in round 1.
-12. **The transition index moves from the screen's state to the strip store** (`EditorToolbar` loses its `transitionFor` / `onTransitionChange` props).
+12. **The transition index leaves the screen's state** (`EditorToolbar` loses its `transitionFor` / `onTransitionChange` props). It is not stored in the strip store either (see As built): the strip reads the selected clip's place on every render.
 13. **Hiding the bar is driven by the strip itself** (`useStripPresence`), not by the open-strip id, so sheets not yet converted keep working during the conversion and the multi-select bar needs no knowledge of the store.

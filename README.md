@@ -78,7 +78,7 @@ Details per platform:
 
 ## Design
 
-The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and a five-group editor toolbar (Edit, Text, Stickers, Effects, Audio). Every colour, font, radius and duration comes from `src/theme/theme.ts`; the shared kit lives in `src/ui/`. UI fonts are Oswald (titles) and Montserrat (body), both under the SIL Open Font License (OFL). Regenerate the app icon and splash with `npm run gen:brand`.
+The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an editor toolbar that follows what is selected, with small tool strips for the quick tools. Every colour, font, radius and duration comes from `src/theme/theme.ts`; the shared kit lives in `src/ui/`. UI fonts are Oswald (titles) and Montserrat (body), both under the SIL Open Font License (OFL). Regenerate the app icon and splash with `npm run gen:brand`.
 
 ## Layout
 
@@ -155,9 +155,24 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and a f
   speed (`scaleTimeRange`), sticker rendering, and a `Transcriber`. This native code only compiles
   on EAS Build — it is reviewed by reading, not yet verified by a real build.
 
+## Editing tools
+
+The row of tools under the preview follows what you have selected.
+
+- **Nothing selected** - Edit, Audio, Text, Stickers, Overlay, Effects, Filter, Adjust, Ratio, Background, Cover, Templates. Edit, Filter, Adjust and Background work on the clip under the white line.
+- **A clip** - Split, Trim, Select, Speed, Volume, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete.
+- **A layer** - the same without Split, Select, Background, Templates, Transition and Freeze, plus Blend, Forward and Back.
+- **A text** - Edit, Animate, Keyframe, Duplicate, Delete, Add text. **A caption** - Edit, Captions, Duplicate, Delete, Add text. **A sticker** - Edit, Animate, Keyframe, Duplicate, Delete.
+- **A sound** - Volume, Fade, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
+- **Audio** and **Text** (from the first row) open their own row: Add audio, Ducking, Beats; Add text, Captions.
+
+Every row except the first has a **back arrow** at the left that clears the selection. Tools that do not apply are not shown (a photo has no Speed, the last clip has no Transition); only Keyframe (the white line is not on the item), Replace / Overlay (while the picker is open) and Freeze (while it captures) grey out for a moment.
+
+**Strips.** Quick tools (Filter, Adjust, Speed, Volume, Opacity, Animate, Mask, Blend, Green screen, Transform, Background, Ratio, Transition, Fade, Strength) open as a small panel in place of the row. Nothing dims and the video keeps its size; you can play, scrub and tap the timeline while it is open. It rises over the two lowest timeline rows. The round **✓** closes it, and so does selecting something else. The ratio pill next to the play button and the mark between two clips open the Ratio and Transition strips. The bigger pickers (Text, Stickers, Add audio, Templates, Captions, Cover, Beats, Trim, Crop, the Effects list) are still full sheets.
+
 ## Clip tools
 
-Select a clip, then use the tools under the preview.
+Select a clip, then use the tools under the preview (see Editing tools).
 
 - **Transform** — pinch, drag or twist the clip on the preview (it snaps gently to the centre,
   straight angles, Fit and Fill). The Transform sheet has Rotate 90°, Flip horizontal / vertical,
@@ -178,7 +193,7 @@ turns them into ordinary video before composing; this code is uncompiled until a
 
 ## Look
 
-Filters, Adjust, Effects and Transitions are in the **Effects** group of the toolbar.
+Filter and Adjust are on the first row and on a selected clip's row; Transition is on a clip's row (or tap the mark between two clips); Effects is on the first row.
 
 - **Filters** — 19 filters plus None. Each has a **Strength** slider (0-100). "Apply to all clips"
   copies the filter and its strength.
@@ -226,7 +241,7 @@ The exported video does the same, but that Swift has never been compiled.
 
 ## Text and captions
 
-Everything here is in the **Text** group of the toolbar.
+Everything here is under **Text** on the first row, or on the row of a selected text.
 
 - **Templates** - a strip at the top of the text panel with twelve one-tap looks: Clean title, Bold pop,
   Neon, Subtitle bar, Comic, Retro, Handwritten, Elegant, Shadowed, Outline only, Sticker label, Soft glow.
@@ -248,7 +263,7 @@ never been compiled.
 
 ## Audio
 
-Everything here is in the **Audio** group of the toolbar.
+Everything here is under **Audio** on the first row, or on the row of a selected sound.
 
 - **Add audio** opens a sheet with four tabs: **Music** (the bundled list, still empty), **Files** (pick an
   audio file), **Effects** (ten built-in sounds: Whoosh, Swoosh, Pop, Click, Ding, Beep, Riser, Drop, Tick,
@@ -268,7 +283,7 @@ that has never been compiled.
 
 ## Layers
 
-Everything here is in the **Edit** group of the toolbar.
+Overlay is on the first row; the rest is on the row of a selected layer.
 
 - **Overlay** - pick a photo or a video. It is added as a layer on top of the main video at the playhead,
   small and in the middle, with its own bar on a **layers** lane of the timeline. Up to 8 layers; at most
