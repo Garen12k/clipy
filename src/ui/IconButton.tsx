@@ -8,8 +8,8 @@ export function IconButton({ name, onPress, disabled, accessibilityLabel, color 
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ disabled: !!disabled }}
       disabled={disabled} onPress={onPress} hitSlop={8}
-      style={{ padding: theme.space.sm, opacity: disabled ? 0.35 : 1 }}>
-      <Ionicons name={name} size={24} color={color} />
+      style={{ width: theme.size.iconButton, height: theme.size.iconButton, alignItems: "center", justifyContent: "center", opacity: disabled ? 0.35 : 1 }}>
+      <Ionicons name={name} size={theme.size.icon.lg} color={color} />
     </PressableScale>
   );
 }

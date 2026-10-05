@@ -1,17 +1,32 @@
+import { useEffect, useRef } from "react";
 import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { theme } from "@/src/theme/theme";
+import { liftTo, pressTo } from "./motion";
+import { isReducedMotion } from "./useReducedMotion";
 
 const APressable = Animated.createAnimatedComponent(Pressable);
-type Props = Omit<PressableProps, "style"> & { style?: StyleProp<ViewStyle> };
+const LIFT = theme.motion.selectedScale - 1;
+type Props = Omit<PressableProps, "style"> & { style?: StyleProp<ViewStyle>; /** The selected chip / tile sits 3 % larger. */ lifted?: boolean };
 
-/** Pressable that dips to 0.96 while held. */
-export function PressableScale({ style, onPressIn, onPressOut, ...rest }: Props) {
-  const s = useSharedValue(1);
-  const anim = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
+/**
+ * THE pressable of the kit: it dips to 0.96 while held, and sits 3 % larger while `lifted` (the selected chip or tile).
+ * Both are shared values set from the handlers / an effect — pressing never re-renders. Motion comes from motion.ts (Reduce Motion: no tween).
+ */
+export function PressableScale({ style, onPressIn, onPressOut, lifted = false, ...rest }: Props) {
+  const press = useSharedValue(1);
+  const lift = useSharedValue(lifted ? 1 : 0);
+  const mounted = useRef(false);
+  // Only a CHANGE of `lifted` animates: not the mount, not another re-render. The shared value is deliberately not a dependency:
+  // it is stable on the device, but the Jest mock hands out a new one on every render, which would re-run this.
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
+    lift.value = liftTo(lifted, isReducedMotion());
+  }, [lifted]);
+  const anim = useAnimatedStyle(() => ({ transform: [{ scale: press.value * (1 + LIFT * lift.value) }] }));
   return (
     <APressable {...rest} style={[style, anim]}
-      onPressIn={(e) => { s.value = withTiming(0.96, { duration: theme.motion.press }); onPressIn?.(e); }}
-      onPressOut={(e) => { s.value = withSpring(1); onPressOut?.(e); }} />
+      onPressIn={(e) => { press.value = pressTo(true, isReducedMotion()); onPressIn?.(e); }}
+      onPressOut={(e) => { press.value = pressTo(false, isReducedMotion()); onPressOut?.(e); }} />
   );
 }

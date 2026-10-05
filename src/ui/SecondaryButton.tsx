@@ -1,16 +1,16 @@
 import { Text } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { buttonBox, buttonLabel, DISABLED_OPACITY } from "./buttonStyle";
 import { PressableScale } from "./PressableScale";
 
-type Props = { title: string; onPress: () => void; disabled?: boolean; danger?: boolean; /** Defaults to `title`; set it when several buttons on a screen share a title. */ accessibilityLabel?: string };
+type Props = { title: string; onPress: () => void; disabled?: boolean; danger?: boolean; compact?: boolean; /** Defaults to `title`; set it when several buttons on a screen share a title. */ accessibilityLabel?: string };
 
-export function SecondaryButton({ title, onPress, disabled, danger, accessibilityLabel }: Props) {
+export function SecondaryButton({ title, onPress, disabled, danger, compact, accessibilityLabel }: Props) {
   const color = danger ? theme.colors.danger : theme.colors.text;
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress}
-      style={{ borderRadius: theme.radius.pill, borderWidth: 1.5, borderColor: danger ? theme.colors.danger : theme.colors.hairline, opacity: disabled ? 0.4 : 1,
-        paddingVertical: theme.space.md, paddingHorizontal: theme.space.xl, alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ fontFamily: theme.fonts.bodyBold, fontSize: 13, color, letterSpacing: 1, textTransform: "uppercase" }}>{title}</Text>
+      style={[buttonBox(compact), { borderWidth: 1.5, borderColor: danger ? theme.colors.danger : theme.colors.hairline, opacity: disabled ? DISABLED_OPACITY : 1 }]}>
+      <Text style={[buttonLabel(compact), { color }]}>{title}</Text>
     </PressableScale>
   );
 }
