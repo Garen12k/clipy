@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLayoutEffect } from "react";
-import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { Keyboard, Pressable, ScrollView, TextInput, useWindowDimensions, View } from "react-native";
 import { create } from "zustand";
 import { theme } from "@/src/theme/theme";
+import { useKeyboard } from "./keyboard";
 import { Body, Title } from "./Text";
 
 /** Heights in points. `compact` and the regular / typing rules give the bottom area's height while a panel shows (see `panelHeight`). */
@@ -27,6 +28,7 @@ type Props = { visible: boolean; onClose: () => void; title: string; size?: Pane
  * A tall inline tool panel that takes the place of the timeline and the toolbar — NOT a Modal: no scrim, the preview above it stays
  * usable. Every part has an explicit height (never `flex: 1` for height); the body scrolls vertically when its content is taller.
  * The bar that hosts it owns the top hairline and the bottom padding (safe area or keyboard).
+ * While the keyboard is up the panel takes its typing height and does not render its lead; the host pads the bottom by the keyboard.
  */
 export function ToolPanel({ visible, onClose, title, size = "regular", action, lead, scroll = true, bodyTestID, children }: Props) {
   const { height: windowH } = useWindowDimensions();
@@ -36,11 +38,26 @@ export function ToolPanel({ visible, onClose, title, size = "regular", action, l
     usePanelPresence.setState((s) => ({ count: s.count + 1, size }));
     return () => usePanelPresence.setState((s) => ({ ...s, count: s.count - 1 }));
   }, [visible, size]);
-  if (!visible) return null;
-  const typing = false;   // Task 2: the keyboard
+  const typing = useKeyboard((s) => s.height > 0);
+  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<View>(null);
   const height = panelHeight(size, windowH, typing) - 1;
   const showLead = !!lead && !typing;
   const bodyH = height - PANEL.header - (showLead ? PANEL.lead : 0);
+  // The keyboard came up (the panel is now short): bring the focused field to the top of the body. An effect, never a scroll callback.
+  useEffect(() => {
+    if (!visible || !typing || !scroll) return;
+    const input = TextInput.State.currentlyFocusedInput();
+    const content = contentRef.current;
+    if (!input || !content) return;
+    input.measureLayout(content, (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: false }), () => {});
+  }, [visible, typing, scroll, bodyH]);
+  // Closing the panel puts the keyboard away.
+  useEffect(() => {
+    if (!visible) return;
+    return () => Keyboard.dismiss();
+  }, [visible]);
+  if (!visible) return null;
   const content = typeof children === "function" ? children(bodyH) : children;
   return (
     <View testID="tool-panel" style={{ height, backgroundColor: theme.colors.surface }}>
@@ -59,9 +76,9 @@ export function ToolPanel({ visible, onClose, title, size = "regular", action, l
       </View>
       {showLead ? <View testID="tool-panel-lead" style={{ height: PANEL.lead, flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.lg }}>{lead}</View> : null}
       {scroll ? (
-        <ScrollView testID={bodyTestID ?? "tool-panel-body"} style={{ height: bodyH }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
+        <ScrollView ref={scrollRef} testID={bodyTestID ?? "tool-panel-body"} style={{ height: bodyH }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
           contentContainerStyle={{ paddingHorizontal: theme.space.lg, paddingVertical: theme.space.md }}>
-          <View collapsable={false} style={{ gap: theme.space.lg }}>{content}</View>
+          <View ref={contentRef} collapsable={false} style={{ gap: theme.space.lg }}>{content}</View>
         </ScrollView>
       ) : (
         <View testID={bodyTestID ?? "tool-panel-body"} style={{ height: bodyH, paddingHorizontal: theme.space.lg }}>{content}</View>

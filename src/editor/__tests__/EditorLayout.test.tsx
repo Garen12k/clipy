@@ -3,10 +3,12 @@ jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-05T10:00:00.000Z" }
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn(async () => null) }));
 jest.mock("@/src/projects", () => ({ storage: { importMedia: jest.fn(), saveStill: jest.fn() } }));
 jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () => ({ uri: "file:///thumb.jpg" })) }));
+jest.mock("@/src/projects/prefs", () => ({ prefs: { getRecentEmoji: jest.fn(async () => []), pushRecentEmoji: jest.fn(async () => {}) } }));
 import { useEffect } from "react";
 import { Dimensions, View } from "react-native";
 import { makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useKeyboard } from "@/src/ui/keyboard";
 import { panelHeight } from "@/src/ui/ToolPanel";
 import { BAR_HEIGHT, STRIP } from "@/src/ui/ToolStrip";
 import { EditorLayout } from "../components/EditorLayout";
@@ -29,6 +31,7 @@ const ui = () => <EditorLayout top={null} preview={<Probe />} transport={<Transp
 
 beforeEach(() => {
   mounts = 0;
+  useKeyboard.setState({ height: 0 });
   closeStrip();
   st().reset();
   st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })] }));
@@ -114,4 +117,59 @@ test("a panel closes when the selection changes, and the timeline is back", asyn
   await act(() => { st().select("a"); });
   expect(screen.queryByTestId("tool-panel")).toBeNull();
   expect(screen.getByTestId("timeline-root")).toBeTruthy();
+});
+
+test("the keyboard alone moves nothing: it only counts while a tool shows", async () => {
+  await render(ui());
+  await act(() => { useKeyboard.setState({ height: 336 }); });
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: BAR_HEIGHT + 8, paddingBottom: 8, marginTop: 0 });
+  expect(screen.getByTestId("slot-timeline")).not.toHaveStyle({ height: 0 });
+});
+
+test("a panel with the keyboard: typing height, padded by the keyboard, so the panel sits on it and the preview gets the rest — without remounting", async () => {
+  await render(ui());
+  const probe = screen.getByTestId("probe");
+  const slot = screen.getByTestId("slot-preview");
+  await fireEvent.press(btn("Stickers"));
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: panelHeight("regular", H) + 8, paddingBottom: 8 });
+  await act(() => { useKeyboard.setState({ height: 336 }); });
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: panelHeight("regular", H, true) + 336, paddingBottom: 336, marginTop: 0 });
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: panelHeight("regular", H, true) - 1 });
+  expect(btn("Play")).toBeTruthy();
+  expect(screen.getByTestId("probe")).toBe(probe);
+  await act(() => { useKeyboard.setState({ height: 382 }); });          // another keyboard: the padding follows it
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: panelHeight("regular", H, true) + 382, paddingBottom: 382 });
+  await act(() => { useKeyboard.setState({ height: 0 }); });            // the keyboard was dismissed: the panel stays, at its size
+  expect(screen.getByRole("header", { name: "Sticker" })).toBeTruthy();
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: panelHeight("regular", H) + 8, paddingBottom: 8 });
+  expect(screen.getByTestId("probe")).toBe(probe);
+  expect(screen.getByTestId("slot-preview")).toBe(slot);
+  expect(slot).toHaveStyle({ flex: 1 });
+  expect(mounts).toBe(1);
+});
+
+test("a strip with the keyboard sits on the keyboard, is not lifted, and the timeline gives its place — still mounted, and the preview too", async () => {
+  await render(ui());
+  const probe = screen.getByTestId("probe");
+  const scroll = screen.getByTestId("timeline-scroll");
+  await act(() => { st().select("a"); });
+  await fireEvent.press(btn("Opacity"));
+  await act(() => { useKeyboard.setState({ height: 260 }); });
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 260, paddingBottom: 260, marginTop: 0 });
+  expect(screen.getByTestId("slot-timeline", hidden)).toHaveStyle({ height: 0, overflow: "hidden" });
+  expect(screen.getByTestId("timeline-scroll", hidden)).toBe(scroll);
+  expect(screen.getByTestId("probe")).toBe(probe);
+  await act(() => { useKeyboard.setState({ height: 0 }); });
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -STRIP.lift });
+  expect(screen.getByTestId("slot-timeline")).not.toHaveStyle({ height: 0 });
+  expect(screen.getByTestId("timeline-scroll")).toBe(scroll);
+  expect(screen.getByTestId("probe")).toBe(probe);
+  expect(mounts).toBe(1);
+});
+
+test("leaving the editor with the keyboard up leaves no height behind for the next visit", async () => {
+  const view = await render(ui());
+  await act(() => { useKeyboard.setState({ height: 336 }); });
+  await view.unmount();
+  expect(useKeyboard.getState().height).toBe(0);
 });

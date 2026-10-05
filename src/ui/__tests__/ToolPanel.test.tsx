@@ -1,8 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
-import { Dimensions, Text } from "react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { Dimensions, Keyboard, Text, TextInput } from "react-native";
+import { useKeyboard } from "../keyboard";
 import { PANEL, panelHeight, ToolPanel, usePanelPresence } from "../ToolPanel";
 
 const H = Dimensions.get("window").height;
+
+afterEach(() => { useKeyboard.setState({ height: 0 }); });
 
 test("panelHeight: regular is 46 % of the window between 300 and 430, compact is 240, typing is 22 % between 148 and 200", () => {
   expect(PANEL).toMatchObject({ header: 44, lead: 44, compact: 240 });
@@ -68,4 +71,36 @@ test("hidden: renders nothing and is not counted; visible: counted with its size
   expect(usePanelPresence.getState()).toEqual({ count: 1, size: "regular" });
   await view.unmount();
   expect(usePanelPresence.getState().count).toBe(0);
+});
+
+test("with the keyboard up the panel takes its typing height and drops the lead; it comes back when the keyboard goes", async () => {
+  await render(<ToolPanel visible onClose={() => {}} title="Sticker" lead={<Text>tabs</Text>}><Text>body</Text></ToolPanel>);
+  await act(() => { useKeyboard.setState({ height: 336 }); });
+  const typing = panelHeight("regular", H, true) - 1;
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: typing });
+  expect(screen.queryByTestId("tool-panel-lead")).toBeNull();
+  expect(screen.getByTestId("tool-panel-body")).toHaveStyle({ height: typing - PANEL.header });
+  expect(screen.getByText("body")).toBeTruthy();                       // still open
+  await act(() => { useKeyboard.setState({ height: 0 }); });
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: panelHeight("regular", H) - 1 });
+  expect(screen.getByTestId("tool-panel-lead")).toBeTruthy();
+});
+
+test("when the keyboard comes up a scrolling panel measures the focused field to bring it into view", async () => {
+  const measureLayout = jest.fn();
+  const focused = jest.spyOn(TextInput.State, "currentlyFocusedInput").mockReturnValue({ measureLayout } as never);
+  await render(<ToolPanel visible onClose={() => {}} title="Text"><TextInput accessibilityLabel="field" /></ToolPanel>);
+  expect(measureLayout).not.toHaveBeenCalled();
+  await act(() => { useKeyboard.setState({ height: 336 }); });
+  expect(measureLayout).toHaveBeenCalledTimes(1);
+  focused.mockRestore();
+});
+
+test("hiding the panel dismisses the keyboard", async () => {
+  const dismiss = jest.spyOn(Keyboard, "dismiss").mockImplementation(() => {});
+  const view = await render(<ToolPanel visible onClose={() => {}} title="Text"><Text>body</Text></ToolPanel>);
+  expect(dismiss).not.toHaveBeenCalled();
+  await view.rerender(<ToolPanel visible={false} onClose={() => {}} title="Text"><Text>body</Text></ToolPanel>);
+  expect(dismiss).toHaveBeenCalledTimes(1);
+  dismiss.mockRestore();
 });

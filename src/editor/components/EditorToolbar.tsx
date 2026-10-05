@@ -16,6 +16,7 @@ import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { IconButton } from "@/src/ui/IconButton";
+import { useKeyboard } from "@/src/ui/keyboard";
 import { useToast } from "@/src/ui/Toast";
 import { ToolButton } from "@/src/ui/ToolButton";
 import { panelHeight, usePanelPresence } from "@/src/ui/ToolPanel";
@@ -62,6 +63,7 @@ const selOf = (s: SelectionState, section: Section): ToolbarSelection => ({ clip
  * during a pick, Freeze during a capture). The height is explicit; while a strip shows the area grows upwards over the timeline's
  * lowest lanes (a negative top margin) instead of pushing the preview. The root must stay a direct child of the screen, after the timeline.
  * A tall panel (`ToolPanel`) takes the bar's place too, at its own explicit height and without a lift: the editor's layout hides the timeline then.
+ * While a tool has the keyboard the bottom padding is the keyboard's height instead of the safe area's, and a strip is not lifted either.
  */
 export function EditorToolbar() {
   // `selectedClipId` holds a main clip's or a layer's id. `selectedIndex` is its place on the main track now (-1 for a layer): the
@@ -91,6 +93,7 @@ export function EditorToolbar() {
   const panelSize = usePanelPresence((s) => (s.count > 0 ? s.size : null));
   const { height: windowH } = useWindowDimensions();
   const toolShown = stripShown || panelSize !== null;
+  const keyboard = useKeyboard((s) => s.height);
   // The text panel closing — by ✓, by the closer or by Export — removes a text left empty (as closing the sheet did).
   const textOpenFor = strip?.id === "text" ? selectedOverlayId : null;
   const lastText = useRef<string | null>(null);
@@ -280,12 +283,14 @@ export function EditorToolbar() {
   // Multi-select: the action bar takes the toolbar's place. This component stays mounted (its strip closer too).
   if (multi) return <MultiSelectBar />;
 
-  const pad = Math.max(insets.bottom, theme.space.sm);
-  const area = panelSize ? panelHeight(panelSize, windowH) : stripShown ? STRIP.height : BAR_HEIGHT;
+  // The keyboard only counts while a tool shows: the tool then sits on it, at its typing height, and nothing is lifted.
+  const typing = toolShown && keyboard > 0;
+  const pad = typing ? keyboard : Math.max(insets.bottom, theme.space.sm);
+  const area = panelSize ? panelHeight(panelSize, windowH, typing) : stripShown ? STRIP.height : BAR_HEIGHT;
 
   return (
     <View testID="editor-toolbar" style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: pad,
-      height: area + pad, marginTop: stripShown ? -STRIP.lift : 0 }}>
+      height: area + pad, marginTop: stripShown && !typing ? -STRIP.lift : 0 }}>
       {toolShown ? null : (
         <View testID="toolbar-row" style={{ height: BAR_HEIGHT - 1, flexDirection: "row", alignItems: "center" }}>
           {bar === "main" ? null : <IconButton name="chevron-back" accessibilityLabel="Back to main tools" onPress={back} />}
