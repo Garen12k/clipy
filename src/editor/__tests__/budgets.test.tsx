@@ -1,10 +1,19 @@
+import { fireEvent, render, screen } from "@testing-library/react-native";
+jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-05T10:00:00.000Z" }));
+jest.mock("expo-video", () => {
+  const { View } = require("react-native");
+  const { useState } = require("react");
+  const make = () => ({ playing: false, loop: false, muted: false, volume: 1, currentTime: 0, playbackRate: 1, timeUpdateEventInterval: 0, audioMixingMode: "auto", preservesPitch: true,
+    play: jest.fn(), pause: jest.fn(), replaceAsync: jest.fn(async () => {}), addListener: jest.fn(() => ({ remove: () => {} })) });
+  return { useVideoPlayer: (_source: unknown, setup?: (p: unknown) => void) => useState(() => { const p = make(); setup?.(p); return p; })[0], VideoView: View };
+});
 import { theme } from "@/src/theme/theme";
 import { PANEL, panelHeight } from "@/src/ui/ToolPanel";
 import { BAR_HEIGHT, STRIP } from "@/src/ui/ToolStrip";
-import { readFileSync } from "fs";
-import { join } from "path";
 import { makeAudioTrack, makeClip, makeEffect, makeOverlay, makeProject, type Project } from "@/src/editor/model/types";
+import { useEditorStore } from "@/src/editor/store";
 import { MULTI_BAR_HEIGHT } from "../components/MultiSelectBar";
+import { PreviewPlayer } from "../components/PreviewPlayer";
 import { CLIP_AREA_HEIGHT, LANE_GAP, LANE_HEIGHT, laneLift, laneModel } from "../timelineLayout";
 
 const TOP_BAR = theme.size.row, TRANSPORT = theme.size.row;
@@ -75,11 +84,28 @@ test("the preview with lanes on demand, on two phones: slot heights and the 9:16
   expect(frame(small(THREE_LANES), 375)).toEqual({ w: 124, h: 221 });
 });
 
-test("the frame's margin in the preview is the smallest step of the scale", () => {
-  const source = readFileSync(join(__dirname, "..", "components", "PreviewPlayer.tsx"), "utf8");
-  expect(source).toContain('<View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.xs }}>');
-  expect(source).not.toContain("padding: theme.space.md");
+test("the frame's margin in the preview is the smallest step of the scale: the rendered frame in a measured slot", async () => {
   expect(FRAME_PAD).toBe(4);
+  useEditorStore.getState().reset();
+  useEditorStore.getState().setProject(CLIPS_ONLY);
+  await render(<PreviewPlayer />);
+  const slot = screen.getByLabelText("Preview").parent!;
+  const big = (p: Project) => preview(p, 852, 59, 34, BAR_HEIGHT);
+  for (const p of [CLIPS_ONLY, TWO_LANES, THREE_LANES]) {
+    // 9:16 on a 393-wide phone: the slot's height limits the frame, which then stands FRAME_PAD from the slot's top and bottom.
+    await fireEvent(slot, "layout", { nativeEvent: { layout: { width: 393, height: big(p) } } });
+    const { width, height } = screen.getByLabelText("Preview").props.style as { width: number; height: number };
+    expect((big(p) - height) / 2).toBe(FRAME_PAD);
+    expect({ w: Math.round(width), h: height }).toEqual(frame(big(p), 393));
+    expect(width / height).toBeCloseTo(9 / 16, 3);
+  }
+  // A frame the slot's width limits (16:9) stands FRAME_PAD from its sides instead.
+  useEditorStore.getState().setProject(makeProject({ clips, aspectRatio: "16:9" }));
+  await render(<PreviewPlayer />);
+  await fireEvent(screen.getByLabelText("Preview").parent!, "layout", { nativeEvent: { layout: { width: 393, height: 445 } } });
+  const wide = screen.getByLabelText("Preview").props.style as { width: number; height: number };
+  expect((393 - wide.width) / 2).toBe(FRAME_PAD);
+  expect(wide.width / wide.height).toBeCloseTo(16 / 9, 3);
 });
 
 test("what has to fit, fits: a tool button in the bar and in a strip's row, three slider rows, the header's targets, a panel's header", () => {
