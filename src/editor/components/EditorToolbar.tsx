@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
 import { addTextOverlay, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, duplicateOverlay, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
@@ -11,13 +11,14 @@ import { useItemClip } from "@/src/editor/useItem";
 import { useFreezeFrame } from "@/src/editor/useFreezeFrame";
 import { TOOL_META, type IoniconName } from "@/src/editor/toolGroups";
 import { contextFor, selectionKey, type Section, type SelectionState, type ToolbarSelection, type ToolId } from "@/src/editor/toolbarContext";
-import { closeStrip, openStrip, useStripCloser, useToolStrip } from "@/src/editor/toolStrip";
+import { closeStrip, openStrip, rekeyStrip, useStripCloser, useToolStrip } from "@/src/editor/toolStrip";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { IconButton } from "@/src/ui/IconButton";
 import { useToast } from "@/src/ui/Toast";
 import { ToolButton } from "@/src/ui/ToolButton";
+import { panelHeight, usePanelPresence } from "@/src/ui/ToolPanel";
 import { BAR_HEIGHT, STRIP, useStripPresence } from "@/src/ui/ToolStrip";
 import { AddAudioSheet } from "./AddAudioSheet";
 import { AdjustSheet } from "./AdjustSheet";
@@ -49,13 +50,10 @@ import { TransitionSheet } from "./TransitionSheet";
 import { TrimSheet } from "./TrimSheet";
 import { VolumeSheet } from "./VolumeSheet";
 
-type PanelFor = { id: string; kind: "text" | "sticker" } | null;
 /** Why a layer was not copied (`duplicateLayerRefusal`). */
 const DUPLICATE_REFUSED = { limit: "You've reached the layer limit.", overlap: "Only two video layers can play at the same time.", noRoom: "There's no room after this layer." } as const;
 /** What `contextFor` reads: the store's selection plus the toolbar's own section. */
 const selOf = (s: SelectionState, section: Section): ToolbarSelection => ({ clipId: s.selectedClipId, overlayId: s.selectedOverlayId, effectId: s.selectedEffectId, audioId: s.selectedAudioId, section });
-
-type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void };
 
 /**
  * The editor's bottom area: ONE bar whose tools follow the selection (`contextFor` decides which bar and which tools; this component
@@ -63,8 +61,9 @@ type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void };
  * A tool that does not apply is not on the bar; the only disabled buttons are momentary (Keyframe off its item, Replace / Overlay
  * during a pick, Freeze during a capture). The height is explicit; while a strip shows the area grows upwards over the timeline's
  * lowest lanes (a negative top margin) instead of pushing the preview. The root must stay a direct child of the screen, after the timeline.
+ * A tall panel (`ToolPanel`) takes the bar's place too, at its own explicit height and without a lift: the editor's layout hides the timeline then.
  */
-export function EditorToolbar({ panelFor, onPanelChange }: Props) {
+export function EditorToolbar() {
   // `selectedClipId` holds a main clip's or a layer's id. `selectedIndex` is its place on the main track now (-1 for a layer): the
   // Transition strip's cut, read on every render so a reorder or an undo while it is open cannot leave it on another clip's cut.
   const selectedId = useEditorStore((s) => s.selectedClipId);
@@ -77,8 +76,8 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
   // A main-bar entry that opens a bar without a selection (Audio, Text). Toolbar state: any change of the selection leaves it, and
   // so does the project losing its last clip (else the Text bar would come back by itself with the next clip).
   const [section, setSection] = useState<Section>(null);
-  // The tools that are still modal sheets (the strips live in the strip store).
-  const [sheet, setSheet] = useState<"trim" | "addAudio" | "sticker" | "captions" | "templates" | "crop" | "effect" | "beats" | "cover" | null>(null);
+  // The two tools that are still modal (Cover is a sheet, Crop a full screen); every other tool lives in the tool store.
+  const [sheet, setSheet] = useState<"crop" | "cover" | null>(null);
   const key = useEditorStore(selectionKey);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   useEffect(() => { setSection(null); }, [key]);
@@ -89,6 +88,19 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
   useStripCloser();
   const strip = useToolStrip((s) => s.open);
   const stripShown = useStripPresence((s) => s.count > 0);
+  const panelSize = usePanelPresence((s) => (s.count > 0 ? s.size : null));
+  const { height: windowH } = useWindowDimensions();
+  const toolShown = stripShown || panelSize !== null;
+  // The text panel closing — by ✓, by the closer or by Export — removes a text left empty (as closing the sheet did).
+  const textOpenFor = strip?.id === "text" ? selectedOverlayId : null;
+  const lastText = useRef<string | null>(null);
+  useEffect(() => {
+    const was = lastText.current;
+    lastText.current = textOpenFor;
+    if (!was || was === textOpenFor) return;
+    const overlay = useEditorStore.getState().project?.overlays.find((o) => o.id === was);
+    if (overlay && isTextOverlay(overlay) && overlay.text.trim().length === 0) apply((x) => deleteOverlay(x, was));
+  }, [textOpenFor, apply]);
   const reversed = !!useItemClip(selectedId)?.reversed;
   const ducking = useEditorStore((s) => !!s.project?.ducking);
   const multi = useEditorStore((s) => s.multiSelect !== null);
@@ -147,18 +159,7 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
     const range = defaultOverlayRange(project, playhead);
     apply((x) => addTextOverlay(x, { ...makeOverlay({ id }), ...range }));
     selectOverlay(id);
-    onPanelChange({ id, kind: "text" });
-  };
-
-  const textPanelFor = panelFor?.kind === "text" ? panelFor.id : null;
-  const stickerPanelFor = panelFor?.kind === "sticker" ? panelFor.id : null;
-
-  const closeText = () => {
-    if (textPanelFor) {
-      const overlay = useEditorStore.getState().project?.overlays.find((o) => o.id === textPanelFor);
-      if (overlay && isTextOverlay(overlay) && overlay.text.trim().length === 0) apply((x) => deleteOverlay(x, textPanelFor));
-    }
-    onPanelChange(null);
+    openStrip("text");
   };
 
   const duplicateSelectedOverlay = () => {
@@ -227,17 +228,17 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
     edit: { onPress: () => onPlayheadClip(() => {}) },
     audioMenu: { onPress: () => setSection("audio") },
     textMenu: { onPress: () => setSection("text") },
-    sticker: { onPress: () => setSheet("sticker") },
+    sticker: { onPress: () => openStrip("sticker") },
     overlay: { disabled: mediaBusy, onPress: () => { void addOverlay(); } },
-    effect: { onPress: () => setSheet("effect") },
+    effect: { onPress: () => openStrip("effect") },
     filter: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("filter")) : openStrip("filter")) },
     adjust: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("adjust")) : openStrip("adjust")) },
     ratio: { onPress: () => openStrip("ratio") },
     background: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("background")) : openStrip("background")) },
     cover: { onPress: () => setSheet("cover") },
-    templates: { onPress: () => setSheet("templates") },
+    templates: { onPress: () => openStrip("templates") },
     split: { onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
-    trim: { onPress: () => setSheet("trim") },
+    trim: { onPress: () => openStrip("trim") },
     speed: { onPress: () => openStrip("speed") },
     volume: { onPress: () => openStrip("volume") },
     animate: { onPress: () => openStrip(bar === "clip" || bar === "layer" ? "clipAnimation" : "overlayAnimation") },
@@ -257,16 +258,16 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
     duplicate: { onPress: duplicateSelected },
     delete: { onPress: () => { if (selectedId) { haptic("medium"); apply((p) => deleteClip(p, selectedId)); } } },
     select: { onPress: () => { haptic("light"); useEditorStore.getState().enterMultiSelect(); } },
-    overlayEdit: { onPress: () => { if (selectedOverlayId) onPanelChange({ id: selectedOverlayId, kind: overlayKind === "sticker" ? "sticker" : "text" }); } },
+    overlayEdit: { onPress: () => { if (selectedOverlayId) openStrip(overlayKind === "sticker" ? "stickerEdit" : "text"); } },
     overlayDuplicate: { onPress: duplicateSelectedOverlay },
     // The store clears the selection once the overlay is gone.
     overlayDelete: { onPress: () => { if (selectedOverlayId) { haptic("medium"); apply((p) => deleteOverlay(p, selectedOverlayId)); } } },
     text: { onPress: addText },
-    captions: { onPress: () => setSheet("captions") },
-    addAudio: { onPress: () => setSheet("addAudio") },
+    captions: { onPress: () => openStrip("captions") },
+    addAudio: { onPress: () => openStrip("addAudio") },
     // A preference, not an action on a track: there even before there is a voice-over.
     ducking: { active: ducking, onPress: () => { haptic("light"); apply((p) => setDucking(p, !ducking)); } },
-    beats: { onPress: () => setSheet("beats") },
+    beats: { onPress: () => openStrip("beats") },
     audioVolume: { onPress: () => openStrip("audioVolume") },
     audioFade: { onPress: () => openStrip("audioFade") },
     audioDuplicate: { onPress: duplicateSelectedAudio },
@@ -280,11 +281,12 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
   if (multi) return <MultiSelectBar />;
 
   const pad = Math.max(insets.bottom, theme.space.sm);
+  const area = panelSize ? panelHeight(panelSize, windowH) : stripShown ? STRIP.height : BAR_HEIGHT;
 
   return (
     <View testID="editor-toolbar" style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: pad,
-      height: (stripShown ? STRIP.height : BAR_HEIGHT) + pad, marginTop: stripShown ? -STRIP.lift : 0 }}>
-      {stripShown ? null : (
+      height: area + pad, marginTop: stripShown ? -STRIP.lift : 0 }}>
+      {toolShown ? null : (
         <View testID="toolbar-row" style={{ height: BAR_HEIGHT - 1, flexDirection: "row", alignItems: "center" }}>
           {bar === "main" ? null : <IconButton name="chevron-back" accessibilityLabel="Back to main tools" onPress={back} />}
           {/* Keyed by the bar: another bar starts again from the left; the same bar keeps its scroll position through re-renders. */}
@@ -294,16 +296,18 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
         </View>
       )}
       <CoverSheet visible={sheet === "cover"} onClose={() => setSheet(null)} />
-      <TrimSheet clipId={selectedId} visible={sheet === "trim"} onClose={() => setSheet(null)} />
-      <TemplateSheet clipId={selectedId} visible={sheet === "templates"} onClose={() => setSheet(null)} />
-      <EffectSheet visible={sheet === "effect"} onClose={() => setSheet(null)} />
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
-      <AddAudioSheet visible={sheet === "addAudio"} onClose={() => setSheet(null)} />
-      <BeatsSheet visible={sheet === "beats"} onClose={() => setSheet(null)} />
-      <StickerSheet visible={sheet === "sticker"} onClose={() => setSheet(null)} onAdded={() => {}} />
-      <CaptionsSheet visible={sheet === "captions"} onClose={() => setSheet(null)} />
-      <TextPanel overlayId={textPanelFor} visible={!!textPanelFor} onClose={closeText} onRetarget={(id) => onPanelChange({ id, kind: "text" })} />
-      <StickerPanel overlayId={stickerPanelFor} visible={!!stickerPanelFor} onClose={() => onPanelChange(null)} onRetarget={(id) => onPanelChange({ id, kind: "sticker" })} />
+      {/* Opened and closed through the tool store, like the strips. */}
+      <TrimSheet clipId={selectedId} visible={strip?.id === "trim"} onClose={closeStrip} />
+      <TemplateSheet clipId={selectedId} visible={strip?.id === "templates"} onClose={closeStrip} />
+      <EffectSheet visible={strip?.id === "effect"} onClose={closeStrip} />
+      <AddAudioSheet visible={strip?.id === "addAudio"} onClose={closeStrip} />
+      <BeatsSheet visible={strip?.id === "beats"} onClose={closeStrip} />
+      <StickerSheet visible={strip?.id === "sticker"} onClose={closeStrip} onAdded={() => {}} />
+      <CaptionsSheet visible={strip?.id === "captions"} onClose={closeStrip} />
+      {/* The text panel and the sticker editor edit the selected overlay; Duplicate selects the copy, then re-keys the panel onto it. */}
+      <TextPanel overlayId={selectedOverlayId} visible={strip?.id === "text"} onClose={closeStrip} onRetarget={rekeyStrip} />
+      <StickerPanel overlayId={selectedOverlayId} visible={strip?.id === "stickerEdit"} onClose={closeStrip} onRetarget={rekeyStrip} />
       {/* The tool strips: opened and closed through the strip store, so the cut marker and the ratio pill open the same ones. */}
       <RatioSheet visible={strip?.id === "ratio"} onClose={closeStrip} />
       <SpeedSheet clipId={selectedId} visible={strip?.id === "speed"} onClose={closeStrip} />

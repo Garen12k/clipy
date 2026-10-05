@@ -83,3 +83,12 @@ test("Clear all removes every marker in one undo step", async () => {
   await act(() => { st().undo(); });
   expect(markers()).toEqual([1, 2, 6]);
 });
+
+test("it is a panel: inline, no scrim, compact, Done closes", async () => {
+  const onClose = jest.fn();
+  await render(<BeatsSheet visible onClose={onClose} />);
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: 239 });
+  expect(screen.queryByLabelText("Close sheet")).toBeNull();
+  await fireEvent.press(btn("Done"));
+  expect(onClose).toHaveBeenCalledTimes(1);
+});

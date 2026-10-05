@@ -16,7 +16,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 import { closeStrip, openStrip, useToolStrip } from "../toolStrip";
 
-const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} />);
+const renderBar = () => render(<EditorToolbar />);
 const st = () => useEditorStore.getState();
 const btn = (name: string) => screen.getByRole("button", { name });
 const gone = (name: string) => expect(screen.queryByRole("button", { name })).toBeNull();
@@ -158,29 +158,29 @@ describe("main bar entries", () => {
     expect(screen.getByRole("header", { name: "Add audio" })).toBeTruthy();
   });
 
-  test("Text opens the text bar without a selection; Add text adds, selects and asks for the panel", async () => {
-    const onPanelChange = jest.fn();
-    await render(<EditorToolbar panelFor={null} onPanelChange={onPanelChange} />);
+  test("Text opens the text bar without a selection; Add text adds, selects and opens the text panel on it", async () => {
+    await renderBar();
     await fireEvent.press(btn("Text"));
     expect(row()).toEqual([BACK, "Add text", "Captions"]);
     await fireEvent.press(btn("Add text"));
     const added = st().project!.overlays[0];
     expect(st().selectedOverlayId).toBe(added.id);
-    expect(onPanelChange).toHaveBeenCalledWith({ id: added.id, kind: "text" });
+    expect(useToolStrip.getState().open).toEqual({ id: "text", key: `overlay:${added.id}` });
+    await act(() => { closeStrip(); });
     expect(row()).toEqual([BACK, ...TEXT]);
   });
 
-  test("Add text with a text or a caption selected is one tap: it adds another, selects it and asks for the panel", async () => {
+  test("Add text with a text or a caption selected is one tap: it adds another, selects it and opens the text panel on it", async () => {
     st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], overlays: [makeOverlay({ id: "t1", start: 1, end: 3 }), makeOverlay({ id: "c1", kind: "caption", start: 1, end: 3 })] }));
-    const onPanelChange = jest.fn();
-    await render(<EditorToolbar panelFor={null} onPanelChange={onPanelChange} />);
+    await renderBar();
     for (const [from, count] of [["t1", 3], ["c1", 4]] as const) {
       await act(() => { st().selectOverlay(from); });
       await fireEvent.press(btn("Add text"));
       expect(st().project!.overlays).toHaveLength(count);
       const added = st().project!.overlays.find((o) => o.id === st().selectedOverlayId)!;
       expect(added).toMatchObject({ kind: "text", text: "Your text" });
-      expect(onPanelChange).toHaveBeenLastCalledWith({ id: added.id, kind: "text" });
+      expect(useToolStrip.getState().open).toEqual({ id: "text", key: `overlay:${added.id}` });
+      await act(() => { closeStrip(); });
     }
     expect(st().past).toHaveLength(2);
   });
@@ -284,14 +284,28 @@ describe("text and sticker bars", () => {
     overlays: [makeOverlay({ id: "t1", start: 1, end: 3 }), makeSticker({ id: "s1", start: 1, end: 3 }), makeOverlay({ id: "c1", kind: "caption", start: 1, end: 3 })],
   }));
 
-  test("Edit asks for the text panel (a text, a caption) or the sticker panel (a sticker)", async () => {
+  test("Edit opens the text panel (a text, a caption) or the sticker editor (a sticker) on the selected overlay", async () => {
     withOverlays();
-    const onPanelChange = jest.fn();
-    await render(<EditorToolbar panelFor={null} onPanelChange={onPanelChange} />);
-    for (const [id, kind] of [["t1", "text"], ["c1", "text"], ["s1", "sticker"]] as const) {
+    await renderBar();
+    for (const [id, tool] of [["t1", "text"], ["c1", "text"], ["s1", "stickerEdit"]] as const) {
       await act(() => { st().selectOverlay(id); });
       await fireEvent.press(btn("Edit"));
-      expect(onPanelChange).toHaveBeenLastCalledWith({ id, kind });
+      expect(useToolStrip.getState().open).toEqual({ id: tool, key: `overlay:${id}` });
+      await act(() => { closeStrip(); });
+    }
+  });
+
+  test("closing the text panel removes a text left empty — by its own close and when the selection moves away", async () => {
+    for (const leave of [() => closeStrip(), () => st().selectOverlay("s1")]) {
+      withOverlays();
+      const view = await renderBar();
+      await act(() => { st().selectOverlay("t1"); });
+      await fireEvent.press(btn("Edit"));
+      await act(() => { st().apply((p) => ops.updateOverlay(p, "t1", { text: "  " })); });
+      await act(() => { leave(); });
+      expect(st().project!.overlays.map((o) => o.id)).toEqual(["s1", "c1"]);
+      expect(useToolStrip.getState().open).toBeNull();
+      await view.unmount();
     }
   });
 

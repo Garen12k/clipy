@@ -20,7 +20,7 @@ const row = () => screen.getAllByRole("button").map((b) => b.props.accessibility
 const gone = (name: string) => expect(screen.queryByRole("button", { name })).toBeNull();
 /** Closes whatever tool is open: a strip's ✓ or a modal sheet's scrim. */
 const closeTool = async () => { await fireEvent.press(screen.queryByRole("button", { name: "Done" }) ?? screen.getByLabelText("Close sheet")); };
-const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} />);
+const renderBar = () => render(<EditorToolbar />);
 const select = (id: string | null) => act(() => { state().select(id); });
 const photoLayer = (id: string, start = 0): LayerClip => ({ ...makePhotoClip({ id }), start });
 const BACK = "Back to main tools";
