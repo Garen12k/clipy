@@ -238,7 +238,8 @@ struct ExportRequest: Record {
   @Field var overlays: [ExportOverlay] = []
   @Field var effects: [ExportEffect] = []
   @Field var audioTracks: [ExportAudioTrack] = []   // every audio track, mixed with the clips' own sound
-  @Field var aspectRatio: String = "9:16"
+  @Field var aspectRatio: String = "9:16"           // "w:h" decides the frame's shape by itself; anything else ("auto") uses `frameAspect`
+  @Field var frameAspect: Double = 0                // the frame's width / height; 0 or absent (a request from before it existed) = not given
   @Field var resolution: Int = 1080
   @Field var outputPath: String = ""
   @Field var fps: Int = 30                          // 24 | 30 | 60 (anything else → 30); a request without it exports at 30
@@ -358,14 +359,32 @@ final class ExportSession {
     try? FileManager.default.removeItem(at: url)
   }
 
-  static func renderSize(aspect: String, resolution: Int) -> CGSize {
-    let short = CGFloat(resolution)                       // 720 / 1080 / 2160 is the short edge
-    let long: CGFloat = aspect == "16:9" || aspect == "9:16" ? short * 16 / 9 : short
-    switch aspect {
-    case "9:16": return CGSize(width: short, height: long)
-    case "16:9": return CGSize(width: long, height: short)
-    default:     return CGSize(width: short, height: short)
-    }
+  /// The narrowest and the widest frame "auto" may give (width / height) — ASPECT_LIMITS in src/editor/model/types.ts.
+  static let aspectLimits: (min: Double, max: Double) = (9.0 / 21.0, 21.0 / 9.0)
+
+  /// The frame's width / height for a request. A "w:h" string is exactly that ratio (the fixed choices, and every
+  /// request from before `frameAspect` existed). Anything else ("auto") uses the number, kept inside `aspectLimits`.
+  /// Neither → 1: an unknown ratio has always been a square.
+  static func aspectValue(aspect: String, frameAspect: Double) -> Double {
+    let parts = aspect.split(separator: ":").map { Double($0) }
+    if parts.count == 2, let w = parts[0], let h = parts[1], w.isFinite, h.isFinite, w > 0, h > 0 { return w / h }
+    if frameAspect.isFinite, frameAspect > 0 { return min(max(frameAspect, aspectLimits.min), aspectLimits.max) }
+    return 1
+  }
+
+  /// The exported video's size in pixels — keep identical to `renderSize` in src/export/estimate.ts.
+  /// The SHORT side is the resolution (720 / 1080 / 2160), the long side follows the shape, both are EVEN (encoders
+  /// need that). A frame the H.264 encoder cannot take (only wider than about 2:1 at 4K) is scaled down in steps of 2
+  /// on the short side, same shape. A shape that is not a positive number is a square.
+  static func renderSize(aspect: Double, resolution: Int) -> CGSize {
+    let a = aspect.isFinite && aspect > 0 ? aspect : 1
+    let ratio = max(a, 1 / a)
+    func even(_ v: Double) -> Int { max(2, Int((v / 2).rounded()) * 2) }
+    func macroblocks(_ w: Int, _ h: Int) -> Int { ((w + 15) / 16) * ((h + 15) / 16) }
+    var short = even(Double(resolution))
+    var long = even(Double(short) * ratio)
+    while macroblocks(long, short) > MediaPrePass.maxMacroblocks && short > 2 { short -= 2; long = even(Double(short) * ratio) }
+    return a >= 1 ? CGSize(width: long, height: short) : CGSize(width: short, height: long)
   }
 
   static func fillTransform(preferredTransform t: CGAffineTransform, naturalSize: CGSize, renderSize: CGSize) -> CGAffineTransform {
@@ -837,7 +856,7 @@ final class ExportSession {
   func start(_ request: ExportRequest) async throws {
     guard let outputURL = Self.fileURL(from: request.outputPath) else { throw ExportError.badOutputPath }
     guard !request.clips.isEmpty else { throw ExportError.sessionFailed("Nothing to export") }
-    let renderSize = Self.renderSize(aspect: request.aspectRatio, resolution: request.resolution)
+    let renderSize = Self.renderSize(aspect: Self.aspectValue(aspect: request.aspectRatio, frameAspect: request.frameAspect), resolution: request.resolution)
     let fps = Self.frameRate(for: request.fps)       // 30 unless the request asks for 24 or 60
 
     // 0. Pre-pass: photos → video, reversed clips → reversed copies, in a per-export temp folder. The folder is
