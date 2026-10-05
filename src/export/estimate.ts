@@ -14,6 +14,25 @@ export const exportBitrate = (res: Resolution, s: ExportSettings = DEFAULT_EXPOR
   return Math.round(BITRATE_MBPS[res] * 1e6 * FPS_BITRATE_FACTOR[c.fps] * QUALITY_BITRATE_FACTOR[c.quality]);
 };
 export const estimateBytes = (durationSec: number, res: Resolution, s: ExportSettings = DEFAULT_EXPORT_SETTINGS): number => (durationSec * exportBitrate(res, s)) / 8;
+/** H.264 level 5.1 / 5.2 frame-size limit in 16 × 16 macroblocks (= 4096 × 2304) — `MediaPrePass.maxMacroblocks` on the native side. */
+export const MAX_MACROBLOCKS = 36_864;
+/**
+ * The exported video's size in pixels for a frame shape (`frameAspect`: width / height) — the mirror of `ExportSession.renderSize`
+ * (keep them identical; src/export/__tests__/renderSize.swift.test.ts). The SHORT side is the resolution (720 / 1080 / 2160), the long
+ * side follows the shape, both are EVEN (encoders need that). A frame the H.264 encoder cannot take (only wider than about 2:1 at 4K)
+ * is scaled down in steps of 2 on the short side, same shape. A shape that is not a positive number is a square.
+ * Neither the bitrate nor the size estimate depends on the shape: they go by resolution, fps and quality only.
+ */
+export function renderSize(aspect: number, resolution: number): { width: number; height: number } {
+  const a = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
+  const ratio = Math.max(a, 1 / a);
+  const even = (v: number) => Math.max(2, Math.round(v / 2) * 2);
+  const macroblocks = (w: number, h: number) => Math.ceil(w / 16) * Math.ceil(h / 16);
+  let short = even(resolution);
+  let long = even(short * ratio);
+  while (macroblocks(long, short) > MAX_MACROBLOCKS && short > 2) { short -= 2; long = even(short * ratio); }
+  return a >= 1 ? { width: long, height: short } : { width: short, height: long };
+}
 /** What the request carries: 0 (no limit — today's export) for High, the capped bitrate for Smaller file. */
 export const requestBitrate = (res: Resolution, s: ExportSettings = DEFAULT_EXPORT_SETTINGS): number => (clampExportSettings(s).quality === "small" ? exportBitrate(res, s) : 0);
 /**

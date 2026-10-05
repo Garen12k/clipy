@@ -277,3 +277,18 @@ test("Cover is still a modal sheet in round 2: a scrim, no inline panel", async 
   expect(screen.queryByTestId("tool-panel")).toBeNull();
   expect(screen.queryByTestId("tool-strip")).toBeNull();
 });
+
+test("an Auto project's cover has the first clip's shape; a wide cover is saved 1080 pixels high", async () => {
+  state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4, width: 1920, height: 1080 })], aspectRatio: "auto" }));
+  const view = await render(<CoverSheet visible onClose={jest.fn()} />);
+  await press("Save to Photos");
+  await waitFor(() => expect(screen.getByText("Saved to Photos")).toBeTruthy());
+  expect(capture.mock.calls[0][1]).toMatchObject({ width: 640, height: 360 });   // 1920 × 1080 pixels on a 3× screen
+  await view.unmount();
+  capture.mockClear();
+  state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], aspectRatio: "21:9" }));
+  await render(<CoverSheet visible onClose={jest.fn()} />);
+  await press("Save to Photos");
+  await waitFor(() => expect(screen.getByText("Saved to Photos")).toBeTruthy());
+  expect(capture.mock.calls[0][1]).toMatchObject({ width: 840, height: 360 });   // 2520 × 1080
+});

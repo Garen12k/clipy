@@ -4,8 +4,8 @@ import { clipAt, clipDuration, curveSteps, findItem, layerEnd, sourceAfter, sour
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
-  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
-  clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
+  clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
@@ -165,8 +165,9 @@ export function setCover(p: Project, cover: Cover | null): Project {
   return p.cover && p.cover.time === next.time && p.cover.title === next.title ? p : touch(p, { cover: next });
 }
 
+/** Same project when it already has the ratio or the id is unknown. Overlay positions are fractions of the frame and stay as they are. */
 export function setAspectRatio(p: Project, ratio: AspectRatio): Project {
-  return p.aspectRatio === ratio ? p : touch(p, { aspectRatio: ratio });
+  return p.aspectRatio === ratio || !isAspectRatio(ratio) ? p : touch(p, { aspectRatio: ratio });
 }
 
 export function renameProject(p: Project, name: string): Project {
@@ -677,7 +678,7 @@ export function setCaptionStyleForAll(p: Project, patch: CaptionStylePatch): Pro
 
 /** The 1080-wide reference frame for the project's aspect ratio (what clipLayout works in). */
 export function frameSize(p: Project): { width: number; height: number } {
-  return { width: 1080, height: 1080 / aspectRatioValue(p.aspectRatio) };
+  return { width: 1080, height: 1080 / frameAspect(p) };
 }
 
 /**

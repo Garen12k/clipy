@@ -44,7 +44,7 @@ test("the notes sit in the strip's header", async () => {
   await view.rerender(<BackgroundSheet clipId="a" visible onClose={() => {}} />);
   expect(screen.getByRole("button", { name: "Apply to all" })).toBeTruthy();
   await view.rerender(<RatioSheet visible onClose={() => {}} />);
-  expect(screen.getByText("9:16 for TikTok, Reels and Shorts. 1:1 for feeds. 16:9 for YouTube.")).toBeTruthy();
+  expect(screen.getByText("Auto fits your first clip. 9:16 for TikTok, Reels and Shorts. 16:9 for YouTube.")).toBeTruthy();
 });
 
 test("Transition: chips over one slider row; the last clip shows its message in a strip", async () => {

@@ -312,3 +312,35 @@ describe("export options in the request", () => {
     } finally { fs.freeBytes = orig; }
   });
 });
+
+describe("the frame's shape in the request", () => {
+  const wide = makeClip({ id: "w", sourceDuration: 4, width: 1920, height: 1080 });
+  const request = async (p: Parameters<typeof useExport>[0]) => {
+    const { result } = await renderHook(() => useExport(p, []));
+    await act(() => result.current.start(1080));
+    return (exportTimeline as jest.Mock).mock.calls[0][0] as { aspectRatio: string; frameAspect: number };
+  };
+  test.each([
+    ["1:1", 1], ["3:2", 1.5], ["2:3", 0.666667], ["16:9", 1.777778], ["9:16", 0.5625], ["4:3", 1.333333], ["3:4", 0.75], ["21:9", 2.333333],
+  ] as const)("%s is sent as its id and its number", async (id, value) => {
+    const r = await request(makeProject({ clips: [wide], aspectRatio: id }));
+    expect(r.aspectRatio).toBe(id);
+    expect(r.frameAspect).toBe(value);
+  });
+  test.each([
+    [1080, 1920, 0.5625], [1920, 1080, 1.777778], [4032, 3024, 1.333333], [6000, 1000, 2.333333], [1000, 6000, 0.428571], [0, 0, 0.5625],
+  ])("Auto with a %i × %i first clip is sent as \"auto\" and the resolved number %f", async (width, height, value) => {
+    const r = await request(makeProject({ clips: [makeClip({ id: "f", sourceDuration: 4, width, height }), wide], aspectRatio: "auto" }));
+    expect(r.aspectRatio).toBe("auto");
+    expect(r.frameAspect).toBe(value);
+  });
+  test("Auto follows the first clip that is in the project, even when its file is missing from the export", async () => {
+    const tall = makeClip({ id: "t", sourceDuration: 4, width: 1080, height: 1920 });
+    const { result } = await renderHook(() => useExport(makeProject({ clips: [tall, wide], aspectRatio: "auto" }), [tall.sourceUri]));
+    await act(() => result.current.start(1080));
+    expect((exportTimeline as jest.Mock).mock.calls[0][0]).toMatchObject({ aspectRatio: "auto", frameAspect: 0.5625 });   // the frame the editor showed
+  });
+  test("the size estimate and the bitrate do not depend on the ratio", () => {
+    expect(estimateBytes(10, 1080)).toBe(12_500_000);
+  });
+});

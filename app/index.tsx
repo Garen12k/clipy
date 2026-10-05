@@ -3,10 +3,13 @@ import { router } from "expo-router";
 import { useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { AspectRatio } from "@/src/editor/model/types";
+import { AFTER_PICKER_MS, AspectRatioSheet } from "@/src/projects/AspectRatioSheet";
+import { pickMedia } from "@/src/projects/pickMedia";
 import { ProjectActionsSheet } from "@/src/projects/ProjectActionsSheet";
 import { ProjectCard } from "@/src/projects/ProjectCard";
 import { useProjects } from "@/src/projects/useProjects";
-import type { ProjectSummary } from "@/src/projects";
+import type { PickedAsset, ProjectSummary } from "@/src/projects";
 import { pickVideoForPost } from "@/src/publish/pickVideo";
 import { theme } from "@/src/theme/theme";
 import { EmptyState } from "@/src/ui/EmptyState";
@@ -20,6 +23,8 @@ import { ToastHost } from "@/src/ui/Toast";
 export default function ProjectsScreen() {
   const { projects, loading, create, rename, duplicate, remove } = useProjects();
   const [actionsFor, setActionsFor] = useState<ProjectSummary | null>(null);
+  /** Media picked for a new project that is waiting for its aspect ratio. */
+  const [pending, setPending] = useState<PickedAsset[] | null>(null);
   const insets = useSafeAreaInsets();
 
   const confirmDelete = (p: ProjectSummary) => Alert.alert("Delete project?", "This can't be undone.", [
@@ -36,9 +41,28 @@ export default function ProjectsScreen() {
     } finally { picking.current = false; }
   }
 
+  // New clip: the library, then the aspect-ratio picker, then the project. Nothing exists until Create is pressed.
+  const starting = useRef(false);
   async function onNew() {
-    const id = await create();
-    if (id) router.push(`/editor/${id}`);
+    if (starting.current || pending) return; // the library or the ratio picker is already up
+    starting.current = true;
+    try {
+      const assets = await pickMedia();
+      if (!assets || assets.length === 0) return;
+      await new Promise((r) => setTimeout(r, AFTER_PICKER_MS));
+      setPending(assets);
+    } finally { starting.current = false; }
+  }
+  const creating = useRef(false);
+  async function onCreate(aspectRatio: AspectRatio) {
+    if (!pending || creating.current) return;
+    creating.current = true;
+    const assets = pending;
+    setPending(null);
+    try {
+      const id = await create(assets, aspectRatio);
+      if (id) router.push(`/editor/${id}`);
+    } finally { creating.current = false; }
   }
 
   return (
@@ -59,6 +83,7 @@ export default function ProjectsScreen() {
       <View style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + theme.space.lg, alignItems: "center" }}>
         <PrimaryButton title="New clip" icon={<Ionicons name="add" size={18} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
       </View>
+      <AspectRatioSheet assets={pending} onCancel={() => setPending(null)} onCreate={onCreate} />
       <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onDelete={confirmDelete} />
       <ToastHost />
     </Screen>

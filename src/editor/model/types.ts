@@ -1,8 +1,18 @@
-export const ASPECT_RATIOS = ["9:16", "1:1", "16:9"] as const;
+/** In the menu's order. `auto` = the shape of the project's first main clip (see `frameAspect`). */
+export const ASPECT_RATIOS = ["auto", "1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4", "21:9"] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
+export type FixedAspectRatio = Exclude<AspectRatio, "auto">;
+/** What a new project starts with (the creation picker's preselection). */
+export const DEFAULT_ASPECT_RATIO: AspectRatio = "auto";
+/** An unknown stored ratio, and `auto` without a usable first clip. */
+export const FALLBACK_ASPECT_RATIO: FixedAspectRatio = "9:16";
+/** The narrowest and the widest frame `auto` may give (width / height): 9:21 … 21:9. */
+export const ASPECT_LIMITS = [9 / 21, 21 / 9] as const;
+export const isAspectRatio = (v: unknown): v is AspectRatio => (ASPECT_RATIOS as readonly unknown[]).includes(v);
+export const aspectLabel = (r: AspectRatio): string => (r === "auto" ? "Auto" : r);
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 13 as const;
+export const SCHEMA_VERSION = 14 as const;
 export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
 export const EXPORT_QUALITIES = ["high", "small"] as const;
@@ -472,9 +482,22 @@ export function makeProject(partial: Partial<Project> = {}): Project {
     exportSettings: { ...DEFAULT_EXPORT_SETTINGS }, cover: null, ...partial };
 }
 
-export function aspectRatioValue(r: AspectRatio): number {
+/** A fixed ratio's width / height. For a project use `frameAspect` (it also resolves `auto`). */
+export function aspectRatioValue(r: FixedAspectRatio): number {
   const [w, h] = r.split(":").map(Number);
   return w / h;
+}
+/**
+ * The frame's width / height — the ONE place a ratio id becomes a number (preview, clip layout, cover, export).
+ * A fixed id is its ratio. `auto` is the first main clip as displayed (`width` / `height` are stored display-oriented: the picker has
+ * already applied the file's rotation), clamped to ASPECT_LIMITS; the clip's own transform and crop do not count. No clip, or one
+ * without a usable size, gives 9:16. Also takes picked media before a project exists (anything with `width` / `height`).
+ */
+export function frameAspect(p: { aspectRatio: AspectRatio; clips: readonly { width: number; height: number }[] }): number {
+  if (p.aspectRatio !== "auto") return aspectRatioValue(isAspectRatio(p.aspectRatio) ? p.aspectRatio : FALLBACK_ASPECT_RATIO);
+  const first = p.clips[0];
+  if (!first || !isNum(first.width) || !isNum(first.height) || first.width <= 0 || first.height <= 0) return aspectRatioValue(FALLBACK_ASPECT_RATIO);
+  return clampNum(first.width / first.height, ASPECT_LIMITS[0], ASPECT_LIMITS[1]);
 }
 export function makeEffect(partial: Partial<EffectItem> & Pick<EffectItem, "id">): EffectItem {
   const type = partial.type ?? "shake";

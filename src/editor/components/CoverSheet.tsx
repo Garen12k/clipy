@@ -5,7 +5,7 @@ import { PixelRatio, TextInput, useWindowDimensions, View } from "react-native";
 import { frameUriAt } from "@/src/editor/coverFrame";
 import { setCover } from "@/src/editor/model/ops";
 import { coverTimeOf, totalDuration } from "@/src/editor/model/timeline";
-import { aspectRatioValue, COVER_LIMITS, type Cover } from "@/src/editor/model/types";
+import { COVER_LIMITS, frameAspect, type Cover } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
@@ -17,8 +17,11 @@ import { CoverFrame } from "./CoverFrame";
 const FRAME_HEIGHT = 240;
 /** The frame's height while the title is being typed: the keyboard must leave Done in view on a small iPhone. */
 const TYPING_FRAME_HEIGHT = 120;
-/** Width in pixels of the picture saved to Photos; its height follows the project's aspect ratio. */
-const SAVE_WIDTH = 1080;
+/** The shorter side, in pixels, of the picture saved to Photos; the other side follows the project's aspect ratio (a wide cover is 1080 high, not 1080 wide). */
+const SAVE_SHORT_SIDE = 1080;
+/** The saved picture's size in pixels for a frame of this shape (width / height). */
+export const coverSaveSize = (ratio: number): { width: number; height: number } =>
+  (ratio > 1 ? { width: Math.round(SAVE_SHORT_SIDE * ratio), height: SAVE_SHORT_SIDE } : { width: SAVE_SHORT_SIDE, height: Math.round(SAVE_SHORT_SIDE / ratio) });
 /** The draft is no cover at all: the first frame and no title (what a project without a cover already shows). */
 const isBlank = (c: Cover) => c.time === 0 && c.title.trim() === "";
 const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, borderRadius: theme.radius.chip, fontFamily: theme.fonts.body, padding: 10, fontSize: 16, minWidth: 72 } as const;
@@ -67,7 +70,7 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
 
   if (!project || project.clips.length === 0) return null;
 
-  const ratio = aspectRatioValue(project.aspectRatio);
+  const ratio = frameAspect(project);
   const frameH = typing ? TYPING_FRAME_HEIGHT : FRAME_HEIGHT;
   const scale = Math.min(1, (windowW - theme.space.xl * 2) / (frameH * ratio));
   const reset = () => {
@@ -94,9 +97,10 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
       const { captureRef, releaseCapture } = require("react-native-view-shot") as typeof import("react-native-view-shot");
       const perm = await requestPermissionsAsync(true);   // add-only access
       if (!perm.granted) { setNote("Allow Photos access in Settings to save."); return; }
-      // view-shot takes the size in points and renders at the screen's scale: divide, so the file is SAVE_WIDTH pixels wide.
+      // view-shot takes the size in points and renders at the screen's scale: divide, so the file has exactly these pixels.
       const points = (px: number) => px / PixelRatio.get();
-      const file = await captureRef(frameRef, { format: "jpg", quality: 0.92, result: "tmpfile", width: points(SAVE_WIDTH), height: points(Math.round(SAVE_WIDTH / ratio)) });
+      const size = coverSaveSize(ratio);
+      const file = await captureRef(frameRef, { format: "jpg", quality: 0.92, result: "tmpfile", width: points(size.width), height: points(size.height) });
       try {
         await saveToLibraryAsync(file);
         setNote("Saved to Photos");

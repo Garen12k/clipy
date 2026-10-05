@@ -1,6 +1,9 @@
-import { Alert } from "react-native";
+import { Alert, StyleSheet } from "react-native";
+import { AFTER_PICKER_MS } from "@/src/projects/AspectRatioSheet";
 import { AFTER_SHEET_MS } from "@/src/projects/ProjectActionsSheet";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { theme } from "@/src/theme/theme";
+import { RATIO_SHAPE_SIZE } from "@/src/ui/RatioShape";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 
 jest.mock("expo-router", () => ({ router: { push: jest.fn() }, useFocusEffect: (cb: () => void) => { const React = require("react"); React.useEffect(cb, []); } }));
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn() }));
@@ -32,8 +35,90 @@ test("shows the empty state, then creates a project from picked videos and opens
   expect(await screen.findByText("No clips yet")).toBeTruthy();
   expect(screen.getByText("Pick some photos or videos from your library and start your first edit.")).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "New clip" }));
-  await waitFor(() => expect(storage.createProject).toHaveBeenCalledWith("Project 1", expect.any(Array)));
-  expect(mockPush).toHaveBeenCalledWith("/editor/p9");
+  await fireEvent.press(await screen.findByRole("button", { name: "Create" }));
+  await waitFor(() => expect(storage.createProject).toHaveBeenCalledWith("Project 1", expect.any(Array), "auto"));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/editor/p9"));
+});
+
+describe("the aspect-ratio picker when a project is created", () => {
+  const LABELS = ["Auto", "1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4", "21:9"];
+  const picked = [{ uri: "file:///a.mov", kind: "video", durationSec: 3, width: 1920, height: 1080 }, { uri: "file:///b.jpg", kind: "photo", durationSec: 0, width: 3024, height: 4032 }];
+  const start = async () => {
+    list.mockResolvedValue([]);
+    (pickMedia as jest.Mock).mockResolvedValueOnce(picked);
+    (storage.createProject as jest.Mock).mockResolvedValueOnce({ project: { id: "p9" }, failed: 0 });
+    await render(<ProjectsScreen />);
+    await fireEvent.press(await screen.findByRole("button", { name: "New clip" }));
+    return screen.findByRole("header", { name: "Aspect ratio" });
+  };
+  const options = () => within(screen.getByTestId("aspect-options")).getAllByRole("button");
+  // A queued result a test did not use must not leak into the next one (clearAllMocks keeps the queue).
+  afterEach(() => { (storage.createProject as jest.Mock).mockReset(); (pickMedia as jest.Mock).mockReset(); });
+
+  test("nothing is shown before media is picked; a cancelled library creates nothing and shows no picker", async () => {
+    list.mockResolvedValue([]);
+    (pickMedia as jest.Mock).mockResolvedValueOnce(null);
+    await render(<ProjectsScreen />);
+    expect(screen.queryByRole("header", { name: "Aspect ratio" })).toBeNull();
+    await fireEvent.press(await screen.findByRole("button", { name: "New clip" }));
+    await waitFor(() => expect(pickMedia).toHaveBeenCalledTimes(1));
+    await act(async () => { await new Promise((r) => setTimeout(r, AFTER_PICKER_MS + 50)); });
+    expect(screen.queryByRole("header", { name: "Aspect ratio" })).toBeNull();
+    expect(storage.createProject).not.toHaveBeenCalled();
+  });
+
+  test("after the media is picked: nine choices in order, Auto preselected and drawn in the first item's shape; nothing is created yet", async () => {
+    expect(await start()).toBeTruthy();
+    expect(options().map((o) => o.props.accessibilityLabel)).toEqual(LABELS);
+    expect(options().map((o) => o.props.accessibilityState.selected)).toEqual(LABELS.map((l) => l === "Auto"));
+    expect(within(options()[0]).getByTestId("ratio-shape")).toHaveStyle({ width: RATIO_SHAPE_SIZE, height: RATIO_SHAPE_SIZE / (16 / 9) });
+    expect(within(options()[5]).getByTestId("ratio-shape")).toHaveStyle({ width: RATIO_SHAPE_SIZE * 9 / 16, height: RATIO_SHAPE_SIZE });
+    expect(storage.createProject).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  test("picking a ratio marks it; Create makes the project with it and opens the editor", async () => {
+    await start();
+    await fireEvent.press(screen.getByRole("button", { name: "21:9" }));
+    expect(options().map((o) => o.props.accessibilityState.selected)).toEqual(LABELS.map((l) => l === "21:9"));
+    expect(storage.createProject).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(storage.createProject).toHaveBeenCalledWith("Project 1", picked, "21:9"));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/editor/p9"));
+    expect(storage.createProject).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("header", { name: "Aspect ratio" })).toBeNull());
+  });
+
+  test("cancelling the picker creates nothing; the next time starts from Auto again", async () => {
+    await start();
+    await fireEvent.press(screen.getByRole("button", { name: "1:1" }));
+    await fireEvent.press(screen.getByLabelText("Close sheet"));
+    await waitFor(() => expect(screen.queryByRole("header", { name: "Aspect ratio" })).toBeNull());
+    expect(storage.createProject).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    (pickMedia as jest.Mock).mockResolvedValueOnce(picked);
+    await fireEvent.press(screen.getByRole("button", { name: "New clip" }));
+    await screen.findByRole("header", { name: "Aspect ratio" });
+    expect(options().map((o) => o.props.accessibilityState.selected)).toEqual(LABELS.map((l) => l === "Auto"));
+  });
+
+  test("a second tap on Create while the project is being made does not make two", async () => {
+    await start();
+    await fireEvent.press(screen.getByRole("button", { name: "Create" }));
+    const again = screen.queryByRole("button", { name: "Create" });
+    if (again) await fireEvent.press(again);
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/editor/p9"));
+    expect(storage.createProject).toHaveBeenCalledTimes(1);
+  });
+
+  test("every choice is a 44-pt target or larger", async () => {
+    await start();
+    for (const o of options()) {
+      const style = StyleSheet.flatten(o.props.style);
+      expect(style.height).toBeGreaterThanOrEqual(theme.size.touch);
+      expect(style.width).toBeGreaterThanOrEqual(theme.size.touch);
+    }
+  });
 });
 
 test("when nothing could be imported, the toast says so and the editor doesn't open", async () => {
@@ -43,6 +128,7 @@ test("when nothing could be imported, the toast says so and the editor doesn't o
   const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
   await render(<ProjectsScreen />);
   await fireEvent.press(await screen.findByRole("button", { name: "New clip" }));
+  await fireEvent.press(await screen.findByRole("button", { name: "Create" }));
   await waitFor(() => expect(useToast.getState().message).toBe("Couldn't import any of the selected items."));
   expect(mockPush).not.toHaveBeenCalled();
   warn.mockRestore();

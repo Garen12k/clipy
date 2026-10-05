@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Switch, View } from "react-native";
 import { CAPTION_STYLE } from "@/src/editor/effects";
 import { applyCaptionPreset, setCaptionStyleForAll } from "@/src/editor/model/ops";
-import { aspectRatioValue, makeOverlay, type CaptionWord, type Project, type TextOverlay, type TextStyle } from "@/src/editor/model/types";
+import { aspectRatioValue, FALLBACK_ASPECT_RATIO, frameAspect, makeOverlay, type CaptionWord, type Project, type TextOverlay, type TextStyle } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/src/editor/textTemplates";
 import { theme } from "@/src/theme/theme";
@@ -36,7 +36,7 @@ const newDraft = (): TextOverlay => makeOverlay({ id: "caption-draft", kind: "ca
 export function CaptionStyleSheet({ visible, onClose }: Props) {
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const caption = useEditorStore((s) => s.project?.overlays.find((o): o is TextOverlay => o.kind === "caption"));
-  const ratio = useEditorStore((s) => s.project?.aspectRatio ?? "9:16");
+  const ratio = useEditorStore((s) => (s.project ? frameAspect(s.project) : aspectRatioValue(FALLBACK_ASPECT_RATIO)));
   // No caption yet (always the case in Expo Go): the same controls restyle a local draft, so the sample still shows every look.
   // Nothing is written to the project and no undo step is made; the draft lives as long as the panel's owner.
   const [draft, setDraft] = useState(newDraft);
@@ -63,7 +63,7 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Caption style" bodyTestID="caption-style-scroll" pinned={{ height: SAMPLE_HEIGHT, content: (
       <TextSample testID="caption-sample" overlay={sample} time={SAMPLE_TIME} width={SAMPLE_WIDTH} height={SAMPLE_HEIGHT}
-        frameHeight={Math.max(SAMPLE_MIN_FRAME_HEIGHT, SAMPLE_WIDTH / aspectRatioValue(ratio))} backgroundColor={theme.colors.sea} />
+        frameHeight={Math.max(SAMPLE_MIN_FRAME_HEIGHT, SAMPLE_WIDTH / ratio)} backgroundColor={theme.colors.sea} />
     ) }}>
         <TemplateStrip tiles={CAPTION_PRESET_TILES} onPick={(presetId) => write((x) => applyCaptionPreset(x, presetId), apply)} />
         {!caption && <Body muted>{NO_CAPTIONS_NOTE}</Body>}

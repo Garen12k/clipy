@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { View } from "react-native";
 import { totalDuration } from "@/src/editor/model/timeline";
+import { aspectLabel } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { openStrip } from "@/src/editor/toolStrip";
 import { formatDuration } from "@/src/lib/format";
@@ -36,7 +37,7 @@ export function TransportRow() {
       <PressableScale accessibilityRole="button" accessibilityLabel="Aspect ratio" onPress={() => openStrip("ratio")} hitSlop={{ top: theme.space.sm, bottom: theme.space.sm }}
         style={{ minWidth: SIDE_WIDTH, alignItems: "center" }}>
         <View style={{ height: theme.size.chipCompact, justifyContent: "center", borderWidth: 1, borderColor: theme.colors.hairline, borderRadius: theme.radius.pill, paddingHorizontal: theme.space.md }}>
-          <Body weight="semi" style={{ fontSize: theme.type.small }}>{project.aspectRatio}</Body>
+          <Body weight="semi" style={{ fontSize: theme.type.small }}>{aspectLabel(project.aspectRatio)}</Body>
         </View>
       </PressableScale>
       <IconButton name="arrow-redo-outline" accessibilityLabel="Redo" disabled={!canRedo} onPress={redo} />

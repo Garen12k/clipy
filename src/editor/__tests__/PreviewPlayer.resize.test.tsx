@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-05T10:00:00.000Z" }));
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
 let mockVideoMounts = 0;
@@ -10,6 +10,7 @@ jest.mock("expo-video", () => {
   const VideoView = (props: object) => { useEffect(() => { mockVideoMounts++; }, []); return <View {...props} />; };
   return { useVideoPlayer: (_source: unknown, setup?: (p: unknown) => void) => useState(() => { const p = make(); setup?.(p); return p; })[0], VideoView };
 });
+import { setAspectRatio } from "@/src/editor/model/ops";
 import { makeClip, makeOverlay, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { PreviewPlayer } from "../components/PreviewPlayer";
@@ -29,5 +30,21 @@ test("a resize of the preview keeps the one VideoView mounted and lays the overl
   await layout(270, 480);          // and closed again
   expect(screen.getByTestId("preview-video")).toBe(video);
   expect(screen.getByText("Hi")).toBeTruthy();
+  expect(mockVideoMounts).toBe(1);
+});
+
+test("changing the ratio reshapes the frame (Auto = the first clip's shape) and never remounts the VideoView", async () => {
+  mockVideoMounts = 0;
+  useEditorStore.getState().reset();
+  useEditorStore.getState().setProject(makeProject({ aspectRatio: "auto", clips: [makeClip({ id: "a", sourceDuration: 4, width: 1920, height: 1080 }), makeClip({ id: "b", sourceDuration: 4 })] }));
+  await render(<PreviewPlayer />);
+  await layout(480, 270);
+  const video = screen.getByTestId("preview-video");
+  expect(screen.getByLabelText("Preview")).toHaveStyle({ aspectRatio: 1920 / 1080 });
+  for (const [id, value] of [["21:9", 21 / 9], ["2:3", 2 / 3], ["3:4", 3 / 4], ["auto", 16 / 9]] as const) {
+    await act(() => { useEditorStore.getState().apply((p) => setAspectRatio(p, id)); });
+    expect(screen.getByLabelText("Preview")).toHaveStyle({ aspectRatio: value });
+    expect(screen.getByTestId("preview-video")).toBe(video);
+  }
   expect(mockVideoMounts).toBe(1);
 });

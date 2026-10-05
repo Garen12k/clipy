@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normaliseTransitions } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
-import { clampExportSettings, DEFAULT_EXPORT_SETTINGS, EFFECT_END_SLACK, type ExportSettings, type Project } from "@/src/editor/model/types";
+import { clampExportSettings, DEFAULT_EXPORT_SETTINGS, EFFECT_END_SLACK, frameAspect, type ExportSettings, type Project } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, exportTimeline, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
 import { estimateBytes, exportableAudio, exportableClips, exportableLayers, requestBitrate, type Resolution } from "./estimate";
@@ -55,7 +55,9 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
           .filter((e) => e.end - e.start >= EFFECT_END_SLACK)
           .map(toExportEffect),
         audioTracks,
-        aspectRatio: project.aspectRatio, resolution, fps: settings.fps, bitrate: requestBitrate(resolution, settings), outputPath,
+        // The id as it is ("auto" included) and the frame's shape as a number: the native side takes a "w:h" id exactly and the
+        // number for anything else. Always finite and above 0 (a null or NaN would be refused); six decimals are plenty for a pixel size.
+        aspectRatio: project.aspectRatio, frameAspect: Math.round(frameAspect(project) * 1e6) / 1e6, resolution, fps: settings.fps, bitrate: requestBitrate(resolution, settings), outputPath,
       });
     } catch (e) { setState({ status: "error", progress: 0, message: e instanceof Error ? e.message : String(e) }); }
   }, [project, missingSourceUris]);

@@ -5,7 +5,7 @@ import { clipGainAt } from "@/src/editor/model/audioMix";
 import { layerHit } from "@/src/editor/model/layerHit";
 import { resolveClipMotion } from "@/src/editor/model/motion";
 import { clipAt, clipDuration, type ClipHit, clipStartTimes, findItem, hasSpeedCurve, itemOffsetAt, layersAt, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
-import { aspectRatioValue, isPhoto, type Clip } from "@/src/editor/model/types";
+import { frameAspect, isPhoto, type Clip } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
 import { useEditorStore } from "@/src/editor/store";
 import { usePhotoPlayback } from "@/src/editor/usePhotoPlayback";
@@ -385,7 +385,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   }, [first, second, slots]);
 
   if (!project) return null;
-  const ratio = aspectRatioValue(project.aspectRatio);
+  const ratio = frameAspect(project);
   const total = totalDuration(project);
   const empty = project.clips.length === 0;
   // Animations, keyframes and the clip's own opacity at the playhead; no overrides at all for a default clip.

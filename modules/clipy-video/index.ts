@@ -124,7 +124,8 @@ export interface ExportRequest {
   overlays: ExportOverlay[];
   effects: ExportEffect[];
   audioTracks: ExportAudioTrack[];
-  aspectRatio: AspectRatio;
+  aspectRatio: AspectRatio;   // "auto" or a "w:h" id; a "w:h" id decides the frame's shape by itself
+  frameAspect: number;        // the frame's width / height (`frameAspect(project)`), finite and > 0; what "auto" exports with
   resolution: Resolution;
   fps: ExportFps;      // frames per second of the exported video
   bitrate: number;     // `requestBitrate`: 0 = no file-length limit (High, the default); above 0 = the video bits per second the file may use (Smaller file)

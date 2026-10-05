@@ -1,4 +1,4 @@
-import { aspectRatioValue, type AspectRatio, type TextOverlay } from "./types";
+import type { TextOverlay } from "./types";
 
 export interface OverlayShadow { color: string; opacity: number; dx: number; dy: number; blur: number }
 export interface OverlayGlow { color: string; radius: number }
@@ -64,9 +64,8 @@ function glowOf(o: TextOverlay, fontSize: number): OverlayGlow | null {
   return glow ? { color: glow.color, radius: r(glow.size * fontSize) } : null;
 }
 
-/** Largest w×h box with the ratio that fits inside the container. */
-export function frameSize(ratio: AspectRatio, containerW: number, containerH: number): { w: number; h: number } {
-  const ar = aspectRatioValue(ratio);
+/** Largest w×h box of the shape `ar` (width / height — `frameAspect`) that fits inside the container. */
+export function frameSize(ar: number, containerW: number, containerH: number): { w: number; h: number } {
   if (containerW / containerH > ar) return { w: r(containerH * ar), h: containerH };
   return { w: containerW, h: r(containerW / ar) };
 }

@@ -1,6 +1,6 @@
 import { coverTimeOf, frameAt, totalDuration } from "@/src/editor/model/timeline";
 import { migrateProject } from "@/src/editor/model/migrate";
-import { DEFAULT_EXPORT_SETTINGS, newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AudioKind, type AudioTrack, type Clip, type LayerClip, type PostPlatform, type Project } from "@/src/editor/model/types";
+import { DEFAULT_ASPECT_RATIO, DEFAULT_EXPORT_SETTINGS, isAspectRatio, newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AspectRatio, type AudioKind, type AudioTrack, type Clip, type LayerClip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
 
 export interface PickedAsset { uri: string; kind: "video" | "photo"; durationSec: number; width: number; height: number; fileName?: string }
@@ -107,7 +107,8 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     return { uri };
   }
 
-  async function createProject(name: string, assets: PickedAsset[]) {
+  /** `aspectRatio`: what the creation picker chose; a new project is Auto unless told otherwise. */
+  async function createProject(name: string, assets: PickedAsset[], aspectRatio: AspectRatio = DEFAULT_ASPECT_RATIO) {
     const id = deps.newId();
     const now = deps.nowIso();
     const { clips, failed } = await importMedia(id, assets);
@@ -115,7 +116,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       await fs.remove(projectDir(id)).catch(() => {});
       throw new Error("Couldn't import any of the selected items.");
     }
-    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: "9:16", clips, overlays: [], audioTracks: [], posts: [], effects: [], layers: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [], exportSettings: { ...DEFAULT_EXPORT_SETTINGS }, cover: null };
+    const project: Project = { id, name, createdAt: now, updatedAt: now, aspectRatio: isAspectRatio(aspectRatio) ? aspectRatio : DEFAULT_ASPECT_RATIO, clips, overlays: [], audioTracks: [], posts: [], effects: [], layers: [], schemaVersion: SCHEMA_VERSION, ducking: false, beatMarkers: [], exportSettings: { ...DEFAULT_EXPORT_SETTINGS }, cover: null };
     await saveProject(project);
     await writeThumb(project);
     return { project, failed };

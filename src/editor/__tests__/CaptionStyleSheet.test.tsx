@@ -185,6 +185,12 @@ describe("presets, sample, highlight and the style section", () => {
     expect(screen.getByText("This is how captions look")).toHaveStyle({ fontSize: 25.6 });   // 0.045 × (320 × 16 / 9), as before
   });
 
+  test("an Auto project's sample has the first clip's shape", async () => {
+    useEditorStore.getState().setProject(makeProject({ aspectRatio: "auto", clips: [makeClip({ id: "a", sourceDuration: 5, width: 1080, height: 1350 })], overlays: [cap("c1", 0)] }));
+    await show();
+    expect(screen.getByText("This is how captions look")).toHaveStyle({ fontSize: 0.045 * (320 * 1350 / 1080) });   // a 4:5 frame, 400 pt tall
+  });
+
   test("the sample is pinned above the scrolling body at 96 pt, so it stays in view; not while typing", async () => {
     await show();
     const pinned = screen.getByTestId("tool-panel-pinned");

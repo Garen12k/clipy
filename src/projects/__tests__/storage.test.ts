@@ -368,3 +368,14 @@ describe("cover file", () => {
     expect((await storage.listProjects()).find((s) => s.id === copy.id)).toMatchObject({ thumbUri: `file:///doc/projects/${copy.id}/cover-5000-b-b-1000.jpg`, coverTitle: "Trip" });
   });
 });
+
+test("createProject stores the chosen aspect ratio; without one a new project is Auto", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/a.mov", "A");
+  const chosen = await storage.createProject("Wide", [asset("file:///picked/a.mov")], "21:9");
+  expect(chosen.project.aspectRatio).toBe("21:9");
+  expect((await storage.loadProject(chosen.project.id)).project.aspectRatio).toBe("21:9");
+  const plain = await storage.createProject("Plain", [asset("file:///picked/a.mov")]);
+  expect(plain.project.aspectRatio).toBe("auto");
+  expect((await storage.loadProject(plain.project.id)).project.aspectRatio).toBe("auto");
+});
