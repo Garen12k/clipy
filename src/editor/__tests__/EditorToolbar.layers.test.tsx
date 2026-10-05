@@ -203,6 +203,9 @@ test("Opacity, Mask and Trim open their sheets on the selected layer", async () 
   await fireEvent(screen.getByTestId("opacity-slider"), "slidingStart");
   await fireEvent(screen.getByTestId("opacity-slider"), "valueChange", 0.5);
   expect(state().project!.layers[0].opacity).toBe(0.5);
+  expect(screen.getByTestId("tool-strip")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Mask" })).toBeNull();     // the bar is hidden while the strip shows
+  await fireEvent.press(btn("Done"));
   await fireEvent.press(btn("Mask"));
   await fireEvent.press(btn("Circle"));
   expect(state().project!.layers[0].mask).toBe("circle");

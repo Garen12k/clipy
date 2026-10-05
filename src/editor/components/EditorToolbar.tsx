@@ -10,11 +10,13 @@ import { useClipMedia } from "@/src/editor/useClipMedia";
 import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { useFreezeFrame } from "@/src/editor/useFreezeFrame";
 import { TOOL_GROUPS, groupForSelection, type IoniconName, type ToolGroupId, type ToolId } from "@/src/editor/toolGroups";
+import { closeStrip, openStrip, useStripCloser, useToolStrip } from "@/src/editor/toolStrip";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { useToast } from "@/src/ui/Toast";
 import { ToolButton } from "@/src/ui/ToolButton";
+import { useStripPresence } from "@/src/ui/ToolStrip";
 import { useReducedMotion } from "@/src/ui/useReducedMotion";
 import { AddAudioSheet } from "./AddAudioSheet";
 import { AdjustSheet } from "./AdjustSheet";
@@ -65,7 +67,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const clipCount = useEditorStore((s) => s.project?.clips.length ?? 0);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   const apply = useEditorStore((s) => s.apply);
-  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | "opacity" | "mask" | "blend" | "chroma" | "cover" | null>(null);
+  const [sheet, setSheet] = useState<"ratio" | "trim" | "speed" | "addAudio" | "volume" | "filter" | "sticker" | "captions" | "templates" | "transform" | "background" | "crop" | "adjust" | "effect" | "effectStrength" | "audioVolume" | "audioFade" | "beats" | "clipAnimation" | "overlayAnimation" | "mask" | "blend" | "chroma" | "cover" | null>(null);
   const noSel = !selectedId;
   const selectedClip = useItemClip(selectedId);
   /** A layer is selected: the main-track tools (Split, Freeze, Ratio, Transition, Background) do not apply. */
@@ -82,6 +84,10 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
   const selectedAudioId = useEditorStore((s) => s.selectedAudioId);
   const ducking = useEditorStore((s) => !!s.project?.ducking);
   const multi = useEditorStore((s) => s.multiSelect !== null);
+  // Tool strips (Opacity so far): the closer lives here, the bottom area; the two rows give their place to a strip while one shows.
+  useStripCloser();
+  const strip = useToolStrip((s) => s.open);
+  const stripShown = useStripPresence((s) => s.count > 0);
   useEffect(() => { setGroup((cur) => groupForSelection({ clipId: selectedId, overlayKind, effectId: selectedEffectId, audioId: selectedAudioId }, cur) ?? cur); }, [selectedId, overlayKind, selectedEffectId, selectedAudioId]);
 
   // Animate / Keyframe act on what the open group edits: Edit → the selected clip, Text → a selected text (not a caption), Stickers → a selected sticker.
@@ -194,7 +200,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
     keyframe: { label: "Keyframe", icon: pin === "remove" ? "diamond" : "diamond-outline", disabled: pin === "off", active: pin === "remove", onPress: toggleKeyframe },
     crop: { label: "Crop", icon: "crop", disabled: noSel, onPress: () => setSheet("crop") },
     overlay: { label: "Overlay", icon: "layers", disabled: !hasClips || mediaBusy, onPress: () => { void addOverlay(); } },
-    opacity: { label: "Opacity", icon: "contrast", disabled: noSel, onPress: () => setSheet("opacity") },
+    opacity: { label: "Opacity", icon: "contrast", disabled: noSel, onPress: () => openStrip("opacity") },
     mask: { label: "Mask", icon: "ellipse-outline", disabled: noSel, onPress: () => setSheet("mask") },
     blend: { label: "Blend", icon: "layers-outline", disabled: !layerSel, onPress: () => setSheet("blend") },
     chroma: { label: "Green screen", icon: "leaf-outline", disabled: noSel, onPress: () => setSheet("chroma") },
@@ -240,15 +246,19 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
 
   return (
     <View style={{ backgroundColor: theme.colors.surface, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: Math.max(insets.bottom, theme.space.sm) }}>
-      <Animated.View key={group} entering={reduced ? undefined : FadeIn.duration(150)}
-        style={{ paddingVertical: theme.space.xs, borderBottomWidth: 1, borderBottomColor: theme.colors.surfaceAlt }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
-          {tools.map((id) => <ToolButton key={id} {...TOOLS[id]} />)}
-        </ScrollView>
-      </Animated.View>
-      <View accessibilityRole="tablist" style={{ flexDirection: "row", justifyContent: "space-around", paddingTop: theme.space.xs }}>
-        {TOOL_GROUPS.map((g) => <ToolButton key={g.id} role="tab" label={g.label} icon={g.icon} active={g.id === group} onPress={() => { if (g.id !== group) haptic("light"); setGroup(g.id); }} />)}
-      </View>
+      {stripShown ? null : (
+        <>
+          <Animated.View key={group} entering={reduced ? undefined : FadeIn.duration(150)}
+            style={{ paddingVertical: theme.space.xs, borderBottomWidth: 1, borderBottomColor: theme.colors.surfaceAlt }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
+              {tools.map((id) => <ToolButton key={id} {...TOOLS[id]} />)}
+            </ScrollView>
+          </Animated.View>
+          <View accessibilityRole="tablist" style={{ flexDirection: "row", justifyContent: "space-around", paddingTop: theme.space.xs }}>
+            {TOOL_GROUPS.map((g) => <ToolButton key={g.id} role="tab" label={g.label} icon={g.icon} active={g.id === group} onPress={() => { if (g.id !== group) haptic("light"); setGroup(g.id); }} />)}
+          </View>
+        </>
+      )}
       <RatioSheet visible={sheet === "ratio"} onClose={() => setSheet(null)} />
       <CoverSheet visible={sheet === "cover"} onClose={() => setSheet(null)} />
       <TrimSheet clipId={selectedId} visible={sheet === "trim"} onClose={() => setSheet(null)} />
@@ -263,7 +273,7 @@ export function EditorToolbar({ panelFor, onPanelChange, transitionFor, onTransi
       <EffectStrengthSheet effectId={selectedEffectId} visible={sheet === "effectStrength"} onClose={() => setSheet(null)} />
       <BackgroundSheet clipId={selectedId} visible={sheet === "background"} onClose={() => setSheet(null)} />
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
-      <OpacitySheet clipId={selectedId} visible={sheet === "opacity"} onClose={() => setSheet(null)} />
+      <OpacitySheet clipId={selectedId} visible={strip?.id === "opacity"} onClose={closeStrip} />
       <MaskSheet clipId={selectedId} visible={sheet === "mask"} onClose={() => setSheet(null)} />
       <BlendSheet clipId={selectedId} visible={sheet === "blend"} onClose={() => setSheet(null)} />
       <ChromaSheet clipId={selectedId} visible={sheet === "chroma"} onClose={() => setSheet(null)} />

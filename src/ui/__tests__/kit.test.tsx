@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 import { theme } from "@/src/theme/theme";
+import { Chip } from "../Chip";
 import { EmptyState } from "../EmptyState";
 import { haptic } from "../haptics";
 import { PrimaryButton } from "../PrimaryButton";
@@ -59,4 +60,11 @@ test("EmptyState and Title render", async () => {
   expect(screen.getByText("Your voyages")).toHaveStyle({ fontFamily: theme.fonts.title });
   expect(screen.getByText("No clips yet")).toBeTruthy();
   expect(screen.getByText("Pick some videos")).toBeTruthy();
+});
+
+test("Chip compact is smaller and keeps role, label and states", async () => {
+  await render(<Chip compact label="Reset" selected={false} disabled onPress={() => {}} />);
+  const chip = screen.getByRole("button", { name: "Reset" });
+  expect(chip).toBeDisabled();
+  expect(chip).toHaveStyle({ paddingVertical: theme.space.xs, paddingHorizontal: theme.space.md });
 });
