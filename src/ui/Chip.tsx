@@ -12,7 +12,7 @@ export function Chip({ label, selected, onPress, disabled, accessibilityLabel, c
     <PressableScale
       accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected, disabled: !!disabled }}
-      disabled={disabled} onPress={onPress}
+      disabled={disabled} onPress={onPress} hitSlop={compact ? { top: 10, bottom: 10, left: 4, right: 4 } : undefined}
       style={{
         paddingVertical: compact ? theme.space.xs : theme.space.sm, paddingHorizontal: compact ? theme.space.md : theme.space.lg, borderRadius: theme.radius.pill,
         backgroundColor: selected ? theme.colors.accent : theme.colors.surfaceAlt,

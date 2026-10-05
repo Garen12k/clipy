@@ -7,7 +7,7 @@ import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
 import { StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
-import { AnimationLength, AnimationTiles, edgeDuration } from "./AnimationTiles";
+import { AnimationLength, AnimationTiles, animationStartX, edgeDuration } from "./AnimationTiles";
 
 type Tab = "in" | "out" | "combo";
 const TABS: { id: Tab; label: string }[] = [{ id: "in", label: "In" }, { id: "out", label: "Out" }, { id: "combo", label: "Combo" }];
@@ -37,7 +37,7 @@ export function ClipAnimationSheet({ clipId, visible, onClose }: { clipId: strin
     <ToolStrip visible={visible} onClose={onClose} title="Animation"
       // "Apply to all" writes the main clips: it is not offered for a layer.
       action={layer ? undefined : { label: "Apply to all clips", onPress: () => { haptic("light"); apply((p) => setAnimationForAllClips(p, clip.animation)); } }}>
-      <StripTiles lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
+      <StripTiles key={tab} initialX={tab === "combo" ? animationStartX(ANIM_COMBO_IDS, anim.combo) : animationStartX(ANIM_IN_IDS, edge?.id ?? null)} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
         {tab === "combo"
           ? <AnimationTiles ids={ANIM_COMBO_IDS} registry={ANIM_COMBO} selected={anim.combo} onPick={pickCombo} />
           : <AnimationTiles ids={ANIM_IN_IDS} registry={ANIM_IN} selected={edge?.id ?? null} onPick={(id) => pickEdge(tab, id)} />}

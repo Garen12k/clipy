@@ -228,8 +228,8 @@ describe("length label", () => {
     // Hero over 8 s: 1 s slices at 1, 2, 3, 0.5, 0.5, 3, 2, 1 → 1 + 0.5 + 0.333 + 2 + 2 + 0.333 + 0.5 + 1 = 7.67 s.
     await press("Hero");
     expect(screen.getByText("Clip length 7.7 s")).toBeTruthy();
-    await press("Normal");
-    expect(screen.getByText("Clip length 7.7 s")).toBeTruthy();
+    await press("Normal");   // the curve warning takes the header: no length line here
+    expect(screen.queryByText(/Clip length/)).toBeNull();
   });
 });
 

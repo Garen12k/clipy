@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { deleteClips, duplicateClips, mainClipIds } from "@/src/editor/model/ops";
-import { isPhoto } from "@/src/editor/model/types";
+import { isPhoto, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
@@ -12,6 +12,9 @@ import { STRIP, useStripPresence } from "@/src/ui/ToolStrip";
 import { FilterSheet } from "./FilterSheet";
 import { SpeedSheet } from "./SpeedSheet";
 import { VolumeSheet } from "./VolumeSheet";
+
+const firstVideoOf = (project: Project, multi: string[]) => { const ids = mainClipIds(project, multi); return project.clips.find((c) => ids.includes(c.id) && !isPhoto(c))?.id ?? null; };
+const firstSoundingOf = (project: Project, multi: string[]) => { const ids = mainClipIds(project, multi); return project.clips.find((c) => ids.includes(c.id) && !isPhoto(c) && !c.reversed)?.id ?? null; };
 
 /** The bar's height (the "N selected" line and one row of tool buttons), without the bottom safe-area padding. */
 export const MULTI_BAR_HEIGHT = 104;
@@ -28,6 +31,11 @@ export function MultiSelectBar() {
   const insets = useSafeAreaInsets();
   const [sheet, setSheet] = useState<"filter" | "speed" | "volume" | null>(null);
   const stripShown = useStripPresence((s) => s.count > 0);
+  // A strip whose clip is gone (the selection changed under it) must not stay remembered, or it would reopen by itself later.
+  const gone = !project || !multi
+    ? sheet !== null
+    : (sheet === "speed" && !firstVideoOf(project, multi)) || (sheet === "volume" && !firstSoundingOf(project, multi)) || (sheet === "filter" && mainClipIds(project, multi).length === 0);
+  if (gone) setSheet(null);
   if (!project || !multi) return null;
 
   const { apply, selectAllClips, exitMultiSelect } = useEditorStore.getState();

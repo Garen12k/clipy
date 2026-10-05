@@ -20,8 +20,8 @@ export function VolumeSheet({ clipId, clipIds, visible, onClose }: { clipId: str
   const write = (op: (p: Project, id: string) => Project) => (p: Project) => (clipIds ? forClips(p, clipIds, op) : op(p, clip.id));
   return (
     <ToolStrip visible={visible} onClose={onClose} title={clipIds ? `Volume · ${count} ${count === 1 ? "clip" : "clips"}` : "Volume"}
-      note={<StripNote>Above 100% only applies in the exported video.</StripNote>}>
-      <StripSlider label={`${Math.round(clip.volume * 100)}%`}
+      note={<StripNote lines={2}>Above 100% only applies in the exported video.</StripNote>}>
+      <StripSlider label={`${Math.round(clip.volume * 100)}%`} labelWidth={48}
         trailing={(
           <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm }}>
             <Body style={{ fontSize: 12 }}>Mute</Body>

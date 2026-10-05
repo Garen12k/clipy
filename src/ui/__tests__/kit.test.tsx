@@ -68,3 +68,9 @@ test("Chip compact is smaller and keeps role, label and states", async () => {
   expect(chip).toBeDisabled();
   expect(chip).toHaveStyle({ paddingVertical: theme.space.xs, paddingHorizontal: theme.space.md });
 });
+
+test("Chip compact widens its touch target; the regular chip does not", async () => {
+  await render(<><Chip compact label="Tab" selected={false} onPress={() => {}} /><Chip label="Big" selected={false} onPress={() => {}} /></>);
+  expect(screen.getByRole("button", { name: "Tab" })).toHaveProp("hitSlop", { top: 10, bottom: 10, left: 4, right: 4 });
+  expect(screen.getByRole("button", { name: "Big" }).props.hitSlop).toBeUndefined();
+});

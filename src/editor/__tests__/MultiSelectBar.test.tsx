@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/id", () => { let n = 0; return { newId: () => `copy${++n}` }; });
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-04T10:00:00.000Z" }));
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
@@ -166,4 +166,16 @@ test("the bar has an explicit height; while a strip shows it hides its buttons a
   expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -(STRIP.height - 104) });
   expect(screen.queryByRole("header", { name: "1 selected" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Select all" })).toBeNull();
+});
+
+test("a strip whose clip vanishes closes and does not reopen by itself later", async () => {
+  await renderWith("a", "b");
+  await press("Speed");
+  expect(header("Speed · 2 clips")).toBeTruthy();
+  // The selection changes under the strip: only the photo is left, so Speed has no clip to show.
+  await act(async () => { st().toggleMultiSelect("a"); st().toggleMultiSelect("b"); st().toggleMultiSelect("c"); });
+  expect(screen.queryByRole("header", { name: /Speed/ })).toBeNull();
+  await act(async () => { st().toggleMultiSelect("a"); });
+  expect(screen.queryByRole("header", { name: /Speed/ })).toBeNull();
+  expect(btn("Speed")).toBeEnabled();
 });

@@ -12,7 +12,7 @@ export function AudioVolumeSheet({ trackId, visible, onClose }: { trackId: strin
   if (!track) return null;
 
   return (
-    <ToolStrip visible={visible} onClose={onClose} title="Volume" note={<StripNote>Above 100% only applies in the exported video.</StripNote>}>
+    <ToolStrip visible={visible} onClose={onClose} title="Volume" note={<StripNote lines={2}>Above 100% only applies in the exported video.</StripNote>}>
       <StripSlider label={`Volume ${Math.round(track.volume * 100)} %`}>
         <Slider
           testID="audio-volume"

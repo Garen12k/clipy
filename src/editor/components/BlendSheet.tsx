@@ -8,7 +8,7 @@ import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { Body } from "@/src/ui/Text";
-import { StripNote, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
+import { StripNote, StripTiles, ToolStrip, tilesStartX } from "@/src/ui/ToolStrip";
 
 /** Tile geometry (points): the column a tile takes, its rounded box, and the two overlapping squares inside it. */
 const TILE_WIDTH = 68;
@@ -33,7 +33,7 @@ export function BlendSheet({ clipId, visible, onClose }: { clipId: string | null
 
   return (
     <ToolStrip visible={visible} onClose={onClose} title="Blend" note={<StripNote>Shows in the exported video</StripNote>}>
-      <StripTiles>
+      <StripTiles initialX={tilesStartX(BLEND_IDS.indexOf(clip.blend), TILE_WIDTH)}>
         {BLEND_IDS.map((id) => {
           const selected = clip.blend === id;
           const label = BLENDS[id].label;

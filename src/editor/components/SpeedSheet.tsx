@@ -14,7 +14,7 @@ import { haptic } from "@/src/ui/haptics";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { Body } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
-import { StripNote, StripSlider, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
+import { StripNote, StripSlider, StripTiles, ToolStrip, tilesStartX } from "@/src/ui/ToolStrip";
 
 const PRESETS = [0.25, 0.5, 1, 1.5, 2, 4];
 
@@ -24,6 +24,8 @@ const TABS: { id: Tab; label: string }[] = [{ id: "normal", label: "Normal" }, {
 /** Tile geometry (points), matching the animation tiles: the column a tile takes, its rounded box and the sparkline inside it. */
 const TILE_WIDTH = 68;
 const TILE_BOX = 44;
+/** A speed chip is about this wide (its text varies a little); only used to start the row near the selected one. */
+const PRESET_WIDTH = 64;
 const SPARK_HEIGHT = 24;
 const BAR_WIDTH = 3;
 const BAR_GAP = 1;
@@ -115,13 +117,17 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
     apply(() => next);
   };
 
+  // While the curve warning shows it takes the header's room (two lines), so the clip length steps aside.
+  const warn = tab === "normal" && curveId !== null;
+  const startX = tab === "normal" ? tilesStartX(PRESETS.findIndex((s) => !curveId && clip.speed === s), PRESET_WIDTH) : tilesStartX(curveId ? SPEED_CURVE_IDS.indexOf(curveId) + 1 : 0, TILE_WIDTH);
+
   return (
     <ToolStrip visible onClose={onClose} title={title}
       note={<>
-        <StripNote>Clip length {clipDuration(clip).toFixed(1)} s</StripNote>
-        {tab === "normal" ? <StripNote>{curveId ? "A curve is active — moving this slider removes it." : "Audio keeps its pitch in the exported video."}</StripNote> : null}
+        {warn ? null : <StripNote>Clip length {clipDuration(clip).toFixed(1)} s</StripNote>}
+        {tab === "normal" ? <StripNote lines={warn ? 2 : 1}>{curveId ? "A curve is active — moving this slider removes it." : "Audio keeps its pitch in the exported video."}</StripNote> : null}
       </>}>
-      <StripTiles lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
+      <StripTiles key={tab} initialX={startX} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
         {tab === "normal" ? (
           PRESETS.map((s) => <Chip key={s} label={formatSpeed(s)} selected={!curveId && clip.speed === s} onPress={() => pickSpeed(s)} />)
         ) : (
@@ -132,7 +138,7 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
         )}
       </StripTiles>
       {tab === "normal" ? (
-        <StripSlider label={`Current speed: ${formatSpeed(clip.speed)}`}>
+        <StripSlider label={curveId ? "Speed" : `Current speed: ${formatSpeed(clip.speed)}`}>
           {/* With a curve the clip's constant speed is 1, so the slider rests at 1× (muted); setClipSpeed clears the curve. */}
           <Slider testID="speed-slider" minimumValue={SPEED_LIMITS[0]} maximumValue={SPEED_LIMITS[1]} step={0.05} value={clip.speed}
             onSlidingStart={beginTransaction} onValueChange={(v) => applyTransient((p) => write(p, (q, cid) => setClipSpeed(q, cid, v)))}

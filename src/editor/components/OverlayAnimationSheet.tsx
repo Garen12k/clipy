@@ -6,7 +6,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
 import { StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
-import { AnimationLength, AnimationTiles, edgeDuration } from "./AnimationTiles";
+import { AnimationLength, AnimationTiles, animationStartX, edgeDuration } from "./AnimationTiles";
 
 type Tab = "in" | "out" | "loop";
 const TABS: { id: Tab; label: string }[] = [{ id: "in", label: "In" }, { id: "out", label: "Out" }, { id: "loop", label: "Loop" }];
@@ -33,7 +33,7 @@ export function OverlayAnimationSheet({ overlayId, visible, onClose }: { overlay
 
   return (
     <ToolStrip visible={visible} onClose={onClose} title="Animation">
-      <StripTiles lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
+      <StripTiles key={tab} initialX={tab === "loop" ? animationStartX(ANIM_LOOP_IDS, anim.loop) : animationStartX(ANIM_IN_IDS, edge?.id ?? null)} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
         {tab === "loop"
           ? <AnimationTiles ids={ANIM_LOOP_IDS} registry={ANIM_LOOP} selected={anim.loop} onPick={pickLoop} />
           : <AnimationTiles ids={ANIM_IN_IDS} registry={ANIM_IN} selected={edge?.id ?? null} onPick={(id) => pickEdge(tab, id)} />}

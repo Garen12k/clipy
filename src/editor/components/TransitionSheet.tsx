@@ -30,7 +30,7 @@ export function TransitionSheet({ clipIndex, visible, onClose }: Props) {
   const current = clip.transitionOut;
 
   return (
-    <ToolStrip visible={visible} onClose={onClose} title="Transition" note={cap < TRANSITION_LIMITS.min ? <StripNote>Clips are too short for a transition here</StripNote> : undefined}>
+    <ToolStrip visible={visible} onClose={onClose} title="Transition" note={cap < TRANSITION_LIMITS.min ? <StripNote lines={2}>Clips are too short for a transition here</StripNote> : undefined}>
       <StripTiles>
         {TRANSITION_TYPES.map((type) => (
           <Chip

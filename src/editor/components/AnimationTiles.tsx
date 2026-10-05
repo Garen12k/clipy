@@ -6,7 +6,7 @@ import type { IoniconName } from "@/src/editor/toolGroups";
 import { theme } from "@/src/theme/theme";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { Body } from "@/src/ui/Text";
-import { StripSlider } from "@/src/ui/ToolStrip";
+import { StripSlider, tilesStartX } from "@/src/ui/ToolStrip";
 
 const NONE_ICON: IoniconName = "ban-outline";
 /** Tile geometry (points): the column a tile takes in the row, its rounded icon box, the glyph inside, and the two small text sizes. */
@@ -39,6 +39,9 @@ export function AnimationTiles<T extends string>({ ids, registry, selected, onPi
     </>
   );
 }
+
+/** Where the animation row starts so the selected tile (None is first) shows. */
+export const animationStartX = <T extends string>(ids: readonly T[], selected: T | null): number => tilesStartX(selected === null ? 0 : ids.indexOf(selected) + 1, TILE_WIDTH);
 
 /** The duration an In / Out tile is picked with: the edge's current one, or the default when the edge is empty. */
 export const edgeDuration = (edge: AnimEdge | null): number => edge?.duration ?? ANIM_LIMITS.defaultDuration;
