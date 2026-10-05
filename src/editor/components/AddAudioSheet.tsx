@@ -2,13 +2,14 @@ import { Asset } from "expo-asset";
 import { useAudioPlayer } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import { useEffect, useRef, useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { Alert, View } from "react-native";
 import { BUNDLED_TRACKS, type BundledTrack } from "@/src/editor/music";
 import { addAudioTrack } from "@/src/editor/model/ops";
 import { totalDuration } from "@/src/editor/model/timeline";
 import { AUDIO_LIMITS, type AudioKind } from "@/src/editor/model/types";
 import { SFX, SFX_IDS, type SfxId } from "@/src/editor/sfx";
 import { useEditorStore } from "@/src/editor/store";
+import { rekeyStrip } from "@/src/editor/toolStrip";
 import { formatDuration } from "@/src/lib/format";
 import { storage } from "@/src/projects";
 import { audioDuration } from "@/src/projects/audioInfo";
@@ -17,9 +18,9 @@ import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
 import { IconButton } from "@/src/ui/IconButton";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
-import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
+import { ToolPanel } from "@/src/ui/ToolPanel";
 import { RecordTab, type RecordCloseGuard } from "./RecordTab";
 
 const MAX_BYTES = 50 * 1024 * 1024;
@@ -46,7 +47,11 @@ const ROW = { flexDirection: "row", alignItems: "center", gap: theme.space.md, b
 /**
  * Adds audio to the project: bundled music, a file, a built-in sound effect, or a voice-over recorded on the spot. Every path
  * copies the file into the project, adds a track starting at the playhead (a recording: where it began), selects it and closes
- * the sheet. The track's own controls are the selected-track tools in the toolbar.
+ * the panel. The track's own controls are the selected-track tools in the toolbar.
+ * A tall inline panel: the preview above it stays live. Auditioning a track neither pauses the project's playback nor is stopped
+ * by it (the two mix, as they did under the sheet). The audition stops when the panel is hidden — by ✓, by its host (a selection
+ * change, Export) — on a tab change and on unmount. While a voice-over is recorded the tool store leaves this panel alone
+ * (`src/editor/toolStrip.ts`): it stops, saves and closes itself.
  */
 export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<TabId>("music");
@@ -55,12 +60,12 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   const [previewId, setPreviewId] = useState<string | null>(null);
   const preview = useAudioPlayer(null);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Set by the Record tab while it is mounted: leaving it mid-recording stops and saves first (it then closes the sheet itself).
+  // Set by the Record tab while it is mounted: leaving it mid-recording stops and saves first (it then closes the panel itself).
   const recordGuard = useRef<(() => boolean) | null>(null) as RecordCloseGuard;
 
   // The id being previewed, readable from cleanups and late callbacks; null = the preview player is idle and is left alone.
   const previewing = useRef<string | null>(null);
-  // Read after an await: the sheet may have been dismissed while a file was copied.
+  // Read after an await: the panel may have been dismissed while a file was copied.
   const open = useRef(visible);
   open.current = visible;
 
@@ -82,6 +87,10 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
     previewTimer.current = setTimeout(() => { previewTimer.current = null; previewing.current = null; setPreviewId(null); }, durationSec * 1000 + PREVIEW_TAIL_MS);
   };
   useEffect(() => { if (!visible) stopPreview(); }, [visible]);   // closed by the parent
+  // A recording has just stopped and is about to be saved. If the selection changed while it ran, the tool store would now close the
+  // panel under the recorder, which then says nothing (too short, could not save): the panel takes the current selection as its own
+  // and closes itself when the save is over. A store subscription, not an effect: it must run before the closer's effect.
+  useEffect(() => useEditorStore.subscribe((s, prev) => { if (prev.recording && !s.recording && open.current) rekeyStrip(); }), []);
   // useAudioPlayer releases the native player in its own unmount cleanup, which runs before this one.
   useEffect(() => () => {
     if (previewTimer.current) clearTimeout(previewTimer.current);
@@ -90,16 +99,16 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
 
   const closeNow = () => { stopPreview(); onClose(); };
   const close = () => { if (recordGuard.current?.()) return; closeNow(); };
-  /** After an import: a sheet the user already dismissed must not be closed again (the parent may be showing another sheet by now). */
+  /** After an import: a panel the user already dismissed must not be closed again (the parent may be showing another tool by now). */
   const closeIfOpen = () => { if (open.current) close(); };
-  // The sheet is a native Modal and would cover the toast: close first.
+  // Close first: the toast shows where the panel was.
   const dismissWith = (message: string) => { closeIfOpen(); useToast.getState().show(message); };
   /** An add the op refused: the limit is blamed only when the project really is at it. */
   const refuse = () => {
     const count = useEditorStore.getState().project?.audioTracks.length ?? 0;
     dismissWith(count >= AUDIO_LIMITS.maxTracks ? LIMIT_MESSAGE : FAILED_MESSAGE);
   };
-  /** True (after closing the sheet with a toast) when the playhead is at the project's end: nothing is imported. */
+  /** True (after closing the panel with a toast) when the playhead is at the project's end: nothing is imported. */
   const refusedAtEnd = (): boolean => {
     const { project, playhead } = useEditorStore.getState();
     if (!project || playhead < totalDuration(project) - END_REACH) return false;
@@ -169,24 +178,22 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   );
 
   return (
-    <Sheet visible={visible} onClose={close} title="Add audio" height="60%">
-      <View style={{ flexDirection: "row", gap: theme.space.md }}>
-        {TABS.map((t) => <Chip key={t.id} label={t.label} selected={tab === t.id} onPress={() => { if (t.id === tab || recordGuard.current?.()) return; stopPreview(); setTab(t.id); }} />)}
-      </View>
+    <ToolPanel visible={visible} onClose={close} title="Add audio"
+      lead={TABS.map((t) => <Chip key={t.id} label={t.label} selected={tab === t.id} onPress={() => { if (t.id === tab || recordGuard.current?.()) return; stopPreview(); setTab(t.id); }} />)}>
       {tab === "music" && (BUNDLED_TRACKS.length === 0 ? (
         <Body muted>No bundled tracks yet — use Files.</Body>
       ) : (
-        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: theme.space.sm }}>
+        <View style={{ gap: theme.space.sm }}>
           {BUNDLED_TRACKS.map((t) => row({ id: `music:${t.id}`, title: t.title, detail: `${formatDuration(t.durationSec)} · ${t.license}`, file: t.file, durationSec: t.durationSec, addLabel: "Use", onAdd: () => addBundled(t) }))}
-        </ScrollView>
+        </View>
       ))}
       {tab === "files" && <PrimaryButton title="Choose a file" disabled={busy} onPress={pickFile} />}
       {tab === "effects" && (
-        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: theme.space.sm }}>
+        <View style={{ gap: theme.space.sm }}>
           {SFX_IDS.map((id) => row({ id: `sfx:${id}`, title: SFX[id].label, detail: `${SFX[id].durationSec.toFixed(1)} s`, file: SFX[id].file, durationSec: SFX[id].durationSec, addLabel: "Add", onAdd: () => addSfx(id) }))}
-        </ScrollView>
+        </View>
       )}
       {tab === "record" && <RecordTab onDone={closeNow} closeGuard={recordGuard} />}
-    </Sheet>
+    </ToolPanel>
   );
 }

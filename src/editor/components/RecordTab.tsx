@@ -13,8 +13,8 @@ const BUTTON = 84;
 export type RecordCloseGuard = { current: (() => boolean) | null };
 
 /**
- * The Add audio sheet's Record tab: one round button that starts a voice-over (the video plays, its sound muted) and stops it.
- * `onDone` is called when the sheet should close: after a recording was saved, and before any message is shown.
+ * The Add audio panel's Record tab: one round button that starts a voice-over (the video plays, its sound muted) and stops it.
+ * `onDone` is called when the panel should close: after a recording was saved, and before any message is shown.
  */
 export function RecordTab({ onDone, closeGuard }: { onDone: () => void; closeGuard?: RecordCloseGuard }) {
   const { state, elapsed, start, stop } = useVoiceRecorder({ onDismiss: onDone });
