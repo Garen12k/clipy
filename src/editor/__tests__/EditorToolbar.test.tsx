@@ -22,7 +22,7 @@ const btn = (name: string) => screen.getByRole("button", { name });
 const gone = (name: string) => expect(screen.queryByRole("button", { name })).toBeNull();
 /** Every button on screen, in order (with nothing open: the back arrow, then the bar's tools). */
 const row = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
-/** Closes whatever tool is open: a strip's ✓ or a modal sheet's scrim. */
+/** Closes whatever tool is open: a strip's or a panel's ✓, or the Cover sheet's scrim. */
 const closeTool = async () => { await fireEvent.press(screen.queryByRole("button", { name: "Done" }) ?? screen.getByLabelText("Close sheet")); };
 const BACK = "Back to main tools";
 const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Effects", "Filter", "Adjust", "Ratio", "Background", "Cover", "Templates"];
@@ -150,7 +150,7 @@ describe("main bar entries", () => {
     expect(row()).toEqual(MAIN);
   });
 
-  test("Add audio on the audio bar opens the Add audio sheet", async () => {
+  test("Add audio on the audio bar opens the Add audio panel", async () => {
     await renderBar();
     await fireEvent.press(btn("Audio"));
     expect(screen.queryByRole("header", { name: "Add audio" })).toBeNull();
@@ -227,7 +227,7 @@ describe("main bar entries", () => {
     expect(btn("This clip")).toBeEnabled();
   });
 
-  test("Captions on the text bar opens the Captions sheet", async () => {
+  test("Captions on the text bar opens the Captions panel", async () => {
     await renderBar();
     await fireEvent.press(btn("Text"));
     expect(screen.queryByRole("header", { name: "Captions" })).toBeNull();
@@ -256,10 +256,10 @@ describe("main bar entries", () => {
     }
   });
 
-  test("Stickers, Effects, Cover and Templates open today's sheets; Ratio opens the ratio tool", async () => {
+  test("Stickers and Templates open panels, Effects a strip, Cover its sheet; Ratio opens the ratio tool", async () => {
     await renderBar();
     await fireEvent.press(btn("Stickers"));
-    expect(screen.getByRole("header", { name: "Sticker" })).toBeTruthy();       // the sheet keeps its own title
+    expect(screen.getByRole("header", { name: "Sticker" })).toBeTruthy();       // the panel keeps its own title
     await closeTool();
     await fireEvent.press(btn("Effects"));
     expect(screen.getByRole("header", { name: "Effects" })).toBeTruthy();
@@ -471,7 +471,7 @@ describe("strips and the bar", () => {
   });
 });
 
-test("Templates is enabled without a selection when the project has clips and opens the sheet", async () => {
+test("Templates is enabled without a selection when the project has clips and opens the Templates panel", async () => {
   await renderBar();
   expect(btn("Templates")).toBeEnabled();
   await fireEvent.press(btn("Templates"));
@@ -653,7 +653,7 @@ describe("Effects on the timeline", () => {
   }));
   const effects = () => st().project!.effects;
 
-  test("Effects is enabled whenever a project is open, even an empty one, and opens the Effects sheet", async () => {
+  test("Effects is enabled whenever a project is open, even an empty one, and opens the Effects strip", async () => {
     st().setProject(makeProject());
     await renderBar();
     expect(btn("Effects")).toBeEnabled();
@@ -662,7 +662,7 @@ describe("Effects on the timeline", () => {
     expect(btn("Glitch")).toBeTruthy();
   });
 
-  test("adding from the sheet selects the effect, closes the sheet and shows the effect bar", async () => {
+  test("adding from the strip selects the effect, closes the strip and shows the effect bar", async () => {
     await renderBar();
     await fireEvent.press(btn("Effects"));
     await fireEvent.press(btn("Glitch"));
@@ -718,7 +718,7 @@ describe("Audio tools", () => {
   const TRACK = [BACK, ...SOUND];
   beforeEach(() => { useToast.getState().clear(); });
 
-  test("Beats opens the beat markers sheet, whose Tap adds a marker at the playhead", async () => {
+  test("Beats opens the beat markers panel, whose Tap adds a marker at the playhead", async () => {
     await renderBar();
     await fireEvent.press(btn("Audio"));
     expect(btn("Beats")).toBeEnabled();
@@ -757,7 +757,7 @@ describe("Audio tools", () => {
     expect(st().selectedAudioId).toBe("t1");
   });
 
-  test("with a track selected, Add audio opens the sheet without deselecting", async () => {
+  test("with a track selected, Add audio opens the panel without deselecting", async () => {
     withAudio();
     await renderBar();
     await act(() => { st().selectAudio("t1"); });

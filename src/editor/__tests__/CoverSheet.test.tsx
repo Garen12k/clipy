@@ -269,3 +269,11 @@ test("renders nothing for an empty project", async () => {
   expect(screen.queryByRole("header", { name: "Cover" })).toBeNull();
   expect(screen.queryByTestId("cover-time")).toBeNull();
 });
+
+test("Cover is still a modal sheet in round 2: a scrim, no inline panel", async () => {
+  await open();
+  expect(screen.getByRole("header", { name: "Cover" })).toBeTruthy();
+  expect(screen.getByLabelText("Close sheet")).toBeTruthy();
+  expect(screen.queryByTestId("tool-panel")).toBeNull();
+  expect(screen.queryByTestId("tool-strip")).toBeNull();
+});
