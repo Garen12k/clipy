@@ -9,6 +9,9 @@ import { IconButton } from "@/src/ui/IconButton";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { Body } from "@/src/ui/Text";
 
+/** The time and the ratio pill take the same width, so play stays in the middle. */
+const SIDE_WIDTH = 84;
+
 /** Undo · time · play/pause · ratio · redo, between the preview and the timeline. */
 export function TransportRow() {
   const project = useEditorStore((s) => s.project);
@@ -22,20 +25,21 @@ export function TransportRow() {
   const empty = project.clips.length === 0;
   const toggle = () => { if (!isPlaying && playhead >= total) seek(0); setPlaying(!isPlaying); };
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.md, paddingVertical: theme.space.xs }}>
-      <IconButton name="arrow-undo" accessibilityLabel="Undo" disabled={!canUndo} onPress={undo} />
-      <Body style={{ fontVariant: ["tabular-nums"], fontSize: 12, minWidth: 84, textAlign: "center" }}>{`${formatDuration(playhead)} / ${formatDuration(total)}`}</Body>
+    <View testID="transport-row" style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.sm }}>
+      <IconButton name="arrow-undo-outline" accessibilityLabel="Undo" disabled={!canUndo} onPress={undo} />
+      <Body style={{ fontVariant: ["tabular-nums"], fontSize: theme.type.small, minWidth: SIDE_WIDTH, textAlign: "center" }}>{`${formatDuration(playhead)} / ${formatDuration(total)}`}</Body>
+      {/* A filled glyph on a filled disc, on purpose: an outline glyph would read as a hole. */}
       <PressableScale accessibilityRole="button" accessibilityLabel={isPlaying ? "Pause" : "Play"} accessibilityState={{ disabled: empty }} disabled={empty} onPress={toggle}
-        style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.text, alignItems: "center", justifyContent: "center", opacity: empty ? 0.35 : 1 }}>
-        <Ionicons name={isPlaying ? "pause" : "play"} size={20} color={theme.colors.onAccent} />
+        style={{ width: theme.size.iconButton, height: theme.size.iconButton, borderRadius: theme.radius.pill, backgroundColor: theme.colors.text, alignItems: "center", justifyContent: "center", opacity: empty ? 0.35 : 1 }}>
+        <Ionicons name={isPlaying ? "pause" : "play"} size={theme.size.icon.md} color={theme.colors.onAccent} />
       </PressableScale>
-      <PressableScale accessibilityRole="button" accessibilityLabel="Aspect ratio" onPress={() => openStrip("ratio")}
-        style={{ minWidth: 84, alignItems: "center" }}>
-        <View style={{ borderWidth: 1, borderColor: theme.colors.hairline, borderRadius: theme.radius.pill, paddingHorizontal: theme.space.md, paddingVertical: 3 }}>
-          <Body weight="semi" style={{ fontSize: 12 }}>{project.aspectRatio}</Body>
+      <PressableScale accessibilityRole="button" accessibilityLabel="Aspect ratio" onPress={() => openStrip("ratio")} hitSlop={{ top: theme.space.sm, bottom: theme.space.sm }}
+        style={{ minWidth: SIDE_WIDTH, alignItems: "center" }}>
+        <View style={{ height: theme.size.chipCompact, justifyContent: "center", borderWidth: 1, borderColor: theme.colors.hairline, borderRadius: theme.radius.pill, paddingHorizontal: theme.space.md }}>
+          <Body weight="semi" style={{ fontSize: theme.type.small }}>{project.aspectRatio}</Body>
         </View>
       </PressableScale>
-      <IconButton name="arrow-redo" accessibilityLabel="Redo" disabled={!canRedo} onPress={redo} />
+      <IconButton name="arrow-redo-outline" accessibilityLabel="Redo" disabled={!canRedo} onPress={redo} />
     </View>
   );
 }

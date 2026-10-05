@@ -126,7 +126,7 @@ export function LayerBar({ layer: l, missing = false, selected, overlapping = fa
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`layer-bar-${l.id}`} onPress={onPress} accessibilityLabel={photo ? "Photo layer" : "Video layer"} hitSlop={HIT_SLOP}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color, opacity: overlapping ? OVERLAP_OPACITY : 1,
-          borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: 4 }}>
+          borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
         {roomy && (
           <>
             <Ionicons name={photo ? "image" : "videocam"} size={14} color={theme.colors.onAccent} />

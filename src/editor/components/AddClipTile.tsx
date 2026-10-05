@@ -17,9 +17,9 @@ export function AddClipTile({ left }: { left: number }) {
     <View testID="add-clips-tile" style={{ position: "absolute", left, top: (CLIP_AREA_HEIGHT - ADD_TILE_SIZE) / 2, width: ADD_TILE_SIZE, height: ADD_TILE_SIZE }}>
       <PressableScale accessibilityRole="button" accessibilityLabel="Add clips" accessibilityState={{ busy, disabled: busy }} disabled={busy}
         onPress={() => { void addMedia(); }}
-        style={{ flex: 1, borderRadius: theme.radius.card, backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.hairline,
+        style={{ flex: 1, borderRadius: theme.radius.card, backgroundColor: theme.elevation.tile, borderWidth: 1, borderColor: theme.colors.hairline,
           alignItems: "center", justifyContent: "center" }}>
-        {busy ? <ActivityIndicator testID="add-clips-busy" color={theme.colors.accent} /> : <Ionicons name="add" size={28} color={theme.colors.text} />}
+        {busy ? <ActivityIndicator testID="add-clips-busy" color={theme.colors.accent} /> : <Ionicons name="add-outline" size={28} color={theme.colors.text} />}
       </PressableScale>
     </View>
   );

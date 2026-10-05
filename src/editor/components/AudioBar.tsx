@@ -84,7 +84,7 @@ export function AudioBar({ track: t, missing, selected, overlapping = false, onP
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`audio-bar-${t.id}`} onPress={onPress} accessibilityLabel={`${label} ${t.title}`} hitSlop={HIT_SLOP}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color, opacity: overlapping ? OVERLAP_OPACITY : 1,
-          borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: 4 }}>
+          borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
         {roomy && (
           <>
             <Ionicons name="volume-medium" size={14} color={theme.colors.onAccent} />

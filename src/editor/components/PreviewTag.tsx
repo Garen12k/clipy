@@ -46,7 +46,7 @@ export function PreviewTag({ visible }: { visible: boolean }) {
         position: "absolute", left: 8, top: 8, overflow: "hidden",
         borderWidth: 1, borderColor: theme.colors.hairline,
         borderRadius: theme.radius.pill, backgroundColor: theme.colors.scrimStrong,
-        paddingHorizontal: 8, paddingVertical: 3,
+        paddingHorizontal: theme.space.sm, paddingVertical: theme.space.xs,
       }}
     >
       <Body weight="semi" style={{ fontSize: 10, color: theme.colors.accent }}>Preview</Body>
