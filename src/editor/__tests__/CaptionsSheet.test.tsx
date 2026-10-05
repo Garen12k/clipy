@@ -83,3 +83,12 @@ test("permission denied explains and links to Settings", async () => {
   await fireEvent.press(screen.getByText("Open Settings"));
   expect(open).toHaveBeenCalledTimes(1);
 });
+
+test("the Replace card leaves room under Cancel for its hit slop, and still fits the compact body", async () => {
+  mockNative = true; load(true);
+  await render(<CaptionsSheet visible onClose={() => {}} />);
+  const card = StyleSheet.flatten(screen.getByRole("button", { name: "Cancel" }).parent?.props.style);
+  expect(card.paddingBottom).toBe(theme.space.xs);
+  // 162 + 4 = 166 <= 171.
+  expect(18 + 3 * theme.space.md + 3 * theme.size.controlCompact + theme.space.xs).toBeLessThanOrEqual(PANEL.compact - 1 - PANEL.header - 2 * theme.space.md);
+});

@@ -79,7 +79,7 @@ export function TextStyleSection({ style, outline, onBegin, onPatch, onPatchTran
 export function CollapsibleTextStyle(props: Props) {
   const [open, setOpen] = useState(false);
   return (<>
-    <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel="Style" accessibilityState={{ expanded: open }}
+    <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel="Style" hitSlop={12} accessibilityState={{ expanded: open }}
       style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
       <Body style={{ color: theme.colors.sea }}>Style</Body>
       <Body style={{ color: theme.colors.sea }}>{open ? "▲" : "▼"}</Body>

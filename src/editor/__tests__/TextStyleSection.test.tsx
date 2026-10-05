@@ -107,3 +107,8 @@ test("the collapsible block is closed until its row is pressed", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "Style" }));
   expect(screen.queryByTestId("style-opacity-slider")).toBeNull();
 });
+
+test("the Style toggle has hit slop", async () => {
+  await render(<CollapsibleTextStyle style={{ ...DEFAULT_TEXT_STYLE }} outline={false} onBegin={onBegin} onPatch={onPatch} onPatchTransient={onPatchTransient} />);
+  expect(screen.getByRole("button", { name: "Style" }).props.hitSlop).toBe(12);
+});

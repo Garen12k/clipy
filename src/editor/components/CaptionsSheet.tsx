@@ -50,10 +50,10 @@ export function CaptionsSheet({ visible, onClose }: Props) {
         )}
 
         {state.status === "idle" && hasCaptions && (
-          <View style={{ gap: theme.space.md }}>
+          <View style={{ gap: theme.space.md, paddingBottom: theme.space.xs }}>
             <Body>Replace existing captions?</Body>
             {/* Stacked like the "done" branch: three uppercase buttons don't fit one row in a panel. All three compact (36): the card
-                is then 162 pt (a line of text + 3 gaps of 12 + 3 × 36) in a body that shows 171, so nothing scrolls; at 48 it would be 198. */}
+                is then 166 pt (a line of text + 3 gaps of 12 + 3 × 36 + 4 under Cancel for its hit slop) in a body that shows 171, so nothing scrolls; at 48 it would be 198. */}
             <PrimaryButton compact title="Replace" onPress={start} />
             <SecondaryButton compact title="Style captions" onPress={() => setStyling(true)} />
             <QuietButton compact title="Cancel" onPress={close} />

@@ -40,7 +40,7 @@ export function StickerPanel({ overlayId, visible, onClose, onRetarget }: Props)
         <Slider testID="sticker-size-slider" minimumValue={OVERLAY_LIMITS.scale[0]} maximumValue={OVERLAY_LIMITS.scale[1]} value={base.scale}
           onSlidingStart={() => { dragTime.current = useEditorStore.getState().playhead; beginTransaction(); }}
           onValueChange={(v: number) => applyTransient((x) => editOverlayAt(x, id, dragTime.current, { scale: v }))} /></View>
-      <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
+      <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" hitSlop={12} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
         <Body style={{ color: theme.colors.sea }}>Fine-tune</Body>
         <Body style={{ color: theme.colors.sea }}>{fine ? "▲" : "▼"}</Body>
       </Pressable>

@@ -6,6 +6,7 @@ export type IoniconName = keyof typeof Ionicons.glyphMap;
 /**
  * What each tool button shows. Which bar a tool is on, and in which order, is decided by `contextFor` (toolbarContext.ts);
  * what it does, by the toolbar component.
+ * Icons are Ionicons outline names, one style for every tool.
  */
 export const TOOL_META: Record<ToolId, { label: string; icon: IoniconName }> = {
   // The main bar.
@@ -26,7 +27,7 @@ export const TOOL_META: Record<ToolId, { label: string; icon: IoniconName }> = {
   trim: { label: "Trim", icon: "code-outline" },
   speed: { label: "Speed", icon: "speedometer-outline" },
   volume: { label: "Volume", icon: "volume-high-outline" },
-  animate: { label: "Animate", icon: "play-forward-outline" },
+  animate: { label: "Animate", icon: "sparkles-outline" },
   crop: { label: "Crop", icon: "crop-outline" },
   transform: { label: "Transform", icon: "resize-outline" },
   opacity: { label: "Opacity", icon: "contrast-outline" },

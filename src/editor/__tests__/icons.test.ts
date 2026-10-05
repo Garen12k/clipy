@@ -15,7 +15,7 @@ test("the icon of each tool", () => {
   expect(Object.fromEntries(TOOL_IDS.map((id) => [id, TOOL_META[id].icon]))).toEqual({
     edit: "film-outline", audioMenu: "musical-notes-outline", textMenu: "text-outline", sticker: "happy-outline", overlay: "layers-outline", effect: "flash-outline",
     filter: "color-filter-outline", adjust: "options-outline", ratio: "phone-portrait-outline", background: "color-palette-outline", cover: "image-outline", templates: "color-wand-outline",
-    split: "cut-outline", trim: "code-outline", speed: "speedometer-outline", volume: "volume-high-outline", animate: "play-forward-outline", crop: "crop-outline",
+    split: "cut-outline", trim: "code-outline", speed: "speedometer-outline", volume: "volume-high-outline", animate: "sparkles-outline", crop: "crop-outline",
     transform: "resize-outline", opacity: "contrast-outline", mask: "ellipse-outline", blend: "color-fill-outline", chroma: "leaf-outline", keyframe: "diamond-outline",
     transition: "swap-horizontal-outline", layerForward: "arrow-up-outline", layerBack: "arrow-down-outline", replace: "sync-outline", reverse: "play-back-outline", freeze: "snow-outline",
     duplicate: "copy-outline", delete: "trash-outline", select: "checkmark-done-outline",

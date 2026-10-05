@@ -85,7 +85,7 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
         <Switch accessibilityLabel="Outline" value={overlay.outline} onValueChange={(outline) => patch({ outline })} trackColor={{ true: theme.colors.accent }} />
       </View>
       <CollapsibleTextStyle style={overlay.style} outline={overlay.outline} onBegin={beginTransaction} onPatch={patchStyle} onPatchTransient={patchStyleTransient} />
-      <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
+      <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" hitSlop={12} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
         <Body style={{ color: theme.colors.sea }}>Fine-tune</Body>
         <Body style={{ color: theme.colors.sea }}>{fine ? "▲" : "▼"}</Body>
       </Pressable>
