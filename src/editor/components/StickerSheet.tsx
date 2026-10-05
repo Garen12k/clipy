@@ -11,6 +11,7 @@ import { prefs } from "@/src/projects/prefs";
 import { DEFAULT_STICKER_COLOR } from "@/src/editor/components/ColorRow";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
+import { useKeyboard } from "@/src/ui/keyboard";
 import { Body } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow } from "./ColorRow";
@@ -25,6 +26,8 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
   const [recent, setRecent] = useState<string[]>([]);
   const [color, setColor] = useState<string>(DEFAULT_STICKER_COLOR);
   const apply = useEditorStore((s) => s.apply);
+  // The keyboard is up (the panel is at its typing height): the recents row gives its place to the results.
+  const typing = useKeyboard((s) => s.height > 0);
 
   useEffect(() => {
     if (!visible) return;
@@ -69,7 +72,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
           </View>
           <FlatList testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={8}
             keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
-            ListHeaderComponent={recent.length > 0 && !query ? (
+            ListHeaderComponent={recent.length > 0 && !query && !typing ? (
               <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap", marginBottom: theme.space.sm }}>
                 {recent.map((char) => (
                   <Pressable key={char} accessibilityLabel={`Recent ${char}`} onPress={() => addEmoji({ char, name: char, keywords: [] })}>

@@ -9,7 +9,6 @@ import { totalDuration } from "@/src/editor/model/timeline";
 import { AUDIO_LIMITS, type AudioKind } from "@/src/editor/model/types";
 import { SFX, SFX_IDS, type SfxId } from "@/src/editor/sfx";
 import { useEditorStore } from "@/src/editor/store";
-import { rekeyStrip } from "@/src/editor/toolStrip";
 import { formatDuration } from "@/src/lib/format";
 import { storage } from "@/src/projects";
 import { audioDuration } from "@/src/projects/audioInfo";
@@ -50,8 +49,8 @@ const ROW = { flexDirection: "row", alignItems: "center", gap: theme.space.md, b
  * the panel. The track's own controls are the selected-track tools in the toolbar.
  * A tall inline panel: the preview above it stays live. Auditioning a track neither pauses the project's playback nor is stopped
  * by it (the two mix, as they did under the sheet). The audition stops when the panel is hidden — by ✓, by its host (a selection
- * change, Export) — on a tab change and on unmount. While a voice-over is recorded the tool store leaves this panel alone
- * (`src/editor/toolStrip.ts`): it stops, saves and closes itself.
+ * change, Export) — on a tab change and on unmount. While a voice-over is recorded, and until it is saved, the tool store leaves
+ * this panel alone (`src/editor/toolStrip.ts`): it stops, saves and closes itself — before the recorder clears the `recording` flag.
  */
 export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<TabId>("music");
@@ -87,10 +86,6 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
     previewTimer.current = setTimeout(() => { previewTimer.current = null; previewing.current = null; setPreviewId(null); }, durationSec * 1000 + PREVIEW_TAIL_MS);
   };
   useEffect(() => { if (!visible) stopPreview(); }, [visible]);   // closed by the parent
-  // A recording has just stopped and is about to be saved. If the selection changed while it ran, the tool store would now close the
-  // panel under the recorder, which then says nothing (too short, could not save): the panel takes the current selection as its own
-  // and closes itself when the save is over. A store subscription, not an effect: it must run before the closer's effect.
-  useEffect(() => useEditorStore.subscribe((s, prev) => { if (prev.recording && !s.recording && open.current) rekeyStrip(); }), []);
   // useAudioPlayer releases the native player in its own unmount cleanup, which runs before this one.
   useEffect(() => () => {
     if (previewTimer.current) clearTimeout(previewTimer.current);

@@ -252,6 +252,88 @@ describe("after unmount nothing is shown", () => {
   });
 });
 
+describe("the recording flag is held until the save is over (the tool store waits for it), then cleared on every way out", () => {
+  /** Starts, then stops with the save held at `gate`: resolves once the save is waiting there. */
+  const stopInto = async (view: { result: { current: ReturnType<typeof useVoiceRecorder> } }, gate: jest.Mock, seconds = 2) => {
+    await act(async () => { await view.result.current.start(); });
+    mockRecorder.currentTime = seconds;
+    let stopping!: Promise<void>;
+    await act(async () => { stopping = view.result.current.stop(); await new Promise((r) => setImmediate(r)); });
+    expect(gate).toHaveBeenCalledTimes(1);
+    return { stopping };   // wrapped: an async function that returned the promise itself would wait for it
+  };
+
+  test("saved: still set while the file is copied (the session itself is already back to playback), cleared once the track is in", async () => {
+    let finish!: () => void;
+    importAudio.mockImplementationOnce((_id: string, a: { title: string; durationSec: number }) => new Promise((resolve) => {
+      finish = () => resolve(makeAudioTrack({ id: "held", title: a.title, sourceDuration: a.durationSec, kind: "voice" }));
+    }));
+    const seen: boolean[] = [];
+    const view = await renderHook(() => useVoiceRecorder({ onDismiss: () => { seen.push(st().recording); } }));
+    const { stopping } = await stopInto(view, importAudio);
+    expect(view.result.current.state).toBe("saving");
+    expect(st().recording).toBe(true);
+    expect(st().isPlaying).toBe(false);
+    expect(lastMode()).toEqual(PLAYBACK_AUDIO_MODE);
+    await act(async () => { finish(); await stopping; });
+    expect(st().project!.audioTracks.map((t) => t.id)).toEqual(["held"]);
+    expect(seen).toEqual([true]);   // the host is told to close before the flag drops: nothing can close it in between
+    expectRestored();
+    expect(view.result.current.state).toBe("idle");
+  });
+
+  test("too short: still set while the file is measured, cleared with the toast", async () => {
+    let finish!: (seconds: number) => void;
+    measure.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const seen: boolean[] = [];
+    const view = await renderHook(() => useVoiceRecorder({ onDismiss: () => { seen.push(st().recording); } }));
+    const { stopping } = await stopInto(view, measure);
+    expect(st().recording).toBe(true);
+    await act(async () => { finish(AUDIO_LIMITS.minDuration - 0.1); await stopping; });
+    expect(toast()).toBe("That recording was too short.");
+    expect(seen).toEqual([true]);
+    expectRestored();
+  });
+
+  test("a save that fails: still set while the file is copied, cleared with the toast", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    let fail!: (e: Error) => void;
+    importAudio.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+    const view = await renderHook(() => useVoiceRecorder());
+    const { stopping } = await stopInto(view, importAudio);
+    expect(st().recording).toBe(true);
+    await act(async () => { fail(new Error("disk full")); await stopping; });
+    expect(toast()).toBe("Couldn't save that recording.");
+    expectRestored();
+    warn.mockRestore();
+  });
+
+  test("a host that throws while it closes does not leave the flag set", async () => {
+    const view = await renderHook(() => useVoiceRecorder({ onDismiss: () => { throw new Error("host"); } }));
+    await act(async () => { await view.result.current.start(); });
+    mockRecorder.currentTime = 2;
+    await act(async () => { await view.result.current.stop().catch(() => {}); });
+    expectRestored();
+    expect(view.result.current.state).toBe("idle");
+  });
+
+  test("unmount during the save: cleared at once; the save ending later leaves a newer recording's flag alone", async () => {
+    let finish!: () => void;
+    importAudio.mockImplementationOnce((_id: string, a: { title: string; durationSec: number }) => new Promise((resolve) => {
+      finish = () => resolve(makeAudioTrack({ id: "late", title: a.title, sourceDuration: a.durationSec, kind: "voice" }));
+    }));
+    const view = await renderHook(() => useVoiceRecorder());
+    const { stopping } = await stopInto(view, importAudio);
+    expect(st().recording).toBe(true);
+    await act(async () => { await view.unmount(); });
+    expect(st().recording).toBe(false);
+    await act(() => { st().setRecording(true); });   // another recorder has started meanwhile
+    await act(async () => { finish(); await stopping; });
+    expect(st().project!.audioTracks.map((t) => t.id)).toEqual(["late"]);
+    expect(st().recording).toBe(true);
+  });
+});
+
 test("the recorder's status duration is used when it has no current time; the wall clock when it reports nothing", async () => {
   const now = jest.spyOn(Date, "now");
   try {

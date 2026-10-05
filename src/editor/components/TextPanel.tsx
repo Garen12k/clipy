@@ -94,7 +94,8 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
         </View>
       )}
       <View style={{ flexDirection: "row", gap: theme.space.md }}>
-        <SecondaryButton title="Duplicate" onPress={() => {
+        {/* Not while the text is empty: the host removes an empty text as the panel leaves it — that would be a second undo step. */}
+        <SecondaryButton title="Duplicate" disabled={overlay.text.trim().length === 0} onPress={() => {
           apply((x) => duplicateOverlay(x, id));
           const overlays = useEditorStore.getState().project?.overlays ?? [];
           const dup = overlays[overlays.findIndex((o) => o.id === id) + 1];

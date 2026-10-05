@@ -46,6 +46,21 @@ test("fine-tune fields and duplicate/delete", async () => {
   expect(onRetarget).toHaveBeenCalledWith("dup");
 });
 
+test("Duplicate is disabled while the text is empty (an empty text is removed when the panel leaves it); Delete is not", async () => {
+  const onRetarget = jest.fn();
+  await render(<TextPanel overlayId="o1" visible onClose={() => {}} onRetarget={onRetarget} />);
+  expect(screen.getByRole("button", { name: "Duplicate" })).toBeEnabled();
+  await fireEvent.changeText(screen.getByLabelText("Overlay text"), " ");
+  const past = useEditorStore.getState().past.length;
+  expect(screen.getByRole("button", { name: "Duplicate" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Delete" })).toBeEnabled();
+  await fireEvent.press(screen.getByRole("button", { name: "Duplicate" }));
+  expect(useEditorStore.getState().project!.overlays).toHaveLength(1);
+  expect(useEditorStore.getState().past).toHaveLength(past);
+  expect(useEditorStore.getState().selectedOverlayId).toBe("o1");
+  expect(onRetarget).not.toHaveBeenCalled();
+});
+
 test("a typing session is a single undo step", async () => {
   await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
   const before = useEditorStore.getState().past.length;

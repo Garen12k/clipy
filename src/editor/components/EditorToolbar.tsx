@@ -285,7 +285,9 @@ export function EditorToolbar() {
 
   // The keyboard only counts while a tool shows: the tool then sits on it, at its typing height, and nothing is lifted.
   const typing = toolShown && keyboard > 0;
-  const pad = typing ? keyboard : Math.max(insets.bottom, theme.space.sm);
+  // Never less than the safe area's: a hardware keyboard's bar reports a height below it.
+  const safePad = Math.max(insets.bottom, theme.space.sm);
+  const pad = typing ? Math.max(keyboard, safePad) : safePad;
   const area = panelSize ? panelHeight(panelSize, windowH, typing) : stripShown ? STRIP.height : BAR_HEIGHT;
 
   return (

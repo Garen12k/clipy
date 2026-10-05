@@ -27,6 +27,13 @@ test("Done closes; the action runs", async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
+test("the header action's small label has a touch target of at least 44 pt", async () => {
+  await render(<ToolStrip visible onClose={() => {}} title="Filter" action={{ label: "Apply to all", onPress: () => {} }}><Text>body</Text></ToolStrip>);
+  const slop = screen.getByRole("button", { name: "Apply to all" }).props.hitSlop as { top: number; bottom: number; left: number; right: number };
+  expect(slop.top + slop.bottom + 12).toBeGreaterThanOrEqual(44);      // the label is one line of 12 pt text
+  expect(slop.left + slop.right + 20).toBeGreaterThanOrEqual(44);      // … and never narrower than 20 pt
+});
+
 test("hidden: renders nothing and is not counted; visible: counted while mounted", async () => {
   const view = await render(<ToolStrip visible={false} onClose={() => {}} title="Filter"><Text>body</Text></ToolStrip>);
   expect(screen.queryByText("body")).toBeNull();

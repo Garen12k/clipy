@@ -13,7 +13,7 @@ export type OpenStrip = { id: OpenToolId; key: string };
 /** Which tool — a strip or a tall panel — is open (null = none). One at a time. Transient UI state: not saved, not undoable. */
 export const useToolStrip = create<{ open: OpenStrip | null }>(() => ({ open: null }));
 
-/** A voice-over is being recorded: the Add audio panel must not be taken away from under the recorder (it stops, saves and closes itself). */
+/** A voice-over is being recorded or saved: the Add audio panel must not be taken away from under the recorder (it stops, saves and closes itself). */
 const recording = () => useEditorStore.getState().recording;
 
 /**

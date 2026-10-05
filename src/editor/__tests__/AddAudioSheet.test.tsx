@@ -471,6 +471,63 @@ describe("as a panel, hosted like the toolbar hosts it", () => {
     expect(tracks()).toEqual([]);
   });
 
+  test("a selection change while the recording is being saved does not take the panel away; a save that fails still shows its toast", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    let fail!: (e: Error) => void;
+    importAudio.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(importAudio).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("Saving…")).toBeTruthy();
+    await act(() => { useEditorStore.getState().select("a"); });   // a tap in the preview, live again
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    expect(screen.getByText("Saving…")).toBeTruthy();
+    await act(() => { openStrip("ratio"); });
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    await act(async () => { fail(new Error("disk full")); });
+    await waitFor(() => expect(useToast.getState().message).toBe("Couldn't save that recording."));
+    expect(useToolStrip.getState().open).toBeNull();
+    expect(useEditorStore.getState().recording).toBe(false);
+    expect(tracks()).toEqual([]);
+    warn.mockRestore();
+  });
+
+  test("a selection change while a too-short recording is being measured: the panel waits, then closes with the toast", async () => {
+    let finish!: (seconds: number) => void;
+    (audioDuration as jest.Mock).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(finish).toBeDefined());
+    await act(() => { useEditorStore.getState().select("a"); });
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    await act(async () => { finish(0.2); });
+    await waitFor(() => expect(useToast.getState().message).toBe("That recording was too short."));
+    expect(useToolStrip.getState().open).toBeNull();
+    expect(useEditorStore.getState().recording).toBe(false);
+  });
+
+  test("a selection change while the recording is being saved: the saved voice-over ends up selected and the panel closed", async () => {
+    let finish!: () => void;
+    importAudio.mockImplementationOnce((_id: string, a: { title: string; durationSec: number }) => new Promise((resolve) => {
+      finish = () => resolve(makeAudioTrack({ id: "held", title: a.title, sourceDuration: a.durationSec, kind: "voice" }));
+    }));
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(importAudio).toHaveBeenCalledTimes(1));
+    await act(() => { useEditorStore.getState().select("a"); });
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    await act(async () => { finish(); });
+    await waitFor(() => expect(useToolStrip.getState().open).toBeNull());
+    expect(useEditorStore.getState()).toMatchObject({ recording: false, selectedAudioId: "held" });
+    expect(useToast.getState().message).toBeNull();
+  });
+
   test("adding a bundled track selects it and closes the panel; the closer has nothing left to do", async () => {
     await render(<Host />);
     await act(() => { openStrip("addAudio"); });

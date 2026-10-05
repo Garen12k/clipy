@@ -57,6 +57,17 @@ test("searching with the keyboard up: the tabs give their place, the search fiel
   expect(screen.getByTestId("emoji-grid").props.keyboardDismissMode).toBe("on-drag");
 });
 
+test("while the keyboard is up the recents row gives its place to the results; it is back when the keyboard goes down", async () => {
+  await render(<StickerSheet visible onClose={() => {}} onAdded={() => {}} />);
+  expect(await screen.findByLabelText("Recent 🎉")).toBeTruthy();
+  await act(() => { useKeyboard.setState({ height: 336 }); });
+  expect(screen.queryByLabelText("Recent 🎉")).toBeNull();
+  expect(screen.getByTestId("emoji-grid").props.ListHeaderComponent).toBeNull();
+  expect(screen.getByTestId("emoji-grid").props.data.length).toBeGreaterThan(0);   // the results are still there
+  await act(() => { useKeyboard.setState({ height: 0 }); });
+  expect(screen.getByLabelText("Recent 🎉")).toBeTruthy();
+});
+
 test("the shapes scroll inside the panel body, at its explicit height", async () => {
   await render(<StickerSheet visible onClose={() => {}} onAdded={() => {}} />);
   await fireEvent.press(screen.getByRole("button", { name: "Shapes" }));

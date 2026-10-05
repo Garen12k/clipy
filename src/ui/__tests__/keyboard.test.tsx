@@ -11,7 +11,7 @@ test("follows keyboardWillShow / keyboardWillHide while mounted, and forgets the
   const metrics = jest.spyOn(Keyboard, "metrics").mockReturnValue(undefined);
   const view = await render(<Tracker />);
   expect(useKeyboard.getState().height).toBe(0);
-  expect(Object.keys(listeners).sort()).toEqual(["keyboardWillHide", "keyboardWillShow"]);
+  expect(Object.keys(listeners).sort()).toEqual(["keyboardDidHide", "keyboardWillHide", "keyboardWillShow"]);
   await act(() => { listeners.keyboardWillShow({ endCoordinates: { screenX: 0, screenY: 516, width: 390, height: 336 } }); });
   expect(useKeyboard.getState().height).toBe(336);
   await act(() => { listeners.keyboardWillShow({ endCoordinates: { screenX: 0, screenY: 470, width: 390, height: 382 } }); });   // the emoji keyboard is taller
@@ -20,8 +20,20 @@ test("follows keyboardWillShow / keyboardWillHide while mounted, and forgets the
   expect(useKeyboard.getState().height).toBe(0);
   await act(() => { listeners.keyboardWillShow({ endCoordinates: { screenX: 0, screenY: 516, width: 390, height: 336 } }); });
   await view.unmount();
-  expect(remove).toHaveBeenCalledTimes(2);
+  expect(remove).toHaveBeenCalledTimes(3);
   expect(useKeyboard.getState().height).toBe(0);
+  add.mockRestore(); metrics.mockRestore();
+});
+
+test("keyboardDidHide ends at 0 too: a mount during the hide animation that read a stale height does not keep it", async () => {
+  const listeners: Record<string, (e: unknown) => void> = {};
+  const add = jest.spyOn(Keyboard, "addListener").mockImplementation(((name: string, fn: (e: unknown) => void) => { listeners[name] = fn; return { remove: () => {} }; }) as never);
+  const metrics = jest.spyOn(Keyboard, "metrics").mockReturnValue({ screenX: 0, screenY: 516, width: 390, height: 336 });   // keyboardWillHide was posted before the mount
+  const view = await render(<Tracker />);
+  expect(useKeyboard.getState().height).toBe(336);
+  await act(() => { listeners.keyboardDidHide({ endCoordinates: { screenX: 0, screenY: 852, width: 390, height: 0 } }); });
+  expect(useKeyboard.getState().height).toBe(0);
+  await view.unmount();
   add.mockRestore(); metrics.mockRestore();
 });
 

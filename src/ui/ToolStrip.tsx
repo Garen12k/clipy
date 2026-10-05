@@ -13,6 +13,8 @@ export const BAR_HEIGHT = 86;
 export const useStripPresence = create<{ count: number }>(() => ({ count: 0 }));
 
 const DONE_SIZE = 32;
+/** Around the header action's label (one line of 12 pt text): a touch target of 44 pt or more. */
+const ACTION_SLOP = { top: 16, bottom: 16, left: 12, right: 12 } as const;
 const LABEL_WIDTH = 124;
 /** Where a row of uniform tiles starts so the selected one shows: its index times the pitch (tile + gap), minus one tile. */
 export const tilesStartX = (index: number, tileWidth: number): number => Math.max(0, index * (tileWidth + theme.space.sm) - tileWidth);
@@ -39,7 +41,7 @@ export function ToolStrip({ visible, onClose, title, note, action, children }: P
         <Title size={15} accessibilityRole="header">{title}</Title>
         <View style={{ flex: 1, height: STRIP.header, justifyContent: "center" }}>{note}</View>
         {action ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={8}>
+          <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={ACTION_SLOP}>
             <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 12 }}>{action.label}</Body>
           </Pressable>
         ) : null}

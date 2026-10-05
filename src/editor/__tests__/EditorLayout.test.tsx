@@ -13,6 +13,7 @@ import { panelHeight } from "@/src/ui/ToolPanel";
 import { BAR_HEIGHT, STRIP } from "@/src/ui/ToolStrip";
 import { EditorLayout } from "../components/EditorLayout";
 import { EditorToolbar } from "../components/EditorToolbar";
+import { MULTI_BAR_HEIGHT } from "../components/MultiSelectBar";
 import { Timeline } from "../components/Timeline";
 import { TransportRow } from "../components/TransportRow";
 import { TIMELINE_HEIGHT } from "../timelineLayout";
@@ -165,6 +166,31 @@ test("a strip with the keyboard sits on the keyboard, is not lifted, and the tim
   expect(screen.getByTestId("timeline-scroll")).toBe(scroll);
   expect(screen.getByTestId("probe")).toBe(probe);
   expect(mounts).toBe(1);
+});
+
+test("a keyboard that is not the tool's (the rename prompt) while a multi-select strip shows: the timeline stays, under the lifted bar", async () => {
+  await render(ui());
+  await act(() => { st().select("a"); st().enterMultiSelect(); });
+  await fireEvent.press(btn("Filter"));
+  expect(screen.getByTestId("tool-strip")).toBeTruthy();
+  const lifted = { height: STRIP.height + 8, marginTop: -(STRIP.height - MULTI_BAR_HEIGHT) };
+  expect(screen.getByTestId("multi-select-bar")).toHaveStyle(lifted);
+  await act(() => { useKeyboard.setState({ height: 336 }); });
+  expect(screen.getByTestId("multi-select-bar")).toHaveStyle(lifted);
+  expect(screen.getByTestId("slot-timeline")).not.toHaveStyle({ height: 0 });
+  expect(screen.getByTestId("slot-timeline").props.pointerEvents).toBe("auto");
+  expect(screen.getByTestId("timeline-root")).toBeTruthy();
+});
+
+test("a keyboard lower than the safe area (a hardware keyboard's bar) never shrinks the bottom padding under a tool", async () => {
+  await render(ui());
+  await fireEvent.press(btn("Stickers"));
+  await act(() => { useKeyboard.setState({ height: 5 }); });
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: panelHeight("regular", H, true) + 8, paddingBottom: 8 });
+  await act(() => { useKeyboard.setState({ height: 0 }); closeStrip(); st().select("a"); });
+  await fireEvent.press(btn("Opacity"));
+  await act(() => { useKeyboard.setState({ height: 5 }); });
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, paddingBottom: 8, marginTop: 0 });
 });
 
 test("leaving the editor with the keyboard up leaves no height behind for the next visit", async () => {

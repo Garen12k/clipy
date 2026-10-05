@@ -20,6 +20,8 @@ export function panelHeight(size: PanelSize, windowHeight: number, typing = fals
 export const usePanelPresence = create<{ count: number; size: PanelSize }>(() => ({ count: 0, size: "regular" }));
 
 const DONE_SIZE = 32;
+/** Around the header action's label (one line of 12 pt text): a touch target of 44 pt or more. */
+const ACTION_SLOP = { top: 16, bottom: 16, left: 12, right: 12 } as const;
 
 type Props = { visible: boolean; onClose: () => void; title: string; size?: PanelSize; action?: { label: string; onPress: () => void };
   lead?: React.ReactNode; scroll?: boolean; bodyTestID?: string; children: React.ReactNode | ((bodyHeight: number) => React.ReactNode) };
@@ -65,7 +67,7 @@ export function ToolPanel({ visible, onClose, title, size = "regular", action, l
         <Title size={16} accessibilityRole="header">{title}</Title>
         <View style={{ flex: 1, height: PANEL.header }} />
         {action ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={8}>
+          <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={ACTION_SLOP}>
             <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 12 }}>{action.label}</Body>
           </Pressable>
         ) : null}

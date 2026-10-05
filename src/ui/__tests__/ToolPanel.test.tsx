@@ -40,6 +40,13 @@ test("Done closes; the action runs", async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
+test("the header action's small label has a touch target of at least 44 pt", async () => {
+  await render(<ToolPanel visible onClose={() => {}} title="Text" action={{ label: "Apply to all", onPress: () => {} }}><Text>body</Text></ToolPanel>);
+  const slop = screen.getByRole("button", { name: "Apply to all" }).props.hitSlop as { top: number; bottom: number; left: number; right: number };
+  expect(slop.top + slop.bottom + 12).toBeGreaterThanOrEqual(44);      // the label is one line of 12 pt text
+  expect(slop.left + slop.right + 20).toBeGreaterThanOrEqual(44);      // … and never narrower than 20 pt
+});
+
 test("compact is 240; a lead row is 44 and the body gives it up; the body test id can be named", async () => {
   await render(<ToolPanel visible onClose={() => {}} title="Sticker" size="compact" lead={<Text>tabs</Text>} bodyTestID="my-scroll"><Text>body</Text></ToolPanel>);
   expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: 239 });

@@ -309,6 +309,27 @@ describe("text and sticker bars", () => {
     }
   });
 
+  test("the text panel's Duplicate is off while the text is empty: no copy, no undo step, the panel stays on its text", async () => {
+    withOverlays();
+    await renderBar();
+    await act(() => { st().selectOverlay("t1"); });
+    await fireEvent.press(btn("Edit"));
+    await act(() => { st().apply((p) => ops.updateOverlay(p, "t1", { text: "  " })); });
+    const past = st().past.length;
+    expect(btn("Duplicate")).toBeDisabled();
+    await fireEvent.press(btn("Duplicate"));
+    expect(st().project!.overlays.map((o) => o.id)).toEqual(["t1", "s1", "c1"]);
+    expect(st().past).toHaveLength(past);
+    expect(st().selectedOverlayId).toBe("t1");
+    expect(useToolStrip.getState().open).toEqual({ id: "text", key: "overlay:t1" });
+    // With a text again it copies, in one step.
+    await act(() => { st().apply((p) => ops.updateOverlay(p, "t1", { text: "Hi" })); });
+    expect(btn("Duplicate")).toBeEnabled();
+    await fireEvent.press(btn("Duplicate"));
+    expect(st().project!.overlays).toHaveLength(4);
+    expect(st().past).toHaveLength(past + 2);
+  });
+
   test("Duplicate copies the overlay in one undo step and selects the copy; Delete removes it and the main bar shows", async () => {
     withOverlays();
     await renderBar();
