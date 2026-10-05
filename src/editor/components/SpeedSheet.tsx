@@ -1,4 +1,3 @@
-import Slider from "@react-native-community/slider";
 import { useState } from "react";
 import { View } from "react-native";
 import { SPEED_CURVES } from "@/src/editor/effects";
@@ -11,8 +10,8 @@ import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
-import { PressableScale } from "@/src/ui/PressableScale";
-import { Body } from "@/src/ui/Text";
+import { Slider } from "@/src/ui/Slider";
+import { Tile, TILE_WIDTH } from "@/src/ui/Tile";
 import { useToast } from "@/src/ui/Toast";
 import { StripNote, StripSlider, StripTiles, ToolStrip, tilesStartX } from "@/src/ui/ToolStrip";
 
@@ -21,19 +20,17 @@ const PRESETS = [0.25, 0.5, 1, 1.5, 2, 4];
 type Tab = "normal" | "curve";
 const TABS: { id: Tab; label: string }[] = [{ id: "normal", label: "Normal" }, { id: "curve", label: "Curve" }];
 
-/** Tile geometry (points), matching the animation tiles: the column a tile takes, its rounded box and the sparkline inside it. */
-const TILE_WIDTH = 68;
-const TILE_BOX = 44;
 /** A speed chip is about this wide (its text varies a little); only used to start the row near the selected one. */
 const PRESET_WIDTH = 64;
+/** The sparkline inside a curve tile's box (points). */
 const SPARK_HEIGHT = 24;
 const BAR_WIDTH = 3;
 const BAR_GAP = 1;
 /** The width eight bars take, so the flat line of "None" is as wide as a preset's sparkline. */
 const SPARK_WIDTH = 8 * BAR_WIDTH + 7 * BAR_GAP;
 const FLAT_LINE = 2;
-const LABEL_SIZE = 11;
-const clearRing = { borderWidth: theme.ring.borderWidth, borderColor: "transparent" };
+/** 1×: the slider ticks lightly when a drag reaches or passes it. */
+const REST = [1] as const;
 
 /** A preset's shape as bars (height = speed / the top speed, of the sparkline's height); "None" (no shape) is a flat line. */
 function Sparkline({ id, shape, color }: { id: string; shape: readonly number[] | null; color: string }) {
@@ -54,13 +51,9 @@ function Sparkline({ id, shape, color }: { id: string; shape: readonly number[] 
 }
 function CurveTile({ id, label, shape, selected, onPress }: { id: string; label: string; shape: readonly number[] | null; selected: boolean; onPress: () => void }) {
   return (
-    <PressableScale accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress}
-      style={{ alignItems: "center", width: TILE_WIDTH, paddingVertical: theme.space.xs }}>
-      <View testID={`curve-tile-${id}`} style={[{ width: TILE_BOX, height: TILE_BOX, borderRadius: theme.radius.card, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceAlt }, selected ? theme.ring : clearRing]}>
-        <Sparkline id={id} shape={shape} color={selected ? theme.colors.accent : theme.colors.textMuted} />
-      </View>
-      <Body numberOfLines={1} weight={selected ? "semi" : "regular"} style={{ color: selected ? theme.colors.accent : theme.colors.text, fontSize: LABEL_SIZE, marginTop: theme.space.xs }}>{label}</Body>
-    </PressableScale>
+    <Tile label={label} selected={selected} onPress={onPress} boxTestID={`curve-tile-${id}`}>
+      <Sparkline id={id} shape={shape} color={selected ? theme.colors.accent : theme.colors.textMuted} />
+    </Tile>
   );
 }
 
@@ -138,11 +131,11 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
         )}
       </StripTiles>
       {tab === "normal" ? (
-        <StripSlider label={curveId ? "Speed" : `Current speed: ${formatSpeed(clip.speed)}`}>
+        <StripSlider label={curveId ? "Speed" : "Current speed:"} value={curveId ? undefined : formatSpeed(clip.speed)}>
           {/* With a curve the clip's constant speed is 1, so the slider rests at 1× (muted); setClipSpeed clears the curve. */}
           <Slider testID="speed-slider" minimumValue={SPEED_LIMITS[0]} maximumValue={SPEED_LIMITS[1]} step={0.05} value={clip.speed}
             onSlidingStart={beginTransaction} onValueChange={(v) => applyTransient((p) => write(p, (q, cid) => setClipSpeed(q, cid, v)))}
-            minimumTrackTintColor={sliderTint} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={sliderTint} />
+            minimumTrackTintColor={sliderTint} thumbTintColor={sliderTint} detents={REST} />
         </StripSlider>
       ) : null}
     </ToolStrip>

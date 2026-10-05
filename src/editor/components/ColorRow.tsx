@@ -20,7 +20,7 @@ export function ColorRow({ value, onChange, compact }: { value: string; onChange
       ))}
       {compact ? null : <TextInput accessibilityLabel="Custom color" value={custom} onChangeText={setCustom} onBlur={() => isHex(custom) && onChange(custom.toUpperCase())}
         autoCapitalize="characters" maxLength={7} placeholder="#RRGGBB" placeholderTextColor={theme.colors.textMuted}
-        style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 6, width: 96 }} />}
+        style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.chip, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm, width: 96 }} />}
     </View>
   );
 }

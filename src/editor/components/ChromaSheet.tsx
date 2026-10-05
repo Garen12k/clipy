@@ -1,4 +1,3 @@
-import Slider from "@react-native-community/slider";
 import { Switch, View } from "react-native";
 import { isKeyable } from "@/src/editor/model/chroma";
 import { setClipChroma } from "@/src/editor/model/ops";
@@ -7,6 +6,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
+import { Slider } from "@/src/ui/Slider";
 import { StripNote, StripSlider, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 import { ColorRow } from "./ColorRow";
 
@@ -36,14 +36,13 @@ export function ChromaSheet({ clipId, visible, onClose }: { clipId: string | nul
           <ColorRow compact value={color} onChange={pickColor} />
         </View>
       </StripTiles>
-      <StripSlider label={`Strength ${Math.round(strength * 100)} %`}>
+      <StripSlider label="Strength" value={`${Math.round(strength * 100)} %`}>
         <Slider
           testID="chroma-strength"
           minimumValue={0} maximumValue={1} step={0.01}
           value={strength} disabled={!on}
           onSlidingStart={beginTransaction}
           onValueChange={(v) => applyTransient((p) => setClipChroma(p, clip.id, { color, strength: v }))}
-          minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent}
         />
       </StripSlider>
     </ToolStrip>

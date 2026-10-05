@@ -1,9 +1,8 @@
-import Slider from "@react-native-community/slider";
 import { fitFades } from "@/src/editor/model/audioMix";
 import { updateAudioTrackById } from "@/src/editor/model/ops";
 import { AUDIO_LIMITS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { theme } from "@/src/theme/theme";
+import { Slider } from "@/src/ui/Slider";
 import { StripSlider, ToolStrip } from "@/src/ui/ToolStrip";
 
 export type FadePatch = { fadeIn?: number; fadeOut?: number };
@@ -24,10 +23,9 @@ export function FadeSliders({ fadeIn, fadeOut, length, onStart, onChange }: Slid
   const cap = fadeCap(length);
   const fitted = fitFades(fadeIn, fadeOut, length);
   const slider = (key: "fadeIn" | "fadeOut", label: string, testID: string, value: number) => (
-    <StripSlider key={key} label={`${label} ${value.toFixed(1)} s`}>
+    <StripSlider key={key} label={label} value={`${value.toFixed(1)} s`}>
       <Slider testID={testID} minimumValue={AUDIO_LIMITS.fade[0]} maximumValue={cap} step={0.05} value={value} disabled={cap <= 0}
-        onSlidingStart={onStart} onValueChange={(v) => onChange({ [key]: Math.max(0, Math.min(v, cap)) })}
-        minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
+        onSlidingStart={onStart} onValueChange={(v) => onChange({ [key]: Math.max(0, Math.min(v, cap)) })} />
     </StripSlider>
   );
   return (

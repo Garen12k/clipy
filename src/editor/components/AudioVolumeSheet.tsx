@@ -1,9 +1,11 @@
-import Slider from "@react-native-community/slider";
 import { updateAudioTrackById } from "@/src/editor/model/ops";
 import { AUDIO_LIMITS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { theme } from "@/src/theme/theme";
+import { Slider } from "@/src/ui/Slider";
 import { StripNote, StripSlider, ToolStrip } from "@/src/ui/ToolStrip";
+
+/** 100 %: the slider ticks lightly when a drag reaches or passes it. */
+const REST = [1] as const;
 
 /** One slider for the selected audio track's volume (0–200 %); one undo step per drag. */
 export function AudioVolumeSheet({ trackId, visible, onClose }: { trackId: string | null; visible: boolean; onClose: () => void }) {
@@ -13,14 +15,14 @@ export function AudioVolumeSheet({ trackId, visible, onClose }: { trackId: strin
 
   return (
     <ToolStrip visible={visible} onClose={onClose} title="Volume" note={<StripNote lines={2}>Above 100% only applies in the exported video.</StripNote>}>
-      <StripSlider label={`Volume ${Math.round(track.volume * 100)} %`}>
+      <StripSlider label="Volume" value={`${Math.round(track.volume * 100)} %`}>
         <Slider
           testID="audio-volume"
           minimumValue={AUDIO_LIMITS.volume[0]} maximumValue={AUDIO_LIMITS.volume[1]} step={0.05}
           value={track.volume}
           onSlidingStart={beginTransaction}
           onValueChange={(v) => applyTransient((p) => updateAudioTrackById(p, track.id, { volume: v }))}
-          minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent}
+          detents={REST}
         />
       </StripSlider>
     </ToolStrip>

@@ -1,6 +1,5 @@
-import Slider from "@react-native-community/slider";
 import { useEffect, useState } from "react";
-import { Image, Pressable, View } from "react-native";
+import { Image, View } from "react-native";
 import { FILTERS } from "@/src/editor/effects";
 import { forClips, mainClipIds, setClipFilter, setClipFilterIntensity, setFilterForAllClips } from "@/src/editor/model/ops";
 import { FILTER_IDS, isPhoto, type Project } from "@/src/editor/model/types";
@@ -8,6 +7,8 @@ import { useEditorStore } from "@/src/editor/store";
 import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
+import { PressableScale } from "@/src/ui/PressableScale";
+import { Slider } from "@/src/ui/Slider";
 import { Body } from "@/src/ui/Text";
 import { StripSlider, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 import { FilterLayer } from "./FilterLayer";
@@ -16,7 +17,6 @@ import { getThumb } from "./thumbnails";
 /** A tile is 52 + 4 + one 11-pt line: it fits the strip's tile row. */
 const TILE_W = 52;
 const TILE_H = 52;
-const LABEL_SIZE = 11;
 
 /** `clipIds` (multi-select): every change is written to all of these main clips; `clipId` is the clip whose values are shown. */
 export function FilterSheet({ clipId, clipIds, visible, onClose }: { clipId: string | null; clipIds?: string[]; visible: boolean; onClose: () => void }) {
@@ -49,24 +49,25 @@ export function FilterSheet({ clipId, clipIds, visible, onClose }: { clipId: str
           const def = FILTERS[id];
           const selected = current === id;
           return (
-            <Pressable
+            <PressableScale
               key={id}
+              lifted={selected}
               accessibilityRole="button"
               accessibilityLabel={def.label}
               accessibilityState={{ selected }}
               onPress={() => { haptic("light"); apply(write((p, cid) => setClipFilter(p, cid, id))); }}
               style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}
             >
-              <View testID={`filter-tile-${id}`} style={[{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", backgroundColor: theme.colors.surfaceAlt }, selected ? theme.ring : { borderWidth: 2, borderColor: "transparent" }]}>
+              <View testID={`filter-tile-${id}`} style={[{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, overflow: "hidden", backgroundColor: theme.elevation.tile }, selected ? theme.ring : theme.ringClear]}>
                 {thumb ? <Image testID={`filter-thumb-${id}`} source={{ uri: thumb }} style={{ width: TILE_W, height: TILE_H }} resizeMode="cover" /> : null}
                 <FilterLayer filter={id} />
               </View>
-              <Body numberOfLines={1} style={{ fontSize: LABEL_SIZE }}>{def.label}</Body>
-            </Pressable>
+              <Body numberOfLines={1} style={[{ fontSize: theme.type.micro }, selected ? { color: theme.colors.accent } : null]}>{def.label}</Body>
+            </PressableScale>
           );
         })}
       </StripTiles>
-      <StripSlider label={`Strength ${Math.round(clip.filterIntensity * 100)}`}>
+      <StripSlider label="Strength" value={`${Math.round(clip.filterIntensity * 100)}`}>
         <Slider
           testID="filter-strength"
           minimumValue={0} maximumValue={1} step={0.01}
@@ -74,7 +75,6 @@ export function FilterSheet({ clipId, clipIds, visible, onClose }: { clipId: str
           disabled={current === "none"}
           onSlidingStart={beginTransaction}
           onValueChange={(v) => applyTransient(write((p, cid) => setClipFilterIntensity(p, cid, v)))}
-          minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent}
         />
       </StripSlider>
     </ToolStrip>
