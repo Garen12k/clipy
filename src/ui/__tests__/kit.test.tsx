@@ -32,9 +32,9 @@ test("SecondaryButton presses and can be disabled", async () => {
   expect(onPress).toHaveBeenCalledTimes(1);
 });
 
-test("ToolButton exposes tab role and selected state when asked", async () => {
-  await render(<ToolButton label="Effects" icon="sparkles" onPress={() => {}} active role="tab" />);
-  expect(screen.getByRole("tab", { name: "Effects" })).toBeSelected();
+test("ToolButton is a button and shows the selected state when active", async () => {
+  await render(<ToolButton label="Effects" icon="sparkles" onPress={() => {}} active />);
+  expect(screen.getByRole("button", { name: "Effects" })).toBeSelected();
 });
 
 test("ProgressRing reports its value", async () => {

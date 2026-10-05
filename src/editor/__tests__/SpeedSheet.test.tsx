@@ -126,8 +126,8 @@ describe("curve tiles", () => {
     expect(useToast.getState().message).toBeNull();
   });
 
-  test("a preset that would make the clip too short is refused: the sheet closes, then a toast shows; no haptic", async () => {
-    // The toast host sits on the screen under the sheet's Modal, so the sheet has to be closed before the message shows.
+  test("a preset that would make the clip too short is refused: the strip closes, then a toast shows; no haptic", async () => {
+    // The strip closes first so the bar below it shows again, then the message.
     const order: string[] = [];
     const onClose = jest.fn(() => { order.push("close"); });
     const unsub = useToast.subscribe((t) => { if (t.message) order.push("toast"); });

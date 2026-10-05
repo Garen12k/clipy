@@ -18,7 +18,7 @@ const OVERLAP = 8;
 const LABEL_SIZE = 11;
 const clearRing = { borderWidth: theme.ring.borderWidth, borderColor: "transparent" };
 
-/** How the selected layer mixes with what is below it: six tiles, one undo step per pick. Only layers have a blend (the tool is disabled for a main clip). */
+/** How the selected layer mixes with what is below it: six tiles, one undo step per pick. Only layers have a blend (the tool is only on a layer's bar). */
 export function BlendSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const clip = useItemClip(clipId);
   const apply = useEditorStore((s) => s.apply);
