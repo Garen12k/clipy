@@ -239,3 +239,9 @@ describe("typing undo steps begin on the first keystroke", () => {
     expect(ov()).toMatchObject({ text: "Hi", color: "#F5C542" });
   });
 });
+
+test("the Fine-tune toggle has hit slop", async () => {
+  await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+  let n = screen.getByText("Fine-tune").parent; while (n && n.props.hitSlop === undefined) n = n.parent;
+  expect(n?.props.hitSlop).toBe(12);
+});

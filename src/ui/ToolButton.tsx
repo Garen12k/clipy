@@ -7,13 +7,13 @@ type Props = { label: string; icon: keyof typeof Ionicons.glyphMap; onPress: () 
 
 export function ToolButton({ label, icon, onPress, disabled, active }: Props) {
   return (
-    <PressableScale accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled, selected: !!active }}
-      disabled={disabled} onPress={onPress} style={{ alignItems: "center", width: 68, paddingVertical: theme.space.sm, opacity: disabled ? 0.35 : 1 }}>
-      <View style={{ width: 40, height: 40, borderRadius: theme.radius.tile + 5, alignItems: "center", justifyContent: "center",
-        backgroundColor: active ? theme.colors.accent : theme.colors.surfaceAlt }}>
-        <Ionicons name={icon} size={20} color={active ? theme.colors.onAccent : theme.colors.text} />
+    <PressableScale lifted={!!active} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled, selected: !!active }}
+      disabled={disabled} onPress={onPress} style={{ alignItems: "center", width: theme.size.toolColumn, paddingVertical: theme.space.xs, gap: theme.space.xs, opacity: disabled ? 0.35 : 1 }}>
+      <View style={[{ width: theme.size.toolBox, height: theme.size.toolBox, borderRadius: theme.radius.box, alignItems: "center", justifyContent: "center",
+        backgroundColor: active ? theme.elevation.lifted : theme.elevation.tile }, active ? theme.ring : theme.ringClear]}>
+        <Ionicons name={icon} size={theme.size.icon.md} color={active ? theme.colors.accent : theme.colors.text} />
       </View>
-      <Text numberOfLines={1} style={{ fontFamily: active ? theme.fonts.bodySemi : theme.fonts.body, color: active ? theme.colors.accent : theme.colors.text, fontSize: 11, marginTop: 4 }}>{label}</Text>
+      <Text numberOfLines={1} style={{ fontFamily: active ? theme.fonts.bodySemi : theme.fonts.body, color: active ? theme.colors.accent : theme.colors.text, fontSize: theme.type.micro }}>{label}</Text>
     </PressableScale>
   );
 }

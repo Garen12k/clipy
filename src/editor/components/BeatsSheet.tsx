@@ -31,9 +31,10 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
     <ToolPanel visible={visible} onClose={onClose} title="Beat markers" size="compact">
       <PrimaryButton title="Tap" onPress={() => run(addBeatMarker, "light")} />
       <Body muted style={{ textAlign: "center" }}>{count === 1 ? "1 marker" : `${count} markers`}</Body>
-      <View style={{ flexDirection: "row", justifyContent: "center", gap: theme.space.md }}>
-        <SecondaryButton title="Remove nearest" disabled={count === 0} onPress={() => run(removeBeatMarkerNear, "light")} />
-        <SecondaryButton title="Clear all" disabled={count === 0} onPress={() => run((p) => clearBeatMarkers(p), "medium")} />
+      {/* Compact: at the regular size the pair is wider than a 375-pt phone leaves between its gutters; the row is 44 tall so the 36-pt buttons' hit slop has room. */}
+      <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", height: theme.size.touch, gap: theme.space.md }}>
+        <SecondaryButton compact title="Remove nearest" disabled={count === 0} onPress={() => run(removeBeatMarkerNear, "light")} />
+        <SecondaryButton compact title="Clear all" disabled={count === 0} onPress={() => run((p) => clearBeatMarkers(p), "medium")} />
       </View>
     </ToolPanel>
   );

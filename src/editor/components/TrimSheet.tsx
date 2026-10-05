@@ -9,7 +9,7 @@ import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { useToast } from "@/src/ui/Toast";
 import { STRIP, StripNote, ToolStrip } from "@/src/ui/ToolStrip";
 
-const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, borderRadius: theme.radius.chip, padding: 12, fontSize: 18, flex: 1, fontFamily: theme.fonts.body } as const;
+const field = { backgroundColor: theme.elevation.tile, color: theme.colors.text, borderRadius: theme.radius.chip, padding: theme.space.md, fontSize: 18, flex: 1, fontFamily: theme.fonts.body } as const;
 
 /** Whether the typed range, once fitted to what the source allows, is another range than the one the item has. */
 function differs(clip: Clip, start: number, end: number): boolean {
@@ -18,7 +18,7 @@ function differs(clip: Clip, start: number, end: number): boolean {
 }
 
 // The fields share the row's WIDTH (`flex: 1` in `field`); the row's height is explicit.
-const row = { height: STRIP.tiles, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.lg } as const;
+const row = { height: STRIP.tiles, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.gutter } as const;
 
 const TRIM_TOO_SHORT = "That trim is too short or outside the clip.";
 const TRIM_OVERLAP = "That trim doesn't fit — only two video layers can play at the same time.";

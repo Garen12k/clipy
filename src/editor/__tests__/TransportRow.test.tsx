@@ -47,3 +47,11 @@ test("the ratio pill opens the ratio strip", async () => {
   expect(screen.queryByRole("button", { name: "1:1" })).toBeNull();     // the row no longer owns a sheet
   closeStrip();
 });
+
+test("the ratio pill shows the choice's label: Auto, or the ratio", async () => {
+  useEditorStore.getState().setProject(makeProject({ aspectRatio: "auto", clips: [makeClip({ id: "a", sourceDuration: 21, width: 1920, height: 1080 })] }));
+  await render(<TransportRow />);
+  expect(screen.getByRole("button", { name: "Aspect ratio" })).toHaveTextContent("Auto");
+  await act(() => { useEditorStore.getState().setProject(makeProject({ aspectRatio: "21:9", clips: [makeClip({ id: "a", sourceDuration: 21 })] })); });
+  expect(screen.getByRole("button", { name: "Aspect ratio" })).toHaveTextContent("21:9");
+});

@@ -403,4 +403,99 @@ final class ExportSessionTests: XCTestCase {
     XCTAssertNil(ExportSession.fileLengthLimit(bitrate: 6_000_000, seconds: .infinity))
     XCTAssertNil(ExportSession.fileLengthLimit(bitrate: .greatestFiniteMagnitude, seconds: 8))   // too large for Int64
   }
+
+  /// The size for a request, as `start` computes it.
+  private func size(_ aspect: String, _ frameAspect: Double, _ resolution: Int) -> CGSize {
+    ExportSession.renderSize(aspect: ExportSession.aspectValue(aspect: aspect, frameAspect: frameAspect), resolution: resolution)
+  }
+
+  /// Every fixed ratio at every resolution: (id, resolution, width, height). The short side is the resolution and both
+  /// sides are even; 9:16, 1:1 and 16:9 are exactly the sizes they always were. The same table is asserted for the
+  /// TypeScript mirror in src/export/__tests__/renderSize.swift.test.ts, which also reads these rows.
+  func testRenderSizeForEveryFixedRatio() {
+    let rows: [(String, Int, Int, Int)] = [
+      ("1:1", 720, 720, 720),
+      ("1:1", 1080, 1080, 1080),
+      ("1:1", 2160, 2160, 2160),
+      ("3:2", 720, 1080, 720),
+      ("3:2", 1080, 1620, 1080),
+      ("3:2", 2160, 3240, 2160),
+      ("2:3", 720, 720, 1080),
+      ("2:3", 1080, 1080, 1620),
+      ("2:3", 2160, 2160, 3240),
+      ("16:9", 720, 1280, 720),
+      ("16:9", 1080, 1920, 1080),
+      ("16:9", 2160, 3840, 2160),
+      ("9:16", 720, 720, 1280),
+      ("9:16", 1080, 1080, 1920),
+      ("9:16", 2160, 2160, 3840),
+      ("4:3", 720, 960, 720),
+      ("4:3", 1080, 1440, 1080),
+      ("4:3", 2160, 2880, 2160),
+      ("3:4", 720, 720, 960),
+      ("3:4", 1080, 1080, 1440),
+      ("3:4", 2160, 2160, 2880),
+      ("21:9", 720, 1680, 720),
+      ("21:9", 1080, 2520, 1080),
+      ("21:9", 2160, 4672, 2002),
+    ]
+    for row in rows {
+      // The number is ignored for a "w:h" id, whatever it is — also when it is absent (0), as in an old request.
+      for number in [0, 0.5625, 2.333333] {
+        let s = size(row.0, number, row.1)
+        XCTAssertEqual(s, CGSize(width: row.2, height: row.3), "\(row.0) at \(row.1) with \(number)")
+        XCTAssertEqual(Int(s.width) % 2, 0); XCTAssertEqual(Int(s.height) % 2, 0)
+      }
+    }
+  }
+
+  /// "auto": the string is not a ratio, so the number decides — (frameAspect, resolution, width, height).
+  func testRenderSizeForAuto() {
+    let rows: [(frameAspect: Double, Int, Int, Int)] = [
+      (frameAspect: 0.5625, 1080, 1080, 1920),
+      (frameAspect: 1.777778, 1080, 1920, 1080),
+      (frameAspect: 1.333333, 1080, 1440, 1080),
+      (frameAspect: 2.333333, 1080, 2520, 1080),
+      (frameAspect: 2.333333, 2160, 4672, 2002),
+      (frameAspect: 1.333333, 720, 960, 720),
+    ]
+    for row in rows {
+      XCTAssertEqual(size("auto", row.frameAspect, row.1), CGSize(width: row.2, height: row.3), "\(row.frameAspect) at \(row.1)")
+    }
+    // The number is kept inside 9:21 … 21:9.
+    XCTAssertEqual(ExportSession.aspectValue(aspect: "auto", frameAspect: 6), 21.0 / 9.0)
+    XCTAssertEqual(ExportSession.aspectValue(aspect: "auto", frameAspect: 0.1), 9.0 / 21.0)
+    // Any shape gives even sides inside the encoder's limit, portrait or landscape as the shape says.
+    var a = ExportSession.aspectLimits.min
+    while a <= ExportSession.aspectLimits.max {
+      for resolution in [720, 1080, 2160] {
+        let s = ExportSession.renderSize(aspect: a, resolution: resolution)
+        XCTAssertEqual(Int(s.width) % 2, 0); XCTAssertEqual(Int(s.height) % 2, 0)
+        XCTAssertLessThanOrEqual(((Int(s.width) + 15) / 16) * ((Int(s.height) + 15) / 16), MediaPrePass.maxMacroblocks)
+        XCTAssertEqual(s.width >= s.height, a >= 1)
+      }
+      a += 0.0137
+    }
+  }
+
+  /// A request from before `frameAspect` existed (the key is absent, so the record keeps its default) exports exactly
+  /// as it did; a string that is no ratio and no number is a square, as an unknown ratio always was.
+  func testAnOldRequestKeepsItsRenderSize() {
+    let request = ExportRequest()
+    XCTAssertEqual(request.aspectRatio, "9:16")
+    XCTAssertEqual(request.frameAspect, 0)
+    XCTAssertEqual(size(request.aspectRatio, request.frameAspect, request.resolution), CGSize(width: 1080, height: 1920))
+    XCTAssertEqual(size("9:16", 0, 720), CGSize(width: 720, height: 1280))
+    XCTAssertEqual(size("1:1", 0, 720), CGSize(width: 720, height: 720))
+    XCTAssertEqual(size("16:9", 0, 720), CGSize(width: 1280, height: 720))
+    for junk in ["auto", "", "wide", "16:", ":9", "0:9", "16:0", "-16:9", "a:b", "1:2:3", "inf:1", "nan:1"] {
+      XCTAssertEqual(ExportSession.aspectValue(aspect: junk, frameAspect: 0), 1, junk)
+      XCTAssertEqual(ExportSession.aspectValue(aspect: junk, frameAspect: .nan), 1, junk)
+      XCTAssertEqual(ExportSession.aspectValue(aspect: junk, frameAspect: -2), 1, junk)
+      XCTAssertEqual(size(junk, 0, 1080), CGSize(width: 1080, height: 1080), junk)
+    }
+    for bad in [0, -1, Double.nan, Double.infinity] {
+      XCTAssertEqual(ExportSession.renderSize(aspect: bad, resolution: 1080), CGSize(width: 1080, height: 1080))
+    }
+  }
 }

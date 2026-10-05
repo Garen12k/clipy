@@ -73,3 +73,9 @@ describe("a keyframed sticker", () => {
     expect(st()).toMatchObject({ x: 0.9, y: 0.9, scale: 4, rotation: 10 });
   });
 });
+
+test("the Fine-tune toggle has hit slop", async () => {
+  await render(<StickerPanel overlayId="s1" visible onClose={() => {}} />);
+  let n = screen.getByText("Fine-tune").parent; while (n && n.props.hitSlop === undefined) n = n.parent;
+  expect(n?.props.hitSlop).toBe(12);
+});

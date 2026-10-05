@@ -6,7 +6,8 @@ jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () 
 jest.mock("@/src/projects/prefs", () => ({ prefs: { getRecentEmoji: jest.fn(async () => []), pushRecentEmoji: jest.fn(async () => {}) } }));
 import { useEffect } from "react";
 import { Dimensions, View } from "react-native";
-import { makeClip, makeProject } from "@/src/editor/model/types";
+import { addEffect, addTextOverlay } from "@/src/editor/model/ops";
+import { makeAudioTrack, makeClip, makeOverlay, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useKeyboard } from "@/src/ui/keyboard";
 import { panelHeight } from "@/src/ui/ToolPanel";
@@ -16,7 +17,7 @@ import { EditorToolbar } from "../components/EditorToolbar";
 import { MULTI_BAR_HEIGHT } from "../components/MultiSelectBar";
 import { Timeline } from "../components/Timeline";
 import { TransportRow } from "../components/TransportRow";
-import { TIMELINE_HEIGHT } from "../timelineLayout";
+import { CLIP_AREA_HEIGHT, LANE_GAP, LANE_HEIGHT, laneModel } from "../timelineLayout";
 import { closeStrip } from "../toolStrip";
 
 const st = () => useEditorStore.getState();
@@ -30,12 +31,124 @@ function Probe() {
 }
 const ui = () => <EditorLayout top={null} preview={<Probe />} transport={<TransportRow />} timeline={<Timeline />} toolbar={<EditorToolbar />} />;
 
+const LANE = LANE_HEIGHT + LANE_GAP;
+/** Two clips, a text and a sound: two lanes under the clips — what a strip (two lanes higher than the bar) rises over. */
+const TWO_LANES = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })],
+  overlays: [makeOverlay({ id: "o1", text: "Hi", start: 0, end: 2 })], audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })] });
+const CLIPS_ONLY = { ...TWO_LANES, overlays: [], audioTracks: [] };
+const TIMELINE_HEIGHT = laneModel(TWO_LANES).height;
+
 beforeEach(() => {
   mounts = 0;
   useKeyboard.setState({ height: 0 });
   closeStrip();
   st().reset();
-  st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })] }));
+  st().setProject(TWO_LANES);
+});
+
+test("the two set-ups: two lanes are exactly a strip's rise; clips only have none", () => {
+  expect(TIMELINE_HEIGHT).toBe(CLIP_AREA_HEIGHT + STRIP.lift);
+  expect(laneModel(CLIPS_ONLY).height).toBe(CLIP_AREA_HEIGHT);
+});
+
+describe("a strip only ever covers lanes", () => {
+  test("clips only: nothing to rise over — the bottom area is a strip high, not lifted, so the preview's slot gives the height; nothing remounts", async () => {
+    st().setProject(CLIPS_ONLY);
+    await render(ui());
+    const probe = screen.getByTestId("probe"), slot = screen.getByTestId("slot-preview"), scroll = screen.getByTestId("timeline-scroll");
+    expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT });
+    await act(() => { st().select("a"); });
+    await fireEvent.press(btn("Opacity"));
+    expect(screen.getByTestId("tool-strip")).toBeTruthy();
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
+    expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT });
+    expect(screen.getByTestId("slot-timeline")).not.toHaveStyle({ height: 0 });
+    expect(screen.getByTestId("slot-preview")).toBe(slot);
+    expect(slot).toHaveStyle({ flex: 1 });
+    expect(screen.getByTestId("timeline-scroll")).toBe(scroll);
+    await fireEvent.press(btn("Done"));
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: BAR_HEIGHT + 8, marginTop: 0 });
+    expect(screen.getByTestId("probe")).toBe(probe);
+    expect(mounts).toBe(1);
+  });
+
+  test("the lift follows the lanes while the strip is open: one lane, then two, then back (undo) — capped at the strip's rise", async () => {
+    st().setProject(CLIPS_ONLY);
+    await render(ui());
+    const probe = screen.getByTestId("probe"), scroll = screen.getByTestId("timeline-scroll");
+    await fireEvent.press(btn("Ratio"));          // a strip that belongs to no item: it stays open through the edits below
+    expect(screen.getByTestId("tool-strip")).toBeTruthy();
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
+    await act(() => { st().apply((p) => addEffect(p, "shake", 1, "e1")); });
+    expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT + LANE });
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -LANE });
+    await act(() => { st().apply((p) => addTextOverlay(p, makeOverlay({ id: "o9", text: "Hi", start: 0, end: 2 }))); });
+    expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT + 2 * LANE });
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -STRIP.lift });
+    await act(() => { st().undo(); });
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -LANE });
+    await act(() => { st().undo(); });
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
+    await act(() => { st().redo(); st().redo(); });
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -STRIP.lift });
+    expect(screen.getByTestId("timeline-scroll")).toBe(scroll);
+    expect(screen.getByTestId("probe")).toBe(probe);
+    expect(mounts).toBe(1);
+  });
+
+  test("more than two lanes: the lift stays the strip's rise", async () => {
+    st().setProject({ ...TWO_LANES, audioTracks: [...TWO_LANES.audioTracks, makeAudioTrack({ id: "v", kind: "voice", sourceDuration: 5 })] });
+    await render(ui());
+    await act(() => { st().select("a"); });
+    await fireEvent.press(btn("Opacity"));
+    expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT + 3 * LANE });
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -STRIP.lift });
+  });
+
+  test("clips only, with the keyboard (Trim): the strip sits on the keyboard, unlifted, the timeline's slot is collapsed — as with lanes", async () => {
+    st().setProject(CLIPS_ONLY);
+    await render(ui());
+    const probe = screen.getByTestId("probe"), scroll = screen.getByTestId("timeline-scroll");
+    await act(() => { st().select("a"); });
+    await fireEvent.press(btn("Trim"));
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
+    await act(() => { useKeyboard.setState({ height: 260 }); });
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 260, paddingBottom: 260, marginTop: 0 });
+    expect(screen.getByTestId("slot-timeline", hidden)).toHaveStyle({ height: 0, overflow: "hidden" });
+    expect(screen.getByTestId("timeline-root", hidden)).toHaveStyle({ height: CLIP_AREA_HEIGHT });
+    await act(() => { useKeyboard.setState({ height: 0 }); });
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
+    expect(screen.getByTestId("timeline-scroll")).toBe(scroll);
+    expect(screen.getByTestId("probe")).toBe(probe);
+    expect(mounts).toBe(1);
+  });
+
+  test("a panel is unaffected by the lanes: clips only, the timeline's slot collapses and the timeline keeps its own height", async () => {
+    st().setProject(CLIPS_ONLY);
+    await render(ui());
+    const scroll = screen.getByTestId("timeline-scroll");
+    await fireEvent.press(btn("Stickers"));
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: panelHeight("regular", H) + 8, marginTop: 0 });
+    expect(screen.getByTestId("slot-timeline", hidden)).toHaveStyle({ height: 0, overflow: "hidden" });
+    expect(screen.getByTestId("timeline-root", hidden)).toHaveStyle({ height: CLIP_AREA_HEIGHT });
+    expect(screen.getByTestId("timeline-scroll", hidden)).toBe(scroll);
+  });
+
+  test("the multi-select bar's rise is capped by the lanes too: none with clips only, one lane's worth with one lane, its own rise with two", async () => {
+    st().setProject(CLIPS_ONLY);
+    await render(ui());
+    const probe = screen.getByTestId("probe");
+    await act(() => { st().select("a"); st().enterMultiSelect(); });
+    await fireEvent.press(btn("Filter"));
+    expect(screen.getByTestId("tool-strip")).toBeTruthy();
+    expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
+    await act(() => { st().apply((p) => addEffect(p, "shake", 1, "e1")); });
+    expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -LANE });
+    await act(() => { st().apply((p) => addTextOverlay(p, makeOverlay({ id: "o9", text: "Hi", start: 0, end: 2 }))); });
+    expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -(STRIP.height - MULTI_BAR_HEIGHT) });
+    expect(screen.getByTestId("probe")).toBe(probe);
+    expect(mounts).toBe(1);
+  });
 });
 
 test("with the bar: preview, transport, timeline and toolbar are all there", async () => {

@@ -63,24 +63,24 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
           <Ionicons name="warning" size={14} color={theme.colors.text} />
         </View>
       )}
-      <View style={{ position: "absolute", bottom: 4, left: 4, flexDirection: "row", gap: 4 }}>
+      <View style={{ position: "absolute", bottom: 4, left: 4, flexDirection: "row", gap: theme.space.xs }}>
         {speedBadge !== null && (
-          <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+          <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1 }}>
             <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>{speedBadge}</Text>
           </View>
         )}
         {clip.reversed && (
-          <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+          <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1 }}>
             <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>◀</Text>
           </View>
         )}
         {photo && (
-          <View accessibilityLabel="Photo" style={{ backgroundColor: theme.colors.sea, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, justifyContent: "center" }}>
+          <View accessibilityLabel="Photo" style={{ backgroundColor: theme.colors.sea, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1, justifyContent: "center" }}>
             <Ionicons name="image" size={10} color={theme.colors.text} />
           </View>
         )}
         {clip.filter && (
-          <View style={{ backgroundColor: theme.colors.sea, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+          <View style={{ backgroundColor: theme.colors.sea, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1 }}>
             <Text style={{ fontSize: 10, color: theme.colors.text, fontWeight: "700" }}>f</Text>
           </View>
         )}

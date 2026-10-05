@@ -7,6 +7,8 @@ import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { indexFromDrop, stripWidth } from "../timelineLayout";
 
+const HANDLE_W = 28;
+
 /** Grip shown on the selected clip. Long-press then drag horizontally to move the clip. */
 export function ReorderHandle({ clipId, index }: { clipId: string; index: number }) {
   const tx = useSharedValue(0);
@@ -31,8 +33,8 @@ export function ReorderHandle({ clipId, index }: { clipId: string; index: number
 
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View accessibilityLabel="Move clip" style={[{ position: "absolute", bottom: 4, alignSelf: "center", left: "50%", marginLeft: -14, width: 28, height: 20, borderRadius: 10, backgroundColor: theme.colors.accent, alignItems: "center", justifyContent: "center" }, style]}>
-        <Ionicons name="reorder-two" size={16} color={theme.colors.onAccent} />
+      <Animated.View accessibilityLabel="Move clip" style={[{ position: "absolute", bottom: 4, alignSelf: "center", left: "50%", marginLeft: -HANDLE_W / 2, width: HANDLE_W, height: 20, borderRadius: 10, backgroundColor: theme.colors.accent, alignItems: "center", justifyContent: "center" }, style]}>
+        <Ionicons name="reorder-two-outline" size={16} color={theme.colors.onAccent} />
       </Animated.View>
     </GestureDetector>
   );

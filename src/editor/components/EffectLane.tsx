@@ -6,7 +6,7 @@ import { EffectPill } from "./EffectPill";
 
 const NONE: EffectItem[] = [];
 
-/** Third timeline lane: one pill per timeline effect. Adds height only; pills are out of the flow. */
+/** The last timeline lane: one pill per timeline effect. Adds height only; pills are out of the flow. */
 export function EffectLane() {
   const effects = useEditorStore((s) => s.project?.effects ?? NONE);
   const selectedId = useEditorStore((s) => s.selectedEffectId);

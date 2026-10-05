@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { clipStartTimes, timeToX, totalDuration } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
-import { audioLaneKinds, CLIP_AREA_HEIGHT, timelineHeight } from "../timelineLayout";
+import { CLIP_AREA_HEIGHT, laneModel } from "../timelineLayout";
 import { createScrubController } from "../timelineScroll";
 import { AddClipTile } from "./AddClipTile";
 import { AudioLane } from "./AudioLane";
@@ -55,12 +55,8 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
 
   if (!project) return null;
   const starts = clipStartTimes(project);
-  // One audio lane per kind in use; with no audio, one empty music lane. Lanes change the height only — never the scroll width or paddings.
-  const kinds = audioLaneKinds(project);
-  const audioLanes = kinds.length > 0 ? kinds : (["music"] as const);
-  // The layers lane exists only while the project has layers.
-  const hasLayers = project.layers.length > 0;
-  const height = timelineHeight(audioLanes.length, hasLayers);
+  // Only the lanes that hold something are shown (laneModel is the one rule). Lanes change the height only — never the scroll width or paddings.
+  const { lanes, height } = laneModel(project);
 
   return (
     <GestureDetector gesture={pinch}>
@@ -88,10 +84,10 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
             <AddClipTile left={timeToX(totalDuration(project), pps) + theme.space.sm} />
             <BeatTicks />
           </View>
-          {hasLayers && <LayerLane />}
-          <OverlayLane />
-          {audioLanes.map((kind) => <AudioLane key={kind} kind={kind} />)}
-          <EffectLane />
+          {/* Keyed by the lane: one that appears or goes leaves the others (and the scroll view) mounted. They stack in the model's order. */}
+          {lanes.map(({ id }) =>
+            id === "layers" ? <LayerLane key={id} /> : id === "overlays" ? <OverlayLane key={id} /> : id === "effects" ? <EffectLane key={id} /> : <AudioLane key={id} kind={id} />,
+          )}
           <SnapGuide left={pad} height={height} />
         </ScrollView>
         <View testID="timeline-playhead" pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: height - 16, backgroundColor: theme.colors.text, borderRadius: 1 }} />

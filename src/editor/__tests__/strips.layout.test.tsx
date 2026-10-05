@@ -37,8 +37,8 @@ test("StripTiles passes initialX as the row's content offset", async () => {
 
 test("the selected tile starts in view: Blend (last tile)", async () => {
   await render(<BlendSheet clipId="L" visible onClose={() => {}} />);
-  // index 5 of 6 tiles, pitch 68 + 8, minus one tile.
-  expect(scrollProps()[0].contentOffset).toEqual({ x: 5 * 76 - 68, y: 0 });
+  // index 5 of 6 tiles, pitch 72 + 8, minus one tile.
+  expect(scrollProps()[0].contentOffset).toEqual({ x: 5 * 80 - 72, y: 0 });
 });
 
 test("Blend with the first tile selected starts at 0", async () => {
@@ -90,7 +90,7 @@ test("StripSlider labelWidth narrows the label", async () => {
 
 test("Volume: short label width; notes may use two lines", async () => {
   await render(<VolumeSheet clipId="a" visible onClose={() => {}} />);
-  expect(screen.getByText("100%")).toHaveStyle({ width: 48 });
+  expect(screen.getByText("100%").parent).toHaveStyle({ width: 48 });       // the value is a text inside the label, which has the width
   expect(screen.getByText("Above 100% only applies in the exported video.")).toHaveProp("numberOfLines", 2);
 });
 

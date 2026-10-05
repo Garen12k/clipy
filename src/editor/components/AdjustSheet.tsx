@@ -1,18 +1,20 @@
-import Slider from "@react-native-community/slider";
 import { useState } from "react";
 import { resetClipAdjust, setAdjustForAllClips, setClipAdjust } from "@/src/editor/model/ops";
 import { ADJUST_KEYS, ADJUST_RANGE, isNeutralAdjust, type AdjustKey } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useIsLayer, useItemClip } from "@/src/editor/useItem";
-import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
+import { QuietButton } from "@/src/ui/QuietButton";
+import { Slider } from "@/src/ui/Slider";
 import { StripSlider, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 
 export const ADJUST_LABELS: Record<AdjustKey, string> = {
   brightness: "Brightness", contrast: "Contrast", saturation: "Saturation", exposure: "Exposure", temperature: "Warmth", tint: "Tint",
   highlights: "Highlights", shadows: "Shadows", sharpen: "Sharpen", vignette: "Vignette", fade: "Fade", grain: "Grain",
 };
+/** 0: a two-sided control ticks lightly when a drag reaches or passes its centre. */
+const CENTRE = [0] as const;
 
 export function AdjustSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const clip = useItemClip(clipId);
@@ -34,15 +36,15 @@ export function AdjustSheet({ clipId, visible, onClose }: { clipId: string | nul
           <Chip key={k} label={clip.adjust[k] !== 0 ? `${ADJUST_LABELS[k]} •` : ADJUST_LABELS[k]} accessibilityLabel={ADJUST_LABELS[k]} selected={key === k} onPress={() => setKey(k)} />
         ))}
       </StripTiles>
-      <StripSlider label={`${ADJUST_LABELS[key]} ${lo < 0 && pct > 0 ? "+" : ""}${pct}`}
-        trailing={<Chip compact label="Reset" selected={false} disabled={neutral} onPress={() => { haptic("light"); apply((p) => resetClipAdjust(p, clip.id)); }} />}>
+      <StripSlider label={ADJUST_LABELS[key]} value={`${lo < 0 && pct > 0 ? "+" : ""}${pct}`}
+        trailing={<QuietButton compact title="Reset" disabled={neutral} onPress={() => { haptic("light"); apply((p) => resetClipAdjust(p, clip.id)); }} />}>
         <Slider
           testID="adjust-slider"
           minimumValue={lo} maximumValue={hi} step={0.01}
           value={value}
           onSlidingStart={beginTransaction}
           onValueChange={(v) => applyTransient((p) => setClipAdjust(p, clip.id, { [key]: v }))}
-          minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent}
+          detents={lo < 0 ? CENTRE : undefined}
         />
       </StripSlider>
     </ToolStrip>

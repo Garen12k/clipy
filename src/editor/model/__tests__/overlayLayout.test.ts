@@ -141,7 +141,8 @@ test("the Swift layout test pins the same styled numbers", () => {
 });
 
 test("frameSize aspect-fits the ratio into a container", () => {
-  expect(frameSize("9:16", 400, 400)).toEqual({ w: 225, h: 400 });
-  expect(frameSize("16:9", 400, 400)).toEqual({ w: 400, h: 225 });
-  expect(frameSize("1:1", 300, 500)).toEqual({ w: 300, h: 300 });
+  expect(frameSize(9 / 16, 400, 400)).toEqual({ w: 225, h: 400 });
+  expect(frameSize(16 / 9, 400, 400)).toEqual({ w: 400, h: 225 });
+  expect(frameSize(1, 300, 500)).toEqual({ w: 300, h: 300 });
+  expect(frameSize(21 / 9, 420, 400)).toEqual({ w: 420, h: 180 });
 });

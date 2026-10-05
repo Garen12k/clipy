@@ -14,7 +14,7 @@ const project = makeProject({
 
 const MAIN = ["edit", "audioMenu", "textMenu", "sticker", "overlay", "effect", "filter", "adjust", "ratio", "background", "cover", "templates"];
 const CLIP = ["split", "trim", "select", "speed", "volume", "animate", "filter", "adjust", "background", "templates", "crop", "transform", "opacity", "mask", "chroma", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete"];
-const SOUND = ["audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio", "ducking", "beats"];
+const SOUND = ["audioSplit", "audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio", "ducking", "beats"];
 const LAYER = ["trim", "speed", "volume", "animate", "filter", "adjust", "crop", "transform", "opacity", "mask", "blend", "chroma", "keyframe", "layerForward", "layerBack", "replace", "reverse", "duplicate", "delete"];
 const without = (list: string[], ...gone: string[]) => list.filter((t) => !gone.includes(t));
 
@@ -59,6 +59,14 @@ test("a sound and an effect", () => {
   expect(contextFor({ ...none, effectId: "e" }, project)).toEqual({ bar: "effect", tools: ["effectStrength", "effectDuplicate", "effectDelete"] });
 });
 
+test("a sound: Split is first, before Volume, and only on a selected sound's bar (where the playhead is does not change the bar)", () => {
+  const { tools } = contextFor({ ...none, audioId: "m" }, project);
+  expect(tools.slice(0, 2)).toEqual(["audioSplit", "audioVolume"]);
+  expect(tools).not.toContain("split");
+  expect(contextFor({ ...none, section: "audio" }, project).tools).not.toContain("audioSplit");
+  expect(contextFor({ ...none, clipId: "a" }, project).tools).not.toContain("audioSplit");
+});
+
 test("sections open a bar without a selection; a selection wins over the section; Text needs clips", () => {
   expect(contextFor({ ...none, section: "audio" }, project)).toEqual({ bar: "audio", tools: ["addAudio", "ducking", "beats"] });
   expect(contextFor({ ...none, section: "text" }, project)).toEqual({ bar: "text", tools: ["text", "captions"] });
@@ -71,7 +79,7 @@ test("sections open a bar without a selection; a selection wins over the section
 test("Beats needs clips: not on an empty project, with or without a sound selected", () => {
   const empty = makeProject({ audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })] });
   expect(contextFor({ ...none, section: "audio" }, empty).tools).toEqual(["addAudio", "ducking"]);
-  expect(contextFor({ ...none, audioId: "m" }, empty).tools).toEqual(["audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio", "ducking"]);
+  expect(contextFor({ ...none, audioId: "m" }, empty).tools).toEqual(["audioSplit", "audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio", "ducking"]);
 });
 
 test("an id that no longer exists counts as no selection", () => {
@@ -88,7 +96,7 @@ test("every tool id is reachable, and no bar lists a tool twice", () => {
     for (const t of tools) seen.add(t);
   }
   expect([...seen].sort()).toEqual([...TOOL_IDS].sort());
-  expect(TOOL_IDS).toHaveLength(48);
+  expect(TOOL_IDS).toHaveLength(49);
 });
 
 test("selectionKey names what is selected; multi-select first", () => {

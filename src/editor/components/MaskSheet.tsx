@@ -6,17 +6,12 @@ import { useEditorStore } from "@/src/editor/store";
 import { useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
-import { PressableScale } from "@/src/ui/PressableScale";
-import { Body } from "@/src/ui/Text";
+import { Tile } from "@/src/ui/Tile";
 import { StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 
 const LABELS: Record<MaskId, string> = { none: "None", rounded: "Rounded", circle: "Circle" };
-/** Tile geometry (points): the column a tile takes, its rounded box, and the square shape preview inside it. */
-const TILE_WIDTH = 68;
-const TILE_BOX = 44;
+/** The square shape preview inside a tile's box (points). */
 const SHAPE = { width: 26, height: 26 };
-const LABEL_SIZE = 11;
-const clearRing = { borderWidth: theme.ring.borderWidth, borderColor: "transparent" };
 
 /** The selected clip's or layer's mask: None, Rounded or Circle. Each tile draws the shape with the radius the preview and the export use. */
 export function MaskSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
@@ -35,13 +30,9 @@ export function MaskSheet({ clipId, visible, onClose }: { clipId: string | null;
         {MASK_IDS.map((id) => {
           const selected = clip.mask === id;
           return (
-            <PressableScale key={id} accessibilityRole="button" accessibilityLabel={LABELS[id]} accessibilityState={{ selected }} onPress={() => pick(id)}
-              style={{ alignItems: "center", width: TILE_WIDTH, paddingVertical: theme.space.xs }}>
-              <View testID={`mask-tile-${id}`} style={[{ width: TILE_BOX, height: TILE_BOX, borderRadius: theme.radius.card, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.surfaceAlt }, selected ? theme.ring : clearRing]}>
-                <View testID={`mask-shape-${id}`} style={{ ...SHAPE, borderRadius: maskRadius(SHAPE, id), backgroundColor: selected ? theme.colors.accent : theme.colors.textMuted }} />
-              </View>
-              <Body numberOfLines={1} weight={selected ? "semi" : "regular"} style={{ color: selected ? theme.colors.accent : theme.colors.text, fontSize: LABEL_SIZE, marginTop: theme.space.xs }}>{LABELS[id]}</Body>
-            </PressableScale>
+            <Tile key={id} label={LABELS[id]} selected={selected} onPress={() => pick(id)} boxTestID={`mask-tile-${id}`}>
+              <View testID={`mask-shape-${id}`} style={{ ...SHAPE, borderRadius: maskRadius(SHAPE, id), backgroundColor: selected ? theme.colors.accent : theme.colors.textMuted }} />
+            </Tile>
           );
         })}
       </StripTiles>

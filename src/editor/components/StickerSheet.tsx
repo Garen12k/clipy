@@ -68,7 +68,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
           <View style={{ height: SEARCH_ROW, justifyContent: "center" }}>
             <TextInput accessibilityLabel="Search emoji" value={query} onChangeText={setQuery}
               placeholder="Search" placeholderTextColor={theme.colors.textMuted}
-              style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 8 }} />
+              style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.chip, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm }} />
           </View>
           <FlatList testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={8}
             keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
@@ -95,7 +95,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={SHAPES[id].label} onPress={() => addShape(id)}
                 style={{ width: 64, alignItems: "center", gap: theme.space.xs }}>
                 <Svg width={48} height={48} viewBox="0 0 100 100"><Path d={SHAPES[id].path} fill={color} /></Svg>
-                <Body style={{ fontSize: 12 }}>{SHAPES[id].label}</Body>
+                <Body style={{ fontSize: theme.type.small }}>{SHAPES[id].label}</Body>
               </Pressable>
             ))}
           </View>

@@ -14,12 +14,12 @@ const offsetAtPlayhead = (clipId: string): number | undefined => {
   return (s.project ? itemOffsetAt(s.project, clipId, s.playhead) : null) ?? undefined;
 };
 const ITEMS: Item[] = [
-  { label: "Rotate 90°", icon: "refresh", run: (p, id) => rotateClip90(p, id) },
-  { label: "Flip horizontal", icon: "swap-horizontal", run: (p, id) => flipClip(p, id, "h") },
-  { label: "Flip vertical", icon: "swap-vertical", run: (p, id) => flipClip(p, id, "v") },
-  { label: "Fit", icon: "contract", run: fitClip },
-  { label: "Fill", icon: "expand", run: fillClip },
-  { label: "Reset", icon: "arrow-undo", run: resetClipTransform },
+  { label: "Rotate 90°", icon: "refresh-outline", run: (p, id) => rotateClip90(p, id) },
+  { label: "Flip horizontal", icon: "swap-horizontal-outline", run: (p, id) => flipClip(p, id, "h") },
+  { label: "Flip vertical", icon: "swap-vertical-outline", run: (p, id) => flipClip(p, id, "v") },
+  { label: "Fit", icon: "contract-outline", run: fitClip },
+  { label: "Fill", icon: "expand-outline", run: fillClip },
+  { label: "Reset", icon: "arrow-undo-outline", run: resetClipTransform },
 ];
 
 export function TransformSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {

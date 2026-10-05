@@ -4,8 +4,8 @@ import { clipAt, clipDuration, curveSteps, findItem, layerEnd, sourceAfter, sour
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
-  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, aspectRatioValue, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
-  clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
+  clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
@@ -165,8 +165,9 @@ export function setCover(p: Project, cover: Cover | null): Project {
   return p.cover && p.cover.time === next.time && p.cover.title === next.title ? p : touch(p, { cover: next });
 }
 
+/** Same project when it already has the ratio or the id is unknown. Overlay positions are fractions of the frame and stay as they are. */
 export function setAspectRatio(p: Project, ratio: AspectRatio): Project {
-  return p.aspectRatio === ratio ? p : touch(p, { aspectRatio: ratio });
+  return p.aspectRatio === ratio || !isAspectRatio(ratio) ? p : touch(p, { aspectRatio: ratio });
 }
 
 export function renameProject(p: Project, name: string): Project {
@@ -375,6 +376,46 @@ export function duplicateAudioTrack(p: Project, id: string): Project {
   const src = p.audioTracks[i];
   const copy: AudioTrack = { ...src, id: newId(), start: r3(src.start + (src.trimEnd - src.trimStart)) };
   return touch(p, { audioTracks: [...p.audioTracks.slice(0, i + 1), copy, ...p.audioTracks.slice(i + 1)] });
+}
+
+/**
+ * The two pieces the track `id` is cut into at project `time`, or null where it cannot be cut: no such track, a time that is not
+ * finite, or a piece shorter than the kind's minimum (`minAudioDuration`) — so never at or outside the track's ends.
+ * A track plays 1:1, so the cut in source time is `trimStart + (time − start)`, rounded like every stored trim (3 decimals). Both
+ * pieces go through `cleanAudioTrack` and must come out meeting at that cut: the first ends there, the second starts there (source
+ * time) and at the first one's end (project time, 3 decimals). The first piece keeps the fade in, the second the fade out, stored as
+ * they were however short the piece is: `audioMix` fits them to its length. `second.id` is still the track's own.
+ */
+function audioSplitPieces(p: Project, id: string | null, time: number): { index: number; first: AudioTrack; second: AudioTrack } | null {
+  if (id === null || !Number.isFinite(time)) return null;
+  const index = p.audioTracks.findIndex((t) => t.id === id);
+  if (index < 0) return null;
+  const t = cleanAudioTrack(p.audioTracks[index]);
+  const cut = r3(t.trimStart + (time - t.start));
+  const min = minAudioDuration(t.kind) - 1e-9;
+  if (!Number.isFinite(cut) || cut - t.trimStart < min || t.trimEnd - cut < min) return null;
+  const first = cleanAudioTrack({ ...t, trimEnd: cut, fadeOut: 0 });
+  const second = cleanAudioTrack({ ...t, start: t.start + (cut - t.trimStart), trimStart: cut, fadeIn: 0 });
+  // The cleaning must not have moved the cut (it keeps the minimum length by moving a trim).
+  if (first.trimStart !== t.trimStart || first.trimEnd !== cut || second.trimStart !== cut || second.trimEnd !== t.trimEnd) return null;
+  return { index, first, second };
+}
+
+/** Whether the track `id` can be cut at project `time` (the rules of `splitAudioTrackAt`, the track limit aside). False for no id. */
+export function canSplitAudioAt(p: Project, id: string | null, time: number): boolean {
+  return audioSplitPieces(p, id, time) !== null;
+}
+
+/**
+ * Cuts the track `id` in two at project `time` (see `audioSplitPieces`): the first piece keeps the id, the second gets `pieceId` and
+ * sits right after it in the list. Refused (same project) where `canSplitAudioAt` is false, at AUDIO_LIMITS.maxTracks, and when
+ * `pieceId` is already a track's id.
+ */
+export function splitAudioTrackAt(p: Project, id: string, time: number, pieceId: string): Project {
+  if (p.audioTracks.length >= AUDIO_LIMITS.maxTracks || p.audioTracks.some((t) => t.id === pieceId)) return p;
+  const cut = audioSplitPieces(p, id, time);
+  if (!cut) return p;
+  return touch(p, { audioTracks: [...p.audioTracks.slice(0, cut.index), cut.first, { ...cut.second, id: pieceId }, ...p.audioTracks.slice(cut.index + 1)] });
 }
 
 /**
@@ -637,7 +678,7 @@ export function setCaptionStyleForAll(p: Project, patch: CaptionStylePatch): Pro
 
 /** The 1080-wide reference frame for the project's aspect ratio (what clipLayout works in). */
 export function frameSize(p: Project): { width: number; height: number } {
-  return { width: 1080, height: 1080 / aspectRatioValue(p.aspectRatio) };
+  return { width: 1080, height: 1080 / frameAspect(p) };
 }
 
 /**

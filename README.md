@@ -80,6 +80,10 @@ Details per platform:
 
 The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an editor toolbar that follows what is selected, with small tool strips for the quick tools. Every colour, font, radius and duration comes from `src/theme/theme.ts`; the shared kit lives in `src/ui/`. UI fonts are Oswald (titles) and Montserrat (body), both under the SIL Open Font License (OFL). Regenerate the app icon and splash with `npm run gen:brand`.
 
+**Building blocks.** One spacing scale (4 / 8 / 12 / 16 / 24 / 32, `theme.space`) and one 16-pt gutter at the screen edges. Sizes for buttons, chips, tiles and icons come from `theme.size`. There are three kinds of button: gold (the one main action of a screen or panel), outlined, and text only; the compact versions are 36 pt high with extra touch room. A selected chip or tile has a gold ring, a lighter surface and is a touch larger. Every tool icon is an outline icon, and a gold icon means "on". Sliders are the kit `Slider` (`src/ui/Slider.tsx`: gold track, a light tick at the rest value, the current value in the label) and pick-one tiles are the kit `Tile` (`src/ui/Tile.tsx`). Surfaces are layered by colour (page, bar, tile, selected), not by shadows.
+
+**Motion.** Buttons dip when pressed; a strip or panel fades and rises in, the row of tools fades in when it changes, messages ease in and out. Closing is instant. Nothing lasts longer than a quarter of a second, only opacity and position change (never layout next to the video), and every animation is built in `src/ui/motion.ts`. With Reduce Motion on, nothing slides or grows (`src/ui/useReducedMotion.ts`); buttons still react.
+
 ## Layout
 
 - `app/` — screens (Expo Router): `index.tsx`, `editor/[id]/index.tsx`, `editor/[id]/export.tsx`
@@ -106,7 +110,10 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an 
 - Projects (create, list, reopen, rename, duplicate, delete)
 - Import clips
 - Timeline (split, trim, reorder); a clip whose source video is missing shows a warning badge
-  and is skipped by preview and export
+  and is skipped by preview and export. The rows under the clips (layers, text / stickers, music, voice,
+  sound effects, effects) appear only once they hold something, so a project with clips only gives the
+  video the most room; adding the first text, sound or effect adds its row (`laneModel` in
+  `src/editor/timelineLayout.ts` is the one rule)
 - Preview playback
 - Export, with a fallback card in Expo Go when the native module is not linked
 
@@ -163,14 +170,27 @@ The row of tools under the preview follows what you have selected.
 - **A clip** - Split, Trim, Select, Speed, Volume, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete.
 - **A layer** - the same without Split, Select, Background, Templates, Transition and Freeze, plus Blend, Forward and Back.
 - **A text** - Edit, Animate, Keyframe, Duplicate, Delete, Add text. **A caption** - Edit, Captions, Duplicate, Delete, Add text. **A sticker** - Edit, Animate, Keyframe, Duplicate, Delete.
-- **A sound** - Volume, Fade, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
+- **A sound** - Split, Volume, Fade, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
 - **Audio** and **Text** (from the first row) open their own row: Add audio, Ducking, Beats; Add text, Captions.
+
+The bar is 90 pt high; a strip is 154 pt with a 44-pt header.
 
 Every row except the first has a **back arrow** at the left that clears the selection. Tools that do not apply are not shown (a photo has no Speed, the last clip has no Transition); only Keyframe (the white line is not on the item), Replace / Overlay (while the picker is open) and Freeze (while it captures) grey out for a moment.
 
-**Strips.** Quick tools (Filter, Adjust, Speed, Volume, Opacity, Animate, Mask, Blend, Green screen, Transform, Background, Ratio, Transition, Fade, Strength) open as a small panel in place of the row. Nothing dims and the video keeps its size; you can play, scrub and tap the timeline while it is open. It rises over the two lowest timeline rows. The round **✓** closes it, and so does selecting something else. The ratio pill next to the play button and the mark between two clips open the Ratio and Transition strips. The Effects list and Trim (by numbers) are strips too.
+**Strips.** Quick tools (Filter, Adjust, Speed, Volume, Opacity, Animate, Mask, Blend, Green screen, Transform, Background, Ratio, Transition, Fade, Strength) open as a small panel in place of the row. Nothing dims; you can play, scrub and tap the timeline while it is open. It rises over the two lowest timeline rows and never over the clips: with two or more rows under the clips the video keeps its size, with fewer the video gets a little smaller while the strip is open. The round **✓** closes it, and so does selecting something else. The ratio pill next to the play button and the mark between two clips open the Ratio and Transition strips. The Effects list and Trim (by numbers) are strips too.
 
-**Panels.** Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style and Beats open as a tall panel at the bottom. Nothing dims: the timeline and the row of tools give the panel their place (the timeline comes back where it was, same zoom), and the video stays above it, a little smaller (smaller still for the big panels), and keeps playing. Play, undo and redo stay usable above the panel. The round **✓** closes it, and so does selecting something else. When you type, the panel sits on the keyboard at a lower height and the video stays in view; drag the panel's content down to put the keyboard away (the panel stays open). While a voice-over is recorded the panel stays until the recording is stopped and saved, and the other tools and Export do not open. Trim's number boxes work the same way: with the keyboard up the timeline is hidden and the strip sits on the keyboard. Panels have no slide-in animation. Cover is still a pop-up sheet (it dims the screen) and Crop is a full screen.
+**Panels.** Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style and Beats open as a tall panel at the bottom. Nothing dims: the timeline and the row of tools give the panel their place (the timeline comes back where it was, same zoom), and the video stays above it, a little smaller (smaller still for the big panels), and keeps playing. Play, undo and redo stay usable above the panel. The round **✓** closes it, and so does selecting something else. When you type, the panel sits on the keyboard at a lower height and the video stays in view; drag the panel's content down to put the keyboard away (the panel stays open). While a voice-over is recorded the panel stays until the recording is stopped and saved, and the other tools and Export do not open. Trim's number boxes work the same way: with the keyboard up the timeline is hidden and the strip sits on the keyboard. Panels fade and rise in; closing is instant. Cover is still a pop-up sheet (it dims the screen) and Crop is a full screen.
+
+**Aspect ratio.** Nine choices: **Auto**, 1:1, 3:2, 2:3, 16:9, 9:16, 4:3, 3:4 and 21:9.
+
+- **Auto** gives the frame the shape of the project's first clip (photo or video, as it is displayed), so that clip fills the frame exactly. It follows the first clip: reorder, delete or replace it and the frame changes with it. The shape is kept between 9:21 and 21:9; a project without clips is 9:16. A clip's own Transform or Crop does not change the frame.
+- **When a project is created**: after you pick photos or videos, a sheet asks for the aspect ratio with Auto already chosen. **Create** makes the project; closing the sheet makes nothing. Adding clips to an existing project does not ask.
+- **In the editor**: the Ratio tool (the row of tools, or the pill beside the play button, which shows "Auto" or the ratio) is a strip of nine tiles, each drawn in its shape. A pick is one undo step and closes the strip.
+- Texts and stickers keep their place (positions are fractions of the frame). Projects made before this keep the ratio they had.
+- One function turns the choice into a number: `frameAspect(project)` in `src/editor/model/types.ts`. The preview, the clip layout, the cover and the export all use it; nothing else looks at "auto".
+- **Export size**: the short side is the resolution (720 / 1080 / 2160), the long side follows the shape, both rounded to even numbers - `renderSize` in `src/export/estimate.ts`, mirrored by `ExportSession.renderSize` (keep them identical; `src/export/__tests__/renderSize.swift.test.ts`). 9:16, 1:1 and 16:9 export at exactly the sizes they always did. A 4K frame wider than about 2:1 is more than the H.264 encoder takes and is scaled down, same shape (21:9 at 4K is 4672 x 2002). The file-size estimate and the bitrate go by resolution only, as before.
+- **Cover saved to Photos**: 1080 pixels on its shorter side (a 16:9 cover is 1920 x 1080, a 9:16 one 1080 x 1920).
+- The drafts grid shows every project in the same 3:4 card whatever its ratio.
 
 ## Clip tools
 
@@ -275,6 +295,7 @@ Everything here is under **Audio** on the first row, or on the row of a selected
 - **Tracks** - up to 12. Each is a bar on its own lane (music, voice, sound effects). Tap a bar to select it:
   **Add audio**, **Volume**, **Fade** (in and out, up to 5 s each), **Duplicate**, **Delete**. Long-press a bar to move it;
   drag its handles to trim.
+- **Split** (first on a selected sound's row) cuts the sound in two at the white line; the second piece becomes the selected one. It is greyed where the line is off the sound or closer than 0.5 s to one of its ends (0.1 s for a sound effect). The first piece keeps the fade in, the second the fade out.
 - **Clip sound** - a clip's own sound also has **Fade in** and **Fade out** (in the clip's Volume strip).
 - **Ducking** - a switch in the Audio tools: music dips to 30 % while a voice-over plays.
 - **Beats** - tap along to drop beat markers, shown as ticks on the timeline.
@@ -390,3 +411,12 @@ Polish items:
 38. **60 fps export time** (and heat) on a long project.
 39. **Cover on Instagram.** The Reel's cover is the chosen frame; `thumb_offset` is in milliseconds, and Instagram accepts an offset 0.05 s before the end.
 40. **Deprecation warning** on `composition.duration` in the export code: expected, harmless.
+
+Aspect ratio items:
+
+41. **Render sizes for the new ratios.** Export one project at 1080p in 3:2, 2:3, 4:3, 3:4 and 21:9 and read the file's size: 1620 x 1080, 1080 x 1620, 1440 x 1080, 1080 x 1440, 2520 x 1080. 9:16, 1:1 and 16:9 must be what they always were (1080 x 1920, 1080 x 1080, 1920 x 1080).
+42. **Even dimensions.** Every exported file has an even width and height (an odd one fails or shows a green edge). Try Auto with an odd-shaped first clip (a cropped screenshot, a panorama).
+43. **Auto.** With a landscape first clip the export is landscape and that clip fills the frame with no bars, exactly as in the preview; a panorama is cut to 21:9. `aspectValue` in `ExportSession.swift` compiles (`Double($0)` on a `Substring`).
+44. **21:9 at 4K** exports (4672 x 2002, not 5040 x 2160). If the encoder takes the full size on the test iPhone, the limit in `renderSize` (both files) can go; if even the reduced size fails, lower `maxMacroblocks`.
+45. **Old requests.** `ExportRequest` without `frameAspect` still decodes (the field keeps its default 0).
+46. **The creation sheet** appears after the photo library closes, every time (it waits 350 ms - `AFTER_PICKER_MS`); if it sometimes does not appear, raise that number.

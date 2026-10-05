@@ -1,4 +1,3 @@
-import Slider from "@react-native-community/slider";
 import { useRef, useState } from "react";
 import { Pressable, Switch, TextInput, View } from "react-native";
 import { overlayBaseAt } from "@/src/editor/model/motion";
@@ -9,7 +8,8 @@ import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { NumField } from "@/src/ui/NumField";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
-import { Body } from "@/src/ui/Text";
+import { Slider } from "@/src/ui/Slider";
+import { Body, ValueLabel } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow, CONTENT_BLACK } from "./ColorRow";
 import { FontStrip } from "./FontStrip";
@@ -17,7 +17,7 @@ import { TemplateStrip, TEXT_TEMPLATE_TILES } from "./TemplateStrip";
 import { CollapsibleTextStyle } from "./TextStyleSection";
 
 type Props = { overlayId: string | null; visible: boolean; onClose: () => void; onRetarget?: (id: string) => void };
-const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, borderRadius: theme.radius.chip, fontFamily: theme.fonts.body, padding: 10, fontSize: 16, minWidth: 72 } as const;
+const field = { backgroundColor: theme.elevation.tile, color: theme.colors.text, borderRadius: theme.radius.chip, fontFamily: theme.fonts.body, padding: theme.space.md, fontSize: 16, minWidth: 72 } as const;
 
 export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
   const found = useEditorStore((s) => s.project?.overlays.find((o) => o.id === overlayId) ?? null);
@@ -66,8 +66,8 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
       {/* Templates are for texts only (`applyTextTemplate` refuses captions, which have their own presets). */}
       {overlay.kind === "text" && <TemplateStrip tiles={TEXT_TEMPLATE_TILES} onPick={(templateId) => apply((x) => applyTextTemplate(x, id, templateId))} />}
       <FontStrip value={overlay.fontId} onChange={(fontId) => patch({ fontId })} />
-      <View><Body muted>Size {Math.round(overlay.fontScale * 100)}%</Body>
-        <Slider testID="size-slider" minimumValue={OVERLAY_LIMITS.fontScale[0]} maximumValue={OVERLAY_LIMITS.fontScale[1]} value={overlay.fontScale} {...slider("fontScale")} minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} /></View>
+      <View><ValueLabel label="Size" value={`${Math.round(overlay.fontScale * 100)}%`} />
+        <Slider testID="size-slider" minimumValue={OVERLAY_LIMITS.fontScale[0]} maximumValue={OVERLAY_LIMITS.fontScale[1]} value={overlay.fontScale} {...slider("fontScale")} /></View>
       <ColorRow value={overlay.color} onChange={(color) => patch({ color })} />
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Body>Background</Body>
@@ -75,7 +75,7 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
       </View>
       {overlay.background && (<>
         <ColorRow value={overlay.background.color} onChange={(color) => patch({ background: { color, opacity: overlay.background!.opacity } })} />
-        <Slider testID="opacity-slider" minimumValue={0.2} maximumValue={1} value={overlay.background.opacity} {...slider("opacity")} minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} />
+        <Slider testID="opacity-slider" minimumValue={0.2} maximumValue={1} value={overlay.background.opacity} {...slider("opacity")} />
       </>)}
       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: theme.space.md }}>
         {(["left", "center", "right"] as Align[]).map((a) => <Chip key={a} label={`Align ${a}`} selected={overlay.align === a} onPress={() => patch({ align: a })} />)}
@@ -85,7 +85,7 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
         <Switch accessibilityLabel="Outline" value={overlay.outline} onValueChange={(outline) => patch({ outline })} trackColor={{ true: theme.colors.accent }} />
       </View>
       <CollapsibleTextStyle style={overlay.style} outline={overlay.outline} onBegin={beginTransaction} onPatch={patchStyle} onPatchTransient={patchStyleTransient} />
-      <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+      <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" hitSlop={12} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
         <Body style={{ color: theme.colors.sea }}>Fine-tune</Body>
         <Body style={{ color: theme.colors.sea }}>{fine ? "▲" : "▼"}</Body>
       </Pressable>

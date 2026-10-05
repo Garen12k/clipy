@@ -17,6 +17,7 @@ import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
 import { IconButton } from "@/src/ui/IconButton";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
+import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Body } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
 import { ToolPanel } from "@/src/ui/ToolPanel";
@@ -41,7 +42,7 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 type Picked = { uri: string; title: string; durationSec: number };
-const ROW = { flexDirection: "row", alignItems: "center", gap: theme.space.md, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, padding: theme.space.md } as const;
+const ROW = { flexDirection: "row", alignItems: "center", gap: theme.space.md, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.chip, padding: theme.space.md } as const;
 
 /**
  * Adds audio to the project: bundled music, a file, a built-in sound effect, or a voice-over recorded on the spot. Every path
@@ -165,10 +166,10 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
 
   const row = (r: { id: string; title: string; detail: string; file: number; durationSec: number; addLabel: string; onAdd: () => void }) => (
     <View key={r.id} style={ROW}>
-      <IconButton name={previewId === r.id ? "stop" : "play"} color={theme.colors.accent}
+      <IconButton name={previewId === r.id ? "stop-outline" : "play-outline"} color={theme.colors.accent}
         accessibilityLabel={`${previewId === r.id ? "Stop" : "Play"} ${r.title}`} onPress={() => togglePreview(r.id, r.file, r.durationSec)} />
-      <View style={{ flex: 1 }}><Body>{r.title}</Body><Body muted style={{ fontSize: 12 }}>{r.detail}</Body></View>
-      <Chip label={r.addLabel} accessibilityLabel={`${r.addLabel} ${r.title}`} selected={false} disabled={busy} onPress={r.onAdd} />
+      <View style={{ flex: 1 }}><Body>{r.title}</Body><Body muted style={{ fontSize: theme.type.small }}>{r.detail}</Body></View>
+      <SecondaryButton compact title={r.addLabel} accessibilityLabel={`${r.addLabel} ${r.title}`} disabled={busy} onPress={r.onAdd} />
     </View>
   );
 

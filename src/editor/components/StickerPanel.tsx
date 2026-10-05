@@ -1,4 +1,3 @@
-import Slider from "@react-native-community/slider";
 import { useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { overlayBaseAt } from "@/src/editor/model/motion";
@@ -8,7 +7,8 @@ import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { NumField } from "@/src/ui/NumField";
-import { Body } from "@/src/ui/Text";
+import { Slider } from "@/src/ui/Slider";
+import { Body, ValueLabel } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow } from "./ColorRow";
 
@@ -36,12 +36,11 @@ export function StickerPanel({ overlayId, visible, onClose, onRetarget }: Props)
       {sticker.shape && (
         <ColorRow value={sticker.color} onChange={(color) => apply((x) => updateSticker(x, id, { color }))} />
       )}
-      <View><Body muted>Size {Math.round(base.scale * 100)}%</Body>
+      <View><ValueLabel label="Size" value={`${Math.round(base.scale * 100)}%`} />
         <Slider testID="sticker-size-slider" minimumValue={OVERLAY_LIMITS.scale[0]} maximumValue={OVERLAY_LIMITS.scale[1]} value={base.scale}
           onSlidingStart={() => { dragTime.current = useEditorStore.getState().playhead; beginTransaction(); }}
-          onValueChange={(v: number) => applyTransient((x) => editOverlayAt(x, id, dragTime.current, { scale: v }))}
-          minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent} /></View>
-      <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          onValueChange={(v: number) => applyTransient((x) => editOverlayAt(x, id, dragTime.current, { scale: v }))} /></View>
+      <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" hitSlop={12} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
         <Body style={{ color: theme.colors.sea }}>Fine-tune</Body>
         <Body style={{ color: theme.colors.sea }}>{fine ? "▲" : "▼"}</Body>
       </Pressable>

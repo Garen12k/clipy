@@ -3,7 +3,7 @@ import {
 } from "../types";
 import { linesToCaptions } from "../captions";
 
-test("schema is v13", () => expect(SCHEMA_VERSION).toBe(13));
+test("schema is v14", () => expect(SCHEMA_VERSION).toBe(14));
 
 test("defaults match the spec", () => {
   expect(DEFAULT_TEXT_STYLE).toEqual({ opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null });
@@ -102,5 +102,5 @@ describe("factories give fresh defaults", () => {
     expect(x.style).not.toBe(y.style);
     expect(x.words).not.toBe(y.words);
   });
-  test("makeProject is v13", () => expect(makeProject().schemaVersion).toBe(13));
+  test("makeProject is v14", () => expect(makeProject().schemaVersion).toBe(14));
 });

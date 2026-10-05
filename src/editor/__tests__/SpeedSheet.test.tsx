@@ -35,7 +35,7 @@ test("chips set the speed; the slider is one undo step", async () => {
   await fireEvent(slider, "touchStart"); await fireEvent(slider, "touchMove");
   expect(useEditorStore.getState().project!.clips[0].speed).toBe(1.5);
   expect(useEditorStore.getState().past).toHaveLength(2);
-  expect(screen.getByText("1.5×")).toBeTruthy();
+  expect(screen.getAllByText("1.5×")[0]).toBeTruthy();       // the chip and the slider row's value
 });
 
 describe("tabs", () => {

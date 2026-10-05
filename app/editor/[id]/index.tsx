@@ -32,7 +32,7 @@ export default function EditorScreen() {
 
   if (load.status === "loading") return <Screen style={{ justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></Screen>;
   if (load.status === "error") return (
-    <Screen style={{ justifyContent: "center", alignItems: "center", padding: 32, gap: 12 }}>
+    <Screen style={{ justifyContent: "center", alignItems: "center", padding: theme.space.xxl, gap: theme.space.md }}>
       <Title>Can't open project</Title><Body muted>{load.error}</Body>
     </Screen>
   );

@@ -1,9 +1,9 @@
-import Slider from "@react-native-community/slider";
 import { useState } from "react";
 import { Pressable, Switch, View } from "react-native";
 import { DEFAULT_GLOW, DEFAULT_SHADOW, TEXT_STYLE_LIMITS, type TextStyle } from "@/src/editor/model/types";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
+import { Slider } from "@/src/ui/Slider";
 import { Body } from "@/src/ui/Text";
 import { ColorRow } from "./ColorRow";
 
@@ -20,7 +20,6 @@ type Props = {
 };
 
 const L = TEXT_STYLE_LIMITS;
-const TINT = { minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.surfaceAlt, thumbTintColor: theme.colors.accent } as const;
 const ROW = { flexDirection: "row", alignItems: "center", justifyContent: "space-between" } as const;
 const pct = (v: number) => `${Math.round(v * 100)}`;
 
@@ -34,7 +33,7 @@ export function TextStyleSection({ style, outline, onBegin, onPatch, onPatchTran
     <View>
       <Body muted>{label}</Body>
       <Slider testID={testID} minimumValue={range[0]} maximumValue={range[1]} step={0.01} value={value}
-        onSlidingStart={onBegin} onValueChange={(v) => onPatchTransient(toPatch(v))} onSlidingComplete={(v) => onPatchTransient(toPatch(v))} {...TINT} />
+        onSlidingStart={onBegin} onValueChange={(v) => onPatchTransient(toPatch(v))} onSlidingComplete={(v) => onPatchTransient(toPatch(v))} />
     </View>
   );
 
@@ -80,8 +79,8 @@ export function TextStyleSection({ style, outline, onBegin, onPatch, onPatchTran
 export function CollapsibleTextStyle(props: Props) {
   const [open, setOpen] = useState(false);
   return (<>
-    <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel="Style" accessibilityState={{ expanded: open }}
-      style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+    <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel="Style" hitSlop={12} accessibilityState={{ expanded: open }}
+      style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
       <Body style={{ color: theme.colors.sea }}>Style</Body>
       <Body style={{ color: theme.colors.sea }}>{open ? "▲" : "▼"}</Body>
     </Pressable>

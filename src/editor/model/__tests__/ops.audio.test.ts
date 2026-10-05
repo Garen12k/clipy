@@ -3,8 +3,11 @@ jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }
 import { AUDIO_LIMITS, BEAT_LIMITS, makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject } from "../types";
 import {
   addAudioTrack, addBeatMarker, clearBeatMarkers, deleteAudioTrack, deleteClip, duplicateAudioTrack, duplicateClip, insertFreezeFrame, moveAudioTrack,
-  removeBeatMarkerNear, replaceClipMedia, setClipFade, setDucking, splitClipAt, trimClip, updateAudioTrackById,
+  canSplitAudioAt, removeBeatMarkerNear, replaceClipMedia, setClipFade, setDucking, splitAudioTrackAt, splitClipAt, trimClip, updateAudioTrackById,
 } from "../ops";
+import { fitFades } from "../audioMix";
+import { trackEnd } from "../audioSync";
+import { migrateProject } from "../migrate";
 
 const music = makeAudioTrack({ id: "m1", sourceDuration: 30 });
 const voice = makeAudioTrack({ id: "v1", sourceDuration: 6, kind: "voice", start: 2 });
@@ -141,6 +144,117 @@ describe("deleteAudioTrack / duplicateAudioTrack", () => {
     expect(duplicateAudioTrack(p, "zzz")).toBe(p);
     const full = makeProject({ audioTracks: Array.from({ length: AUDIO_LIMITS.maxTracks }, (_, i) => makeAudioTrack({ id: `t${i}`, sourceDuration: 5 })) });
     expect(duplicateAudioTrack(full, "t0")).toBe(full);
+  });
+});
+
+describe("splitAudioTrackAt", () => {
+  // On the timeline from 3 to 22 (19 s long), playing the source from 1 to 20.
+  const long = { ...music, start: 3, trimStart: 1, trimEnd: 20, fadeIn: 1, fadeOut: 2, volume: 0.8, title: "Song" };
+  const q = makeProject({ clips: base.clips, audioTracks: [voice, long, sfx] });
+  const full = makeProject({ audioTracks: Array.from({ length: AUDIO_LIMITS.maxTracks }, (_, i) => makeAudioTrack({ id: `t${i}`, sourceDuration: 5 })) });
+
+  test("cuts a trimmed track that starts later: the source time of the cut is trimStart + (time − start)", () => {
+    const next = splitAudioTrackAt(q, "m1", 7.5, "n1");   // 4.5 s into the track → source 1 + 4.5 = 5.5
+    expect(next.audioTracks.map((t) => t.id)).toEqual(["v1", "m1", "n1", "s1"]);
+    expect(next.audioTracks[1]).toEqual({ ...long, trimEnd: 5.5, fadeOut: 0 });
+    expect(next.audioTracks[2]).toEqual({ ...long, id: "n1", start: 7.5, trimStart: 5.5, fadeIn: 0 });
+    expect(next.updatedAt).toBe("2026-10-01T10:00:00.000Z");
+  });
+
+  test("the first piece keeps the fade in, the second the fade out; everything else is the same on both", () => {
+    const [, a, b] = splitAudioTrackAt(q, "m1", 7.5, "n1").audioTracks;
+    expect([a.fadeIn, a.fadeOut, b.fadeIn, b.fadeOut]).toEqual([1, 0, 0, 2]);
+    for (const key of ["sourceUri", "title", "sourceDuration", "volume", "kind"] as const) { expect(a[key]).toBe(long[key]); expect(b[key]).toBe(long[key]); }
+  });
+
+  test("the other tracks keep their objects, and the original project is not changed", () => {
+    const next = splitAudioTrackAt(q, "m1", 7.5, "n1");
+    expect(next.audioTracks[0]).toBe(voice);
+    expect(next.audioTracks[3]).toBe(sfx);
+    expect(q.audioTracks).toEqual([voice, long, sfx]);
+    expect(next.clips).toBe(q.clips);
+  });
+
+  test("rounded to 3 decimals, and gapless: the second piece starts exactly where the first ends, in project and in source time", () => {
+    for (const [time, cut, start] of [[4.23456, 2.235, 4.235], [7.4996, 5.5, 7.5], [13 / 3, 2.333, 4.333], [21.0004, 19, 21]]) {
+      const [, a, b] = splitAudioTrackAt(q, "m1", time, "n1").audioTracks;
+      expect([a.trimEnd, b.trimStart, b.start]).toEqual([cut, cut, start]);
+      expect(b.trimStart).toBe(a.trimEnd);
+      expect(b.start).toBe(Math.round(trackEnd(a) * 1000) / 1000);
+      expect(trackEnd(b)).toBeCloseTo(22, 9);
+    }
+  });
+
+  test("refused when either piece would be under the kind's minimum: 0.5 s for music and voice", () => {
+    expect(splitAudioTrackAt(q, "m1", 3.499, "n1")).toBe(q);
+    expect(splitAudioTrackAt(q, "m1", 3.5, "n1").audioTracks[1]).toMatchObject({ trimStart: 1, trimEnd: 1.5 });      // 0.5 s is allowed
+    expect(splitAudioTrackAt(q, "m1", 21.501, "n1")).toBe(q);
+    expect(splitAudioTrackAt(q, "m1", 21.5, "n1").audioTracks[2]).toMatchObject({ start: 21.5, trimStart: 19.5, trimEnd: 20 });
+    expect(splitAudioTrackAt(q, "v1", 2.4, "n1")).toBe(q);     // voice: 2 … 8
+    expect(splitAudioTrackAt(q, "v1", 7.6, "n1")).toBe(q);
+    expect(splitAudioTrackAt(q, "v1", 5, "n1").audioTracks.slice(0, 2)).toEqual([{ ...voice, trimEnd: 3 }, { ...voice, id: "n1", start: 5, trimStart: 3 }]);
+  });
+
+  test("a sound effect may be cut into pieces as short as 0.1 s", () => {
+    // s1: 4 … 5 on the timeline, source 0 … 1
+    expect(splitAudioTrackAt(q, "s1", 4.05, "n1")).toBe(q);
+    expect(splitAudioTrackAt(q, "s1", 4.1, "n1").audioTracks.slice(2)).toEqual([{ ...sfx, trimEnd: 0.1 }, { ...sfx, id: "n1", start: 4.1, trimStart: 0.1 }]);
+    expect(splitAudioTrackAt(q, "s1", 4.9, "n1").audioTracks.slice(2)).toEqual([{ ...sfx, trimEnd: 0.9 }, { ...sfx, id: "n1", start: 4.9, trimStart: 0.9 }]);
+    expect(splitAudioTrackAt(q, "s1", 4.95, "n1")).toBe(q);
+    // 0.15 s long: no cut leaves 0.1 s on both sides
+    const tiny = makeProject({ audioTracks: [makeAudioTrack({ id: "s2", sourceDuration: 0.15, kind: "sfx" })] });
+    for (const time of [0.05, 0.075, 0.1]) expect(splitAudioTrackAt(tiny, "s2", time, "n1")).toBe(tiny);
+  });
+
+  test("refused exactly at the start or the end, outside the track, and for a time that is not finite", () => {
+    for (const time of [3, 22, 0, 2.9, 22.1, 99, -1, NaN, Infinity, -Infinity]) expect(splitAudioTrackAt(q, "m1", time, "n1")).toBe(q);
+  });
+
+  test("refused for an unknown id, at the track limit, and for a new id that is already there", () => {
+    expect(splitAudioTrackAt(q, "zzz", 7.5, "n1")).toBe(q);
+    expect(splitAudioTrackAt(full, "t0", 2, "n1")).toBe(full);
+    expect(splitAudioTrackAt(q, "m1", 7.5, "v1")).toBe(q);
+    expect(splitAudioTrackAt(q, "m1", 7.5, "m1")).toBe(q);
+  });
+
+  test("fades longer than a piece are stored as they were: the mix fits them to the piece's length", () => {
+    const faded = makeProject({ audioTracks: [{ ...music, fadeIn: 5, fadeOut: 3 }] });
+    const [a, b] = splitAudioTrackAt(faded, "m1", 2, "n1").audioTracks;     // 2 s, then 28 s
+    expect([a.fadeIn, a.fadeOut, b.fadeIn, b.fadeOut]).toEqual([5, 0, 0, 3]);
+    expect(fitFades(a.fadeIn, a.fadeOut, a.trimEnd - a.trimStart)).toEqual({ in: 2, out: 0 });
+  });
+
+  test("what is stored reloads unchanged, and can be split again", () => {
+    const next = splitAudioTrackAt(q, "m1", 4.23456, "n1");
+    expect(migrateProject(JSON.parse(JSON.stringify(next)))).toEqual(next);
+    const again = splitAudioTrackAt(next, "n1", 10, "n2");
+    expect(again.audioTracks.map((t) => [t.id, t.start, t.trimStart, t.trimEnd])).toEqual(
+      [["v1", 2, 0, 6], ["m1", 3, 1, 2.235], ["n1", 4.235, 2.235, 8], ["n2", 10, 8, 20], ["s1", 4, 0, 1]]);
+    expect(migrateProject(JSON.parse(JSON.stringify(again)))).toEqual(again);
+  });
+});
+
+describe("canSplitAudioAt", () => {
+  const long = { ...music, start: 3, trimStart: 1, trimEnd: 20 };
+  const q = makeProject({ clips: base.clips, audioTracks: [voice, long, sfx] });
+
+  test("true where the cut leaves both pieces long enough; false at and past the edges, for no / an unknown id and a broken time", () => {
+    const table: [string | null, number, boolean][] = [
+      ["m1", 7.5, true], ["m1", 3.5, true], ["m1", 21.5, true], ["m1", 3.499, false], ["m1", 21.501, false], ["m1", 3, false], ["m1", 22, false],
+      ["m1", 0, false], ["m1", 30, false], ["m1", NaN, false], ["m1", Infinity, false],
+      ["v1", 5, true], ["v1", 2.4, false], ["s1", 4.1, true], ["s1", 4.9, true], ["s1", 4.05, false], ["s1", 4.95, false],
+      ["zzz", 7.5, false], [null, 7.5, false],
+    ];
+    for (const [id, time, want] of table) expect([id, time, canSplitAudioAt(q, id, time)]).toEqual([id, time, want]);
+  });
+
+  test("agrees with the op wherever there is room for another track; the track limit is not its business", () => {
+    for (const id of ["m1", "v1", "s1"]) {
+      for (let time = 0; time <= 23; time += 0.05) expect([id, time, canSplitAudioAt(q, id, time)]).toEqual([id, time, splitAudioTrackAt(q, id, time, "n1") !== q]);
+    }
+    const full = makeProject({ audioTracks: Array.from({ length: AUDIO_LIMITS.maxTracks }, (_, i) => makeAudioTrack({ id: `t${i}`, sourceDuration: 5 })) });
+    expect(canSplitAudioAt(full, "t0", 2)).toBe(true);
+    expect(splitAudioTrackAt(full, "t0", 2, "n1")).toBe(full);
   });
 });
 
