@@ -1,11 +1,11 @@
-import { Pressable, View } from "react-native";
+import { Pressable } from "react-native";
 import { setBackgroundForAllClips, setClipBackground } from "@/src/editor/model/ops";
 import type { ClipBackground } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
-import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
+import { StripNote, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 import { CONTENT_BLACK, PALETTE } from "./ColorRow";
 
 const SWATCH = 36;
@@ -20,9 +20,8 @@ export function BackgroundSheet({ clipId, visible, onClose }: { clipId: string |
   const isColor = (c: string) => bg.type === "color" && bg.color.toUpperCase() === c.toUpperCase();
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Background" action={{ label: "Apply to all", onPress: () => { haptic("light"); apply((p) => setBackgroundForAllClips(p, clip.background)); } }}>
-      <Body muted>Shown around a clip that does not fill the frame.</Body>
-      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: theme.space.sm }}>
+    <ToolStrip visible={visible} onClose={onClose} title="Background" note={<StripNote>Shown around a clip that does not fill the frame.</StripNote>} action={{ label: "Apply to all", onPress: () => { haptic("light"); apply((p) => setBackgroundForAllClips(p, clip.background)); } }}>
+      <StripTiles>
         <Pressable accessibilityRole="button" accessibilityLabel="Black" accessibilityState={{ selected: bg.type === "black" }} onPress={() => choose({ type: "black" })}
           style={[{ width: SWATCH, height: SWATCH, borderRadius: SWATCH / 2, backgroundColor: CONTENT_BLACK, borderWidth: 1, borderColor: theme.colors.hairline }, ringOrClear(bg.type === "black")]} />
         {PALETTE.filter((c) => c.toUpperCase() !== CONTENT_BLACK).map((c) => (
@@ -33,7 +32,7 @@ export function BackgroundSheet({ clipId, visible, onClose }: { clipId: string |
           style={[{ height: SWATCH, borderRadius: SWATCH / 2, paddingHorizontal: theme.space.md, justifyContent: "center", backgroundColor: theme.colors.surfaceAlt }, ringOrClear(bg.type === "blur")]}>
           <Body weight="semi">Blur</Body>
         </Pressable>
-      </View>
-    </Sheet>
+      </StripTiles>
+    </ToolStrip>
   );
 }

@@ -1,12 +1,10 @@
-import { View } from "react-native";
 import { fillClip, fitClip, flipClip, resetClipTransform, rotateClip90 } from "@/src/editor/model/ops";
 import { findItem, itemOffsetAt } from "@/src/editor/model/timeline";
 import type { Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
-import { Sheet } from "@/src/ui/Sheet";
 import { ToolButton } from "@/src/ui/ToolButton";
+import { StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 import type { IoniconName } from "../toolGroups";
 
 /** `offset` = the playhead's offset inside the clip or layer (undefined when the playhead is elsewhere): Fit / Fill / Reset write the pin there when the clip has keyframes. */
@@ -36,10 +34,10 @@ export function TransformSheet({ clipId, visible, onClose }: { clipId: string | 
     apply((p) => it.run(p, clipId, offset));
   };
   return (
-    <Sheet visible={visible} onClose={onClose} title="Transform">
-      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: theme.space.sm }}>
+    <ToolStrip visible={visible} onClose={onClose} title="Transform">
+      <StripTiles>
         {ITEMS.map((it) => <ToolButton key={it.label} label={it.label} icon={it.icon} onPress={() => press(it)} />)}
-      </View>
-    </Sheet>
+      </StripTiles>
+    </ToolStrip>
   );
 }
