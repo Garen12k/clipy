@@ -1,14 +1,12 @@
 import { useState } from "react";
-import { View } from "react-native";
 import { ANIM_COMBO, ANIM_IN } from "@/src/editor/effects";
 import { setAnimationForAllClips, setClipAnimation } from "@/src/editor/model/ops";
 import { ANIM_COMBO_IDS, ANIM_IN_IDS, type AnimComboId, type AnimInId } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useIsLayer, useItemClip } from "@/src/editor/useItem";
-import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
-import { Sheet } from "@/src/ui/Sheet";
+import { StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 import { AnimationLength, AnimationTiles, edgeDuration } from "./AnimationTiles";
 
 type Tab = "in" | "out" | "combo";
@@ -36,21 +34,18 @@ export function ClipAnimationSheet({ clipId, visible, onClose }: { clipId: strin
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Animation"
+    <ToolStrip visible={visible} onClose={onClose} title="Animation"
       // "Apply to all" writes the main clips: it is not offered for a layer.
       action={layer ? undefined : { label: "Apply to all clips", onPress: () => { haptic("light"); apply((p) => setAnimationForAllClips(p, clip.animation)); } }}>
-      <View style={{ flexDirection: "row", gap: theme.space.sm }}>
-        {TABS.map((t) => <Chip key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}
-      </View>
-      {tab === "combo" ? (
-        <AnimationTiles ids={ANIM_COMBO_IDS} registry={ANIM_COMBO} selected={anim.combo} onPick={pickCombo} />
-      ) : (
-        <>
-          <AnimationTiles ids={ANIM_IN_IDS} registry={ANIM_IN} selected={edge?.id ?? null} onPick={(id) => pickEdge(tab, id)} />
-          <AnimationLength edge={edge} onStart={beginTransaction}
-            onChange={(v) => { if (edge) applyTransient((p) => setClipAnimation(p, clip.id, { [tab]: { id: edge.id, duration: v } })); }} />
-        </>
+      <StripTiles lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
+        {tab === "combo"
+          ? <AnimationTiles ids={ANIM_COMBO_IDS} registry={ANIM_COMBO} selected={anim.combo} onPick={pickCombo} />
+          : <AnimationTiles ids={ANIM_IN_IDS} registry={ANIM_IN} selected={edge?.id ?? null} onPick={(id) => pickEdge(tab, id)} />}
+      </StripTiles>
+      {tab === "combo" ? null : (
+        <AnimationLength edge={edge} onStart={beginTransaction}
+          onChange={(v) => { if (edge) applyTransient((p) => setClipAnimation(p, clip.id, { [tab]: { id: edge.id, duration: v } })); }} />
       )}
-    </Sheet>
+    </ToolStrip>
   );
 }
