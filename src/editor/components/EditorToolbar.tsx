@@ -14,6 +14,7 @@ import { contextFor, selectionKey, type Section, type SelectionState, type Toolb
 import { closeStrip, openStrip, rekeyStrip, useStripCloser, useToolStrip } from "@/src/editor/toolStrip";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
+import { EnterView } from "@/src/ui/Enter";
 import { haptic } from "@/src/ui/haptics";
 import { IconButton } from "@/src/ui/IconButton";
 import { useKeyboard } from "@/src/ui/keyboard";
@@ -296,10 +297,14 @@ export function EditorToolbar() {
       {toolShown ? null : (
         <View testID="toolbar-row" style={{ height: BAR_HEIGHT - 1, flexDirection: "row", alignItems: "center" }}>
           {bar === "main" ? null : <IconButton name="chevron-back" accessibilityLabel="Back to main tools" onPress={back} />}
-          {/* Keyed by the bar: another bar starts again from the left; the same bar keeps its scroll position through re-renders. */}
-          <ScrollView key={bar} testID="toolbar-scroll" horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
-            {tools.map((id) => <ToolButton key={id} label={TOOL_META[id].label} icon={ACTIONS[id].icon ?? TOOL_META[id].icon} disabled={ACTIONS[id].disabled} active={ACTIONS[id].active} onPress={ACTIONS[id].onPress} />)}
-          </ScrollView>
+          {/* Keyed by the bar: another bar is a new mount — it starts again from the left and its tools fade in from the right; the same
+              bar keeps its scroll position through re-renders and does not replay. The back arrow is outside, so it stays put. */}
+          <EnterView key={bar} axis="x" testID="toolbar-tools" style={{ flex: 1, height: BAR_HEIGHT - 1 }}>
+            <ScrollView key={bar} testID="toolbar-scroll" horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ height: BAR_HEIGHT - 1 }}
+              contentContainerStyle={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }}>
+              {tools.map((id) => <ToolButton key={id} label={TOOL_META[id].label} icon={ACTIONS[id].icon ?? TOOL_META[id].icon} disabled={ACTIONS[id].disabled} active={ACTIONS[id].active} onPress={ACTIONS[id].onPress} />)}
+            </ScrollView>
+          </EnterView>
         </View>
       )}
       <CoverSheet visible={sheet === "cover"} onClose={() => setSheet(null)} />

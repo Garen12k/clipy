@@ -9,7 +9,6 @@ const DIRS = ["src/ui", "src/editor/components"];
  */
 const ALLOW: Record<string, { max: number; why: string }> = {
   "src/ui/NumField.tsx": { max: 2, why: "round 1, task 8" },
-  "src/ui/Toast.tsx": { max: 2, why: "round 1, task 3" },
   "src/editor/components/AudioBar.tsx": { max: 3, why: "round 1, task 6" },
   "src/editor/components/ClipThumbStrip.tsx": { max: 10, why: "round 1, task 6" },
   "src/editor/components/ColorRow.tsx": { max: 2, why: "round 1, task 7" },

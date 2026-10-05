@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { Keyboard, Pressable, ScrollView, TextInput, useWindowDimensions, View } from "react-native";
 import { create } from "zustand";
 import { theme } from "@/src/theme/theme";
+import { EnterView } from "./Enter";
 import { useKeyboard } from "./keyboard";
 import { Body, Title } from "./Text";
 
@@ -67,29 +68,32 @@ export function ToolPanel({ visible, onClose, title, size = "regular", action, l
   const content = typeof children === "function" ? children(bodyH) : children;
   return (
     <View testID="tool-panel" style={{ height, backgroundColor: theme.colors.surface }}>
-      <View style={{ height: PANEL.header, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.lg }}>
-        <Title size={16} accessibilityRole="header">{title}</Title>
-        <View style={{ flex: 1, height: PANEL.header }} />
-        {action ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={ACTION_SLOP}>
-            <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 12 }}>{action.label}</Body>
+      {/* Only the content moves: the panel's own box is in place, opaque, from the first frame. The keyboard changing the height re-renders it and replays nothing. */}
+      <EnterView testID="tool-panel-content" style={{ height }}>
+        <View style={{ height: PANEL.header, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.lg }}>
+          <Title size={16} accessibilityRole="header">{title}</Title>
+          <View style={{ flex: 1, height: PANEL.header }} />
+          {action ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={ACTION_SLOP}>
+              <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 12 }}>{action.label}</Body>
+            </Pressable>
+          ) : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={onClose} hitSlop={8}
+            style={{ width: DONE_SIZE, height: DONE_SIZE, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.accent }}>
+            <Ionicons name="checkmark" size={20} color={theme.colors.onAccent} />
           </Pressable>
-        ) : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={onClose} hitSlop={8}
-          style={{ width: DONE_SIZE, height: DONE_SIZE, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.accent }}>
-          <Ionicons name="checkmark" size={20} color={theme.colors.onAccent} />
-        </Pressable>
-      </View>
-      {showLead ? <View testID="tool-panel-lead" style={{ height: PANEL.lead, flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.lg }}>{lead}</View> : null}
-      {pinned && !typing ? <View testID="tool-panel-pinned" style={{ height: pinned.height, alignItems: "center", justifyContent: "center", paddingHorizontal: theme.space.lg }}>{pinned.content}</View> : null}
-      {scroll ? (
-        <ScrollView ref={scrollRef} testID={bodyTestID ?? "tool-panel-body"} style={{ height: bodyH }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
-          contentContainerStyle={{ paddingHorizontal: theme.space.lg, paddingVertical: theme.space.md }}>
-          <View ref={contentRef} collapsable={false} style={{ gap: theme.space.lg }}>{content}</View>
-        </ScrollView>
-      ) : (
-        <View testID={bodyTestID ?? "tool-panel-body"} style={{ height: bodyH, paddingHorizontal: theme.space.lg }}>{content}</View>
-      )}
+        </View>
+        {showLead ? <View testID="tool-panel-lead" style={{ height: PANEL.lead, flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.lg }}>{lead}</View> : null}
+        {pinned && !typing ? <View testID="tool-panel-pinned" style={{ height: pinned.height, alignItems: "center", justifyContent: "center", paddingHorizontal: theme.space.lg }}>{pinned.content}</View> : null}
+        {scroll ? (
+          <ScrollView ref={scrollRef} testID={bodyTestID ?? "tool-panel-body"} style={{ height: bodyH }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
+            contentContainerStyle={{ paddingHorizontal: theme.space.lg, paddingVertical: theme.space.md }}>
+            <View ref={contentRef} collapsable={false} style={{ gap: theme.space.lg }}>{content}</View>
+          </ScrollView>
+        ) : (
+          <View testID={bodyTestID ?? "tool-panel-body"} style={{ height: bodyH, paddingHorizontal: theme.space.lg }}>{content}</View>
+        )}
+      </EnterView>
     </View>
   );
 }

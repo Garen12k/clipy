@@ -3,6 +3,7 @@ import { useLayoutEffect } from "react";
 import { Pressable, ScrollView, View, type TextProps } from "react-native";
 import { create } from "zustand";
 import { theme } from "@/src/theme/theme";
+import { EnterView } from "./Enter";
 import { Body, Title } from "./Text";
 
 /** Heights in points. `height` = the bottom area while a strip shows (1 hairline + header + tiles + slider + 1 spare); `lift` = how far it rises over the timeline. */
@@ -37,20 +38,23 @@ export function ToolStrip({ visible, onClose, title, note, action, children }: P
   if (!visible) return null;
   return (
     <View testID="tool-strip" style={{ height: STRIP.header + STRIP.tiles + STRIP.slider, backgroundColor: theme.colors.surface }}>
-      <View style={{ height: STRIP.header, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.lg }}>
-        <Title size={15} accessibilityRole="header">{title}</Title>
-        <View style={{ flex: 1, height: STRIP.header, justifyContent: "center" }}>{note}</View>
-        {action ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={ACTION_SLOP}>
-            <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 12 }}>{action.label}</Body>
+      {/* Only the content moves: the strip's own box is in place, opaque, from the first frame. */}
+      <EnterView testID="tool-strip-content" style={{ height: STRIP.header + STRIP.tiles + STRIP.slider }}>
+        <View style={{ height: STRIP.header, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.lg }}>
+          <Title size={15} accessibilityRole="header">{title}</Title>
+          <View style={{ flex: 1, height: STRIP.header, justifyContent: "center" }}>{note}</View>
+          {action ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={ACTION_SLOP}>
+              <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 12 }}>{action.label}</Body>
+            </Pressable>
+          ) : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={onClose} hitSlop={8}
+            style={{ width: DONE_SIZE, height: DONE_SIZE, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.accent }}>
+            <Ionicons name="checkmark" size={20} color={theme.colors.onAccent} />
           </Pressable>
-        ) : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="Done" onPress={onClose} hitSlop={8}
-          style={{ width: DONE_SIZE, height: DONE_SIZE, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.accent }}>
-          <Ionicons name="checkmark" size={20} color={theme.colors.onAccent} />
-        </Pressable>
-      </View>
-      <View style={{ height: STRIP.tiles + STRIP.slider, justifyContent: "center" }}>{children}</View>
+        </View>
+        <View style={{ height: STRIP.tiles + STRIP.slider, justifyContent: "center" }}>{children}</View>
+      </EnterView>
     </View>
   );
 }
