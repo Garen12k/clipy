@@ -309,6 +309,22 @@ describe("text and sticker bars", () => {
     }
   });
 
+  test("closing the text panel keeps a caption left empty (as leaving the editor does): only a text is removed", async () => {
+    for (const leave of [() => closeStrip(), () => st().selectOverlay("s1")]) {
+      withOverlays();
+      const view = await renderBar();
+      await act(() => { st().selectOverlay("c1"); });
+      await fireEvent.press(btn("Edit"));
+      await act(() => { st().apply((p) => ops.updateOverlay(p, "c1", { text: "  " })); });
+      const past = st().past.length;
+      await act(() => { leave(); });
+      expect(st().project!.overlays.map((o) => o.id)).toEqual(["t1", "s1", "c1"]);
+      expect(st().past).toHaveLength(past);
+      expect(useToolStrip.getState().open).toBeNull();
+      await view.unmount();
+    }
+  });
+
   test("the text panel's Duplicate is off while the text is empty: no copy, no undo step, the panel stays on its text", async () => {
     withOverlays();
     await renderBar();

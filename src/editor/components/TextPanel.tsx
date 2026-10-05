@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { Pressable, Switch, TextInput, View } from "react-native";
 import { overlayBaseAt } from "@/src/editor/model/motion";
 import { applyTextTemplate, deleteOverlay, duplicateOverlay, editOverlayAt, setTextStyle, updateOverlay, updateOverlayShared } from "@/src/editor/model/ops";
-import { isTextOverlay, OVERLAY_LIMITS, type Align, type TextStyle } from "@/src/editor/model/types";
+import { isTextOverlay, OVERLAY_LIMITS, type Align, type Project, type TextStyle } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
@@ -25,19 +25,25 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
   // The playhead, followed only while the overlay has keyframes (else nothing shown here depends on it).
   const playhead = useEditorStore((s) => ((s.project?.overlays.find((o) => o.id === overlayId)?.keyframes.length ?? 0) > 0 ? s.playhead : 0));
   const [fine, setFine] = useState(false);
-  // How long the history was right after this typing's undo step began (see `type`).
-  const typedFrom = useRef(0);
+  // The typing undo step that is open: the overlay it belongs to, and the project as its last keystroke left it (see `type`).
+  const typing = useRef<{ id: string; left: Project | null } | null>(null);
   if (!found || !isTextOverlay(found)) return null;
   const overlay = found;
   const id = overlay.id;
   const patch = (p: Parameters<typeof updateOverlay>[2]) => apply((x) => updateOverlay(x, id, p));
   const patchShared = (p: Parameters<typeof updateOverlayShared>[2]) => apply((x) => updateOverlayShared(x, id, p));
-  // Typing is one undo step per focus. Undo is reachable while the panel is open: if the history got shorter since that step began,
-  // the step is gone, and the next keystroke begins a new one instead of being written into the step before it.
-  const beginTyping = () => { beginTransaction(); typedFrom.current = useEditorStore.getState().past.length; };
+  // An unbroken run of keystrokes is one undo step, begun by its FIRST keystroke (focusing the field makes none). The panel is
+  // inline: Undo / Redo, the other controls and the preview stay reachable while the field keeps focus. So a keystroke continues
+  // the open step only on the same overlay and while the project is still the object the last keystroke left; after anything else
+  // (a colour, a template, Undo, Redo, another text, an edit from elsewhere) it begins a new step, which clears Redo as any edit does.
+  // Redo being armed is checked too: undoing the edit made right after the typing brings that very object back.
   const type = (t: string) => {
-    if (useEditorStore.getState().past.length < typedFrom.current) beginTyping();
+    if (t === overlay.text) return;
+    const open = typing.current;
+    const { project, future } = useEditorStore.getState();
+    if (!open || open.id !== id || open.left !== project || future.length > 0) beginTransaction();
     applyTransient((x) => updateOverlay(x, id, { text: t }));
+    typing.current = { id, left: useEditorStore.getState().project };
   };
   // Placement (x / y / scale / rotation) is read and written at the playhead: the pin there when the overlay has keyframes — its own
   // values are hidden then and must never be edited silently — otherwise its own values (`editOverlayAt` is the plain update then).
@@ -55,7 +61,7 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
 
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Text" bodyTestID="text-panel-scroll">
-      <TextInput accessibilityLabel="Overlay text" multiline autoFocus value={overlay.text} onFocus={beginTyping} onChangeText={type}
+      <TextInput accessibilityLabel="Overlay text" multiline autoFocus value={overlay.text} onChangeText={type}
         style={{ ...field, minHeight: 64, textAlignVertical: "top" }} placeholder="Your text" placeholderTextColor={theme.colors.textMuted} />
       {/* Templates are for texts only (`applyTextTemplate` refuses captions, which have their own presets). */}
       {overlay.kind === "text" && <TemplateStrip tiles={TEXT_TEMPLATE_TILES} onPick={(templateId) => apply((x) => applyTextTemplate(x, id, templateId))} />}

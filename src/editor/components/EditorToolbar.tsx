@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
-import { addTextOverlay, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, duplicateOverlay, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
+import { addTextOverlay, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, dropEmptyText, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, duplicateOverlay, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
 import { clipAt, findItem, itemOffsetAt } from "@/src/editor/model/timeline";
-import { isTextOverlay, makeOverlay } from "@/src/editor/model/types";
+import { makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useClipMedia } from "@/src/editor/useClipMedia";
 import { useItemClip } from "@/src/editor/useItem";
@@ -94,15 +94,15 @@ export function EditorToolbar() {
   const { height: windowH } = useWindowDimensions();
   const toolShown = stripShown || panelSize !== null;
   const keyboard = useKeyboard((s) => s.height);
-  // The text panel closing — by ✓, by the closer or by Export — removes a text left empty (as closing the sheet did).
+  // The text panel closing — by ✓, by the closer or by Export — removes a text left empty (as closing the sheet did). A text only,
+  // never a caption: the same rule as leaving the editor (`dropEmptyText`).
   const textOpenFor = strip?.id === "text" ? selectedOverlayId : null;
   const lastText = useRef<string | null>(null);
   useEffect(() => {
     const was = lastText.current;
     lastText.current = textOpenFor;
     if (!was || was === textOpenFor) return;
-    const overlay = useEditorStore.getState().project?.overlays.find((o) => o.id === was);
-    if (overlay && isTextOverlay(overlay) && overlay.text.trim().length === 0) apply((x) => deleteOverlay(x, was));
+    apply((x) => dropEmptyText(x, was));
   }, [textOpenFor, apply]);
   const reversed = !!useItemClip(selectedId)?.reversed;
   const ducking = useEditorStore((s) => !!s.project?.ducking);

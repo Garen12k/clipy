@@ -10,7 +10,7 @@ import { Body, Title } from "./Text";
 export const PANEL = { header: 44, lead: 44, compact: 240, regularShare: 0.46, regularMin: 300, regularMax: 430, typingShare: 0.22, typingMin: 148, typingMax: 200 } as const;
 export type PanelSize = "regular" | "compact";
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-/** The bottom area's height while a panel shows, without the bottom padding: 1 hairline + header + lead + body. `typing` = the keyboard is up. */
+/** The bottom area's height while a panel shows, without the bottom padding: 1 hairline + header + lead + pinned + body. `typing` = the keyboard is up. */
 export function panelHeight(size: PanelSize, windowHeight: number, typing = false): number {
   if (typing) return clamp(Math.round(windowHeight * PANEL.typingShare), PANEL.typingMin, PANEL.typingMax);
   if (size === "compact") return PANEL.compact;
@@ -24,15 +24,18 @@ const DONE_SIZE = 32;
 const ACTION_SLOP = { top: 16, bottom: 16, left: 12, right: 12 } as const;
 
 type Props = { visible: boolean; onClose: () => void; title: string; size?: PanelSize; action?: { label: string; onPress: () => void };
-  lead?: React.ReactNode; scroll?: boolean; bodyTestID?: string; children: React.ReactNode | ((bodyHeight: number) => React.ReactNode) };
+  lead?: React.ReactNode; pinned?: { height: number; content: React.ReactNode }; scroll?: boolean; bodyTestID?: string; children: React.ReactNode | ((bodyHeight: number) => React.ReactNode) };
 
 /**
  * A tall inline tool panel that takes the place of the timeline and the toolbar — NOT a Modal: no scrim, the preview above it stays
  * usable. Every part has an explicit height (never `flex: 1` for height); the body scrolls vertically when its content is taller.
  * The bar that hosts it owns the top hairline and the bottom padding (safe area or keyboard).
- * While the keyboard is up the panel takes its typing height and does not render its lead; the host pads the bottom by the keyboard.
+ * `pinned` is fixed content between the header (and the lead) and the body, at its own explicit height, which the body gives up:
+ * it stays in view while the body scrolls.
+ * While the keyboard is up the panel takes its typing height and renders neither its lead nor its pinned content; the host pads the
+ * bottom by the keyboard.
  */
-export function ToolPanel({ visible, onClose, title, size = "regular", action, lead, scroll = true, bodyTestID, children }: Props) {
+export function ToolPanel({ visible, onClose, title, size = "regular", action, lead, pinned, scroll = true, bodyTestID, children }: Props) {
   const { height: windowH } = useWindowDimensions();
   // Counted before paint, so the host hides its bar and the timeline in the same frame the panel appears.
   useLayoutEffect(() => {
@@ -45,7 +48,8 @@ export function ToolPanel({ visible, onClose, title, size = "regular", action, l
   const contentRef = useRef<View>(null);
   const height = panelHeight(size, windowH, typing) - 1;
   const showLead = !!lead && !typing;
-  const bodyH = height - PANEL.header - (showLead ? PANEL.lead : 0);
+  const pinnedH = pinned && !typing ? pinned.height : 0;
+  const bodyH = height - PANEL.header - (showLead ? PANEL.lead : 0) - pinnedH;
   // The keyboard came up (the panel is now short): bring the focused field to the top of the body. An effect, never a scroll callback.
   useEffect(() => {
     if (!visible || !typing || !scroll) return;
@@ -77,6 +81,7 @@ export function ToolPanel({ visible, onClose, title, size = "regular", action, l
         </Pressable>
       </View>
       {showLead ? <View testID="tool-panel-lead" style={{ height: PANEL.lead, flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.lg }}>{lead}</View> : null}
+      {pinned && !typing ? <View testID="tool-panel-pinned" style={{ height: pinned.height, alignItems: "center", justifyContent: "center", paddingHorizontal: theme.space.lg }}>{pinned.content}</View> : null}
       {scroll ? (
         <ScrollView ref={scrollRef} testID={bodyTestID ?? "tool-panel-body"} style={{ height: bodyH }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
           contentContainerStyle={{ paddingHorizontal: theme.space.lg, paddingVertical: theme.space.md }}>

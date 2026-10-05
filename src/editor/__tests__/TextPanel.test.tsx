@@ -150,3 +150,92 @@ test("a caption's fine-tune fields still write its placement", async () => {
   await fireEvent(screen.getByLabelText("Y %"), "blur");
   expect(ov().y).toBe(0.8);
 });
+
+describe("typing undo steps begin on the first keystroke", () => {
+  const st = () => useEditorStore.getState();
+  const textOf = (id: string) => { const o = st().project!.overlays.find((x) => x.id === id)!; return isTextOverlay(o) ? o.text : ""; };
+  const two = () => st().setProject({ ...p, overlays: [makeOverlay({ id: "o1", text: "Hi", start: 1, end: 4 }), makeOverlay({ id: "o2", text: "Yo", start: 1, end: 4 })] });
+
+  test("an unbroken run of keystrokes is one history entry", async () => {
+    await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+    const input = screen.getByLabelText("Overlay text");
+    await fireEvent.changeText(input, "ab");
+    await fireEvent.changeText(input, "abc");
+    expect(st().past).toHaveLength(1);
+    expect(textOf("o1")).toBe("abc");
+  });
+
+  test("focusing the field without typing leaves no history entry; nor does a keystroke that changes nothing", async () => {
+    await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+    const input = screen.getByLabelText("Overlay text");
+    await fireEvent(input, "focus");
+    expect(st().past).toHaveLength(0);
+    await fireEvent.changeText(input, "Hi");
+    expect(st().past).toHaveLength(0);
+    expect(st().dirty).toBe(false);
+  });
+
+  test("the panel re-targeted to another text while the field keeps focus: its typing is its own step", async () => {
+    two();
+    const view = await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+    await fireEvent.changeText(screen.getByLabelText("Overlay text"), "Hi there");
+    await view.rerender(<TextPanel overlayId="o2" visible onClose={() => {}} />);
+    await fireEvent.changeText(screen.getByLabelText("Overlay text"), "Yo y");
+    await fireEvent.changeText(screen.getByLabelText("Overlay text"), "Yo you");
+    expect(st().past).toHaveLength(2);
+    await act(() => { st().undo(); });
+    expect([textOf("o1"), textOf("o2")]).toEqual(["Hi there", "Yo"]);
+    await act(() => { st().undo(); });
+    expect([textOf("o1"), textOf("o2")]).toEqual(["Hi", "Yo"]);
+  });
+
+  test("type, a colour, type: three entries in order", async () => {
+    await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+    const input = screen.getByLabelText("Overlay text");
+    const white = ov().color;
+    await fireEvent.changeText(input, "Hi a");
+    await fireEvent.changeText(input, "Hi ab");
+    await fireEvent.press(screen.getByLabelText("Color #F5C542"));
+    await fireEvent.changeText(input, "Hi abc");
+    await fireEvent.changeText(input, "Hi abcd");
+    expect(st().past).toHaveLength(3);
+    await act(() => { st().undo(); });
+    expect(ov()).toMatchObject({ text: "Hi ab", color: "#F5C542" });
+    await act(() => { st().undo(); });
+    expect(ov()).toMatchObject({ text: "Hi ab", color: white });
+    await act(() => { st().undo(); });
+    expect(ov()).toMatchObject({ text: "Hi", color: white });
+    expect(st().past).toHaveLength(0);
+  });
+
+  test("type, Undo, type: Redo is empty and the history is coherent", async () => {
+    await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+    const input = screen.getByLabelText("Overlay text");
+    await fireEvent.changeText(input, "Hi a");
+    await fireEvent.press(screen.getByLabelText("Color #F5C542"));
+    await act(() => { st().undo(); });
+    expect(st().future).toHaveLength(1);
+    await fireEvent.changeText(input, "Hi ab");
+    await fireEvent.changeText(input, "Hi abc");
+    expect(st().future).toHaveLength(0);
+    expect(st().past).toHaveLength(2);
+    await act(() => { st().redo(); });
+    expect(ov().text).toBe("Hi abc");
+    await act(() => { st().undo(); });
+    expect(ov().text).toBe("Hi a");
+    await act(() => { st().undo(); });
+    expect(ov().text).toBe("Hi");
+  });
+
+  test("type, Undo, a colour, type: the typing does not join the colour step", async () => {
+    await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+    const input = screen.getByLabelText("Overlay text");
+    await fireEvent.changeText(input, "Hi a");
+    await act(() => { st().undo(); });
+    await fireEvent.press(screen.getByLabelText("Color #F5C542"));
+    await fireEvent.changeText(input, "Hi b");
+    expect(st().past).toHaveLength(2);
+    await act(() => { st().undo(); });
+    expect(ov()).toMatchObject({ text: "Hi", color: "#F5C542" });
+  });
+});

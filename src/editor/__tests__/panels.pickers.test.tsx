@@ -64,7 +64,7 @@ describe("Caption style", () => {
   test("is a regular panel whose body is the one vertical scroll with its test id", async () => {
     await render(<CaptionStyleSheet visible onClose={() => {}} />);
     expect(screen.getByRole("header", { name: "Caption style" })).toBeTruthy();
-    expect(screen.getByTestId("caption-style-scroll")).toHaveStyle({ height: panelHeight("regular", H) - 1 - PANEL.header });
+    expect(screen.getByTestId("caption-style-scroll")).toHaveStyle({ height: panelHeight("regular", H) - 1 - PANEL.header - 96 });   // less the pinned sample
     expect(screen.queryByLabelText("Close sheet")).toBeNull();
   });
 });

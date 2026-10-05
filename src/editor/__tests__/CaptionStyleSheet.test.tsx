@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
-import { StyleSheet } from "react-native";
+import { Dimensions, StyleSheet } from "react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, onSlidingStart, onValueChange, onSlidingComplete }: { testID?: string; onSlidingStart?: () => void; onValueChange?: (v: number) => void; onSlidingComplete?: (v: number) => void }) => <View testID={testID} onTouchStart={() => onSlidingStart?.()} onTouchMove={(v: number) => onValueChange?.(v)} onTouchEnd={(v: number) => onSlidingComplete?.(v)} />; });
 import { CAPTION_STYLE } from "@/src/editor/effects";
@@ -7,6 +7,8 @@ import { FONTS } from "@/src/editor/fonts";
 import { DEFAULT_SHADOW, makeClip, makeOverlay, makeProject, type TextOverlay } from "@/src/editor/model/types";
 import { CAPTION_PRESETS, DEFAULT_HIGHLIGHT_COLOR } from "@/src/editor/textTemplates";
 import { useEditorStore } from "@/src/editor/store";
+import { useKeyboard } from "@/src/ui/keyboard";
+import { PANEL, panelHeight } from "@/src/ui/ToolPanel";
 import { CaptionStyleSheet } from "../components/CaptionStyleSheet";
 
 const cap = (id: string, start: number) => makeOverlay({ id, kind: "caption", ...CAPTION_STYLE, start, end: start + 1 });
@@ -181,6 +183,21 @@ describe("presets, sample, highlight and the style section", () => {
     expect(screen.getByText("This is how captions look")).toHaveStyle({ fontSize: 0.045 * 260 });
     await act(() => { useEditorStore.getState().setProject(makeProject({ aspectRatio: "9:16", clips: [makeClip({ id: "a", sourceDuration: 5 })], overlays: [cap("c1", 0)] })); });
     expect(screen.getByText("This is how captions look")).toHaveStyle({ fontSize: 25.6 });   // 0.045 × (320 × 16 / 9), as before
+  });
+
+  test("the sample is pinned above the scrolling body at 96 pt, so it stays in view; not while typing", async () => {
+    await show();
+    const pinned = screen.getByTestId("tool-panel-pinned");
+    expect(pinned).toHaveStyle({ height: 96 });
+    expect(within(pinned).getByTestId("caption-sample")).toHaveStyle({ height: 96 });
+    expect(within(screen.getByTestId("caption-style-scroll")).queryByTestId("caption-sample")).toBeNull();
+    expect(screen.getByTestId("caption-style-scroll")).toHaveStyle({ height: panelHeight("regular", Dimensions.get("window").height) - 1 - PANEL.header - 96 });
+    // The small phone (667 pt) keeps 166 pt of scrolling body; an 852-pt phone 251.
+    expect([667, 852].map((h) => panelHeight("regular", h) - 1 - PANEL.header - 96)).toEqual([166, 251]);
+    await act(() => { useKeyboard.setState({ height: 336 }); });
+    expect(screen.queryByTestId("caption-sample")).toBeNull();
+    await act(() => { useKeyboard.setState({ height: 0 }); });
+    expect(screen.getByTestId("caption-sample")).toBeTruthy();
   });
 
   test("one vertical scroll without scroll handlers", async () => {

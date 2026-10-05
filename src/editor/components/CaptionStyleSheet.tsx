@@ -24,7 +24,8 @@ const SAMPLE_WORDS: CaptionWord[] = SAMPLE_TEXT.split(" ").map((text, i, all) =>
 /** Inside the second word, so that one carries the highlight. */
 const SAMPLE_TIME = (SAMPLE_WORDS[1].start + SAMPLE_WORDS[1].end) / 2;
 const SAMPLE_WIDTH = 320;
-const SAMPLE_HEIGHT = 180;
+/** Pinned above the panel's scrolling body, so every control shows its effect: short enough to leave the body 166 pt on a 667-pt phone (251 on 852). */
+const SAMPLE_HEIGHT = 96;
 /** The frame the sample is a window onto is never shorter than this, so the caption (sized against the frame's height) stays readable in a wide project. */
 const SAMPLE_MIN_FRAME_HEIGHT = 260;
 const NO_CAPTIONS_NOTE = "Preview only — captions need the full app build";
@@ -60,13 +61,12 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
     style: textStyle, words: SAMPLE_WORDS, highlightColor });
 
   return (
-    <ToolPanel visible={visible} onClose={onClose} title="Caption style" bodyTestID="caption-style-scroll">
+    <ToolPanel visible={visible} onClose={onClose} title="Caption style" bodyTestID="caption-style-scroll" pinned={{ height: SAMPLE_HEIGHT, content: (
+      <TextSample testID="caption-sample" overlay={sample} time={SAMPLE_TIME} width={SAMPLE_WIDTH} height={SAMPLE_HEIGHT}
+        frameHeight={Math.max(SAMPLE_MIN_FRAME_HEIGHT, SAMPLE_WIDTH / aspectRatioValue(ratio))} backgroundColor={theme.colors.sea} />
+    ) }}>
         <TemplateStrip tiles={CAPTION_PRESET_TILES} onPick={(presetId) => write((x) => applyCaptionPreset(x, presetId), apply)} />
         {!caption && <Body muted>{NO_CAPTIONS_NOTE}</Body>}
-        <View style={{ alignItems: "center" }}>
-          <TextSample testID="caption-sample" overlay={sample} time={SAMPLE_TIME} width={SAMPLE_WIDTH} height={SAMPLE_HEIGHT}
-            frameHeight={Math.max(SAMPLE_MIN_FRAME_HEIGHT, SAMPLE_WIDTH / aspectRatioValue(ratio))} backgroundColor={theme.colors.sea} />
-        </View>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Body>Highlight spoken word</Body>
           <Switch accessibilityLabel="Highlight spoken word" value={highlightColor !== null}

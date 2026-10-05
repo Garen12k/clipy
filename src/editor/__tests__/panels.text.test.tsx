@@ -35,7 +35,7 @@ test("the text field comes first in the body, so it is in view at the typing hei
   expect(screen.getByLabelText("Overlay text")).toBeTruthy();
 });
 
-test("typing is one undo step per focus; typing after an Undo is a new step", async () => {
+test("an unbroken run of typing is one undo step; typing after an Undo is a new step", async () => {
   await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
   const field = screen.getByLabelText("Overlay text");
   await fireEvent(field, "focus");

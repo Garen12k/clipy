@@ -29,7 +29,10 @@ export function TrimSheet({ clipId, visible, onClose }: { clipId: string | null;
   const layer = useIsLayer(clipId);
   const apply = useEditorStore((s) => s.apply);
   const [start, setStart] = useState("0"); const [end, setEnd] = useState("0");
-  useEffect(() => { if (clip) { setStart(clip.trimStart.toFixed(1)); setEnd(clip.trimEnd.toFixed(1)); } }, [clip?.id, visible]);
+  // The fields show the clip's range, and follow it: the timeline and Undo are live under the strip, so a handle drag or an Undo
+  // re-seeds both (else Apply would put the old numbers back). Typing changes nothing in the store, and this strip's own Apply
+  // closes it — so what is being typed is only ever replaced by a change the user made elsewhere.
+  useEffect(() => { if (clip) { setStart(clip.trimStart.toFixed(1)); setEnd(clip.trimEnd.toFixed(1)); } }, [clip?.id, clip?.trimStart, clip?.trimEnd, visible]);
   if (!clip) return null;
 
   const submit = (from: number, to: number) => {

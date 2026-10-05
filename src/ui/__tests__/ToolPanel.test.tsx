@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { Dimensions, Keyboard, Text, TextInput } from "react-native";
 import { useKeyboard } from "../keyboard";
 import { PANEL, panelHeight, ToolPanel, usePanelPresence } from "../ToolPanel";
@@ -110,4 +110,25 @@ test("hiding the panel dismisses the keyboard", async () => {
   await view.rerender(<ToolPanel visible={false} onClose={() => {}} title="Text"><Text>body</Text></ToolPanel>);
   expect(dismiss).toHaveBeenCalledTimes(1);
   dismiss.mockRestore();
+});
+
+test("pinned content sits between the header and the scrolling body at its own height, which the body gives up", async () => {
+  await render(<ToolPanel visible onClose={() => {}} title="Caption style" pinned={{ height: 96, content: <Text>sample</Text> }}><Text>body</Text></ToolPanel>);
+  const height = panelHeight("regular", H) - 1;
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ height });
+  expect(screen.getByTestId("tool-panel-pinned")).toHaveStyle({ height: 96 });
+  expect(screen.getByText("sample")).toBeTruthy();
+  const body = screen.getByTestId("tool-panel-body");
+  expect(body).toHaveStyle({ height: height - PANEL.header - 96 });
+  expect(within(body).queryByText("sample")).toBeNull();               // not in the scroll: it stays in view
+});
+
+test("with the keyboard up the pinned content is not rendered (as the lead is not) and the body has the whole typing height", async () => {
+  await render(<ToolPanel visible onClose={() => {}} title="Caption style" lead={<Text>tabs</Text>} pinned={{ height: 96, content: <Text>sample</Text> }}><Text>body</Text></ToolPanel>);
+  const height = panelHeight("regular", H) - 1;
+  expect(screen.getByTestId("tool-panel-body")).toHaveStyle({ height: height - PANEL.header - PANEL.lead - 96 });
+  await act(() => { useKeyboard.setState({ height: 336 }); });
+  expect(screen.queryByTestId("tool-panel-pinned")).toBeNull();
+  expect(screen.queryByText("sample")).toBeNull();
+  expect(screen.getByTestId("tool-panel-body")).toHaveStyle({ height: panelHeight("regular", H, true) - 1 - PANEL.header });
 });
