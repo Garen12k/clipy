@@ -1,7 +1,7 @@
 # Editing UI, round 2 — tall panels: design
 
 **Date:** 2026-10-05
-**Status:** Approved by the user 2026-10-05
+**Status:** Implemented 2026-10-05 (Swift untouched; on-device confirmation by the user pending)
 **Builds on:** round 1 (`docs/superpowers/specs/2026-10-05-editing-ui-r1-toolbar-strips-design.md`): the contextual bar (`src/editor/toolbarContext.ts`), tool strips (`src/ui/ToolStrip.tsx`), the open-tool store (`src/editor/toolStrip.ts`). No model, schema or Swift change.
 
 ## 1. What the user gets
@@ -183,6 +183,36 @@ Behaviour inside each tool is unchanged unless listed: the same ops, the same on
 - `AddAudioSheet.test.tsx`: three `getByLabelText("Close sheet")` become the Done button.
 - `CaptionsSheet.test.tsx`: one `getAllByLabelText("Close sheet")[0]` becomes the Done button.
 - Everything else (roles, labels, texts, test ids including `text-panel-scroll` and `caption-style-scroll`) is kept, so the other suites pass unedited.
+
+## 3a. As built
+
+Checked against the code at the end of the round. Everything in §2 and §3 was built as written unless it is listed here.
+
+**Sheets, strips, panels**
+
+- Panels: Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style, Beats. Strips: Effects and Trim, as well as round 1's. Sheets left: `CoverSheet` (editor; its own frame is what is edited and captured, closing without Done discards), `ProjectActionsSheet` (home), `PostOptionsSheet` (post). `CropScreen` stays a full-screen Modal. `KeyboardAvoidingView` is used only in `Sheet.tsx` and `PostScreenBody.tsx`. Pinned by a test in `CoverSheet.test.tsx`.
+- No open / close animation.
+- The timeline slot is collapsed (height 0, still mounted) while a panel is open, and, with the keyboard up, also for a strip (Trim) except while the multi-select bar shows (the bar is then lifted over the timeline, which stays).
+
+**Changes to the spec while building**
+
+1. **Pinned caption sample.** `ToolPanel` got one optional prop, `pinned={{ height, content }}`: a fixed-height row between the header (and lead) and the body, not rendered at typing height. Caption style's sample sits there at 96 pt, so it stays in view while the body scrolls (body 166 pt on a 667-pt phone, 251 pt on an 852-pt phone).
+2. **Header action hit target.** The header action's `hitSlop` is 16 / 16 / 12 / 12 in both `ToolPanel` and `ToolStrip`. A strip's header row is 36 pt, so its real vertical target on iOS is probably nearer 36 than 44 (a phone check).
+3. **Keyboard.** `useKeyboard` also listens to `keyboardDidHide` (sets 0). The bottom padding while a tool shows is `max(keyboard height, max(bottom inset, 8))`, never less than the safe area. Typing height is 148 pt on a 667-pt phone, so the picture left is about 130 pt there.
+4. **Emoji recents are hidden while the keyboard is up**, so a small phone still shows result rows while searching; they return when the keyboard goes down. On a 667-pt phone the grid with the keyboard up is about one and a half rows.
+5. **The two in-body Done buttons** (Text panel, the Captions "done" card) are replaced by the header ✓.
+6. **Empty texts.** Duplicate is disabled while the text is empty (Delete stays). An empty text being edited is removed on any close of the Text panel (✓, selecting something else, Export) and when the editor is left (`dropEmptyText` in `model/ops.ts`, called from the `useLoadProject` unmount path before the save). Captions are never removed, and an empty text that is not open in the panel is left alone.
+7. **Typing undo steps.** A keystroke begins an undo step when there is none open for this text, the project is no longer the one the last keystroke left, or Redo is armed; otherwise it is written into the open step. So the first keystroke after focus (or after Undo, a colour change, another text) starts its own step; focusing, or a keystroke that changes nothing, adds none. This replaces §3.2's "starts on focus" wording (decision 8).
+8. **Recording.** While a voice-over records, and until it is saved, the Add audio panel stays open and other tools and Export do not open (`openStrip` is a no-op, the closer waits, `closeForExport` returns false and pauses playback, which stops and saves). To make that true `useVoiceRecorder` clears the store's `recording` flag only after the save ends (and at once on unmount); this is the one change to that file. The preview stays muted during "Saving...".
+9. **Auditioning a sound** in Add audio does not pause the project's playback, and playback does not stop it: they mix, as they did under the sheet.
+10. **Trim's fields follow the clip**: they are re-seeded whenever the clip's `trimStart` / `trimEnd` change in the store (handle drag, Undo / Redo); typed text is replaced only by such an outside change.
+11. **Fonts strip** in the text panel uses `keyboardShouldPersistTaps="handled"` so a chip takes one tap with the keyboard up.
+
+**Files outside the plan that changed:** `src/editor/model/ops.ts` (`dropEmptyText`), `src/editor/useLoadProject.ts`, `src/editor/useVoiceRecorder.ts`. `store.ts`, `Timeline.tsx`, `timelineScroll.ts`, `PreviewPlayer.tsx`, `Sheet.tsx`, `CoverSheet.tsx`, `modules/` and `package.json` are untouched.
+
+**Test expectations changed beyond §3.3:** `keyboard.test.tsx` (the third listener, three removes), `panels.pickers.test.tsx` (Caption style body height minus the pinned 96 pt), `toolStrip.test.tsx` (a counting `newId` mock so new items get ids under Jest), and a title in `panels.text.test.tsx`.
+
+**Not checked by any test (on the device checklist in the plan):** how the preview looks and behaves while it resizes (no black frame, no restart, playback continues); the timeline coming back at the same scroll and zoom; real keyboard heights (hardware keyboard, emoji keyboard, suggestion bar); the 667-pt phone while typing; hit targets; voice-over recording and the microphone prompt; the document picker over an inline panel.
 
 ## 4. Screens
 
