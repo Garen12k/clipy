@@ -21,6 +21,7 @@ import { useToast } from "@/src/ui/Toast";
 import { AUDIO_LIMITS, makeAudioTrack, makeClip, makeProject } from "@/src/editor/model/types";
 import { SFX, SFX_IDS } from "@/src/editor/sfx";
 import { useEditorStore } from "@/src/editor/store";
+import { closeStrip, openStrip, useStripCloser, useToolStrip } from "../toolStrip";
 import { AddAudioSheet } from "../components/AddAudioSheet";
 
 const importAudio = storage.importAudio as jest.Mock;
@@ -33,6 +34,7 @@ beforeEach(() => {
   mockRecorder.currentTime = 0; mockRecorder.stop.mockClear(); mockRecorder.record.mockClear();
   importAudio.mockClear(); mockPlayer.play.mockClear(); mockPlayer.pause.mockClear(); mockPlayer.replace.mockClear();
   useToast.getState().clear();
+  closeStrip();
   useEditorStore.getState().reset();
   useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })] }));
 });
@@ -128,7 +130,7 @@ test("the preview stops on a tab change, on close, and survives a released playe
   expect(btn("Play Whoosh")).toBeTruthy();
   await fireEvent.press(btn("Play Whoosh"));
   mockPlayer.pause.mockClear();
-  await fireEvent.press(screen.getByLabelText("Close sheet"));
+  await fireEvent.press(btn("Done"));
   expect(mockPlayer.pause).toHaveBeenCalled();
   expect(onClose).toHaveBeenCalledTimes(1);
   mockPlayer.pause.mockImplementation(() => { throw new Error("released"); });
@@ -347,7 +349,7 @@ test("the preview player is left alone while nothing is previewing", async () =>
   const view = await render(<AddAudioSheet visible onClose={() => {}} />);
   await fireEvent.press(btn("Effects"));
   await fireEvent.press(btn("Music"));
-  await fireEvent.press(screen.getByLabelText("Close sheet"));
+  await fireEvent.press(btn("Done"));
   await view.rerender(<AddAudioSheet visible={false} onClose={() => {}} />);
   await view.unmount();
   expect(mockPlayer.pause).not.toHaveBeenCalled();
@@ -381,7 +383,7 @@ describe("Record tab", () => {
   test("closing the sheet while recording stops and saves, then closes", async () => {
     const onClose = jest.fn();
     await record(onClose, 0);
-    await fireEvent.press(screen.getByLabelText("Close sheet"));
+    await fireEvent.press(btn("Done"));
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(mockRecorder.stop).toHaveBeenCalledTimes(1);
     expect(tracks()).toHaveLength(1);
@@ -407,5 +409,194 @@ describe("Record tab", () => {
     await waitFor(() => expect(useToast.getState().message).toBe("That recording was too short."));
     expect(order).toEqual(["close:null"]);
     expect(tracks()).toEqual([]);
+  });
+});
+
+test("it is a panel: inline, no scrim, the four tabs in the lead", async () => {
+  await render(<AddAudioSheet visible onClose={() => {}} />);
+  expect(screen.getByTestId("tool-panel")).toBeTruthy();
+  expect(screen.getByTestId("tool-panel-lead")).toBeTruthy();
+  expect(screen.queryByLabelText("Close sheet")).toBeNull();
+  for (const l of ["Music", "Files", "Effects", "Record"]) expect(btn(l)).toBeTruthy();
+});
+
+test("hidden by its host (the closer, Export) it stops the preview, as when the sheet was hidden", async () => {
+  const view = await render(<AddAudioSheet visible onClose={() => {}} />);
+  await fireEvent.press(btn("Effects"));
+  await fireEvent.press(btn("Play Whoosh"));
+  mockPlayer.pause.mockClear();
+  await view.rerender(<AddAudioSheet visible={false} onClose={() => {}} />);
+  expect(mockPlayer.pause).toHaveBeenCalled();
+});
+
+describe("as a panel, hosted like the toolbar hosts it", () => {
+  function Host() {
+    useStripCloser();
+    const open = useToolStrip((s) => s.open);
+    return <AddAudioSheet visible={open?.id === "addAudio"} onClose={closeStrip} />;
+  }
+  const startRecording = async () => {
+    await fireEvent.press(btn("Record"));
+    await fireEvent.press(btn("Start recording"));
+    await waitFor(() => expect(btn("Stop recording")).toBeEnabled());
+    mockRecorder.currentTime = 2.5;
+  };
+
+  test("a selection change while recording does not take it away; stopping saves, selects the voice-over and closes it", async () => {
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await act(() => { useEditorStore.getState().select("a"); });
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    expect(useEditorStore.getState().recording).toBe(true);
+    await act(() => { openStrip("ratio"); });
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(useToolStrip.getState().open).toBeNull());
+    expect(tracks()).toHaveLength(1);
+    expect(useEditorStore.getState().selectedAudioId).toBe(tracks()[0].id);
+    expect(useEditorStore.getState().recording).toBe(false);
+  });
+
+  test("a selection change while recording, then a recording that is too short: the panel closes and the toast still shows", async () => {
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await act(() => { useEditorStore.getState().select("a"); });
+    mockRecorder.currentTime = 0.2;
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(useToast.getState().message).toBe("That recording was too short."));
+    expect(useToolStrip.getState().open).toBeNull();
+    expect(useEditorStore.getState().recording).toBe(false);
+    expect(tracks()).toEqual([]);
+  });
+
+  test("a selection change while the recording is being saved does not take the panel away; a save that fails still shows its toast", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    let fail!: (e: Error) => void;
+    importAudio.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(importAudio).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("Saving…")).toBeTruthy();
+    await act(() => { useEditorStore.getState().select("a"); });   // a tap in the preview, live again
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    expect(screen.getByText("Saving…")).toBeTruthy();
+    await act(() => { openStrip("ratio"); });
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    await act(async () => { fail(new Error("disk full")); });
+    await waitFor(() => expect(useToast.getState().message).toBe("Couldn't save that recording."));
+    expect(useToolStrip.getState().open).toBeNull();
+    expect(useEditorStore.getState().recording).toBe(false);
+    expect(tracks()).toEqual([]);
+    warn.mockRestore();
+  });
+
+  test("a selection change while a too-short recording is being measured: the panel waits, then closes with the toast", async () => {
+    let finish!: (seconds: number) => void;
+    (audioDuration as jest.Mock).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(finish).toBeDefined());
+    await act(() => { useEditorStore.getState().select("a"); });
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    await act(async () => { finish(0.2); });
+    await waitFor(() => expect(useToast.getState().message).toBe("That recording was too short."));
+    expect(useToolStrip.getState().open).toBeNull();
+    expect(useEditorStore.getState().recording).toBe(false);
+  });
+
+  test("a selection change while the recording is being saved: the saved voice-over ends up selected and the panel closed", async () => {
+    let finish!: () => void;
+    importAudio.mockImplementationOnce((_id: string, a: { title: string; durationSec: number }) => new Promise((resolve) => {
+      finish = () => resolve(makeAudioTrack({ id: "held", title: a.title, sourceDuration: a.durationSec, kind: "voice" }));
+    }));
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await fireEvent.press(btn("Stop recording"));
+    await waitFor(() => expect(importAudio).toHaveBeenCalledTimes(1));
+    await act(() => { useEditorStore.getState().select("a"); });
+    expect(useToolStrip.getState().open?.id).toBe("addAudio");
+    await act(async () => { finish(); });
+    await waitFor(() => expect(useToolStrip.getState().open).toBeNull());
+    expect(useEditorStore.getState()).toMatchObject({ recording: false, selectedAudioId: "held" });
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("adding a bundled track selects it and closes the panel; the closer has nothing left to do", async () => {
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await fireEvent.press(btn("Use Sunny Loop"));
+    await waitFor(() => expect(tracks()).toHaveLength(1));
+    await waitFor(() => expect(useToolStrip.getState().open).toBeNull());
+    expect(useEditorStore.getState().selectedAudioId).toBe(tracks()[0].id);
+  });
+
+  test("a selection change closes the panel and stops a preview that was playing", async () => {
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await fireEvent.press(btn("Play Sunny Loop"));
+    mockPlayer.pause.mockClear();
+    await act(() => { useEditorStore.getState().select("a"); });
+    expect(useToolStrip.getState().open).toBeNull();
+    expect(screen.queryByTestId("tool-panel")).toBeNull();
+    expect(mockPlayer.pause).toHaveBeenCalled();
+  });
+
+  test("the done mark while recording stops and saves first, then the panel closes; nothing is left recording", async () => {
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await fireEvent.press(btn("Done"));
+    await waitFor(() => expect(useToolStrip.getState().open).toBeNull());
+    await waitFor(() => expect(tracks()).toHaveLength(1));
+    expect(mockRecorder.stop).toHaveBeenCalledTimes(1);
+    expect(useEditorStore.getState()).toMatchObject({ recording: false, isPlaying: false });
+  });
+
+  test("playback pausing while recording (Export) stops and saves, and the panel closes itself", async () => {
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    await waitFor(() => expect(useToolStrip.getState().open).toBeNull());
+    await waitFor(() => expect(tracks()).toHaveLength(1));
+    expect(useEditorStore.getState().recording).toBe(false);
+  });
+
+  test("leaving the editor while recording discards the recording and clears the recording flag", async () => {
+    const view = await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await startRecording();
+    await view.unmount();
+    expect(useEditorStore.getState()).toMatchObject({ recording: false, isPlaying: false });
+    expect(useToolStrip.getState().open).toBeNull();
+    expect(tracks()).toEqual([]);
+  });
+
+  test("leaving the editor while a preview plays survives a released player", async () => {
+    const view = await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await fireEvent.press(btn("Play Sunny Loop"));
+    mockPlayer.pause.mockImplementation(() => { throw new Error("released"); });
+    try { await view.unmount(); } finally { mockPlayer.pause.mockImplementation(() => {}); }
+  });
+
+  test("a preview does not pause the project's own playback, and playback does not stop the preview", async () => {
+    await render(<Host />);
+    await act(() => { openStrip("addAudio"); });
+    await act(() => { useEditorStore.getState().setPlaying(true); });
+    await fireEvent.press(btn("Play Sunny Loop"));
+    expect(useEditorStore.getState().isPlaying).toBe(true);
+    expect(btn("Stop Sunny Loop")).toBeTruthy();
+    mockPlayer.pause.mockClear();
+    await act(() => { useEditorStore.getState().setPlaying(false); });
+    expect(mockPlayer.pause).not.toHaveBeenCalled();
+    expect(btn("Stop Sunny Loop")).toBeTruthy();
   });
 });

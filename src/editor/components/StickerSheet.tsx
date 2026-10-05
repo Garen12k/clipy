@@ -11,11 +11,14 @@ import { prefs } from "@/src/projects/prefs";
 import { DEFAULT_STICKER_COLOR } from "@/src/editor/components/ColorRow";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
-import { Sheet } from "@/src/ui/Sheet";
+import { useKeyboard } from "@/src/ui/keyboard";
 import { Body } from "@/src/ui/Text";
+import { ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow } from "./ColorRow";
 
 type Tab = "emoji" | "shapes";
+/** The search row's height; the grid gets the rest of the panel's body. */
+const SEARCH_ROW = 52;
 
 export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; onClose: () => void; onAdded: (id: string) => void }) {
   const [tab, setTab] = useState<Tab>("emoji");
@@ -23,6 +26,8 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
   const [recent, setRecent] = useState<string[]>([]);
   const [color, setColor] = useState<string>(DEFAULT_STICKER_COLOR);
   const apply = useEditorStore((s) => s.apply);
+  // The keyboard is up (the panel is at its typing height): the recents row gives its place to the results.
+  const typing = useKeyboard((s) => s.height > 0);
 
   useEffect(() => {
     if (!visible) return;
@@ -53,27 +58,29 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
   const results = searchEmoji(query);
 
   return (
-    // The panel has a maximum height, not a fixed one: its content sizes itself and shrinks to fit (a `flex: 1` child would collapse to nothing).
-    <Sheet visible={visible} onClose={onClose} title="Sticker" height="60%">
-      <View style={{ flexDirection: "row", gap: theme.space.sm }}>
+    <ToolPanel visible={visible} onClose={onClose} title="Sticker" scroll={false}
+      lead={<>
         <Chip label="Emoji" selected={tab === "emoji"} onPress={() => setTab("emoji")} />
         <Chip label="Shapes" selected={tab === "shapes"} onPress={() => setTab("shapes")} />
-      </View>
-      {tab === "emoji" ? (
-        <View style={{ flexShrink: 1, gap: theme.space.sm }}>
-          <TextInput accessibilityLabel="Search emoji" value={query} onChangeText={setQuery}
-            placeholder="Search" placeholderTextColor={theme.colors.textMuted}
-            style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 8 }} />
-          {recent.length > 0 && !query && (
-            <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap" }}>
-              {recent.map((char) => (
-                <Pressable key={char} accessibilityLabel={`Recent ${char}`} onPress={() => addEmoji({ char, name: char, keywords: [] })}>
-                  <Text style={{ fontSize: 28 }}>{char}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-          <FlatList data={results} keyExtractor={(e) => e.char} numColumns={8}
+      </>}>
+      {(bodyHeight) => tab === "emoji" ? (
+        <View style={{ height: bodyHeight }}>
+          <View style={{ height: SEARCH_ROW, justifyContent: "center" }}>
+            <TextInput accessibilityLabel="Search emoji" value={query} onChangeText={setQuery}
+              placeholder="Search" placeholderTextColor={theme.colors.textMuted}
+              style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.chip, paddingHorizontal: 10, paddingVertical: 8 }} />
+          </View>
+          <FlatList testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={8}
+            keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
+            ListHeaderComponent={recent.length > 0 && !query && !typing ? (
+              <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap", marginBottom: theme.space.sm }}>
+                {recent.map((char) => (
+                  <Pressable key={char} accessibilityLabel={`Recent ${char}`} onPress={() => addEmoji({ char, name: char, keywords: [] })}>
+                    <Text style={{ fontSize: 28 }}>{char}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
             renderItem={({ item }) => (
               <Pressable accessibilityLabel={`Emoji ${item.name}`} onPress={() => addEmoji(item)} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
                 <Text style={{ fontSize: 24 }}>{item.char}</Text>
@@ -81,7 +88,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
             )} />
         </View>
       ) : (
-        <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ gap: theme.space.md }}>
+        <ScrollView testID="shape-list" style={{ height: bodyHeight }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ gap: theme.space.md, paddingVertical: theme.space.md }}>
           <ColorRow value={color} onChange={setColor} />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.md }}>
             {SHAPE_IDS.map((id) => (
@@ -94,6 +101,6 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
           </View>
         </ScrollView>
       )}
-    </Sheet>
+    </ToolPanel>
   );
 }

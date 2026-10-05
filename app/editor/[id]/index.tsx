@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { useCallback } from "react";
+import { ActivityIndicator } from "react-native";
 import { AudioPreview } from "@/src/editor/components/AudioPreview";
+import { EditorLayout } from "@/src/editor/components/EditorLayout";
 import { EditorToolbar } from "@/src/editor/components/EditorToolbar";
 import { EditorTopBar } from "@/src/editor/components/EditorTopBar";
 import { PreviewPlayer } from "@/src/editor/components/PreviewPlayer";
@@ -11,7 +12,7 @@ import { TransportRow } from "@/src/editor/components/TransportRow";
 import { TrimHandles } from "@/src/editor/components/TrimHandles";
 import type { Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { closeStrip, openStrip } from "@/src/editor/toolStrip";
+import { closeForExport, openStrip } from "@/src/editor/toolStrip";
 import { useAutosave } from "@/src/editor/useAutosave";
 import { useLoadProject } from "@/src/editor/useLoadProject";
 import { storage } from "@/src/projects";
@@ -28,7 +29,6 @@ export default function EditorScreen() {
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
   const project = useEditorStore((s) => s.project);
   const clipById = (clipId: string) => project?.clips.find((c) => c.id === clipId);
-  const [panelFor, setPanelFor] = useState<{ id: string; kind: "text" | "sticker" } | null>(null);
 
   if (load.status === "loading") return <Screen style={{ justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></Screen>;
   if (load.status === "error") return (
@@ -38,17 +38,20 @@ export default function EditorScreen() {
   );
   return (
     <Screen>
-      <EditorTopBar onExport={() => { closeStrip(); useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />
-      <View testID="slot-preview" style={{ flex: 1 }}>
-        <PreviewPlayer onOpenPanel={(overlayId) => {
-          const overlay = useEditorStore.getState().project?.overlays.find((o) => o.id === overlayId);
-          setPanelFor({ id: overlayId, kind: overlay?.kind === "sticker" ? "sticker" : "text" });
-        }} />
-        <AudioPreview />
-      </View>
-      <TransportRow />
-      <View testID="slot-timeline">
-        <Timeline
+      <EditorLayout
+        top={<EditorTopBar onExport={() => { if (!closeForExport()) return; useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />}
+        preview={<>
+          <PreviewPlayer onOpenPanel={(overlayId) => {
+            // A double-tap on a text or a sticker: select it first, open second, so the panel's key is that overlay.
+            const s = useEditorStore.getState();
+            const overlay = s.project?.overlays.find((o) => o.id === overlayId);
+            s.selectOverlay(overlayId);
+            openStrip(overlay?.kind === "sticker" ? "stickerEdit" : "text");
+          }} />
+          <AudioPreview />
+        </>}
+        transport={<TransportRow />}
+        timeline={<Timeline
           renderStripExtras={(clipId, index) => {
             if (clipId !== selectedClipId) return null;
             const clip = clipById(clipId);
@@ -66,9 +69,9 @@ export default function EditorScreen() {
             useEditorStore.getState().select(clip.id);
             openStrip("transition");
           }}
-        />
-      </View>
-      <EditorToolbar panelFor={panelFor} onPanelChange={setPanelFor} />
+        />}
+        toolbar={<EditorToolbar />}
+      />
       <ToastHost />
     </Screen>
   );

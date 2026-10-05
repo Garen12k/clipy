@@ -16,13 +16,13 @@ import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 import { closeStrip, openStrip, useToolStrip } from "../toolStrip";
 
-const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} />);
+const renderBar = () => render(<EditorToolbar />);
 const st = () => useEditorStore.getState();
 const btn = (name: string) => screen.getByRole("button", { name });
 const gone = (name: string) => expect(screen.queryByRole("button", { name })).toBeNull();
 /** Every button on screen, in order (with nothing open: the back arrow, then the bar's tools). */
 const row = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
-/** Closes whatever tool is open: a strip's ✓ or a modal sheet's scrim. */
+/** Closes whatever tool is open: a strip's or a panel's ✓, or the Cover sheet's scrim. */
 const closeTool = async () => { await fireEvent.press(screen.queryByRole("button", { name: "Done" }) ?? screen.getByLabelText("Close sheet")); };
 const BACK = "Back to main tools";
 const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Effects", "Filter", "Adjust", "Ratio", "Background", "Cover", "Templates"];
@@ -150,7 +150,7 @@ describe("main bar entries", () => {
     expect(row()).toEqual(MAIN);
   });
 
-  test("Add audio on the audio bar opens the Add audio sheet", async () => {
+  test("Add audio on the audio bar opens the Add audio panel", async () => {
     await renderBar();
     await fireEvent.press(btn("Audio"));
     expect(screen.queryByRole("header", { name: "Add audio" })).toBeNull();
@@ -158,29 +158,29 @@ describe("main bar entries", () => {
     expect(screen.getByRole("header", { name: "Add audio" })).toBeTruthy();
   });
 
-  test("Text opens the text bar without a selection; Add text adds, selects and asks for the panel", async () => {
-    const onPanelChange = jest.fn();
-    await render(<EditorToolbar panelFor={null} onPanelChange={onPanelChange} />);
+  test("Text opens the text bar without a selection; Add text adds, selects and opens the text panel on it", async () => {
+    await renderBar();
     await fireEvent.press(btn("Text"));
     expect(row()).toEqual([BACK, "Add text", "Captions"]);
     await fireEvent.press(btn("Add text"));
     const added = st().project!.overlays[0];
     expect(st().selectedOverlayId).toBe(added.id);
-    expect(onPanelChange).toHaveBeenCalledWith({ id: added.id, kind: "text" });
+    expect(useToolStrip.getState().open).toEqual({ id: "text", key: `overlay:${added.id}` });
+    await act(() => { closeStrip(); });
     expect(row()).toEqual([BACK, ...TEXT]);
   });
 
-  test("Add text with a text or a caption selected is one tap: it adds another, selects it and asks for the panel", async () => {
+  test("Add text with a text or a caption selected is one tap: it adds another, selects it and opens the text panel on it", async () => {
     st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], overlays: [makeOverlay({ id: "t1", start: 1, end: 3 }), makeOverlay({ id: "c1", kind: "caption", start: 1, end: 3 })] }));
-    const onPanelChange = jest.fn();
-    await render(<EditorToolbar panelFor={null} onPanelChange={onPanelChange} />);
+    await renderBar();
     for (const [from, count] of [["t1", 3], ["c1", 4]] as const) {
       await act(() => { st().selectOverlay(from); });
       await fireEvent.press(btn("Add text"));
       expect(st().project!.overlays).toHaveLength(count);
       const added = st().project!.overlays.find((o) => o.id === st().selectedOverlayId)!;
       expect(added).toMatchObject({ kind: "text", text: "Your text" });
-      expect(onPanelChange).toHaveBeenLastCalledWith({ id: added.id, kind: "text" });
+      expect(useToolStrip.getState().open).toEqual({ id: "text", key: `overlay:${added.id}` });
+      await act(() => { closeStrip(); });
     }
     expect(st().past).toHaveLength(2);
   });
@@ -227,7 +227,7 @@ describe("main bar entries", () => {
     expect(btn("This clip")).toBeEnabled();
   });
 
-  test("Captions on the text bar opens the Captions sheet", async () => {
+  test("Captions on the text bar opens the Captions panel", async () => {
     await renderBar();
     await fireEvent.press(btn("Text"));
     expect(screen.queryByRole("header", { name: "Captions" })).toBeNull();
@@ -256,10 +256,10 @@ describe("main bar entries", () => {
     }
   });
 
-  test("Stickers, Effects, Cover and Templates open today's sheets; Ratio opens the ratio tool", async () => {
+  test("Stickers and Templates open panels, Effects a strip, Cover its sheet; Ratio opens the ratio tool", async () => {
     await renderBar();
     await fireEvent.press(btn("Stickers"));
-    expect(screen.getByRole("header", { name: "Sticker" })).toBeTruthy();       // the sheet keeps its own title
+    expect(screen.getByRole("header", { name: "Sticker" })).toBeTruthy();       // the panel keeps its own title
     await closeTool();
     await fireEvent.press(btn("Effects"));
     expect(screen.getByRole("header", { name: "Effects" })).toBeTruthy();
@@ -284,15 +284,66 @@ describe("text and sticker bars", () => {
     overlays: [makeOverlay({ id: "t1", start: 1, end: 3 }), makeSticker({ id: "s1", start: 1, end: 3 }), makeOverlay({ id: "c1", kind: "caption", start: 1, end: 3 })],
   }));
 
-  test("Edit asks for the text panel (a text, a caption) or the sticker panel (a sticker)", async () => {
+  test("Edit opens the text panel (a text, a caption) or the sticker editor (a sticker) on the selected overlay", async () => {
     withOverlays();
-    const onPanelChange = jest.fn();
-    await render(<EditorToolbar panelFor={null} onPanelChange={onPanelChange} />);
-    for (const [id, kind] of [["t1", "text"], ["c1", "text"], ["s1", "sticker"]] as const) {
+    await renderBar();
+    for (const [id, tool] of [["t1", "text"], ["c1", "text"], ["s1", "stickerEdit"]] as const) {
       await act(() => { st().selectOverlay(id); });
       await fireEvent.press(btn("Edit"));
-      expect(onPanelChange).toHaveBeenLastCalledWith({ id, kind });
+      expect(useToolStrip.getState().open).toEqual({ id: tool, key: `overlay:${id}` });
+      await act(() => { closeStrip(); });
     }
+  });
+
+  test("closing the text panel removes a text left empty — by its own close and when the selection moves away", async () => {
+    for (const leave of [() => closeStrip(), () => st().selectOverlay("s1")]) {
+      withOverlays();
+      const view = await renderBar();
+      await act(() => { st().selectOverlay("t1"); });
+      await fireEvent.press(btn("Edit"));
+      await act(() => { st().apply((p) => ops.updateOverlay(p, "t1", { text: "  " })); });
+      await act(() => { leave(); });
+      expect(st().project!.overlays.map((o) => o.id)).toEqual(["s1", "c1"]);
+      expect(useToolStrip.getState().open).toBeNull();
+      await view.unmount();
+    }
+  });
+
+  test("closing the text panel keeps a caption left empty (as leaving the editor does): only a text is removed", async () => {
+    for (const leave of [() => closeStrip(), () => st().selectOverlay("s1")]) {
+      withOverlays();
+      const view = await renderBar();
+      await act(() => { st().selectOverlay("c1"); });
+      await fireEvent.press(btn("Edit"));
+      await act(() => { st().apply((p) => ops.updateOverlay(p, "c1", { text: "  " })); });
+      const past = st().past.length;
+      await act(() => { leave(); });
+      expect(st().project!.overlays.map((o) => o.id)).toEqual(["t1", "s1", "c1"]);
+      expect(st().past).toHaveLength(past);
+      expect(useToolStrip.getState().open).toBeNull();
+      await view.unmount();
+    }
+  });
+
+  test("the text panel's Duplicate is off while the text is empty: no copy, no undo step, the panel stays on its text", async () => {
+    withOverlays();
+    await renderBar();
+    await act(() => { st().selectOverlay("t1"); });
+    await fireEvent.press(btn("Edit"));
+    await act(() => { st().apply((p) => ops.updateOverlay(p, "t1", { text: "  " })); });
+    const past = st().past.length;
+    expect(btn("Duplicate")).toBeDisabled();
+    await fireEvent.press(btn("Duplicate"));
+    expect(st().project!.overlays.map((o) => o.id)).toEqual(["t1", "s1", "c1"]);
+    expect(st().past).toHaveLength(past);
+    expect(st().selectedOverlayId).toBe("t1");
+    expect(useToolStrip.getState().open).toEqual({ id: "text", key: "overlay:t1" });
+    // With a text again it copies, in one step.
+    await act(() => { st().apply((p) => ops.updateOverlay(p, "t1", { text: "Hi" })); });
+    expect(btn("Duplicate")).toBeEnabled();
+    await fireEvent.press(btn("Duplicate"));
+    expect(st().project!.overlays).toHaveLength(4);
+    expect(st().past).toHaveLength(past + 2);
   });
 
   test("Duplicate copies the overlay in one undo step and selects the copy; Delete removes it and the main bar shows", async () => {
@@ -420,7 +471,7 @@ describe("strips and the bar", () => {
   });
 });
 
-test("Templates is enabled without a selection when the project has clips and opens the sheet", async () => {
+test("Templates is enabled without a selection when the project has clips and opens the Templates panel", async () => {
   await renderBar();
   expect(btn("Templates")).toBeEnabled();
   await fireEvent.press(btn("Templates"));
@@ -602,7 +653,7 @@ describe("Effects on the timeline", () => {
   }));
   const effects = () => st().project!.effects;
 
-  test("Effects is enabled whenever a project is open, even an empty one, and opens the Effects sheet", async () => {
+  test("Effects is enabled whenever a project is open, even an empty one, and opens the Effects strip", async () => {
     st().setProject(makeProject());
     await renderBar();
     expect(btn("Effects")).toBeEnabled();
@@ -611,7 +662,7 @@ describe("Effects on the timeline", () => {
     expect(btn("Glitch")).toBeTruthy();
   });
 
-  test("adding from the sheet selects the effect, closes the sheet and shows the effect bar", async () => {
+  test("adding from the strip selects the effect, closes the strip and shows the effect bar", async () => {
     await renderBar();
     await fireEvent.press(btn("Effects"));
     await fireEvent.press(btn("Glitch"));
@@ -667,7 +718,7 @@ describe("Audio tools", () => {
   const TRACK = [BACK, ...SOUND];
   beforeEach(() => { useToast.getState().clear(); });
 
-  test("Beats opens the beat markers sheet, whose Tap adds a marker at the playhead", async () => {
+  test("Beats opens the beat markers panel, whose Tap adds a marker at the playhead", async () => {
     await renderBar();
     await fireEvent.press(btn("Audio"));
     expect(btn("Beats")).toBeEnabled();
@@ -706,7 +757,7 @@ describe("Audio tools", () => {
     expect(st().selectedAudioId).toBe("t1");
   });
 
-  test("with a track selected, Add audio opens the sheet without deselecting", async () => {
+  test("with a track selected, Add audio opens the panel without deselecting", async () => {
     withAudio();
     await renderBar();
     await act(() => { st().selectAudio("t1"); });

@@ -49,6 +49,8 @@ function measuredSeconds(uri: string): Promise<number | null> {
  * into the project as a `voice` track beginning where the playhead was when the recorder started, as long as the recorder said —
  * or as the saved file measures, when that is shorter. Playback ending (the project's end, or anything else pausing it) stops the recording too.
  * Every way out — stop, cancel, an error, unmount — un-mutes the preview and puts the audio session back to its playback mode.
+ * The `recording` flag outlives the recorder by the save: it is cleared when the track is in (or refused), so whatever waits for
+ * it (the tool store's closer, Export) waits for the save too; the preview stays muted for that moment.
  *
  * `onDismiss` is called before any toast and after a successful save, so that a hosting sheet (a native Modal, which would cover
  * the toast) can close. Neither happens once the hook has unmounted: a save still under way then adds its track silently.
@@ -71,12 +73,15 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
   const stopTimer = () => { if (timer.current) { clearInterval(timer.current); timer.current = null; } };
   const notify = (message: string) => { onDismiss.current?.(); useToast.getState().show(message); };
 
-  /** Ends the session: recorder stopped if asked (it may already be released), preview sound back on, playback mode restored. Never throws. */
-  const release = async (stopRecorder: boolean) => {
+  /**
+   * Ends the session: recorder stopped if asked (it may already be released), playback mode restored, and — unless a save follows,
+   * which then clears it itself — the `recording` flag cleared (preview sound back on). Never throws.
+   */
+  const release = async (stopRecorder: boolean, saveFollows = false) => {
     stopTimer();
     session.current = null;
     if (stopRecorder) { try { await recorder.stop(); } catch { /* released, or never started */ } }
-    useEditorStore.getState().setRecording(false);
+    if (!saveFollows) useEditorStore.getState().setRecording(false);
     await restorePlaybackAudioMode();
   };
 
@@ -143,7 +148,7 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
         uri = recorder.uri;
         seconds = Math.max(reported, recordedSeconds(recorder)) || wallClock;
       } finally {
-        await release(false);
+        await release(false, true);
       }
       if (!save) return;
       if (useEditorStore.getState().project?.id !== ses.projectId) return;   // the editor moved on while recording
@@ -167,9 +172,15 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
       if (save) message = "Couldn't save that recording.";
     } finally {
       setPhase("idle");
-      if (life.current === born) {
-        if (message) notify(message);
-        else if (saved) onDismiss.current?.();
+      // The flag drops last, after the host was told to close: until then the tool store leaves the host alone, so a selection
+      // change during the save cannot take it — and the message — away. An unmount meanwhile has cleared the flag already.
+      try {
+        if (life.current === born) {
+          if (message) notify(message);
+          else if (saved) onDismiss.current?.();
+        }
+      } finally {
+        if (life.current === born) useEditorStore.getState().setRecording(false);
       }
     }
   };
@@ -186,12 +197,14 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
 
   // Unmount with a session open (starting or recording): nothing is saved, everything is put back. useAudioRecorder releases the
   // native recorder in its own cleanup, which runs before this one — stopping a released recorder throws, so swallow it.
+  // Unmount during a save: the save goes on silently, but the flag it still holds is given back now.
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
       life.current += 1;
       stopTimer();
+      if (phase.current === "saving") useEditorStore.getState().setRecording(false);
       if (!session.current) return;
       session.current = null;
       phase.current = "idle";

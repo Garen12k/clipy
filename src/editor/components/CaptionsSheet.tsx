@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Linking, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { useEditorStore } from "@/src/editor/store";
+import { rekeyStrip } from "@/src/editor/toolStrip";
 import { useCaptions } from "@/src/editor/useCaptions";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
-import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
+import { ToolPanel } from "@/src/ui/ToolPanel";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { CaptionStyleSheet } from "./CaptionStyleSheet";
 
@@ -19,17 +20,30 @@ export function CaptionsSheet({ visible, onClose }: Props) {
   const clipCount = clipIds.length;
   const [styling, setStyling] = useState(false);
 
-  // Closing mid-run cancels it, so captions never land after the sheet is gone.
+  // Closing mid-run cancels it, so captions never land after the panel is gone.
   const close = () => { if (state.status === "running") cancel(); reset(); onClose(); };
+  // Hidden by the host (another selection, Export): the same clean-up, and the next opening starts on Captions.
+  useEffect(() => {
+    if (visible) return;
+    if (state.status === "running") cancel();
+    reset();
+    setStyling(false);
+  }, [visible]);
+  // The captions are about to be replaced: a selected one would vanish and close this panel with it. Deselect it and re-key first.
+  const start = () => {
+    const s = useEditorStore.getState();
+    if (s.selectedOverlayId && s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind === "caption") { s.selectOverlay(null); rekeyStrip(); }
+    return run();
+  };
 
   return (
-    <Sheet visible={visible} onClose={close} title="Captions">
-      <View style={{ gap: theme.space.lg }}>
+    <>
+      <ToolPanel visible={visible && !styling} onClose={close} title="Captions" size="compact">
         {state.status === "unavailable" && (
           <View style={{ gap: theme.space.sm }}>
             <Body>Captions need the native build</Body>
             <Body muted>Transcription runs on your iPhone with Apple&apos;s speech recognizer, which Expo Go can&apos;t load.</Body>
-            {/* The looks can still be tried here: the style sheet previews them on its sample. */}
+            {/* The looks can still be tried here: the style panel previews them on its sample. */}
             <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
           </View>
         )}
@@ -37,8 +51,8 @@ export function CaptionsSheet({ visible, onClose }: Props) {
         {state.status === "idle" && hasCaptions && (
           <View style={{ gap: theme.space.md }}>
             <Body>Replace existing captions?</Body>
-            {/* Stacked like the "done" branch: three uppercase buttons don't fit one row in a 327 pt sheet. */}
-            <PrimaryButton compact title="Replace" onPress={run} />
+            {/* Stacked like the "done" branch: three uppercase buttons don't fit one row in a panel. */}
+            <PrimaryButton compact title="Replace" onPress={start} />
             <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
             <SecondaryButton title="Cancel" onPress={close} />
           </View>
@@ -46,7 +60,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
 
         {state.status === "idle" && !hasCaptions && (
           <View style={{ gap: theme.space.sm }}>
-            <PrimaryButton title="Transcribe" onPress={run} />
+            <PrimaryButton title="Transcribe" onPress={start} />
             <Body muted>Uses on-device speech recognition. Clips: {clipCount}</Body>
           </View>
         )}
@@ -70,7 +84,6 @@ export function CaptionsSheet({ visible, onClose }: Props) {
               </Body>
             )}
             <PrimaryButton compact title="Style captions" onPress={() => setStyling(true)} />
-            <SecondaryButton title="Done" onPress={close} />
           </View>
         )}
 
@@ -79,11 +92,11 @@ export function CaptionsSheet({ visible, onClose }: Props) {
             <Body>{state.message}</Body>
             {state.code === "E_SPEECH_DENIED"
               ? <PrimaryButton title="Open Settings" onPress={() => { Linking.openSettings(); }} />
-              : <PrimaryButton title="Try again" onPress={run} />}
+              : <PrimaryButton title="Try again" onPress={start} />}
           </View>
         )}
-      </View>
-      <CaptionStyleSheet visible={styling} onClose={() => setStyling(false)} />
-    </Sheet>
+      </ToolPanel>
+      <CaptionStyleSheet visible={visible && styling} onClose={() => setStyling(false)} />
+    </>
   );
 }

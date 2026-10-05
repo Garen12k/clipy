@@ -277,6 +277,15 @@ export function deleteOverlay(p: Project, id: string): Project {
   return touch(p, { overlays: p.overlays.filter((o) => o.id !== id) });
 }
 
+/**
+ * The project without the text `id` when that text is empty (nothing but white space); the same project otherwise. Captions and
+ * stickers are never dropped. For the save when the editor is left while that text is being edited (see `useLoadProject`).
+ */
+export function dropEmptyText(p: Project, id: string | null): Project {
+  const o = p.overlays.find((x) => x.id === id);
+  return o && o.kind === "text" && o.text.trim().length === 0 ? deleteOverlay(p, o.id) : p;
+}
+
 /** How far (fraction of the frame, right and down) a duplicated text / sticker sits from its original. */
 const DUPLICATE_OFFSET = 0.03;
 

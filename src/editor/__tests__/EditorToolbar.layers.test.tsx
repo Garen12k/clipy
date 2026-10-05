@@ -18,9 +18,9 @@ const state = () => useEditorStore.getState();
 const btn = (name: string) => screen.getByRole("button", { name });
 const row = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
 const gone = (name: string) => expect(screen.queryByRole("button", { name })).toBeNull();
-/** Closes whatever tool is open: a strip's ✓ or a modal sheet's scrim. */
+/** Closes whatever tool is open: a strip's or a panel's ✓, or the Cover sheet's scrim. */
 const closeTool = async () => { await fireEvent.press(screen.queryByRole("button", { name: "Done" }) ?? screen.getByLabelText("Close sheet")); };
-const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} />);
+const renderBar = () => render(<EditorToolbar />);
 const select = (id: string | null) => act(() => { state().select(id); });
 const photoLayer = (id: string, start = 0): LayerClip => ({ ...makePhotoClip({ id }), start });
 const BACK = "Back to main tools";
@@ -186,7 +186,7 @@ test("Overlay picks one item and adds it as a selected layer at the playhead", a
   expect(btn("Forward")).toBeTruthy();
 });
 
-test("Opacity, Mask and Trim open their sheets on the selected layer", async () => {
+test("Opacity, Mask and Trim open their strips on the selected layer", async () => {
   await renderBar();
   await select("L");
   await fireEvent.press(btn("Opacity"));

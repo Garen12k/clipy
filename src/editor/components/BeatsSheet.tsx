@@ -6,12 +6,12 @@ import { theme } from "@/src/theme/theme";
 import { haptic, type HapticKind } from "@/src/ui/haptics";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
-import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
+import { ToolPanel } from "@/src/ui/ToolPanel";
 
 /**
  * Beat markers: tap along while the video plays to drop a marker at the playhead. The playhead is read from the store at press
- * time (the sheet does not re-render on every tick). Each press is one undo step; a press the model refuses (too close to a
+ * time (the panel does not re-render on every tick). Each press is one undo step; a press the model refuses (too close to a
  * marker, nothing in reach, the limit) does nothing at all.
  */
 export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -28,13 +28,13 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
   };
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Beat markers">
+    <ToolPanel visible={visible} onClose={onClose} title="Beat markers" size="compact">
       <PrimaryButton title="Tap" onPress={() => run(addBeatMarker, "light")} />
       <Body muted style={{ textAlign: "center" }}>{count === 1 ? "1 marker" : `${count} markers`}</Body>
       <View style={{ flexDirection: "row", justifyContent: "center", gap: theme.space.md }}>
         <SecondaryButton title="Remove nearest" disabled={count === 0} onPress={() => run(removeBeatMarkerNear, "light")} />
         <SecondaryButton title="Clear all" disabled={count === 0} onPress={() => run((p) => clearBeatMarkers(p), "medium")} />
       </View>
-    </Sheet>
+    </ToolPanel>
   );
 }

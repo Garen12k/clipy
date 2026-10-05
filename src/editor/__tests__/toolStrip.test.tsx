@@ -1,5 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-05T10:00:00.000Z" }));
+// expo-crypto gives no id under jest: every new item gets its own.
+let mockIds = 0;
+jest.mock("@/src/lib/id", () => ({ newId: () => `new${++mockIds}` }));
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn() }));
 jest.mock("@/src/projects", () => ({ storage: { importMedia: jest.fn(), saveStill: jest.fn() } }));
 jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () => ({ uri: "file:///thumb.jpg" })) }));
@@ -10,7 +13,7 @@ import { makeClip, makeLayer, makeOverlay, makeProject } from "@/src/editor/mode
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 import { OpacitySheet } from "../components/OpacitySheet";
-import { closeStrip, openStrip, useStripCloser, useToolStrip } from "../toolStrip";
+import { closeForExport, closeStrip, openStrip, rekeyStrip, useStripCloser, useToolStrip } from "../toolStrip";
 
 const st = () => useEditorStore.getState();
 const open = () => useToolStrip.getState().open;
@@ -24,6 +27,7 @@ function Host() {
 
 beforeEach(() => {
   closeStrip();
+  st().setRecording(false);
   st().reset();
   st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })], layers: [makeLayer({ id: "L", sourceDuration: 2 })], overlays: [makeOverlay({ id: "t" })] }));
 });
@@ -133,7 +137,7 @@ test("opening and closing a strip in the toolbar does not remount what is beside
     return <View testID="probe" />;
   }
   st().select("a");
-  await render(<><Probe /><EditorToolbar panelFor={null} onPanelChange={() => {}} /></>);
+  await render(<><Probe /><EditorToolbar /></>);
   const before = screen.getByTestId("probe");
   await fireEvent.press(screen.getByRole("button", { name: "Opacity" }));
   expect(screen.getByTestId("tool-strip")).toBeTruthy();
@@ -142,4 +146,72 @@ test("opening and closing a strip in the toolbar does not remount what is beside
   expect(screen.queryByTestId("tool-strip")).toBeNull();
   expect(screen.getByTestId("probe")).toBe(before);
   expect(mounts).toBe(1);
+});
+
+test("a panel is opened and closed through the same store, keyed on the selection", () => {
+  st().select("a");
+  openStrip("templates");
+  expect(open()).toEqual({ id: "templates", key: "clip:a" });
+  st().select(null);
+  openStrip("beats");
+  expect(open()).toEqual({ id: "beats", key: "none" });
+});
+
+test("rekeyStrip moves the open tool to the current selection, so the closer leaves it alone", async () => {
+  st().selectOverlay("t");
+  await render(<Host />);
+  await act(() => { openStrip("text"); });
+  await act(() => { st().select("a"); rekeyStrip(); });
+  expect(open()).toEqual({ id: "text", key: "clip:a" });
+  await act(() => { closeStrip(); rekeyStrip(); });                     // nothing open: nothing to re-key
+  expect(open()).toBeNull();
+});
+
+test("while a voice-over is being recorded nothing closes or replaces the open tool; it closes once recording has ended", async () => {
+  await render(<Host />);
+  await act(() => { openStrip("addAudio"); st().setRecording(true); });
+  await act(() => { st().select("a"); });
+  expect(open()).toEqual({ id: "addAudio", key: "none" });
+  await act(() => { openStrip("ratio"); });
+  expect(open()?.id).toBe("addAudio");
+  await act(() => { st().setRecording(false); });
+  expect(open()).toBeNull();
+});
+
+test("closeForExport closes the tool; while recording it pauses playback instead and says no", () => {
+  st().select("a");
+  openStrip("opacity");
+  expect(closeForExport()).toBe(true);
+  expect(open()).toBeNull();
+  openStrip("addAudio");
+  st().setRecording(true); st().setPlaying(true);
+  expect(closeForExport()).toBe(false);
+  expect(open()?.id).toBe("addAudio");
+  expect(st().isPlaying).toBe(false);
+  st().setRecording(false);
+});
+
+test("adding selects the new item: the Effects picker adds, selects and closes — the effect's bar shows and nothing reopens", async () => {
+  await render(<EditorToolbar />);
+  await fireEvent.press(screen.getByRole("button", { name: "Effects" }));
+  expect(open()).toEqual({ id: "effect", key: "none" });
+  await fireEvent.press(screen.getByRole("button", { name: "Glow" }));
+  expect(st().selectedEffectId).toBe(st().project!.effects[0].id);
+  expect(open()).toBeNull();
+  expect(screen.getByRole("button", { name: "Strength" })).toBeTruthy();
+});
+
+test("Add text selects the new text first and opens the panel second, so its own selection change does not close it", async () => {
+  await render(<EditorToolbar />);
+  await fireEvent.press(screen.getByRole("button", { name: "Text" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Add text" }));
+  const id = st().selectedOverlayId!;
+  await act(async () => {});                                            // the closer's effect has run
+  expect(open()).toEqual({ id: "text", key: `overlay:${id}` });
+  // Duplicate inside the panel selects the copy and re-keys: still open, now on the copy.
+  // (While the text panel is still a modal sheet the bar under it has a Duplicate too: the panel's is the last one.)
+  await fireEvent.press(screen.getAllByRole("button", { name: "Duplicate" }).at(-1)!);
+  const copy = st().selectedOverlayId!;
+  expect(copy).not.toBe(id);
+  expect(open()).toEqual({ id: "text", key: `overlay:${copy}` });
 });
