@@ -1,14 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
 import { View } from "react-native";
 import { totalDuration } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
+import { openStrip } from "@/src/editor/toolStrip";
 import { formatDuration } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { IconButton } from "@/src/ui/IconButton";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { Body } from "@/src/ui/Text";
-import { RatioSheet } from "./RatioSheet";
 
 /** Undo · time · play/pause · ratio · redo, between the preview and the timeline. */
 export function TransportRow() {
@@ -17,7 +16,6 @@ export function TransportRow() {
   const isPlaying = useEditorStore((s) => s.isPlaying);
   const canUndo = useEditorStore((s) => s.past.length > 0);
   const canRedo = useEditorStore((s) => s.future.length > 0);
-  const [ratioOpen, setRatioOpen] = useState(false);
   if (!project) return null;
   const { undo, redo, seek, setPlaying } = useEditorStore.getState();
   const total = totalDuration(project);
@@ -31,14 +29,13 @@ export function TransportRow() {
         style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.text, alignItems: "center", justifyContent: "center", opacity: empty ? 0.35 : 1 }}>
         <Ionicons name={isPlaying ? "pause" : "play"} size={20} color={theme.colors.onAccent} />
       </PressableScale>
-      <PressableScale accessibilityRole="button" accessibilityLabel="Aspect ratio" onPress={() => setRatioOpen(true)}
+      <PressableScale accessibilityRole="button" accessibilityLabel="Aspect ratio" onPress={() => openStrip("ratio")}
         style={{ minWidth: 84, alignItems: "center" }}>
         <View style={{ borderWidth: 1, borderColor: theme.colors.hairline, borderRadius: theme.radius.pill, paddingHorizontal: theme.space.md, paddingVertical: 3 }}>
           <Body weight="semi" style={{ fontSize: 12 }}>{project.aspectRatio}</Body>
         </View>
       </PressableScale>
       <IconButton name="arrow-redo" accessibilityLabel="Redo" disabled={!canRedo} onPress={redo} />
-      <RatioSheet visible={ratioOpen} onClose={() => setRatioOpen(false)} />
     </View>
   );
 }

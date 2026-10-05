@@ -119,10 +119,10 @@ test("renders nothing when hidden or without a clip", async () => {
   expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
 });
 
-test("the Crop tool is disabled without a selection and opens the screen for a video or a photo", async () => {
+test("the Crop tool is not on the main bar and opens the screen for a video or a photo", async () => {
   useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makePhotoClip({ id: "p" })] }));
-  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
-  expect(screen.getByRole("button", { name: "Crop" })).toBeDisabled();
+  await render(<EditorToolbar panelFor={null} onPanelChange={() => {}} />);
+  expect(screen.queryByRole("button", { name: "Crop" })).toBeNull();
   for (const id of ["a", "p"]) {
     await act(() => { useEditorStore.getState().select(id); });
     expect(screen.getByRole("button", { name: "Crop" })).toBeEnabled();

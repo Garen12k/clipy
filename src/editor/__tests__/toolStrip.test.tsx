@@ -124,7 +124,7 @@ test("opening and closing a strip in the toolbar does not remount what is beside
     return <View testID="probe" />;
   }
   st().select("a");
-  await render(<><Probe /><EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} /></>);
+  await render(<><Probe /><EditorToolbar panelFor={null} onPanelChange={() => {}} /></>);
   const before = screen.getByTestId("probe");
   await fireEvent.press(screen.getByRole("button", { name: "Opacity" }));
   expect(screen.getByTestId("tool-strip")).toBeTruthy();

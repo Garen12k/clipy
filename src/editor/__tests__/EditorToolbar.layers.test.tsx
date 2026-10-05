@@ -10,19 +10,24 @@ import { useToast } from "@/src/ui/Toast";
 import { LAYER_LIMITS, makeClip, makeLayer, makePhotoClip, makeProject, type LayerClip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
+import { closeStrip } from "../toolStrip";
 
 const pick = pickMedia as jest.Mock;
 const importMedia = storage.importMedia as jest.Mock;
 const state = () => useEditorStore.getState();
 const btn = (name: string) => screen.getByRole("button", { name });
 const row = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
-const openGroup = async (name: string) => { await fireEvent.press(screen.getByRole("tab", { name })); };
-const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} transitionFor={null} onTransitionChange={() => {}} />);
+const gone = (name: string) => expect(screen.queryByRole("button", { name })).toBeNull();
+/** Closes whatever tool is open: a strip's ✓ or a modal sheet's scrim. */
+const closeTool = async () => { await fireEvent.press(screen.queryByRole("button", { name: "Done" }) ?? screen.getByLabelText("Close sheet")); };
+const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} />);
 const select = (id: string | null) => act(() => { state().select(id); });
 const photoLayer = (id: string, start = 0): LayerClip => ({ ...makePhotoClip({ id }), start });
-const EDIT = ["Split", "Trim", "Transform", "Animate", "Keyframe", "Crop", "Overlay", "Opacity", "Mask", "Blend", "Green screen", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Select", "Ratio"];
+const BACK = "Back to main tools";
+const LAYER = ["Trim", "Speed", "Volume", "Animate", "Filter", "Adjust", "Crop", "Transform", "Opacity", "Mask", "Blend", "Green screen", "Keyframe", "Forward", "Back", "Replace", "Reverse", "Duplicate", "Delete"];
 
 beforeEach(() => {
+  closeStrip();
   pick.mockReset(); importMedia.mockReset();
   useToast.getState().clear();
   state().reset();
@@ -32,70 +37,56 @@ beforeEach(() => {
   }));
 });
 
-test("Edit lists Overlay, Opacity and Mask; Forward / Back only show for a selected layer", async () => {
+test("Forward / Back only show for a selected layer, whose bar lists the layer tools", async () => {
   await renderBar();
-  expect(row().slice(0, EDIT.length)).toEqual(EDIT);
-  expect(screen.queryByRole("button", { name: "Forward" })).toBeNull();
+  gone("Forward");
   await select("a");
-  expect(screen.queryByRole("button", { name: "Forward" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+  gone("Forward");
+  gone("Back");
+  gone("Blend");
   await select("L");
-  expect(row().slice(0, EDIT.length + 2)).toEqual(["Forward", "Back", ...EDIT]);   // first: reachable without scrolling the row
-  await openGroup("Effects");
-  expect(screen.queryByRole("button", { name: "Forward" })).toBeNull();
+  expect(row()).toEqual([BACK, ...LAYER]);
 });
 
-test("no selection: Opacity and Mask are disabled, Overlay is enabled; an empty project disables Overlay", async () => {
+test("no selection: Opacity and Mask are not there, Overlay is enabled; an empty project has no Overlay", async () => {
   await renderBar();
-  expect(btn("Opacity")).toBeDisabled();
-  expect(btn("Mask")).toBeDisabled();
+  gone("Opacity");
+  gone("Mask");
   expect(btn("Overlay")).toBeEnabled();
   await act(() => { state().setProject(makeProject()); });
-  expect(btn("Overlay")).toBeDisabled();
+  gone("Overlay");
 });
 
-test("a main clip selection keeps every rule and enables Opacity and Mask", async () => {
+test("a main clip selection: every tool on its bar is enabled", async () => {
   await renderBar();
-  await select("a");
-  for (const l of ["Split", "Trim", "Transform", "Animate", "Crop", "Overlay", "Opacity", "Mask", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Ratio"]) expect(btn(l)).toBeEnabled();
-  await openGroup("Effects");
-  for (const l of ["Filter", "Adjust", "Speed", "Transition", "Background"]) expect(btn(l)).toBeEnabled();
+  await act(() => { state().select("a"); state().seek(1); });
+  const labels = row().slice(1);
+  expect(labels).toEqual(expect.arrayContaining(["Split", "Trim", "Speed", "Volume", "Filter", "Adjust", "Opacity", "Mask", "Transition", "Freeze"]));
+  for (const l of labels) expect(btn(l)).toBeEnabled();
 });
 
-test("a video layer selection: the tools that apply are enabled; Split, Freeze, Ratio, Transition and Background are disabled", async () => {
+test("a video layer selection: the tools that apply are enabled; Split, Freeze, Ratio, Transition, Background and Select are not there", async () => {
   await renderBar();
-  await select("L");
-  expect(screen.getByRole("tab", { name: "Edit" })).toBeSelected();
-  for (const l of ["Trim", "Transform", "Animate", "Crop", "Overlay", "Opacity", "Mask", "Replace", "Reverse", "Duplicate", "Delete", "Forward", "Back"]) expect(btn(l)).toBeEnabled();
-  for (const l of ["Split", "Freeze", "Ratio"]) expect(btn(l)).toBeDisabled();
-  await openGroup("Effects");
-  for (const l of ["Filter", "Adjust", "Speed", "Effect", "Templates"]) expect(btn(l)).toBeEnabled();
-  for (const l of ["Transition", "Background"]) expect(btn(l)).toBeDisabled();
-  await openGroup("Audio");
-  expect(btn("Volume")).toBeEnabled();
+  await act(() => { state().select("L"); state().seek(1.5); });
+  for (const l of ["Split", "Freeze", "Ratio", "Transition", "Background", "Select"]) gone(l);
+  for (const l of LAYER) expect(btn(l)).toBeEnabled();
 });
 
 test("a photo layer selection follows the photo rules: no Reverse, Speed or Volume", async () => {
   await renderBar();
   await select("P");
-  for (const l of ["Trim", "Transform", "Animate", "Crop", "Opacity", "Mask", "Replace", "Duplicate", "Delete", "Forward", "Back"]) expect(btn(l)).toBeEnabled();
-  for (const l of ["Split", "Reverse", "Freeze", "Ratio"]) expect(btn(l)).toBeDisabled();
-  await openGroup("Effects");
-  expect(btn("Filter")).toBeEnabled();
-  expect(btn("Speed")).toBeDisabled();
-  await openGroup("Audio");
-  expect(btn("Volume")).toBeDisabled();
+  for (const l of ["Trim", "Transform", "Animate", "Filter", "Crop", "Opacity", "Mask", "Replace", "Duplicate", "Delete", "Forward", "Back"]) expect(btn(l)).toBeEnabled();
+  for (const l of ["Split", "Reverse", "Freeze", "Ratio", "Speed", "Volume"]) gone(l);
 });
 
-test("a reversed layer shows Reverse active and disables Volume", async () => {
+test("a reversed layer shows Reverse active and has no Volume", async () => {
   await renderBar();
   await select("L");
   await fireEvent.press(btn("Reverse"));
   expect(state().project!.layers[0].reversed).toBe(true);
   expect(state().selectedClipId).toBe("L");
   expect(btn("Reverse")).toBeSelected();
-  await openGroup("Audio");
-  expect(btn("Volume")).toBeDisabled();
+  gone("Volume");
 });
 
 test("Forward and Back move the layer in draw order, one undo step each; at the end nothing happens", async () => {
@@ -205,22 +196,23 @@ test("Opacity, Mask and Trim open their sheets on the selected layer", async () 
   expect(state().project!.layers[0].opacity).toBe(0.5);
   expect(screen.getByTestId("tool-strip")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Mask" })).toBeNull();     // the bar is hidden while the strip shows
-  await fireEvent.press(btn("Done"));
+  await closeTool();
   await fireEvent.press(btn("Mask"));
   await fireEvent.press(btn("Circle"));
   expect(state().project!.layers[0].mask).toBe("circle");
+  await closeTool();
   await fireEvent.press(btn("Trim"));
   await fireEvent.changeText(screen.getByLabelText("Trim end"), "1.5");
   await fireEvent.press(btn("Apply"));
   expect(state().project!.layers[0]).toMatchObject({ trimEnd: 1.5, start: 1 });
 });
 
-test("Blend is enabled only for a layer; Green screen for any clip or layer", async () => {
+test("Blend only shows for a layer; Green screen for any clip or layer", async () => {
   await renderBar();
-  expect(btn("Blend")).toBeDisabled();
-  expect(btn("Green screen")).toBeDisabled();
+  gone("Blend");
+  gone("Green screen");
   await select("a");
-  expect(btn("Blend")).toBeDisabled();
+  gone("Blend");
   expect(btn("Green screen")).toBeEnabled();
   await select("L");
   expect(btn("Blend")).toBeEnabled();
@@ -236,6 +228,7 @@ test("Blend and Green screen open their sheets on the selected layer", async () 
   await fireEvent.press(btn("Blend"));
   await fireEvent.press(btn("Multiply"));
   expect(state().project!.layers[0].blend).toBe("multiply");
+  await closeTool();
   await fireEvent.press(btn("Green screen"));
   await fireEvent(screen.getAllByLabelText("Green screen").find((n) => typeof n.props.value === "boolean")!, "valueChange", true);
   expect(state().project!.layers[0].chroma).toEqual({ color: "#00FF00", strength: 0.5 });

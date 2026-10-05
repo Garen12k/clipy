@@ -4,6 +4,7 @@ import { renameProject } from "@/src/editor/model/ops";
 import { makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { TransportRow } from "../components/TransportRow";
+import { closeStrip, useToolStrip } from "../toolStrip";
 
 beforeEach(() => {
   useEditorStore.getState().reset();
@@ -37,4 +38,12 @@ test("play at the end restarts from 0", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "Play" }));
   expect(useEditorStore.getState().playhead).toBe(0);
   expect(useEditorStore.getState().isPlaying).toBe(true);
+});
+
+test("the ratio pill opens the ratio strip", async () => {
+  await render(<TransportRow />);
+  await fireEvent.press(screen.getByRole("button", { name: "Aspect ratio" }));
+  expect(useToolStrip.getState().open).toMatchObject({ id: "ratio" });
+  expect(screen.queryByRole("button", { name: "1:1" })).toBeNull();     // the row no longer owns a sheet
+  closeStrip();
 });
