@@ -378,6 +378,46 @@ export function duplicateAudioTrack(p: Project, id: string): Project {
 }
 
 /**
+ * The two pieces the track `id` is cut into at project `time`, or null where it cannot be cut: no such track, a time that is not
+ * finite, or a piece shorter than the kind's minimum (`minAudioDuration`) — so never at or outside the track's ends.
+ * A track plays 1:1, so the cut in source time is `trimStart + (time − start)`, rounded like every stored trim (3 decimals). Both
+ * pieces go through `cleanAudioTrack` and must come out meeting at that cut: the first ends there, the second starts there (source
+ * time) and at the first one's end (project time, 3 decimals). The first piece keeps the fade in, the second the fade out, stored as
+ * they were however short the piece is: `audioMix` fits them to its length. `second.id` is still the track's own.
+ */
+function audioSplitPieces(p: Project, id: string | null, time: number): { index: number; first: AudioTrack; second: AudioTrack } | null {
+  if (id === null || !Number.isFinite(time)) return null;
+  const index = p.audioTracks.findIndex((t) => t.id === id);
+  if (index < 0) return null;
+  const t = cleanAudioTrack(p.audioTracks[index]);
+  const cut = r3(t.trimStart + (time - t.start));
+  const min = minAudioDuration(t.kind) - 1e-9;
+  if (!Number.isFinite(cut) || cut - t.trimStart < min || t.trimEnd - cut < min) return null;
+  const first = cleanAudioTrack({ ...t, trimEnd: cut, fadeOut: 0 });
+  const second = cleanAudioTrack({ ...t, start: t.start + (cut - t.trimStart), trimStart: cut, fadeIn: 0 });
+  // The cleaning must not have moved the cut (it keeps the minimum length by moving a trim).
+  if (first.trimStart !== t.trimStart || first.trimEnd !== cut || second.trimStart !== cut || second.trimEnd !== t.trimEnd) return null;
+  return { index, first, second };
+}
+
+/** Whether the track `id` can be cut at project `time` (the rules of `splitAudioTrackAt`, the track limit aside). False for no id. */
+export function canSplitAudioAt(p: Project, id: string | null, time: number): boolean {
+  return audioSplitPieces(p, id, time) !== null;
+}
+
+/**
+ * Cuts the track `id` in two at project `time` (see `audioSplitPieces`): the first piece keeps the id, the second gets `pieceId` and
+ * sits right after it in the list. Refused (same project) where `canSplitAudioAt` is false, at AUDIO_LIMITS.maxTracks, and when
+ * `pieceId` is already a track's id.
+ */
+export function splitAudioTrackAt(p: Project, id: string, time: number, pieceId: string): Project {
+  if (p.audioTracks.length >= AUDIO_LIMITS.maxTracks || p.audioTracks.some((t) => t.id === pieceId)) return p;
+  const cut = audioSplitPieces(p, id, time);
+  if (!cut) return p;
+  return touch(p, { audioTracks: [...p.audioTracks.slice(0, cut.index), cut.first, { ...cut.second, id: pieceId }, ...p.audioTracks.slice(cut.index + 1)] });
+}
+
+/**
  * Fade in / out of a video clip's own sound, in seconds of output time, clamped to AUDIO_LIMITS.fade (stored as given: `audioMix` fits
  * them to the clip's length). Photos are refused; a non-finite value leaves the project unchanged.
  */

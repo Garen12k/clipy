@@ -6,7 +6,7 @@ export const TOOL_IDS = [
   "split", "trim", "speed", "volume", "animate", "crop", "transform", "opacity", "mask", "blend", "chroma", "keyframe", "transition",
   "layerForward", "layerBack", "replace", "reverse", "freeze", "duplicate", "delete", "select",
   "overlayEdit", "overlayDuplicate", "overlayDelete", "text", "captions",
-  "addAudio", "ducking", "beats", "audioVolume", "audioFade", "audioDuplicate", "audioDelete",
+  "addAudio", "ducking", "beats", "audioSplit", "audioVolume", "audioFade", "audioDuplicate", "audioDelete",
   "effectStrength", "effectDuplicate", "effectDelete",
 ] as const;
 export type ToolId = (typeof TOOL_IDS)[number];
@@ -21,13 +21,14 @@ const keep = (list: [ToolId, boolean?][]): ToolId[] => list.filter(([, ok]) => o
 
 /**
  * Which bar the editor shows and which tools are on it, in order. Pure: the toolbar component only renders this.
- * A tool that cannot be used for the selection for a lasting reason is left out (never returned and greyed).
+ * A tool that cannot be used for the selection for a lasting reason is left out (never returned and greyed). Where the playhead is
+ * is not a lasting reason: Keyframe and a sound's Split are always listed, and the toolbar turns them off for the moment.
  * `sel.clipId` is a main clip's or a layer's id. An id that no longer exists counts as no selection.
  */
 export function contextFor(sel: ToolbarSelection, p: Project): ToolbarContext {
   const hasClips = p.clips.length > 0;
   if (sel.effectId && p.effects.some((e) => e.id === sel.effectId)) return { bar: "effect", tools: ["effectStrength", "effectDuplicate", "effectDelete"] };
-  if (sel.audioId && p.audioTracks.some((t) => t.id === sel.audioId)) return { bar: "audio", tools: keep([["audioVolume"], ["audioFade"], ["audioDuplicate"], ["audioDelete"], ["addAudio"], ["ducking"], ["beats", hasClips]]) };
+  if (sel.audioId && p.audioTracks.some((t) => t.id === sel.audioId)) return { bar: "audio", tools: keep([["audioSplit"], ["audioVolume"], ["audioFade"], ["audioDuplicate"], ["audioDelete"], ["addAudio"], ["ducking"], ["beats", hasClips]]) };
   const overlay = sel.overlayId ? p.overlays.find((o) => o.id === sel.overlayId) : undefined;
   if (overlay) {
     if (overlay.kind === "caption") return { bar: "text", tools: ["overlayEdit", "captions", "overlayDuplicate", "overlayDelete", "text"] };

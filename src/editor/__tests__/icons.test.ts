@@ -21,10 +21,12 @@ test("the icon of each tool", () => {
     duplicate: "copy-outline", delete: "trash-outline", select: "checkmark-done-outline",
     overlayEdit: "create-outline", overlayDuplicate: "copy-outline", overlayDelete: "trash-outline", text: "add-circle-outline", captions: "chatbox-ellipses-outline",
     addAudio: "add-circle-outline", ducking: "volume-low-outline", beats: "pulse-outline", audioVolume: "volume-medium-outline", audioFade: "trending-up-outline",
-    audioDuplicate: "copy-outline", audioDelete: "trash-outline",
+    audioDuplicate: "copy-outline", audioDelete: "trash-outline", audioSplit: "cut-outline",
     effectStrength: "speedometer-outline", effectDuplicate: "copy-outline", effectDelete: "trash-outline",
   });
   // Tools that can be on the same bar never share a glyph: Trim / Crop did; Overlay / Blend would have, once both are outline.
   expect(TOOL_META.trim.icon).not.toBe(TOOL_META.crop.icon);
   expect(TOOL_META.overlay.icon).not.toBe(TOOL_META.blend.icon);
+  // The two Splits are the same action on different bars (a clip's, a sound's), never side by side: one glyph, one label.
+  expect(TOOL_META.audioSplit).toEqual(TOOL_META.split);
 });

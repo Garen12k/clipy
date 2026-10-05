@@ -167,7 +167,7 @@ The row of tools under the preview follows what you have selected.
 - **A clip** - Split, Trim, Select, Speed, Volume, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete.
 - **A layer** - the same without Split, Select, Background, Templates, Transition and Freeze, plus Blend, Forward and Back.
 - **A text** - Edit, Animate, Keyframe, Duplicate, Delete, Add text. **A caption** - Edit, Captions, Duplicate, Delete, Add text. **A sticker** - Edit, Animate, Keyframe, Duplicate, Delete.
-- **A sound** - Volume, Fade, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
+- **A sound** - Split, Volume, Fade, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
 - **Audio** and **Text** (from the first row) open their own row: Add audio, Ducking, Beats; Add text, Captions.
 
 The bar is 90 pt high; a strip is 154 pt with a 44-pt header.
@@ -281,6 +281,7 @@ Everything here is under **Audio** on the first row, or on the row of a selected
 - **Tracks** - up to 12. Each is a bar on its own lane (music, voice, sound effects). Tap a bar to select it:
   **Add audio**, **Volume**, **Fade** (in and out, up to 5 s each), **Duplicate**, **Delete**. Long-press a bar to move it;
   drag its handles to trim.
+- **Split** (first on a selected sound's row) cuts the sound in two at the white line; the second piece becomes the selected one. It is greyed where the line is off the sound or closer than 0.5 s to one of its ends (0.1 s for a sound effect). The first piece keeps the fade in, the second the fade out.
 - **Clip sound** - a clip's own sound also has **Fade in** and **Fade out** (in the clip's Volume strip).
 - **Ducking** - a switch in the Audio tools: music dips to 30 % while a voice-over plays.
 - **Beats** - tap along to drop beat markers, shown as ticks on the timeline.

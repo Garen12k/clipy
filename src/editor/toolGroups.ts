@@ -54,6 +54,7 @@ export const TOOL_META: Record<ToolId, { label: string; icon: IoniconName }> = {
   addAudio: { label: "Add audio", icon: "add-circle-outline" },
   ducking: { label: "Ducking", icon: "volume-low-outline" },
   beats: { label: "Beats", icon: "pulse-outline" },
+  audioSplit: { label: "Split", icon: "cut-outline" },   // the clip Split's glyph: the same action, and the two are never on one bar
   audioVolume: { label: "Volume", icon: "volume-medium-outline" },
   audioFade: { label: "Fade", icon: "trending-up-outline" },
   audioDuplicate: { label: "Duplicate", icon: "copy-outline" },

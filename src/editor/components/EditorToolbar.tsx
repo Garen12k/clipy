@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
-import { addTextOverlay, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, dropEmptyText, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, duplicateOverlay, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
+import { addTextOverlay, canSplitAudioAt, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, dropEmptyText, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, duplicateOverlay, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitAudioTrackAt, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
 import { clipAt, findItem, itemOffsetAt } from "@/src/editor/model/timeline";
-import { makeOverlay } from "@/src/editor/model/types";
+import { AUDIO_LIMITS, makeOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useClipMedia } from "@/src/editor/useClipMedia";
 import { useItemClip } from "@/src/editor/useItem";
@@ -52,6 +52,8 @@ import { TransitionSheet } from "./TransitionSheet";
 import { TrimSheet } from "./TrimSheet";
 import { VolumeSheet } from "./VolumeSheet";
 
+/** A sound could not be copied or cut in two: the project already has every track it may have. */
+const AUDIO_LIMIT_MESSAGE = "You've reached the audio track limit.";
 /** Why a layer was not copied (`duplicateLayerRefusal`). */
 const DUPLICATE_REFUSED = { limit: "You've reached the layer limit.", overlap: "Only two video layers can play at the same time.", noRoom: "There's no room after this layer." } as const;
 /** What `contextFor` reads: the store's selection plus the toolbar's own section. */
@@ -60,7 +62,8 @@ const selOf = (s: SelectionState, section: Section): ToolbarSelection => ({ clip
 /**
  * The editor's bottom area: ONE bar whose tools follow the selection (`contextFor` decides which bar and which tools; this component
  * only gives each tool its action), a back arrow on every bar but the main one, and — in the bar's place — the open tool strip.
- * A tool that does not apply is not on the bar; the only disabled buttons are momentary (Keyframe off its item, Replace / Overlay
+ * A tool that does not apply is not on the bar; the only disabled buttons are momentary (Keyframe off its item, a sound's Split where
+ * the white line cannot cut it, Replace / Overlay
  * during a pick, Freeze during a capture). The height is explicit; while a strip shows the area grows upwards over the timeline's
  * lowest lanes (a negative top margin) instead of pushing the preview. The root must stay a direct child of the screen, after the timeline.
  * A tall panel (`ToolPanel`) takes the bar's place too, at its own explicit height and without a lift: the editor's layout hides the timeline then.
@@ -141,6 +144,10 @@ export function EditorToolbar() {
     }
   };
 
+  // A sound's Split: whether the selected sound can be cut at the playhead (`canSplitAudioAt`, the op's own rule). A boolean, so
+  // playhead ticks re-render only when the answer changes — the same way as `pin` above, and shown the same way (off, not hidden).
+  const canSplitAudio = useEditorStore((s) => !!s.project && canSplitAudioAt(s.project, s.selectedAudioId, s.playhead));
+
   /** Clears whichever selection is active, and the section: the main bar shows. */
   const back = () => {
     const s = useEditorStore.getState();
@@ -193,12 +200,24 @@ export function EditorToolbar() {
     if (!project || !selectedAudioId) return;
     // The op returns the same project when it refuses (the track limit).
     const next = duplicateAudioTrack(project, selectedAudioId);
-    if (next === project) { useToast.getState().show("You've reached the audio track limit."); return; }
+    if (next === project) { useToast.getState().show(AUDIO_LIMIT_MESSAGE); return; }
     haptic("light");
     apply(() => next);
     // The copy sits right after the original in the list.
     const dup = next.audioTracks[next.audioTracks.findIndex((t) => t.id === selectedAudioId) + 1];
     if (dup) selectAudio(dup.id);
+  };
+  const splitSelectedAudio = () => {
+    const { project, playhead, selectAudio } = useEditorStore.getState();
+    if (!project || !selectedAudioId || !canSplitAudioAt(project, selectedAudioId, playhead)) return;
+    // The one refusal `canSplitAudioAt` leaves to the op: two pieces are two tracks.
+    if (project.audioTracks.length >= AUDIO_LIMITS.maxTracks) { useToast.getState().show(AUDIO_LIMIT_MESSAGE); return; }
+    const pieceId = newId();
+    const next = splitAudioTrackAt(project, selectedAudioId, playhead, pieceId);
+    if (next === project) return;
+    haptic("light");
+    apply(() => next);
+    selectAudio(pieceId);   // the second piece: the one the playhead is now at the start of
   };
   const deleteSelectedAudio = () => {
     if (!selectedAudioId) return;
@@ -272,6 +291,7 @@ export function EditorToolbar() {
     // A preference, not an action on a track: there even before there is a voice-over.
     ducking: { active: ducking, onPress: () => { haptic("light"); apply((p) => setDucking(p, !ducking)); } },
     beats: { onPress: () => openStrip("beats") },
+    audioSplit: { disabled: !canSplitAudio, onPress: splitSelectedAudio },
     audioVolume: { onPress: () => openStrip("audioVolume") },
     audioFade: { onPress: () => openStrip("audioFade") },
     audioDuplicate: { onPress: duplicateSelectedAudio },

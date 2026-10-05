@@ -30,7 +30,7 @@ const BACK = "Back to main tools";
 const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Effects", "Filter", "Adjust", "Ratio", "Background", "Cover", "Templates"];
 const CLIP = ["Split", "Trim", "Select", "Speed", "Volume", "Animate", "Filter", "Adjust", "Background", "Templates", "Crop", "Transform", "Opacity", "Mask", "Green screen", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate", "Delete"];
 const TEXT = ["Edit", "Animate", "Keyframe", "Duplicate", "Delete", "Add text"];
-const SOUND = ["Volume", "Fade", "Duplicate", "Delete", "Add audio", "Ducking", "Beats"];
+const SOUND = ["Split", "Volume", "Fade", "Duplicate", "Delete", "Add audio", "Ducking", "Beats"];
 
 beforeEach(() => {
   closeStrip();
@@ -94,8 +94,10 @@ describe("bars", () => {
     expect(disabled()).toEqual(["Keyframe"]);
     await act(() => { st().selectOverlay("t1"); st().seek(2); });
     expect(disabled()).toEqual([]);
-    await act(() => { st().selectAudio("m1"); });
+    await act(() => { st().selectAudio("m1"); });                  // m1 is 0 … 5: the playhead (2) is on it
     expect(disabled()).toEqual([]);
+    await act(() => { st().seek(6); });                 // off the sound: its Split is momentarily off, like Keyframe
+    expect(disabled()).toEqual(["Split"]);
   });
 
   test("tools that do not apply are not there: a photo, the last clip, one clip, an empty project", async () => {
@@ -791,6 +793,75 @@ describe("Audio tools", () => {
     expect(screen.getByTestId("fade-in").props.maximumValue).toBe(2);
     await fireEvent(screen.getByTestId("fade-in"), "valueChange", 1);
     expect(tracks().map((t) => t.fadeIn)).toEqual([0, 1]);
+  });
+
+  test("Split is first on a selected sound's bar, and off (like Keyframe) while the playhead is not where the sound can be cut", async () => {
+    withAudio();                                         // t1: 0 … 4, t2: 1 … 5
+    await renderBar();
+    await act(() => { st().selectAudio("t1"); st().seek(2); });
+    expect(row()).toEqual(TRACK);
+    expect(row()[1]).toBe("Split");
+    expect(btn("Split")).toBeEnabled();
+    for (const [time, on] of [[0, false], [0.4, false], [0.5, true], [3.5, true], [3.6, false], [4, false], [7, false], [2, true]] as const) {
+      await act(() => { st().seek(time); });
+      expect([time, !btn("Split").props.accessibilityState?.disabled]).toEqual([time, on]);
+      expect(row()).toEqual(TRACK);                      // never hidden: the bar does not jump under the finger
+    }
+    await act(() => { st().seek(0.2); });
+    await fireEvent.press(btn("Split"));
+    expect(tracks()).toHaveLength(2);
+    expect(past()).toBe(0);
+  });
+
+  test("Split cuts the selected sound at the playhead in one undo step, selects the second piece and buzzes lightly", async () => {
+    withAudio();
+    const buzz = jest.spyOn(haptics, "haptic");
+    await renderBar();
+    await act(() => { st().selectAudio("t1"); st().seek(1.5); });
+    await fireEvent.press(btn("Split"));
+    expect(tracks().map((t) => [t.id, t.start, t.trimStart, t.trimEnd])).toEqual([["t1", 0, 0, 1.5], ["dup", 1.5, 1.5, 4], ["t2", 1, 0, 4]]);
+    expect(past()).toBe(1);
+    expect(st().selectedAudioId).toBe("dup");
+    expect(buzz).toHaveBeenCalledTimes(1);
+    expect(buzz).toHaveBeenCalledWith("light");
+    expect(row()).toEqual(TRACK);
+    expect(btn("Split")).toBeDisabled();                 // the playhead is at the very start of the selected piece
+    expect(useToast.getState().message).toBeNull();
+    // Undo: one track again; the selected piece is gone, so the store's own rule clears the selection.
+    await act(() => { st().undo(); });
+    expect(tracks().map((t) => [t.id, t.start, t.trimStart, t.trimEnd])).toEqual([["t1", 0, 0, 4], ["t2", 1, 0, 4]]);
+    expect(st().selectedAudioId).toBeNull();
+    expect(row()).toEqual(MAIN);
+    buzz.mockRestore();
+  });
+
+  test("Split at the track limit toasts and changes nothing", async () => {
+    withAudio(AUDIO_LIMITS.maxTracks);
+    const buzz = jest.spyOn(haptics, "haptic");
+    await renderBar();
+    await act(() => { st().selectAudio("t1"); st().seek(2); });
+    expect(btn("Split")).toBeEnabled();
+    await fireEvent.press(btn("Split"));
+    expect(tracks()).toHaveLength(AUDIO_LIMITS.maxTracks);
+    expect(past()).toBe(0);
+    expect(st().selectedAudioId).toBe("t1");
+    expect(buzz).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBe("You've reached the audio track limit.");
+    buzz.mockRestore();
+  });
+
+  test("playhead ticks that do not change whether the sound can be cut do not re-render the bar", async () => {
+    withAudio();
+    await renderBar();
+    await act(() => { st().selectAudio("t1"); st().seek(1); });
+    const asked = jest.spyOn(ops, "canSplitAudioAt");
+    const before = screen.getByTestId("toolbar-scroll").props.children;
+    for (const time of [1.1, 1.2, 2, 3.4]) await act(() => { st().seek(time); });
+    expect(asked).toHaveBeenCalled();                    // the selector ran on the ticks …
+    expect(screen.getByTestId("toolbar-scroll").props.children).toBe(before);   // … and the bar's buttons are the very same elements
+    await act(() => { st().seek(3.9); });               // the answer changes: now it renders
+    expect(screen.getByTestId("toolbar-scroll").props.children).not.toBe(before);
+    asked.mockRestore();
   });
 
   test("Duplicate copies the track in one undo step and selects the copy", async () => {
