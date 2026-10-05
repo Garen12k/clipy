@@ -42,18 +42,23 @@ export default function ProjectsScreen() {
   }
 
   // New clip: the library, then the aspect-ratio picker, then the project. Nothing exists until Create is pressed.
+  // The button is held back only by the two refs — the library is up, or a project is being made (its media copied) — never by
+  // `pending`: if iOS drops the sheet's presentation, `pending` stays set with nothing on screen to clear it, and the button must
+  // still work. The sheet itself covers the button while it is really there. A press with media still waiting starts over: the
+  // stale pick is dropped first (so the sheet is presented afresh for the new one), and the new pick replaces it.
   const starting = useRef(false);
+  const creating = useRef(false);
   async function onNew() {
-    if (starting.current || pending) return; // the library or the ratio picker is already up
+    if (starting.current || creating.current) return;
     starting.current = true;
     try {
+      setPending(null);
       const assets = await pickMedia();
       if (!assets || assets.length === 0) return;
       await new Promise((r) => setTimeout(r, AFTER_PICKER_MS));
       setPending(assets);
     } finally { starting.current = false; }
   }
-  const creating = useRef(false);
   async function onCreate(aspectRatio: AspectRatio) {
     if (!pending || creating.current) return;
     creating.current = true;

@@ -111,6 +111,57 @@ describe("the aspect-ratio picker when a project is created", () => {
     expect(storage.createProject).toHaveBeenCalledTimes(1);
   });
 
+  test("a sheet iOS never presented cannot block New clip: the next press opens the library again and its pick replaces the stale one", async () => {
+    await start(); // media is waiting for its ratio — on the phone the sheet may never have appeared
+    const other = [{ uri: "file:///c.mov", kind: "video", durationSec: 5, width: 1080, height: 1080 }];
+    let pick: (v: unknown) => void = () => {};
+    (pickMedia as jest.Mock).mockImplementationOnce(() => new Promise((r) => { pick = r; }));
+    // (A press resolves only when its handler has finished: this one is awaited once the library has answered.)
+    const pressed = fireEvent.press(screen.getByRole("button", { name: "New clip" }));
+    await waitFor(() => expect(pickMedia).toHaveBeenCalledTimes(2));
+    // The stale pick is dropped as the library opens (so the sheet is presented afresh afterwards) …
+    await waitFor(() => expect(screen.queryByRole("header", { name: "Aspect ratio" })).toBeNull());
+    // … and a third press while the library is up does nothing.
+    await fireEvent.press(screen.getByRole("button", { name: "New clip" }));
+    expect(pickMedia).toHaveBeenCalledTimes(2);
+    pick(other);
+    await pressed;
+    await screen.findByRole("header", { name: "Aspect ratio" });
+    await fireEvent.press(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(storage.createProject).toHaveBeenCalledWith("Project 1", other, "auto"));
+    expect(storage.createProject).toHaveBeenCalledTimes(1);
+  });
+
+  test("a lost sheet and then a cancelled library: nothing is waiting any more, and New clip still works", async () => {
+    await start();
+    (pickMedia as jest.Mock).mockResolvedValueOnce(null).mockResolvedValueOnce(picked);
+    await fireEvent.press(screen.getByRole("button", { name: "New clip" }));
+    await waitFor(() => expect(pickMedia).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("header", { name: "Aspect ratio" })).toBeNull());
+    await fireEvent.press(screen.getByRole("button", { name: "New clip" }));
+    await waitFor(() => expect(pickMedia).toHaveBeenCalledTimes(3));
+    await screen.findByRole("header", { name: "Aspect ratio" });
+    expect(storage.createProject).not.toHaveBeenCalled();
+  });
+
+  test("while the project is being made (the media is copied) New clip does nothing", async () => {
+    await start();
+    let made: (v: unknown) => void = () => {};
+    (storage.createProject as jest.Mock).mockReset();
+    (storage.createProject as jest.Mock).mockImplementationOnce(() => new Promise((r) => { made = r; }));
+    const pressed = fireEvent.press(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(storage.createProject).toHaveBeenCalledTimes(1));
+    await fireEvent.press(screen.getByRole("button", { name: "New clip" }));
+    expect(pickMedia).toHaveBeenCalledTimes(1);
+    made({ project: { id: "p9" }, failed: 0 });
+    await pressed;
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/editor/p9"));
+    // Afterwards it works again.
+    (pickMedia as jest.Mock).mockResolvedValueOnce(picked);
+    await fireEvent.press(screen.getByRole("button", { name: "New clip" }));
+    await waitFor(() => expect(pickMedia).toHaveBeenCalledTimes(2));
+  });
+
   test("every choice is a 44-pt target or larger", async () => {
     await start();
     for (const o of options()) {

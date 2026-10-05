@@ -468,7 +468,7 @@ final class ExportSessionTests: XCTestCase {
       ("3:4", 2160, 2160, 2880),
       ("21:9", 720, 1680, 720),
       ("21:9", 1080, 2520, 1080),
-      ("21:9", 2160, 4672, 2002),
+      ("21:9", 2160, 4092, 1754),
     ]
     for row in rows {
       // The number is ignored for a "w:h" id, whatever it is — also when it is absent (0), as in an old request.
@@ -480,6 +480,20 @@ final class ExportSessionTests: XCTestCase {
     }
   }
 
+  /// The longer side is never above 4096 px, whichever way the frame is turned; 16:9 and 9:16 at 4K are under it.
+  func testRenderSizeKeepsTheLongSideInsideTheEncoder() {
+    XCTAssertEqual(ExportSession.maxLongSide, 4096)
+    XCTAssertEqual(ExportSession.renderSize(aspect: 16.0 / 9.0, resolution: 2160), CGSize(width: 3840, height: 2160))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 9.0 / 16.0, resolution: 2160), CGSize(width: 2160, height: 3840))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 21.0 / 9.0, resolution: 2160), CGSize(width: 4092, height: 1754))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 9.0 / 21.0, resolution: 2160), CGSize(width: 1754, height: 4092))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 4096.0 / 2160.0, resolution: 2160), CGSize(width: 4096, height: 2160))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 2, resolution: 2160), CGSize(width: 4096, height: 2048))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 0.5, resolution: 2160), CGSize(width: 2048, height: 4096))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 21.0 / 9.0, resolution: 1080), CGSize(width: 2520, height: 1080))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 21.0 / 9.0, resolution: 720), CGSize(width: 1680, height: 720))
+  }
+
   /// "auto": the string is not a ratio, so the number decides — (frameAspect, resolution, width, height).
   func testRenderSizeForAuto() {
     let rows: [(frameAspect: Double, Int, Int, Int)] = [
@@ -487,7 +501,7 @@ final class ExportSessionTests: XCTestCase {
       (frameAspect: 1.777778, 1080, 1920, 1080),
       (frameAspect: 1.333333, 1080, 1440, 1080),
       (frameAspect: 2.333333, 1080, 2520, 1080),
-      (frameAspect: 2.333333, 2160, 4672, 2002),
+      (frameAspect: 2.333333, 2160, 4092, 1754),
       (frameAspect: 1.333333, 720, 960, 720),
     ]
     for row in rows {

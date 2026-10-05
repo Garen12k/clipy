@@ -372,10 +372,20 @@ final class ExportSession {
     return 1
   }
 
+  /// The longest side, in pixels, an H.264 encoder is asked for — `MAX_LONG_SIDE` in src/export/estimate.ts. The
+  /// macroblock count alone lets a very wide frame through (4672 × 2002 = 36 792 macroblocks), but hardware H.264
+  /// encoders stop at a 4096 × 2304 frame. That is a limit on the frame's two dimensions, not on "width": the encoder
+  /// that takes 3840 × 2160 takes 2160 × 3840 too (a 9:16 4K export), so the cap is on the LONGER side whichever way
+  /// the frame is turned. 3840 is under it: 16:9 and 9:16 at 4K are untouched.
+  static let maxLongSide = 4096
+
   /// The exported video's size in pixels — keep identical to `renderSize` in src/export/estimate.ts.
   /// The SHORT side is the resolution (720 / 1080 / 2160), the long side follows the shape, both are EVEN (encoders
-  /// need that). A frame the H.264 encoder cannot take (only wider than about 2:1 at 4K) is scaled down in steps of 2
-  /// on the short side, same shape. A shape that is not a positive number is a square.
+  /// need that). A frame the H.264 encoder cannot take — too many macroblocks, or a long side above `maxLongSide`:
+  /// only frames wider than 4096 : 2160 (about 1.9 : 1) at 4K — is scaled down in steps of 2 on the short side, same
+  /// shape. A shape that is not a positive number is a square.
+  /// 21:9 at 4K: 2160 × 7 / 3 = 5040 → … 1756 × 7 / 3 = 4097.33 → 4098 (too long) → 1754 × 7 / 3 = 4092.67 → 4092:
+  /// 4092 × 1754. 2:1 at 4K: 4320 → 2048 × 2 = 4096: 4096 × 2048. 16:9 at 4K: 3840 × 2160, as ever.
   static func renderSize(aspect: Double, resolution: Int) -> CGSize {
     let a = aspect.isFinite && aspect > 0 ? aspect : 1
     let ratio = max(a, 1 / a)
@@ -383,7 +393,7 @@ final class ExportSession {
     func macroblocks(_ w: Int, _ h: Int) -> Int { ((w + 15) / 16) * ((h + 15) / 16) }
     var short = even(Double(resolution))
     var long = even(Double(short) * ratio)
-    while macroblocks(long, short) > MediaPrePass.maxMacroblocks && short > 2 { short -= 2; long = even(Double(short) * ratio) }
+    while (macroblocks(long, short) > MediaPrePass.maxMacroblocks || long > maxLongSide) && short > 2 { short -= 2; long = even(Double(short) * ratio) }
     return a >= 1 ? CGSize(width: long, height: short) : CGSize(width: short, height: long)
   }
 

@@ -17,10 +17,20 @@ export const estimateBytes = (durationSec: number, res: Resolution, s: ExportSet
 /** H.264 level 5.1 / 5.2 frame-size limit in 16 × 16 macroblocks (= 4096 × 2304) — `MediaPrePass.maxMacroblocks` on the native side. */
 export const MAX_MACROBLOCKS = 36_864;
 /**
+ * The longest side, in pixels, an H.264 encoder is asked for — `ExportSession.maxLongSide` on the native side. The macroblock count
+ * alone lets a very wide frame through (4672 × 2002 = 36 792 macroblocks), but hardware H.264 encoders stop at a 4096 × 2304 frame.
+ * That is a limit on the frame's two dimensions, not on "width": the encoder that takes 3840 × 2160 takes 2160 × 3840 too (a 9:16 4K
+ * export), so the cap is on the LONGER side whichever way the frame is turned. 3840 is under it: 16:9 and 9:16 at 4K are untouched.
+ */
+export const MAX_LONG_SIDE = 4096;
+/**
  * The exported video's size in pixels for a frame shape (`frameAspect`: width / height) — the mirror of `ExportSession.renderSize`
  * (keep them identical; src/export/__tests__/renderSize.swift.test.ts). The SHORT side is the resolution (720 / 1080 / 2160), the long
- * side follows the shape, both are EVEN (encoders need that). A frame the H.264 encoder cannot take (only wider than about 2:1 at 4K)
- * is scaled down in steps of 2 on the short side, same shape. A shape that is not a positive number is a square.
+ * side follows the shape, both are EVEN (encoders need that). A frame the H.264 encoder cannot take — too many macroblocks, or a long
+ * side above MAX_LONG_SIDE: only frames wider than 4096 : 2160 (about 1.9 : 1) at 4K — is scaled down in steps of 2 on the short side,
+ * same shape. A shape that is not a positive number is a square.
+ * 21:9 at 4K: 2160 × 7 / 3 = 5040 → … 1756 × 7 / 3 = 4097.33 → 4098 (too long) → 1754 × 7 / 3 = 4092.67 → 4092: 4092 × 1754.
+ * 2:1 at 4K: 4320 → 2048 × 2 = 4096: 4096 × 2048. 16:9 at 4K: 3840 × 2160, as ever.
  * Neither the bitrate nor the size estimate depends on the shape: they go by resolution, fps and quality only.
  */
 export function renderSize(aspect: number, resolution: number): { width: number; height: number } {
@@ -30,7 +40,7 @@ export function renderSize(aspect: number, resolution: number): { width: number;
   const macroblocks = (w: number, h: number) => Math.ceil(w / 16) * Math.ceil(h / 16);
   let short = even(resolution);
   let long = even(short * ratio);
-  while (macroblocks(long, short) > MAX_MACROBLOCKS && short > 2) { short -= 2; long = even(short * ratio); }
+  while ((macroblocks(long, short) > MAX_MACROBLOCKS || long > MAX_LONG_SIDE) && short > 2) { short -= 2; long = even(short * ratio); }
   return a >= 1 ? { width: long, height: short } : { width: short, height: long };
 }
 /** What the request carries: 0 (no limit — today's export) for High, the capped bitrate for Smaller file. */
