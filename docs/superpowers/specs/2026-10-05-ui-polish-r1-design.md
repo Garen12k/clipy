@@ -1,7 +1,7 @@
 # UI polish, round 1 — building blocks and the editor: design
 
 **Date:** 2026-10-05
-**Status:** Approved by the user 2026-10-05
+**Status:** Implemented 2026-10-05 (on-device confirmation by the user pending)
 **Builds on:** the UI redesign ("Grand Voyage": `src/theme/theme.ts`, the kit in `src/ui/`), editing UI round 1 (the contextual bar, `ToolStrip`, `src/editor/toolStrip.ts`) and round 2 (`ToolPanel`, `EditorLayout`, `src/ui/keyboard.ts`). No model, schema or Swift change. No new package.
 
 ## 1. What the user gets
@@ -84,6 +84,34 @@ The only cost is 4 pt of preview in the bar state.
 ### 3.3 Gutters
 
 Top bar: `height: size.row`, `paddingLeft: space.sm`, `paddingRight: space.gutter`, `paddingBottom: space.sm`. Play row: `height: size.row`, `paddingHorizontal: space.sm`. Toolbar row: the back arrow gets `paddingLeft: space.sm`. Strips and panels: `space.gutter`. The toast: `left / right: space.gutter`.
+
+## 3a. As built
+
+What was built, and where it differs from the plan above. Commits `f0314eb` (tokens) to `dc5a991` (fix wave 1), then the guard pins and these docs.
+
+**Numbers.** Bar 86 to 90; strip 150 to 154 with a 44-pt header (tiles 72, slider 36); the lift is still two timeline lanes (64). The preview is 4 pt shorter in the bar state (229 instead of 233 on 375 x 667; 349 instead of 353 on 393 x 852), and 4 pt shorter with Trim and the keyboard up. `MULTI_BAR_HEIGHT` stays 104 (a strip rises 50 over it). `STRIP` is derived from named parts in `ToolStrip.tsx`, not typed as five literals; `budgets.test.tsx` pins the values.
+
+**Look.** A selected chip has a gold ring (no gold fill); the header check is a gold ring on the tile colour. Surfaces are colour steps (`theme.elevation`), no shadows. Compact tab chips have a 72-pt-high tap area (the strip's lead row). Compact buttons carry 4 pt of top / bottom slop (`buttonSlop`).
+
+**Motion.** Entrances only: strip, panel, the row of tools (on a `key={bar}` change, or when it returns) and the toast. No exit animations (closing is instant) and no layout animations; `toolStrip.ts` is untouched. No tile stagger. `PressableScale` takes `still`: the Speed preset chips set their lift at once while the slider is dragged, so nothing animates during a drag. The toast fades out by a timer shortly before its 2.5 s end.
+
+**Sliders and tiles.** The kit `Slider` (`src/ui/Slider.tsx`) wraps the community slider: gold track and thumb; the unfilled track is `theme.colors.sea` (2.5:1 on a bar; the planned `elevation.tile` was 1.15:1 and nearly invisible). A light haptic tick at Adjust 0 (Brightness), Volume 100 % (clip and sound) and Speed 1x; a disabled slider never ticks, and nothing ticks outside a drag. `StripSlider` shows a `ValueLabel` (tabular digits). Only `CoverSheet.tsx` still imports the community slider. The kit `Tile` (`TILE_WIDTH` 72) replaces the four private 68-pt tiles.
+
+**Icons.** Every tool icon is an outline icon. Trim uses `code-outline` and Blend `color-fill-outline`, for lack of better outline glyphs (both are on the phone checklist). Kept filled: the keyframe diamond, play / pause in `TransportRow`, mic / stop in `RecordTab`, warning / image / videocam / volume-medium on timeline bars, play in `PreviewPlayer`, checkmark in `ProgressRing`.
+
+**Touch targets below 44 pt (kept on purpose).** Adjust's Reset is a 36-pt-high target (its row is 36 high, so its slop has no room). Add audio's USE / Add button is a 36-pt touchable inside a row about 64 high. Captions' "Replace existing captions?" buttons are all compact (36) so the card fits the compact panel; the "Added captions." Style captions button is a regular 48. Beats' two buttons are compact (about 327 of 343 pt on a 375-pt phone, estimated, not measured).
+
+**Tests whose expectations changed.** `ToolStrip.test.tsx` (86 / 150 / 36 / 76 to 90 / 154 / 44 / 72; the action hit-slop test replaced by a 44-pt header test); `ToolPanel.test.tsx` (the header-action target test replaced: the action is a compact quiet button); `kit.test.tsx` (two chip cases: ring, heights); `strips.layout.test.tsx` (tile column 68 to 72; the Volume label is read through its parent); `SpeedSheet.test.tsx` ("1.5x" now appears twice); `Slider.test.tsx`, `strips.polish.test.tsx`, `panels.polish.test.tsx` and `sheetStyle.test.tsx` (rest track `sea`); `useReducedMotion.test.tsx` (exactly one query and one listener); `CaptionsSheet.test.tsx` (two expectations added).
+
+**Files outside the plan.** `src/ui/buttonStyle.ts`, `src/ui/QuietButton.tsx`, `src/ui/DoneButton.tsx`, `src/ui/Enter.tsx` and `ValueLabel` in `src/ui/Text.tsx`; the top bar and play row have explicit 48-pt rows. Nothing on the plan's do-not-touch list changed (`git diff --stat main` is empty for it).
+
+**Guards.** `spacingScale.test.ts` has two documented blind spots: an apostrophe in JSX text hides the rest of its line, and a value with `*` or `/` is skipped whole (raw numbers in it included). `kitSlider.test.ts` also checks that no kit slider overrides the rest track. Both allow-tables are pinned at their minimum: timeline-lane geometry below the 4-pt scale, and the Cover sheet.
+
+**Left as it was.** The four timeline pills (`AudioBar`, `EffectPill`, `LayerBar`, `OverlayPill`) still use `fontSize: 12` rather than `theme.type.small`.
+
+**Round 2 (not done).** Home, export, post and accounts screens, screen transitions, `Sheet` (Cover) and `CropScreen`.
+
+**What no test checks.** Everything on the device checklist at the end of the plan: how it looks and feels, the haptics, smoothness while the video plays, Reduce Motion on the phone, the smallest iPhone.
 
 ## 4. Buttons, icons and controls
 

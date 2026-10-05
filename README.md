@@ -80,6 +80,10 @@ Details per platform:
 
 The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an editor toolbar that follows what is selected, with small tool strips for the quick tools. Every colour, font, radius and duration comes from `src/theme/theme.ts`; the shared kit lives in `src/ui/`. UI fonts are Oswald (titles) and Montserrat (body), both under the SIL Open Font License (OFL). Regenerate the app icon and splash with `npm run gen:brand`.
 
+**Building blocks.** One spacing scale (4 / 8 / 12 / 16 / 24 / 32, `theme.space`) and one 16-pt gutter at the screen edges. Sizes for buttons, chips, tiles and icons come from `theme.size`. There are three kinds of button: gold (the one main action of a screen or panel), outlined, and text only; the compact versions are 36 pt high with extra touch room. A selected chip or tile has a gold ring, a lighter surface and is a touch larger. Every tool icon is an outline icon, and a gold icon means "on". Sliders are the kit `Slider` (`src/ui/Slider.tsx`: gold track, a light tick at the rest value, the current value in the label) and pick-one tiles are the kit `Tile` (`src/ui/Tile.tsx`). Surfaces are layered by colour (page, bar, tile, selected), not by shadows.
+
+**Motion.** Buttons dip when pressed; a strip or panel fades and rises in, the row of tools fades in when it changes, messages ease in and out. Closing is instant. Nothing lasts longer than a quarter of a second, only opacity and position change (never layout next to the video), and every animation is built in `src/ui/motion.ts`. With Reduce Motion on, nothing slides or grows (`src/ui/useReducedMotion.ts`); buttons still react.
+
 ## Layout
 
 - `app/` — screens (Expo Router): `index.tsx`, `editor/[id]/index.tsx`, `editor/[id]/export.tsx`
@@ -166,11 +170,13 @@ The row of tools under the preview follows what you have selected.
 - **A sound** - Volume, Fade, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
 - **Audio** and **Text** (from the first row) open their own row: Add audio, Ducking, Beats; Add text, Captions.
 
+The bar is 90 pt high; a strip is 154 pt with a 44-pt header.
+
 Every row except the first has a **back arrow** at the left that clears the selection. Tools that do not apply are not shown (a photo has no Speed, the last clip has no Transition); only Keyframe (the white line is not on the item), Replace / Overlay (while the picker is open) and Freeze (while it captures) grey out for a moment.
 
 **Strips.** Quick tools (Filter, Adjust, Speed, Volume, Opacity, Animate, Mask, Blend, Green screen, Transform, Background, Ratio, Transition, Fade, Strength) open as a small panel in place of the row. Nothing dims and the video keeps its size; you can play, scrub and tap the timeline while it is open. It rises over the two lowest timeline rows. The round **✓** closes it, and so does selecting something else. The ratio pill next to the play button and the mark between two clips open the Ratio and Transition strips. The Effects list and Trim (by numbers) are strips too.
 
-**Panels.** Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style and Beats open as a tall panel at the bottom. Nothing dims: the timeline and the row of tools give the panel their place (the timeline comes back where it was, same zoom), and the video stays above it, a little smaller (smaller still for the big panels), and keeps playing. Play, undo and redo stay usable above the panel. The round **✓** closes it, and so does selecting something else. When you type, the panel sits on the keyboard at a lower height and the video stays in view; drag the panel's content down to put the keyboard away (the panel stays open). While a voice-over is recorded the panel stays until the recording is stopped and saved, and the other tools and Export do not open. Trim's number boxes work the same way: with the keyboard up the timeline is hidden and the strip sits on the keyboard. Panels have no slide-in animation. Cover is still a pop-up sheet (it dims the screen) and Crop is a full screen.
+**Panels.** Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style and Beats open as a tall panel at the bottom. Nothing dims: the timeline and the row of tools give the panel their place (the timeline comes back where it was, same zoom), and the video stays above it, a little smaller (smaller still for the big panels), and keeps playing. Play, undo and redo stay usable above the panel. The round **✓** closes it, and so does selecting something else. When you type, the panel sits on the keyboard at a lower height and the video stays in view; drag the panel's content down to put the keyboard away (the panel stays open). While a voice-over is recorded the panel stays until the recording is stopped and saved, and the other tools and Export do not open. Trim's number boxes work the same way: with the keyboard up the timeline is hidden and the strip sits on the keyboard. Panels fade and rise in; closing is instant. Cover is still a pop-up sheet (it dims the screen) and Crop is a full screen.
 
 ## Clip tools
 
