@@ -11,6 +11,7 @@ import { useItemClip } from "@/src/editor/useItem";
 import { useFreezeFrame } from "@/src/editor/useFreezeFrame";
 import { TOOL_META, type IoniconName } from "@/src/editor/toolGroups";
 import { contextFor, selectionKey, type Section, type SelectionState, type ToolbarSelection, type ToolId } from "@/src/editor/toolbarContext";
+import { laneLift, laneModel } from "@/src/editor/timelineLayout";
 import { closeStrip, openStrip, rekeyStrip, useStripCloser, useToolStrip } from "@/src/editor/toolStrip";
 import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
@@ -111,6 +112,8 @@ export function EditorToolbar() {
   const reversed = !!useItemClip(selectedId)?.reversed;
   const ducking = useEditorStore((s) => !!s.project?.ducking);
   const multi = useEditorStore((s) => s.multiSelect !== null);
+  // A strip rises over the timeline's lanes only, never over the clips: with fewer than two lanes the rest of its height comes out of the preview.
+  const lift = useEditorStore((s) => laneLift(laneModel(s.project), STRIP.lift));
   const insets = useSafeAreaInsets();
   const { replaceMedia, addOverlay, busy: mediaBusy } = useClipMedia();
   const { freeze, busy: freezeBusy } = useFreezeFrame();
@@ -313,7 +316,7 @@ export function EditorToolbar() {
 
   return (
     <View testID="editor-toolbar" style={{ backgroundColor: theme.elevation.bar, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: pad,
-      height: area + pad, marginTop: stripShown && !typing ? -STRIP.lift : 0 }}>
+      height: area + pad, marginTop: stripShown && !typing && lift > 0 ? -lift : 0 }}>
       {toolShown ? null : (
         <View testID="toolbar-row" style={{ height: BAR_HEIGHT - 1, flexDirection: "row", alignItems: "center", paddingLeft: bar === "main" ? 0 : theme.space.sm }}>
           {bar === "main" ? null : <IconButton name="chevron-back-outline" accessibilityLabel="Back to main tools" onPress={back} />}

@@ -72,6 +72,8 @@ Tests read `BAR_HEIGHT`, `STRIP.*`, `MULTI_BAR_HEIGHT`, `PANEL.*`, `panelHeight`
 
 ### 3.2 The preview
 
+> **Superseded (bigger preview).** The timeline is no longer always 216: a lane is shown only while it holds something (`laneModel` in `timelineLayout.ts`), so it is 120 with clips only and 216 with a text, one sound and an effect. The table below is the three-lane case. With clips only the slot is 325 (375 × 667) / 445 (393 × 852); with two lanes 261 / 381. A strip lifts by `min(STRIP.lift, lanes' height)` and the preview gives the rest while it is open (clips only: 261 / 381). The margin around the frame is 4 (`space.xs`), not 12.
+
 Preview slot = window − (top inset + 8) − top bar 48 − play row 48 − timeline 216 − (bar + bottom padding). One audio lane, no layers lane.
 
 | Phone | Bar, today → new | Strip | Regular / compact / typing panel | Strip + keyboard (Trim), today → new |

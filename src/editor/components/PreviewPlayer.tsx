@@ -392,7 +392,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const motion = hit ? clipFrameMotion(hit.clip, hit.offsetInClip) : null;
 
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.md }}>
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.xs }}>
       <Pressable
         onPress={(e?: GestureResponderEvent) => {
           // A tap on a layer's picture (the topmost one there) selects it; with a layer selected, a tap anywhere else deselects it.

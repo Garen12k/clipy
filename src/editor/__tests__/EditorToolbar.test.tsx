@@ -16,6 +16,7 @@ import { deleteClip, moveClip } from "@/src/editor/model/ops";
 import { AUDIO_LIMITS, makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
+import { LANE_GAP, LANE_HEIGHT } from "../timelineLayout";
 import { closeStrip, openStrip, useToolStrip } from "../toolStrip";
 
 const renderBar = () => render(<EditorToolbar />);
@@ -399,7 +400,18 @@ describe("text and sticker bars", () => {
 });
 
 describe("strips and the bar", () => {
+  test("with no lanes under the clips a strip is not lifted at all; with one lane, by that lane", async () => {
+    await renderBar();
+    await act(() => { st().select("a"); });
+    await fireEvent.press(btn("Opacity"));
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
+    await act(() => { st().setProject({ ...st().project!, effects: [makeEffect({ id: "e1", start: 0, end: 2 })] }); st().select("a"); openStrip("opacity"); });
+    expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -(LANE_HEIGHT + LANE_GAP) });
+  });
+
   test("while a strip shows the bar is hidden and the bottom area is taller and lifted; Done brings the bar back", async () => {
+    // A text and a sound: two lanes under the clips for the strip to rise over (it never rises over the clip area).
+    st().setProject({ ...st().project!, overlays: [makeOverlay({ id: "o1", text: "Hi", start: 0, end: 2 })], audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })] });
     await renderBar();
     await act(() => { st().select("a"); });
     await fireEvent.press(btn("Opacity"));

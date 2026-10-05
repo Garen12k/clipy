@@ -6,17 +6,33 @@ export const LANE_HEIGHT = 28;
 export const LANE_GAP = 4;
 /** The audio kinds that have at least one track, in lane order (music, voice, sfx). Empty when the project has no audio. */
 export const audioLaneKinds = (p: Pick<Project, "audioTracks">): AudioKind[] => AUDIO_KINDS.filter((k) => p.audioTracks.some((t) => t.kind === k));
-/**
- * Height of the whole timeline: the clip area, the layers lane (only when the project has layers), the text / sticker lane, one lane
- * per audio kind in use and the effects lane. A project with no audio still shows one (empty) music lane, so the count never goes
- * below one. Lanes only ever add height.
- */
-export const timelineHeight = (audioLaneCount: number, hasLayerLane = false): number =>
-  CLIP_AREA_HEIGHT + (2 + Math.max(1, audioLaneCount) + (hasLayerLane ? 1 : 0)) * (LANE_HEIGHT + LANE_GAP);
-/** The height with one audio lane and no layers lane. */
-export const TIMELINE_HEIGHT = timelineHeight(1);
-/** Lanes under the clips, top to bottom: the layers lane first when there is one, then text / stickers, the audio lanes and effects. Index 0 is the first lane shown. */
+/** Where the lane at `index` starts (its gap, then its bars): index 0 is the first lane shown, right under the clip area. */
 export const laneTop = (index: number): number => CLIP_AREA_HEIGHT + index * (LANE_HEIGHT + LANE_GAP);
+
+/** A lane of the timeline: picture-in-picture layers, text / captions / stickers, one per audio kind, timeline effects. */
+export type LaneId = "layers" | "overlays" | AudioKind | "effects";
+export type Lane = { id: LaneId; index: number; top: number };
+/** The lanes shown under the clips, top to bottom; `lanesHeight` is what they add to the clip area and `height` is the whole timeline. */
+export type LaneModel = { lanes: Lane[]; lanesHeight: number; height: number };
+
+/**
+ * THE rule for the timeline's lanes — nothing else decides which lanes exist, where they sit or how high the timeline is.
+ * A lane is shown only while it holds something: layers; text, captions and stickers (one lane for all three); each audio kind that
+ * has a track; effects. The order never changes. A project with clips only (or none) has no lanes: the timeline is the clip area.
+ */
+export function laneModel(p: Pick<Project, "layers" | "overlays" | "audioTracks" | "effects"> | null): LaneModel {
+  const ids: LaneId[] = p
+    ? [...(p.layers.length > 0 ? (["layers"] as const) : []), ...(p.overlays.length > 0 ? (["overlays"] as const) : []), ...audioLaneKinds(p), ...(p.effects.length > 0 ? (["effects"] as const) : [])]
+    : [];
+  const lanes = ids.map((id, index) => ({ id, index, top: laneTop(index) }));
+  const height = laneTop(lanes.length);
+  return { lanes, lanesHeight: height - CLIP_AREA_HEIGHT, height };
+}
+/**
+ * How far a bottom area that grows by `rise` (a tool strip) may rise over the timeline: over the lanes shown, never over the clip
+ * area. What is left of the rise comes out of the preview while the strip is open.
+ */
+export const laneLift = (model: Pick<LaneModel, "lanesHeight">, rise: number): number => Math.min(rise, model.lanesHeight);
 export const STRIP_HEIGHT = 64;
 export const THUMB_WIDTH = 64;
 export const MIN_THUMB_INTERVAL = 0.5;

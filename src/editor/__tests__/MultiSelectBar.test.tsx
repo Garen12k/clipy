@@ -3,11 +3,12 @@ jest.mock("@/src/lib/id", () => { let n = 0; return { newId: () => `copy${++n}` 
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-04T10:00:00.000Z" }));
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
 import * as Haptics from "expo-haptics";
-import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { Text } from "react-native";
 import { useEditorStore } from "@/src/editor/store";
 import { STRIP, ToolStrip } from "@/src/ui/ToolStrip";
 import { MULTI_BAR_HEIGHT, MultiSelectBar } from "../components/MultiSelectBar";
+import { LANE_GAP, LANE_HEIGHT } from "../timelineLayout";
 
 const st = () => useEditorStore.getState();
 const clips = () => st().project!.clips;
@@ -157,6 +158,8 @@ test("Volume: reversed + normal chosen → enabled, and the sheet shows the norm
 });
 
 test("the bar has an explicit height; while a strip shows it hides its buttons and lifts by the difference", async () => {
+  // Two lanes under the clips: room for the whole rise.
+  st().setProject({ ...st().project!, audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })], effects: [makeEffect({ id: "e1", start: 0, end: 1 })] });
   st().enterMultiSelect(); st().toggleMultiSelect("a");
   const view = await render(<><MultiSelectBar /><ToolStrip visible={false} onClose={() => {}} title="X"><Text>x</Text></ToolStrip></>);
   expect(MULTI_BAR_HEIGHT).toBe(104);
@@ -166,6 +169,14 @@ test("the bar has an explicit height; while a strip shows it hides its buttons a
   expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -(STRIP.height - 104) });
   expect(screen.queryByRole("header", { name: "1 selected" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Select all" })).toBeNull();
+});
+
+test("the lift never reaches over the clip area: none without lanes, one lane's height with one", async () => {
+  st().enterMultiSelect(); st().toggleMultiSelect("a");
+  await render(<><MultiSelectBar /><ToolStrip visible onClose={() => {}} title="X"><Text>x</Text></ToolStrip></>);
+  expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
+  await act(() => { st().apply((p) => ({ ...p, effects: [makeEffect({ id: "e1", start: 0, end: 1 })] })); });
+  expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -(LANE_HEIGHT + LANE_GAP) });
 });
 
 test("a strip whose clip vanishes closes and does not reopen by itself later", async () => {

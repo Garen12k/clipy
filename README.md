@@ -110,7 +110,10 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an 
 - Projects (create, list, reopen, rename, duplicate, delete)
 - Import clips
 - Timeline (split, trim, reorder); a clip whose source video is missing shows a warning badge
-  and is skipped by preview and export
+  and is skipped by preview and export. The rows under the clips (layers, text / stickers, music, voice,
+  sound effects, effects) appear only once they hold something, so a project with clips only gives the
+  video the most room; adding the first text, sound or effect adds its row (`laneModel` in
+  `src/editor/timelineLayout.ts` is the one rule)
 - Preview playback
 - Export, with a fallback card in Expo Go when the native module is not linked
 
@@ -174,7 +177,7 @@ The bar is 90 pt high; a strip is 154 pt with a 44-pt header.
 
 Every row except the first has a **back arrow** at the left that clears the selection. Tools that do not apply are not shown (a photo has no Speed, the last clip has no Transition); only Keyframe (the white line is not on the item), Replace / Overlay (while the picker is open) and Freeze (while it captures) grey out for a moment.
 
-**Strips.** Quick tools (Filter, Adjust, Speed, Volume, Opacity, Animate, Mask, Blend, Green screen, Transform, Background, Ratio, Transition, Fade, Strength) open as a small panel in place of the row. Nothing dims and the video keeps its size; you can play, scrub and tap the timeline while it is open. It rises over the two lowest timeline rows. The round **✓** closes it, and so does selecting something else. The ratio pill next to the play button and the mark between two clips open the Ratio and Transition strips. The Effects list and Trim (by numbers) are strips too.
+**Strips.** Quick tools (Filter, Adjust, Speed, Volume, Opacity, Animate, Mask, Blend, Green screen, Transform, Background, Ratio, Transition, Fade, Strength) open as a small panel in place of the row. Nothing dims; you can play, scrub and tap the timeline while it is open. It rises over the two lowest timeline rows and never over the clips: with two or more rows under the clips the video keeps its size, with fewer the video gets a little smaller while the strip is open. The round **✓** closes it, and so does selecting something else. The ratio pill next to the play button and the mark between two clips open the Ratio and Transition strips. The Effects list and Trim (by numbers) are strips too.
 
 **Panels.** Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style and Beats open as a tall panel at the bottom. Nothing dims: the timeline and the row of tools give the panel their place (the timeline comes back where it was, same zoom), and the video stays above it, a little smaller (smaller still for the big panels), and keeps playing. Play, undo and redo stay usable above the panel. The round **✓** closes it, and so does selecting something else. When you type, the panel sits on the keyboard at a lower height and the video stays in view; drag the panel's content down to put the keyboard away (the panel stays open). While a voice-over is recorded the panel stays until the recording is stopped and saved, and the other tools and Export do not open. Trim's number boxes work the same way: with the keyboard up the timeline is hidden and the strip sits on the keyboard. Panels fade and rise in; closing is instant. Cover is still a pop-up sheet (it dims the screen) and Crop is a full screen.
 

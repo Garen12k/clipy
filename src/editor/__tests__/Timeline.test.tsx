@@ -2,17 +2,22 @@ import { Dimensions, StyleSheet } from "react-native";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn(async () => null) }));
-import { makeAudioTrack, makeClip, makeEffect, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { addEffect, addTextOverlay, deleteOverlay } from "@/src/editor/model/ops";
+import { makeAudioTrack, makeClip, makeEffect, makeLayer, makeOverlay, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { Timeline } from "../components/Timeline";
 import { useSnapGuide } from "../snapping";
-import { CLIP_AREA_HEIGHT, LANE_GAP, LANE_HEIGHT, stripWidth, TIMELINE_HEIGHT, timelineHeight } from "../timelineLayout";
+import { CLIP_AREA_HEIGHT, LANE_GAP, LANE_HEIGHT, laneModel, stripWidth } from "../timelineLayout";
 
 const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })] });
+const LANE = LANE_HEIGHT + LANE_GAP;
+const text = (id = "o1") => makeOverlay({ id, text: "Hi", start: 1, end: 3 });
+const laneIds = () => screen.queryAllByTestId(/-lane$/).map((l) => l.props.testID);
 beforeEach(() => { useEditorStore.getState().reset(); useEditorStore.getState().setProject(p); });
 
 test("timeline content container stacks the clip row and lanes vertically", async () => {
+  useEditorStore.getState().setProject({ ...p, overlays: [text()], audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })] });
   await render(<Timeline />);
   const scrollView = screen.getByTestId("timeline-scroll");
   expect(scrollView.props.contentContainerStyle).toMatchObject({ flexDirection: "column" });
@@ -20,14 +25,16 @@ test("timeline content container stacks the clip row and lanes vertically", asyn
   expect(screen.getByTestId("music-lane")).toBeTruthy();
 });
 
-test("the effects lane is the third lane and only adds height: paddings and width stand-ins are unchanged", async () => {
-  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], effects: [makeEffect({ id: "e1", start: 2, end: 5 })] }));
+test("the effects lane is the last lane and only adds height: paddings and width stand-ins are unchanged", async () => {
+  const q = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [text()], audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })], effects: [makeEffect({ id: "e1", start: 2, end: 5 })] });
+  useEditorStore.getState().setProject(q);
   await render(<Timeline />);
   const scroll = screen.getByTestId("timeline-scroll");
-  expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["overlay-lane", "music-lane", "effect-lane"]);
-  expect(TIMELINE_HEIGHT).toBe(CLIP_AREA_HEIGHT + 3 * (LANE_HEIGHT + LANE_GAP));
+  expect(laneIds()).toEqual(["overlay-lane", "music-lane", "effect-lane"]);
+  const height = laneModel(q).height;
+  expect(height).toBe(CLIP_AREA_HEIGHT + 3 * LANE);
   // Exactly the same container style as before, with the taller height: no width, no extra padding.
-  expect(scroll.props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height: TIMELINE_HEIGHT, flexDirection: "column" });
+  expect(scroll.props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height, flexDirection: "column" });
   const lane = StyleSheet.flatten(screen.getByTestId("effect-lane").props.style);
   expect(lane).toEqual(StyleSheet.flatten(screen.getByTestId("overlay-lane").props.style));
   expect(lane).toEqual({ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP });
@@ -42,13 +49,14 @@ const scrollHandlers = (scroll: { props: object }) => Object.keys(scroll.props).
 
 test("three audio kinds give three audio lanes between the overlay and effects lanes; only heights change", async () => {
   const kinds = ["sfx", "voice", "music", "music"] as const;
-  useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], effects: [makeEffect({ id: "e1", start: 2, end: 5 })], beatMarkers: [1, 2],
-    audioTracks: kinds.map((kind, i) => makeAudioTrack({ id: `t${i}`, kind, sourceDuration: 5, start: i })) }));
+  const q = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [text()], effects: [makeEffect({ id: "e1", start: 2, end: 5 })], beatMarkers: [1, 2],
+    audioTracks: kinds.map((kind, i) => makeAudioTrack({ id: `t${i}`, kind, sourceDuration: 5, start: i })) });
+  useEditorStore.getState().setProject(q);
   await render(<Timeline />);
   const scroll = screen.getByTestId("timeline-scroll");
-  expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["overlay-lane", "music-lane", "voice-lane", "sfx-lane", "effect-lane"]);
-  const height = timelineHeight(3);
-  expect(height).toBe(TIMELINE_HEIGHT + 2 * (LANE_HEIGHT + LANE_GAP));
+  expect(laneIds()).toEqual(["overlay-lane", "music-lane", "voice-lane", "sfx-lane", "effect-lane"]);
+  const height = laneModel(q).height;
+  expect(height).toBe(CLIP_AREA_HEIGHT + 5 * LANE);
   // The same container style as with one lane apart from the height: no width, no extra padding.
   expect(scroll.props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height, flexDirection: "column" });
   for (const id of ["music-lane", "voice-lane", "sfx-lane"])
@@ -64,22 +72,76 @@ test("three audio kinds give three audio lanes between the overlay and effects l
   expect(screen.getByTestId("timeline-playhead")).toHaveStyle({ height: height - 16, top: 8, left: Dimensions.get("window").width / 2 - 1 });
 });
 
-test("with no audio there is one empty music lane and the height is unchanged", async () => {
+test("a project with clips only has no lanes at all: the timeline is as high as the clip area", async () => {
   await render(<Timeline />);
   const scroll = screen.getByTestId("timeline-scroll");
-  expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["overlay-lane", "music-lane", "effect-lane"]);
+  expect(laneIds()).toEqual([]);
   expect(screen.queryAllByTestId(/^audio-bar-/)).toHaveLength(0);
-  expect(scroll.props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height: 216, flexDirection: "column" });
-  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: 216 });
-  expect(screen.getByTestId("timeline-playhead")).toHaveStyle({ height: 200 });
+  expect(laneModel(p).height).toBe(CLIP_AREA_HEIGHT);
+  expect(scroll.props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height: CLIP_AREA_HEIGHT, flexDirection: "column" });
+  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT });
+  expect(screen.getByTestId("timeline-playhead")).toHaveStyle({ height: CLIP_AREA_HEIGHT - 16 });
   expect(scrollHandlers(scroll)).toEqual(SCROLL_HANDLERS);
+});
+
+test("an empty project (no clips) has no lanes either", async () => {
+  useEditorStore.getState().setProject(makeProject());
+  await render(<Timeline />);
+  expect(laneIds()).toEqual([]);
+  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT });
+  expect(screen.getByTestId("timeline-scroll").props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height: CLIP_AREA_HEIGHT, flexDirection: "column" });
 });
 
 test("a project with only a voice track shows just the voice lane, at the one-lane height", async () => {
   useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], audioTracks: [makeAudioTrack({ id: "v", kind: "voice", sourceDuration: 5 })] }));
   await render(<Timeline />);
-  expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["overlay-lane", "voice-lane", "effect-lane"]);
-  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: TIMELINE_HEIGHT });
+  expect(laneIds()).toEqual(["voice-lane"]);
+  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT + LANE });
+});
+
+test("a lane appears with its first item and goes with its last — through undo and redo too — and the scroll view is the same instance throughout", async () => {
+  await render(<Timeline />);
+  const scroll = screen.getByTestId("timeline-scroll");
+  const root = screen.getByTestId("timeline-root");
+  const strip = screen.getByRole("button", { name: "Clip a" });
+  const same = () => {
+    expect(screen.getByTestId("timeline-scroll")).toBe(scroll);
+    expect(screen.getByTestId("timeline-root")).toBe(root);
+    expect(screen.getByRole("button", { name: "Clip a" })).toBe(strip);
+    expect(scrollHandlers(screen.getByTestId("timeline-scroll"))).toEqual(SCROLL_HANDLERS);
+  };
+  const shows = (lanes: string[]) => {
+    expect(laneIds()).toEqual(lanes);
+    const height = CLIP_AREA_HEIGHT + lanes.length * LANE;
+    expect(laneModel(useEditorStore.getState().project).height).toBe(height);
+    expect(screen.getByTestId("timeline-root")).toHaveStyle({ height });
+    expect(screen.getByTestId("timeline-scroll").props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height, flexDirection: "column" });
+    expect(screen.getByTestId("timeline-playhead")).toHaveStyle({ height: height - 16 });
+    same();
+  };
+  const st = () => useEditorStore.getState();
+  shows([]);
+  await act(() => { st().apply((q) => addTextOverlay(q, text())); });
+  shows(["overlay-lane"]);
+  const overlayLane = screen.getByTestId("overlay-lane");
+  await act(() => { st().apply((q) => addEffect(q, "shake", 1, "e1")); });
+  shows(["overlay-lane", "effect-lane"]);
+  // A lane that appears above or below another leaves that one mounted (a bar being dragged in it keeps its gesture).
+  expect(screen.getByTestId("overlay-lane")).toBe(overlayLane);
+  const effectLane = screen.getByTestId("effect-lane");
+  await act(() => { st().apply((q) => deleteOverlay(q, "o1")); });
+  shows(["effect-lane"]);
+  expect(screen.getByTestId("effect-lane")).toBe(effectLane);
+  await act(() => { st().undo(); });
+  shows(["overlay-lane", "effect-lane"]);
+  expect(screen.getByTestId("effect-lane")).toBe(effectLane);
+  expect(screen.getByTestId("overlay-pill-o1")).toBeTruthy();
+  await act(() => { st().undo(); st().undo(); });
+  shows([]);
+  await act(() => { st().redo(); });
+  shows(["overlay-lane"]);
+  await act(() => { st().redo(); st().redo(); });
+  shows(["effect-lane"]);
 });
 
 test("a project with layers gets a layers lane right under the clips; only heights change", async () => {
@@ -87,9 +149,9 @@ test("a project with layers gets a layers lane right under the clips; only heigh
     layers: [makeLayer({ id: "l1", sourceDuration: 4, start: 1 }), { ...makePhotoClip({ id: "l2" }), start: 30 }] }));   // l2 lies past the project's end
   await render(<Timeline />);
   const scroll = screen.getByTestId("timeline-scroll");
-  expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["layer-lane", "overlay-lane", "music-lane", "effect-lane"]);
-  const height = timelineHeight(1, true);
-  expect(height).toBe(TIMELINE_HEIGHT + LANE_HEIGHT + LANE_GAP);
+  expect(laneIds()).toEqual(["layer-lane"]);
+  const height = laneModel(useEditorStore.getState().project).height;
+  expect(height).toBe(CLIP_AREA_HEIGHT + LANE);
   // The same container style as without layers apart from the height: no width, no extra padding.
   expect(scroll.props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height, flexDirection: "column" });
   expect(StyleSheet.flatten(screen.getByTestId("layer-lane").props.style)).toEqual({ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP });
@@ -107,12 +169,14 @@ test("the layers lane goes away with the last layer, and stacks with the audio l
     audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 }), makeAudioTrack({ id: "v", kind: "voice", sourceDuration: 5 })] });
   useEditorStore.getState().setProject(withLayer);
   await render(<Timeline />);
-  expect(screen.getAllByTestId(/-lane$/).map((l) => l.props.testID)).toEqual(["layer-lane", "overlay-lane", "music-lane", "voice-lane", "effect-lane"]);
-  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: timelineHeight(2, true) });
+  expect(laneIds()).toEqual(["layer-lane", "music-lane", "voice-lane"]);
+  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: laneModel(withLayer).height });
+  expect(laneModel(withLayer).height).toBe(CLIP_AREA_HEIGHT + 3 * LANE);
   await act(() => { useEditorStore.getState().setProject({ ...withLayer, layers: [] }); });
   expect(screen.queryByTestId("layer-lane")).toBeNull();
-  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: timelineHeight(2) });
-  expect(screen.getByTestId("timeline-scroll").props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height: timelineHeight(2), flexDirection: "column" });
+  expect(laneIds()).toEqual(["music-lane", "voice-lane"]);
+  expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT + 2 * LANE });
+  expect(screen.getByTestId("timeline-scroll").props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height: CLIP_AREA_HEIGHT + 2 * LANE, flexDirection: "column" });
 });
 
 // Jest has no layout, so this pins the stand-ins for the content width: the tile is absolutely positioned and the paddings are untouched.
@@ -146,6 +210,10 @@ test("tapping the + tile opens the picker without scrubbing or pausing", async (
 
 test("the snap guide is drawn inside the scroll content, out of the flow: width, paddings and scroll handlers are as before", async () => {
   useSnapGuide.setState({ time: null });
+  const q = { ...p, overlays: [text()], audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })] };
+  useEditorStore.getState().setProject(q);
+  const height = laneModel(q).height;
+  expect(height).toBe(CLIP_AREA_HEIGHT + 2 * LANE);
   await render(<Timeline />);
   const scroll = screen.getByTestId("timeline-scroll");
   const before = { style: scroll.props.contentContainerStyle, handlers: scrollHandlers(scroll) };
@@ -153,12 +221,17 @@ test("the snap guide is drawn inside the scroll content, out of the flow: width,
   await act(() => { useSnapGuide.setState({ time: 4 }); });
   const pad = Dimensions.get("window").width / 2, pps = useEditorStore.getState().pixelsPerSecond;
   const line = within(screen.getByTestId("timeline-scroll")).getByTestId("snap-guide");
-  expect(StyleSheet.flatten(line.props.style)).toMatchObject({ position: "absolute", left: pad + 4 * pps - 0.5, top: 0, width: 1, height: TIMELINE_HEIGHT });
+  expect(StyleSheet.flatten(line.props.style)).toMatchObject({ position: "absolute", left: pad + 4 * pps - 0.5, top: 0, width: 1, height });
   expect(line.props.pointerEvents).toBe("none");
   expect(screen.getByTestId("timeline-scroll").props.contentContainerStyle).toEqual(before.style);
-  expect(before.style).toEqual({ paddingHorizontal: pad, height: TIMELINE_HEIGHT, flexDirection: "column" });
+  expect(before.style).toEqual({ paddingHorizontal: pad, height, flexDirection: "column" });
   expect(scrollHandlers(screen.getByTestId("timeline-scroll"))).toEqual(SCROLL_HANDLERS);
   expect(before.handlers).toEqual(SCROLL_HANDLERS);
+  // The guide always spans the whole timeline as it is now: a lane going away while it shows shortens it with the timeline.
+  await act(() => { useEditorStore.getState().setProject({ ...q, audioTracks: [] }); useSnapGuide.setState({ time: 4 }); });
+  expect(StyleSheet.flatten(screen.getByTestId("snap-guide").props.style)).toMatchObject({ top: 0, height: CLIP_AREA_HEIGHT + LANE });
+  await act(() => { useEditorStore.getState().setProject(p); useSnapGuide.setState({ time: 4 }); });
+  expect(StyleSheet.flatten(screen.getByTestId("snap-guide").props.style)).toMatchObject({ top: 0, height: CLIP_AREA_HEIGHT });
   await act(() => { useSnapGuide.setState({ time: null }); });
   expect(screen.queryByTestId("snap-guide")).toBeNull();
 });

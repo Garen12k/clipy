@@ -14,7 +14,8 @@ const HEADER = theme.size.header, TILES = 72, SLIDER = 36;
 const HEIGHT = 1 + HEADER + TILES + SLIDER + 1;
 /**
  * Heights in points: header 44, tiles 72, slider 36, height 154, lift 64. `height` = the bottom area while a strip shows; `lift` = how
- * far it rises over the timeline = height − BAR_HEIGHT = two lanes (src/editor/timelineLayout.ts), so its top edge sits on a lane's top edge.
+ * far it rises over the timeline at most = height − BAR_HEIGHT = two lanes (src/editor/timelineLayout.ts), so its top edge sits on a lane's
+ * top edge. It only ever covers lanes: the bar that hosts it lifts by `laneLift` (fewer than two lanes → less, and the preview gives the rest).
  * The header is 44 so the ✓ and the action have a real 44-pt target inside it.
  */
 export const STRIP = { header: HEADER, tiles: TILES, slider: SLIDER, height: HEIGHT, lift: HEIGHT - BAR_HEIGHT } as const;
