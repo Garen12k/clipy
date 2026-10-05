@@ -56,7 +56,7 @@ test("closing the sheet mid-run cancels the transcription", async () => {
   const pressed = fireEvent.press(screen.getByText("Transcribe"));
   await new Promise((r) => setImmediate(r));   // let fireEvent's own act() settle; plain wait avoids overlapping act scopes
   expect(screen.getByText(/Transcribing clip 1 of 1/)).toBeTruthy();
-  await fireEvent.press(screen.getAllByLabelText("Close sheet")[0]);
+  await fireEvent.press(screen.getByRole("button", { name: "Done" }));
   expect(cancelTranscribe).toHaveBeenCalledTimes(1);
   expect(onClose).toHaveBeenCalledTimes(1);
   await act(async () => { finish(); await pressed; });

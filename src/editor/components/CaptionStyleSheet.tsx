@@ -1,6 +1,6 @@
 import Slider from "@react-native-community/slider";
 import { useState } from "react";
-import { ScrollView, Switch, View } from "react-native";
+import { Switch, View } from "react-native";
 import { CAPTION_STYLE } from "@/src/editor/effects";
 import { applyCaptionPreset, setCaptionStyleForAll } from "@/src/editor/model/ops";
 import { aspectRatioValue, makeOverlay, type CaptionWord, type Project, type TextOverlay, type TextStyle } from "@/src/editor/model/types";
@@ -8,8 +8,8 @@ import { useEditorStore } from "@/src/editor/store";
 import { DEFAULT_HIGHLIGHT_COLOR } from "@/src/editor/textTemplates";
 import { theme } from "@/src/theme/theme";
 import { NumField } from "@/src/ui/NumField";
-import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
+import { ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow, CONTENT_BLACK } from "./ColorRow";
 import { FontStrip } from "./FontStrip";
 import { CAPTION_PRESET_TILES, TemplateStrip, TextSample } from "./TemplateStrip";
@@ -37,7 +37,7 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
   const caption = useEditorStore((s) => s.project?.overlays.find((o): o is TextOverlay => o.kind === "caption"));
   const ratio = useEditorStore((s) => s.project?.aspectRatio ?? "9:16");
   // No caption yet (always the case in Expo Go): the same controls restyle a local draft, so the sample still shows every look.
-  // Nothing is written to the project and no undo step is made; the draft lives as long as the sheet's owner.
+  // Nothing is written to the project and no undo step is made; the draft lives as long as the panel's owner.
   const [draft, setDraft] = useState(newDraft);
   const style = caption ?? draft;
   const textStyle = style.style;
@@ -60,8 +60,7 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
     style: textStyle, words: SAMPLE_WORDS, highlightColor });
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Caption style" height="85%">
-      <ScrollView testID="caption-style-scroll" keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: theme.space.lg, paddingBottom: theme.space.xl }}>
+    <ToolPanel visible={visible} onClose={onClose} title="Caption style" bodyTestID="caption-style-scroll">
         <TemplateStrip tiles={CAPTION_PRESET_TILES} onPick={(presetId) => write((x) => applyCaptionPreset(x, presetId), apply)} />
         {!caption && <Body muted>{NO_CAPTIONS_NOTE}</Body>}
         <View style={{ alignItems: "center" }}>
@@ -105,7 +104,6 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
         <NumField label="Y %" value={Math.round(style.y * 100)} onCommit={(v) => patch({ y: v / 100 })} />
         <CollapsibleTextStyle style={textStyle} outline={style.outline} onBegin={begin}
           onPatch={(sp: Partial<TextStyle>) => patch({ style: sp })} onPatchTransient={(sp: Partial<TextStyle>) => patchTransient({ style: sp })} />
-      </ScrollView>
-    </Sheet>
+    </ToolPanel>
   );
 }
