@@ -1204,6 +1204,9 @@ describe("the next clip is preloaded in a second player and takes over at the cu
   };
 
   beforeEach(() => {
+    // The clock stands still unless a test moves it: the early-start timer never fires by itself, and a playhead tick is exactly
+    // as old as the test says.
+    jest.useFakeTimers();
     st().setProject(makeProject({ clips: [
       makeClip({ id: "x", sourceDuration: 4 }),
       makeClip({ id: "y", sourceDuration: 4, trimStart: 1, trimEnd: 3, speed: 0.5, volume: 0.5 }),
@@ -1213,7 +1216,10 @@ describe("the next clip is preloaded in a second player and takes over at the cu
     A.muted = false; A.volume = 1;
     B.muted = true; B.volume = 0;
   });
+  afterEach(() => { jest.useRealTimers(); });
   afterAll(() => { B.muted = false; B.volume = 1; });
+  /** Lets `ms` of playback pass without a playhead tick (the fake clock and its timers move together). */
+  const wait = (ms: number) => act(() => { jest.advanceTimersByTime(ms); });
 
   test("both players are configured alike; the standby one is set up silent, loads the next clip's file, seeks to its first frame once ready, and stays paused", async () => {
     await mount();
@@ -1603,6 +1609,325 @@ describe("the next clip is preloaded in a second player and takes over at the cu
       expect(B.play).toHaveBeenCalledTimes(1);
       await act(() => { st().setPlaying(false); });
     });
+  });
+
+  describe("a slow clip ticks too rarely to start the standby player in time: a timer starts it between two ticks", () => {
+    // x at 0.25×: 16 s of playback, a tick (0.05 s of media) every 0.2 s of it.
+    const slowX = () => st().setProject(makeProject({ clips: [
+      makeClip({ id: "x", sourceDuration: 4, speed: 0.25 }),
+      makeClip({ id: "y", sourceDuration: 4, trimStart: 1, trimEnd: 3, speed: 0.5, volume: 0.5 }),
+      makeClip({ id: "z", sourceDuration: 4 }),
+    ] }));
+    // The early-start timers: every setTimeout of 100 ms or more (nothing else here waits that long) — how many were armed, and
+    // how many of those have not been cancelled.
+    let setSpy: jest.SpyInstance, clearSpy: jest.SpyInstance;
+    const armedIds = (): unknown[] => setSpy.mock.calls.flatMap(([, ms], n) => (typeof ms === "number" && ms >= 100 ? [setSpy.mock.results[n].value] : []));
+    const timers = {
+      armed: () => armedIds().length,
+      alive: () => armedIds().filter((id) => !clearSpy.mock.calls.some(([cleared]) => cleared === id)).length,
+    };
+    beforeEach(() => { setSpy = jest.spyOn(globalThis, "setTimeout"); clearSpy = jest.spyOn(globalThis, "clearTimeout"); });
+    afterEach(() => { setSpy.mockRestore(); clearSpy.mockRestore(); });
+
+    test("0.4 s left at the last tick before the window: one play() 0.18 s later, the rate written before it, and none from the ticks after", async () => {
+      slowX();
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9); // playhead 15.6: 0.4 s left
+      expect(B.play).not.toHaveBeenCalled();
+      await wait(179);
+      expect(B.play).not.toHaveBeenCalled();
+      expect(B.rates).toEqual([]);
+      let ratesAtPlay: number[] | null = null;
+      B.play.mockImplementationOnce(() => { ratesAtPlay = B.rates.slice(); B.playing = true; });
+      await wait(1);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      expect(ratesAtPlay).toEqual([0.5]);
+      expect(B.muted).toBe(true);
+      expect(B.seeks).toEqual([1]);
+      expect(view().props.player).toBe(A);
+      expect(st().playhead).toBeCloseTo(15.6, 9); // the timer never moves the playhead
+      await wait(20);
+      await tick(A, 3.95); // 0.2 s left: the tick finds it rolling
+      await wait(100);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      expect(B.rates).toEqual([0.5]);
+      expect(B.pause).not.toHaveBeenCalled();
+      await wait(100);
+      await tick(A, 4);
+      expect(view().props.player).toBe(B);
+      expect(B.play).toHaveBeenCalledTimes(1); // no second play() at the hand-over
+      expect(B.pause).not.toHaveBeenCalled();
+      expect(B.seeks).toEqual([1]);
+      await wait(5000);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("an edit that re-renders between the timer's start and the next tick does not stop the rolling player", async () => {
+      slowX();
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      await wait(180);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await act(() => { st().applyTransient((p) => setClipTransform(p, "x", { x: 0.1 })); });
+      expect(B.pause).not.toHaveBeenCalled();
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("the tick gets there first: one play(), and the timer armed earlier never adds another", async () => {
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.5); // 0.5 s left: a timer for 0.28 s
+      await wait(100);
+      await tick(A, 3.8); // the player ran ahead of the clock: inside the window already
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await wait(1000);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      expect(B.rates).toEqual([0.5]);
+      expect(B.pause).not.toHaveBeenCalled();
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("ticks that agree with the armed timer do not arm it again; one that moves the cut does, once", async () => {
+      slowX();
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      const armed = timers.armed;
+      await tick(A, 0.05); // playhead 0.2: the cut is 15.8 s away
+      expect(armed()).toBe(1);
+      for (const t of [0.1, 0.15, 0.2]) { await wait(200); await tick(A, t); }
+      await act(() => { st().applyTransient((p) => setClipTransform(p, "x", { x: 0.1 })); });
+      expect(armed()).toBe(1);
+      await wait(600); // the player stalled: 0.6 s later it has moved one tick only
+      await tick(A, 0.25);
+      expect(armed()).toBe(2);
+      await wait(200);
+      await tick(A, 0.3);
+      expect(armed()).toBe(2);
+      // 14.8 s are left (playhead 1.2 of 16): the second timer fires 14.58 s from here — 0.2 s after the first one would have.
+      await wait(14579);
+      expect(B.play).not.toHaveBeenCalled();
+      await wait(1);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      expect(timers.alive()).toBe(1); // the one that fired; the first was cancelled
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("pausing cancels the timer", async () => {
+      slowX();
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      expect(timers.alive()).toBe(1);
+      await wait(100);
+      await act(() => { st().setPlaying(false); });
+      expect(timers.alive()).toBe(0);
+      await wait(5000);
+      expect(B.play).not.toHaveBeenCalled();
+      expect(B.rates).toEqual([]);
+    });
+
+    test("a seek away re-times it: nothing starts at the old time", async () => {
+      slowX();
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      expect([timers.armed(), timers.alive()]).toEqual([1, 1]);
+      await act(() => { st().seek(2); });
+      expect([timers.armed(), timers.alive()]).toEqual([2, 1]); // a new one, and the old one is gone
+      await wait(5000);
+      expect(B.play).not.toHaveBeenCalled();
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("the next clip going away, or its file being replaced, cancels it", async () => {
+      slowX();
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      expect(timers.alive()).toBe(1);
+      await act(() => { st().apply((p) => replaceClipMedia(p, "y", { sourceUri: "file:///media/new.mp4", sourceDuration: 8, width: 1080, height: 1920, kind: "video" })); });
+      expect(timers.alive()).toBe(0);
+      await wait(5000);
+      expect(B.play).not.toHaveBeenCalled();
+      await readyUp(B);
+      await tick(A, 3.91); // armed again, for the new file
+      expect(timers.alive()).toBe(1);
+      await act(() => { st().apply((p) => ({ ...p, clips: [p.clips[0]] })); });
+      expect(timers.alive()).toBe(0);
+      await wait(5000);
+      expect(B.play).not.toHaveBeenCalled();
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("the clip under the playhead changing (a seek into another clip) cancels it", async () => {
+      slowX();
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      expect(timers.alive()).toBe(1);
+      await act(() => { st().seek(21); }); // inside z, the last clip: nothing to preload
+      expect(timers.alive()).toBe(0);
+      await wait(5000);
+      expect(B.play).not.toHaveBeenCalled();
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("the timer re-checks the store when it fires: a pause the component has not rendered yet stops it", async () => {
+      slowX();
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      // Inside one act(): the store is paused and the timer fires before React has run any effect for it.
+      let playsWhenFired = -1;
+      await act(() => { st().setPlaying(false); jest.advanceTimersByTime(1000); playsWhenFired = B.play.mock.calls.length; });
+      expect(playsWhenFired).toBe(0);
+      expect(B.play).not.toHaveBeenCalled();
+    });
+
+    test("the timer re-checks the standby player when it fires: one that failed in the meantime is not started", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+      slowX();
+      await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      await act(() => { B.listeners.statusChange?.({ status: "error", error: { message: "decode failed" } }); });
+      await wait(1000);
+      expect(B.play).not.toHaveBeenCalled();
+      warn.mockRestore();
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("unmounting cancels the timer: nothing is called on the released players afterwards", async () => {
+      slowX();
+      const { unmount } = await bothReady();
+      await act(() => { st().setPlaying(true); });
+      await tick(A, 3.9);
+      expect(timers.alive()).toBe(1);
+      A.released = true; B.released = true;
+      await unmount();
+      expect(timers.alive()).toBe(0);
+      const calls = () => [B.play.mock.calls.length, B.pause.mock.calls.length, B.rates.length, B.seeks.length, A.play.mock.calls.length];
+      const before = calls();
+      jest.advanceTimersByTime(5000);
+      expect(calls()).toEqual(before);
+      expect(B.play).not.toHaveBeenCalled();
+      A.released = false; B.released = false;
+      await act(() => { st().setPlaying(false); });
+    });
+  });
+
+  describe("Play pressed inside the last 0.22 s of a clip", () => {
+    test("the standby player is not started with the player on screen: the cut hands over to it standing on the first frame", async () => {
+      await bothReady();
+      await act(() => { st().seek(3.9); });
+      await act(() => { st().setPlaying(true); });
+      expect(A.play).toHaveBeenCalledTimes(1);
+      expect(B.play).not.toHaveBeenCalled();
+      expect(B.rates).toEqual([]);
+      await tick(A, 3.9); // the player reporting where it stands: it has not moved yet
+      await tick(A, 3.905); // nor is a hair past the seek (the player's time scale) its clock running
+      expect(st().playhead).toBe(3.905);
+      await wait(1000);
+      expect(B.play).not.toHaveBeenCalled();
+      expect(B.playing).toBe(false);
+      await tick(A, 4);
+      expect(view().props.player).toBe(B);
+      expect(B.play).toHaveBeenCalledTimes(1); // at the cut, from the first frame
+      expect(B.seeks).toEqual([1]);
+      expect(B.rates).toEqual([0.5]);
+      expect(A.replaceAsync).not.toHaveBeenCalledWith({ uri: Y });
+      await tick(B, 1);
+      expect(st().playhead).toBe(4);
+      await act(() => { st().setPlaying(false); });
+    });
+
+    test("once the player on screen has moved, the early start is as ever; pausing and pressing Play again holds it back again", async () => {
+      await bothReady();
+      await act(() => { st().seek(3.85); });
+      await act(() => { st().setPlaying(true); });
+      expect(B.play).not.toHaveBeenCalled();
+      await tick(A, 3.9);
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await act(() => { st().setPlaying(false); });
+      expect(B.pause).toHaveBeenCalledTimes(1);
+      await act(() => { st().setPlaying(true); });
+      expect(B.play).toHaveBeenCalledTimes(1);
+      await act(() => { st().setPlaying(false); });
+    });
+  });
+
+  test("the standby player fails while it rolls: the cut does not hand over to it — the player on screen loads the clip", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    await bothReady();
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 3.9);
+    expect(B.play).toHaveBeenCalledTimes(1);
+    await act(() => { B.listeners.statusChange?.({ status: "error", error: { message: "decode failed" } }); });
+    await tick(A, 4);
+    expect(st().playhead).toBe(4);
+    expect(view().props.player).toBe(A);
+    expect(A.replaceAsync).toHaveBeenLastCalledWith({ uri: Y });
+    expect(B.play).toHaveBeenCalledTimes(1);
+    A.seeks.length = 0; A.play.mockClear();
+    await readyUp(A);
+    expect(A.seeks).toEqual([1]);
+    expect(A.play).toHaveBeenCalledTimes(1);
+    await tick(A, 2);
+    expect(st().playhead).toBe(6); // the playhead moves on
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+    await act(() => { st().setPlaying(false); });
+  });
+
+  test("x → y → x again: the player that showed x is seeked, not reloaded, for the clip after y, and takes over again", async () => {
+    st().setProject(makeProject({ clips: [
+      makeClip({ id: "x", sourceDuration: 4, trimEnd: 2 }),
+      makeClip({ id: "y", sourceDuration: 4 }),
+      makeClip({ id: "x2", sourceDuration: 4, sourceUri: X, trimStart: 2.5 }),
+    ] }));
+    await bothReady();
+    const video = view();
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 1.9);
+    await tick(A, 2); // the cut onto y
+    expect(view().props.player).toBe(B);
+    // A still holds x.mp4: one seek to x2's first frame, no reload, and it stays paused.
+    expect(A.replaceAsync.mock.calls).toEqual([[{ uri: X }]]);
+    expect(A.seeks).toEqual([0, 2.5]);
+    expect(A.playing).toBe(false);
+    A.play.mockClear();
+    await tick(B, 2);
+    expect(A.seeks).toEqual([0, 2.5]);
+    await tick(B, 3.9); // y's last 0.22 s: A is started early
+    expect(A.play).toHaveBeenCalledTimes(1);
+    await tick(B, 4); // the cut onto x2
+    expect(st().playhead).toBe(6);
+    expect(view().props.player).toBe(A);
+    expect(view()).toBe(video);
+    expect(A.play).toHaveBeenCalledTimes(1);
+    expect(A.replaceAsync).toHaveBeenCalledTimes(1);
+    expect(B.replaceAsync).toHaveBeenCalledTimes(1);
+    expect(A.seeks).toEqual([0, 2.5]);
+    expect(A.muted).toBe(false);
+    await tick(A, 3);
+    expect(st().playhead).toBe(6.5);
+    await act(() => { st().setPlaying(false); });
+  });
+
+  test("unmounting while the standby player rolls is safe although both players are already released", async () => {
+    const { unmount } = await bothReady();
+    await act(() => { st().setPlaying(true); });
+    await tick(A, 3.9);
+    expect(B.playing).toBe(true);
+    A.released = true; B.released = true;
+    await unmount();
+    jest.advanceTimersByTime(5000);
+    A.released = false; B.released = false;
+    await act(() => { st().setPlaying(false); });
   });
 
   test("unmounting after a hand-over is safe although both players are already released", async () => {

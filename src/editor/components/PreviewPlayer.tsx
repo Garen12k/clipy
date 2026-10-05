@@ -4,12 +4,12 @@ import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { clipGainAt } from "@/src/editor/model/audioMix";
 import { layerHit } from "@/src/editor/model/layerHit";
 import { resolveClipMotion } from "@/src/editor/model/motion";
-import { clipAt, clipDuration, clipStartTimes, findItem, hasSpeedCurve, itemOffsetAt, layersAt, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
+import { clipAt, clipDuration, type ClipHit, clipStartTimes, findItem, hasSpeedCurve, itemOffsetAt, layersAt, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
 import { aspectRatioValue, isPhoto, type Clip } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
 import { useEditorStore } from "@/src/editor/store";
 import { usePhotoPlayback } from "@/src/editor/usePhotoPlayback";
-import { canHandOver, keepRolling, nextPreloadTarget, shouldStartEarly, type StandbyState } from "@/src/editor/previewHandoff";
+import { canHandOver, earlyStartDelay, HANDOFF_LEAD, HANDOFF_REARM, hasMoved, keepRolling, nextPreloadTarget, shouldStartEarly, type Playback, type PreloadTarget, type StandbyState } from "@/src/editor/previewHandoff";
 import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
 import { theme } from "@/src/theme/theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -107,6 +107,16 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const [activeIndex, setActiveIndex] = useState(0);
   // The photo clip the active player was last paused for; null while a video is under the playhead.
   const pausedForPhotoId = useRef<string | null>(null);
+  // The active player has reported a time past the one playback started from (see Playback.moving); false again at every pause.
+  const moving = useRef(false);
+  // The playhead that playback started from, noted at the active player's first tick after Play; null while paused.
+  const playedFrom = useRef<number | null>(null);
+  // The playhead the active player last wrote to the store, and when (clock ms): how old the store's playhead is while playing.
+  const lastTick = useRef<{ playhead: number; at: number } | null>(null);
+  // The one timer that starts the standby player between two playhead ticks, and the cut time (clock ms) it was armed for.
+  const earlyTimer = useRef<{ id: ReturnType<typeof setTimeout>; cutAt: number } | null>(null);
+  // Set by the unmount cleanup: a timer callback that still gets through must not touch the (released) players.
+  const unmounted = useRef(false);
 
   /** Writes player `i`'s rate for `offsetInClip` of `clip` unless it already runs at it; true when it wrote. */
   const applyRateTo = (i: number, clip: Clip, offsetInClip: number): boolean => {
@@ -136,6 +146,48 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     players[active.current].play();
   };
   const seekPlayer = (t: number) => { players[active.current].currentTime = t; slots[active.current].lastSeek = t; };
+  /** How playback stands for a playhead read from the store: its age counts only when the active player's last tick put it there. */
+  const playbackAt = (at: number, playing: boolean): Playback => {
+    const tick = lastTick.current;
+    return { playing, moving: moving.current, sinceTick: tick && tick.playhead === at ? Math.max(0, (Date.now() - tick.at) / 1000) : 0 };
+  };
+  const cancelEarlyStart = () => {
+    if (!earlyTimer.current) return;
+    clearTimeout(earlyTimer.current.id);
+    earlyTimer.current = null;
+  };
+  /**
+   * The early start of the standby player, for the playhead tick and for the timer alike: start it now when it is time (the next
+   * clip's rate first, written once — the hand-over finds it in place; `lastSeek` stays, it is where it was started from), else keep
+   * exactly one timer armed for the moment it will be, else none. `rolling` makes the start happen once, whoever gets there first.
+   * The timer is left alone while the cut it was armed for has not moved: this runs on every playhead tick.
+   */
+  const startEarlyOrArm = (at: ClipHit, target: PreloadTarget | null, playback: Playback) => {
+    const i = 1 - active.current;
+    const slot = slots[i];
+    if (target && shouldStartEarly(at, target, standbyState(slot), playback)) {
+      cancelEarlyStart();
+      applyRateTo(i, target.clip, 0);
+      players[i].play();
+      slot.rolling = true;
+      return;
+    }
+    const delay = earlyStartDelay(at, target, standbyState(slot), playback);
+    if (delay === null) { cancelEarlyStart(); return; }
+    const cutAt = Date.now() + (delay + HANDOFF_LEAD) * 1000;
+    if (earlyTimer.current && Math.abs(earlyTimer.current.cutAt - cutAt) <= HANDOFF_REARM * 1000) return;
+    cancelEarlyStart();
+    earlyTimer.current = { cutAt, id: setTimeout(onEarlyTimer, Math.round(delay * 1000)) };
+  };
+  /** The timer: nothing it was armed with is trusted — the same decision is taken again on what the store holds now. */
+  const onEarlyTimer = () => {
+    earlyTimer.current = null;
+    if (unmounted.current) return;
+    const s = useEditorStore.getState();
+    const h = s.project ? clipAt(s.project, s.playhead) : null;
+    if (!s.project || !h) return;
+    startEarlyOrArm(h, nextPreloadTarget(s.project, h.index, s.missingSourceUris), playbackAt(s.playhead, s.isPlaying));
+  };
 
   // A photo under the playhead: the player stays paused and a timer moves the playhead instead.
   usePhotoPlayback(isPlaying && !!hit && isPhoto(hit.clip) && !missing.includes(hit.clip.sourceUri));
@@ -236,20 +288,26 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   // Declared after the effect above, so after a hand-over it is the player that just left the screen that prepares the clip after.
   // It re-runs with every playhead tick and every edit, so every write is guarded by what the slot remembers: one play(), one
   // pause(), one seek, one rate write. It never writes the sound (the standby player is silent until it takes over).
+  // The playhead ticks every 0.05 s of MEDIA time — every 0.2 s of playback on a 0.25× clip — so a tick alone can find the window
+  // far too late: when the window is still ahead, one timer is armed for its start (startEarlyOrArm), and cancelled on every path
+  // below on which the early start is off (a pause, nothing to preload, the standby player loading or not ready).
   useEffect(() => {
+    if (!isPlaying) { moving.current = false; playedFrom.current = null; } // the next Play starts from a standing player
     const i = 1 - active.current;
     const slot = slots[i];
     const player = players[i];
     const target = project && hit ? nextPreloadTarget(project, hit.index, missing) : null;
+    const playback = playbackAt(playhead, isPlaying);
     if (slot.rolling) {
-      if (keepRolling(hit, target, standbyState(slot), isPlaying)) return;
+      if (keepRolling(hit, target, standbyState(slot), playback)) return; // no timer is alive: starting it cancelled it
       player.pause();
       slot.rolling = false;
       slot.lastSeek = null; // it has moved: the preload below seeks it back
     }
-    if (!hit || !target) return;
+    if (!hit || !target) { cancelEarlyStart(); return; }
     slot.loadedClipId = target.clip.id;
     if (slot.loadedSourceUri !== target.clip.sourceUri) {
+      cancelEarlyStart();
       slot.loadedSourceUri = target.clip.sourceUri;
       slot.pendingSeek = target.sourceTime; // lands once the file reports readyToPlay
       slot.lastSeek = null;
@@ -259,13 +317,14 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
     }
     if (slot.pendingSeek !== null) slot.pendingSeek = target.sourceTime;
     else if (slot.lastSeek !== target.sourceTime) { player.currentTime = target.sourceTime; slot.lastSeek = target.sourceTime; }
-    if (shouldStartEarly(hit, target, standbyState(slot), isPlaying)) {
-      // The rate first (written once: the hand-over finds it in place), then play. `lastSeek` stays: where it was started from.
-      applyRateTo(i, target.clip, 0);
-      player.play();
-      slot.rolling = true;
-    }
-  }, [project, hit, isPlaying, missing, first, second, slots]);
+    startEarlyOrArm(hit, target, playback);
+  }, [project, hit, playhead, isPlaying, missing, first, second, slots]);
+
+  // Unmounting: no timer outlives the players (the hook releases them in its own cleanup).
+  useEffect(() => {
+    unmounted.current = false;
+    return () => { unmounted.current = true; cancelEarlyStart(); };
+  }, []);
 
   // Play / pause toggles. Crossing between clips while playing is handled by the effects above.
   useEffect(() => {
@@ -284,8 +343,12 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         slot.pendingSeek = null;
         if (i === active.current && useEditorStore.getState().isPlaying && !photoAtPlayhead()) startPlayer();
       } else if (status === "error") {
-        // Unblock timeUpdate handling even though the seek never landed, and surface the failure once.
+        // Unblock timeUpdate handling even though the seek never landed, and surface the failure once. The player is nowhere
+        // we know of any more, and no longer rolling towards a cut: a cut onto its clip must not hand over to it (the playhead
+        // would stall on a dead player) — it takes the reload path on the player on screen instead.
         slot.pendingSeek = null;
+        slot.lastSeek = null;
+        slot.rolling = false;
         console.warn("PreviewPlayer: video player error", error);
       }
     }));
@@ -310,6 +373,11 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
       const h = clipAt(s.project, s.playhead);
       if (!h || isPhoto(h.clip) || h.clip.id !== slot.loadedClipId) return; // a photo's timer owns the playhead
       const { playhead: next, ended } = nextPlayheadFromPlayer(s.project, h, currentTime, s.missingSourceUris);
+      if (!moving.current) {
+        playedFrom.current ??= s.playhead;
+        moving.current = hasMoved(playedFrom.current, next); // its clock is running
+      }
+      lastTick.current = { playhead: next, at: Date.now() }; // before the store hears of it: the effects read it
       s.seek(next);
       if (ended) s.setPlaying(false);
     }));
