@@ -13,7 +13,8 @@ const project = makeProject({
 });
 
 const MAIN = ["edit", "audioMenu", "textMenu", "sticker", "overlay", "effect", "filter", "adjust", "ratio", "background", "cover", "templates"];
-const CLIP = ["split", "trim", "speed", "volume", "animate", "filter", "adjust", "crop", "transform", "opacity", "mask", "chroma", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete", "select"];
+const CLIP = ["split", "trim", "select", "speed", "volume", "animate", "filter", "adjust", "background", "templates", "crop", "transform", "opacity", "mask", "chroma", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete"];
+const SOUND = ["audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio", "ducking", "beats"];
 const LAYER = ["trim", "speed", "volume", "animate", "filter", "adjust", "crop", "transform", "opacity", "mask", "blend", "chroma", "keyframe", "layerForward", "layerBack", "replace", "reverse", "duplicate", "delete"];
 const without = (list: string[], ...gone: string[]) => list.filter((t) => !gone.includes(t));
 
@@ -24,6 +25,12 @@ test("nothing selected: the main bar; an empty project keeps only what needs no 
 
 test("a main clip: the clip bar in the spec's order", () => {
   expect(contextFor({ ...none, clipId: "a" }, project)).toEqual({ bar: "clip", tools: CLIP });
+});
+
+test("a main clip: Select is third, Background and Templates follow Adjust", () => {
+  const { tools } = contextFor({ ...none, clipId: "a" }, project);
+  expect(tools.slice(0, 4)).toEqual(["split", "trim", "select", "speed"]);
+  expect(tools.slice(tools.indexOf("adjust"), tools.indexOf("adjust") + 3)).toEqual(["adjust", "background", "templates"]);
 });
 
 test("clip rules: a photo has no Speed / Volume / Reverse / Freeze; a reversed clip no Volume; the last clip no Transition; one clip no Select", () => {
@@ -38,28 +45,33 @@ test("a layer: the layer bar; a photo layer has no Speed / Volume / Reverse; a r
   expect(contextFor({ ...none, clipId: "L" }, project)).toEqual({ bar: "layer", tools: LAYER });
   expect(contextFor({ ...none, clipId: "P" }, project)).toEqual({ bar: "layer", tools: without(LAYER, "speed", "volume", "reverse") });
   expect(contextFor({ ...none, clipId: "R" }, project).tools).toEqual(without(LAYER, "volume"));
-  for (const id of ["L", "P", "R"]) for (const t of ["split", "freeze", "transition", "select", "background", "ratio"]) expect(contextFor({ ...none, clipId: id }, project).tools).not.toContain(t);
+  for (const id of ["L", "P", "R"]) for (const t of ["split", "freeze", "transition", "select", "background", "templates", "ratio"]) expect(contextFor({ ...none, clipId: id }, project).tools).not.toContain(t);
 });
 
-test("a text, a caption and a sticker", () => {
-  const OVERLAY = ["overlayEdit", "animate", "keyframe", "overlayDuplicate", "overlayDelete"];
-  expect(contextFor({ ...none, overlayId: "t" }, project)).toEqual({ bar: "text", tools: OVERLAY });
-  expect(contextFor({ ...none, overlayId: "c" }, project)).toEqual({ bar: "text", tools: ["overlayEdit", "captions", "overlayDuplicate", "overlayDelete"] });
-  expect(contextFor({ ...none, overlayId: "s" }, project)).toEqual({ bar: "sticker", tools: OVERLAY });
+test("a text, a caption and a sticker: Add text follows Delete on a text and a caption, not on a sticker", () => {
+  expect(contextFor({ ...none, overlayId: "t" }, project)).toEqual({ bar: "text", tools: ["overlayEdit", "animate", "keyframe", "overlayDuplicate", "overlayDelete", "text"] });
+  expect(contextFor({ ...none, overlayId: "c" }, project)).toEqual({ bar: "text", tools: ["overlayEdit", "captions", "overlayDuplicate", "overlayDelete", "text"] });
+  expect(contextFor({ ...none, overlayId: "s" }, project)).toEqual({ bar: "sticker", tools: ["overlayEdit", "animate", "keyframe", "overlayDuplicate", "overlayDelete"] });
 });
 
 test("a sound and an effect", () => {
-  expect(contextFor({ ...none, audioId: "m" }, project)).toEqual({ bar: "audio", tools: ["audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio"] });
+  expect(contextFor({ ...none, audioId: "m" }, project)).toEqual({ bar: "audio", tools: SOUND });
   expect(contextFor({ ...none, effectId: "e" }, project)).toEqual({ bar: "effect", tools: ["effectStrength", "effectDuplicate", "effectDelete"] });
 });
 
 test("sections open a bar without a selection; a selection wins over the section; Text needs clips", () => {
   expect(contextFor({ ...none, section: "audio" }, project)).toEqual({ bar: "audio", tools: ["addAudio", "ducking", "beats"] });
   expect(contextFor({ ...none, section: "text" }, project)).toEqual({ bar: "text", tools: ["text", "captions"] });
-  expect(contextFor({ ...none, section: "audio" }, makeProject())).toEqual({ bar: "audio", tools: ["addAudio", "ducking", "beats"] });
+  expect(contextFor({ ...none, section: "audio" }, makeProject())).toEqual({ bar: "audio", tools: ["addAudio", "ducking"] });
   expect(contextFor({ ...none, section: "text" }, makeProject()).bar).toBe("main");
   expect(contextFor({ ...none, section: "audio", clipId: "a" }, project).bar).toBe("clip");
-  expect(contextFor({ ...none, section: "text", audioId: "m" }, project).tools).toEqual(["audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio"]);
+  expect(contextFor({ ...none, section: "text", audioId: "m" }, project).tools).toEqual(SOUND);
+});
+
+test("Beats needs clips: not on an empty project, with or without a sound selected", () => {
+  const empty = makeProject({ audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })] });
+  expect(contextFor({ ...none, section: "audio" }, empty).tools).toEqual(["addAudio", "ducking"]);
+  expect(contextFor({ ...none, audioId: "m" }, empty).tools).toEqual(["audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio", "ducking"]);
 });
 
 test("an id that no longer exists counts as no selection", () => {

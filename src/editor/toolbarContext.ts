@@ -27,11 +27,12 @@ const keep = (list: [ToolId, boolean?][]): ToolId[] => list.filter(([, ok]) => o
 export function contextFor(sel: ToolbarSelection, p: Project): ToolbarContext {
   const hasClips = p.clips.length > 0;
   if (sel.effectId && p.effects.some((e) => e.id === sel.effectId)) return { bar: "effect", tools: ["effectStrength", "effectDuplicate", "effectDelete"] };
-  if (sel.audioId && p.audioTracks.some((t) => t.id === sel.audioId)) return { bar: "audio", tools: ["audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio"] };
+  if (sel.audioId && p.audioTracks.some((t) => t.id === sel.audioId)) return { bar: "audio", tools: keep([["audioVolume"], ["audioFade"], ["audioDuplicate"], ["audioDelete"], ["addAudio"], ["ducking"], ["beats", hasClips]]) };
   const overlay = sel.overlayId ? p.overlays.find((o) => o.id === sel.overlayId) : undefined;
   if (overlay) {
-    if (overlay.kind === "caption") return { bar: "text", tools: ["overlayEdit", "captions", "overlayDuplicate", "overlayDelete"] };
-    return { bar: overlay.kind === "sticker" ? "sticker" : "text", tools: ["overlayEdit", "animate", "keyframe", "overlayDuplicate", "overlayDelete"] };
+    if (overlay.kind === "caption") return { bar: "text", tools: ["overlayEdit", "captions", "overlayDuplicate", "overlayDelete", "text"] };
+    const sticker = overlay.kind === "sticker";
+    return { bar: sticker ? "sticker" : "text", tools: keep([["overlayEdit"], ["animate"], ["keyframe"], ["overlayDuplicate"], ["overlayDelete"], ["text", !sticker]]) };
   }
   const item = sel.clipId ? findItem(p, sel.clipId) : null;
   if (item) {
@@ -42,10 +43,10 @@ export function contextFor(sel: ToolbarSelection, p: Project): ToolbarContext {
         ["blend"], ["chroma"], ["keyframe"], ["layerForward"], ["layerBack"], ["replace"], ["reverse", video], ["duplicate"], ["delete"]]) };
     }
     const hasNext = p.clips.findIndex((c) => c.id === item.clip.id) < p.clips.length - 1;
-    return { bar: "clip", tools: keep([["split"], ["trim"], ["speed", video], ["volume", sounds], ["animate"], ["filter"], ["adjust"], ["crop"], ["transform"], ["opacity"], ["mask"],
-      ["chroma"], ["keyframe"], ["transition", hasNext], ["replace"], ["reverse", video], ["freeze", video], ["duplicate"], ["delete"], ["select", p.clips.length >= 2]]) };
+    return { bar: "clip", tools: keep([["split"], ["trim"], ["select", p.clips.length >= 2], ["speed", video], ["volume", sounds], ["animate"], ["filter"], ["adjust"], ["background"], ["templates"],
+      ["crop"], ["transform"], ["opacity"], ["mask"], ["chroma"], ["keyframe"], ["transition", hasNext], ["replace"], ["reverse", video], ["freeze", video], ["duplicate"], ["delete"]]) };
   }
-  if (sel.section === "audio") return { bar: "audio", tools: ["addAudio", "ducking", "beats"] };
+  if (sel.section === "audio") return { bar: "audio", tools: keep([["addAudio"], ["ducking"], ["beats", hasClips]]) };
   if (sel.section === "text" && hasClips) return { bar: "text", tools: ["text", "captions"] };
   return { bar: "main", tools: keep([["edit", hasClips], ["audioMenu"], ["textMenu", hasClips], ["sticker", hasClips], ["overlay", hasClips], ["effect"],
     ["filter", hasClips], ["adjust", hasClips], ["ratio"], ["background", hasClips], ["cover", hasClips], ["templates", hasClips]]) };

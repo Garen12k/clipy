@@ -36,13 +36,13 @@ export function selectionKey(s: { selectedClipId; selectedOverlayId; selectedEff
 | Bar | When | Tools |
 |---|---|---|
 | **main** | nothing selected | Edit, Audio, Text, Stickers, Overlay, Effects, Filter, Adjust, Ratio, Background, Cover, Templates |
-| **clip** | a main clip is selected | Split, Trim, Speed, Volume, Animate, Filter, Adjust, Crop, Transform, Opacity, Mask, Green screen, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete, Select |
+| **clip** | a main clip is selected | Split, Trim, Select, Speed, Volume, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete |
 | **layer** | a layer is selected | Trim, Speed, Volume, Animate, Filter, Adjust, Crop, Transform, Opacity, Mask, Blend, Green screen, Keyframe, Forward, Back, Replace, Reverse, Duplicate, Delete |
-| **text** | a text is selected | Edit, Animate, Keyframe, Duplicate, Delete |
-| **text** | a caption is selected | Edit, Captions, Duplicate, Delete |
+| **text** | a text is selected | Edit, Animate, Keyframe, Duplicate, Delete, Add text |
+| **text** | a caption is selected | Edit, Captions, Duplicate, Delete, Add text |
 | **text** | main bar → Text (no selection) | Add text, Captions |
 | **sticker** | a sticker is selected | Edit, Animate, Keyframe, Duplicate, Delete |
-| **audio** | a sound is selected | Volume, Fade, Duplicate, Delete, Add audio |
+| **audio** | a sound is selected | Volume, Fade, Duplicate, Delete, Add audio, Ducking, Beats |
 | **audio** | main bar → Audio (no selection) | Add audio, Ducking, Beats |
 | **effect** | an effect is selected | Strength, Duplicate, Delete |
 
@@ -59,8 +59,9 @@ Each rule is today's `disabled` rule turned into "not rendered"; no new rule is 
 | Volume (clip and layer) | the item is a photo or is reversed |
 | Transition | the clip is the last one |
 | Select | the project has fewer than two clips |
+| Beats | the project has no clips (as today) |
 | Blend | never on the clip bar (a main clip has no blend); always on the layer bar |
-| Split, Freeze, Transition, Select, Background, Ratio | never on the layer bar (as today) |
+| Split, Freeze, Transition, Select, Background, Templates, Ratio | never on the layer bar (as today: a layer has no background, and Templates' "This clip" is a main clip) |
 | Animate, Keyframe | never for a caption (as today) |
 
 **Exceptions — visible but disabled, because the reason is momentary and the user should see the tool:**
@@ -77,10 +78,10 @@ Split has no such state: today it is enabled whenever a main clip is selected an
 - **Audio** opens the audio bar without a selection: Add audio (today's sheet), Ducking (today's toggle), Beats (today's sheet). Selecting a sound on the timeline shows that sound's tools on the same bar.
 - **Text** opens the text bar without a selection: Add text (today's behaviour: adds a text at the playhead, selects it, opens the text panel) and Captions (today's sheet).
 - **Stickers** opens today's Sticker sheet. **Effects** opens today's Effects sheet (adding one selects it — the effect bar shows). **Overlay** picks media for a new layer, as today. **Cover** and **Templates** open today's sheets.
-- **Filter**, **Adjust**, **Background** select the main clip under the playhead and open the tool on it.
+- **Filter**, **Adjust**, **Background** select the main clip under the playhead and open the tool on it. On the clip bar the same three open on the selected clip, and **Templates** there opens the sheet with "This clip" available (on the main bar no clip is selected, so only "Whole project").
 - **Ratio** opens the aspect-ratio strip (the ratio pill in the transport row opens the same strip).
 
-The section (Audio / Text without a selection) is toolbar state, not store state. It is cleared by the back arrow and whenever the selection changes.
+The section (Audio / Text without a selection) is toolbar state, not store state. It is cleared by the back arrow, whenever the selection changes, and when the project loses its last clip.
 
 ### 2.5 Tool → bars
 
@@ -93,19 +94,18 @@ The section (Audio / Text without a selection) is toolbar state, not store state
 | `overlay` | Overlay | main |
 | `effect` | Effects | main |
 | `ratio` | Ratio | main |
-| `background` | Background | main |
 | `cover` | Cover | main |
-| `templates` | Templates | main |
+| `background`, `templates` | Background, Templates | main, clip |
 | `filter`, `adjust` | Filter, Adjust | main, clip, layer |
 | `split`, `transition`, `freeze`, `select` | Split, Transition, Freeze, Select | clip |
 | `trim`, `speed`, `volume`, `crop`, `transform`, `opacity`, `mask`, `chroma`, `replace`, `reverse`, `duplicate`, `delete` | Trim, Speed, Volume, Crop, Transform, Opacity, Mask, Green screen, Replace, Reverse, Duplicate, Delete | clip, layer |
 | `blend`, `layerForward`, `layerBack` | Blend, Forward, Back | layer |
 | `animate`, `keyframe` | Animate, Keyframe | clip, layer, text (a text), sticker |
 | `overlayEdit`, `overlayDuplicate`, `overlayDelete` *(new)* | Edit, Duplicate, Delete | text, sticker |
-| `text` | Add text | text (no selection) |
+| `text` | Add text | text (no selection; a text; a caption) |
 | `captions` | Captions | text (no selection; a caption) |
 | `addAudio` | Add audio | audio |
-| `ducking`, `beats` | Ducking, Beats | audio (no selection) |
+| `ducking`, `beats` | Ducking, Beats | audio (no selection; a sound). Beats only when the project has clips |
 | `audioVolume`, `audioFade`, `audioDuplicate`, `audioDelete` | Volume, Fade, Duplicate, Delete | audio (a sound) |
 | `effectStrength`, `effectDuplicate`, `effectDelete` | Strength, Duplicate, Delete | effect |
 
@@ -149,7 +149,7 @@ The bottom area has an **explicit height** in both states and, while a strip is 
 
 ### 3.3 Opening and closing — `src/editor/toolStrip.ts`
 
-One small UI store holds the open strip: `{ id: StripId; key: string; clipIndex: number | null } | null` (`key` = `selectionKey` at the moment it opened; `clipIndex` only for Transition). `openStrip(id, clipIndex?)` and `closeStrip()` are plain functions, so the toolbar, the cut marker on the timeline and the ratio pill in the transport row open the same strip. Transient: not saved, not undoable.
+One small UI store holds the open strip: `{ id: StripId; key: string } | null` (`key` = `selectionKey` at the moment it opened). The Transition strip's cut is the selected clip's place on the main track, read on every render (never stored: the clip can move while the strip is open); the strip closes if that clip becomes the last one. `openStrip(id)` leaves multi-select first (the ratio pill is still on screen in that mode). `openStrip(id)` and `closeStrip()` are plain functions, so the toolbar, the cut marker on the timeline and the ratio pill in the transport row open the same strip. Transient: not saved, not undoable.
 
 A strip closes when:
 

@@ -6,13 +6,15 @@ jest.mock("@/src/projects", () => ({ storage: { importMedia: jest.fn(), saveStil
 jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () => ({ uri: "file:///thumb.jpg" })) }));
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
+import * as haptics from "@/src/ui/haptics";
 import { useToast } from "@/src/ui/Toast";
 import { BAR_HEIGHT, STRIP } from "@/src/ui/ToolStrip";
-import { deleteClip } from "@/src/editor/model/ops";
+import * as ops from "@/src/editor/model/ops";
+import { deleteClip, moveClip } from "@/src/editor/model/ops";
 import { AUDIO_LIMITS, makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
-import { closeStrip, useToolStrip } from "../toolStrip";
+import { closeStrip, openStrip, useToolStrip } from "../toolStrip";
 
 const renderBar = () => render(<EditorToolbar panelFor={null} onPanelChange={() => {}} />);
 const st = () => useEditorStore.getState();
@@ -24,7 +26,9 @@ const row = () => screen.getAllByRole("button").map((b) => b.props.accessibility
 const closeTool = async () => { await fireEvent.press(screen.queryByRole("button", { name: "Done" }) ?? screen.getByLabelText("Close sheet")); };
 const BACK = "Back to main tools";
 const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Effects", "Filter", "Adjust", "Ratio", "Background", "Cover", "Templates"];
-const CLIP = ["Split", "Trim", "Speed", "Volume", "Animate", "Filter", "Adjust", "Crop", "Transform", "Opacity", "Mask", "Green screen", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate", "Delete", "Select"];
+const CLIP = ["Split", "Trim", "Select", "Speed", "Volume", "Animate", "Filter", "Adjust", "Background", "Templates", "Crop", "Transform", "Opacity", "Mask", "Green screen", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate", "Delete"];
+const TEXT = ["Edit", "Animate", "Keyframe", "Duplicate", "Delete", "Add text"];
+const SOUND = ["Volume", "Fade", "Duplicate", "Delete", "Add audio", "Ducking", "Beats"];
 
 beforeEach(() => {
   closeStrip();
@@ -52,13 +56,13 @@ describe("bars", () => {
     await act(() => { st().select("a"); });
     expect(row()).toEqual([BACK, ...CLIP]);
     await act(() => { st().selectOverlay("t1"); });
-    expect(row()).toEqual([BACK, "Edit", "Animate", "Keyframe", "Duplicate", "Delete"]);
+    expect(row()).toEqual([BACK, ...TEXT]);
     await act(() => { st().selectOverlay("c1"); });
-    expect(row()).toEqual([BACK, "Edit", "Captions", "Duplicate", "Delete"]);
+    expect(row()).toEqual([BACK, "Edit", "Captions", "Duplicate", "Delete", "Add text"]);
     await act(() => { st().selectOverlay("s1"); });
     expect(row()).toEqual([BACK, "Edit", "Animate", "Keyframe", "Duplicate", "Delete"]);
     await act(() => { st().selectAudio("m1"); });
-    expect(row()).toEqual([BACK, "Volume", "Fade", "Duplicate", "Delete", "Add audio"]);
+    expect(row()).toEqual([BACK, ...SOUND]);
     await act(() => { st().selectEffect("e1"); });
     expect(row()).toEqual([BACK, "Strength", "Duplicate", "Delete"]);
     await act(() => { st().selectEffect(null); });
@@ -163,7 +167,64 @@ describe("main bar entries", () => {
     const added = st().project!.overlays[0];
     expect(st().selectedOverlayId).toBe(added.id);
     expect(onPanelChange).toHaveBeenCalledWith({ id: added.id, kind: "text" });
-    expect(row()).toEqual([BACK, "Edit", "Animate", "Keyframe", "Duplicate", "Delete"]);
+    expect(row()).toEqual([BACK, ...TEXT]);
+  });
+
+  test("Add text with a text or a caption selected is one tap: it adds another, selects it and asks for the panel", async () => {
+    st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], overlays: [makeOverlay({ id: "t1", start: 1, end: 3 }), makeOverlay({ id: "c1", kind: "caption", start: 1, end: 3 })] }));
+    const onPanelChange = jest.fn();
+    await render(<EditorToolbar panelFor={null} onPanelChange={onPanelChange} />);
+    for (const [from, count] of [["t1", 3], ["c1", 4]] as const) {
+      await act(() => { st().selectOverlay(from); });
+      await fireEvent.press(btn("Add text"));
+      expect(st().project!.overlays).toHaveLength(count);
+      const added = st().project!.overlays.find((o) => o.id === st().selectedOverlayId)!;
+      expect(added).toMatchObject({ kind: "text", text: "Your text" });
+      expect(onPanelChange).toHaveBeenLastCalledWith({ id: added.id, kind: "text" });
+    }
+    expect(st().past).toHaveLength(2);
+  });
+
+  test("the Audio / Text section does not survive an emptied project", async () => {
+    await renderBar();
+    for (const [entry, first] of [["Text", "Add text"], ["Audio", "Add audio"]] as const) {
+      await fireEvent.press(btn(entry));
+      expect(row()[1]).toBe(first);
+      await act(() => { st().apply((p) => ({ ...p, clips: [] })); });
+      expect(row()).toEqual(["Audio", "Effects", "Ratio"]);
+      await act(() => { st().undo(); });
+      expect(row()).toEqual(MAIN);
+    }
+  });
+
+  test("on an empty project Audio still opens its bar, without Beats", async () => {
+    st().setProject(makeProject());
+    await renderBar();
+    await fireEvent.press(btn("Audio"));
+    expect(row()).toEqual([BACK, "Add audio", "Ducking"]);
+  });
+
+  test("Background on the clip bar opens for the selected clip, not the one under the playhead", async () => {
+    await renderBar();
+    await act(() => { st().select("a"); st().seek(5); });               // the playhead is on b
+    await fireEvent.press(btn("Background"));
+    expect(st().selectedClipId).toBe("a");
+    expect(useToolStrip.getState().open).toMatchObject({ id: "background", key: "clip:a" });
+    const before = st().project!.clips[1].background;
+    await fireEvent.press(btn("Blur"));
+    expect(st().project!.clips[0].background).not.toEqual(before);
+    expect(st().project!.clips[1].background).toEqual(before);
+  });
+
+  test("Templates on the clip bar offers This clip; on the main bar it cannot", async () => {
+    await renderBar();
+    await fireEvent.press(btn("Templates"));
+    expect(btn("This clip")).toBeDisabled();
+    await closeTool();
+    await act(() => { st().select("b"); });
+    await fireEvent.press(btn("Templates"));
+    expect(btn("Random template")).toBeTruthy();
+    expect(btn("This clip")).toBeEnabled();
   });
 
   test("Captions on the text bar opens the Captions sheet", async () => {
@@ -250,6 +311,23 @@ describe("text and sticker bars", () => {
     expect(row()).toEqual(MAIN);
   });
 
+  test("Duplicate buzzes only when the overlay was copied", async () => {
+    withOverlays();
+    const buzz = jest.spyOn(haptics, "haptic");
+    await renderBar();
+    await act(() => { st().selectOverlay("t1"); });
+    const refused = jest.spyOn(ops, "duplicateOverlay").mockImplementationOnce((p) => p);
+    await fireEvent.press(btn("Duplicate"));
+    expect(refused).toHaveBeenCalled();
+    expect(buzz).not.toHaveBeenCalled();
+    expect(st().past).toHaveLength(0);
+    expect(st().selectedOverlayId).toBe("t1");
+    await fireEvent.press(btn("Duplicate"));
+    expect(buzz).toHaveBeenCalledWith("light");
+    expect(st().past).toHaveLength(1);
+    buzz.mockRestore(); refused.mockRestore();
+  });
+
   test("Animate opens the overlay animation for a text and the clip animation for a clip", async () => {
     withOverlays();
     await renderBar();
@@ -296,8 +374,36 @@ describe("strips and the bar", () => {
     await renderBar();
     await act(() => { st().select("a"); });
     await fireEvent.press(btn("Transition"));
-    expect(useToolStrip.getState().open).toEqual({ id: "transition", key: "clip:a", clipIndex: 0 });
+    expect(useToolStrip.getState().open).toEqual({ id: "transition", key: "clip:a" });
     expect(btn("Dissolve")).toBeTruthy();
+  });
+
+  test("the Transition strip follows its clip: after a reorder (and its undo) a pick lands on the selected clip's cut", async () => {
+    st().setProject(makeProject({ clips: ["a", "b", "c"].map((id) => makeClip({ id, sourceDuration: 4 })) }));
+    await renderBar();
+    await act(() => { st().select("a"); });
+    await fireEvent.press(btn("Transition"));
+    await act(() => { st().apply((p) => moveClip(p, "a", 1)); });         // b, a, c
+    expect(st().project!.clips.map((c) => c.id)).toEqual(["b", "a", "c"]);
+    expect(useToolStrip.getState().open?.id).toBe("transition");
+    await fireEvent.press(btn("Dissolve"));
+    expect(st().project!.clips.map((c) => c.transitionOut.type)).toEqual(["none", "dissolve", "none"]);
+    await act(() => { st().undo(); st().undo(); });                       // a, b, c again, nothing set
+    expect(st().project!.clips.map((c) => c.id)).toEqual(["a", "b", "c"]);
+    await fireEvent.press(btn("Dissolve"));
+    expect(st().project!.clips.map((c) => c.transitionOut.type)).toEqual(["dissolve", "none", "none"]);
+  });
+
+  test("the Transition strip closes when its clip becomes the last one", async () => {
+    st().setProject(makeProject({ clips: ["a", "b", "c"].map((id) => makeClip({ id, sourceDuration: 4 })) }));
+    await renderBar();
+    await act(() => { st().select("b"); });
+    await fireEvent.press(btn("Transition"));
+    expect(screen.getByTestId("tool-strip")).toBeTruthy();
+    await act(() => { st().apply((p) => moveClip(p, "b", 2)); });
+    expect(useToolStrip.getState().open).toBeNull();
+    expect(screen.queryByTestId("tool-strip")).toBeNull();
+    expect(row()).not.toContain("Transition");
   });
 
   test("the bar is one horizontally scrolling row that starts again from the left when the bar changes", async () => {
@@ -558,7 +664,7 @@ describe("Audio tools", () => {
   }));
   const tracks = () => st().project!.audioTracks;
   const past = () => st().past.length;
-  const TRACK = [BACK, "Volume", "Fade", "Duplicate", "Delete", "Add audio"];
+  const TRACK = [BACK, ...SOUND];
   beforeEach(() => { useToast.getState().clear(); });
 
   test("Beats opens the beat markers sheet, whose Tap adds a marker at the playhead", async () => {
@@ -586,6 +692,18 @@ describe("Audio tools", () => {
     expect(st().project!.ducking).toBe(false);
     expect(btn("Ducking")).not.toBeSelected();
     expect(past()).toBe(2);
+  });
+
+  test("with a track selected, Ducking and Beats are one tap away and keep it selected", async () => {
+    withAudio();
+    await renderBar();
+    await act(() => { st().selectAudio("t1"); });
+    await fireEvent.press(btn("Ducking"));
+    expect(st().project!.ducking).toBe(true);
+    expect(btn("Ducking")).toBeSelected();
+    await fireEvent.press(btn("Beats"));
+    expect(screen.getByRole("header", { name: "Beat markers" })).toBeTruthy();
+    expect(st().selectedAudioId).toBe("t1");
   });
 
   test("with a track selected, Add audio opens the sheet without deselecting", async () => {
@@ -784,6 +902,18 @@ describe("Select (multi-select)", () => {
     await act(() => { st().enterMultiSelect(); });
     expect(useToolStrip.getState().open).toBeNull();
     expect(screen.getByRole("header", { name: "1 selected" })).toBeTruthy();   // the mode starts with the selected clip chosen
+  });
+
+  test("opening the Ratio strip in multi-select (the transport row's pill) leaves the mode and shows the strip", async () => {
+    await renderBar();
+    await act(() => { st().select("a"); st().enterMultiSelect(); });
+    expect(screen.queryByTestId("editor-toolbar")).toBeNull();
+    await act(() => { openStrip("ratio"); });
+    expect(st().multiSelect).toBeNull();
+    expect(useToolStrip.getState().open).toMatchObject({ id: "ratio", key: "none" });
+    expect(screen.getByTestId("tool-strip")).toBeTruthy();
+    await fireEvent.press(btn("1:1"));
+    expect(st().project?.aspectRatio).toBe("1:1");
   });
 
   test("entering with clip a selected starts with it chosen", async () => {

@@ -64,7 +64,7 @@ export default function EditorScreen() {
             const clip = project?.clips[index];
             if (!clip) return;
             useEditorStore.getState().select(clip.id);
-            openStrip("transition", index);
+            openStrip("transition");
           }}
         />
       </View>

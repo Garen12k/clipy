@@ -31,9 +31,9 @@ beforeEach(() => {
 test("openStrip remembers the selection it opened with; closeStrip clears it", () => {
   st().select("a");
   openStrip("opacity");
-  expect(open()).toEqual({ id: "opacity", key: "clip:a", clipIndex: null });
-  openStrip("transition", 0);
-  expect(open()).toEqual({ id: "transition", key: "clip:a", clipIndex: 0 });
+  expect(open()).toEqual({ id: "opacity", key: "clip:a" });
+  openStrip("transition");
+  expect(open()).toEqual({ id: "transition", key: "clip:a" });
   closeStrip();
   expect(open()).toBeNull();
   st().select(null);
@@ -88,6 +88,15 @@ test("it closes when multi-select is entered and when the host unmounts", async 
   expect(open()?.id).toBe("opacity");
   await view.unmount();
   expect(open()).toBeNull();
+});
+
+test("opening a strip in multi-select leaves the mode first, so its key is not the mode's and it stays open", async () => {
+  st().select("a");
+  await render(<Host />);
+  await act(() => { st().enterMultiSelect(); });
+  await act(() => { openStrip("ratio"); });
+  expect(st().multiSelect).toBeNull();
+  expect(open()).toEqual({ id: "ratio", key: "none" });
 });
 
 test("a strip opened with nothing selected closes when something is selected", async () => {

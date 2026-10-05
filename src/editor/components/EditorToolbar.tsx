@@ -65,7 +65,8 @@ type Props = { panelFor: PanelFor; onPanelChange: (next: PanelFor) => void };
  * lowest lanes (a negative top margin) instead of pushing the preview. The root must stay a direct child of the screen, after the timeline.
  */
 export function EditorToolbar({ panelFor, onPanelChange }: Props) {
-  // `selectedClipId` holds a main clip's or a layer's id. `selectedIndex` is the place on the main track (-1 for a layer): transitions only.
+  // `selectedClipId` holds a main clip's or a layer's id. `selectedIndex` is its place on the main track now (-1 for a layer): the
+  // Transition strip's cut, read on every render so a reorder or an undo while it is open cannot leave it on another clip's cut.
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const selectedOverlayId = useEditorStore((s) => s.selectedOverlayId);
   const selectedEffectId = useEditorStore((s) => s.selectedEffectId);
@@ -73,12 +74,15 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
   const overlayKind = useEditorStore((s) => s.project?.overlays.find((o) => o.id === s.selectedOverlayId)?.kind ?? null);
   const selectedIndex = useEditorStore((s) => s.project?.clips.findIndex((c) => c.id === s.selectedClipId) ?? -1);
   const apply = useEditorStore((s) => s.apply);
-  // A main-bar entry that opens a bar without a selection (Audio, Text). Toolbar state: any change of the selection leaves it.
+  // A main-bar entry that opens a bar without a selection (Audio, Text). Toolbar state: any change of the selection leaves it, and
+  // so does the project losing its last clip (else the Text bar would come back by itself with the next clip).
   const [section, setSection] = useState<Section>(null);
   // The tools that are still modal sheets (the strips live in the strip store).
   const [sheet, setSheet] = useState<"trim" | "addAudio" | "sticker" | "captions" | "templates" | "crop" | "effect" | "beats" | "cover" | null>(null);
   const key = useEditorStore(selectionKey);
+  const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   useEffect(() => { setSection(null); }, [key]);
+  useEffect(() => { if (!hasClips) setSection(null); }, [hasClips]);
   const bar = useEditorStore((s) => (s.project ? contextFor(selOf(s, section), s.project).bar : "main"));
   const tools = useEditorStore(useShallow((s) => (s.project ? contextFor(selOf(s, section), s.project).tools : [])));
   // Tool strips: the closer lives here, the bottom area; the bar gives its place to a strip while one shows.
@@ -158,13 +162,16 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
   };
 
   const duplicateSelectedOverlay = () => {
-    if (!selectedOverlayId) return;
+    const { project, selectOverlay } = useEditorStore.getState();
+    if (!project || !selectedOverlayId) return;
+    // The op returns the same project when it refuses: no buzz, no undo step.
+    const next = duplicateOverlay(project, selectedOverlayId);
+    if (next === project) return;
     haptic("light");
-    apply((p) => duplicateOverlay(p, selectedOverlayId));
+    apply(() => next);
     // The copy sits right after the original in the list.
-    const list = useEditorStore.getState().project?.overlays ?? [];
-    const dup = list[list.findIndex((o) => o.id === selectedOverlayId) + 1];
-    if (dup) useEditorStore.getState().selectOverlay(dup.id);
+    const dup = next.overlays[next.overlays.findIndex((o) => o.id === selectedOverlayId) + 1];
+    if (dup) selectOverlay(dup.id);
   };
 
   const duplicateSelectedEffect = () => {
@@ -226,7 +233,7 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
     filter: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("filter")) : openStrip("filter")) },
     adjust: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("adjust")) : openStrip("adjust")) },
     ratio: { onPress: () => openStrip("ratio") },
-    background: { onPress: () => onPlayheadClip(() => openStrip("background")) },
+    background: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("background")) : openStrip("background")) },
     cover: { onPress: () => setSheet("cover") },
     templates: { onPress: () => setSheet("templates") },
     split: { onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
@@ -241,7 +248,7 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
     blend: { onPress: () => openStrip("blend") },
     chroma: { onPress: () => openStrip("chroma") },
     keyframe: { icon: pin === "remove" ? "diamond" : undefined, disabled: pin === "off", active: pin === "remove", onPress: toggleKeyframe },
-    transition: { onPress: () => openStrip("transition", selectedIndex) },
+    transition: { onPress: () => openStrip("transition") },
     layerForward: { onPress: () => reorderSelected("forward") },
     layerBack: { onPress: () => reorderSelected("back") },
     replace: { disabled: mediaBusy, onPress: () => { if (selectedId) void replaceMedia(selectedId); } },
@@ -314,7 +321,7 @@ export function EditorToolbar({ panelFor, onPanelChange }: Props) {
       <AudioVolumeSheet trackId={selectedAudioId} visible={strip?.id === "audioVolume"} onClose={closeStrip} />
       <AudioFadeSheet target={selectedAudioId ? { type: "track", id: selectedAudioId } : null} visible={strip?.id === "audioFade"} onClose={closeStrip} />
       <VolumeSheet clipId={selectedId} visible={strip?.id === "volume"} onClose={closeStrip} />
-      <TransitionSheet clipIndex={strip?.clipIndex ?? 0} visible={strip?.id === "transition"} onClose={closeStrip} />
+      <TransitionSheet clipIndex={selectedIndex} visible={strip?.id === "transition"} onClose={closeStrip} />
     </View>
   );
 }
