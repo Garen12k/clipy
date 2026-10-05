@@ -7,6 +7,7 @@ import { cancelTranscribe, transcribe } from "@/modules/clipy-video";
 import { makeClip, makeOverlay, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { PANEL } from "@/src/ui/ToolPanel";
 import { SPEECH_DENIED_MESSAGE } from "@/src/editor/useCaptions";
 import { CaptionsSheet } from "../components/CaptionsSheet";
 
@@ -46,6 +47,10 @@ test("offers Style captions next to Replace when captions already exist", async 
   // One main button on the card: Replace. Style captions is outlined, Cancel is text only.
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
   expect(screen.getByText("Cancel")).toHaveStyle({ color: theme.colors.accent });
+  // All three are the same height (compact), and the card fits the compact panel's body without scrolling:
+  // 239 − 44 (header) − 2 × 12 (the body's padding) = 171 ≥ one line of text (18) + 3 × 12 (gaps) + 3 × 36 = 162.
+  for (const name of ["Replace", "Style captions", "Cancel"]) expect(screen.getByRole("button", { name })).toHaveStyle({ height: theme.size.controlCompact });
+  expect(18 + 3 * theme.space.md + 3 * theme.size.controlCompact).toBeLessThanOrEqual(PANEL.compact - 1 - PANEL.header - 2 * theme.space.md);
   await fireEvent.press(screen.getByText("Style captions"));
   expect(screen.getByText("Caption style")).toBeTruthy();
 });

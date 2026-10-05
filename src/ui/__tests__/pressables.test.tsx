@@ -56,6 +56,30 @@ test("lifted: no animation on mount; the one spring when it changes, and only th
   expect(S).toHaveBeenCalledTimes(2);
 });
 
+test("still: a change of `lifted` lands at once, with no spring (a chip whose selection follows a slider being dragged)", async () => {
+  const ui = (lifted: boolean, still: boolean) => <PressableScale lifted={lifted} still={still} accessibilityRole="button" accessibilityLabel="Tile"><Text>a</Text></PressableScale>;
+  const view = await render(ui(false, true));
+  await view.rerender(ui(true, true));
+  await view.rerender(ui(false, true));
+  expect(S).not.toHaveBeenCalled();
+  await view.rerender(ui(false, false));                                                  // the drag ended: nothing changed, nothing animates
+  expect(S).not.toHaveBeenCalled();
+  await view.rerender(ui(true, false));                                                   // a pick after it springs as usual
+  expect(S).toHaveBeenCalledTimes(1);
+});
+
+test("Chip still: the ring and the colours switch at once, the lift does not spring", async () => {
+  const ui = (selected: boolean) => <Chip still label="2×" selected={selected} onPress={() => {}} />;
+  const view = await render(ui(false));
+  await view.rerender(ui(true));
+  expect(btn("2×")).toBeSelected();
+  expect(btn("2×")).toHaveStyle({ backgroundColor: theme.elevation.lifted, ...theme.ring });
+  expect(screen.getByText("2×")).toHaveStyle({ color: theme.colors.accent });
+  await view.rerender(ui(false));
+  expect(btn("2×")).toHaveStyle({ backgroundColor: theme.elevation.tile, ...theme.ringClear });
+  expect(S).not.toHaveBeenCalled();
+});
+
 test("the three buttons share one box and one label style; compact is 36", async () => {
   expect(buttonBox()).toMatchObject({ height: theme.size.control, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill });
   expect(buttonBox(true)).toMatchObject({ height: theme.size.controlCompact, paddingHorizontal: theme.space.lg });
@@ -70,6 +94,17 @@ test("the three buttons share one box and one label style; compact is 36", async
   expect(btn("Second").props.style).not.toEqual(expect.objectContaining({ backgroundColor: theme.colors.accent }));
   expect(screen.getByText("Quiet")).toHaveStyle({ color: theme.colors.accent, fontFamily: theme.fonts.bodyBold });
   expect(screen.getByText("Second")).toHaveStyle({ color: theme.colors.text, fontFamily: theme.fonts.bodyBold });
+});
+
+test("compact main / secondary / quiet buttons are 36 pt high and reach 44 with the same vertical slop; regular ones need none", async () => {
+  await render(<><PrimaryButton compact title="Export" onPress={() => {}} /><SecondaryButton compact title="Use" onPress={() => {}} /><QuietButton compact title="Reset" onPress={() => {}} />
+    <PrimaryButton title="Tap" onPress={() => {}} /><SecondaryButton title="Cancel" onPress={() => {}} /></>);
+  for (const name of ["Export", "Use", "Reset"]) {
+    const slop = btn(name).props.hitSlop as { top: number; bottom: number };
+    expect(theme.size.controlCompact + slop.top + slop.bottom).toBe(theme.size.touch);
+    expect(slop).toEqual(btn("Reset").props.hitSlop);
+  }
+  for (const name of ["Tap", "Cancel"]) expect(btn(name).props.hitSlop).toBeUndefined();
 });
 
 test("QuietButton: presses, can be disabled, danger is red, compact reaches 44 pt with its slop", async () => {

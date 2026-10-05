@@ -3,6 +3,7 @@ jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }
 import * as Haptics from "expo-haptics";
 import { makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { theme } from "@/src/theme/theme";
 import { useToast } from "@/src/ui/Toast";
 import { BeatsSheet } from "../components/BeatsSheet";
 
@@ -25,6 +26,15 @@ test("title, Tap, a count, and Remove nearest / Clear all disabled while there a
   expect(screen.getByText("0 markers")).toBeTruthy();
   expect(btn("Remove nearest")).toBeDisabled();
   expect(btn("Clear all")).toBeDisabled();
+});
+
+test("Remove nearest and Clear all are compact, so the pair fits between the gutters of a 375-pt phone; Tap stays the regular main button", async () => {
+  await render(<BeatsSheet visible onClose={() => {}} />);
+  for (const name of ["Remove nearest", "Clear all"]) {
+    expect(btn(name)).toHaveStyle({ height: theme.size.controlCompact, paddingHorizontal: theme.space.lg });
+    expect(screen.getByText(name)).toHaveStyle({ fontSize: theme.type.label });
+  }
+  expect(btn("Tap")).toHaveStyle({ height: theme.size.control });
 });
 
 test("Tap adds a marker at the playhead as it is at press time (also while playing), one undo step each, with a light haptic", async () => {

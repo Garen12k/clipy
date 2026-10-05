@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { Text } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { Chip } from "../Chip";
 import { BAR_HEIGHT, STRIP, StripNote, StripSlider, StripTiles, ToolStrip, useStripPresence } from "../ToolStrip";
 
 test("the height budget: bar 90, strip 154 = 1 + 44 + 72 + 36 + 1, lifted by the difference", () => {
@@ -71,4 +72,13 @@ test("rows have explicit heights; the slider row shows its label and trailing", 
   expect(screen.getByTestId("strip-tiles")).toHaveStyle({ height: STRIP.tiles });
   expect(screen.getByTestId("strip-slider")).toHaveStyle({ height: STRIP.slider });
   for (const t of ["tabs", "tile", "Brightness +35", "slider", "reset"]) expect(screen.getByText(t)).toBeTruthy();
+});
+
+test("the lead of a tiles row is as high as the row, so a compact tab chip's slop is inside it: a real 44-pt target", async () => {
+  await render(<StripTiles lead={<Chip compact label="In" selected onPress={() => {}} />}><Text>tile</Text></StripTiles>);
+  expect(screen.getByTestId("strip-lead")).toHaveStyle({ height: STRIP.tiles, alignItems: "center" });
+  const chip = screen.getByRole("button", { name: "In" });
+  const slop = chip.props.hitSlop as { top: number; bottom: number };
+  expect(theme.size.chipCompact + slop.top + slop.bottom).toBeGreaterThanOrEqual(theme.size.touch);
+  expect(theme.size.chipCompact + slop.top + slop.bottom).toBeLessThanOrEqual(STRIP.tiles);
 });

@@ -79,6 +79,9 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const curveId = clip.speedCurve?.id ?? null;
   const [tab, setTab] = useState<Tab>(curveId ? "curve" : "normal");
+  // True from the slider's drag start to its end (two renders per drag, none per frame): the preset chips' ring follows the live
+  // speed, and their lift must not spring while the slider is dragged.
+  const [dragging, setDragging] = useState(false);
   const sliderTint = curveId ? theme.colors.textMuted : theme.colors.accent;
   /** One clip op on the shown clip, or on every clip of the multi-selection (one project out, so one undo step). */
   const write = (p: Project, op: (p: Project, id: string) => Project) => (clipIds ? forClips(p, clipIds, op) : op(p, clip.id));
@@ -122,7 +125,7 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
       </>}>
       <StripTiles key={tab} initialX={startX} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
         {tab === "normal" ? (
-          PRESETS.map((s) => <Chip key={s} label={formatSpeed(s)} selected={!curveId && clip.speed === s} onPress={() => pickSpeed(s)} />)
+          PRESETS.map((s) => <Chip key={s} still={dragging} label={formatSpeed(s)} selected={!curveId && clip.speed === s} onPress={() => pickSpeed(s)} />)
         ) : (
           <>
             <CurveTile id="none" label="None" shape={null} selected={curveId === null} onPress={() => pickCurve(null)} />
@@ -134,7 +137,8 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
         <StripSlider label={curveId ? "Speed" : "Current speed:"} value={curveId ? undefined : formatSpeed(clip.speed)}>
           {/* With a curve the clip's constant speed is 1, so the slider rests at 1× (muted); setClipSpeed clears the curve. */}
           <Slider testID="speed-slider" minimumValue={SPEED_LIMITS[0]} maximumValue={SPEED_LIMITS[1]} step={0.05} value={clip.speed}
-            onSlidingStart={beginTransaction} onValueChange={(v) => applyTransient((p) => write(p, (q, cid) => setClipSpeed(q, cid, v)))}
+            onSlidingStart={() => { setDragging(true); beginTransaction(); }} onValueChange={(v) => applyTransient((p) => write(p, (q, cid) => setClipSpeed(q, cid, v)))}
+            onSlidingComplete={() => setDragging(false)}
             minimumTrackTintColor={sliderTint} thumbTintColor={sliderTint} detents={REST} />
         </StripSlider>
       ) : null}

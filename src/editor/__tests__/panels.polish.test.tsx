@@ -29,7 +29,7 @@ beforeEach(() => {
 
 test("the text panel's sliders are the kit's and its Size line is one text with the value picked out", async () => {
   await render(<TextPanel overlayId="t" visible onClose={() => {}} />);
-  expect(screen.getByTestId("size-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.elevation.tile });
+  expect(screen.getByTestId("size-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.sea });
   const overlay = st().project!.overlays[0] as TextOverlay;
   const pct = `${Math.round(overlay.fontScale * 100)}%`;
   expect(screen.getByText(`Size ${pct}`)).toBeTruthy();

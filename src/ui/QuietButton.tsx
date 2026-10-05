@@ -1,17 +1,15 @@
 import { Text } from "react-native";
 import { theme } from "@/src/theme/theme";
-import { buttonBox, buttonLabel, DISABLED_OPACITY } from "./buttonStyle";
+import { buttonBox, buttonLabel, buttonSlop, DISABLED_OPACITY } from "./buttonStyle";
 import { PressableScale } from "./PressableScale";
 
 type Props = { title: string; onPress: () => void; disabled?: boolean; danger?: boolean; compact?: boolean; /** Defaults to `title`. */ accessibilityLabel?: string };
-/** Compact is 36 pt high: 4 pt of slop each way makes its target 44. */
-const COMPACT_SLOP = { top: 4, bottom: 4 } as const;
 
 /** The third kind of button: text only (gold; red for `danger`). Same height, label style and press feedback as the other two. */
 export function QuietButton({ title, onPress, disabled, danger, compact, accessibilityLabel }: Props) {
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress}
-      hitSlop={compact ? COMPACT_SLOP : undefined}
+      hitSlop={buttonSlop(compact)}
       style={[buttonBox(compact), { paddingHorizontal: theme.space.sm, minWidth: theme.size.touch, opacity: disabled ? DISABLED_OPACITY : 1 }]}>
       <Text style={[buttonLabel(compact), { color: danger ? theme.colors.danger : theme.colors.accent }]}>{title}</Text>
     </PressableScale>

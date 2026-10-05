@@ -155,6 +155,22 @@ test("the scanner: a value may span lines and hold calls; every hit names its li
   expect(rawSpacing("{ row: { gap: 2 }, tile: { margin: 1 } }")).toEqual(["1: gap: 2", "1: margin: 1"]);         // a value ends at its own brace
 });
 
+test("KNOWN LIMIT, kept on record: an apostrophe in JSX text hides the rest of ITS line from the scanner", () => {
+  const hits = (code: string) => rawSpacing(code).length;
+  // The scanner does not parse JSX: the apostrophe opens a "string" that runs to the end of the line, so the gap after it is never seen.
+  expect(hits("<Text>Don't</Text><View style={{ gap: 4 }} />")).toBe(0);                          // a miss — do not trust the guard for such a line
+  expect(hits("<View style={{ gap: 4 }} /><Text>Don't</Text>")).toBe(1);                          // only what comes AFTER the apostrophe is hidden
+  expect(hits("<Text>Don't</Text>\n<View style={{ gap: 4 }} />")).toBe(1);                        // and never the next line
+  expect(hits("<Text>Don&apos;t</Text><View style={{ gap: 4 }} />")).toBe(1);                     // the entity (what the lint rule asks for) hides nothing
+});
+
+test("KNOWN LIMIT, kept on record: a value that multiplies or divides is skipped whole, raw numbers and all", () => {
+  // Meant for a share of something measured (h * 0.12). The scanner cannot tell that from arithmetic on raw numbers.
+  expect(rawSpacing("{ padding: 2 * 5, gap: 16 / 2 }")).toEqual([]);                              // a miss: 10 and 8, raw
+  expect(rawSpacing("{ paddingTop: h * 0.5 + 6 }")).toEqual([]);                                  // a miss: the raw 6 rides along with the ratio
+  expect(rawSpacing("{ paddingTop: h * 0.5, marginTop: 6 }")).toEqual(["1: marginTop: 6"]);       // only the value with the operator is skipped
+});
+
 test("the report: says per file whether to use a token, lower the count or delete the line", () => {
   const allow = { "a.tsx": { max: 2, why: "" }, "b.tsx": { max: 2, why: "" }, "c.tsx": { max: 1, why: "" }, "d.tsx": { max: 1, why: "" }, "gone.tsx": { max: 1, why: "" } };
   expect(problems({ "a.tsx": ["1: gap: 4", "2: gap: 4"], "clean.tsx": [] }, { "a.tsx": allow["a.tsx"] })).toEqual([]);

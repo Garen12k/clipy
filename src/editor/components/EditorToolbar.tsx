@@ -300,7 +300,7 @@ export function EditorToolbar() {
           {/* Keyed by the bar: another bar is a new mount — it starts again from the left and its tools fade in from the right; the same
               bar keeps its scroll position through re-renders and does not replay. The back arrow is outside, so it stays put. */}
           <EnterView key={bar} axis="x" testID="toolbar-tools" style={{ flex: 1, height: BAR_HEIGHT - 1 }}>
-            <ScrollView key={bar} testID="toolbar-scroll" horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ height: BAR_HEIGHT - 1 }}
+            <ScrollView testID="toolbar-scroll" horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ height: BAR_HEIGHT - 1 }}
               contentContainerStyle={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }}>
               {tools.map((id) => <ToolButton key={id} label={TOOL_META[id].label} icon={ACTIONS[id].icon ?? TOOL_META[id].icon} disabled={ACTIONS[id].disabled} active={ACTIONS[id].active} onPress={ACTIONS[id].onPress} />)}
             </ScrollView>

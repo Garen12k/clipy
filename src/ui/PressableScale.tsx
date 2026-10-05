@@ -7,13 +7,14 @@ import { isReducedMotion } from "./useReducedMotion";
 
 const APressable = Animated.createAnimatedComponent(Pressable);
 const LIFT = theme.motion.selectedScale - 1;
-type Props = Omit<PressableProps, "style"> & { style?: StyleProp<ViewStyle>; /** The selected chip / tile sits 3 % larger. */ lifted?: boolean };
+type Props = Omit<PressableProps, "style"> & { style?: StyleProp<ViewStyle>; /** The selected chip / tile sits 3 % larger. */ lifted?: boolean;
+  /** A change of `lifted` lands at once, with no spring: for a chip whose selection follows a slider while it is dragged. */ still?: boolean };
 
 /**
  * THE pressable of the kit: it dips to 0.96 while held, and sits 3 % larger while `lifted` (the selected chip or tile).
  * Both are shared values set from the handlers / an effect — pressing never re-renders. Motion comes from motion.ts (Reduce Motion: no tween).
  */
-export function PressableScale({ style, onPressIn, onPressOut, lifted = false, ...rest }: Props) {
+export function PressableScale({ style, onPressIn, onPressOut, lifted = false, still = false, ...rest }: Props) {
   const press = useSharedValue(1);
   const lift = useSharedValue(lifted ? 1 : 0);
   const mounted = useRef(false);
@@ -21,7 +22,7 @@ export function PressableScale({ style, onPressIn, onPressOut, lifted = false, .
   // it is stable on the device, but the Jest mock hands out a new one on every render, which would re-run this.
   useEffect(() => {
     if (!mounted.current) { mounted.current = true; return; }
-    lift.value = liftTo(lifted, isReducedMotion());
+    lift.value = liftTo(lifted, still || isReducedMotion());
   }, [lifted]);
   const anim = useAnimatedStyle(() => ({ transform: [{ scale: press.value * (1 + LIFT * lift.value) }] }));
   return (

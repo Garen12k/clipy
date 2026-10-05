@@ -3,6 +3,7 @@ jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }
 jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, minimumValue, maximumValue, value, onSlidingStart, onValueChange }: { testID?: string; minimumValue?: number; maximumValue?: number; value?: number; onSlidingStart?: () => void; onValueChange?: (v: number) => void }) => <View testID={testID} accessibilityValue={{ min: minimumValue, max: maximumValue, now: value }} onTouchStart={() => onSlidingStart?.()} onTouchMove={() => onValueChange?.(0.35)} />; });
 import { makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { theme } from "@/src/theme/theme";
 import { AdjustSheet } from "../components/AdjustSheet";
 
 const LABELS = ["Brightness", "Contrast", "Saturation", "Exposure", "Warmth", "Tint", "Highlights", "Shadows", "Sharpen", "Vignette", "Fade", "Grain"];
@@ -58,4 +59,14 @@ test("Apply to all copies the adjust to every clip", async () => {
   await drag();
   await fireEvent.press(screen.getByRole("button", { name: "Apply to all" }));
   expect(clips().map((c) => c.adjust.brightness)).toEqual([0.35, 0.35]);
+});
+
+test("Reset is a compact quiet button (text only, gold), not a chip: 36 pt high in the 36-pt slider row, at least 44 wide", async () => {
+  useEditorStore.getState().apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "a" ? { ...c, adjust: { ...c.adjust, brightness: 0.2 } } : c)) }));
+  await render(<AdjustSheet clipId="a" visible onClose={() => {}} />);
+  const reset = screen.getByRole("button", { name: "Reset" });
+  expect(reset).toHaveStyle({ height: theme.size.controlCompact, minWidth: theme.size.touch });
+  expect(reset).not.toHaveStyle({ backgroundColor: theme.elevation.tile });
+  expect(screen.getByText("Reset")).toHaveStyle({ color: theme.colors.accent, fontFamily: theme.fonts.bodyBold });
+  expect(screen.getByTestId("strip-slider")).toHaveStyle({ height: theme.size.controlCompact });   // the row is the button's height: its slop has no room here
 });

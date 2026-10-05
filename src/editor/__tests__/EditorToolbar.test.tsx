@@ -4,6 +4,8 @@ jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn() }));
 jest.mock("@/src/projects", () => ({ storage: { importMedia: jest.fn(), saveStill: jest.fn() } }));
 jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () => ({ uri: "file:///thumb.jpg" })) }));
+import { readFileSync } from "fs";
+import { join } from "path";
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
 import * as haptics from "@/src/ui/haptics";
@@ -468,6 +470,12 @@ describe("strips and the bar", () => {
     expect(clip).not.toBe(main);                                         // another bar: a fresh scroller, at the start
     await act(() => { st().select("b"); });
     expect(scroller()).toBe(clip);
+  });
+
+  test("the bar's key is on the entering wrapper alone: remounting it remounts the scroller inside", () => {
+    const src = readFileSync(join(__dirname, "..", "components", "EditorToolbar.tsx"), "utf8");
+    expect(src.match(/key=\{bar\}/g)).toHaveLength(1);
+    expect(src).toMatch(/<EnterView key=\{bar\}/);
   });
 });
 

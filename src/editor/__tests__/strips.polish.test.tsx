@@ -20,7 +20,7 @@ beforeEach(() => {
 
 test("a strip's slider is the kit's: themed, and its name and value are one text with the value picked out", async () => {
   await render(<OpacitySheet clipId="a" visible onClose={() => {}} />);
-  expect(screen.getByTestId("opacity-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.elevation.tile, thumbTintColor: theme.colors.accent });
+  expect(screen.getByTestId("opacity-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.sea, thumbTintColor: theme.colors.accent });
   expect(screen.getByText("Opacity 100 %")).toBeTruthy();
   expect(screen.getByText("100 %")).toHaveStyle({ color: theme.colors.text, fontVariant: ["tabular-nums"] });
 });

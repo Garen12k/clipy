@@ -62,7 +62,8 @@ export function ToolStrip({ visible, onClose, title, note, action, children }: P
 export function StripTiles({ lead, initialX, children }: { lead?: React.ReactNode; initialX?: number; children: React.ReactNode }) {
   return (
     <View testID="strip-tiles" style={{ height: STRIP.tiles, flexDirection: "row", alignItems: "center" }}>
-      {lead ? <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingLeft: theme.space.gutter }}>{lead}</View> : null}
+      {/* As high as the row: a compact chip (28) centred in it has its vertical slop inside its parent, so its target really is 44 pt. */}
+      {lead ? <View testID="strip-lead" style={{ height: STRIP.tiles, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingLeft: theme.space.gutter }}>{lead}</View> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ flex: 1, height: STRIP.tiles }} contentOffset={{ x: initialX ?? 0, y: 0 }}
         contentContainerStyle={{ alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.gutter }}>
         {children}
