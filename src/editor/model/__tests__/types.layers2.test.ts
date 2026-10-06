@@ -1,7 +1,7 @@
 import { BLEND_IDS, CHROMA, CHROMA_PRESETS, clampChroma, clampEffectRect, EFFECT_IDS, isRegionEffect, makeClip, makeEffect, makeLayer, makeProject, newLayer, newPhotoClip, newVideoClip, REGION_LIMITS, SCHEMA_VERSION } from "../types";
 
 test("schema v12 constants", () => {
-  expect(SCHEMA_VERSION).toBe(14);
+  expect(SCHEMA_VERSION).toBe(15);
   expect(BLEND_IDS).toEqual(["normal", "screen", "multiply", "overlay", "lighten", "darken"]);
   expect(CHROMA).toEqual({ hueBase: 12, hueRange: 48, soft: 10, minSat: 0.25, minVal: 0.2, defaultStrength: 0.5, cube: 32 });
   expect(CHROMA_PRESETS).toEqual(["#00FF00", "#0000FF"]);
@@ -53,7 +53,7 @@ test("factories default blend and chroma", () => {
   expect(newPhotoClip({ id: "a", sourceUri: "u", width: 1, height: 1 })).toMatchObject({ blend: "normal", chroma: null });
   expect(makeClip({ id: "a", sourceDuration: 5 })).toMatchObject({ blend: "normal", chroma: null });
   expect(makeLayer({ id: "l", sourceDuration: 5 })).toMatchObject({ blend: "normal", chroma: null });
-  expect(makeProject().schemaVersion).toBe(14);
+  expect(makeProject().schemaVersion).toBe(15);
 });
 
 test("newLayer keeps the green screen as a copy", () => {

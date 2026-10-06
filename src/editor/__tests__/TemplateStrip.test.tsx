@@ -5,10 +5,10 @@ import { FONT_IDS } from "@/src/editor/model/types";
 import { FontStrip } from "../components/FontStrip";
 import { CAPTION_PRESET_TILES, TemplateStrip, TEXT_TEMPLATE_TILES, TILE_WIDTH } from "../components/TemplateStrip";
 
-test("twelve template tiles, each 72 pt wide with its label and an \"Aa\" sample in the template's look", async () => {
+test("twenty-four template tiles, each 72 pt wide with its label and an \"Aa\" sample in the template's look", async () => {
   await render(<TemplateStrip tiles={TEXT_TEMPLATE_TILES} onPick={() => {}} />);
   expect(TILE_WIDTH).toBe(72);
-  expect(screen.getAllByText("Aa").length).toBeGreaterThanOrEqual(12);
+  expect(screen.getAllByText("Aa").length).toBeGreaterThanOrEqual(24);
   for (const id of TEXT_TEMPLATE_IDS) {
     const tile = screen.getByRole("button", { name: TEXT_TEMPLATES[id].label });
     expect(tile).toHaveStyle({ width: 72 });
@@ -19,6 +19,8 @@ test("twelve template tiles, each 72 pt wide with its label and an \"Aa\" sample
   expect(screen.getByTestId("overlay-glow-tile-neon", { includeHiddenElements: true })).toHaveStyle({ color: TEXT_TEMPLATES.neon.patch.style.glow!.color });
   expect(screen.getByTestId("overlay-shadow-tile-retro", { includeHiddenElements: true })).toBeTruthy();
   expect(screen.queryByTestId("overlay-glow-tile-subtitleBar", { includeHiddenElements: true })).toBeNull();
+  expect(screen.getByRole("button", { name: "Sticky note" })).toBeTruthy();
+  expect(screen.getByTestId("overlay-glow-tile-neonOutline", { includeHiddenElements: true })).toHaveStyle({ color: "#39FF14" });
 });
 
 test("pressing a tile reports its id; no tile is marked selected", async () => {

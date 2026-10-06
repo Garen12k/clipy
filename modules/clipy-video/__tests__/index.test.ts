@@ -53,7 +53,7 @@ describe("export API", () => {
         backgroundColor: null, backgroundOpacity: 0, outline: true, align: "center" as const, emoji: null, shape: null,
         x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 2,
         animIn: null, animOut: null, animLoop: null, keyframes: [],
-        style: { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadowColor: null, shadowOpacity: 0, shadowDistance: 0, shadowBlur: 0, glowColor: null, glowSize: 0 },
+        style: { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadowColor: null, shadowOpacity: 0, shadowDistance: 0, shadowBlur: 0, glowColor: null, glowSize: 0, boxPadding: 0.25, boxCorner: "rounded" as const },
         words: [], highlightColor: null,
       }],
       audioTracks: [{ sourceUri: "file:///m.m4a", start: 0, trimStart: 0, trimEnd: 2, gain: [{ time: 0, gain: 1 }, { time: 2, gain: 1 }] }], aspectRatio: "9:16" as const, frameAspect: 0.5625, resolution: 1080 as const, fps: 30 as const, bitrate: 0, outputPath: "/tmp/out.mp4",
@@ -262,7 +262,7 @@ describe("toExportClip", () => {
 
 describe("toExportOverlay", () => {
   /** The neutral style as the native record has it: shadow / glow flattened, a null colour = off. */
-  const neutral = { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadowColor: null, shadowOpacity: 0, shadowDistance: 0, shadowBlur: 0, glowColor: null, glowSize: 0 };
+  const neutral = { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadowColor: null, shadowOpacity: 0, shadowDistance: 0, shadowBlur: 0, glowColor: null, glowSize: 0, boxPadding: 0.25, boxCorner: "rounded" };
   it("maps a default text overlay, whole", () => {
     expect(toExportOverlay(makeOverlay({ id: "o", fontId: "anton" }))).toEqual({
       kind: "text", text: "Your text", fontPostScriptName: "Anton-Regular", fontScale: 0.07, color: "#F4F4F5",
@@ -296,7 +296,7 @@ describe("toExportOverlay", () => {
   });
   it("maps a styled text, whole: shadow and glow flattened", () => {
     const style = { opacity: 0.8, letterSpacing: 0.1, lineSpacing: 1.5, outlineColor: "#FF2D7A", outlineWidth: 2,
-      shadow: { color: "#101010", opacity: 0.6, distance: 0.06, blur: 0.1 }, glow: { color: "#00E5FF", size: 0.25 } };
+      shadow: { color: "#101010", opacity: 0.6, distance: 0.06, blur: 0.1 }, glow: { color: "#00E5FF", size: 0.25 }, boxPadding: 0.4, boxCorner: "square" as const };
     const o = makeOverlay({ id: "o", fontId: "anton", style, words: [{ text: "Your", start: 0, end: 1 }], highlightColor: "#FFE600" });
     const e = toExportOverlay(o);
     expect(e).toEqual({
@@ -305,7 +305,7 @@ describe("toExportOverlay", () => {
       x: 0.5, y: 0.5, scale: 1, rotation: 0, start: 0, end: 3,
       animIn: null, animOut: null, animLoop: null, keyframes: [],
       style: { opacity: 0.8, letterSpacing: 0.1, lineSpacing: 1.5, outlineColor: "#FF2D7A", outlineWidth: 2,
-        shadowColor: "#101010", shadowOpacity: 0.6, shadowDistance: 0.06, shadowBlur: 0.1, glowColor: "#00E5FF", glowSize: 0.25 },
+        shadowColor: "#101010", shadowOpacity: 0.6, shadowDistance: 0.06, shadowBlur: 0.1, glowColor: "#00E5FF", glowSize: 0.25, boxPadding: 0.4, boxCorner: "square" },
       words: [], highlightColor: null,   // a plain text never sends words or a highlight
     });
   });
@@ -329,6 +329,28 @@ describe("toExportOverlay", () => {
     });
     expect(e.words).not.toBe(words);
     expect(e.words[0]).not.toBe(words[0]);
+  });
+  it("the box fields travel with every text and caption; a sticker sends the defaults", () => {
+    const text = toExportOverlay(makeOverlay({ id: "o", background: { color: "#112233", opacity: 0.4 }, style: { ...makeOverlay({ id: "x" }).style, boxPadding: 0.5, boxCorner: "square" } }));
+    expect(text).toMatchObject({ backgroundColor: "#112233", backgroundOpacity: 0.4, style: { boxPadding: 0.5, boxCorner: "square" } });
+    const caption = toExportOverlay(makeOverlay({ id: "c", kind: "caption", text: "Hi", start: 0, end: 1, style: { ...makeOverlay({ id: "x" }).style, boxPadding: 0.1 } }));
+    expect(caption.style).toMatchObject({ boxPadding: 0.1, boxCorner: "rounded" });
+    expect(toExportOverlay(makeSticker({ id: "s", emoji: null, shape: "ring" }))).toMatchObject({ shape: "ring", style: { boxPadding: 0.25, boxCorner: "rounded" } });
+    expect(Object.keys(text.style)).toEqual(["opacity", "letterSpacing", "lineSpacing", "outlineColor", "outlineWidth", "shadowColor", "shadowOpacity", "shadowDistance", "shadowBlur", "glowColor", "glowSize", "boxPadding", "boxCorner"]);
+  });
+  it("the box fields are always a number in range and a known corner: a hand-built style is cleaned, never sent as null / undefined", () => {
+    const base = makeOverlay({ id: "x" }).style;
+    const boxOf = (box: unknown) => { const s = toExportOverlay(makeOverlay({ id: "o", style: { ...base, ...(box as object) } })).style; return [s.boxPadding, s.boxCorner]; };
+    expect(boxOf({ boxPadding: undefined, boxCorner: undefined })).toEqual([0.25, "rounded"]);   // a style built before the fields existed
+    expect(boxOf({ boxPadding: null, boxCorner: null })).toEqual([0.25, "rounded"]);
+    expect(boxOf({ boxPadding: NaN, boxCorner: "pill" })).toEqual([0.25, "rounded"]);
+    expect(boxOf({ boxPadding: "0.5", boxCorner: 1 })).toEqual([0.25, "rounded"]);
+    expect(boxOf({ boxPadding: 5, boxCorner: "square" })).toEqual([0.6, "square"]);
+    expect(boxOf({ boxPadding: -1 })).toEqual([0, "rounded"]);
+    expect(boxOf({ boxPadding: Infinity })).toEqual([0.25, "rounded"]);
+    // Only the box is cleaned here: the other style numbers travel as stored, as they always did.
+    const rest = toExportOverlay(makeOverlay({ id: "o", style: { ...base, lineSpacing: 9, boxPadding: 5 } })).style;
+    expect(rest).toMatchObject({ lineSpacing: 9, boxPadding: 0.6 });
   });
 });
 

@@ -1,3 +1,4 @@
+import { memo, useCallback, useRef } from "react";
 import { ScrollView, View } from "react-native";
 import { makeOverlay, type TextOverlay } from "@/src/editor/model/types";
 import { CAPTION_PRESET_IDS, CAPTION_PRESETS, TEXT_TEMPLATE_IDS, TEXT_TEMPLATES, type CaptionPresetId, type TextTemplateId } from "@/src/editor/textTemplates";
@@ -36,18 +37,27 @@ export function TextSample({ overlay, width, height, frameHeight, backgroundColo
   );
 }
 
+/** A tile draws again only when its own data or its `onPick` changes; the strip keeps `onPick` stable, so typing in the panel does not redraw 24 samples. */
+const Tile = memo(function Tile({ tile: t, onPick }: { tile: TemplateTile<string>; onPick: (id: string) => void }) {
+  return (
+    <PressableScale accessibilityRole="button" accessibilityLabel={t.label} onPress={() => onPick(t.id)} style={{ width: TILE_WIDTH, gap: theme.space.xs }}>
+      <TextSample width={TILE_WIDTH} height={TILE_HEIGHT} frameHeight={TILE_FRAME_HEIGHT} backgroundColor={theme.colors.surfaceAlt}
+        overlay={makeOverlay({ id: `tile-${t.id}`, text: "Aa", ...t.look, fontScale: TILE_FONT_SCALE, x: 0.5, y: 0.5 })} />
+      <Body muted numberOfLines={2} style={{ fontSize: theme.type.micro, textAlign: "center" }}>{t.label}</Body>
+    </PressableScale>
+  );
+});
+
 /** One-tap looks, side by side. A tile is an action, not a mode: none is shown as selected. */
 export function TemplateStrip<T extends string>({ tiles, onPick }: { tiles: readonly TemplateTile<T>[]; onPick: (id: T) => void }) {
+  // The latest `onPick` (the panel passes a new function every render) behind one function that never changes.
+  const latest = useRef(onPick);
+  latest.current = onPick;
+  const pick = useCallback((id: string) => latest.current(id as T), []);
   return (
     <ScrollView testID="template-strip" horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
       style={{ flexGrow: 0 }} contentContainerStyle={{ gap: theme.space.sm }}>
-      {tiles.map((t) => (
-        <PressableScale key={t.id} accessibilityRole="button" accessibilityLabel={t.label} onPress={() => onPick(t.id)} style={{ width: TILE_WIDTH, gap: theme.space.xs }}>
-          <TextSample width={TILE_WIDTH} height={TILE_HEIGHT} frameHeight={TILE_FRAME_HEIGHT} backgroundColor={theme.colors.surfaceAlt}
-            overlay={makeOverlay({ id: `tile-${t.id}`, text: "Aa", ...t.look, fontScale: TILE_FONT_SCALE, x: 0.5, y: 0.5 })} />
-          <Body muted numberOfLines={2} style={{ fontSize: theme.type.micro, textAlign: "center" }}>{t.label}</Body>
-        </PressableScale>
-      ))}
+      {tiles.map((t) => <Tile key={t.id} tile={t} onPick={pick} />)}
     </ScrollView>
   );
 }

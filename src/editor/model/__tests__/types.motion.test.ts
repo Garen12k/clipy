@@ -4,8 +4,8 @@ import {
   NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, OVERLAY_LIMITS, SCHEMA_VERSION, TRANSFORM_LIMITS,
 } from "../types";
 
-test("schema is v14 and the id lists are as specified", () => {
-  expect(SCHEMA_VERSION).toBe(14);
+test("schema is v15 and the id lists are as specified", () => {
+  expect(SCHEMA_VERSION).toBe(15);
   expect(ANIM_IN_IDS).toEqual(["fade", "slideLeft", "slideRight", "slideUp", "slideDown", "zoomIn", "zoomOut", "spin", "pop", "rise"]);
   expect(ANIM_COMBO_IDS).toEqual(["zoomInSlow", "zoomOutSlow", "panLeft", "panRight", "sway", "pulse"]);
   expect(ANIM_LOOP_IDS).toEqual(["wiggle", "pulse", "spin", "float", "blink", "shake"]);

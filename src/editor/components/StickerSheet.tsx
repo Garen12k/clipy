@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
-import { searchEmoji, type EmojiEntry } from "@/src/editor/emoji";
+import { EMOJI_BY_PACK, EMOJI_PACK_IDS, EMOJI_PACKS, searchEmoji, type EmojiEntry, type EmojiPackId } from "@/src/editor/emoji";
 import { addSticker, defaultOverlayRange } from "@/src/editor/model/ops";
 import { makeSticker, SHAPE_IDS, type ShapeId } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -13,16 +13,19 @@ import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { useKeyboard } from "@/src/ui/keyboard";
 import { Body } from "@/src/ui/Text";
-import { ToolPanel } from "@/src/ui/ToolPanel";
+import { PANEL, ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow } from "./ColorRow";
 
 type Tab = "emoji" | "shapes";
 /** The search row's height; the grid gets the rest of the panel's body. */
 const SEARCH_ROW = 52;
+/** Rows of eight the grid mounts first (the tallest panel shows eight); the rest is virtualised. */
+const FIRST_ROWS = 9;
 
 export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; onClose: () => void; onAdded: (id: string) => void }) {
   const [tab, setTab] = useState<Tab>("emoji");
   const [query, setQuery] = useState("");
+  const [pack, setPack] = useState<EmojiPackId>("faces");
   const [recent, setRecent] = useState<string[]>([]);
   const [color, setColor] = useState<string>(DEFAULT_STICKER_COLOR);
   const apply = useEditorStore((s) => s.apply);
@@ -55,13 +58,26 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
     onClose();
   };
 
-  const results = searchEmoji(query);
+  const searching = query.trim().length > 0;
+  // A search looks through every emoji; without one the grid shows the chosen pack, all of it.
+  const results = searching ? searchEmoji(query) : EMOJI_BY_PACK[pack];
 
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Sticker" scroll={false}
       lead={<>
         <Chip label="Emoji" selected={tab === "emoji"} onPress={() => setTab("emoji")} />
         <Chip label="Shapes" selected={tab === "shapes"} onPress={() => setTab("shapes")} />
+        {tab === "emoji" ? (<>
+          <View style={{ width: StyleSheet.hairlineWidth, height: theme.size.icon.md, backgroundColor: theme.colors.hairline }} />
+          {/* The lead row has an explicit height: this `flex` is the row's spare WIDTH. The chips scroll sideways inside it. */}
+          <ScrollView testID="emoji-packs" horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled"
+            style={{ flex: 1, height: PANEL.lead }} contentContainerStyle={{ alignItems: "center", gap: theme.space.sm }}>
+            {EMOJI_PACK_IDS.map((id) => (
+              <Chip key={id} compact label={EMOJI_PACKS[id].label} accessibilityLabel={`${EMOJI_PACKS[id].label} pack`} selected={!searching && pack === id}
+                onPress={() => { setQuery(""); setPack(id); }} />
+            ))}
+          </ScrollView>
+        </>) : null}
       </>}>
       {(bodyHeight) => tab === "emoji" ? (
         <View style={{ height: bodyHeight }}>
@@ -70,7 +86,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               placeholder="Search" placeholderTextColor={theme.colors.textMuted}
               style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.chip, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm }} />
           </View>
-          <FlatList testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={8}
+          <FlatList key={searching ? "search" : pack} testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={8} initialNumToRender={FIRST_ROWS} windowSize={7} maxToRenderPerBatch={20}
             keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
             ListHeaderComponent={recent.length > 0 && !query && !typing ? (
               <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap", marginBottom: theme.space.sm }}>
@@ -95,7 +111,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={SHAPES[id].label} onPress={() => addShape(id)}
                 style={{ width: 64, alignItems: "center", gap: theme.space.xs }}>
                 <Svg width={48} height={48} viewBox="0 0 100 100"><Path d={SHAPES[id].path} fill={color} /></Svg>
-                <Body style={{ fontSize: theme.type.small }}>{SHAPES[id].label}</Body>
+                <Body numberOfLines={2} style={{ fontSize: theme.type.small, textAlign: "center" }}>{SHAPES[id].label}</Body>
               </Pressable>
             ))}
           </View>

@@ -10,10 +10,10 @@ import { NumField } from "@/src/ui/NumField";
 import { Slider } from "@/src/ui/Slider";
 import { Body, ValueLabel } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
-import { ColorRow, CONTENT_BLACK } from "./ColorRow";
+import { ColorRow } from "./ColorRow";
 import { FontStrip } from "./FontStrip";
 import { CAPTION_PRESET_TILES, TemplateStrip, TextSample } from "./TemplateStrip";
-import { CollapsibleTextStyle } from "./TextStyleSection";
+import { TextStyleSection } from "./TextStyleSection";
 
 type Props = { visible: boolean; onClose: () => void };
 
@@ -54,7 +54,6 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
   // Slider drags: one undo step per drag (beginTransaction on start, transient updates while sliding).
   const patchTransient = (p: StylePatch) => write((x) => setCaptionStyleForAll(x, p), applyTransient);
   const begin = () => { if (caption) beginTransaction(); };
-  const opacityPatch = (v: number) => ({ background: { color: style.background?.color ?? CONTENT_BLACK, opacity: v } });
   // The sample is a window onto the middle of a frame of the project's shape, so the caption has its real size against the frame's width.
   const sample = makeOverlay({ id: "caption-sample", kind: "caption", text: SAMPLE_TEXT, fontId: style.fontId, fontScale: style.fontScale, color: style.color,
     background: style.background, outline: style.outline, align: style.align, x: 0.5, y: 0.5, start: 0, end: SAMPLE_LENGTH,
@@ -83,25 +82,11 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
             onSlidingComplete={(v) => patchTransient({ fontScale: v })} />
         </View>
         <ColorRow value={style.color} onChange={(color) => patch({ color })} />
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Body>Background</Body>
-          <Switch accessibilityLabel="Background" value={!!style.background}
-            onValueChange={(on) => patch({ background: on ? { color: style.background?.color ?? CONTENT_BLACK, opacity: style.background?.opacity ?? 0.6 } : null })}
-            trackColor={{ true: theme.colors.accent }} />
-        </View>
-        {style.background && (<>
-          <ColorRow value={style.background.color} onChange={(color) => patch({ background: { color, opacity: style.background!.opacity } })} />
-          <Slider testID="caption-opacity-slider" minimumValue={0.2} maximumValue={1} value={style.background.opacity}
-            onSlidingStart={begin} onValueChange={(v) => patchTransient(opacityPatch(v))}
-            onSlidingComplete={(v) => patchTransient(opacityPatch(v))} />
-        </>)}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Body>Outline</Body>
-          <Switch accessibilityLabel="Outline" value={style.outline} onValueChange={(outline) => patch({ outline })} trackColor={{ true: theme.colors.accent }} />
-        </View>
         <NumField label="Y %" value={Math.round(style.y * 100)} onCommit={(v) => patch({ y: v / 100 })} />
-        <CollapsibleTextStyle style={textStyle} outline={style.outline} onBegin={begin}
-          onPatch={(sp: Partial<TextStyle>) => patch({ style: sp })} onPatchTransient={(sp: Partial<TextStyle>) => patchTransient({ style: sp })} />
+        <TextStyleSection style={textStyle} outline={style.outline} background={style.background} boxOpacityTestID="caption-opacity-slider"
+          onBegin={begin} onPatch={(sp: Partial<TextStyle>) => patch({ style: sp })} onPatchTransient={(sp: Partial<TextStyle>) => patchTransient({ style: sp })}
+          onOutline={(outline) => patch({ outline })} onBackground={(background) => patch({ background })}
+          onBackgroundTransient={(background) => patchTransient({ background })} />
     </ToolPanel>
   );
 }

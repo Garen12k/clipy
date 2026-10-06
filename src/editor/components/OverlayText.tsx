@@ -21,6 +21,7 @@ const NO_OFFSET = { width: 0, height: 0 };
  * iOS can clip a text shadow at the `Text`'s own frame, so each under-layer reaches `room` px beyond the fill's content box on every side
  * and pads the same amount back in: its content box — and so its wrapping — stays exactly the fill's.
  * Every layer draws the same string (`plain`), so they all wrap alike.
+ * The box's padding and corner radius come from the layout (style.boxPadding / boxCorner); with the default style they are the old 0.25 × font and padding / 2.
  */
 export function OverlayText({ overlay: o, frameW, frameH, opacity, frameOnly, time, children }: Props) {
   const l = layoutOverlay(o, frameW, frameH);
@@ -39,8 +40,8 @@ export function OverlayText({ overlay: o, frameW, frameH, opacity, frameOnly, ti
   return (
     <View testID={frameOnly ? `overlay-base-${o.id}` : `overlay-${o.id}`} pointerEvents="box-none"
       style={{ position: "absolute", left: l.centerX, top: l.centerY, width: 0, height: 0, alignItems: "center", justifyContent: "center", transform: [{ rotate: `${l.rotation}deg` }], ...(faded === undefined ? null : { opacity: faded }) }}>
-      <View style={{ position: "absolute", maxWidth: l.maxWidth, padding: l.padding, borderRadius: l.padding / 2 }}>
-        {o.background && !frameOnly && <View pointerEvents="none" style={{ position: "absolute", inset: 0, backgroundColor: o.background.color, opacity: o.background.opacity, borderRadius: l.padding / 2 }} />}
+      <View testID={frameOnly ? `overlay-base-body-${o.id}` : `overlay-body-${o.id}`} style={{ position: "absolute", maxWidth: l.maxWidth, padding: l.padding, borderRadius: l.boxRadius }}>
+        {o.background && !frameOnly && <View pointerEvents="none" style={{ position: "absolute", inset: 0, backgroundColor: o.background.color, opacity: o.background.opacity, borderRadius: l.boxRadius }} />}
         {!frameOnly && l.glow && <Text testID={`overlay-glow-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.glow.color, ...halo(l.glow.color, l.glow.radius) }}>{plain}</Text>}
         {!frameOnly && l.shadow && (
           <Text testID={`overlay-shadow-${o.id}`} aria-hidden pointerEvents="none"

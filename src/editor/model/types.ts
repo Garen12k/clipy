@@ -12,7 +12,7 @@ export const isAspectRatio = (v: unknown): v is AspectRatio => (ASPECT_RATIOS as
 export const aspectLabel = (r: AspectRatio): string => (r === "auto" ? "Auto" : r);
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 14 as const;
+export const SCHEMA_VERSION = 15 as const;
 export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
 export const EXPORT_QUALITIES = ["high", "small"] as const;
@@ -45,7 +45,9 @@ export type FilterId = (typeof FILTER_IDS)[number];
 export const TRANSITION_TYPES = ["none", "fade", "dissolve", "slide", "zoom",
   "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur"] as const;   // "slide" keeps its id and is labelled "Slide left"
 export type TransitionType = (typeof TRANSITION_TYPES)[number];
-export const SHAPE_IDS = ["circle", "square", "roundedBox", "arrow", "star", "speechBubble", "heart"] as const;
+export const SHAPE_IDS = ["circle", "square", "roundedBox", "arrow", "star", "speechBubble", "heart",
+  "arrowCurved", "arrowDouble", "bubbleRound", "bubbleSquare", "bubbleThought", "badgeSeal", "badgeRibbon", "banner",
+  "sparkle", "burst", "frameRounded", "ring", "brackets"] as const;
 export type ShapeId = (typeof SHAPE_IDS)[number];
 export const SPEED_LIMITS = [0.25, 4] as const;
 export const TRANSITION_LIMITS = { min: 0.3, max: 1.0 };
@@ -311,6 +313,9 @@ export function clampSpeedCurve(v: unknown, clip: { kind: ClipKind }): SpeedCurv
 
 export interface TextShadow { color: string; opacity: number; distance: number; blur: number }   // distance, blur: fractions of the font size
 export interface TextGlow { color: string; size: number }                                         // size: fraction of the font size
+/** The corners of a text's background box. */
+export const BOX_CORNERS = ["rounded", "square"] as const;
+export type BoxCorner = (typeof BOX_CORNERS)[number];
 export interface TextStyle {
   opacity: number;              // 0–1, default 1
   letterSpacing: number;        // −0.05…0.3 of the font size, default 0
@@ -319,17 +324,19 @@ export interface TextStyle {
   outlineWidth: number;         // 0.5…3 × the base outline width, default 1
   shadow: TextShadow | null;    // default null
   glow: TextGlow | null;        // default null
+  boxPadding: number;           // 0…0.6 of the font size between the text and the edge of its background box; default 0.25 (every box before v15)
+  boxCorner: BoxCorner;         // default "rounded" (every box before v15)
 }
-export const DEFAULT_TEXT_STYLE: TextStyle = { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null };
+export const DEFAULT_TEXT_STYLE: TextStyle = { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null, boxPadding: 0.25, boxCorner: "rounded" };
 export const TEXT_STYLE_LIMITS = { opacity: [0, 1], letterSpacing: [-0.05, 0.3], lineSpacing: [0.8, 2], outlineWidth: [0.5, 3],
-  shadowOpacity: [0, 1], shadowDistance: [0, 0.3], shadowBlur: [0, 0.5], glowSize: [0.05, 0.6] } as const;
+  shadowOpacity: [0, 1], shadowDistance: [0, 0.3], shadowBlur: [0, 0.5], glowSize: [0.05, 0.6], boxPadding: [0, 0.6] } as const;
 export const DEFAULT_SHADOW: TextShadow = { color: "#000000", opacity: 0.6, distance: 0.06, blur: 0.1 };
 export const DEFAULT_GLOW: TextGlow = { color: "#FFFFFF", size: 0.25 };
 export interface CaptionWord { text: string; start: number; end: number }   // seconds from the caption's start
 
 export const isHexColor = (v: unknown): v is string => typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v);
 
-/** Every field present and in range; non-finite / missing numbers → the default, bad colours → the default (outlineColor: null). Idempotent, unknown keys dropped. */
+/** Every field present and in range; non-finite / missing numbers → the default, bad colours → the default (outlineColor: null). Idempotent, unknown keys dropped. The box fields: padding clamped, corner one of BOX_CORNERS (else the default) — a style stored before v15 gets the box it always had. */
 export function clampTextStyle(v: unknown): TextStyle {
   const s = isRec(v) ? v : {};
   const L = TEXT_STYLE_LIMITS;
@@ -351,6 +358,8 @@ export function clampTextStyle(v: unknown): TextStyle {
       color: isHexColor(gl.color) ? gl.color : DEFAULT_GLOW.color,
       size: num(gl.size, DEFAULT_GLOW.size, L.glowSize),
     } : null,
+    boxPadding: num(s.boxPadding, DEFAULT_TEXT_STYLE.boxPadding, L.boxPadding),
+    boxCorner: (BOX_CORNERS as readonly unknown[]).includes(s.boxCorner) ? (s.boxCorner as BoxCorner) : DEFAULT_TEXT_STYLE.boxCorner,
   };
 }
 

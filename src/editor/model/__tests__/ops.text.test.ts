@@ -36,7 +36,7 @@ describe("setTextStyle", () => {
     const next = setTextStyle(p, "t", { opacity: 7, letterSpacing: -3, lineSpacing: 9, outlineWidth: 0, outlineColor: "red",
       shadow: { color: "nope", opacity: 4, distance: 4, blur: 4 }, glow: { color: "#00FF00", size: 9 } });
     expect(text(next, "t").style).toEqual({ opacity: 1, letterSpacing: -0.05, lineSpacing: 2, outlineColor: null, outlineWidth: 0.5,
-      shadow: { color: "#000000", opacity: 1, distance: 0.3, blur: 0.5 }, glow: { color: "#00FF00", size: 0.6 } });
+      shadow: { color: "#000000", opacity: 1, distance: 0.3, blur: 0.5 }, glow: { color: "#00FF00", size: 0.6 }, boxPadding: 0.25, boxCorner: "rounded" });
   });
   test("same project when nothing changes, for a sticker and for an unknown id", () => {
     expect(setTextStyle(p, "t", { opacity: 1 })).toBe(p);
@@ -228,5 +228,49 @@ describe("duplicateOverlay", () => {
       if (src.words.length > 0) { expect(copy.words).not.toBe(src.words); expect(copy.words[0]).not.toBe(src.words[0]); }
       expect(clampTextStyle(copy.style)).toEqual(copy.style);
     }
+  });
+});
+
+describe("the box fields go through the existing ops (no op changed for them)", () => {
+  const base = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [
+    makeOverlay({ id: "t", text: "Hi", start: 0, end: 3, background: { color: "#000000", opacity: 0.6 } }),
+    makeOverlay({ id: "c1", kind: "caption", text: "one", start: 0, end: 1 }), makeOverlay({ id: "c2", kind: "caption", text: "two", start: 1, end: 2 }),
+    makeSticker({ id: "s", start: 0, end: 3 }),
+  ] });
+  const styleOf = (p: Project, id: string) => (p.overlays.find((o) => o.id === id) as TextOverlay).style;
+
+  test("setTextStyle: padding is stored with two decimals and clamped; the corner is one of the two ids; the rest of the style stays", () => {
+    const a = setTextStyle(base, "t", { boxPadding: 0.456, boxCorner: "square" });
+    expect(styleOf(a, "t")).toEqual({ ...DEFAULT_TEXT_STYLE, boxPadding: 0.46, boxCorner: "square" });
+    expect(styleOf(setTextStyle(a, "t", { boxPadding: 9 }), "t").boxPadding).toBe(0.6);
+    expect(styleOf(setTextStyle(a, "t", { boxPadding: -3 }), "t").boxPadding).toBe(0);
+    expect(styleOf(setTextStyle(a, "t", { boxCorner: "pill" as never }), "t").boxCorner).toBe("rounded");
+    expect((a.overlays[0] as TextOverlay).background).toEqual({ color: "#000000", opacity: 0.6 });      // the box itself is not the style's
+  });
+  test("setTextStyle: the same project when nothing changes; refused for a sticker", () => {
+    expect(setTextStyle(base, "t", { boxPadding: 0.25, boxCorner: "rounded" })).toBe(base);
+    expect(setTextStyle(base, "t", { boxPadding: 0.2501 })).toBe(base);                                 // rounds to the stored 0.25
+    expect(setTextStyle(base, "s", { boxCorner: "square" })).toBe(base);
+    expect(setTextStyle(base, "t", { boxPadding: undefined })).toBe(base);
+  });
+  test("setCaptionStyleForAll writes every caption and leaves texts alone; same project when nothing changes", () => {
+    const a = setCaptionStyleForAll(base, { style: { boxPadding: 0.1, boxCorner: "square" } });
+    expect([styleOf(a, "c1"), styleOf(a, "c2")].map((s) => [s.boxPadding, s.boxCorner])).toEqual([[0.1, "square"], [0.1, "square"]]);
+    expect(styleOf(a, "t")).toEqual(DEFAULT_TEXT_STYLE);
+    expect(setCaptionStyleForAll(a, { style: { boxCorner: "square" } })).toBe(a);
+  });
+  test("duplicateOverlay copies the box fields into the copy's own style", () => {
+    const a = duplicateOverlay(setTextStyle(base, "t", { boxPadding: 0.5, boxCorner: "square" }), "t");
+    const [src, copy] = a.overlays as TextOverlay[];
+    expect(copy.style).toEqual(src.style);
+    expect(copy.style).not.toBe(src.style);
+  });
+  test("applyTextTemplate replaces the whole look, the box fields included: a new look sets them, an old look resets them", () => {
+    const note = applyTextTemplate(base, "t", "note");
+    expect(styleOf(note, "t")).toEqual(TEXT_TEMPLATES.note.patch.style);
+    expect((note.overlays[0] as TextOverlay).background).toEqual({ color: "#FFF27A", opacity: 1 });
+    const back = applyTextTemplate(note, "t", "subtitleBar");
+    expect(styleOf(back, "t")).toMatchObject({ boxPadding: 0.25, boxCorner: "rounded" });
+    expect(applyTextTemplate(note, "t", "note")).toBe(note);
   });
 });

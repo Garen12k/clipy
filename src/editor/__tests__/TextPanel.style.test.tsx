@@ -14,7 +14,7 @@ const ov = (): TextOverlay => {
   return o;
 };
 const past = () => useEditorStore.getState().past.length;
-const open = async () => { await render(<TextPanel overlayId="o1" visible onClose={() => {}} />); await fireEvent.press(screen.getByRole("button", { name: "Style" })); };
+const open = async () => { await render(<TextPanel overlayId="o1" visible onClose={() => {}} />); for (const b of screen.getAllByRole("button", { name: / options$|^Spacing and opacity$/ })) await fireEvent.press(b); };
 async function drag(testID: string, values: number[]) {
   const slider = screen.getByTestId(testID);
   await fireEvent(slider, "touchStart");
@@ -22,10 +22,10 @@ async function drag(testID: string, values: number[]) {
   await fireEvent(slider, "touchEnd", values[values.length - 1]);
 }
 
-test("the Style block is collapsed until asked for", async () => {
+test("the style rows are closed until asked for", async () => {
   await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
   expect(screen.queryByTestId("style-opacity-slider")).toBeNull();
-  await fireEvent.press(screen.getByRole("button", { name: "Style" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Spacing and opacity" }));
   expect(screen.getByTestId("style-opacity-slider")).toBeTruthy();
 });
 
@@ -43,7 +43,7 @@ test("a caption has no template strip (templates are for texts)", async () => {
   useEditorStore.getState().setProject({ ...p, overlays: [makeOverlay({ id: "o1", kind: "caption", text: "Cap", start: 1, end: 4 })] });
   await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
   expect(screen.queryByTestId("template-strip")).toBeNull();
-  expect(screen.getByRole("button", { name: "Style" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Spacing and opacity" })).toBeTruthy();
 });
 
 test.each([

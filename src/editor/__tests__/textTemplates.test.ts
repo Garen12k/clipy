@@ -1,5 +1,5 @@
 import { FONTS } from "../fonts";
-import { clampAnimEdge, clampTextStyle, ANIM_LOOP_IDS, FONT_IDS, OVERLAY_LIMITS, TEXT_STYLE_LIMITS, type TextStyle } from "../model/types";
+import { clampAnimEdge, clampTextStyle, ANIM_LOOP_IDS, DEFAULT_TEXT_STYLE, FONT_IDS, OVERLAY_LIMITS, TEXT_STYLE_LIMITS, type TextStyle } from "../model/types";
 import { CAPTION_PRESET_IDS, CAPTION_PRESETS, TEXT_TEMPLATE_IDS, TEXT_TEMPLATES } from "../textTemplates";
 
 const HEX = /^#[0-9A-F]{6}$/;
@@ -8,8 +8,9 @@ const within = (v: number, [lo, hi]: readonly [number, number]) => v >= lo && v 
 function expectStyleInLimits(s: TextStyle) {
   const L = TEXT_STYLE_LIMITS;
   expect(clampTextStyle(s)).toEqual(s);   // survives the sanity rule unchanged
-  expect(Object.keys(s).sort()).toEqual(["glow", "letterSpacing", "lineSpacing", "opacity", "outlineColor", "outlineWidth", "shadow"]);
+  expect(Object.keys(s).sort()).toEqual(["boxCorner", "boxPadding", "glow", "letterSpacing", "lineSpacing", "opacity", "outlineColor", "outlineWidth", "shadow"]);
   expect(within(s.opacity, L.opacity) && within(s.letterSpacing, L.letterSpacing) && within(s.lineSpacing, L.lineSpacing) && within(s.outlineWidth, L.outlineWidth)).toBe(true);
+  expect(within(s.boxPadding, L.boxPadding)).toBe(true); expect(["rounded", "square"]).toContain(s.boxCorner);
   if (s.outlineColor !== null) expect(s.outlineColor).toMatch(HEX);
   if (s.shadow) {
     expect(s.shadow.color).toMatch(HEX);
@@ -22,11 +23,52 @@ const expectBackground = (b: { color: string; opacity: number } | null) => {
 };
 
 describe("text templates", () => {
-  test("the twelve of the spec, in order, each with a label", () => {
-    expect(TEXT_TEMPLATE_IDS).toEqual(["cleanTitle", "boldPop", "neon", "subtitleBar", "comic", "retro", "handwritten", "elegant", "shadowed", "outlineOnly", "stickerLabel", "softGlow"]);
+  test("twenty-four, in order: the first twelve as they were, then the twelve of 2026-10-06", () => {
+    expect(TEXT_TEMPLATE_IDS).toEqual(["cleanTitle", "boldPop", "neon", "subtitleBar", "comic", "retro", "handwritten", "elegant", "shadowed", "outlineOnly", "stickerLabel", "softGlow",
+      "headline", "neonOutline", "softShadow", "note", "titleBar", "stamp", "bubblegum", "cinema", "gold", "chalk", "pop3d", "watermark"]);
     expect(Object.keys(TEXT_TEMPLATES)).toEqual([...TEXT_TEMPLATE_IDS]);
     expect(TEXT_TEMPLATE_IDS.map((id) => TEXT_TEMPLATES[id].label)).toEqual(
-      ["Clean title", "Bold pop", "Neon", "Subtitle bar", "Comic", "Retro", "Handwritten", "Elegant", "Shadowed", "Outline only", "Sticker label", "Soft glow"]);
+      ["Clean title", "Bold pop", "Neon", "Subtitle bar", "Comic", "Retro", "Handwritten", "Elegant", "Shadowed", "Outline only", "Sticker label", "Soft glow",
+        "Headline", "Neon outline", "Soft shadow", "Sticky note", "Title bar", "Stamp", "Bubblegum", "Cinema", "Gold", "Chalkboard", "3D pop", "Watermark"]);
+    expect(new Set(TEXT_TEMPLATE_IDS.map((id) => TEXT_TEMPLATES[id].label)).size).toBe(24);
+  });
+  test("the first twelve keep the box every text had: default padding, round corners", () => {
+    for (const id of TEXT_TEMPLATE_IDS.slice(0, 12)) expect(TEXT_TEMPLATES[id].patch.style).toMatchObject({ boxPadding: 0.25, boxCorner: "rounded" });
+    for (const id of CAPTION_PRESET_IDS) expect(CAPTION_PRESETS[id].patch.style).toMatchObject({ boxPadding: 0.25, boxCorner: "rounded" });
+  });
+  test("the twelve new looks, value for value", () => {
+    const t = TEXT_TEMPLATES, base = DEFAULT_TEXT_STYLE;
+    expect(t.headline.patch).toEqual({ fontId: "anton", color: "#FFFFFF", background: { color: "#E10600", opacity: 1 }, outline: false,
+      style: { ...base, letterSpacing: 0.04, boxPadding: 0.35, boxCorner: "square" } });
+    expect(t.neonOutline.patch).toEqual({ fontId: "poppins", color: "#0B0B14", background: null, outline: true,
+      style: { ...base, letterSpacing: 0.06, outlineColor: "#39FF14", outlineWidth: 2.4, glow: { color: "#39FF14", size: 0.35 } } });
+    expect(t.softShadow.patch).toEqual({ fontId: "fredoka", color: "#FFF8E7", background: null, outline: false,
+      style: { ...base, shadow: { color: "#3A1F5D", opacity: 0.7, distance: 0.05, blur: 0.45 } } });
+    expect(t.note.patch).toEqual({ fontId: "permanentMarker", color: "#1B1B1F", background: { color: "#FFF27A", opacity: 1 }, outline: false,
+      style: { ...base, lineSpacing: 1.1, boxPadding: 0.5, boxCorner: "square" } });
+    expect(t.titleBar.patch).toEqual({ fontId: "oswald", color: "#FFFFFF", background: { color: "#0A1B33", opacity: 0.85 }, outline: false,
+      style: { ...base, letterSpacing: 0.06, boxPadding: 0.15, boxCorner: "square" } });
+    expect(t.stamp.patch).toEqual({ fontId: "bebasNeue", color: "#D7263D", background: { color: "#FFF4E0", opacity: 1 }, outline: true,
+      style: { ...base, letterSpacing: 0.12, outlineColor: "#D7263D", outlineWidth: 0.8, boxPadding: 0.2 } });
+    expect(t.bubblegum.patch).toEqual({ fontId: "lobster", color: "#FFFFFF", background: null, outline: true,
+      style: { ...base, outlineColor: "#FF4FA3", outlineWidth: 2.5, shadow: { color: "#B0005A", opacity: 1, distance: 0.07, blur: 0 } } });
+    expect(t.cinema.patch).toEqual({ fontId: "montserrat", color: "#FFFFFF", background: null, outline: false,
+      style: { ...base, opacity: 0.9, letterSpacing: 0.3, lineSpacing: 1.4 } });
+    expect(t.gold.patch).toEqual({ fontId: "dancingScript", color: "#F5C542", background: null, outline: false,
+      style: { ...base, shadow: { color: "#5A3A00", opacity: 0.9, distance: 0.04, blur: 0.08 }, glow: { color: "#FFE9A8", size: 0.2 } } });
+    expect(t.chalk.patch).toEqual({ fontId: "caveat", color: "#F4F4F5", background: { color: "#1E3B2F", opacity: 0.95 }, outline: false,
+      style: { ...base, letterSpacing: 0.03, boxPadding: 0.4 } });
+    expect(t.pop3d.patch).toEqual({ fontId: "righteous", color: "#FFFFFF", background: null, outline: true,
+      style: { ...base, outlineColor: "#6C2BD9", outlineWidth: 2, shadow: { color: "#00E5A0", opacity: 1, distance: 0.12, blur: 0 } } });
+    expect(t.watermark.patch).toEqual({ fontId: "poppins", color: "#FFFFFF", background: null, outline: false,
+      style: { ...base, opacity: 0.55, letterSpacing: 0.15, lineSpacing: 1.3 } });
+  });
+  test("the new looks use what the first twelve did not: the box fields, three unused fonts; none carries an animation", () => {
+    const fresh = TEXT_TEMPLATE_IDS.slice(12).map((id) => TEXT_TEMPLATES[id].patch);
+    expect(fresh.filter((p) => p.style.boxPadding !== 0.25 || p.style.boxCorner !== "rounded")).toHaveLength(5);
+    const oldFonts = new Set(TEXT_TEMPLATE_IDS.slice(0, 12).map((id) => TEXT_TEMPLATES[id].patch.fontId));
+    expect(fresh.map((p) => p.fontId).filter((f) => !oldFonts.has(f))).toEqual(["permanentMarker", "lobster", "dancingScript"]);
+    expect(fresh.every((p) => p.animation === undefined)).toBe(true);
   });
   test.each(TEXT_TEMPLATE_IDS.map((id) => [id]))("%s is a complete, valid patch", (id) => {
     const { patch } = TEXT_TEMPLATES[id];
@@ -93,5 +135,29 @@ describe("caption presets", () => {
     expect(c.neonGlow.patch.style.glow).not.toBeNull();
     expect(c.karaoke.patch).toMatchObject({ color: "#FFFFFF", highlightColor: "#FFE14D" });
     expect(CAPTION_PRESET_IDS.filter((id) => c[id].patch.highlightColor !== null)).toEqual(["karaoke"]);
+  });
+});
+
+describe("the first twelve looks, frozen", () => {
+  // Copied from the file as it stood before the 2026-10-06 round (git daf7a60), plus the two box fields every text had then.
+  const box = { boxPadding: 0.25, boxCorner: "rounded" } as const;
+  const none = { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null, ...box };
+  const FROZEN = {
+    cleanTitle: { fontId: "poppins", color: "#FFFFFF", background: null, outline: false, style: { ...none, letterSpacing: 0.02, shadow: { color: "#000000", opacity: 0.35, distance: 0.03, blur: 0.12 } } },
+    boldPop: { fontId: "anton", color: "#FFFFFF", background: null, outline: true, style: { ...none, letterSpacing: 0.02, outlineColor: "#000000", outlineWidth: 2 }, animation: { in: { id: "pop", duration: 0.4 } } },
+    neon: { fontId: "righteous", color: "#FFD6F5", background: null, outline: false, style: { ...none, letterSpacing: 0.04, glow: { color: "#FF2BD6", size: 0.45 } } },
+    subtitleBar: { fontId: "montserrat", color: "#FFFFFF", background: { color: "#000000", opacity: 0.75 }, outline: false, style: { ...none } },
+    comic: { fontId: "bangers", color: "#FFE14D", background: null, outline: true, style: { ...none, letterSpacing: 0.03, outlineColor: "#000000", outlineWidth: 2.2, shadow: { color: "#000000", opacity: 1, distance: 0.08, blur: 0 } } },
+    retro: { fontId: "pressStart", color: "#FFD23F", background: null, outline: false, style: { ...none, lineSpacing: 1.4, shadow: { color: "#D7263D", opacity: 1, distance: 0.1, blur: 0 } } },
+    handwritten: { fontId: "caveat", color: "#FFFFFF", background: null, outline: false, style: { ...none, lineSpacing: 0.9, shadow: { color: "#000000", opacity: 0.55, distance: 0.04, blur: 0.15 } } },
+    elegant: { fontId: "playfair", color: "#F7E7CE", background: null, outline: false, style: { ...none, letterSpacing: 0.08, lineSpacing: 1.15, shadow: { color: "#000000", opacity: 0.45, distance: 0.03, blur: 0.2 } } },
+    shadowed: { fontId: "oswald", color: "#FFFFFF", background: null, outline: false, style: { ...none, shadow: { color: "#000000", opacity: 0.85, distance: 0.1, blur: 0.18 } } },
+    outlineOnly: { fontId: "bebasNeue", color: "#111111", background: null, outline: true, style: { ...none, letterSpacing: 0.05, outlineColor: "#FFFFFF", outlineWidth: 2.6 } },
+    stickerLabel: { fontId: "fredoka", color: "#1B1B1F", background: { color: "#FFD23F", opacity: 1 }, outline: false, style: { ...none } },
+    softGlow: { fontId: "roboto", color: "#FFF4D6", background: null, outline: false, style: { ...none, letterSpacing: 0.01, glow: { color: "#FFB84D", size: 0.3 } } },
+  };
+  test("none of them has moved a value", () => {
+    expect(TEXT_TEMPLATE_IDS.slice(0, 12)).toEqual(Object.keys(FROZEN));
+    for (const [id, patch] of Object.entries(FROZEN)) expect(TEXT_TEMPLATES[id as keyof typeof TEXT_TEMPLATES].patch).toEqual(patch);
   });
 });

@@ -86,11 +86,11 @@
 |---|---|---|---|---|
 | Text, fonts, colour, outline, background | Have (16 fonts) | Yes | — | |
 | More fonts, shadow, glow, spacing, opacity | Have | Yes | — | curved text still missing |
-| Text templates and bubbles | Have (12) | Yes | — | |
+| Text templates and bubbles | Have (24) | Yes | — | |
 | Auto captions | Have (native build only) | — | — | |
 | Caption styles incl. word-by-word highlight (karaoke) | Have (native build) | Yes | — | six presets; very popular in short-form |
 | Bilingual / translated captions | Missing | — | XL | needs a translation service |
-| Stickers: emoji + shapes | Have | Yes | — | |
+| Stickers: emoji + shapes | Have | Yes | — | 20 shapes, emoji packs |
 | Sticker library / GIFs / custom stickers from photos | Missing | Yes | M–L | needs bundled or licensed art |
 
 ## G — Project and export polish (suggested last)

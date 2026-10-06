@@ -1,12 +1,17 @@
 import { fireEvent, render, screen, within } from "@testing-library/react-native";
 jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, step, onSlidingStart, onValueChange, onSlidingComplete }: { testID?: string; step?: number; onSlidingStart?: () => void; onValueChange?: (v: number) => void; onSlidingComplete?: (v: number) => void }) => <View testID={testID} step={step} onTouchStart={() => onSlidingStart?.()} onTouchMove={(v: number) => onValueChange?.(v)} onTouchEnd={(v: number) => onSlidingComplete?.(v)} />; });
 import { DEFAULT_GLOW, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, type TextStyle } from "@/src/editor/model/types";
-import { CollapsibleTextStyle, TextStyleSection } from "../components/TextStyleSection";
+import { TextStyleSection, type TextBox } from "../components/TextStyleSection";
 
-const onBegin = jest.fn(), onPatch = jest.fn(), onPatchTransient = jest.fn();
-beforeEach(() => { onBegin.mockClear(); onPatch.mockClear(); onPatchTransient.mockClear(); });
-const show = (style: Partial<TextStyle> = {}, outline = false) =>
-  render(<TextStyleSection style={{ ...DEFAULT_TEXT_STYLE, ...style }} outline={outline} onBegin={onBegin} onPatch={onPatch} onPatchTransient={onPatchTransient} />);
+const onBegin = jest.fn(), onPatch = jest.fn(), onPatchTransient = jest.fn(), onOutline = jest.fn(), onBackground = jest.fn(), onBackgroundTransient = jest.fn();
+beforeEach(() => { for (const f of [onBegin, onPatch, onPatchTransient, onOutline, onBackground, onBackgroundTransient]) f.mockClear(); });
+const section = (style: Partial<TextStyle> = {}, outline = false, background: TextBox | null = null) => (
+  <TextStyleSection style={{ ...DEFAULT_TEXT_STYLE, ...style }} outline={outline} background={background} boxOpacityTestID="opacity-slider"
+    onBegin={onBegin} onPatch={onPatch} onPatchTransient={onPatchTransient} onOutline={onOutline} onBackground={onBackground} onBackgroundTransient={onBackgroundTransient} />
+);
+/** Every row that can be opened, opened (a row that is off is a disabled button: pressing it does nothing). */
+const openAll = async () => { for (const b of screen.getAllByRole("button", { name: / options$|^Spacing and opacity$/ })) await fireEvent.press(b); };
+const show = async (style: Partial<TextStyle> = {}, outline = false, background: TextBox | null = null) => { const view = await render(section(style, outline, background)); await openAll(); return view; };
 
 async function drag(testID: string, values: number[]) {
   const slider = screen.getByTestId(testID);
@@ -67,7 +72,7 @@ test("the shadow switch turns the default shadow on and off", async () => {
   expect(screen.queryByTestId("style-shadow-blur-slider")).toBeNull();
   await fireEvent(screen.getByLabelText("Shadow"), "valueChange", true);
   expect(onPatch).toHaveBeenLastCalledWith({ shadow: DEFAULT_SHADOW });
-  await view.rerender(<TextStyleSection style={{ ...DEFAULT_TEXT_STYLE, shadow: { ...DEFAULT_SHADOW } }} outline={false} onBegin={onBegin} onPatch={onPatch} onPatchTransient={onPatchTransient} />);
+  await view.rerender(section({ shadow: { ...DEFAULT_SHADOW } }));
   await fireEvent(screen.getByLabelText("Shadow"), "valueChange", false);
   expect(onPatch).toHaveBeenLastCalledWith({ shadow: null });
 });
@@ -90,7 +95,7 @@ test("the glow switch, colour and size", async () => {
   expect(screen.queryByTestId("style-glow-size-slider")).toBeNull();
   await fireEvent(screen.getByLabelText("Glow"), "valueChange", true);
   expect(onPatch).toHaveBeenLastCalledWith({ glow: DEFAULT_GLOW });
-  await view.rerender(<TextStyleSection style={{ ...DEFAULT_TEXT_STYLE, glow: { ...DEFAULT_GLOW } }} outline={false} onBegin={onBegin} onPatch={onPatch} onPatchTransient={onPatchTransient} />);
+  await view.rerender(section({ glow: { ...DEFAULT_GLOW } }));
   await fireEvent.press(within(screen.getByTestId("style-glow-color")).getByLabelText("Color #00E5A0"));
   expect(onPatch).toHaveBeenLastCalledWith({ glow: { ...DEFAULT_GLOW, color: "#00E5A0" } });
   await drag("style-glow-size-slider", [0.5]);
@@ -99,16 +104,38 @@ test("the glow switch, colour and size", async () => {
   expect(onPatch).toHaveBeenLastCalledWith({ glow: null });
 });
 
-test("the collapsible block is closed until its row is pressed", async () => {
-  await render(<CollapsibleTextStyle style={DEFAULT_TEXT_STYLE} outline={false} onBegin={onBegin} onPatch={onPatch} onPatchTransient={onPatchTransient} />);
-  expect(screen.queryByTestId("style-opacity-slider")).toBeNull();
-  await fireEvent.press(screen.getByRole("button", { name: "Style" }));
+test("every row is closed until asked for; Spacing and opacity opens and closes from its row", async () => {
+  await render(section({ shadow: { ...DEFAULT_SHADOW } }, true, { color: "#000000", opacity: 0.6 }));
+  for (const id of ["style-outline", "style-shadow", "style-box", "style-spacing", "style-glow"]) expect(screen.queryByTestId(id)).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "Spacing and opacity" }));
   expect(screen.getByTestId("style-opacity-slider")).toBeTruthy();
-  await fireEvent.press(screen.getByRole("button", { name: "Style" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Spacing and opacity" }));
   expect(screen.queryByTestId("style-opacity-slider")).toBeNull();
 });
 
-test("the Style toggle has hit slop", async () => {
-  await render(<CollapsibleTextStyle style={{ ...DEFAULT_TEXT_STYLE }} outline={false} onBegin={onBegin} onPatch={onPatch} onPatchTransient={onPatchTransient} />);
-  expect(screen.getByRole("button", { name: "Style" }).props.hitSlop).toBe(12);
+test("the Outline and Background switches report to their own callbacks; a new box is black at 60 %", async () => {
+  await show();
+  await fireEvent(screen.getByLabelText("Outline"), "valueChange", true);
+  expect(onOutline).toHaveBeenLastCalledWith(true);
+  await fireEvent(screen.getByLabelText("Background"), "valueChange", true);
+  expect(onBackground).toHaveBeenLastCalledWith({ color: "#000000", opacity: 0.6 });
+  expect(onPatch).not.toHaveBeenCalled();
+});
+
+test("the box controls: corner chips patch the style, padding drags transiently, the opacity drag sends the whole box", async () => {
+  await show({ boxPadding: 0.3 }, false, { color: "#2E86AB", opacity: 0.8 });
+  expect(screen.getByText("Padding 30")).toBeTruthy();
+  expect(screen.getByText("Box opacity 80 %")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "Square" }));
+  expect(onPatch).toHaveBeenLastCalledWith({ boxCorner: "square" });
+  await drag("style-box-padding-slider", [0.4, 0.5]);
+  expect(onPatchTransient).toHaveBeenLastCalledWith({ boxPadding: 0.5 });
+  await drag("opacity-slider", [0.5]);
+  expect(onBackgroundTransient).toHaveBeenLastCalledWith({ color: "#2E86AB", opacity: 0.5 });
+  expect(onBegin).toHaveBeenCalledTimes(2);
+  await fireEvent.press(within(screen.getByTestId("style-box-color")).getByLabelText("Color #C8102E"));
+  expect(onBackground).toHaveBeenLastCalledWith({ color: "#C8102E", opacity: 0.8 });
+  for (const id of ["style-box-padding-slider", "opacity-slider"]) expect(screen.getByTestId(id).props.step).toBe(0.01);
+  await fireEvent(screen.getByLabelText("Background"), "valueChange", false);      // off: reported, and the row closes
+  expect(onBackground).toHaveBeenLastCalledWith(null);
 });

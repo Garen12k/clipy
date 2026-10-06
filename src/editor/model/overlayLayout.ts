@@ -4,6 +4,7 @@ export interface OverlayShadow { color: string; opacity: number; dx: number; dy:
 export interface OverlayGlow { color: string; radius: number }
 export interface OverlayLayout {
   centerX: number; centerY: number; fontSize: number; maxWidth: number; padding: number; rotation: number;
+  boxRadius: number;              // px: the background box's corner radius (0 = square corners, or no box)
   letterSpacing: number;          // px
   lineHeight: number;             // px
   outlineWidth: number;           // px
@@ -17,6 +18,8 @@ export interface OverlayLayout {
 export const OUTLINE_FACTOR = 2 / 450;
 export const LINE_HEIGHT_FACTOR = 1.2;
 export const BACKGROUND_PAD_FACTOR = 0.25;
+/** A rounded box corner = half of the DEFAULT padding (not of the chosen one): it is the corner every box had before the padding became adjustable. */
+export const BOX_RADIUS_FACTOR = 0.5;
 export const MAX_WIDTH_FACTOR = 0.9;
 /** cos 45° = sin 45°: a shadow's distance goes equally right and down. */
 export const SHADOW_ANGLE = 0.7071;
@@ -33,14 +36,15 @@ export function contrastFor(hex: string): string {
 /**
  * The single source of truth for where text sits in a frame and for the pixel values of its style. Mirrored in
  * modules/clipy-video/ios/OverlayLayout.swift. All inputs are resolution-independent; outputs are pixels for the given frame.
- * The neutral style (× 1, × 0) gives exactly the numbers from before styles existed.
+ * The neutral style (× 1, × 0, the default box padding and corner) gives exactly the numbers from before styles existed.
  */
 export function layoutOverlay(o: TextOverlay, frameW: number, frameH: number): OverlayLayout {
   const fontSize = r(o.fontScale * o.scale * frameH);
   return {
     centerX: r(o.x * frameW), centerY: r(o.y * frameH), fontSize,
     maxWidth: r(MAX_WIDTH_FACTOR * frameW),
-    padding: o.background ? r(BACKGROUND_PAD_FACTOR * fontSize) : 0,
+    padding: o.background ? r(o.style.boxPadding * fontSize) : 0,
+    boxRadius: !o.background || o.style.boxCorner === "square" ? 0 : r(BACKGROUND_PAD_FACTOR * fontSize) * BOX_RADIUS_FACTOR,
     rotation: o.rotation,
     letterSpacing: r(o.style.letterSpacing * fontSize),
     lineHeight: r(LINE_HEIGHT_FACTOR * fontSize * o.style.lineSpacing),
