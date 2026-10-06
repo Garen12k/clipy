@@ -84,3 +84,7 @@ test("icons on the home, export, post and accounts screens are outline icons, ou
       + 'Brand marks ("logo-…") have no outline version and are fine. If a glyph has no "-outline" name at all (check node_modules/@expo/vector-icons), pick the nearest outline glyph.');
   }
 });
+
+test("no screen outside the editor still names a filled icon", () => {
+  expect(ALLOW).toEqual({});
+});

@@ -196,3 +196,13 @@ test("no raw padding / margin / gap numbers in the kit, the editor's components,
       + "A value that multiplies or divides (h * 0.12), 0 and StyleSheet.hairlineWidth are fine. A number that truly cannot be a token gets a line in ALLOW with its reason.");
   }
 });
+
+test("the allow-table is at its agreed minimum: timeline-lane geometry below the 4-pt scale, and nothing else", () => {
+  expect(Object.fromEntries(Object.entries(ALLOW).map(([file, a]) => [file, a.max]))).toEqual({
+    "src/editor/components/AudioBar.tsx": 2,
+    "src/editor/components/ClipThumbStrip.tsx": 5,
+    "src/editor/components/EffectPill.tsx": 1,
+    "src/editor/components/LayerBar.tsx": 2,
+    "src/editor/components/OverlayPill.tsx": 1,
+  });
+});
