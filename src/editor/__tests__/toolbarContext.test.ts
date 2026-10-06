@@ -1,4 +1,4 @@
-import { makeAudioTrack, makeClip, makeEffect, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker, type LayerClip } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker, type Clip, type LayerClip } from "@/src/editor/model/types";
 import { contextFor, selectionKey, TOOL_IDS, type ToolbarSelection } from "../toolbarContext";
 
 const none: ToolbarSelection = { clipId: null, overlayId: null, effectId: null, audioId: null, section: null };
@@ -12,11 +12,12 @@ const project = makeProject({
   audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })],
 });
 
-const MAIN = ["edit", "audioMenu", "textMenu", "sticker", "overlay", "effect", "filter", "adjust", "ratio", "background", "cover", "templates"];
+const MAIN = ["edit", "audioMenu", "textMenu", "sticker", "overlay", "collage", "effect", "filter", "adjust", "ratio", "background", "cover", "templates"];
 const CLIP = ["split", "trim", "select", "speed", "volume", "animate", "filter", "adjust", "background", "templates", "crop", "transform", "opacity", "mask", "chroma", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete"];
 const SOUND = ["audioSplit", "audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio", "ducking", "beats"];
 const LAYER = ["trim", "speed", "volume", "animate", "filter", "adjust", "crop", "transform", "opacity", "mask", "blend", "chroma", "keyframe", "layerForward", "layerBack", "replace", "reverse", "duplicate", "delete"];
 const without = (list: string[], ...gone: string[]) => list.filter((t) => !gone.includes(t));
+const withMotion = (list: string[]) => list.flatMap((t) => (t === "animate" ? ["animate", "motion"] : [t]));
 
 test("nothing selected: the main bar; an empty project keeps only what needs no clip", () => {
   expect(contextFor(none, project)).toEqual({ bar: "main", tools: MAIN });
@@ -34,7 +35,7 @@ test("a main clip: Select is third, Background and Templates follow Adjust", () 
 });
 
 test("clip rules: a photo has no Speed / Volume / Reverse / Freeze; a reversed clip no Volume; the last clip no Transition; one clip no Select", () => {
-  expect(contextFor({ ...none, clipId: "p" }, project).tools).toEqual(without(CLIP, "speed", "volume", "reverse", "freeze"));
+  expect(contextFor({ ...none, clipId: "p" }, project).tools).toEqual(withMotion(without(CLIP, "speed", "volume", "reverse", "freeze")));
   expect(contextFor({ ...none, clipId: "r" }, project).tools).toEqual(without(CLIP, "volume"));
   expect(contextFor({ ...none, clipId: "z" }, project).tools).toEqual(without(CLIP, "transition"));
   const one = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] });
@@ -43,7 +44,7 @@ test("clip rules: a photo has no Speed / Volume / Reverse / Freeze; a reversed c
 
 test("a layer: the layer bar; a photo layer has no Speed / Volume / Reverse; a reversed layer no Volume", () => {
   expect(contextFor({ ...none, clipId: "L" }, project)).toEqual({ bar: "layer", tools: LAYER });
-  expect(contextFor({ ...none, clipId: "P" }, project)).toEqual({ bar: "layer", tools: without(LAYER, "speed", "volume", "reverse") });
+  expect(contextFor({ ...none, clipId: "P" }, project)).toEqual({ bar: "layer", tools: withMotion(without(LAYER, "speed", "volume", "reverse")) });
   expect(contextFor({ ...none, clipId: "R" }, project).tools).toEqual(without(LAYER, "volume"));
   for (const id of ["L", "P", "R"]) for (const t of ["split", "freeze", "transition", "select", "background", "templates", "ratio"]) expect(contextFor({ ...none, clipId: id }, project).tools).not.toContain(t);
 });
@@ -87,7 +88,7 @@ test("an id that no longer exists counts as no selection", () => {
 });
 
 test("every tool id is reachable, and no bar lists a tool twice", () => {
-  const sels: ToolbarSelection[] = [none, { ...none, section: "audio" }, { ...none, section: "text" }, { ...none, clipId: "a" }, { ...none, clipId: "L" },
+  const sels: ToolbarSelection[] = [none, { ...none, section: "audio" }, { ...none, section: "text" }, { ...none, clipId: "a" }, { ...none, clipId: "p" }, { ...none, clipId: "L" },
     { ...none, overlayId: "t" }, { ...none, overlayId: "c" }, { ...none, overlayId: "s" }, { ...none, audioId: "m" }, { ...none, effectId: "e" }];
   const seen = new Set<string>();
   for (const sel of sels) {
@@ -96,7 +97,7 @@ test("every tool id is reachable, and no bar lists a tool twice", () => {
     for (const t of tools) seen.add(t);
   }
   expect([...seen].sort()).toEqual([...TOOL_IDS].sort());
-  expect(TOOL_IDS).toHaveLength(49);
+  expect(TOOL_IDS).toHaveLength(51);
 });
 
 test("selectionKey names what is selected; multi-select first", () => {
@@ -108,4 +109,49 @@ test("selectionKey names what is selected; multi-select first", () => {
   expect(selectionKey({ ...s, selectedAudioId: "m" })).toBe("audio:m");
   expect(selectionKey({ ...s, multiSelect: [] })).toBe("multi");
   expect(selectionKey({ ...s, multiSelect: ["a", "b"], selectedClipId: "a" })).toBe("multi");
+});
+
+describe("Motion and Collage", () => {
+  const tagged = (id: string): LayerClip => ({ ...makePhotoClip({ id }), start: 0, collage: { group: "g", layout: "sideBySide", cell: 0, border: 0, corner: 0, aspect: 0.5625 } });
+  const tools = (clip: Clip, layer = false) => contextFor({ ...none, clipId: clip.id }, makeProject({ clips: layer ? [makeClip({ id: "a", sourceDuration: 4 })] : [clip, makeClip({ id: "z", sourceDuration: 4 })], layers: layer ? [{ ...clip, start: 0 }] : [] })).tools;
+
+  test("Collage is on the main bar right after Overlay, and needs a clip like Overlay", () => {
+    const { tools: main } = contextFor(none, project);
+    expect(main.slice(main.indexOf("overlay"), main.indexOf("overlay") + 3)).toEqual(["overlay", "collage", "effect"]);
+    expect(contextFor(none, makeProject()).tools).not.toContain("collage");
+  });
+
+  test("Motion follows Animate for a photo — main clip or layer — and is never there for a video", () => {
+    for (const layer of [false, true]) {
+      const list = tools(makePhotoClip({ id: "p" }), layer);
+      expect(list.slice(list.indexOf("animate"), list.indexOf("animate") + 3)).toEqual(["animate", "motion", "filter"]);
+      expect(tools(makeClip({ id: "v", sourceDuration: 4 }), layer)).not.toContain("motion");
+    }
+  });
+
+  test("one way of moving a photo at a time: keyframes hide Motion, a Motion hides Keyframe", () => {
+    const pinned = makePhotoClip({ id: "p", keyframes: [makeKeyframe({ t: 0 })] });
+    const moving: Clip = { ...makePhotoClip({ id: "p" }), motion: { id: "zoomIn", strength: 0.5 } };
+    for (const layer of [false, true]) {
+      expect(tools(pinned, layer)).not.toContain("motion");
+      expect(tools(pinned, layer)).toContain("keyframe");
+      expect(tools(moving, layer)).toContain("motion");
+      expect(tools(moving, layer)).not.toContain("keyframe");
+    }
+    // An older Combo is not a stored Motion: both tools are there.
+    const old = makePhotoClip({ id: "p", animation: { in: null, out: null, combo: "zoomInSlow" } });
+    expect(tools(old)).toEqual(expect.arrayContaining(["motion", "keyframe"]));
+    // A video is untouched by either rule: Keyframe as ever, pinned or not.
+    expect(tools(makeClip({ id: "v", sourceDuration: 4, keyframes: [makeKeyframe({ t: 0 })] }))).toContain("keyframe");
+  });
+
+  test("a collage cell: Collage comes first on its bar, and it has no Motion (it would grow over its neighbours)", () => {
+    const list = contextFor({ ...none, clipId: "c" }, makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [tagged("c")] })).tools;
+    expect(list[0]).toBe("collage");
+    expect(list[1]).toBe("trim");
+    expect(list).not.toContain("motion");
+    expect(list).toContain("keyframe");
+    expect(contextFor({ ...none, clipId: "P" }, project).tools).not.toContain("collage");      // a plain layer
+    expect(contextFor({ ...none, clipId: "a" }, project).tools).not.toContain("collage");      // a main clip
+  });
 });

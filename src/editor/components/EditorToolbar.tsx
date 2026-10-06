@@ -33,6 +33,7 @@ import { BeatsSheet } from "./BeatsSheet";
 import { CaptionsSheet } from "./CaptionsSheet";
 import { ChromaSheet } from "./ChromaSheet";
 import { ClipAnimationSheet } from "./ClipAnimationSheet";
+import { CollageSheet } from "./CollageSheet";
 import { CoverSheet } from "./CoverSheet";
 import { CropScreen } from "./CropScreen";
 import { EffectSheet } from "./EffectSheet";
@@ -44,6 +45,7 @@ import { FilterSheet } from "./FilterSheet";
 import { MaskSheet } from "./MaskSheet";
 import { MultiSelectBar } from "./MultiSelectBar";
 import { OpacitySheet } from "./OpacitySheet";
+import { PhotoMotionSheet } from "./PhotoMotionSheet";
 import { StickerPanel } from "./StickerPanel";
 import { StickerSheet } from "./StickerSheet";
 import { TemplateSheet } from "./TemplateSheet";
@@ -64,7 +66,7 @@ const selOf = (s: SelectionState, section: Section): ToolbarSelection => ({ clip
  * The editor's bottom area: ONE bar whose tools follow the selection (`contextFor` decides which bar and which tools; this component
  * only gives each tool its action), a back arrow on every bar but the main one, and — in the bar's place — the open tool strip.
  * A tool that does not apply is not on the bar; the only disabled buttons are momentary (Keyframe off its item, a sound's Split where
- * the white line cannot cut it, Replace / Overlay
+ * the white line cannot cut it, Replace / Overlay / Collage
  * during a pick, Freeze during a capture). The height is explicit; while a strip shows the area grows upwards over the timeline's
  * lowest lanes (a negative top margin) instead of pushing the preview. The root must stay a direct child of the screen, after the timeline.
  * A tall panel (`ToolPanel`) takes the bar's place too, at its own explicit height and without a lift: the editor's layout hides the timeline then.
@@ -256,6 +258,7 @@ export function EditorToolbar() {
     textMenu: { onPress: () => setSection("text") },
     sticker: { onPress: () => openStrip("sticker") },
     overlay: { disabled: mediaBusy, onPress: () => { void addOverlay(); } },
+    collage: { disabled: mediaBusy, onPress: () => openStrip("collage") },
     effect: { onPress: () => openStrip("effect") },
     filter: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("filter")) : openStrip("filter")) },
     adjust: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("adjust")) : openStrip("adjust")) },
@@ -268,6 +271,7 @@ export function EditorToolbar() {
     speed: { onPress: () => openStrip("speed") },
     volume: { onPress: () => openStrip("volume") },
     animate: { onPress: () => openStrip(bar === "clip" || bar === "layer" ? "clipAnimation" : "overlayAnimation") },
+    motion: { onPress: () => openStrip("photoMotion") },
     crop: { onPress: () => setSheet("crop") },
     transform: { onPress: () => openStrip("transform") },
     opacity: { onPress: () => openStrip("opacity") },
@@ -343,12 +347,15 @@ export function EditorToolbar() {
       {/* The text panel and the sticker editor edit the selected overlay; Duplicate selects the copy, then re-keys the panel onto it. */}
       <TextPanel overlayId={selectedOverlayId} visible={strip?.id === "text"} onClose={closeStrip} onRetarget={rekeyStrip} />
       <StickerPanel overlayId={selectedOverlayId} visible={strip?.id === "stickerEdit"} onClose={closeStrip} onRetarget={rekeyStrip} />
+      {/* Collage: a layout tile makes one (it selects the first cell and re-keys the panel onto it); with a cell selected it edits that collage. */}
+      <CollageSheet clipId={selectedId} visible={strip?.id === "collage"} onClose={closeStrip} />
       {/* The tool strips: opened and closed through the strip store, so the cut marker and the ratio pill open the same ones. */}
       <RatioSheet visible={strip?.id === "ratio"} onClose={closeStrip} />
       <SpeedSheet clipId={selectedId} visible={strip?.id === "speed"} onClose={closeStrip} />
       <FilterSheet clipId={selectedId} visible={strip?.id === "filter"} onClose={closeStrip} />
       <TransformSheet clipId={selectedId} visible={strip?.id === "transform"} onClose={closeStrip} />
       <ClipAnimationSheet clipId={selectedId} visible={strip?.id === "clipAnimation"} onClose={closeStrip} />
+      <PhotoMotionSheet clipId={selectedId} visible={strip?.id === "photoMotion"} onClose={closeStrip} />
       <OverlayAnimationSheet overlayId={selectedOverlayId} visible={strip?.id === "overlayAnimation"} onClose={closeStrip} />
       <AdjustSheet clipId={selectedId} visible={strip?.id === "adjust"} onClose={closeStrip} />
       <EffectStrengthSheet effectId={selectedEffectId} visible={strip?.id === "effectStrength"} onClose={closeStrip} />
