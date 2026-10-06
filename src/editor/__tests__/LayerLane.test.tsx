@@ -298,7 +298,7 @@ test("a very short layer is drawn 12 pt wide without a label and stays tappable;
   setLayers([{ ...makeLayer({ id: "t", sourceDuration: 20, speed: 4, trimEnd: 0.4, start: 2 }) }]);   // 0.1 s on screen
   await render(<LayerLane />);
   expect(screen.getByTestId("layer-bar-t")).toHaveStyle({ left: 100, width: 12 });
-  expect(screen.getByTestId("layer-bar-t").props.hitSlop).toBe(8);
+  expect(screen.getByTestId("layer-bar-t").props.hitSlop).toEqual({ top: 2, bottom: 2, left: 8, right: 8 });
   expect(screen.queryByText("Layer")).toBeNull();
   await fireEvent.press(screen.getByTestId("layer-bar-t"));
   expect(st().selectedClipId).toBe("t");

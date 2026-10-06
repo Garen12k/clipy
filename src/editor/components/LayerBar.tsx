@@ -9,10 +9,10 @@ import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { useToast } from "@/src/ui/Toast";
 import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
-import { LANE_HEIGHT } from "../timelineLayout";
+import { LANE_HEIGHT, ROW_SLOP } from "../timelineLayout";
 
 const HANDLE_W = 12;
-/** A bar is never drawn narrower than this; HIT_SLOP keeps it tappable. */
+/** A bar is never drawn narrower than this; HIT_SLOP keeps it tappable — sideways only: up and down it stops at ROW_SLOP, inside its own row. */
 const MIN_WIDTH = 12;
 const HIT_SLOP = 8;
 /** Narrower than this there is no room between the handles: the label is left out. */
@@ -123,7 +123,7 @@ export function LayerBar({ layer: l, missing = false, selected, onPress }: Props
   const handleW = Math.min(HANDLE_W, width / 2);
   return (
     <GestureDetector gesture={gestures.move}>
-      <Pressable testID={`layer-bar-${l.id}`} onPress={onPress} accessibilityLabel={photo ? "Photo layer" : "Video layer"} hitSlop={HIT_SLOP}
+      <Pressable testID={`layer-bar-${l.id}`} onPress={onPress} accessibilityLabel={photo ? "Photo layer" : "Video layer"} hitSlop={{ top: ROW_SLOP, bottom: ROW_SLOP, left: HIT_SLOP, right: HIT_SLOP }}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color,
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
         {roomy && (

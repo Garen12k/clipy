@@ -118,8 +118,9 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an 
 - Timeline (split, trim, reorder); a clip whose source video is missing shows a warning badge
   and is skipped by preview and export. The rows under the clips (music, voice, sound effects, one row per layer,
   text / stickers, effects — in that order) appear only once they hold something, so a project with clips only gives the
-  video the most room; adding the first text, sound or effect adds its row, and every layer adds its own
-  (`laneModel` in `src/editor/timelineLayout.ts` is the one rule)
+  video the most room; adding the first text, sound or effect adds its row, and every layer adds its own. Text, captions
+  and stickers share a row while they share no time; ones that play at the same moment get a row each, so no bar
+  covers another (`overlayRows`). `laneModel` in `src/editor/timelineLayout.ts` is the one rule
 - Preview playback
 - Export, with a fallback card in Expo Go when the native module is not linked
 
