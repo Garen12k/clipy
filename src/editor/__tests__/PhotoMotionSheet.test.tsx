@@ -136,3 +136,12 @@ test("the tile row starts on the ringed tile and stays where it is across picks"
     Dimensions.set({ window });
   }
 });
+
+test("dragging Strength on a photo that shows an older Combo as a Motion tile is one undo step", async () => {
+  await open("old");
+  await fireEvent(slider(), "touchStart");
+  await fireEvent(slider(), "touchMove", { v: 0.8 });
+  await fireEvent(slider(), "touchMove", { v: 0.3 });
+  expect(clip("old")).toMatchObject({ motion: { id: "panLeft", strength: 0.3 }, animation: { combo: null } });
+  expect(past()).toBe(1);
+});

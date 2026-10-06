@@ -11,7 +11,7 @@ jest.mock("expo-modules-core", () => {
 });
 
 import { requireOptionalNativeModule } from "expo-modules-core";
-import { resolveClipMotion, sampleKeyframes } from "@/src/editor/model/motion";
+import { photoMotionPins, resolveClipMotion, sampleKeyframes } from "@/src/editor/model/motion";
 import { curveSteps, outputOffsetOf } from "@/src/editor/model/timeline";
 import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, transcribe } from "../index";
@@ -268,6 +268,15 @@ describe("toExportClip", () => {
     ] });
     expect("motion" in toExportClip(moving)).toBe(false);          // the request has no such field: Swift is not asked anything new
     expect(toExportLayer({ ...moving, start: 2 }).keyframes).toHaveLength(2);
+    // A layer photo with a placement: the two pins hold the placement combined with the motion, as `photoMotionPins` says.
+    const placed = { ...makePhotoClip({ id: "q", seconds: 4 }), motion: { id: "zoomCorner" as const, strength: 1 }, start: 2,
+      transform: { scale: 1.5, x: 0.1, y: 0, rotation: 30, flipH: false, flipV: false } };
+    const pins = toExportLayer(placed).keyframes;
+    expect(pins).toEqual(photoMotionPins(placed, 4));
+    expect(pins).toEqual([
+      { t: 0, x: 0.1, y: 0, scale: 1.5, rotation: 30, opacity: 1 },
+      { t: 4, x: expect.closeTo(0.22, 12), y: expect.closeTo(0.12, 12), scale: expect.closeTo(1.86, 12), rotation: 30, opacity: 1 },
+    ]);
     // Keyframes win over a stored motion, as in the preview.
     const pinned = { ...moving, keyframes: [makeKeyframe({ t: 1, scale: 2 })] };
     expect(toExportClip(pinned).keyframes).toEqual([{ t: 1, x: 0, y: 0, scale: 2, rotation: 0, opacity: 1 }]);

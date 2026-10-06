@@ -1,5 +1,5 @@
 import { coverFactor, croppedSize, type Size } from "./clipLayout";
-import { clampCrop, clampNum, TRANSFORM_LIMITS, type Clip, type CollageCell, type CollageLayoutId, type CropRect } from "./types";
+import { clampCrop, clampNum, COLLAGE_LIMITS, TRANSFORM_LIMITS, type Clip, type CollageCell, type CollageLayoutId, type CropRect } from "./types";
 
 /**
  * Collage geometry (spec section 6). Pure maths, TypeScript only: a collage is ordinary layers, and all this file ever produces is a
@@ -34,11 +34,11 @@ function baseCells(layout: CollageLayoutId, aspect: number): CellRect[] {
 
 /**
  * The layout's cells in a frame of `aspect` (width / height; unusable → square) with `border` — a fraction of the frame's SHORTER
- * side (not a number or below 0 → none) — at the frame's edges and between cells: the same pixels everywhere. Not rounded.
+ * side (not a number or below 0 → none; above COLLAGE_LIMITS.border → the maximum) — at the frame's edges and between cells: the same pixels everywhere. Not rounded.
  */
 export function collageCells(layout: CollageLayoutId, aspect: number, border: number): CellRect[] {
   const a = usable(aspect) ? aspect : 1;
-  const b = Number.isFinite(border) ? Math.max(0, border) : 0;
+  const b = Number.isFinite(border) ? clampNum(border, COLLAGE_LIMITS.border[0], COLLAGE_LIMITS.border[1]) : 0;
   const gx = b * Math.min(1, 1 / a);
   const gy = b * Math.min(a, 1);
   return baseCells(layout, a).map((c) => cell(gx + c.x * (1 - gx), gy + c.y * (1 - gy), c.w * (1 - gx) - gx, c.h * (1 - gy) - gy));

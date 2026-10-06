@@ -208,3 +208,11 @@ describe("placeInCell / isCellInPlace", () => {
     expect(isCellInPlace({ ...placed, collage: bad })).toBe(false);
   });
 });
+
+test("the border is clamped to COLLAGE_LIMITS: above the maximum gives the maximum's cells, below 0 gives none", () => {
+  for (const id of COLLAGE_LAYOUT_IDS) for (const a of RATIOS) {
+    expect(collageCells(id, a, 1)).toEqual(collageCells(id, a, COLLAGE_LIMITS.border[1]));
+    expect(collageCells(id, a, -1)).toEqual(collageCells(id, a, 0));
+    for (const c of collageCells(id, a, 1)) { expect(c.w).toBeGreaterThan(0); expect(c.h).toBeGreaterThan(0); }
+  }
+});

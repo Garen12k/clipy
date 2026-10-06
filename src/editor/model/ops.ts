@@ -5,7 +5,7 @@ import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
-  clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, activePhotoMotion, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   clampPhotoMotion, COMBO_AS_MOTION, type PhotoMotion, type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
@@ -821,6 +821,7 @@ function replacedMedia(old: Clip, media: Pick<Clip, "sourceUri" | "sourceDuratio
     const speedCurve = old.speedCurve ? presetCurve(base, old.speedCurve.id, 0, trimEnd) : null;
     next = { ...base, sourceDuration: media.sourceDuration, trimEnd, speedCurve };
   }
+  if (next.kind !== "photo") delete next.motion;   // a Motion belongs to photos only; the key goes, it is never undefined
   return next.kind === "video" && clipDuration(next) < MIN_CLIP_SECONDS - 1e-9 ? old : next;
 }
 
@@ -1337,6 +1338,7 @@ export function toggleClipKeyframe(p: Project, clipId: string, offsetInClip: num
     const m = pinMoment(c, offsetInClip);
     const i = pinIndexAt(c.keyframes, m.t);
     if (i < 0) {
+      if (activePhotoMotion(c)) return c;   // a Motion and pins never share a photo (as `setPhotoMotion` refuses a pinned one)
       const keyframes = insertPin(c.keyframes, { t: m.t, ...clipBaseAt(c, m.offset) }, clampClipKeyframes);
       return keyframes === c.keyframes ? c : { ...c, keyframes };
     }
