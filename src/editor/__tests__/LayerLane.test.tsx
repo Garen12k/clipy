@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { layerEnd } from "@/src/editor/model/timeline";
@@ -9,6 +10,7 @@ import { useToast } from "@/src/ui/Toast";
 import { layerTrimFromDrag } from "../components/LayerBar";
 import { LayerLane } from "../components/LayerLane";
 import { useSnapGuide } from "../snapping";
+import { LANE_GAP, LANE_HEIGHT, laneModel } from "../timelineLayout";
 
 const TOAST = "Only two video layers can play at the same time.";
 const photoLayer = (id: string, start: number, seconds = 3): LayerClip => ({ ...makePhotoClip({ id, seconds }), start });
@@ -35,9 +37,32 @@ const drag = (g: G, ...xs: number[]) => act(() => { g.handlers.onStart(); for (c
 const handleOf = async (id: string, which: "start" | "end") => { await act(() => { st().select(id); }); return gestureOf(screen.getByLabelText(`Layer ${which} handle`)); };
 const setLayers = (layers: LayerClip[]) => { st().setProject(makeProject({ clips: [main], layers })); st().setZoom(50); };
 
+test("every layer has its own row, in the order of project.layers: a lane high, in the flow, holding that layer's bar and no other", async () => {
+  await render(<LayerLane />);
+  const rows = within(screen.getByTestId("layer-lane")).getAllByTestId(/^layer-row-/);
+  expect(rows.map((r) => r.props.testID)).toEqual(["layer-row-v1", "layer-row-ph", "layer-row-v2"]);
+  for (const id of ["v1", "ph", "v2"]) {
+    const row = screen.getByTestId(`layer-row-${id}`);
+    expect(StyleSheet.flatten(row.props.style)).toEqual({ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP });
+    expect(within(row).getAllByTestId(/^layer-bar-[a-z0-9]+$/).map((b) => b.props.testID)).toEqual([`layer-bar-${id}`]);
+  }
+  // The group itself has no size of its own: its height is its rows', which is what laneModel counts.
+  expect(screen.getByTestId("layer-lane").props.style).toBeUndefined();
+  expect(laneModel(st().project).lanes.find((l) => l.id === "layers")!.rows).toBe(rows.length);
+});
+
+test("rows keep the order of the array: a new layer is the bottom row, and a removed one leaves the other rows mounted", async () => {
+  await render(<LayerLane />);
+  const v2 = screen.getByTestId("layer-bar-v2");
+  await act(() => { st().setProject({ ...st().project!, layers: [...st().project!.layers, photoLayer("new", 0)] }); });
+  expect(screen.getAllByTestId(/^layer-row-/).map((r) => r.props.testID)).toEqual(["layer-row-v1", "layer-row-ph", "layer-row-v2", "layer-row-new"]);
+  await act(() => { st().setProject({ ...st().project!, layers: st().project!.layers.filter((l) => l.id !== "ph") }); });
+  expect(screen.getAllByTestId(/^layer-row-/).map((r) => r.props.testID)).toEqual(["layer-row-v1", "layer-row-v2", "layer-row-new"]);
+  expect(screen.getByTestId("layer-bar-v2")).toBe(v2);
+});
+
 test("the lane holds one bar per layer, placed by start and output length, titled Layer, in the layer colour", async () => {
   await render(<LayerLane />);
-  expect(screen.getByTestId("layer-lane")).toHaveStyle({ position: "relative", height: 28, marginTop: 4 });
   expect(screen.getByTestId("layer-bar-v1")).toHaveStyle({ position: "absolute", left: 50, width: 200, height: 28, backgroundColor: theme.colors.laneLayer });
   expect(screen.getByTestId("layer-bar-ph")).toHaveStyle({ position: "absolute", left: 100, width: 150, backgroundColor: theme.colors.laneLayer });
   expect(screen.getByTestId("layer-bar-v2")).toHaveStyle({ position: "absolute", left: 400, width: 250 });
@@ -68,12 +93,15 @@ test("tapping a bar selects the layer like a clip (exclusively); tapping the sel
   for (const id of ["v1", "ph", "v2"]) expect(screen.getByTestId(`layer-bar-${id}`)).toHaveStyle({ borderColor: theme.colors.laneLayer, zIndex: 0 });
 });
 
-test("the selected bar is drawn above the others; a bar over an earlier one is see-through", async () => {
+test("no bar is drawn see-through, not even one that shares its time with an earlier layer; the selected bar keeps its zIndex", async () => {
   await render(<LayerLane />);
-  expect(screen.getByTestId("layer-bar-v1")).toHaveStyle({ zIndex: 0, opacity: 1 });
-  expect(screen.getByTestId("layer-bar-ph")).toHaveStyle({ zIndex: 0, opacity: 0.85 });
-  expect(screen.getByTestId("layer-bar-v2")).toHaveStyle({ zIndex: 0, opacity: 1 });
+  // ph (2 – 5) plays over v1 (1 – 5): each has its own row, so nothing covers anything.
+  for (const id of ["v1", "ph", "v2"]) {
+    expect(screen.getByTestId(`layer-bar-${id}`)).toHaveStyle({ zIndex: 0 });
+    expect(StyleSheet.flatten(screen.getByTestId(`layer-bar-${id}`).props.style).opacity ?? 1).toBe(1);
+  }
   await act(() => { st().select("v1"); });
+  for (const id of ["v1", "ph", "v2"]) expect(StyleSheet.flatten(screen.getByTestId(`layer-bar-${id}`).props.style).opacity ?? 1).toBe(1);
   expect(screen.getByTestId("layer-bar-v1")).toHaveStyle({ zIndex: 1 });
   expect(screen.getByTestId("layer-bar-ph")).toHaveStyle({ zIndex: 0 });
 });
@@ -270,7 +298,7 @@ test("a very short layer is drawn 12 pt wide without a label and stays tappable;
   setLayers([{ ...makeLayer({ id: "t", sourceDuration: 20, speed: 4, trimEnd: 0.4, start: 2 }) }]);   // 0.1 s on screen
   await render(<LayerLane />);
   expect(screen.getByTestId("layer-bar-t")).toHaveStyle({ left: 100, width: 12 });
-  expect(screen.getByTestId("layer-bar-t").props.hitSlop).toBe(8);
+  expect(screen.getByTestId("layer-bar-t").props.hitSlop).toEqual({ top: 2, bottom: 2, left: 8, right: 8 });
   expect(screen.queryByText("Layer")).toBeNull();
   await fireEvent.press(screen.getByTestId("layer-bar-t"));
   expect(st().selectedClipId).toBe("t");

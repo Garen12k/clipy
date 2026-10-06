@@ -30,7 +30,7 @@ test("the effects lane is the last lane and only adds height: paddings and width
   useEditorStore.getState().setProject(q);
   await render(<Timeline />);
   const scroll = screen.getByTestId("timeline-scroll");
-  expect(laneIds()).toEqual(["overlay-lane", "music-lane", "effect-lane"]);
+  expect(laneIds()).toEqual(["music-lane", "overlay-lane", "effect-lane"]);
   const height = laneModel(q).height;
   expect(height).toBe(CLIP_AREA_HEIGHT + 3 * LANE);
   // Exactly the same container style as before, with the taller height: no width, no extra padding.
@@ -47,14 +47,14 @@ test("the effects lane is the last lane and only adds height: paddings and width
 const SCROLL_HANDLERS = ["onMomentumScrollBegin", "onMomentumScrollEnd", "onScroll", "onScrollBeginDrag", "onScrollEndDrag"];
 const scrollHandlers = (scroll: { props: object }) => Object.keys(scroll.props).filter((k) => /^on.*Scroll|^onScroll/.test(k)).sort();
 
-test("three audio kinds give three audio lanes between the overlay and effects lanes; only heights change", async () => {
+test("three audio kinds give three audio lanes right under the clips, above the overlay and effects lanes; only heights change", async () => {
   const kinds = ["sfx", "voice", "music", "music"] as const;
   const q = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [text()], effects: [makeEffect({ id: "e1", start: 2, end: 5 })], beatMarkers: [1, 2],
     audioTracks: kinds.map((kind, i) => makeAudioTrack({ id: `t${i}`, kind, sourceDuration: 5, start: i })) });
   useEditorStore.getState().setProject(q);
   await render(<Timeline />);
   const scroll = screen.getByTestId("timeline-scroll");
-  expect(laneIds()).toEqual(["overlay-lane", "music-lane", "voice-lane", "sfx-lane", "effect-lane"]);
+  expect(laneIds()).toEqual(["music-lane", "voice-lane", "sfx-lane", "overlay-lane", "effect-lane"]);
   const height = laneModel(q).height;
   expect(height).toBe(CLIP_AREA_HEIGHT + 5 * LANE);
   // The same container style as with one lane apart from the height: no width, no extra padding.
@@ -144,17 +144,22 @@ test("a lane appears with its first item and goes with its last — through undo
   shows(["effect-lane"]);
 });
 
-test("a project with layers gets a layers lane right under the clips; only heights change", async () => {
+test("a project with layers gets a row per layer right under the clips; only heights change", async () => {
   useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })],
     layers: [makeLayer({ id: "l1", sourceDuration: 4, start: 1 }), { ...makePhotoClip({ id: "l2" }), start: 30 }] }));   // l2 lies past the project's end
   await render(<Timeline />);
   const scroll = screen.getByTestId("timeline-scroll");
   expect(laneIds()).toEqual(["layer-lane"]);
   const height = laneModel(useEditorStore.getState().project).height;
-  expect(height).toBe(CLIP_AREA_HEIGHT + LANE);
+  expect(height).toBe(CLIP_AREA_HEIGHT + 2 * LANE);
   // The same container style as without layers apart from the height: no width, no extra padding.
   expect(scroll.props.contentContainerStyle).toEqual({ paddingHorizontal: Dimensions.get("window").width / 2, height, flexDirection: "column" });
-  expect(StyleSheet.flatten(screen.getByTestId("layer-lane").props.style)).toEqual({ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP });
+  // One row per layer, each the size of any other lane, in the order of project.layers — the bar inside is that layer's.
+  expect(within(screen.getByTestId("layer-lane")).getAllByTestId(/^layer-row-/).map((r) => r.props.testID)).toEqual(["layer-row-l1", "layer-row-l2"]);
+  for (const id of ["l1", "l2"]) {
+    expect(StyleSheet.flatten(screen.getByTestId(`layer-row-${id}`).props.style)).toEqual({ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP });
+    expect(within(screen.getByTestId(`layer-row-${id}`)).getByTestId(`layer-bar-${id}`)).toBeTruthy();
+  }
   // Bars are out of the flow, so they cannot widen the scroll content — not even one past the last clip.
   const bars = within(scroll).getAllByTestId(/^layer-bar-l\d$/);
   expect(bars).toHaveLength(2);
@@ -164,12 +169,12 @@ test("a project with layers gets a layers lane right under the clips; only heigh
   expect(screen.getByTestId("timeline-playhead")).toHaveStyle({ height: height - 16, top: 8, left: Dimensions.get("window").width / 2 - 1 });
 });
 
-test("the layers lane goes away with the last layer, and stacks with the audio lanes", async () => {
+test("the layer rows go away with the last layer, and sit under the audio lanes", async () => {
   const withLayer = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], layers: [makeLayer({ id: "l1", sourceDuration: 4 })],
     audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 }), makeAudioTrack({ id: "v", kind: "voice", sourceDuration: 5 })] });
   useEditorStore.getState().setProject(withLayer);
   await render(<Timeline />);
-  expect(laneIds()).toEqual(["layer-lane", "music-lane", "voice-lane"]);
+  expect(laneIds()).toEqual(["music-lane", "voice-lane", "layer-lane"]);
   expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: laneModel(withLayer).height });
   expect(laneModel(withLayer).height).toBe(CLIP_AREA_HEIGHT + 3 * LANE);
   await act(() => { useEditorStore.getState().setProject({ ...withLayer, layers: [] }); });

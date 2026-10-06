@@ -13,7 +13,12 @@ import { KeyframeDots } from "./KeyframeDots";
 
 const HANDLE_W = 12;
 
-export function OverlayPill({ overlay: o, selected, onPress }: { overlay: Overlay; selected: boolean; onPress: () => void }) {
+/**
+ * One text, caption or sticker on the text / stickers lane. `top` is its row's offset inside the lane (see OverlayLane): a style
+ * only, so a bar that changes rows while it is dragged stays the same mounted view and its gesture goes on. It has no hit slop: its
+ * touch area is the bar, which never reaches into the row above or below.
+ */
+export function OverlayPill({ overlay: o, selected, top = 0, onPress }: { overlay: Overlay; selected: boolean; top?: number; onPress: () => void }) {
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const store = useEditorStore.getState();
   // The overlay when the drag began. A start trim is computed from this snapshot's start and pins on every frame (see `updateOverlayShared`).
@@ -50,7 +55,7 @@ export function OverlayPill({ overlay: o, selected, onPress }: { overlay: Overla
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`overlay-pill-${o.id}`} onPress={onPress} accessibilityLabel={`${isSticker(o) ? "Sticker" : "Text"} ${label}`}
-        style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: isSticker(o) ? theme.colors.laneSticker : theme.colors.laneText,
+        style={{ position: "absolute", left: leftPx, top, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: isSticker(o) ? theme.colors.laneSticker : theme.colors.laneText,
           borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
         <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12 }}>{label}</Text>
         {selected && o.keyframes.length > 0 && (
