@@ -3,6 +3,8 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { Alert, FlatList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { hasSeenWelcome } from "@/src/auth/welcomeSeen";
+import { WelcomeScreen } from "@/src/auth/WelcomeScreen";
 import type { AspectRatio } from "@/src/editor/model/types";
 import { AFTER_PICKER_MS, AspectRatioSheet } from "@/src/projects/AspectRatioSheet";
 import { pickMedia } from "@/src/projects/pickMedia";
@@ -25,7 +27,18 @@ import { Spinner } from "@/src/ui/Spinner";
 import { Body, Title } from "@/src/ui/Text";
 import { ToastHost } from "@/src/ui/Toast";
 
-export default function ProjectsScreen() {
+/**
+ * Home. On first launch — the "seen" flag is not set — this same route draws the welcome screen in place of the projects: the flag is
+ * read synchronously, so the very first frame is already the right one and the projects never flash. Nothing is navigated (no
+ * redirect, no guard in the layout), so links from outside to /post, /accounts or /oauth are untouched, and "Continue without an
+ * account" or a sign-in simply swaps the welcome screen for the projects.
+ */
+export default function Home() {
+  const [seen, setSeen] = useState(hasSeenWelcome);
+  return seen ? <ProjectsScreen /> : <WelcomeScreen first onDone={() => setSeen(true)} />;
+}
+
+function ProjectsScreen() {
   const { projects, loading, create, createQuick, rename, duplicate, remove } = useProjects();
   const [actionsFor, setActionsFor] = useState<ProjectSummary | null>(null);
   /** Media picked for a new project that is waiting for its aspect ratio. */

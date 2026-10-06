@@ -32,6 +32,20 @@ test("SecondaryButton presses and can be disabled", async () => {
   expect(onPress).toHaveBeenCalledTimes(1);
 });
 
+test("SecondaryButton draws its icon before the title; without one it is the title alone, the same box", async () => {
+  const { View } = require("react-native");
+  const v = await render(<SecondaryButton title="Continue with email" onPress={() => {}} icon={<View testID="mail-icon" />} />);
+  const withIcon = screen.getByRole("button", { name: "Continue with email" });
+  expect(withIcon.children).toHaveLength(2);
+  expect(withIcon.children[0]).toBe(screen.getByTestId("mail-icon"));
+  expect(withIcon.children[1]).toBe(screen.getByText("Continue with email"));
+  expect(withIcon).toHaveStyle({ borderWidth: 1.5, height: theme.size.control });
+  await v.rerender(<SecondaryButton title="Share" onPress={() => {}} />);
+  const plain = screen.getByRole("button", { name: "Share" });
+  expect(plain.children).toHaveLength(1);
+  expect(plain).toHaveStyle({ borderWidth: 1.5, height: theme.size.control });
+});
+
 test("ToolButton is a button and shows the selected state when active", async () => {
   await render(<ToolButton label="Effects" icon="sparkles" onPress={() => {}} active />);
   expect(screen.getByRole("button", { name: "Effects" })).toBeSelected();

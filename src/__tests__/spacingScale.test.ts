@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { join, relative, sep } from "path";
 
 const ROOT = join(__dirname, "..", "..");
-const DIRS = ["src/ui", "src/editor/components", "src/projects", "src/export", "src/publish", "app"];
+const DIRS = ["src/ui", "src/editor/components", "src/projects", "src/export", "src/publish", "src/auth", "app"];
 /**
  * Files that still hold raw spacing numbers, with exactly how many. One file per line: a task that fixes a file deletes (or lowers)
  * that file's line and no other. The count is exact — fewer hits than listed fails too, so the table cannot go stale.

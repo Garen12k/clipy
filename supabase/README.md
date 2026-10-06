@@ -27,14 +27,38 @@ Where a button name below could not be checked on the live page, it says *(may b
    - after `EXPO_PUBLIC_SUPABASE_KEY=` paste the publishable (or anon) key.
 7. Save. Never share or commit `.env`.
 
-## 2. Turn on Sign in with Apple
+## 2. Turn on signing in (email, Google, Apple)
 
-1. In the Supabase project, open **Authentication → Sign In / Providers** *(may be named slightly differently; the docs also call it **Authentication → Providers**)*.
-2. Click **Apple** and switch it on.
-3. In **Client IDs**, type `host.exp.Exponent`. This is the ID Expo Go uses on your iPhone.
-4. Later, when Clipy becomes a real App Store app, add `com.clipy.app` to the same list (separated by a comma).
-5. The OAuth fields (Services ID, secret key) can stay empty: the Clipy app signs in natively and does not need them.
-6. Click **Save**.
+Clipy's welcome screen offers three ways to sign in. Each is one provider in the Supabase project, under **Authentication → Sign In / Providers** *(may be named slightly differently; the docs also call it **Authentication → Providers**)*. None of this has been run yet against a real project.
+
+### a. Email (a 6-digit code, no password) — works in Expo Go
+
+1. Click **Email** and make sure it is switched on. **Confirm email** can stay on.
+2. Open **Authentication → Emails → Templates** *(may be named slightly differently)* and choose **Magic Link**. This is the email Clipy's "Send code" sends.
+3. Change its message so it shows the code instead of a link. The body must contain `{{ .Token }}`, for example: `Your Clipy code is {{ .Token }}`. Remove the `{{ .ConfirmationURL }}` link. **Save**.
+4. Do the same for the **Confirm signup** template: a new address may get that email the first time.
+5. The code must be **6 digits** (Clipy's box takes exactly six). If the project offers an "Email OTP length" setting under the Email provider, set it to 6.
+6. After a code is sent, Clipy's "Resend code" waits 60 seconds, to match Supabase's default minimum gap between two emails to the same address *(the 60-second default is from memory, not verified against a real project; if yours is set differently, tell the developer)*.
+7. Supabase's built-in email sender only sends a few emails an hour, and only to the project's own team members. For real use, connect your own email sender under **Authentication → Emails → SMTP Settings** *(may be named slightly differently)*.
+
+### b. Google — needs a Google client in your name
+
+1. In Google Cloud (the same `Clipy` project as step 5, or create it now following step 5.1 to 5.5), go to **Clients → Create client**: Application type **Web application**, name `Clipy sign-in`.
+2. Under **Authorized redirect URIs**, add exactly (with your project ref): `https://<ref>.supabase.co/auth/v1/callback`. **Create**, and copy the **Client ID** and **Client secret**.
+3. In Supabase, click **Google**, switch it on, paste the Client ID and Client secret, **Save**.
+4. Open **Authentication → URL Configuration** and, under **Redirect URLs**, add these two (this is where Google sign-in returns to the app):
+   - `clipy://welcome` — the real app.
+   - `exp://**` — Expo Go, **testing only — remove before release** (there the address is `exp://<your computer's address>:<port>/--/welcome`, which changes with your network, so a wildcard is needed).
+5. If Google sign-in ends on a web page instead of returning to Clipy, the address in step 4 is missing or misspelt: tell the developer which address you see.
+
+### c. Apple — works only in the real build
+
+1. Click **Apple** and switch it on.
+2. In **Client IDs**, type `com.clipy.app` (Clipy's bundle ID).
+3. The OAuth fields (Services ID, secret key) can stay empty: the Clipy app signs in natively and does not need them.
+4. Click **Save**.
+
+Apple sign-in cannot work inside Expo Go (Apple issues the sign-in for Expo Go, not for Clipy), so there the app says "Apple sign-in works in the installed app, not in Expo Go." Check it on the first real build.
 
 ## 3. Install the Supabase tool and put the server online
 
@@ -158,8 +182,8 @@ Nothing here has run against the real Supabase or Google. Check each of these th
 
 After steps 1 to 5 above, on your iPhone in Expo Go:
 
-1. With no `.env`, Accounts shows "Posting isn't set up yet" and the Share button still works.
-2. Accounts → Sign in with Apple → Connect YouTube (Google "unverified app" screen → Advanced → continue) → the row shows your channel name.
+1. With no `.env`, Accounts shows "Sign-in isn't set up yet" and the Share button still works.
+2. Accounts → Sign in → Continue with email → type the code from the email → back on Accounts, signed in → Connect YouTube (Google "unverified app" screen → Advanced → continue) → the row shows your channel name.
 3. Home → Post a video → pick a short clip. It opens the Post screen (not "This video can't be posted.").
 4. Type a caption. The keyboard does not cover the caption field.
 5. Post → Preparing → Uploading % → Publishing → Done.

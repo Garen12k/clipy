@@ -1,5 +1,7 @@
 const mockSignInWithIdToken = jest.fn(async () => ({ error: null }));
 jest.mock("@supabase/supabase-js", () => ({ createClient: jest.fn(() => ({ auth: { signInWithIdToken: mockSignInWithIdToken, signOut: jest.fn(async () => ({ error: null })) } })) }));
+// jest-expo answers "yes, Expo Go": this file tests the installed app (the Expo Go branch is in supabaseSignIn.test.ts).
+jest.mock("expo", () => ({ isRunningInExpoGo: () => false }));
 import * as Apple from "expo-apple-authentication";
 
 const load = () => { let m!: typeof import("../supabase"); jest.isolateModules(() => { m = require("../supabase"); }); return m; };
@@ -23,7 +25,13 @@ test("Apple sign-in hands the identity token to Supabase; cancel is quiet; failu
   await expect(m.signInWithApple()).rejects.toThrow("Apple didn't return a sign-in token.");
   mockSignInWithIdToken.mockResolvedValueOnce({ error: { message: "Unacceptable audience in id_token" } } as never);
   (Apple.signInAsync as jest.Mock).mockResolvedValueOnce({ identityToken: "apple-jwt" });
-  await expect(m.signInWithApple()).rejects.toThrow("Unacceptable audience in id_token");
+  // Never Apple's or the server's own words: a plain sentence.
+  await expect(m.signInWithApple()).rejects.toThrow("Couldn't sign in.");
+  mockSignInWithIdToken.mockResolvedValueOnce({ error: { name: "AuthRetryableFetchError", message: "Network request failed", status: 0 } } as never);
+  (Apple.signInAsync as jest.Mock).mockResolvedValueOnce({ identityToken: "apple-jwt" });
+  await expect(m.signInWithApple()).rejects.toThrow("Couldn't reach Clipy. Check your connection.");
+  (Apple.signInAsync as jest.Mock).mockRejectedValueOnce(Object.assign(new Error("The authorization attempt failed for an unknown reason"), { code: "ERR_REQUEST_UNKNOWN" }));
+  await expect(m.signInWithApple()).rejects.toThrow("Couldn't sign in.");
 });
 
 test("signOut calls auth.signOut, and is a no-op without a client", async () => {
