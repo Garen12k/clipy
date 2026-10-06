@@ -151,3 +151,68 @@ test("a tile tapped while a pick is open does not open a second one", async () =
   expect(past()).toBe(0);
   expect(useToast.getState().message).toBeNull();
 });
+
+const diagram = (id: string) => (screen.getByTestId(`collage-diagram-${id}`).children as unknown as { props: { style: { width: number; height: number } } }[]).map((c) => c.props.style);
+
+test("the layout diagrams follow a tall frame: Big and two is big-on-top (its first cell spans the width)", async () => {
+  st().setProject({ ...base, aspectRatio: "9:16" });
+  await open(null);
+  const t = diagram("bigTwo");
+  expect(t[0].width).toBeGreaterThan(t[1].width * 1.5);
+  expect(t[0].height).toBeCloseTo(t[1].height, 5);
+});
+
+test("the layout diagrams follow a wide frame: Big and two is big-on-the-left (its first cell spans the height)", async () => {
+  st().setProject({ ...base, aspectRatio: "16:9" });
+  await open(null);
+  const w = diagram("bigTwo");
+  expect(w[0].height).toBeGreaterThan(w[1].height * 1.5);
+  expect(w[0].width).toBeCloseTo(w[1].width, 5);
+});
+
+test("tapping the layout a hand-moved cell shows still re-lays the cells that are in another layout, in one undo step", async () => {
+  const moved: Project = { ...two, layers: two.layers.map((l) => (l.id === "x1" ? { ...l, transform: { ...l.transform, x: 0.1 } } : l)) };
+  st().setProject(moved);
+  await open("x1");
+  await fireEvent.press(tile("Stacked"));
+  await fireEvent.press(screen.getByRole("button", { name: "Side by side" }));
+  expect(layers().map((l) => l.collage!.layout)).toEqual(["sideBySide", "sideBySide"]);
+  expect(layers()[0]).toBe(moved.layers[0]);
+  expect(past()).toBe(2);
+  await fireEvent.press(tile("Side by side"));
+  expect(past()).toBe(2);
+});
+
+test("while the collage is being made a spinner shows in a fixed slot and the tiles ignore taps", async () => {
+  let resolve: (v: unknown) => void = () => {};
+  pick.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+  await open(null);
+  expect(screen.queryByLabelText("Making the collage")).toBeNull();
+  expect(screen.getByTestId("collage-busy-slot")).toBeTruthy();
+  await fireEvent.press(tile("Stacked"));
+  expect(screen.getByLabelText("Making the collage")).toBeTruthy();
+  for (const name of tiles()) await fireEvent.press(tile(name));   // the kit Tile has no disabled state: a tap while busy does nothing
+  expect(pick).toHaveBeenCalledTimes(1);
+  await act(async () => { resolve(null); });
+  expect(screen.queryByLabelText("Making the collage")).toBeNull();
+});
+
+test("Border after one cell of the group was deleted moves the remaining cells and does not throw", async () => {
+  st().setProject({ ...three, layers: three.layers.filter((l) => l.id !== "y2") });
+  await open("y1");
+  await fireEvent(border(), "touchStart");
+  await fireEvent(border(), "touchMove", { v: 0.03 });
+  expect(layers().map((l) => l.collage!.border)).toEqual([0.03, 0.03]);
+});
+
+test("Replace photo -> video on a collage cell fits the video to the cell", async () => {
+  const { useClipMedia } = require("@/src/editor/useClipMedia");
+  const { renderHook } = require("@testing-library/react-native");
+  st().setProject(two);
+  pick.mockResolvedValueOnce([{ uri: "file:///v.mov", kind: "video", durationSec: 4, width: 1920, height: 1080 }]);
+  importMedia.mockResolvedValueOnce({ clips: [makeClip({ id: "tmp", width: 1920, height: 1080, sourceDuration: 4 })], failed: 0 });
+  const { result } = await renderHook(() => useClipMedia());
+  await act(async () => { await result.current.replaceMedia("x1"); });
+  expect(layers()[0]).toMatchObject({ id: "x1", kind: "video", width: 1920, height: 1080, transform: { scale: 0.5, x: -0.25, y: 0 } });
+  expect(layers()[0].crop).toEqual({ x: 0.420898, y: 0, w: 0.158203, h: 1 });
+});

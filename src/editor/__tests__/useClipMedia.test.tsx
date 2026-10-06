@@ -9,7 +9,10 @@ import { useEditorStore } from "@/src/editor/store";
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { useToast } from "@/src/ui/Toast";
-import { useClipMedia } from "../useClipMedia";
+import { openStrip, useToolStrip } from "../toolStrip";
+import { selectionKey } from "../toolbarContext";
+import { clipDuration } from "../model/timeline";
+import { newLayerStart, useClipMedia } from "../useClipMedia";
 
 const pick = pickMedia as jest.Mock;
 const importMedia = storage.importMedia as jest.Mock;
@@ -311,4 +314,55 @@ test("Replace on a collage cell that is in its place fits the new picture to the
   expect(s.project!.layers[0]).toMatchObject({ id: "x1", width: 1920, height: 1080, crop: { x: 0.420898, y: 0, w: 0.158203, h: 1 }, transform: { scale: 0.5, x: -0.25, y: 0 } });
   expect(s.project!.layers[1].crop).toEqual({ x: 0.25, y: 0, w: 0.5, h: 1 });
   expect(s.past).toHaveLength(1);
+});
+
+describe("makeCollage and the open tool", () => {
+  const state = () => useEditorStore.getState();
+  const shot = (n: number) => ({ uri: `file:///p${n}.jpg`, kind: "photo", durationSec: 0, width: 1080, height: 1920 });
+  const setup = () => {
+    state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [{ ...makePhotoClip({ id: "o" }), start: 0 }] }));
+    pick.mockResolvedValueOnce([shot(1), shot(2)]);
+    importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "n1" }), makePhotoClip({ id: "n2" })], failed: 0 });
+  };
+  const run = async () => {
+    const { result } = await renderHook(() => useClipMedia());
+    await act(async () => { await result.current.makeCollage("sideBySide"); });
+  };
+
+  test("the Collage panel still open stays open, now on the new cell", async () => {
+    setup();
+    state().select("o");
+    openStrip("collage");
+    await run();
+    expect(state().selectedClipId).toBe("n1");
+    expect(useToolStrip.getState().open).toEqual({ id: "collage", key: selectionKey(state()) });
+  });
+
+  test("another tool opened meanwhile is not re-keyed onto the new cell", async () => {
+    setup();
+    state().select("o");
+    openStrip("collage");
+    const { result } = await renderHook(() => useClipMedia());
+    pick.mockReset();
+    pick.mockImplementationOnce(async () => { openStrip("speed"); return [shot(1), shot(2)]; });
+    const keyBefore = useToolStrip.getState().open;
+    await act(async () => { await result.current.makeCollage("sideBySide"); });
+    const open = useToolStrip.getState().open!;
+    expect(open.id).toBe("speed");
+    expect(open.key).toBe(keyBefore!.key);
+    expect(open.key).not.toBe(selectionKey(state()));
+  });
+
+  test("near the end of the project the collage starts where newLayerStart puts it, within the layer rules", async () => {
+    state().seek(3.9);
+    const expected = newLayerStart(state().project!, 3.9);
+    pick.mockResolvedValueOnce([shot(1), shot(2)]);
+    importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "n1" }), makePhotoClip({ id: "n2" })], failed: 0 });
+    await run();
+    const ls = state().project!.layers;
+    expect(expected).toBeCloseTo(2, 5);
+    expect(ls.map((l) => l.start)).toEqual([expected, expected]);
+    expect(ls.length).toBeLessThanOrEqual(LAYER_LIMITS.max);
+    for (const l of ls) expect(clipDuration(l)).toBeGreaterThanOrEqual(LAYER_LIMITS.minDuration);
+  });
 });

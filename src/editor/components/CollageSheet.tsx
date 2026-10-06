@@ -10,7 +10,8 @@ import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { Slider } from "@/src/ui/Slider";
 import { Tile } from "@/src/ui/Tile";
-import { ToolPanel } from "@/src/ui/ToolPanel";
+import { Spinner } from "@/src/ui/Spinner";
+import { PANEL, ToolPanel } from "@/src/ui/ToolPanel";
 import { StripSlider, StripTiles } from "@/src/ui/ToolStrip";
 
 /** The square a tile draws its layout in (points), and the border it is drawn with so the cells read as separate. */
@@ -19,11 +20,11 @@ const DIAGRAM_BORDER = 0.06;
 /** How far the frame's shape may be from the one a collage was laid out for before "Fit to frame" is offered. */
 const SAME_SHAPE = 1e-6;
 
-/** A layout drawn small, from the same cells the collage is made of. The inset's small cell is drawn lighter so it shows on the big one. */
-function LayoutDiagram({ layout, selected }: { layout: CollageLayoutId; selected: boolean }) {
+/** A layout drawn small, from the same cells the collage is made of, in the frame's orientation (a tall frame stacks Big and two). The inset's small cell is drawn lighter so it shows on the big one. */
+function LayoutDiagram({ layout, selected, aspect }: { layout: CollageLayoutId; selected: boolean; aspect: number }) {
   return (
     <View testID={`collage-diagram-${layout}`} style={{ width: DIAGRAM, height: DIAGRAM }}>
-      {collageCells(layout, 1, DIAGRAM_BORDER).map((c, i) => (
+      {collageCells(layout, aspect, DIAGRAM_BORDER).map((c, i) => (
         <View key={i} style={{ position: "absolute", left: c.x * DIAGRAM, top: c.y * DIAGRAM, width: c.w * DIAGRAM, height: c.h * DIAGRAM,
           backgroundColor: layout === "inset" && i === 1 ? theme.colors.text : selected ? theme.colors.accent : theme.colors.textMuted }} />
       ))}
@@ -42,6 +43,7 @@ export function CollageSheet({ clipId, visible, onClose }: { clipId: string | nu
   const clip = useItemClip(clipId);
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const { makeCollage, busy } = useClipMedia();
+  const aspect = useEditorStore((s) => (s.project ? frameAspect(s.project) : 1));
   const tag = clip?.collage ?? null;
   const group = tag?.group ?? null;
   // A cell that "Fit to frame" would move: in its place, and laid out for another frame shape. (A cell moved by hand never is: it
@@ -55,14 +57,18 @@ export function CollageSheet({ clipId, visible, onClose }: { clipId: string | nu
 
   const pick = (id: CollageLayoutId) => {
     if (!tag) { if (!busy) void makeCollage(id); return; }
-    if (tag.layout === id) return;   // already this layout: no buzz, no undo step
-    haptic("light");
+    if (busy) return;
+    haptic("light");   // a re-lay that changes nothing (every cell already there) is the same project: `apply` adds no undo step
     apply((p) => relayCollage(p, tag.group, { layout: id }));
   };
 
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Collage" size="compact" scroll={false}
       action={tag && stale ? { label: "Fit to frame", onPress: () => { haptic("light"); apply((p) => relayCollage(p, tag.group, {})); } } : undefined}>
+      {/* A fixed slot over the header's free middle: the spinner shows in it while the collage is being made, and nothing moves. */}
+      <View testID="collage-busy-slot" pointerEvents="none" style={{ position: "absolute", top: -PANEL.header, left: 0, right: 0, height: PANEL.header, alignItems: "center", justifyContent: "center" }}>
+        {busy ? <Spinner label="Making the collage" /> : null}
+      </View>
       {/* The kit's rows bring their own gutter: the panel's is taken back so they line up with every strip. */}
       <View style={{ marginHorizontal: -theme.space.gutter }}>
         <StripTiles>
@@ -70,7 +76,7 @@ export function CollageSheet({ clipId, visible, onClose }: { clipId: string | nu
             const selected = tag?.layout === id;
             return (
               <Tile key={id} label={COLLAGE_LAYOUTS[id].label} selected={selected} onPress={() => pick(id)}>
-                <LayoutDiagram layout={id} selected={selected} />
+                <LayoutDiagram layout={id} selected={selected} aspect={aspect} />
               </Tile>
             );
           })}

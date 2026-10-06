@@ -4,7 +4,7 @@ import { addClips, addLayer, replaceClipMedia } from "@/src/editor/model/ops";
 import { clipDuration, findItem, totalDuration } from "@/src/editor/model/timeline";
 import { COLLAGE_CELLS, LAYER_LIMITS, newPhotoClip, newVideoClip, type Clip, type CollageLayoutId, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { rekeyStrip } from "@/src/editor/toolStrip";
+import { rekeyStrip, useToolStrip } from "@/src/editor/toolStrip";
 import { newId } from "@/src/lib/id";
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
@@ -149,7 +149,7 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
    * The Collage tool: n picked photos / videos become the layout's cells, as layers starting at the playhead (as it was when the
    * layout was tapped; see `newLayerStart`). Refused with a toast before the picker (no layer room) or before anything is copied
    * (too few, too many videos, a third video on screen); a failed import adds nothing. One undo step; the first cell is selected and
-   * the open panel is re-keyed onto it, so it stays open on the new collage.
+   * the Collage panel, if still the open tool, is re-keyed onto it so it stays open on the new collage.
    */
   const makeCollage = (layout: CollageLayoutId) => withLock(async () => {
     const pressed = useEditorStore.getState();
@@ -184,7 +184,8 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     if (next === project) { tell(collageRefusal(project, clips, layout, start) ?? "empty", clips.length); return; }
     apply(() => next);
     select(clips[0].id);
-    rekeyStrip();
+    // Only the Collage panel follows the selection: a tool opened meanwhile belongs to the item it was opened on.
+    if (useToolStrip.getState().open?.id === "collage") rekeyStrip();
   }, ADD_FAILED);
 
   return { addMedia, replaceMedia, addOverlay, makeCollage, busy };
