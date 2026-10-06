@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, View } from "react-native";
+import { Alert, FlatList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AspectRatio } from "@/src/editor/model/types";
 import { AFTER_PICKER_MS, AspectRatioSheet } from "@/src/projects/AspectRatioSheet";
@@ -13,10 +13,12 @@ import type { PickedAsset, ProjectSummary } from "@/src/projects";
 import { pickVideoForPost } from "@/src/publish/pickVideo";
 import { theme } from "@/src/theme/theme";
 import { EmptyState } from "@/src/ui/EmptyState";
+import { EnterView } from "@/src/ui/Enter";
 import { haptic } from "@/src/ui/haptics";
 import { IconButton } from "@/src/ui/IconButton";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { Screen } from "@/src/ui/Screen";
+import { Spinner } from "@/src/ui/Spinner";
 import { Title } from "@/src/ui/Text";
 import { ToastHost } from "@/src/ui/Toast";
 
@@ -72,21 +74,26 @@ export default function ProjectsScreen() {
 
   return (
     <Screen>
-      <View style={{ paddingLeft: theme.space.lg, paddingRight: theme.space.sm, marginBottom: theme.space.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Title size={26} accessibilityRole="header">Your voyages</Title>
+      <View testID="home-header" style={{ height: theme.size.row, paddingLeft: theme.space.gutter, paddingRight: theme.space.sm, marginBottom: theme.space.sm, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Title size={theme.type.screen} accessibilityRole="header">Your voyages</Title>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <IconButton name="paper-plane" accessibilityLabel="Post a video" onPress={onPostVideo} />
-          <IconButton name="person-circle" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
+          <IconButton name="paper-plane-outline" accessibilityLabel="Post a video" onPress={onPostVideo} />
+          <IconButton name="person-circle-outline" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
         </View>
       </View>
-      {loading ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 40 }} /> : projects.length === 0 ? (
+      {loading ? <Spinner style={{ marginTop: theme.space.xxl }} /> : projects.length === 0 ? (
         <EmptyState emoji="🏝️" title="No clips yet" hint="Pick some photos or videos from your library and start your first edit." />
       ) : (
-        <FlatList data={projects} numColumns={2} keyExtractor={(p) => p.id} contentContainerStyle={{ padding: theme.space.sm, paddingBottom: 120 + insets.bottom }}
-          renderItem={({ item, index }) => <ProjectCard summary={item} index={index} onPress={() => (item.broken ? setActionsFor(item) : router.push(`/editor/${item.id}`))} onLongPress={() => { haptic("light"); setActionsFor(item); }} />} />
+        // The LIST eases in, once, when it first appears: EnterView animates on mount only, so a refresh, a rename, a duplicate or a
+        // delete never replays it, and no card animates on its own. Cards sit on the 16-pt gutter: 8 from the list + 8 from the cell.
+        <EnterView style={{ flex: 1 }}>
+          <FlatList data={projects} numColumns={2} keyExtractor={(p) => p.id}
+            contentContainerStyle={{ paddingHorizontal: theme.space.sm, paddingBottom: theme.size.control + theme.space.xxl + theme.space.xl + insets.bottom }}
+            renderItem={({ item }) => <ProjectCard summary={item} onPress={() => (item.broken ? setActionsFor(item) : router.push(`/editor/${item.id}`))} onLongPress={() => { haptic("light"); setActionsFor(item); }} />} />
+        </EnterView>
       )}
       <View style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + theme.space.lg, alignItems: "center" }}>
-        <PrimaryButton title="New clip" icon={<Ionicons name="add" size={18} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
+        <PrimaryButton title="New clip" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
       </View>
       <AspectRatioSheet assets={pending} onCancel={() => setPending(null)} onCreate={onCreate} />
       <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onDelete={confirmDelete} />

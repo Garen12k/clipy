@@ -279,6 +279,8 @@ describe("main bar entries", () => {
     expect(useToolStrip.getState().open).toMatchObject({ id: "ratio", key: "none" });
     await fireEvent.press(btn("1:1"));
     expect(st().project?.aspectRatio).toBe("1:1");
+    expect(useToolStrip.getState().open).toMatchObject({ id: "ratio" });   // stays open: shapes are tried one after another
+    await closeTool();
     expect(useToolStrip.getState().open).toBeNull();
   });
 });

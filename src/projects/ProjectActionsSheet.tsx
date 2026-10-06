@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { QuietButton } from "@/src/ui/QuietButton";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Sheet } from "@/src/ui/Sheet";
 import type { ProjectSummary } from "./storage";
@@ -27,7 +28,7 @@ export function ProjectActionsSheet({ project, onClose, onRename, onDuplicate, o
       <View style={{ gap: theme.space.md }}>
         {shown?.broken ? null : <SecondaryButton title="Rename" onPress={run(onRename, true)} />}
         {shown?.broken ? null : <SecondaryButton title="Duplicate" onPress={run(onDuplicate, false)} />}
-        <SecondaryButton title="Delete" danger onPress={run(onDelete, true)} />
+        <QuietButton title="Delete" danger onPress={run(onDelete, true)} />
       </View>
     </Sheet>
   );

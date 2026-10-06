@@ -1,13 +1,12 @@
-import { TextInput, View } from "react-native";
+import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
+import { Field } from "@/src/ui/Field";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 import { clientAdapters } from "../adapters";
 import { PLATFORMS, type PlatformId } from "../platforms";
 
-/** Same look as the editor's text fields (TextPanel / NumField). */
-const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, borderRadius: theme.radius.chip, fontFamily: theme.fonts.body, padding: 10, fontSize: 16 } as const;
 const TITLE_MAX = 100;
 const PRIVACY = [{ value: "public", label: "Public" }, { value: "unlisted", label: "Unlisted" }, { value: "private", label: "Private" }] as const;
 
@@ -25,14 +24,14 @@ export function PostOptionsSheet({ platform, options, onChange, onClose }: Props
       {platform === "youtube" ? (
         <View style={{ gap: theme.space.lg }}>
           <View style={{ gap: theme.space.xs }}>
-            <Body muted style={{ fontSize: 12 }}>Title</Body>
-            <TextInput accessibilityLabel="YouTube title" value={title} maxLength={TITLE_MAX} onChangeText={(t) => onChange({ title: t })}
-              style={field} placeholder="Uses your caption" placeholderTextColor={theme.colors.textMuted} returnKeyType="done" />
-            <Body muted style={{ fontSize: 12, alignSelf: "flex-end" }}>{`${title.length} / ${TITLE_MAX}`}</Body>
+            <Body muted style={{ fontSize: theme.type.small }}>Title</Body>
+            <Field accessibilityLabel="YouTube title" value={title} maxLength={TITLE_MAX} onChangeText={(t) => onChange({ title: t })}
+              placeholder="Uses your caption" returnKeyType="done" />
+            <Body muted style={{ fontSize: theme.type.small, alignSelf: "flex-end" }}>{`${title.length} / ${TITLE_MAX}`}</Body>
           </View>
           <View style={{ gap: theme.space.sm }}>
-            <Body muted style={{ fontSize: 12 }}>Who can see it</Body>
-            <View style={{ flexDirection: "row", gap: theme.space.md }}>
+            <Body muted style={{ fontSize: theme.type.small }}>Who can see it</Body>
+            <View style={{ flexDirection: "row", gap: theme.space.sm }}>
               {PRIVACY.map((p) => <Chip key={p.value} label={p.label} selected={options.privacy === p.value} onPress={() => onChange({ privacy: p.value })} />)}
             </View>
           </View>

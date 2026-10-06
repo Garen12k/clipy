@@ -1,6 +1,6 @@
 import { withDelay, withSpring, withTiming } from "react-native-reanimated";
 import { theme } from "@/src/theme/theme";
-import { EASE, enterTo, fadeOutTo, liftTo, pressTo, timing } from "../motion";
+import { EASE, enterTo, fadeOutTo, liftTo, pressTo, sheetTo, timing } from "../motion";
 
 jest.mock("react-native-reanimated", () => {
   const m = require("react-native-reanimated/mock");
@@ -49,4 +49,13 @@ test("enter: to 1 in the base duration, optionally delayed; fade out: to 0, fast
   expect(fadeOutTo(true)).toBe(0);
   expect(T).not.toHaveBeenCalled();
   expect(D).not.toHaveBeenCalled();
+});
+
+test("sheet: the sheet spring to 0; with Reduce Motion the panel is placed, not animated", () => {
+  expect(sheetTo(false)).toBe(0);
+  expect(S).toHaveBeenLastCalledWith(0, theme.motion.sheet);
+  S.mockClear(); T.mockClear();
+  expect(sheetTo(true)).toBe(0);
+  expect(S).not.toHaveBeenCalled();
+  expect(T).not.toHaveBeenCalled();
 });

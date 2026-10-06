@@ -59,7 +59,7 @@ test("Transition: chips over one slider row; the last clip shows its message in 
   expect(screen.getByText("No clip after this one")).toBeTruthy();
 });
 
-test("a pick is one undo step and a re-pick is none; a ratio pick closes", async () => {
+test("a pick is one undo step and a re-pick is none; a ratio pick leaves the strip open", async () => {
   const onClose = jest.fn();
   const view = await render(<MaskSheet clipId="a" visible onClose={() => {}} />);
   await fireEvent.press(screen.getByRole("button", { name: "Circle" }));
@@ -68,5 +68,5 @@ test("a pick is one undo step and a re-pick is none; a ratio pick closes", async
   await view.rerender(<RatioSheet visible onClose={onClose} />);
   await fireEvent.press(screen.getByRole("button", { name: "1:1" }));
   expect(st().project?.aspectRatio).toBe("1:1");
-  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(onClose).not.toHaveBeenCalled();
 });

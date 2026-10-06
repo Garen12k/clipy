@@ -9,6 +9,7 @@ import { captureRef, releaseCapture } from "react-native-view-shot";
 import { frameUriAt } from "@/src/editor/coverFrame";
 import { makeClip, makeProject, type Cover } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { theme } from "@/src/theme/theme";
 import { CoverSheet } from "../components/CoverSheet";
 
 const frame = frameUriAt as jest.Mock;
@@ -291,4 +292,18 @@ test("an Auto project's cover has the first clip's shape; a wide cover is saved 
   await press("Save to Photos");
   await waitFor(() => expect(screen.getByText("Saved to Photos")).toBeTruthy());
   expect(capture.mock.calls[0][1]).toMatchObject({ width: 840, height: 360 });   // 2520 × 1080
+});
+
+describe("round 2 look (behaviour unchanged)", () => {
+  test("the title is the kit field, the slider's rest track is the kit's colour, Reset is text only, Done is the one gold button", async () => {
+    await open();
+    expect(field()).toHaveStyle({ backgroundColor: theme.elevation.tile, fontSize: theme.type.input, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md });
+    expect(field()).toHaveProp("placeholder", "Add a title");
+    expect(slider()).toHaveProp("maximumTrackTintColor", theme.colors.sea);
+    expect(screen.getByText("0 / 40")).toHaveStyle({ fontSize: theme.type.small });
+    expect(screen.getByRole("button", { name: "Reset" })).not.toHaveStyle({ borderWidth: 1.5 });
+    expect(saveButton()).toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
+    expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Done");
+  });
 });

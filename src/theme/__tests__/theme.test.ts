@@ -8,16 +8,31 @@ test("Grand Voyage tokens", () => {
     hairline: "rgba(217,179,106,0.45)", sea: "#1C6E9E", seaLight: "#2E86AB", danger: "#E5484D",
     laneText: "#D9B36A", laneSticker: "#E86A7A", laneMusic: "#3BA7C9",
   });
-  expect(theme.radius).toEqual({ card: 12, chip: 8, tile: 7, sheet: 18, pill: 999, box: 14 });
+  expect(theme.radius).toEqual({ card: 12, chip: 8, tile: 7, sheet: 18, pill: 999, box: 14, cover: 16 });
   expect(theme.fonts).toEqual({ title: "Oswald_700Bold", body: "Montserrat_400Regular", bodySemi: "Montserrat_600SemiBold", bodyBold: "Montserrat_800ExtraBold" });
   expect(theme.motion).toMatchObject({ press: 120, fade: 200, stagger: 40, minLoading: 1200, fontTimeout: 5000 });
   expect(theme.space).toEqual({ xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, gutter: 16 });
-  expect(theme.size).toEqual({ touch: 44, control: 48, controlCompact: 36, iconButton: 40, toolBox: 44, toolColumn: 72, chip: 36, chipCompact: 28, row: 48, header: 44, done: 32, icon: { sm: 16, md: 20, lg: 24 } });
-  expect(theme.type).toEqual({ micro: 11, small: 12, label: 13, body: 14 });
+  expect(theme.size).toEqual({ touch: 44, control: 48, controlCompact: 36, iconButton: 40, toolBox: 44, toolColumn: 72, chip: 36, chipCompact: 28, row: 48, header: 44, done: 32, listRow: 56, avatar: 32, ring: 120, icon: { sm: 16, md: 20, lg: 24 } });
+  expect(theme.type).toEqual({ micro: 11, small: 12, label: 13, body: 14, input: 16, heading: 18, title: 20, screen: 26 });
   expect(theme.elevation).toEqual({ page: theme.colors.bg, bar: theme.colors.surfaceBar, tile: theme.colors.surfaceAlt, lifted: theme.colors.surfaceHigh });
   expect(theme.ringClear).toEqual({ borderWidth: theme.ring.borderWidth, borderColor: "transparent" });
   expect(theme.motion).toMatchObject({ fast: 120, base: 180, slow: 240, enterShift: 8, pressScale: 0.96, selectedScale: 1.03, curve: [0.2, 0, 0, 1], spring: { mass: 1, damping: 40, stiffness: 700 } });
   for (const ms of [theme.motion.fast, theme.motion.base, theme.motion.slow]) expect(ms).toBeLessThanOrEqual(250);
+  // The sheet spring is critically damped (damping = 2·√(stiffness·mass)): it cannot overshoot. Mass is explicit — Reanimated 4's default is 4.
+  expect(theme.motion.sheet).toEqual({ mass: 1, damping: 40, stiffness: 400 });
+  expect(theme.motion.sheet.damping).toBe(2 * Math.sqrt(theme.motion.sheet.stiffness * theme.motion.sheet.mass));
+});
+
+test("dangerText is red text that reads (4.5:1) on the page and on a bar; danger stays the fill / border red", () => {
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a: string, b: string) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  expect(theme.colors.danger).toBe("#E5484D");
+  expect(theme.colors.dangerText).toBe("#F47A7E");
+  expect(ratio(theme.colors.dangerText, theme.elevation.bar)).toBeGreaterThanOrEqual(4.5);
+  expect(ratio(theme.colors.dangerText, theme.elevation.page)).toBeGreaterThanOrEqual(4.5);
 });
 
 test("audio lane colours: one per kind, all different from the other lanes", () => {

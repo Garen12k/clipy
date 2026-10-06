@@ -84,9 +84,13 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an 
 
 **Motion.** Buttons dip when pressed; a strip or panel fades and rises in, the row of tools fades in when it changes, messages ease in and out. Closing is instant. Nothing lasts longer than a quarter of a second, only opacity and position change (never layout next to the video), and every animation is built in `src/ui/motion.ts`. With Reduce Motion on, nothing slides or grows (`src/ui/useReducedMotion.ts`); buttons still react.
 
+**Screens.** The home, export, post and accounts screens use the same building blocks as the editor: `Field` (the one text box), `Card` (the one card surface) and `Spinner`. Each screen or state has at most one gold button (Accounts has none: Connect and Reconnect are outlined, Disconnect and Sign out are text only). A project card shows its cover with the length at the top right and the name over a dark fade; the project list eases in once when it first appears.
+
+**Moving between screens.** A project and the Post / Accounts screens slide in from the side, Export rises from the bottom (the standard iOS movements; the options live in `src/navigation/screenOptions.ts`). Swiping back works everywhere except while an export renders or uploads run; in the editor only the left edge starts the swipe. Pop-up sheets rise on a spring that cannot bounce and are placed at once with Reduce Motion.
+
 ## Layout
 
-- `app/` — screens (Expo Router): `index.tsx`, `editor/[id]/index.tsx`, `editor/[id]/export.tsx`
+- `app/` — screens (Expo Router): `index.tsx`, `post.tsx`, `accounts.tsx`, `oauth.tsx`, `editor/[id]/index.tsx`, `editor/[id]/export.tsx`
 - `src/editor/` — model (types/ops/timeline/`overlayLayout.ts`), store, and components (PreviewPlayer, Timeline,
   ClipThumbStrip, TrimHandles, ReorderHandle, EditorToolbar, RatioSheet, TrimSheet (a strip), text style panel,
   music lane). `src/editor/model/overlayLayout.ts` computes text overlay position/size as fractions of
@@ -94,6 +98,7 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an 
   same formula for the native renderer.
 - `src/projects/` — project storage behind `FsAdapter`/`expoFs`, and the Projects screen pieces
 - `src/export/` — export estimate, `useExport`, `ExportScreenBody`
+- `src/navigation/` — the screen-transition options (`screenOptions.ts`)
 - `src/theme/` — theme tokens
 - `src/ui/` — shared UI primitives
 - `modules/clipy-video/` — Swift native module (`ios/`, `ios/Tests/`) and its TypeScript wrapper (`index.ts`)
@@ -185,7 +190,7 @@ Every row except the first has a **back arrow** at the left that clears the sele
 
 - **Auto** gives the frame the shape of the project's first clip (photo or video, as it is displayed), so that clip fills the frame exactly. It follows the first clip: reorder, delete or replace it and the frame changes with it. The shape is kept between 9:21 and 21:9; a project without clips is 9:16. A clip's own Transform or Crop does not change the frame.
 - **When a project is created**: after you pick photos or videos, a sheet asks for the aspect ratio with Auto already chosen. **Create** makes the project; closing the sheet makes nothing. Adding clips to an existing project does not ask.
-- **In the editor**: the Ratio tool (the row of tools, or the pill beside the play button, which shows "Auto" or the ratio) is a strip of nine tiles, each drawn in its shape. A pick is one undo step and closes the strip.
+- **In the editor**: the Ratio tool (the row of tools, or the pill beside the play button, which shows "Auto" or the ratio) is a strip of nine tiles, each drawn in its shape. A pick is one undo step; the strip stays open so you can try several shapes, and ✓ closes it.
 - Texts and stickers keep their place (positions are fractions of the frame). Projects made before this keep the ratio they had.
 - One function turns the choice into a number: `frameAspect(project)` in `src/editor/model/types.ts`. The preview, the clip layout, the cover and the export all use it; nothing else looks at "auto".
 - **Export size**: the short side is the resolution (720 / 1080 / 2160), the long side follows the shape, both rounded to even numbers - `renderSize` in `src/export/estimate.ts`, mirrored by `ExportSession.renderSize` (keep them identical; `src/export/__tests__/renderSize.swift.test.ts`). 9:16, 1:1 and 16:9 export at exactly the sizes they always did. A 4K frame wider than about 1.9:1 is more than the H.264 encoder takes (its longer side would be above 4096 pixels) and is scaled down, same shape (21:9 at 4K is 4092 x 1754). The file-size estimate and the bitrate go by resolution only, as before.

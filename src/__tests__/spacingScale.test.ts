@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { join, relative, sep } from "path";
 
 const ROOT = join(__dirname, "..", "..");
-const DIRS = ["src/ui", "src/editor/components"];
+const DIRS = ["src/ui", "src/editor/components", "src/projects", "src/export", "src/publish", "app"];
 /**
  * Files that still hold raw spacing numbers, with exactly how many. One file per line: a task that fixes a file deletes (or lowers)
  * that file's line and no other. The count is exact — fewer hits than listed fails too, so the table cannot go stale.
@@ -10,7 +10,6 @@ const DIRS = ["src/ui", "src/editor/components"];
 const ALLOW: Record<string, { max: number; why: string }> = {
   "src/editor/components/AudioBar.tsx": { max: 2, why: "HANDLE_W + 2 and the warning dot's padding: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/ClipThumbStrip.tsx": { max: 5, why: "the 10-pt badges on a thumbnail: 1 and 2 pt, below the 4-pt scale" },
-  "src/editor/components/CoverSheet.tsx": { max: 1, why: "the Cover sheet is out of scope in round 1" },
   "src/editor/components/EffectPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/LayerBar.tsx": { max: 2, why: "HANDLE_W + 2 and the warning dot's padding: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/OverlayPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
@@ -183,14 +182,14 @@ test("the report: says per file whether to use a token, lower the count or delet
   expect(out[4]).toMatch(/^gone\.tsx: .*Delete its line from ALLOW/);
 });
 
-test("no raw padding / margin / gap numbers in the kit and the editor's components, outside the allow-table", () => {
+test("no raw padding / margin / gap numbers in the kit, the editor's components, the home / export / post screens and app/, outside the allow-table", () => {
   const found: Record<string, string[]> = {};
   let files = 0;
   for (const dir of DIRS) for (const file of walk(join(ROOT, dir))) {
     files++;
     found[relative(ROOT, file).split(sep).join("/")] = rawSpacing(readFileSync(file, "utf8"));
   }
-  expect(files).toBeGreaterThan(50);       // the scan really read the two folders
+  expect(files).toBeGreaterThan(100);      // the scan really read the six folders
   const wrong = problems(found, ALLOW);
   if (wrong.length > 0) {
     throw new Error(`Spacing comes from theme.space (src/theme/theme.ts), never from a raw number. ${wrong.length} file(s) to fix:\n\n  - ${wrong.join("\n\n  - ")}\n\n`
@@ -198,11 +197,10 @@ test("no raw padding / margin / gap numbers in the kit and the editor's componen
   }
 });
 
-test("the allow-table is at its agreed minimum: timeline-lane geometry below the 4-pt scale, and the Cover sheet", () => {
+test("the allow-table is at its agreed minimum: timeline-lane geometry below the 4-pt scale, and nothing else", () => {
   expect(Object.fromEntries(Object.entries(ALLOW).map(([file, a]) => [file, a.max]))).toEqual({
     "src/editor/components/AudioBar.tsx": 2,
     "src/editor/components/ClipThumbStrip.tsx": 5,
-    "src/editor/components/CoverSheet.tsx": 1,
     "src/editor/components/EffectPill.tsx": 1,
     "src/editor/components/LayerBar.tsx": 2,
     "src/editor/components/OverlayPill.tsx": 1,
