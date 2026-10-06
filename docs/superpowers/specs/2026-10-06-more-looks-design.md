@@ -1,7 +1,7 @@
 # More transitions, filters and effects: design
 
 **Date:** 2026-10-06
-**Status:** Approved by the user 2026-10-06
+**Status:** Implemented 2026-10-06 (Swift export unverified until an EAS build exists; on-device confirmation by the user pending)
 **Builds on:** CapCut group B (`docs/superpowers/specs/2026-10-03-capcut-b-look-design.md`: filter strength, Adjust, timeline effects, eleven transitions, the "Preview" tag), group E2 (`2026-10-04-capcut-e2-blend-chroma-regions-design.md`: the two box effects), the strips (`2026-10-05-editing-ui-r1-toolbar-strips-design.md`) and the text-looks round (`2026-10-06-text-looks-stickers-design.md`, schema v15). Schema v15 → **v16**. No new package, no new asset.
 
 ## 1. What the user gets
@@ -68,6 +68,49 @@ A new test file, `src/editor/__tests__/looks.frozen.test.ts`, written **first** 
 4. **Files nobody edits:** `adjust.ts`, `Adjust.swift`, `FilterLayer.tsx`, `AdjustLayer.tsx` — whole-file checksums.
 
 New Swift is therefore **inserted**, never interleaved: new `blend` cases go between the Spin and the Blur branch, new effect cases after the Mosaic box branch, new helpers after the last existing one or in new files.
+
+## 3a. As built
+
+Branch `more-looks`, one commit per task (plan: `docs/superpowers/plans/2026-10-06-more-looks.md`). Ten of the thirty originally offered items already existed, so the approved final list is: transitions Cover left, Reveal left, Cover up, Reveal down, Circle open, Circle close, Diagonal wipe, Clock wipe, Pixelate, White flash; filters Kodak, Fuji, Matte, Bleach, Dusk, Moody, Cinema (id `tealOrange`), Blush, Grit, Silver, Indigo, Drama; effects Film burn, Lens flare, Dust, Heartbeat, Hue shift, Mirror, Soft edges, Strobe. The picker totals are 32 filters with None, 20 effects and 21 transitions with None. No new package and no new asset.
+
+| Task | Commit | What |
+|---|---|---|
+| 1 | `79461bd` | Schema 16 (the migration adds nothing, so an older build refuses the file instead of silently dropping new ids), ids, labels, icons, Swift id lists with pass-through cases, `looks.frozen.test.ts` |
+| 2 | `518ec5c` | Twelve filters as rows in `filterRecipes.ts` ↔ `FilterRecipes.swift` over the unchanged Adjust pipeline, plus one new primitive (split tone); preview computed from the row |
+| 4 | `e950372` | Transition geometry as a new mirrored pair `transitionMath.ts` ↔ `TransitionMath.swift`; preview curtains |
+| 3 | `a124279` | Effect maths for the eight (`effectMath.ts` ↔ `EffectMath.swift`, appended), preview scale, layer and shapes |
+| 7 | `d51a832` | 32 filters, 20 effects, 21 transitions in the pickers; the Filter and Transition rows open at the selected item (offset computed once per opening) |
+| 6 | `ab6360d` | `TransitionLayer` curtains for six transitions plus the diagonal; a white dip for the flash; the Preview tag's truth table |
+| 5 | `d905ce6` | `EffectLayer` shapes for Film burn, Lens flare, Soft edges and Dust; Heartbeat and Strobe through the existing paths |
+| 9 | `a9b6be1` | Swift blends for the ten transitions (`TransitionMasks.swift`, uncompiled) |
+| 8 | `f781ce9` | Swift renderers for the eight effects (uncompiled) |
+| 10 | this commit | Docs, README first-build list, device checklist |
+
+(The commit order on the branch is 1, 2, 4, 3, 7, 6, 5, 9, 8 because the tasks ran in parallel.)
+
+### What the preview shows
+
+- **As in the export:** Heartbeat, Strobe, White flash.
+- **Roughly:** the twelve filters (a tint and a saturation computed from the row), Film burn, Lens flare, Soft edges, Dust, and Cover left / Reveal left / Cover up / Reveal down / Circle open / Circle close / Diagonal wipe as a moving black edge. The preview never shows two clips, so the other clip is black; Cover and Reveal in one direction look the same.
+- **Tag only:** Hue shift, Mirror; Clock wipe and Pixelate show the old dip to black.
+- Filter and Transition rows open at the selected item. The Blend, Aspect ratio, Animation and Speed strips still recompute their offset on each pick (a known follow-up). "Kodak" and "Fuji" are brand names to rename before any public release.
+
+### Deviations the tasks reported
+
+1. **Task 1.** `looks.frozen.test.ts` wraps its tests in a nine-line `frozen()` helper whose failure text says an existing look was changed (literals, stretches and checksums as briefed). `src/editor/model/__tests__/chroma.parity.test.ts` (line 258, not in the plan's file list) read the mosaic branch up to `default:`, which now swallowed the eight pass-through cases; it reads `branch("mosaicBox")` now. Pinned version numbers and counts were updated by hand in `migrate.test.ts`, `types.{audio,clip,layers,layers2,motion,polish,speed,text,look}.test.ts`, `effects.test.ts`, `EffectSheet.test.tsx` and `strips.r2.test.tsx` (expectations 15 → 16, 11 → 21 transitions, 12 → 20 effects, 20 → 32 filters). `noHexLiterals.test.ts` gained two allow-list entries (`filterRecipes.ts`, `transitionMath.ts`). The 20 old filter ids, 11 old transition ids and 12 old effect ids keep their order and recipes.
+2. **Task 2.** Two tests beyond the brief (every row passes the Adjust clamp unchanged; half strength is half way). The test of the registry in `effects.test.ts` sat at lines 84-86, not 79-81. Observation: the old Warm / Cool filters and the Adjust slider use opposite temperature directions (README item 1); the new filters follow the slider.
+3. **Task 3.** Every new function is total (a non-finite input gives the rest value): each ends in `within(value, lo, hi, rest)` and uses `calmEnvelope`; `mirrorMix` is written with nested `within` so `min` never sees a NaN. A strength above 1 is effectively capped. The dust opacity is clamped like `effectShapes`. Two extra tests and two extra parity lines. All 40 vectors of the brief were recomputed independently and kept.
+4. **Task 4.** Every transition function starts with a mirrored `unitProgress` clamp (NaN → 0); the scalar, slide and iris vector tables grew (13 → 22, 7 → 15, 4 → 8) to cover ends and out-of-range input; the Swift test compares with a 1e-12 tolerance; `slantCurtain` also returns the empty square for a non-positive size or a non-finite edge; four XCTests added.
+5. **Task 5.** None. **Task 6.** Tests only: a block for both ends of all ten and for the middle against the maths (33 tests in `TransitionLayer.test.tsx`). **Task 7.** None.
+6. **Task 8.** The dust scratch opacity uses `EffectMath.within` instead of `min(1, …)`; `specks` has one more step (`CIColorClamp`, optional) because `CIRandomGenerator` puts noise in alpha and `CIColorMatrix` can then push components above 1; the three new helpers are private, so they are tested only through `apply`.
+7. **Task 9.** `sectorMask` clamps the small mask to its extent before scaling it up (otherwise a faint line of the old clip could show along the frame border); the `flashWhite` case ends with a crop to the frame; one added Jest test (no stray numbers, shorter side for blocks, clamp before scaling). No clock-wipe cache: the mask is at most 262 KB and every frame differs.
+
+### What no test checks
+
+- The device checklist at the end of the plan (looks, feel, speed) and the first-build items in the README (56 – 75), which are §11 item by item: filter names and keys (1), toned filters (2), temperature direction (3), the translucent radial gradient (4), the half-plane rotation (5), the clock arc (6), pixellate at the ends (7), 4K cost (8), the dust grain and scratch width (9), the mirror seam (10).
+- How the twelve filters look in an export, and how well the preview's tint resembles each.
+- How the curtains read over a playing video (smoothness at the playhead's tick rate, the switch at the cut, the ring's clean hole, nothing drawn outside the preview).
+- Whether any of the new Swift compiles.
 
 ## 4. Substitutions (ten of thirty)
 
