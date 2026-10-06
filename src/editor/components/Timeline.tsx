@@ -84,7 +84,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
             <AddClipTile left={timeToX(totalDuration(project), pps) + theme.space.sm} />
             <BeatTicks />
           </View>
-          {/* Keyed by the lane: one that appears or goes leaves the others (and the scroll view) mounted. They stack in the model's order. */}
+          {/* Keyed by the lane: one that appears or goes leaves the others (and the scroll view) mounted. They stack in the model's order; the layers lane is as many rows as there are layers. */}
           {lanes.map(({ id }) =>
             id === "layers" ? <LayerLane key={id} /> : id === "overlays" ? <OverlayLane key={id} /> : id === "effects" ? <EffectLane key={id} /> : <AudioLane key={id} kind={id} />,
           )}

@@ -1,7 +1,7 @@
 import { curveSteps } from "@/src/editor/model/timeline";
 import { makeClip } from "@/src/editor/model/types";
 import { makeAudioTrack, makeEffect, makeLayer, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
-import { audioLaneKinds, CLIP_AREA_HEIGHT, indexFromDrop, LANE_GAP, LANE_HEIGHT, laneLift, laneModel, type LaneModel, laneTop, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
+import { audioLaneKinds, CLIP_AREA_HEIGHT, indexFromDrop, LANE_GAP, LANE_HEIGHT, laneLift, laneModel, type LaneModel, laneTop, layerRowTops, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
 
 const LANE = LANE_HEIGHT + LANE_GAP;
 
@@ -74,18 +74,67 @@ test("laneModel: a lane exists only while it holds something — text, captions 
   expect(ids(laneModel(makeProject({ clips, layers: [makeLayer({ id: "l", sourceDuration: 4 })] })))).toEqual(["layers"]);
 });
 
-test("laneModel: the order is layers, text / stickers, music, voice, sfx, effects; each lane's index and top follow from the lanes above it", () => {
-  const full = makeProject({ clips, layers: [makeLayer({ id: "l", sourceDuration: 4 })], overlays: [makeOverlay({ id: "o", text: "Hi", start: 0, end: 1 })],
-    audioTracks: [track("a", "sfx"), track("b", "voice"), track("c", "music"), track("d", "sfx")], effects: [makeEffect({ id: "e", start: 0, end: 1 })] });
+const layersOf = (n: number) => Array.from({ length: n }, (_, i) => makeLayer({ id: `l${i + 1}`, sourceDuration: 4, start: i }));
+const hi = makeOverlay({ id: "o", text: "Hi", start: 0, end: 1 });
+const fx = makeEffect({ id: "e", start: 0, end: 1 });
+
+test("laneModel: the order is music, voice, sfx, one row per layer, text / stickers, effects; each lane's index and top follow from the rows above it", () => {
+  const full = makeProject({ clips, layers: [makeLayer({ id: "l", sourceDuration: 4 })], overlays: [hi],
+    audioTracks: [track("a", "sfx"), track("b", "voice"), track("c", "music"), track("d", "sfx")], effects: [fx] });
   const m = laneModel(full);
-  expect(ids(m)).toEqual(["layers", "overlays", "music", "voice", "sfx", "effects"]);
-  m.lanes.forEach((l, i) => { expect(l.index).toBe(i); expect(l.top).toBe(laneTop(i)); });
+  expect(ids(m)).toEqual(["music", "voice", "sfx", "layers", "overlays", "effects"]);
+  m.lanes.forEach((l, i) => { expect(l.index).toBe(i); expect(l.top).toBe(laneTop(i)); expect(l.rows).toBe(1); });
   expect(m.lanesHeight).toBe(6 * LANE);
   expect(m.height).toBe(CLIP_AREA_HEIGHT + 6 * LANE);
-  // Without the text lane the lanes below move up by one.
+  // Without the text lane and the layers the lanes below move up.
   const some = laneModel({ ...full, overlays: [], layers: [] });
-  expect(some.lanes).toEqual([{ id: "music", index: 0, top: laneTop(0) }, { id: "voice", index: 1, top: laneTop(1) }, { id: "sfx", index: 2, top: laneTop(2) }, { id: "effects", index: 3, top: laneTop(3) }]);
+  expect(some.lanes).toEqual([{ id: "music", index: 0, top: laneTop(0), rows: 1 }, { id: "voice", index: 1, top: laneTop(1), rows: 1 }, { id: "sfx", index: 2, top: laneTop(2), rows: 1 }, { id: "effects", index: 3, top: laneTop(3), rows: 1 }]);
   expect(some.height).toBe(CLIP_AREA_HEIGHT + 4 * LANE);
+});
+
+test("laneModel: music only is one lane right under the clips", () => {
+  const m = laneModel(makeProject({ clips, audioTracks: [track("m", "music")] }));
+  expect(m.lanes).toEqual([{ id: "music", index: 0, top: CLIP_AREA_HEIGHT, rows: 1 }]);
+  expect(layerRowTops(m)).toEqual([]);
+  expect(m.lanesHeight).toBe(LANE);
+  expect(m.height).toBe(CLIP_AREA_HEIGHT + LANE);
+});
+
+test.each([1, 3, 8])("laneModel: %i layer(s) alone give one layers lane of that many rows, each row a lane high, in the order of project.layers", (n) => {
+  const m = laneModel(makeProject({ clips, layers: layersOf(n) }));
+  expect(m.lanes).toEqual([{ id: "layers", index: 0, top: CLIP_AREA_HEIGHT, rows: n }]);
+  expect(layerRowTops(m)).toEqual(Array.from({ length: n }, (_, i) => CLIP_AREA_HEIGHT + i * LANE));
+  expect(m.lanesHeight).toBe(n * LANE);
+  expect(m.height).toBe(CLIP_AREA_HEIGHT + n * LANE);
+});
+
+test("laneModel: layers that never overlap in time still get a row each", () => {
+  const apart = [makeLayer({ id: "x", sourceDuration: 2, start: 0 }), makeLayer({ id: "y", sourceDuration: 2, start: 5 })];
+  expect(layerRowTops(laneModel(makeProject({ clips, layers: apart })))).toEqual([laneTop(0), laneTop(1)]);
+});
+
+test("laneModel: music + voice + 2 layers + text + effects — the songs under the clips, then a row per layer, then text, then effects", () => {
+  const m = laneModel(makeProject({ clips, audioTracks: [track("v", "voice"), track("m", "music")], layers: layersOf(2), overlays: [hi], effects: [fx] }));
+  expect(m.lanes).toEqual([
+    { id: "music", index: 0, top: 120, rows: 1 },
+    { id: "voice", index: 1, top: 152, rows: 1 },
+    { id: "layers", index: 2, top: 184, rows: 2 },
+    { id: "overlays", index: 4, top: 248, rows: 1 },
+    { id: "effects", index: 5, top: 280, rows: 1 },
+  ]);
+  expect(layerRowTops(m)).toEqual([184, 216]);
+  expect(m.lanesHeight).toBe(6 * LANE);
+  expect(m.height).toBe(312);
+});
+
+test("laneLift stays bounded by the strip's rise however many layer rows there are", () => {
+  const eight = laneModel(makeProject({ clips, layers: layersOf(8), audioTracks: [track("m", "music")], overlays: [hi] }));
+  expect(eight.lanesHeight).toBe(10 * LANE);
+  expect(laneLift(eight, 2 * LANE)).toBe(2 * LANE);
+  expect(laneLift(eight, 50)).toBe(50);
+  expect(eight.height - laneLift(eight, 2 * LANE)).toBeGreaterThanOrEqual(CLIP_AREA_HEIGHT);
+  // One layer alone is one row: the rise is capped by it.
+  expect(laneLift(laneModel(makeProject({ clips, layers: layersOf(1) })), 2 * LANE)).toBe(LANE);
 });
 
 test("laneModel: the three everyday lanes (text, one sound, effects) give the height the timeline always had", () => {

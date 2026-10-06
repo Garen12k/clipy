@@ -17,7 +17,6 @@ const MIN_WIDTH = 12;
 const HIT_SLOP = 8;
 /** Narrower than this there is no room between the handles: the label is left out. */
 const LABEL_MIN_WIDTH = HANDLE_W * 2 + 4;
-const OVERLAP_OPACITY = 0.85;
 /** A refusal is only announced when the finger has really moved. */
 const REFUSAL_MIN_PX = 2;
 /** Two times closer than this are the same place: an op that changes nothing there has not refused anything. */
@@ -52,14 +51,14 @@ export function layerTrimFromDrag(layer: LayerClip, handle: "left" | "right", fr
   return { trimStart: layer.trimStart, trimEnd: Math.min(layer.sourceDuration, Math.max(raw, sourceAfter(layer, layer.trimStart, min))), anchor };
 }
 
-type Props = { layer: LayerClip; missing?: boolean; selected: boolean; overlapping?: boolean; onPress: () => void };
+type Props = { layer: LayerClip; missing?: boolean; selected: boolean; onPress: () => void };
 
 /**
- * One layer on the layers lane: tap selects, long-press drag moves it, the handles (shown when selected) trim it — a photo has
- * only the end handle. The selected bar is drawn above its neighbours, so a bar overlapping it never covers its handles.
+ * One layer in its own row of the layers lane (see LayerLane): tap selects, long-press drag moves it along the row, the handles
+ * (shown when selected) trim it — a photo has only the end handle. It is alone in its row, so nothing covers it and it is never see-through.
  * `missing` (its file is gone): the warning badge the audio bar shows.
  */
-export function LayerBar({ layer: l, missing = false, selected, overlapping = false, onPress }: Props) {
+export function LayerBar({ layer: l, missing = false, selected, onPress }: Props) {
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const store = useEditorStore.getState();
   // Drag state lives in a ref object: gesture callbacks each get their own copy of captured variables.
@@ -125,7 +124,7 @@ export function LayerBar({ layer: l, missing = false, selected, overlapping = fa
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`layer-bar-${l.id}`} onPress={onPress} accessibilityLabel={photo ? "Photo layer" : "Video layer"} hitSlop={HIT_SLOP}
-        style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color, opacity: overlapping ? OVERLAP_OPACITY : 1,
+        style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color,
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
         {roomy && (
           <>
