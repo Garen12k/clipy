@@ -22,7 +22,7 @@ test("the twelve recipe filters are the twelve ids after the old twenty, with on
   expect(FILTER_IDS).toHaveLength(32);
   expect(FILTER_IDS.slice(20)).toEqual([...RECIPE_FILTER_IDS]);
   expect(Object.keys(FILTER_RECIPES)).toEqual([...RECIPE_FILTER_IDS]);
-  expect(RECIPE_FILTER_IDS.map((id) => FILTERS[id].label)).toEqual(["Kodak", "Fuji", "Matte", "Bleach", "Dusk", "Moody", "Cinema", "Blush", "Grit", "Silver", "Indigo", "Drama"]);
+  expect(RECIPE_FILTER_IDS.map((id) => FILTERS[id].label)).toEqual(["Amber", "Jade", "Matte", "Bleach", "Dusk", "Moody", "Cinema", "Blush", "Grit", "Silver", "Indigo", "Drama"]);
   // A filter tile is 52 pt wide: one short word.
   for (const id of RECIPE_FILTER_IDS) { expect(FILTERS[id].label).toMatch(/^[A-Z][a-z]{2,6}$/); expect(isRecipeFilter(id)).toBe(true); }
   for (const id of FILTER_IDS.slice(0, 20)) expect(isRecipeFilter(id)).toBe(false);
@@ -94,7 +94,7 @@ test("the preview recipe is computed from the row: the veil, 1 + saturation, 0.2
   for (const id of ["grit", "silver", "indigo"] as const) expect(FILTERS[id].preview.saturation).toBe(0);      // the three black-and-whites
 });
 
-test("Kodak's thumbnail is not Warm's and Matte's is not Faded's: on mid grey they differ by at least 12 / 255 in some channel", () => {
+test("Amber (kodak): its thumbnail is not Warm's and Matte's is not Faded's: on mid grey they differ by at least 12 / 255 in some channel", () => {
   const channels = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
   /** What FilterLayer's three layers (grey, tint, white / black) leave of a mid-grey picture at full strength, 0…255 per channel. */
   const onGrey = (id: keyof typeof FILTERS): number[] => {

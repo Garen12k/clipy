@@ -25,8 +25,8 @@ const btn = (name: string) => screen.getByRole("button", { name });
 const gone = (name: string) => expect(screen.queryByRole("button", { name })).toBeNull();
 /** Every button on screen, in order (with nothing open: the back arrow, then the bar's tools). */
 const row = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
-/** Closes whatever tool is open: a strip's or a panel's ✓, or the Cover sheet's scrim. */
-const closeTool = async () => { await fireEvent.press(screen.queryByRole("button", { name: "Done" }) ?? screen.getByLabelText("Close sheet")); };
+/** Closes whatever tool is open: a strip's or a panel's ✓. */
+const closeTool = async () => { await fireEvent.press(screen.getByRole("button", { name: "Done" })); };
 const BACK = "Back to main tools";
 const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Collage", "Effects", "Filter", "Adjust", "Ratio", "Background", "Cover", "Templates"];
 const CLIP = ["Split", "Trim", "Select", "Speed", "Volume", "Animate", "Filter", "Adjust", "Background", "Templates", "Crop", "Transform", "Opacity", "Mask", "Green screen", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate", "Delete"];
@@ -261,7 +261,7 @@ describe("main bar entries", () => {
     }
   });
 
-  test("Stickers and Templates open panels, Effects a strip, Cover its sheet; Ratio opens the ratio tool", async () => {
+  test("Stickers, Cover and Templates open panels, Effects a strip; Ratio opens the ratio tool", async () => {
     await renderBar();
     await fireEvent.press(btn("Stickers"));
     expect(screen.getByRole("header", { name: "Sticker" })).toBeTruthy();       // the panel keeps its own title
@@ -270,8 +270,28 @@ describe("main bar entries", () => {
     expect(screen.getByRole("header", { name: "Effects" })).toBeTruthy();
     await closeTool();
     await fireEvent.press(btn("Cover"));
+    // Cover opens through the tool store like every other panel: inline, no scrim, in the bar's place; its ✓ closes it at once.
+    expect(useToolStrip.getState().open).toEqual({ id: "cover", key: "none" });
     expect(screen.getByRole("header", { name: "Cover" })).toBeTruthy();
+    expect(screen.getAllByTestId("tool-panel")).toHaveLength(1);
+    expect(screen.queryByLabelText("Close sheet")).toBeNull();
+    expect(screen.queryByTestId("toolbar-row")).toBeNull();
+    const untouched = st().project;
     await closeTool();
+    expect(useToolStrip.getState().open).toBeNull();
+    expect(screen.queryByTestId("tool-panel")).toBeNull();
+    expect(btn("Cover")).toBeTruthy();
+    expect(st().project).toBe(untouched);
+    expect(st().past).toHaveLength(0);
+    // One tool at a time: another tool takes its place, and selecting something closes it.
+    await fireEvent.press(btn("Cover"));
+    await act(() => { openStrip("ratio"); });
+    expect(screen.queryByRole("header", { name: "Cover" })).toBeNull();
+    await closeTool();
+    await fireEvent.press(btn("Cover"));
+    await act(() => { st().select("a"); });
+    expect(useToolStrip.getState().open).toBeNull();
+    await act(() => { st().select(null); });
     await fireEvent.press(btn("Templates"));
     expect(btn("Random template")).toBeTruthy();
     await closeTool();

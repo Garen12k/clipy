@@ -1,8 +1,11 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
+// The real hooks, counted: `useIsLayer` runs once per render of the strip.
+jest.mock("@/src/editor/useItem", () => { const real = jest.requireActual("@/src/editor/useItem"); return { ...real, useIsLayer: jest.fn(real.useIsLayer) }; });
 import { trimClip } from "@/src/editor/model/ops";
 import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useIsLayer } from "@/src/editor/useItem";
 import { TrimSheet } from "../components/TrimSheet";
 
 beforeEach(() => { useEditorStore.getState().reset(); });
@@ -72,5 +75,31 @@ describe("the fields follow the clip while the strip is open", () => {
     await render(<TrimSheet clipId="p" visible onClose={() => {}} />);
     await act(() => { st().apply((p) => trimClip(p, "p", 0, 6)); });
     expect(screen.getByLabelText("Length").props.value).toBe("6.0");
+  });
+});
+
+describe("a closed strip", () => {
+  const st = () => useEditorStore.getState();
+  const values = () => [screen.getByLabelText("Trim start").props.value, screen.getByLabelText("Trim end").props.value];
+  const renders = useIsLayer as jest.Mock;
+
+  test("does no state work while the clip is trimmed under it (each frame of a handle drag is one render, not two)", async () => {
+    st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] }));
+    await render(<TrimSheet clipId="a" visible={false} onClose={() => {}} />);
+    renders.mockClear();
+    for (const end of [3.5, 3, 2.5]) await act(() => { st().apply((p) => trimClip(p, "a", 0, end)); });
+    expect(renders).toHaveBeenCalledTimes(3);
+    // Opening it shows the range the clip has now.
+    await screen.rerender(<TrimSheet clipId="a" visible onClose={() => {}} />);
+    expect(values()).toEqual(["0.0", "2.5"]);
+  });
+
+  test("reopened, it shows the range the clip has, not what was typed and left behind", async () => {
+    st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] }));
+    await render(<TrimSheet clipId="a" visible onClose={() => {}} />);
+    await fireEvent.changeText(screen.getByLabelText("Trim start"), "2");
+    await screen.rerender(<TrimSheet clipId="a" visible={false} onClose={() => {}} />);
+    await screen.rerender(<TrimSheet clipId="a" visible onClose={() => {}} />);
+    expect(values()).toEqual(["0.0", "4.0"]);
   });
 });

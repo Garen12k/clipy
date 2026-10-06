@@ -4,6 +4,9 @@ jest.mock("@react-native-community/slider", () => { const { View } = require("re
 import { ANIM_COMBO, ANIM_IN } from "@/src/editor/effects";
 import { ANIM_COMBO_IDS, ANIM_IN_IDS, makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { setClipAnimation } from "@/src/editor/model/ops";
+import { TILE_WIDTH } from "@/src/ui/Tile";
+import { tilesStartX } from "@/src/ui/ToolStrip";
 import { ClipAnimationSheet } from "../components/ClipAnimationSheet";
 
 const anim = (i = 0) => useEditorStore.getState().project!.clips[i].animation;
@@ -173,4 +176,31 @@ describe("a photo: zoom and pan live in the Motion tool", () => {
     expect("motion" in useEditorStore.getState().project!.clips[0]).toBe(false);
     expect(past()).toBe(1);
   });
+});
+
+type ScrollInst = ReturnType<typeof screen.getByTestId>;
+const findRowScroll = (n: ScrollInst): ScrollInst | null => { if (n.props.contentOffset !== undefined) return n; for (const c of n.children) { if (typeof c === "string") continue; const f = findRowScroll(c as ScrollInst); if (f) return f; } return null; };
+/** Where the tile row starts (the kit hands it to its ScrollView as contentOffset). */
+const rowStartX = () => findRowScroll(screen.getByTestId("strip-tiles"))!.props.contentOffset.x as number;
+
+test("the tile row keeps its offset across picks; a tab, another clip or the next opening works it out again", async () => {
+  useEditorStore.getState().apply((p) => setClipAnimation(p, "a", { in: { id: "rise", duration: 0.5 } }));
+  const view = await render(<ClipAnimationSheet clipId="a" visible onClose={() => {}} />);
+  const atRise = tilesStartX(ANIM_IN_IDS.indexOf("rise") + 1, TILE_WIDTH);
+  expect(atRise).toBeGreaterThan(0);
+  expect(rowStartX()).toBe(atRise);
+  await press("Fade");
+  expect(anim().in?.id).toBe("fade");
+  expect(rowStartX()).toBe(atRise);                           // the row did not move under the finger
+  await press("Combo");
+  expect(rowStartX()).toBe(0);
+  await press("Pulse");
+  expect(anim().combo).toBe("pulse");
+  expect(rowStartX()).toBe(0);
+  await view.rerender(<ClipAnimationSheet clipId="a" visible={false} onClose={() => {}} />);
+  await view.rerender(<ClipAnimationSheet clipId="a" visible onClose={() => {}} />);
+  await press("Combo");
+  expect(rowStartX()).toBe(tilesStartX(ANIM_COMBO_IDS.indexOf("pulse") + 1, TILE_WIDTH));
+  await view.rerender(<ClipAnimationSheet clipId="b" visible onClose={() => {}} />);
+  expect(rowStartX()).toBe(0);
 });

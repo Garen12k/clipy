@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { View } from "react-native";
 import { BLENDS } from "@/src/editor/effects";
 import { setClipBlend } from "@/src/editor/model/ops";
@@ -17,6 +18,13 @@ const OVERLAP = 8;
 export function BlendSheet({ clipId, visible, onClose }: { clipId: string | null; visible: boolean; onClose: () => void }) {
   const clip = useItemClip(clipId);
   const apply = useEditorStore((s) => s.apply);
+  // Where the row starts: the selected tile in view. Worked out when the strip opens (and for another layer) — NOT on every pick: a
+  // ScrollView applies a changed contentOffset at once, and the row must not move under the finger.
+  const startX = useMemo(
+    () => tilesStartX(clip ? BLEND_IDS.indexOf(clip.blend) : 0, TILE_WIDTH),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visible, clip?.id],
+  );
   if (!clip) return null;
   const pick = (id: BlendId) => {
     const project = useEditorStore.getState().project;
@@ -28,7 +36,7 @@ export function BlendSheet({ clipId, visible, onClose }: { clipId: string | null
 
   return (
     <ToolStrip visible={visible} onClose={onClose} title="Blend" note={<StripNote>Shows in the exported video</StripNote>}>
-      <StripTiles initialX={tilesStartX(BLEND_IDS.indexOf(clip.blend), TILE_WIDTH)}>
+      <StripTiles initialX={startX}>
         {BLEND_IDS.map((id) => {
           const selected = clip.blend === id;
           const label = BLENDS[id].label;

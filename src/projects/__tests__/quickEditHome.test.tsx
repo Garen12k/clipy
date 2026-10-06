@@ -38,11 +38,11 @@ const openSheet = async () => {
   return screen.findByRole("header", { name: "Quick edit" });
 };
 
-test("Quick edit sits beside New clip: an outlined button on a pill of its own; New clip stays the one gold button", async () => {
+test("Quick edit sits beside New project: an outlined button on a pill of its own; New project stays the one gold button", async () => {
   await render(<ProjectsScreen />);
   await screen.findByText("No clips yet");
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
-  expect(screen.getByTestId("primary-button")).toHaveAccessibleName("New clip");
+  expect(screen.getByTestId("primary-button")).toHaveAccessibleName("New project");
   expect(screen.getByTestId("home-actions")).toHaveStyle({ flexDirection: "row", justifyContent: "center", gap: theme.space.md });
   expect(btn("Quick edit").parent).toHaveStyle({ borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar });
   expect(screen.queryByRole("header", { name: "Quick edit" })).toBeNull();
@@ -80,12 +80,12 @@ test("style, then media, then the draft: up to 30 items in the order tapped, a s
   expect(make).toHaveBeenCalledTimes(1);
   expect(make.mock.calls[0].slice(1)).toEqual(["Project 1", PICKED, "retro"]);
   expect(screen.getByText("Making your quick edit")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "New clip" })).toBeNull();   // nothing else can be started meanwhile
+  expect(screen.queryByRole("button", { name: "New project" })).toBeNull();   // nothing else can be started meanwhile
   expect(screen.queryByRole("button", { name: "Quick edit" })).toBeNull();
   await pressed;
   await waitFor(() => expect(push).toHaveBeenCalledWith("/editor/q1"));
   expect(screen.queryByTestId("home-making")).toBeNull();
-  expect(btn("New clip")).toBeTruthy();
+  expect(btn("New project")).toBeTruthy();
 });
 
 test("the library is cancelled: no draft, no spinner, the buttons are back", async () => {

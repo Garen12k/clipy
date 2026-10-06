@@ -4,7 +4,7 @@ jest.mock("@react-native-community/slider", () => { const { View } = require("re
 import * as Haptics from "expo-haptics";
 import { StyleSheet } from "react-native";
 import { SPEED_CURVES } from "@/src/editor/effects";
-import { setClipSpeedCurve } from "@/src/editor/model/ops";
+import { setClipSpeed, setClipSpeedCurve } from "@/src/editor/model/ops";
 import { curveSteps } from "@/src/editor/model/timeline";
 import { makeClip, makeLayer, makePhotoClip, makeProject, SPEED_CURVE_IDS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -292,4 +292,27 @@ describe("clipIds (multi-select)", () => {
     expect(past()).toBe(0);
     expect(impact).not.toHaveBeenCalled();
   });
+});
+
+type ScrollInst = ReturnType<typeof screen.getByTestId>;
+const findRowScroll = (n: ScrollInst): ScrollInst | null => { if (n.props.contentOffset !== undefined) return n; for (const c of n.children) { if (typeof c === "string") continue; const f = findRowScroll(c as ScrollInst); if (f) return f; } return null; };
+/** Where the tile row starts (the kit hands it to its ScrollView as contentOffset). */
+const rowStartX = () => findRowScroll(screen.getByTestId("strip-tiles"))!.props.contentOffset.x as number;
+
+test("the tile row keeps its offset across picks, on both tabs; the next opening works it out again", async () => {
+  useEditorStore.getState().apply((p) => setClipSpeed(p, "a", 4));
+  const view = await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+  const at4x = 5 * (64 + 8) - 64;                             // 4× is chip 5; a chip counts as 64 wide
+  expect(rowStartX()).toBe(at4x);
+  await press("0.5×");
+  expect(clip().speed).toBe(0.5);
+  expect(rowStartX()).toBe(at4x);                             // the row did not move under the finger
+  await press("Curve");
+  expect(rowStartX()).toBe(0);
+  await press("Flash out");
+  expect(clip().speedCurve?.id).toBe("flashOut");
+  expect(rowStartX()).toBe(0);
+  await view.rerender(<SpeedSheet clipId="a" visible={false} onClose={() => {}} />);
+  await view.rerender(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+  expect(rowStartX()).toBe(6 * 80 - 72);                      // opens on Curve: None, then Flash out as tile 6
 });

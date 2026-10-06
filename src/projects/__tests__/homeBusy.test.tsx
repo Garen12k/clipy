@@ -71,13 +71,13 @@ const startMaking = async () => {
   await screen.findByTestId("home-making");
   return { pressed, finish: (v: unknown) => act(async () => { finish(v); await pressed; }) };
 };
-/** New clip up to the moment the project is being made (its media copied). */
+/** New project up to the moment the project is being made (its media copied). */
 const startCreating = async () => {
   let finish: (v: unknown) => void = () => {};
   pick.mockResolvedValueOnce(PICKED);
   createProject.mockImplementationOnce(() => new Promise((r) => { finish = r; }));
   await home();
-  await fireEvent.press(btn("New clip"));
+  await fireEvent.press(btn("New project"));
   const pressed = fireEvent.press(await screen.findByRole("button", { name: "Create" }));
   await waitFor(() => expect(createProject).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(screen.getByTestId("home-list").props.pointerEvents).toBe("none"));
@@ -106,7 +106,7 @@ describe("the home screen takes no touches while a project is being made", () =>
     expect(push).toHaveBeenLastCalledWith("/accounts");
   });
 
-  test("while New clip makes its project: the same", async () => {
+  test("while New project makes its project: the same", async () => {
     const { finish } = await startCreating();
     expect(screen.getByTestId("home-header-actions").props.pointerEvents).toBe("none");
     await fireEvent.press(btn("Beach"));
@@ -143,7 +143,7 @@ describe("the editor opens only if the home screen is still in front", () => {
     expect(btn("Quick edit")).toBeTruthy();
   });
 
-  test("New clip: the screen lost focus while the project was made — no navigation", async () => {
+  test("New project: the screen lost focus while the project was made — no navigation", async () => {
     const { finish } = await startCreating();
     await blurScreen();
     await finish({ project: { id: "p9" }, failed: 0 });
@@ -166,12 +166,12 @@ describe("the Quick edit button cannot stick", () => {
     expect(pick).not.toHaveBeenCalled();
   });
 
-  test("New clip clears a Quick edit sheet that is (or is thought to be) open", async () => {
+  test("New project clears a Quick edit sheet that is (or is thought to be) open", async () => {
     pick.mockResolvedValueOnce(null);
     await home();
     await fireEvent.press(btn("Quick edit"));
     await waitFor(() => expect(quickHeader()).toBeTruthy());
-    await fireEvent.press(btn("New clip"));
+    await fireEvent.press(btn("New project"));
     await waitFor(() => expect(pick).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(quickHeader()).toBeNull());
   });
@@ -179,7 +179,7 @@ describe("the Quick edit button cannot stick", () => {
   test("Quick edit clears media that is waiting for its aspect ratio", async () => {
     pick.mockResolvedValueOnce(PICKED);
     await home();
-    await fireEvent.press(btn("New clip"));
+    await fireEvent.press(btn("New project"));
     await screen.findByRole("header", { name: "Aspect ratio" });
     await fireEvent.press(btn("Quick edit"));
     await waitFor(() => expect(quickHeader()).toBeTruthy());
@@ -208,7 +208,7 @@ describe("one thing at a time", () => {
     expect(make).not.toHaveBeenCalled();
   });
 
-  test("while the Quick edit library is opening or up, New clip and Quick edit do nothing", async () => {
+  test("while the Quick edit library is opening or up, New project and Quick edit do nothing", async () => {
     let answer: (v: unknown) => void = () => {};
     pick.mockImplementation(() => new Promise((r) => { answer = r; }));
     await home();
@@ -216,13 +216,13 @@ describe("one thing at a time", () => {
     const pressed = fireEvent.press(await screen.findByRole("button", { name: "Choose photos and videos" }));
     await waitFor(() => expect(quickHeader()).toBeNull());
     // The sheet is fading out: the library is not up yet.
-    await fireEvent.press(btn("New clip"));
+    await fireEvent.press(btn("New project"));
     await fireEvent.press(btn("Quick edit"));
     await settle();
     expect(pick).toHaveBeenCalledTimes(1);   // the Quick edit one
     expect(pick).toHaveBeenCalledWith({ limit: 30 });
     // The library is up.
-    await fireEvent.press(btn("New clip"));
+    await fireEvent.press(btn("New project"));
     await fireEvent.press(btn("Quick edit"));
     await settle();
     expect(pick).toHaveBeenCalledTimes(1);

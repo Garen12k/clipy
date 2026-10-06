@@ -18,8 +18,8 @@ const state = () => useEditorStore.getState();
 const btn = (name: string) => screen.getByRole("button", { name });
 const row = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
 const gone = (name: string) => expect(screen.queryByRole("button", { name })).toBeNull();
-/** Closes whatever tool is open: a strip's or a panel's ✓, or the Cover sheet's scrim. */
-const closeTool = async () => { await fireEvent.press(screen.queryByRole("button", { name: "Done" }) ?? screen.getByLabelText("Close sheet")); };
+/** Closes whatever tool is open: a strip's or a panel's ✓. */
+const closeTool = async () => { await fireEvent.press(screen.getByRole("button", { name: "Done" })); };
 const renderBar = () => render(<EditorToolbar />);
 const select = (id: string | null) => act(() => { state().select(id); });
 const photoLayer = (id: string, start = 0): LayerClip => ({ ...makePhotoClip({ id }), start });

@@ -114,7 +114,7 @@ test("a new filter is picked like an old one and keeps the strength", async () =
 test("the row opens with the selected filter in view — worked out once per opening, never past the row's end", async () => {
   useEditorStore.getState().apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "a" ? { ...c, filter: "kodak" as const } : c)) }));
   const view = await render(<FilterSheet clipId="a" visible onClose={() => {}} />);
-  expect(startX()).toBe(Math.min(20 * 60 - 52, rowEnd()));             // Kodak is tile 20
+  expect(startX()).toBe(Math.min(20 * 60 - 52, rowEnd()));             // Amber (id kodak) is tile 20
   // Picking another filter does not move the row under the finger.
   await fireEvent.press(screen.getByRole("button", { name: "Warm" }));
   expect(startX()).toBe(Math.min(20 * 60 - 52, rowEnd()));

@@ -1,15 +1,18 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/editor/coverFrame", () => ({ frameUriAt: jest.fn(async (_p: unknown, t: number, exact?: boolean) => `file:///f-${t}-${exact ? "still" : "thumb"}.jpg`) }));
 jest.mock("react-native-view-shot", () => ({ captureRef: jest.fn(async () => "file:///tmp/cover.jpg"), releaseCapture: jest.fn() }));
 jest.mock("expo-media-library/legacy", () => ({ requestPermissionsAsync: jest.fn(async () => ({ granted: true })), saveToLibraryAsync: jest.fn(async () => {}) }));
 import { requestPermissionsAsync, saveToLibraryAsync } from "expo-media-library/legacy";
-import { PixelRatio } from "react-native";
+import { Dimensions, PixelRatio } from "react-native";
 import { captureRef, releaseCapture } from "react-native-view-shot";
 import { frameUriAt } from "@/src/editor/coverFrame";
+import * as timeline from "@/src/editor/model/timeline";
 import { makeClip, makeProject, type Cover } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { useKeyboard } from "@/src/ui/keyboard";
+import { PANEL, panelHeight } from "@/src/ui/ToolPanel";
 import { CoverSheet } from "../components/CoverSheet";
 
 const frame = frameUriAt as jest.Mock;
@@ -18,10 +21,17 @@ const release = releaseCapture as jest.Mock;
 const permission = requestPermissionsAsync as jest.Mock;
 const save = saveToLibraryAsync as jest.Mock;
 
+const H = Dimensions.get("window").height;
 const state = () => useEditorStore.getState();
 const slider = () => screen.getByTestId("cover-time");
 const field = () => screen.getByLabelText("Cover title");
 const press = (name: string) => fireEvent.press(screen.getByRole("button", { name }));
+/** One drag of the slider through these values: finger down, the values, finger up on the last one. */
+const drag = async (...values: number[]) => {
+  await fireEvent(slider(), "slidingStart", slider().props.value);
+  for (const v of values) await fireEvent(slider(), "valueChange", v);
+  await fireEvent(slider(), "slidingComplete", values[values.length - 1]);
+};
 
 async function open(cover: Cover | null = null) {
   state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 6 })], aspectRatio: "9:16", cover }));
@@ -34,7 +44,7 @@ async function open(cover: Cover | null = null) {
 // A 3× iPhone: view-shot takes its size in points and multiplies by the screen's scale.
 let pixelRatio: jest.SpyInstance;
 beforeEach(() => { jest.clearAllMocks(); state().reset(); pixelRatio = jest.spyOn(PixelRatio, "get").mockReturnValue(3); });
-afterEach(() => { pixelRatio.mockRestore(); });
+afterEach(() => { pixelRatio.mockRestore(); useKeyboard.setState({ height: 0 }); });
 const saveButton = () => screen.getByRole("button", { name: "Save to Photos" });
 
 test("opens on the first frame with an empty title when there is no cover", async () => {
@@ -48,32 +58,155 @@ test("opens on the first frame with an empty title when there is no cover", asyn
   await waitFor(() => expect(screen.getByTestId("cover-image").props.source).toEqual({ uri: "file:///f-0-still.jpg" }));
 });
 
-test("opens on the stored cover (clamped)", async () => {
+test("opens on the stored cover (read clamped, nothing written)", async () => {
   await open({ time: 99, title: "Trip" });
   expect(slider().props.value).toBe(10);
   expect(field().props.value).toBe("Trip");
   expect(screen.getByTestId("cover-title")).toHaveTextContent("Trip");
-});
-
-test("moving the slider changes the frame, not the project", async () => {
-  await open();
-  const before = state().project;
-  await fireEvent(slider(), "valueChange", 5);
-  await waitFor(() => expect(frame).toHaveBeenCalledWith(before, 5, false));
-  await fireEvent(slider(), "slidingComplete", 5);
-  await waitFor(() => expect(frame).toHaveBeenCalledWith(before, 5, true));
-  await waitFor(() => expect(screen.getByTestId("cover-image").props.source).toEqual({ uri: "file:///f-5-still.jpg" }));
-  expect(state().project).toBe(before);
+  expect(state().project!.cover).toEqual({ time: 99, title: "Trip" });
   expect(state().past).toHaveLength(0);
 });
 
-test("typing a title shows it on the frame; the field is limited to 40", async () => {
+test("Cover is an inline panel: no Modal and no scrim, an explicit height, rows with explicit heights", async () => {
+  await open();
+  expect(screen.getByRole("header", { name: "Cover" })).toBeTruthy();
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: panelHeight("regular", H) - 1 });
+  expect(screen.getByTestId("tool-panel-body")).toHaveStyle({ height: panelHeight("regular", H) - 1 - PANEL.header - PANEL.lead });
+  expect(screen.queryByLabelText("Close sheet")).toBeNull();
+  expect(screen.queryByTestId("tool-strip")).toBeNull();
+  expect(JSON.stringify(screen.toJSON())).not.toContain('"type":"Modal"');
+  expect(JSON.stringify(screen.toJSON())).toContain('"type":"View"');   // the tree really is in that string
+  expect(screen.getByTestId("cover-frame-row")).toHaveStyle({ height: 240 });
+  expect(screen.getByTestId("cover-time-row")).toHaveStyle({ height: theme.size.touch });
+});
+
+test("the slider sits above the body and does not scroll; the body is the frame, the title, then Save to Photos", async () => {
+  await open();
+  expect(within(screen.getByTestId("tool-panel-lead")).getByTestId("cover-time")).toBeTruthy();
+  const body = screen.getByTestId("tool-panel-body");
+  expect(within(body).queryByTestId("cover-time")).toBeNull();
+  const tree = JSON.stringify(screen.toJSON());
+  const at = ["cover-time-row", "tool-panel-body", "cover-frame-row", "Cover title", "Save to Photos"].map((name) => tree.indexOf(`"${name}"`));
+  expect(at.every((i) => i >= 0)).toBe(true);
+  expect(at).toEqual([...at].sort((a, b) => a - b));
+});
+
+test("closed, the panel reads nothing from the clips when the store changes", async () => {
+  state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], aspectRatio: "9:16", cover: { time: 2, title: "Trip" } }));
+  await render(<CoverSheet visible={false} onClose={jest.fn()} />);
+  const spies = [jest.spyOn(timeline, "coverTimeOf"), jest.spyOn(timeline, "totalDuration"), jest.spyOn(timeline, "frameAt")];
+  try {
+    await act(() => { useEditorStore.setState({ pixelsPerSecond: 81 }); });
+    await act(() => { useEditorStore.setState({ pixelsPerSecond: 82 }); });
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+  } finally { for (const spy of spies) spy.mockRestore(); }
+  // Opened, it reads the stored cover.
+  await screen.rerender(<CoverSheet visible onClose={jest.fn()} />);
+  expect(slider().props.value).toBe(2);
+  expect(slider().props.maximumValue).toBe(4);
+  await waitFor(() => expect(frame).toHaveBeenLastCalledWith(state().project, 2, true));
+});
+
+test("opening and closing leaves the project and the playhead as they were", async () => {
+  for (const cover of [null, { time: 5, title: "Trip" }]) {
+    const onClose = await open(cover);
+    state().seek(2);
+    const before = state().project;
+    await press("Done");
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await screen.rerender(<CoverSheet visible={false} onClose={onClose} />);
+    expect(screen.queryByTestId("tool-panel")).toBeNull();
+    expect(state().project).toBe(before);
+    expect(state().past).toHaveLength(0);
+    expect(state().playhead).toBe(2);
+    await screen.unmount();
+  }
+});
+
+test("one drag of the slider is one undo step: the cover follows the finger, thumbnails while it moves, the exact still when it is let go", async () => {
+  await open();
+  const before = state().project;
+  await drag(3, 4, 5);
+  expect(state().project!.cover).toEqual({ time: 5, title: "" });
+  expect(state().past).toHaveLength(1);
+  expect(slider().props.value).toBe(5);
+  expect(frame).toHaveBeenCalledWith(expect.anything(), 3, false);
+  expect(frame).toHaveBeenCalledWith(expect.anything(), 5, false);
+  expect(frame).toHaveBeenLastCalledWith(state().project, 5, true);
+  await waitFor(() => expect(screen.getByTestId("cover-image").props.source).toEqual({ uri: "file:///f-5-still.jpg" }));
+  expect(state().playhead).toBe(0);                                   // the white line is not moved by choosing a cover
+  await act(() => { state().undo(); });
+  expect(state().project).toBe(before);
+  expect(slider().props.value).toBe(0);
+  await waitFor(() => expect(frame).toHaveBeenLastCalledWith(before, 0, true));
+  // A second drag is its own step.
+  await drag(2);
+  await drag(7);
+  expect(state().past).toHaveLength(2);
+});
+
+test("a value that arrives without a drag (VoiceOver's swipe up / down) is its own undo step", async () => {
+  await open();
+  await fireEvent(slider(), "valueChange", 4);
+  expect(state().project!.cover).toEqual({ time: 4, title: "" });
+  expect(state().past).toHaveLength(1);
+  expect(frame).toHaveBeenLastCalledWith(state().project, 4, true);
+});
+
+test("typing a title writes it: on the frame, counted, an unbroken run is one undo step", async () => {
   await open();
   expect(screen.queryByTestId("cover-title")).toBeNull();
+  await fireEvent.changeText(field(), "Beach");
   await fireEvent.changeText(field(), "Beach day");
   expect(screen.getByTestId("cover-title")).toHaveTextContent("Beach day");
   expect(screen.getByText("9 / 40")).toBeTruthy();
+  expect(state().project!.cover).toEqual({ time: 0, title: "Beach day" });
+  expect(state().past).toHaveLength(1);
+  await act(() => { state().undo(); });
+  expect(field().props.value).toBe("");
+  expect(state().project!.cover).toBeNull();
+  // Typing after an Undo is a new step.
+  await fireEvent.changeText(field(), "Trip");
+  expect(state().past).toHaveLength(1);
+  expect(state().future).toHaveLength(0);
+});
+
+test("typing after a drag was undone is a new undo step: the step the earlier typing opened is not continued while Redo is armed", async () => {
+  await open();
+  await fireEvent.changeText(field(), "Trip");
+  expect(state().past).toHaveLength(1);
+  await drag(5);
+  expect(state().past).toHaveLength(2);
+  await act(() => { state().undo(); });
+  expect(state().project!.cover).toEqual({ time: 0, title: "Trip" });
+  expect(state().future).toHaveLength(1);
+  await fireEvent.changeText(field(), "Trip 2");
+  // A new step, and the undone drag can no longer be redone over it.
+  expect(state().past).toHaveLength(2);
+  expect(state().future).toHaveLength(0);
+  expect(state().project!.cover).toEqual({ time: 0, title: "Trip 2" });
+  expect(field().props.value).toBe("Trip 2");
+  // The run goes on as that one step.
+  await fireEvent.changeText(field(), "Trip 23");
+  expect(state().past).toHaveLength(2);
+  // Each Undo lands on a whole state: the first typing, then no cover.
+  await act(() => { state().undo(); });
+  expect(state().project!.cover).toEqual({ time: 0, title: "Trip" });
+  expect(field().props.value).toBe("Trip");
+  await act(() => { state().undo(); });
+  expect(state().project!.cover).toBeNull();
   expect(state().past).toHaveLength(0);
+  expect(state().future).toHaveLength(2);
+});
+
+test("the field keeps the spaces being typed; the cover holds the title trimmed, and a space alone makes no undo step", async () => {
+  await open({ time: 5, title: "Trip" });
+  await fireEvent.changeText(field(), "Trip ");
+  expect(field().props.value).toBe("Trip ");
+  expect(state().past).toHaveLength(0);
+  await fireEvent.changeText(field(), "Trip to");
+  expect(state().project!.cover).toEqual({ time: 5, title: "Trip to" });
+  expect(state().past).toHaveLength(1);
 });
 
 test("the title is cut to 40 whole characters as it is typed: an emoji is one, and is never cut in half", async () => {
@@ -86,59 +219,53 @@ test("the title is cut to 40 whole characters as it is typed: an emoji is one, a
   expect(field().props.value).toBe("a".repeat(39) + "😀");
 });
 
-test("Done on an untouched sheet of a project without a cover makes no cover and no undo step", async () => {
-  const onClose = await open();
+test("a title of spaces only on the first frame makes no cover and no undo step", async () => {
+  await open();
   const before = state().project;
-  await press("Done");
-  expect(state().project).toBe(before);
-  expect(state().project!.cover).toBeNull();
-  expect(state().past).toHaveLength(0);
-  expect(onClose).toHaveBeenCalledTimes(1);
-  // A title of spaces only is still nothing.
   await fireEvent.changeText(field(), "   ");
-  await press("Done");
-  expect(state().project!.cover).toBeNull();
+  expect(state().project).toBe(before);
   expect(state().past).toHaveLength(0);
 });
 
 test("without a cover, a title alone or a time alone is a cover", async () => {
   await open();
   await fireEvent.changeText(field(), "Trip");
-  await press("Done");
   expect(state().project!.cover).toEqual({ time: 0, title: "Trip" });
   expect(state().past).toHaveLength(1);
+  await screen.unmount();
   await open();
-  await fireEvent(slider(), "valueChange", 3);
-  await press("Done");
+  await drag(3);
   expect(state().project!.cover).toEqual({ time: 3, title: "" });
 });
 
-test("Done on the first frame with the title cleared removes the cover (a blank cover is no cover), as one undo step", async () => {
+test("the first frame with the title cleared is no cover (a blank cover is no cover), as one undo step", async () => {
   await open({ time: 0, title: "Trip" });
   await fireEvent.changeText(field(), "");
-  await press("Done");
   expect(state().project!.cover).toBeNull();
   expect(state().past).toHaveLength(1);
 });
 
-test("Done saves time and title as one undo step and closes", async () => {
-  const onClose = await open();
-  await fireEvent(slider(), "valueChange", 5);
+test("the slider and the title each keep what the other set", async () => {
+  await open();
+  await drag(5);
   await fireEvent.changeText(field(), "  Beach day ");
-  await press("Done");
   expect(state().project!.cover).toEqual({ time: 5, title: "Beach day" });
-  expect(state().past).toHaveLength(1);
-  expect(onClose).toHaveBeenCalledTimes(1);
+  await drag(2);
+  expect(state().project!.cover).toEqual({ time: 2, title: "Beach day" });
+  expect(state().past).toHaveLength(3);
 });
 
-test("Done with nothing changed adds no undo step", async () => {
+test("Done only closes: what was chosen is already the cover", async () => {
   const onClose = await open({ time: 5, title: "Trip" });
+  await drag(2);
+  const chosen = state().project;
   await press("Done");
-  expect(state().past).toHaveLength(0);
   expect(onClose).toHaveBeenCalledTimes(1);
+  expect(state().project).toBe(chosen);
+  expect(state().past).toHaveLength(1);
 });
 
-test("Reset clears the cover (one undo step) and the draft", async () => {
+test("Reset clears the cover (one undo step); a second Reset does nothing; the panel stays open", async () => {
   const onClose = await open({ time: 5, title: "Trip" });
   await press("Reset");
   expect(state().project!.cover).toBeNull();
@@ -146,33 +273,31 @@ test("Reset clears the cover (one undo step) and the draft", async () => {
   expect(slider().props.value).toBe(0);
   expect(field().props.value).toBe("");
   expect(screen.queryByTestId("cover-title")).toBeNull();
+  await waitFor(() => expect(frame).toHaveBeenLastCalledWith(state().project, 0, true));
   await press("Reset");
   expect(state().past).toHaveLength(1);
   expect(onClose).not.toHaveBeenCalled();
 });
 
-test("closing without Done discards the draft", async () => {
-  const onClose = await open({ time: 5, title: "Trip" });
-  const before = state().project;
-  await fireEvent(slider(), "valueChange", 2);
-  await fireEvent.changeText(field(), "Other");
-  await fireEvent.press(screen.getByLabelText("Close sheet"));
-  expect(onClose).toHaveBeenCalledTimes(1);
-  expect(state().project).toBe(before);
-  expect(state().past).toHaveLength(0);
-});
-
-test("reopening starts again from the stored cover", async () => {
-  const onClose = await open({ time: 5, title: "Trip" });
-  await fireEvent(slider(), "valueChange", 2);
-  await fireEvent.changeText(field(), "Other");
-  await waitFor(() => expect(screen.getByTestId("cover-image").props.source).toEqual({ uri: "file:///f-2-thumb.jpg" }));
-  await screen.rerender(<CoverSheet visible={false} onClose={onClose} />);
-  frame.mockReturnValueOnce(new Promise(() => {}));   // the stored cover's still is slow to come
-  await screen.rerender(<CoverSheet visible onClose={onClose} />);
+test("an Undo while the panel is open shows in the slider, the field and the frame", async () => {
+  await open({ time: 5, title: "Trip" });
+  await press("Reset");
+  await act(() => { state().undo(); });
   expect(slider().props.value).toBe(5);
   expect(field().props.value).toBe("Trip");
-  // The frame of the discarded draft is not shown (nor saved) while the right one loads.
+  expect(screen.getByTestId("cover-title")).toHaveTextContent("Trip");
+  await waitFor(() => expect(screen.getByTestId("cover-image").props.source).toEqual({ uri: "file:///f-5-still.jpg" }));
+});
+
+test("reopening starts from the stored cover, and never shows the frame of the last opening while this one loads", async () => {
+  const onClose = await open({ time: 5, title: "Trip" });
+  await waitFor(() => expect(screen.getByTestId("cover-image").props.source).toEqual({ uri: "file:///f-5-still.jpg" }));
+  await screen.rerender(<CoverSheet visible={false} onClose={onClose} />);
+  await act(() => { state().apply((p) => ({ ...p, cover: { time: 2, title: "Other" } })); });
+  frame.mockReturnValueOnce(new Promise(() => {}));   // the stored cover's still is slow to come
+  await screen.rerender(<CoverSheet visible onClose={onClose} />);
+  expect(slider().props.value).toBe(2);
+  expect(field().props.value).toBe("Other");
   expect(screen.queryByTestId("cover-image")).toBeNull();
 });
 
@@ -213,28 +338,29 @@ test("the temporary capture is removed even when saving it fails; nothing to rem
   expect(release).not.toHaveBeenCalled();
 });
 
-test("while the title is being typed the frame is small (the keyboard must not hide Done) and Save waits for the full-size frame", async () => {
+test("the frame is the same size whatever happens (it is the picture that is saved); Save waits while the keyboard is up", async () => {
   await open();
   expect(screen.getByTestId("cover-frame")).toHaveStyle({ width: 135, height: 240 });
   expect(field().props.returnKeyType).toBe("done");
   await fireEvent(field(), "focus");
-  expect(screen.getByTestId("cover-frame")).toHaveStyle({ width: 67.5, height: 120 });
+  await act(() => { useKeyboard.setState({ height: 336 }); });
+  // The panel takes its typing height (the host pads the keyboard); the frame is still there, full size, scrolled out of the way.
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: panelHeight("regular", H, true) - 1 });
+  expect(screen.getByTestId("cover-frame")).toHaveStyle({ width: 135, height: 240 });
   expect(saveButton()).toBeDisabled();
+  expect(screen.getByText("Close the keyboard to save.")).toBeTruthy();   // why it is disabled, said above the button
   await press("Save to Photos");
   expect(permission).not.toHaveBeenCalled();
   expect(capture).not.toHaveBeenCalled();
-  // The return key ends the typing: full size again, Save usable.
-  await fireEvent(field(), "submitEditing");
-  expect(screen.getByTestId("cover-frame")).toHaveStyle({ width: 135, height: 240 });
+  // The keyboard gone: Save usable, and the reason gone with it.
+  await act(() => { useKeyboard.setState({ height: 0 }); });
   expect(saveButton()).toBeEnabled();
-  await fireEvent(field(), "focus");
-  await fireEvent(field(), "blur");
-  expect(screen.getByTestId("cover-frame")).toHaveStyle({ height: 240 });
+  expect(screen.queryByText("Close the keyboard to save.")).toBeNull();
   await press("Save to Photos");
   await waitFor(() => expect(screen.getByText("Saved to Photos")).toBeTruthy());
 });
 
-test("a refused permission or a failed capture is said in the sheet, which stays usable", async () => {
+test("a refused permission or a failed capture is said in the panel, which stays usable", async () => {
   await open();
   permission.mockResolvedValueOnce({ granted: false });
   await press("Save to Photos");
@@ -269,14 +395,7 @@ test("renders nothing for an empty project", async () => {
   await render(<CoverSheet visible onClose={jest.fn()} />);
   expect(screen.queryByRole("header", { name: "Cover" })).toBeNull();
   expect(screen.queryByTestId("cover-time")).toBeNull();
-});
-
-test("Cover is still a modal sheet in round 2: a scrim, no inline panel", async () => {
-  await open();
-  expect(screen.getByRole("header", { name: "Cover" })).toBeTruthy();
-  expect(screen.getByLabelText("Close sheet")).toBeTruthy();
   expect(screen.queryByTestId("tool-panel")).toBeNull();
-  expect(screen.queryByTestId("tool-strip")).toBeNull();
 });
 
 test("an Auto project's cover has the first clip's shape; a wide cover is saved 1080 pixels high", async () => {
@@ -294,16 +413,16 @@ test("an Auto project's cover has the first clip's shape; a wide cover is saved 
   expect(capture.mock.calls[0][1]).toMatchObject({ width: 840, height: 360 });   // 2520 × 1080
 });
 
-describe("round 2 look (behaviour unchanged)", () => {
-  test("the title is the kit field, the slider's rest track is the kit's colour, Reset is text only, Done is the one gold button", async () => {
+describe("look", () => {
+  test("the title is the kit field, the slider is the kit's, Reset is text only in the header, Save to Photos is the one gold button", async () => {
     await open();
     expect(field()).toHaveStyle({ backgroundColor: theme.elevation.tile, fontSize: theme.type.input, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md });
     expect(field()).toHaveProp("placeholder", "Add a title");
     expect(slider()).toHaveProp("maximumTrackTintColor", theme.colors.sea);
+    expect(slider()).toHaveProp("minimumTrackTintColor", theme.colors.accent);
     expect(screen.getByText("0 / 40")).toHaveStyle({ fontSize: theme.type.small });
     expect(screen.getByRole("button", { name: "Reset" })).not.toHaveStyle({ borderWidth: 1.5 });
-    expect(saveButton()).toHaveStyle({ borderWidth: 1.5 });
     expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
-    expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Done");
+    expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Save to Photos");
   });
 });

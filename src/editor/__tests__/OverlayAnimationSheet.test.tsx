@@ -4,6 +4,9 @@ jest.mock("@react-native-community/slider", () => { const { View } = require("re
 import { ANIM_LOOP } from "@/src/editor/effects";
 import { ANIM_LOOP_IDS, makeClip, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { setOverlayAnimation } from "@/src/editor/model/ops";
+import { TILE_WIDTH } from "@/src/ui/Tile";
+import { tilesStartX } from "@/src/ui/ToolStrip";
 import { OverlayAnimationSheet } from "../components/OverlayAnimationSheet";
 
 const anim = (id: string) => useEditorStore.getState().project!.overlays.find((o) => o.id === id)!.animation;
@@ -68,4 +71,30 @@ test("renders nothing for a caption or a missing overlay", async () => {
   expect(screen.queryByText("Animation")).toBeNull();
   await view.rerender(<OverlayAnimationSheet overlayId={null} visible onClose={() => {}} />);
   expect(screen.queryByText("Animation")).toBeNull();
+});
+
+type ScrollInst = ReturnType<typeof screen.getByTestId>;
+const findRowScroll = (n: ScrollInst): ScrollInst | null => { if (n.props.contentOffset !== undefined) return n; for (const c of n.children) { if (typeof c === "string") continue; const f = findRowScroll(c as ScrollInst); if (f) return f; } return null; };
+/** Where the tile row starts (the kit hands it to its ScrollView as contentOffset). */
+const rowStartX = () => findRowScroll(screen.getByTestId("strip-tiles"))!.props.contentOffset.x as number;
+
+test("the tile row keeps its offset across picks; a tab, another overlay or the next opening works it out again", async () => {
+  useEditorStore.getState().apply((p) => setOverlayAnimation(p, "t1", { in: { id: "rise", duration: 0.5 } }));
+  const view = await render(<OverlayAnimationSheet overlayId="t1" visible onClose={() => {}} />);
+  const atRise = tilesStartX(10, TILE_WIDTH);                 // None, then the ten In ids: Rise is tile 10
+  expect(rowStartX()).toBe(atRise);
+  await press("Fade");
+  expect(anim("t1").in?.id).toBe("fade");
+  expect(rowStartX()).toBe(atRise);                           // the row did not move under the finger
+  await press("Loop");
+  expect(rowStartX()).toBe(0);
+  await press("Shake");
+  expect(anim("t1").loop).toBe("shake");
+  expect(rowStartX()).toBe(0);
+  await view.rerender(<OverlayAnimationSheet overlayId="t1" visible={false} onClose={() => {}} />);
+  await view.rerender(<OverlayAnimationSheet overlayId="t1" visible onClose={() => {}} />);
+  await press("Loop");
+  expect(rowStartX()).toBe(tilesStartX(ANIM_LOOP_IDS.indexOf("shake") + 1, TILE_WIDTH));
+  await view.rerender(<OverlayAnimationSheet overlayId="s1" visible onClose={() => {}} />);
+  expect(rowStartX()).toBe(0);
 });

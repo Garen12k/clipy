@@ -125,7 +125,7 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an 
 
 ## Quick edit
 
-A second button on the home screen, beside **New clip**: pick a style, pick photos and videos, and the app opens a
+A second button on the home screen, beside **New project**: pick a style, pick photos and videos, and the app opens a
 finished draft. Works fully in Expo Go.
 
 - **Six styles** (on screen they are called styles; **Templates** is a different tool inside the editor), each with its
@@ -146,7 +146,7 @@ finished draft. Works fully in Expo Go.
 - **Cancel leaves nothing behind.** Closing the sheet or cancelling the library makes no project. The music is fetched
   before the project is created, and a draft that cannot be finished is deleted again ("Couldn't make the quick edit").
   If only some items could not be read, the draft is made from the rest and a message counts them.
-- **While a project is being made** (Quick edit or New clip) the home screen takes no touches, and the editor opens only
+- **While a project is being made** (Quick edit or New project) the home screen takes no touches, and the editor opens only
   if the home screen is still in front.
 
 The styles are data (`QUICK_RECIPES` in `src/projects/quickEdit.ts`), built by one pure function (`buildQuickEdit`);
@@ -214,7 +214,7 @@ Every row except the first has a **back arrow** at the left that clears the sele
 
 **Strips.** Quick tools (Filter, Adjust, Speed, Volume, Opacity, Animate, Mask, Blend, Green screen, Transform, Background, Ratio, Transition, Fade, Strength) open as a small panel in place of the row. Nothing dims; you can play, scrub and tap the timeline while it is open. It rises over the two lowest timeline rows and never over the clips: with two or more rows under the clips the video keeps its size, with fewer the video gets a little smaller while the strip is open. The round **✓** closes it, and so does selecting something else. The ratio pill next to the play button and the mark between two clips open the Ratio and Transition strips. The Effects list and Trim (by numbers) are strips too.
 
-**Panels.** Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style and Beats open as a tall panel at the bottom. Nothing dims: the timeline and the row of tools give the panel their place (the timeline comes back where it was, same zoom), and the video stays above it, a little smaller (smaller still for the big panels), and keeps playing. Play, undo and redo stay usable above the panel. The round **✓** closes it, and so does selecting something else. When you type, the panel sits on the keyboard at a lower height and the video stays in view; drag the panel's content down to put the keyboard away (the panel stays open). While a voice-over is recorded the panel stays until the recording is stopped and saved, and the other tools and Export do not open. Trim's number boxes work the same way: with the keyboard up the timeline is hidden and the strip sits on the keyboard. Panels fade and rise in; closing is instant. Cover is still a pop-up sheet (it dims the screen) and Crop is a full screen.
+**Panels.** Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style, Beats and Cover open as a tall panel at the bottom. Nothing dims: the timeline and the row of tools give the panel their place (the timeline comes back where it was, same zoom), and the video stays above it, a little smaller (smaller still for the big panels), and keeps playing. Play, undo and redo stay usable above the panel. The round **✓** closes it, and so does selecting something else. When you type, the panel sits on the keyboard at a lower height and the video stays in view; drag the panel's content down to put the keyboard away (the panel stays open). While a voice-over is recorded the panel stays until the recording is stopped and saved, and the other tools and Export do not open. Trim's number boxes work the same way: with the keyboard up the timeline is hidden and the strip sits on the keyboard. Panels fade and rise in; closing is instant. Crop is a full screen.
 
 **Aspect ratio.** Nine choices: **Auto**, 1:1, 3:2, 2:3, 16:9, 9:16, 4:3, 3:4 and 21:9.
 
@@ -252,7 +252,7 @@ turns them into ordinary video before composing; this code is uncompiled until a
 
 Filter and Adjust are on the first row and on a selected clip's row; Transition is on a clip's row (or tap the mark between two clips); Effects is on the first row.
 
-- **Filters** — 31 filters plus None. The twelve newest, after Dream: Kodak, Fuji, Matte, Bleach, Dusk, Moody, Cinema, Blush, Grit, Silver, Indigo, Drama ("Kodak" and "Fuji" are brand names: rename them before any public release). The Filter row opens at the filter in use. Each has a **Strength** slider (0-100). "Apply to all clips"
+- **Filters** — 31 filters plus None. The twelve newest, after Dream: Amber, Jade, Matte, Bleach, Dusk, Moody, Cinema, Blush, Grit, Silver, Indigo, Drama. The Filter row opens at the filter in use. Each has a **Strength** slider (0-100). "Apply to all clips"
   copies the filter and its strength.
 - **Adjust** — twelve sliders: Brightness, Contrast, Saturation, Exposure, Warmth, Tint, Highlights,
   Shadows, Sharpen, Vignette, Fade, Grain. **Reset** sets them all back to 0; "Apply to all" copies
@@ -428,10 +428,12 @@ on older phones. The export is Swift that has never been compiled.
   **Smaller file** asks the engine to keep the file under a size limit (`fileLengthLimit`); this is a ceiling, not a
   target, and it is untested until the first native build. 24 fps from 30 fps sources may judder slightly;
   text and sticker animations are still sampled 30 times a second at every frame rate.
-- **Cover** - **Edit** -> **Cover** (last tool). Drag the slider to pick a frame, type a short title (up to 40
-  characters), then **Done**; **Reset** goes back to the first frame. **Save to Photos** saves the picture (1080 px
-  wide, a screen capture of the cover frame, so filters and layers are not on it); it is disabled while you type
-  the title. The drafts list shows the cover and its title once you leave the editor (the picture is written when
+- **Cover** - **Edit** -> **Cover** (last tool). It opens as a panel under the video, like the other tools. Drag
+  the slider to pick a frame and type a short title (up to 40 characters): the panel shows the chosen frame with
+  the title on it, and the choice is kept as you go (one drag is one undo step, a run of typing is one); the round
+  **✓** closes the panel. **Reset** goes back to the first frame and no title. **Save to Photos** saves the picture
+  (1080 px wide, a screen capture of the cover frame, so filters and layers are not on it); it is disabled while
+  the keyboard is up. The drafts list shows the cover and its title once you leave the editor (the picture is written when
   the editor closes; if the app is killed inside the editor the first frame shows until the next close).
   The cover is sent to **Instagram only**, as the Reel's thumbnail.
 - **Snapping** - while you move or trim a bar on the timeline (text, caption, sticker, effect, audio, layer, or a
@@ -535,8 +537,8 @@ More looks items (ten transitions, twelve filters and eight effects; none of the
 
 Filters:
 
-56. **Split tone** (Cinema, Kodak, Fuji, Dusk, Blush, Indigo). Shadows and highlights should take their two colours: a tint, not a flat wash and not nothing. The pair is `CIFalseColor` (dark takes colour 0) laid over the picture with `CISoftLightBlendMode`; whether that reads as a tint, and in which colour space the hex colours land, is unverified. If too strong or too weak, change the `amount` in `src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together.
-57. **Warm / cool direction.** The new warm filters (Kodak, Matte, Dusk) and cool ones (Fuji, Moody) follow the Adjust "Warmth" slider (positive = warm). The older Warm / Cool filters use the opposite direction (item 1), so exactly one of the two conventions is backwards: compare Kodak with Warm and with the slider, then flip the one that is wrong (if it is the slider, the new rows flip with it).
+56. **Split tone** (Cinema, Amber, Jade, Dusk, Blush, Indigo). Shadows and highlights should take their two colours: a tint, not a flat wash and not nothing. The pair is `CIFalseColor` (dark takes colour 0) laid over the picture with `CISoftLightBlendMode`; whether that reads as a tint, and in which colour space the hex colours land, is unverified. If too strong or too weak, change the `amount` in `src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together.
+57. **Warm / cool direction.** The new warm filters (Amber, Matte, Dusk) and cool ones (Jade, Moody) follow the Adjust "Warmth" slider (positive = warm). The older Warm / Cool filters use the opposite direction (item 1), so exactly one of the two conventions is backwards: compare Amber with Warm and with the slider, then flip the one that is wrong (if it is the slider, the new rows flip with it).
 58. **Each of the twelve changes the picture**, and **Strength** 0-100 mixes it in (0 = the untouched frame, 100 = the full recipe).
 59. **Grit, Silver and Indigo** are black-and-white (Indigo then toned blue); Bleach and Drama keep some colour. Check Grit's grain and sharpening are not harsh.
 60. **An old filter on an old project** looks exactly as it did.
@@ -564,8 +566,8 @@ Transitions:
 
 Left by the reviews of the same work:
 
-76. **Temperature direction, both families side by side.** The old filters (Warm 7100 K, Sunset and Golden higher; Cool and Teal lower: `Effects.swift`) and the Adjust slider with the new recipes (`6500 - 2500*v`, warm = lower) use opposite conventions. Export Warm, Kodak, Moody and Adjust temperature +50 on the same clip and compare: one family is reversed. Fixing the old ones changes an existing look, so that is the owner's decision.
-77. **Split-tone filters may export darker than designed** (Kodak, Fuji, Dusk, Cinema, Blush, Indigo; Core Image's linear working space). If so, lower `amount` in the mirrored recipe rows (`src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together).
+76. **Temperature direction, both families side by side.** The old filters (Warm 7100 K, Sunset and Golden higher; Cool and Teal lower: `Effects.swift`) and the Adjust slider with the new recipes (`6500 - 2500*v`, warm = lower) use opposite conventions. Export Warm, Amber, Moody and Adjust temperature +50 on the same clip and compare: one family is reversed. Fixing the old ones changes an existing look, so that is the owner's decision.
+77. **Split-tone filters may export darker than designed** (Amber, Jade, Dusk, Cinema, Blush, Indigo; Core Image's linear working space). If so, lower `amount` in the mirrored recipe rows (`src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together).
 78. **Dust density** was lowered to `dustSpeck` 0.005 (from 0.02) by reasoning only: confirm by eye that the specks are a faint sprinkle and not a haze, and tune both files together (item 62).
 79. **Effect order.** The preview draws the flat layers before the shapes; the export uses list order. Strobe after Film burn hides the burn in the export but not on the phone.
 80. **White flash, Heartbeat and Strobe show the Preview tag although they are exact.** Kept on purpose: the spec promises the tag for every look.
