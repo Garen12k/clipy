@@ -2,7 +2,7 @@ import { requireOptionalNativeModule, type EventSubscription } from "expo-module
 import { FONTS } from "@/src/editor/fonts";
 import { clipGainCurve, exportTrackCurve, type GainPoint } from "@/src/editor/model/audioMix";
 import { trackEnd } from "@/src/editor/model/audioSync";
-import { edgeDurations } from "@/src/editor/model/motion";
+import { edgeDurations, photoMotionPins } from "@/src/editor/model/motion";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
 import { clampTextStyle, DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type BoxCorner, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type ExportFps, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
@@ -103,7 +103,8 @@ export function toExportClip(c: Clip): ExportClip {
     reversed: c.reversed,
     filterIntensity: c.filterIntensity, adjust: { ...c.adjust },
     animIn: toEdge(c.animation.in, edges.in), animOut: toEdge(c.animation.out, edges.out), animCombo: c.animation.combo,
-    keyframes: outputKeyframes(c, length),
+    // A photo's Motion travels as two pins (it eases the way pins are interpolated): the native side needs nothing new.
+    keyframes: photoMotionPins(c, length) ?? outputKeyframes(c, length),
     speedSpans: hasSpeedCurve(c) ? playbackSpans(c) : [],
     gain: clipGainCurve(c),
     opacity: c.opacity, mask: c.mask,

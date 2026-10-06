@@ -258,6 +258,20 @@ describe("toExportClip", () => {
       expect(e.speedSpans).toEqual([{ duration: 0.5, speed: 2 }, { duration: 1, speed: 1.5 }]);
     });
   });
+  it("sends a photo's Motion as two pins, at its start and its end — nothing else in the request changes", () => {
+    const still = makePhotoClip({ id: "p", seconds: 4 });
+    const moving = { ...still, motion: { id: "zoomIn" as const, strength: 0.5 } };
+    expect(toExportClip(still).keyframes).toEqual([]);
+    expect(toExportClip(moving)).toEqual({ ...toExportClip(still), keyframes: [
+      { t: 0, x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+      { t: 4, x: 0, y: 0, scale: expect.closeTo(1.15, 12), rotation: 0, opacity: 1 },
+    ] });
+    expect("motion" in toExportClip(moving)).toBe(false);          // the request has no such field: Swift is not asked anything new
+    expect(toExportLayer({ ...moving, start: 2 }).keyframes).toHaveLength(2);
+    // Keyframes win over a stored motion, as in the preview.
+    const pinned = { ...moving, keyframes: [makeKeyframe({ t: 1, scale: 2 })] };
+    expect(toExportClip(pinned).keyframes).toEqual([{ t: 1, x: 0, y: 0, scale: 2, rotation: 0, opacity: 1 }]);
+  });
 });
 
 describe("toExportOverlay", () => {
