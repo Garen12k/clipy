@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { join, relative, sep } from "path";
 
 const ROOT = join(__dirname, "..", "..");
-const DIRS = ["app", "src/projects", "src/export", "src/publish"];
+const DIRS = ["app", "src/projects", "src/export", "src/publish", "src/auth"];
 /**
  * Files that still name a filled icon, and which ones, in the order they appear. One file per line: the task that fixes a file
  * deletes that file's line and no other. The list is exact, so the table cannot go stale.
