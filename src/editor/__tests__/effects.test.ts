@@ -17,7 +17,7 @@ const swiftNumber = (name: string): number => {
 };
 
 test("registry covers every id with sane preview params", () => {
-  expect(FILTER_IDS).toHaveLength(20);
+  expect(FILTER_IDS).toHaveLength(32);
   for (const id of FILTER_IDS) {
     const f = FILTERS[id];
     expect(f.label.length).toBeGreaterThan(0);
@@ -26,7 +26,7 @@ test("registry covers every id with sane preview params", () => {
     expect(Math.abs(f.preview.brightness)).toBeLessThanOrEqual(0.3);
   }
   expect(FILTERS.none.preview).toEqual({ tint: "#000000", tintOpacity: 0, saturation: 1, brightness: 0 });
-  expect(TRANSITION_TYPES).toHaveLength(11);
+  expect(TRANSITION_TYPES).toHaveLength(21);
   for (const t of TRANSITION_TYPES) expect(TRANSITIONS[t].label.length).toBeGreaterThan(0);
 });
 
@@ -59,9 +59,14 @@ test("caption style default", () => {
 });
 
 test("effects registry covers every effect id; labels as specified", () => {
-  expect(EFFECT_IDS).toHaveLength(12);
+  expect(EFFECT_IDS).toHaveLength(20);
   for (const id of EFFECT_IDS) { expect(EFFECTS[id].label.length).toBeGreaterThan(0); expect(EFFECTS[id].icon.length).toBeGreaterThan(0); }
-  expect(EFFECT_IDS.map((id) => EFFECTS[id].label)).toEqual(["Glitch", "Shake", "Zoom pulse", "Blur", "VHS", "Light leak", "Flash", "RGB split", "Old film", "Glow", "Blur box", "Mosaic box"]);
+  expect(EFFECT_IDS.map((id) => EFFECTS[id].label)).toEqual(["Glitch", "Shake", "Zoom pulse", "Blur", "VHS", "Light leak", "Flash", "RGB split", "Old film", "Glow", "Blur box", "Mosaic box",
+    "Film burn", "Lens flare", "Dust", "Heartbeat", "Hue shift", "Mirror", "Soft edges", "Strobe"]);
+  expect(EFFECT_IDS.slice(12).map((id) => EFFECTS[id].icon)).toEqual(["flame-outline", "aperture-outline", "snow-outline", "fitness-outline", "color-palette-outline", "swap-horizontal-outline", "ellipse-outline", "flashlight-outline"]);
+  expect(TRANSITION_TYPES.slice(11).map((t) => TRANSITIONS[t].label)).toEqual(["Cover left", "Reveal left", "Cover up", "Reveal down", "Circle open", "Circle close", "Diagonal wipe", "Clock wipe", "Pixelate", "White flash"]);
+  // Under a 72-pt tile: at most two words, sentence case.
+  for (const id of EFFECT_IDS) { expect(EFFECTS[id].label.split(" ").length).toBeLessThanOrEqual(2); expect(EFFECTS[id].icon.endsWith("-outline")).toBe(true); }
   expect(TRANSITIONS.slide.label).toBe("Slide left");
   expect(TRANSITIONS.slideRight.label).toBe("Slide right");
 });
@@ -76,8 +81,11 @@ test("animation registries cover every id with the specified labels", () => {
   expect(ANIM_LOOP_IDS.map((id) => ANIM_LOOP[id].label)).toEqual(["Wiggle", "Pulse", "Spin", "Float", "Blink", "Shake"]);
 });
 
-test("every non-none filter id has a recipe case in Effects.swift filterChain", () => {
-  for (const id of FILTER_IDS) if (id !== "none") expect(swift).toContain(`case "${id}":`);
+test("every filter has its export recipe in exactly one place: the nineteen old ones a case in Effects.filterChain, the twelve of 2026-10-06 a row in FilterRecipes.swift", () => {
+  const recipes = readFileSync(join(__dirname, "../../../modules/clipy-video/ios/FilterRecipes.swift"), "utf8");
+  for (const id of FILTER_IDS.slice(1, 20)) { expect(swift).toContain(`case "${id}":`); expect(recipes).not.toContain(`"${id}": FilterRecipe(`); }
+  for (const id of FILTER_IDS.slice(20)) { expect(recipes).toContain(`"${id}": FilterRecipe(`); expect(swift).not.toContain(`case "${id}":`); }
+  expect(FILTER_IDS.slice(20)).toHaveLength(12);
 });
 
 test("every transition type except none / dissolve has its own case inside ClipyCompositor.blend", () => {

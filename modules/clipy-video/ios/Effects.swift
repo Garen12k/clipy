@@ -4,9 +4,9 @@ import Foundation
 
 /// Mirror of src/editor/effects.ts — ids and shape paths must stay identical.
 enum Effects {
-  static let filterIds = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage", "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream"]
-  static let transitionTypes = ["none", "fade", "dissolve", "slide", "zoom", "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur"]
-  static let effectIds = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow", "blurBox", "mosaicBox"]
+  static let filterIds = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage", "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream", "kodak", "fuji", "matte", "bleach", "dusk", "moody", "tealOrange", "blush", "grit", "silver", "indigo", "drama"]
+  static let transitionTypes = ["none", "fade", "dissolve", "slide", "zoom", "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur", "cover", "reveal", "coverUp", "revealDown", "circleOpen", "circleClose", "wipeDiagonal", "wipeClock", "pixelate", "flashWhite"]
+  static let effectIds = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow", "blurBox", "mosaicBox", "filmBurn", "lensFlare", "dust", "heartbeat", "hueShift", "mirror", "softEdges", "strobe"]
 
   /// Core Image recipe per filter id (applied in order). Unknown ids (and nil / "none") → empty chain (no filter).
   static func filterChain(_ id: String?) -> [(name: String, params: [String: Any])] {

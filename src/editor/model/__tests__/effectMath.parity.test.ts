@@ -3,7 +3,9 @@ import { join } from "path";
 import { EFFECT, EFFECT_COLORS } from "../effectMath";
 import { EFFECT_IDS } from "../types";
 import {
-  ENVELOPE_VECTORS, FLASH_VECTORS, FLICKER_VECTORS, GLITCH_VECTORS, HASH_VECTORS, LEAK_VECTORS, PULSE_VECTORS, SHAKE_VECTORS,
+  BURN_VECTORS, BURN_Y_VECTORS, DUST_VECTORS, ENVELOPE_VECTORS, FLARE_OPACITY_VECTORS, FLARE_X_VECTORS, FLASH_VECTORS, FLICKER_VECTORS,
+  GLITCH_VECTORS, HASH_VECTORS, HEARTBEAT_VECTORS, HUE_VECTORS, LEAK_VECTORS, MIRROR_VECTORS, PULSE_VECTORS, SHAKE_VECTORS, SOFT_EDGE_VECTORS,
+  STROBE_VECTORS,
   type ScalarVector,
 } from "./effectMath.vectors";
 
@@ -36,6 +38,9 @@ const inOrder = (body: string, parts: string[]) => {
 const SCALARS: [string, ScalarVector[]][] = [
   ["hash", HASH_VECTORS], ["envelope", ENVELOPE_VECTORS], ["pulseScale", PULSE_VECTORS], ["flashOpacity", FLASH_VECTORS],
   ["leakAlpha", LEAK_VECTORS], ["flickerAlpha", FLICKER_VECTORS],
+  ["heartbeatScale", HEARTBEAT_VECTORS], ["strobeOpacity", STROBE_VECTORS], ["burnOpacity", BURN_VECTORS], ["burnCentreY", BURN_Y_VECTORS],
+  ["flareX", FLARE_X_VECTORS], ["flareOpacity", FLARE_OPACITY_VECTORS], ["softEdgeAmount", SOFT_EDGE_VECTORS], ["hueAngle", HUE_VECTORS],
+  ["mirrorMix", MIRROR_VECTORS],
 ];
 
 test("EffectMath.swift declares exactly the EFFECT constants, with the same values", () => {
@@ -139,4 +144,54 @@ test("the blur transition is continuous: both frames blurred by a radius that pe
   expect([...branch.matchAll(/blurred\(/g)]).toHaveLength(2);
   expect(branch).toMatch(/blurTransitionRadius\(/);
   expect(branch).not.toMatch(/p < 0\.5/);
+});
+
+test("EffectMath.swift mirrors the ten functions of 2026-10-06, under the same names", () => {
+  for (const fn of ["heartbeatScale", "strobeOpacity", "burnOpacity", "burnCentreY", "flareX", "flareOpacity", "softEdgeAmount", "dustScratch", "hueAngle", "mirrorMix"]) {
+    expect(swift).toMatch(new RegExp(`static func ${fn}\\(`));
+  }
+  expect(swift).toContain("struct DustScratch: Equatable {");
+  // The scratch's two hash arguments are the same expressions on both sides.
+  const dust = between(swift, "static func dustScratch(", "\n  }\n");
+  expect(dust).toContain("hash(n * 7 + i * 13 + 1) < EffectMath.dustChance * k");
+  expect(dust).toContain("hash(n * 3 + i * 17 + 2)");
+  // sin² as a product, never pow (the same double arithmetic as `Math.sin(x) ** 2` is not guaranteed for pow).
+  expect(between(swift, "static func bump(", "\n  }\n")).toMatch(/let s = sin\(Double\.pi \* x\)\s*\n\s*return s \* s/);
+  // Every result goes through one guard (finite, inside its range), written the same on both sides.
+  expect(between(swift, "static func within(", "\n  }\n")).toContain("return v.isFinite ? min(hi, max(lo, v)) : rest");
+  expect(between(swift, "static func calmEnvelope(", "\n  }\n")).toContain("return t.isFinite && d.isFinite ? envelope(t: t, d: d) : 0");
+});
+
+test("the other nine functions of 2026-10-06 have the same bodies as effectMath.ts: the expression, and the range it is kept within", () => {
+  const body = (fn: string) => between(swift, `static func ${fn}(`, "\n  }\n");
+  // heartbeatScale: two bumps `beatGap` apart, the second weaker; never below 1, never above 1 + beatAmp.
+  expect(body("heartbeatScale")).toContain("let phase = frac(EffectMath.beatHz * t)");
+  expect(body("heartbeatScale")).toContain("let beat = bump(phase / EffectMath.beatWidth) + EffectMath.beatSecond * bump((phase - EffectMath.beatGap) / EffectMath.beatWidth)");
+  expect(body("heartbeatScale")).toContain("return within(1 + EffectMath.beatAmp * k * calmEnvelope(t: t, d: d) * beat, 1, 1 + EffectMath.beatAmp, 1)");
+  // strobeOpacity: k for the first `strobeDuty` of every period.
+  expect(body("strobeOpacity")).toContain("return frac(EffectMath.strobeHz * t) < EffectMath.strobeDuty ? within(k, 0, 1, 0) : 0");
+  // burnOpacity: a slow swell, 0 … burnMax.
+  expect(body("burnOpacity")).toContain("0.5 + 0.5 * sin(tau * EffectMath.burnHz * t)");
+  expect(body("burnOpacity")).toContain("return within(EffectMath.burnMax * k * calmEnvelope(t: t, d: d) * (0.5 + 0.5 * sin(tau * EffectMath.burnHz * t)), 0, EffectMath.burnMax, 0)");
+  // burnCentreY: the middle of the height, drifting `burnDrift` each way.
+  expect(body("burnCentreY")).toContain("return within(0.5 + EffectMath.burnDrift * sin(tau * EffectMath.burnDriftHz * t), 0.5 - EffectMath.burnDrift, 0.5 + EffectMath.burnDrift, 0.5)");
+  // flareX: one margin left of the frame to one margin right of it.
+  expect(body("flareX")).toContain("1 + 2 * EffectMath.flareMargin");
+  expect(body("flareX")).toContain("return within(-EffectMath.flareMargin + (1 + 2 * EffectMath.flareMargin) * frac(EffectMath.flareHz * t), -EffectMath.flareMargin, 1 + EffectMath.flareMargin, -EffectMath.flareMargin)");
+  expect(body("flareOpacity")).toContain("return within(EffectMath.flareMax * k * calmEnvelope(t: t, d: d), 0, EffectMath.flareMax, 0)");
+  expect(body("softEdgeAmount")).toContain("return within(k * calmEnvelope(t: t, d: d), 0, 1, 0)");
+  // hueAngle: up to half a turn each way.
+  expect(body("hueAngle")).toContain("return within(Double.pi * k * calmEnvelope(t: t, d: d) * sin(tau * EffectMath.hueHz * t), -Double.pi, Double.pi, 0)");
+  // mirrorMix: full from `mirrorFull` up.
+  expect(body("mirrorMix")).toContain("return within(within(k / EffectMath.mirrorFull, 0, 1, 0) * calmEnvelope(t: t, d: d), 0, 1, 0)");
+  // dustScratch's film frame is a floor, as in TS (`Math.floor(EFFECT.dustFps * t)`).
+  expect(body("dustScratch")).toContain("let n = (EffectMath.dustFps * t).rounded(.down)");
+  expect(swift).toContain("private static let tau = 2 * Double.pi");
+});
+
+describe("the Swift test table embeds every DUST_VECTORS case", () => {
+  it("has the same number of cases", () => expect([...table.matchAll(/EffectDustVector\(name: "/g)]).toHaveLength(DUST_VECTORS.length));
+  it.each(DUST_VECTORS.map((v) => [v.name, v] as const))("%s", (_name, v) => {
+    expect(table).toContain(`EffectDustVector(name: "${v.name}", t: ${fmt(v.t)}, k: ${fmt(v.k)}, i: ${fmt(v.i)}, on: ${v.on}, x: ${fmt(v.x)})`);
+  });
 });

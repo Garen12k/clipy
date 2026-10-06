@@ -222,24 +222,32 @@ turns them into ordinary video before composing; this code is uncompiled until a
 
 Filter and Adjust are on the first row and on a selected clip's row; Transition is on a clip's row (or tap the mark between two clips); Effects is on the first row.
 
-- **Filters** — 19 filters plus None. Each has a **Strength** slider (0-100). "Apply to all clips"
+- **Filters** — 31 filters plus None. The twelve newest, after Dream: Kodak, Fuji, Matte, Bleach, Dusk, Moody, Cinema, Blush, Grit, Silver, Indigo, Drama ("Kodak" and "Fuji" are brand names: rename them before any public release). The Filter row opens at the filter in use. Each has a **Strength** slider (0-100). "Apply to all clips"
   copies the filter and its strength.
 - **Adjust** — twelve sliders: Brightness, Contrast, Saturation, Exposure, Warmth, Tint, Highlights,
   Shadows, Sharpen, Vignette, Fade, Grain. **Reset** sets them all back to 0; "Apply to all" copies
   them to every clip.
-- **Effects** — ten: Glitch, Shake, Zoom pulse, Blur, VHS, Light leak, Flash, RGB split, Old film,
-  Glow. Tap one in the Effects strip to add it at the playhead. Effects sit on their own lane of the
+- **Effects** — twenty: Glitch, Shake, Zoom pulse, Blur, VHS, Light leak, Flash, RGB split, Old film,
+  Glow, Blur box, Mosaic box, Film burn, Lens flare, Dust, Heartbeat, Hue shift, Mirror, Soft edges,
+  Strobe. Tap one in the Effects strip to add it at the playhead. Effects sit on their own lane of the
   timeline as pills: move them, trim them, duplicate or delete them, and set a **Strength**.
-- **Transitions** — eleven chips: None, Fade, Dissolve, Slide left / right / up / down, Zoom, Wipe,
-  Spin, Blur.
+- **Transitions** — twenty-one chips: None, Fade, Dissolve, Slide left / right / up / down, Zoom, Wipe,
+  Spin, Blur, Cover left, Reveal left, Cover up, Reveal down, Circle open, Circle close, Diagonal wipe,
+  Clock wipe, Pixelate, White flash. The Transition row opens at the chip in use.
 
 **Preview vs export.** Expo Go cannot change a video's pixels, so the preview only approximates
 with coloured layers and movement, and shows the "Preview" tag. The exported video is the real thing.
 
-- Shown roughly in the preview: filter strength, brightness, exposure, warmth, tint, fade, vignette,
-  lowering saturation; the effects Shake, Zoom pulse, Flash, Light leak, VHS, Old film and Glow.
+- Shown as in the export: the effects Heartbeat and Strobe, and the transition White flash.
+- Shown roughly in the preview: filter strength (the twelve newest filters as a tint of the same kind),
+  brightness, exposure, warmth, tint, fade, vignette,
+  lowering saturation; the effects Shake, Zoom pulse, Flash, Light leak, VHS, Old film, Glow, Film burn,
+  Lens flare, Soft edges and Dust. Cover left, Reveal left, Cover up, Reveal down, Circle open, Circle
+  close and Diagonal wipe show the export's moving edge as a black shape: the preview never shows two
+  clips at once, so the other clip is black. The older transitions show as a dip to black.
 - Not shown until a real build: contrast, raising saturation, highlights, shadows, sharpen, grain;
-  the effects Glitch, Blur and RGB split. Every transition shows as a dip to black.
+  the effects Glitch, Blur, RGB split, Hue shift and Mirror. Clock wipe and Pixelate show only as the
+  dip to black.
 
 All of the export side is Swift that has never been compiled.
 
@@ -456,3 +464,42 @@ Text looks and stickers items:
 53. **Frames and rings.** Frame and Ring export with a see-through middle (the hole is the inner subpath, wound the other way, filled non-zero); Corners shows four separate brackets.
 54. **Thought bubble and Award.** The two dots of the Thought bubble and the two ribbon tails of the Award are there; the tails overlap the disc and must show as one solid shape, not punched out (non-zero fill).
 55. **Every new shape** appears, right way up, in its colour. `ExportSessionTests.testSVGPathParsesShapes` and `testCompoundShapesKeepTheirHoles` compile and pass, and so do `TextBoxTests` and the new `OverlayLayoutTests` box vectors.
+
+More looks items (ten transitions, twelve filters and eight effects; none of their Swift has ever run, and every Core Image name and key is from memory of Apple's reference. A wrong name or key makes that one look do nothing, it never crashes). Most likely wrong first in each group:
+
+Filters:
+
+56. **Split tone** (Cinema, Kodak, Fuji, Dusk, Blush, Indigo). Shadows and highlights should take their two colours: a tint, not a flat wash and not nothing. The pair is `CIFalseColor` (dark takes colour 0) laid over the picture with `CISoftLightBlendMode`; whether that reads as a tint, and in which colour space the hex colours land, is unverified. If too strong or too weak, change the `amount` in `src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together.
+57. **Warm / cool direction.** The new warm filters (Kodak, Matte, Dusk) and cool ones (Fuji, Moody) follow the Adjust "Warmth" slider (positive = warm). The older Warm / Cool filters use the opposite direction (item 1), so exactly one of the two conventions is backwards: compare Kodak with Warm and with the slider, then flip the one that is wrong (if it is the slider, the new rows flip with it).
+58. **Each of the twelve changes the picture**, and **Strength** 0-100 mixes it in (0 = the untouched frame, 100 = the full recipe).
+59. **Grit, Silver and Indigo** are black-and-white (Indigo then toned blue); Bleach and Drama keep some colour. Check Grit's grain and sharpening are not harsh.
+60. **An old filter on an old project** looks exactly as it did.
+61. **Export speed** with a split-tone filter (two extra Core Image filters and a mix per frame).
+
+Effects:
+
+62. **Dust speck density.** The fine grain (`CIRandomGenerator` through `CIColorMatrix` and a clamp) should be visible but faint. Too many or too few specks: tune `dustSpeck` in `effectMath.ts` and `EffectMath.swift` together. The two scratches should sit where the preview draws them, 3 px wide at 1080p and 6 px at 4K. (The Swift test reads the mean of an area, so a single speck cannot fail it.)
+63. **Soft edges.** Centre sharp, edges blurred, no dark rim. The mask relies on `CIBlendWithMask` (white = the sharp image); if inverted the centre is soft. The blur radius is 2 % of the shorter side at full Strength (about 22 px at 1080p, 43 px at 4K): check the look and the export speed at 4K (one full-frame blur per frame).
+64. **Lens flare and Film burn.** `CIRadialGradient` with a see-through outer colour should give a soft glow, not a hard disc or a grey fringe, laid on with `CIScreenBlendMode` (only ever brighter). The flare should cross left to right every two seconds at about a third of the way down (Core Image's y axis points up; one flip is done in the code). Film burn glows orange from the left edge and drifts up and down. Check neither is blown out on bright footage.
+65. **Mirror.** The left half is copied onto the right with no one-pixel seam on the centre line (check an odd-width video too); below Strength 50 it fades in.
+66. **Hue shift** turns colours around the wheel and leaves greys alone. `CIHueAdjust` takes radians and which way round the wheel it turns is unknown; only the order of the colours would differ.
+67. **Heartbeat and Strobe** match the preview's timing (two beats and a rest, 1.25 times a second; dark for 40 % of every half second).
+
+Transitions:
+
+68. **Clock wipe direction.** It should start at 12 o'clock and run clockwise. If it runs anticlockwise, the arc's `clockwise` flag (or the way up of the small mask picture) in `TransitionMasks.swift` is the cause. Also check the edge is smooth at 4K (the mask is drawn at 512 px and scaled up) and that no thin line of the old clip shows along the frame border.
+69. **Mask polarity.** In Circle open / close, Diagonal wipe and Clock wipe the new clip must appear inside the shape and the old one outside (`CIBlendWithMask`: white = the first image). If one is inverted, flip its mask.
+70. **Up and down of the covers and reveals.** Cover left: the new clip slides in from the right. Reveal left: the old clip slides off to the left. Cover up: the new clip rises from the bottom. Reveal down: the old clip drops off the bottom. Core Image's y axis points up while the maths points down, so a sign could be reversed (one flip is done per helper).
+71. **Diagonal wipe** starts at the top-left corner and ends at the bottom-right, with a straight edge and no gap or left-over corner at either end (the rotation sign of the half-plane mask).
+72. **Circle open / close**: a clean round edge that reaches the corners exactly at the end (no pinhole, no dot left).
+73. **Pixelate**: no jump at the first and last frame (blocks of 1-2 px at the ends; `CIPixellate` fed a clamped image), and speed at 4K (it runs on both clips).
+74. **White flash** is white, not grey, at the cut. White flash and Pixelate (like the older Dissolve and Blur) may look a little brighter in the export than in the preview in the middle of the transition: Core Image mixes in linear light, the preview in display space.
+75. **Nothing compiles until a real build does**: `FilterRecipes.swift`, `TransitionMath.swift`, `TransitionMasks.swift` and the new parts of `EffectMath.swift` / `EffectRenderer.swift` / `ClipyCompositor.swift`, and their XCTests (`FilterRecipeTests`, `TransitionMathTests`, `TransitionBlendTests`, `EffectMathTests`), were only read against `node_modules/expo-modules-core/ios`, never built.
+
+Left by the reviews of the same work:
+
+76. **Temperature direction, both families side by side.** The old filters (Warm 7100 K, Sunset and Golden higher; Cool and Teal lower: `Effects.swift`) and the Adjust slider with the new recipes (`6500 - 2500*v`, warm = lower) use opposite conventions. Export Warm, Kodak, Moody and Adjust temperature +50 on the same clip and compare: one family is reversed. Fixing the old ones changes an existing look, so that is the owner's decision.
+77. **Split-tone filters may export darker than designed** (Kodak, Fuji, Dusk, Cinema, Blush, Indigo; Core Image's linear working space). If so, lower `amount` in the mirrored recipe rows (`src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together).
+78. **Dust density** was lowered to `dustSpeck` 0.005 (from 0.02) by reasoning only: confirm by eye that the specks are a faint sprinkle and not a haze, and tune both files together (item 62).
+79. **Effect order.** The preview draws the flat layers before the shapes; the export uses list order. Strobe after Film burn hides the burn in the export but not on the phone.
+80. **White flash, Heartbeat and Strobe show the Preview tag although they are exact.** Kept on purpose: the spec promises the tag for every look.

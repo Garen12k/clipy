@@ -24,6 +24,8 @@ enum EffectRenderer {
   static let blurBoxRadius: Double = 0.06
   static let mosaicBoxBlock: Double = 0.08
   static let mosaicBoxMinBlock: Double = 4
+  /// The lens flare's halo is this share of its core's strength (export only).
+  static let flareHaloAlpha: Double = 0.5
 
   /// `image` with the effect `type` at local time `t` (seconds since the effect's start) of its duration `d`, at
   /// intensity `k`; `size` is the frame. Unknown types, non-finite input and times outside [0, d] → `image` unchanged.
@@ -103,6 +105,65 @@ enum EffectRenderer {
             ])
       else { return image }
       return tiles.cropped(to: box).composited(over: image).cropped(to: rect)
+    // ---- The eight effects of 2026-10-06 (the maths is EffectMath's; every filter goes through a guarded helper). ----
+    case "filmBurn":
+      // Warm light swelling in from the LEFT edge. `burnCentreY` is a fraction from the TOP of the screen; Core
+      // Image is y-up, so the centre is at height × (1 − y).
+      let centre = CGPoint(x: 0, y: h * (1 - EffectMath.burnCentreY(t: t)))
+      return light(EffectMath.filmBurnColor, alpha: EffectMath.burnOpacity(t: t, d: d, k: k), centre: centre, radius: EffectMath.burnRadius * w, over: image, rect: rect)
+    case "lensFlare":
+      // A bright spot with a wide soft halo, sweeping left → right at a fixed height (`flareY` from the top).
+      let alpha = EffectMath.flareOpacity(t: t, d: d, k: k)
+      let centre = CGPoint(x: EffectMath.flareX(t: t) * w, y: h * (1 - EffectMath.flareY))
+      let halo = light(EffectMath.lensFlareColor, alpha: alpha * flareHaloAlpha, centre: centre, radius: EffectMath.flareHalo * shorter, over: image, rect: rect)
+      return light(EffectMath.lensFlareColor, alpha: alpha, centre: centre, radius: EffectMath.flareCore * shorter, over: halo, rect: rect)
+    case "dust":
+      // Thin light scratches at the places the preview draws them (their opacity clamped as `effectShapes` clamps
+      // it), then a fine white grain.
+      let amount = k * env
+      guard amount > 0 else { return image }
+      var out = image.cropped(to: rect)
+      let lineWidth = max(1, (EffectMath.dustWidth * w).rounded())
+      let line = CIColor(color: UIColor(hex: EffectMath.dustColor).withAlphaComponent(CGFloat(EffectMath.within(EffectMath.dustOpacity * amount, 0, EffectMath.dustOpacity, 0))))
+      for i in 0..<Int(EffectMath.dustLines) {
+        let s = EffectMath.dustScratch(t: t, k: k, i: Double(i))
+        guard s.on else { continue }
+        let strip = CGRect(x: (s.x * w).rounded(), y: 0, width: lineWidth, height: h).intersection(rect)
+        if strip.isNull || strip.isEmpty { continue }
+        out = CIImage(color: line).cropped(to: strip).composited(over: out).cropped(to: rect)
+      }
+      return specks(over: out, amount: amount, time: t, rect: rect)
+    case "heartbeat":
+      return scaled(image, by: EffectMath.heartbeatScale(t: t, d: d, k: k), dx: 0, dy: 0, rect: rect)
+    case "hueShift":
+      let angle = EffectMath.hueAngle(t: t, d: d, k: k)
+      guard angle.isFinite, angle != 0,
+            let turned = Adjust.filtered(image.cropped(to: rect), "CIHueAdjust", ["inputAngle": number(angle)])
+      else { return image }
+      return turned.cropped(to: rect)
+    case "mirror":
+      // The left half turned over about the frame's vertical centre line (x → width − x) and laid over the right half.
+      // The seam is at width / 2 for any width: the half [0, w/2] lands on [w/2, w], and the whole frame lies under it.
+      let mix = EffectMath.mirrorMix(t: t, d: d, k: k)
+      guard mix > 0 else { return image }
+      let frame = image.cropped(to: rect)
+      let flipped = frame.cropped(to: CGRect(x: 0, y: 0, width: w / 2, height: h))
+        .transformed(by: CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: CGFloat(w), ty: 0))
+      let mirrored = flipped.composited(over: frame).cropped(to: rect)
+      return mix >= 1 ? mirrored : ClipyCompositor.dissolve(from: frame, to: mirrored, progress: CGFloat(mix)).cropped(to: rect)
+    case "softEdges":
+      // The whole frame blurred (`CIGaussianBlur` through `ClipyCompositor.blurred`: clamped first, cropped after),
+      // then the sharp frame kept in the middle by a round mask (white = sharp).
+      let radius = EffectMath.edgeBlur * EffectMath.softEdgeAmount(t: t, d: d, k: k) * shorter
+      guard radius.isFinite, radius > 0 else { return image }
+      let frame = image.cropped(to: rect)
+      let soft = ClipyCompositor.blurred(frame, radius: CGFloat(radius), rect: rect)
+      guard let mask = softMask(shorter: shorter, rect: rect),
+            let out = Adjust.filtered(frame, "CIBlendWithMask", [kCIInputBackgroundImageKey: soft, "inputMaskImage": mask])
+      else { return image }
+      return out.cropped(to: rect)
+    case "strobe":
+      return colorLayer(EffectMath.strobeColor, opacity: EffectMath.strobeOpacity(t: t, k: k), over: image, rect: rect)
     default:
       return image
     }
@@ -193,5 +254,60 @@ enum EffectRenderer {
     guard params.keys.allSatisfy({ keys.contains($0) }) else { return nil }
     for (key, value) in params { f.setValue(value, forKey: key) }
     return f.outputImage
+  }
+
+  /// A soft round light: the colour `hex` at `alpha` in the centre, fading to nothing at `radius` pixels
+  /// (`CIRadialGradient`), screened over `image` (`CIScreenBlendMode`: it can only brighten). Nothing to draw, or a
+  /// filter / key Core Image does not know → `image` unchanged.
+  private static func light(_ hex: String, alpha: Double, centre: CGPoint, radius: Double, over image: CIImage, rect: CGRect) -> CIImage {
+    guard alpha.isFinite, alpha > 0, radius.isFinite, radius > 0, centre.x.isFinite, centre.y.isFinite else { return image }
+    let color = UIColor(hex: hex)
+    guard let glow = generated("CIRadialGradient", [
+            "inputCenter": CIVector(x: centre.x, y: centre.y),
+            "inputRadius0": number(0),
+            "inputRadius1": number(radius),
+            "inputColor0": CIColor(color: color.withAlphaComponent(CGFloat(min(1, alpha)))),
+            "inputColor1": CIColor(color: color.withAlphaComponent(0)),
+          ]),
+          let lit = Adjust.filtered(glow.cropped(to: rect), "CIScreenBlendMode", [kCIInputBackgroundImageKey: image.cropped(to: rect)])
+    else { return image }
+    return lit.cropped(to: rect)
+  }
+
+  /// The soft-edges mask: white (sharp) within `edgeInner` × the shorter side of the frame's centre, black (blurred)
+  /// from `edgeOuter` × the shorter side outwards. Nil when the generator is missing.
+  private static func softMask(shorter: Double, rect: CGRect) -> CIImage? {
+    return generated("CIRadialGradient", [
+      "inputCenter": CIVector(x: rect.midX, y: rect.midY),
+      "inputRadius0": number(EffectMath.edgeInner * shorter),
+      "inputRadius1": number(EffectMath.edgeOuter * shorter),
+      "inputColor0": CIColor.white,
+      "inputColor1": CIColor.black,
+    ])?.cropped(to: rect)
+  }
+
+  /// A fine white grain over `image` (Apple's "scratchy analog film" recipe): `CIRandomGenerator` noise, moved every
+  /// frame, through `CIColorMatrix` — every colour channel takes the noise's green, and the alpha is a small multiple
+  /// of it (`dustSpeck` × amount), so only a faint sprinkle is left — composited over the frame. Anything missing →
+  /// `image` unchanged.
+  private static func specks(over image: CIImage, amount: Double, time: Double, rect: CGRect) -> CIImage {
+    guard amount.isFinite, amount > 0, let noise = generated("CIRandomGenerator", [:]) else { return image }
+    let offset = Adjust.grainOffset(time: time)
+    let field = noise.transformed(by: CGAffineTransform(translationX: offset.x, y: offset.y)).cropped(to: rect)
+    let alpha = CGFloat(min(1, EffectMath.dustSpeck * amount))
+    guard let white = Adjust.filtered(field, "CIColorMatrix", [
+            "inputRVector": CIVector(x: 0, y: 1, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: 1, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 1, z: 0, w: 0),
+            "inputAVector": CIVector(x: 0, y: alpha, z: 0, w: 0),
+            "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+          ])
+    else { return image }
+    // `CIColorClamp` keeps every component of the sprinkle in 0…1; without it the unclamped sprinkle is used.
+    let bounded = Adjust.filtered(white, "CIColorClamp", [
+      "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+      "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+    ]) ?? white
+    return bounded.cropped(to: rect).composited(over: image).cropped(to: rect)
   }
 }

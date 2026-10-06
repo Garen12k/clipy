@@ -1,8 +1,9 @@
 import type { AnimComboId, AnimInId, AnimLoopId, BlendId, EffectId, FilterId, ShapeId, SpeedCurveId, TextOverlay, TransitionType } from "./model/types";
+import { filterPreviewOf } from "./model/filterRecipes";
 import type { IoniconName } from "./toolGroups";
 
 export interface FilterPreview { tint: string; tintOpacity: number; saturation: number; brightness: number }
-/** Preview approximations only. The real Core Image recipes live in modules/clipy-video/ios/Effects.swift, keyed by the same ids. */
+/** Preview approximations only. The first twenty have their Core Image recipes in modules/clipy-video/ios/Effects.swift; the twelve of 2026-10-06 are rows of model/filterRecipes.ts, and their preview is computed from the row. */
 export const FILTERS: Record<FilterId, { label: string; preview: FilterPreview }> = {
   none:    { label: "None",    preview: { tint: "#000000", tintOpacity: 0,    saturation: 1,   brightness: 0 } },
   warm:    { label: "Warm",    preview: { tint: "#FF9A3C", tintOpacity: 0.14, saturation: 1.1, brightness: 0.02 } },
@@ -24,12 +25,27 @@ export const FILTERS: Record<FilterId, { label: string; preview: FilterPreview }
   sepia:   { label: "Sepia",   preview: { tint: "#C8A05A", tintOpacity: 0.3,  saturation: 0,   brightness: 0 } },
   crisp:   { label: "Crisp",   preview: { tint: "#000000", tintOpacity: 0,    saturation: 1.05, brightness: 0 } },
   dream:   { label: "Dream",   preview: { tint: "#FFFFFF", tintOpacity: 0.08, saturation: 1.1, brightness: 0.03 } },
+  kodak:      { label: "Kodak",  preview: filterPreviewOf("kodak") },
+  fuji:       { label: "Fuji",   preview: filterPreviewOf("fuji") },
+  matte:      { label: "Matte",  preview: filterPreviewOf("matte") },
+  bleach:     { label: "Bleach", preview: filterPreviewOf("bleach") },
+  dusk:       { label: "Dusk",   preview: filterPreviewOf("dusk") },
+  moody:      { label: "Moody",  preview: filterPreviewOf("moody") },
+  tealOrange: { label: "Cinema", preview: filterPreviewOf("tealOrange") },
+  blush:      { label: "Blush",  preview: filterPreviewOf("blush") },
+  grit:       { label: "Grit",   preview: filterPreviewOf("grit") },
+  silver:     { label: "Silver", preview: filterPreviewOf("silver") },
+  indigo:     { label: "Indigo", preview: filterPreviewOf("indigo") },
+  drama:      { label: "Drama",  preview: filterPreviewOf("drama") },
 };
 
 export const TRANSITIONS: Record<TransitionType, { label: string }> = {
   none: { label: "None" }, fade: { label: "Fade" }, dissolve: { label: "Dissolve" }, slide: { label: "Slide left" }, zoom: { label: "Zoom" },
   slideRight: { label: "Slide right" }, slideUp: { label: "Slide up" }, slideDown: { label: "Slide down" },
   wipe: { label: "Wipe" }, spin: { label: "Spin" }, blur: { label: "Blur" },
+  cover: { label: "Cover left" }, reveal: { label: "Reveal left" }, coverUp: { label: "Cover up" }, revealDown: { label: "Reveal down" },
+  circleOpen: { label: "Circle open" }, circleClose: { label: "Circle close" }, wipeDiagonal: { label: "Diagonal wipe" }, wipeClock: { label: "Clock wipe" },
+  pixelate: { label: "Pixelate" }, flashWhite: { label: "White flash" },
 };
 
 /** Timeline effects. The preview can only approximate them; the real look is Swift's. */
@@ -46,6 +62,14 @@ export const EFFECTS: Record<EffectId, { label: string; icon: IoniconName }> = {
   glow:      { label: "Glow",       icon: "bulb-outline" },
   blurBox:   { label: "Blur box",   icon: "scan-outline" },
   mosaicBox: { label: "Mosaic box", icon: "grid-outline" },
+  filmBurn:  { label: "Film burn",  icon: "flame-outline" },
+  lensFlare: { label: "Lens flare", icon: "aperture-outline" },
+  dust:      { label: "Dust",       icon: "snow-outline" },
+  heartbeat: { label: "Heartbeat",  icon: "fitness-outline" },
+  hueShift:  { label: "Hue shift",  icon: "color-palette-outline" },
+  mirror:    { label: "Mirror",     icon: "swap-horizontal-outline" },
+  softEdges: { label: "Soft edges", icon: "ellipse-outline" },
+  strobe:    { label: "Strobe",     icon: "flashlight-outline" },
 };
 
 /** Entry / exit animations (clips, text, stickers). The motion maths lives in model/motion.ts. */

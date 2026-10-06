@@ -4,10 +4,10 @@ import {
 } from "../types";
 
 test("registries have the spec sizes", () => {
-  expect(SCHEMA_VERSION).toBe(15);
-  expect(FILTER_IDS).toHaveLength(20);
-  expect(TRANSITION_TYPES).toHaveLength(11);
-  expect(EFFECT_IDS).toHaveLength(12);
+  expect(SCHEMA_VERSION).toBe(16);
+  expect(FILTER_IDS).toHaveLength(32);
+  expect(TRANSITION_TYPES).toHaveLength(21);
+  expect(EFFECT_IDS).toHaveLength(20);
   expect(ADJUST_KEYS).toHaveLength(12);
   expect(EFFECT_LIMITS).toEqual({ minDuration: 0.2, defaultDuration: 2, defaultIntensity: 0.7 });
 });
@@ -45,4 +45,13 @@ test("factories carry fresh look defaults (no shared adjust object)", () => {
 test("makeEffect defaults", () => {
   expect(makeEffect({ id: "e" })).toEqual({ id: "e", type: "shake", start: 0, end: 2, intensity: 0.7, rect: null });
   expect(makeEffect({ id: "e", type: "glow", end: 3 })).toMatchObject({ type: "glow", end: 3 });
+});
+
+test("the ten transitions and eight effects of 2026-10-06 follow the old ones, in this order", () => {
+  expect(TRANSITION_TYPES.slice(11)).toEqual(["cover", "reveal", "coverUp", "revealDown", "circleOpen", "circleClose", "wipeDiagonal", "wipeClock", "pixelate", "flashWhite"]);
+  expect(EFFECT_IDS.slice(12)).toEqual(["filmBurn", "lensFlare", "dust", "heartbeat", "hueShift", "mirror", "softEdges", "strobe"]);
+  expect(new Set(TRANSITION_TYPES).size).toBe(21);
+  expect(new Set(EFFECT_IDS).size).toBe(20);
+  // A new effect is an ordinary full-frame effect: no rectangle.
+  for (const type of EFFECT_IDS.slice(12)) expect(makeEffect({ id: "e", type }).rect).toBeNull();
 });

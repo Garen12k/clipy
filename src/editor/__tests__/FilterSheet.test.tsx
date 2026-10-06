@@ -2,7 +2,9 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
 jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, disabled, onSlidingStart, onValueChange }: { testID?: string; disabled?: boolean; onSlidingStart?: () => void; onValueChange?: (v: number) => void }) => <View testID={testID} accessibilityState={{ disabled: !!disabled }} onTouchStart={() => onSlidingStart?.()} onTouchMove={() => onValueChange?.(0.8)} />; });
-import { makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { Dimensions } from "react-native";
+import { FILTERS } from "@/src/editor/effects";
+import { FILTER_IDS, makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { FilterSheet } from "../components/FilterSheet";
 
@@ -82,4 +84,49 @@ test("clipIds: a tile and the slider write every listed main clip, one undo step
   expect(st().past).toHaveLength(2);
   await act(() => { st().undo(); });
   expect(st().project!.clips.map((c) => [c.filter, c.filterIntensity])).toEqual([["warm", 1], [null, 1], ["warm", 1]]);
+});
+
+type Inst = ReturnType<typeof screen.getByTestId>;
+const findScroll = (n: Inst): Inst | null => { if (n.props.contentOffset !== undefined) return n; for (const c of n.children) { if (typeof c === "string") continue; const f = findScroll(c as Inst); if (f) return f; } return null; };
+const startX = () => findScroll(screen.getByTestId("strip-tiles"))!.props.contentOffset.x as number;
+/** As the kit computes it: 32 tiles of 52, gaps of 8, a 16 gutter each side. */
+const rowEnd = () => 32 * 52 + 31 * 8 + 32 - Dimensions.get("window").width;
+
+test("32 tiles: the twenty old filters first, in their order, then the twelve new ones; one thumbnail request for all of them", async () => {
+  const { getThumb } = jest.requireMock("@/src/editor/components/thumbnails") as { getThumb: jest.Mock };
+  getThumb.mockClear();
+  await render(<FilterSheet clipId="a" visible onClose={() => {}} />);
+  const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel).filter((l) => l !== "Done" && l !== "Apply to all clips");
+  expect(labels).toEqual(FILTER_IDS.map((id) => FILTERS[id].label));
+  expect(labels).toHaveLength(32);
+  expect(labels.slice(0, 20)).toEqual(["None", "Warm", "Cool", "Vivid", "Faded", "Mono", "Noir", "Vintage", "Sunset", "Golden", "Teal", "Pastel", "Film", "Chrome", "Instant", "Process", "Tonal", "Sepia", "Crisp", "Dream"]);
+  expect(getThumb).toHaveBeenCalledTimes(1);
+});
+
+test("a new filter is picked like an old one and keeps the strength", async () => {
+  await render(<FilterSheet clipId="a" visible onClose={() => {}} />);
+  await fireEvent.press(screen.getByRole("button", { name: "Cinema" }));
+  expect(useEditorStore.getState().project!.clips[0]).toMatchObject({ filter: "tealOrange", filterIntensity: 1 });
+  expect(screen.getByTestId("filter-strength").props.accessibilityState.disabled).toBe(false);
+  expect(useEditorStore.getState().past).toHaveLength(1);
+});
+
+test("the row opens with the selected filter in view — worked out once per opening, never past the row's end", async () => {
+  useEditorStore.getState().apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "a" ? { ...c, filter: "kodak" as const } : c)) }));
+  const view = await render(<FilterSheet clipId="a" visible onClose={() => {}} />);
+  expect(startX()).toBe(Math.min(20 * 60 - 52, rowEnd()));             // Kodak is tile 20
+  // Picking another filter does not move the row under the finger.
+  await fireEvent.press(screen.getByRole("button", { name: "Warm" }));
+  expect(startX()).toBe(Math.min(20 * 60 - 52, rowEnd()));
+  // Closed and opened again: now it starts at Warm (tile 1 → 1·60 − 52 = 8).
+  await view.rerender(<FilterSheet clipId="a" visible={false} onClose={() => {}} />);
+  await view.rerender(<FilterSheet clipId="a" visible onClose={() => {}} />);
+  expect(startX()).toBe(8);
+  // The last filter: clamped to the row's end. Another clip (no filter): the start of the row.
+  await fireEvent.press(screen.getByRole("button", { name: "Drama" }));
+  await view.rerender(<FilterSheet clipId="a" visible={false} onClose={() => {}} />);
+  await view.rerender(<FilterSheet clipId="a" visible onClose={() => {}} />);
+  expect(startX()).toBe(Math.min(31 * 60 - 52, rowEnd()));
+  await view.rerender(<FilterSheet clipId="b" visible onClose={() => {}} />);
+  expect(startX()).toBe(0);
 });
