@@ -172,7 +172,7 @@ test("a panel hides the timeline and the bar without unmounting or resizing the 
   expect(screen.getByTestId("tool-panel")).toBeTruthy();
   expect(screen.getByRole("header", { name: "Beat markers" })).toBeTruthy();
   expect(screen.queryByTestId("toolbar-row")).toBeNull();
-  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: panelHeight("compact", H) + 8, marginTop: 0 });
+  expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: panelHeight("regular", H) + 8, marginTop: 0 });   // the Beats panel is a regular panel since Find beats / Cut to beats
   // The timeline is not shown — hidden from accessibility and from touches, its slot collapsed and clipped …
   expect(screen.queryByTestId("timeline-root")).toBeNull();
   expect(screen.queryByTestId("slot-timeline")).toBeNull();
