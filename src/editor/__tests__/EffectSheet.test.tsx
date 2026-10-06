@@ -17,10 +17,10 @@ beforeEach(() => {
 });
 
 describe("EffectSheet", () => {
-  test("is titled Effects and shows twelve tiles", async () => {
+  test("is titled Effects and shows a tile for every effect", async () => {
     await render(<EffectSheet visible onClose={() => {}} />);
     expect(screen.getByRole("header", { name: "Effects" })).toBeTruthy();
-    expect(EFFECT_IDS).toHaveLength(12);
+    expect(EFFECT_IDS).toHaveLength(20);
     for (const id of EFFECT_IDS) expect(screen.getByRole("button", { name: EFFECTS[id].label })).toBeTruthy();
   });
 

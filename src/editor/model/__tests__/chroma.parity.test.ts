@@ -255,7 +255,7 @@ describe("EffectRenderer: the blur box and the mosaic box", () => {
   const all = code(renderer);
   const body = between(all, "static func apply(", "\n  }\n");
   const branch = (id: string) => between(body, `case "${id}"`, "\n    case ");
-  const mosaic = between(body, 'case "mosaicBox"', "\n    default:");
+  const mosaic = branch("mosaicBox");   // no longer the last case: the effects of 2026-10-06 follow it
   it("takes the rectangle as an optional last parameter (nil for every other call)", () => {
     expect(all).toContain("static func apply(type: String, image: CIImage, t: Double, d: Double, k: Double, size: CGSize, region: RegionRect? = nil) -> CIImage {");
   });

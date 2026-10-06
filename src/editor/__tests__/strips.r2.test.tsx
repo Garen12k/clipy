@@ -13,7 +13,7 @@ beforeEach(() => {
   st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makePhotoClip({ id: "p", seconds: 3 })] }));
 });
 
-test("the Effects picker is a strip: inline, no scrim, the twelve tiles in one sideways row, Done closes", async () => {
+test("the Effects picker is a strip: inline, no scrim, its tiles in one sideways row, Done closes", async () => {
   const onClose = jest.fn();
   await render(<EffectSheet visible onClose={onClose} />);
   expect(screen.getByTestId("tool-strip")).toBeTruthy();

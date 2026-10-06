@@ -12,7 +12,7 @@ export const isAspectRatio = (v: unknown): v is AspectRatio => (ASPECT_RATIOS as
 export const aspectLabel = (r: AspectRatio): string => (r === "auto" ? "Auto" : r);
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 15 as const;
+export const SCHEMA_VERSION = 16 as const;
 export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
 export const EXPORT_QUALITIES = ["high", "small"] as const;
@@ -43,7 +43,8 @@ export const FILTER_IDS = ["none", "warm", "cool", "vivid", "faded", "mono", "no
   "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream"] as const;
 export type FilterId = (typeof FILTER_IDS)[number];
 export const TRANSITION_TYPES = ["none", "fade", "dissolve", "slide", "zoom",
-  "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur"] as const;   // "slide" keeps its id and is labelled "Slide left"
+  "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur",   // "slide" keeps its id and is labelled "Slide left"
+  "cover", "reveal", "coverUp", "revealDown", "circleOpen", "circleClose", "wipeDiagonal", "wipeClock", "pixelate", "flashWhite"] as const;
 export type TransitionType = (typeof TRANSITION_TYPES)[number];
 export const SHAPE_IDS = ["circle", "square", "roundedBox", "arrow", "star", "speechBubble", "heart",
   "arrowCurved", "arrowDouble", "bubbleRound", "bubbleSquare", "bubbleThought", "badgeSeal", "badgeRibbon", "banner",
@@ -97,7 +98,8 @@ export const DEFAULT_ADJUST: ClipAdjust = {
   highlights: 0, shadows: 0, sharpen: 0, vignette: 0, fade: 0, grain: 0,
 };
 
-export const EFFECT_IDS = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow", "blurBox", "mosaicBox"] as const;
+export const EFFECT_IDS = ["glitch", "shake", "zoomPulse", "blur", "vhs", "lightLeak", "flash", "rgbSplit", "oldFilm", "glow", "blurBox", "mosaicBox",
+  "filmBurn", "lensFlare", "dust", "heartbeat", "hueShift", "mirror", "softEdges", "strobe"] as const;
 export type EffectId = (typeof EFFECT_IDS)[number];
 /** Fractions of the frame, top-left origin. */
 export interface EffectRect { x: number; y: number; w: number; h: number }

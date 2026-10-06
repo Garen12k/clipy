@@ -103,6 +103,15 @@ enum EffectRenderer {
             ])
       else { return image }
       return tiles.cropped(to: box).composited(over: image).cropped(to: rect)
+    // The eight effects of 2026-10-06. A line marked PLACEHOLDER hands the frame back until its renderer lands.
+    case "filmBurn": return image    // MORE-LOOKS-PLACEHOLDER
+    case "lensFlare": return image    // MORE-LOOKS-PLACEHOLDER
+    case "dust": return image    // MORE-LOOKS-PLACEHOLDER
+    case "heartbeat": return image    // MORE-LOOKS-PLACEHOLDER
+    case "hueShift": return image    // MORE-LOOKS-PLACEHOLDER
+    case "mirror": return image    // MORE-LOOKS-PLACEHOLDER
+    case "softEdges": return image    // MORE-LOOKS-PLACEHOLDER
+    case "strobe": return image    // MORE-LOOKS-PLACEHOLDER
     default:
       return image
     }

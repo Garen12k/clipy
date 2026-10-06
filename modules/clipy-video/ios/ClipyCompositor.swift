@@ -541,6 +541,17 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
       let black = CIImage(color: CIColor.black).cropped(to: rect)
       let spun = a.transformed(by: turn).composited(over: black).cropped(to: rect)
       return dissolve(from: spun, to: b, progress: p).cropped(to: rect)
+    // The ten transitions of 2026-10-06. A line marked PLACEHOLDER dissolves until its blend lands.
+    case "cover": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    case "reveal": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    case "coverUp": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    case "revealDown": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    case "circleOpen": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    case "circleClose": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    case "wipeDiagonal": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    case "wipeClock": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    case "pixelate": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    case "flashWhite": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
     case "blur":
       // Both frames carry the same blur — none at either end, strongest in the middle — and cross-dissolve
       // throughout, so the picture never jumps (a sharp frame never meets a fully blurred one).

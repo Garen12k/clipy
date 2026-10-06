@@ -30,6 +30,9 @@ export const TRANSITIONS: Record<TransitionType, { label: string }> = {
   none: { label: "None" }, fade: { label: "Fade" }, dissolve: { label: "Dissolve" }, slide: { label: "Slide left" }, zoom: { label: "Zoom" },
   slideRight: { label: "Slide right" }, slideUp: { label: "Slide up" }, slideDown: { label: "Slide down" },
   wipe: { label: "Wipe" }, spin: { label: "Spin" }, blur: { label: "Blur" },
+  cover: { label: "Cover left" }, reveal: { label: "Reveal left" }, coverUp: { label: "Cover up" }, revealDown: { label: "Reveal down" },
+  circleOpen: { label: "Circle open" }, circleClose: { label: "Circle close" }, wipeDiagonal: { label: "Diagonal wipe" }, wipeClock: { label: "Clock wipe" },
+  pixelate: { label: "Pixelate" }, flashWhite: { label: "White flash" },
 };
 
 /** Timeline effects. The preview can only approximate them; the real look is Swift's. */
@@ -46,6 +49,14 @@ export const EFFECTS: Record<EffectId, { label: string; icon: IoniconName }> = {
   glow:      { label: "Glow",       icon: "bulb-outline" },
   blurBox:   { label: "Blur box",   icon: "scan-outline" },
   mosaicBox: { label: "Mosaic box", icon: "grid-outline" },
+  filmBurn:  { label: "Film burn",  icon: "flame-outline" },
+  lensFlare: { label: "Lens flare", icon: "aperture-outline" },
+  dust:      { label: "Dust",       icon: "snow-outline" },
+  heartbeat: { label: "Heartbeat",  icon: "fitness-outline" },
+  hueShift:  { label: "Hue shift",  icon: "color-palette-outline" },
+  mirror:    { label: "Mirror",     icon: "swap-horizontal-outline" },
+  softEdges: { label: "Soft edges", icon: "ellipse-outline" },
+  strobe:    { label: "Strobe",     icon: "flashlight-outline" },
 };
 
 /** Entry / exit animations (clips, text, stickers). The motion maths lives in model/motion.ts. */
