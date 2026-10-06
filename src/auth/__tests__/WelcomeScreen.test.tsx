@@ -5,11 +5,14 @@ jest.mock("@/src/publish/supabase", () => ({
   SIGN_IN_NOT_SET_UP: "Sign-in isn't set up yet.",
 }));
 import * as Apple from "expo-apple-authentication";
-import { AccessibilityInfo } from "react-native";
+import { AccessibilityInfo, Keyboard, StyleSheet } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { WORDMARK } from "@/src/ui/LoadingScreen";
 import { isBackendConfigured, sendEmailCode, signInWithApple, signInWithGoogle, verifyEmailCode } from "@/src/publish/supabase";
 import { useSession } from "@/src/publish/useSession";
 import { theme } from "@/src/theme/theme";
 import { useToast } from "@/src/ui/Toast";
+import { RESEND_COOLDOWN_S } from "../EmailSignIn";
 import { hasSeenWelcome, WELCOME_SEEN_KEY } from "../welcomeSeen";
 import { WelcomeScreen } from "../WelcomeScreen";
 
@@ -44,7 +47,9 @@ describe("the first step", () => {
   test("first launch: the name, the line under it, three sign-in buttons, the skip link and the footer — and no gold button, no close", async () => {
     const onDone = jest.fn();
     await render(<WelcomeScreen first onDone={onDone} />);
-    expect(screen.getByRole("header", { name: "Clipy" })).toHaveStyle({ fontFamily: theme.fonts.title });
+    // The wordmark is the loading screen's: the same numbers, shared, not copied.
+    expect(WORDMARK).toEqual({ size: 48, letterSpacing: 8 });
+    expect(screen.getByRole("header", { name: "Clipy" })).toHaveStyle({ fontFamily: theme.fonts.title, fontSize: WORDMARK.size, letterSpacing: WORDMARK.letterSpacing });
     expect(screen.getByText("Edit, caption and post your clips.")).toBeTruthy();
     expect(await screen.findByLabelText("Continue with Apple")).toHaveStyle({ height: theme.size.control, width: "100%" });
     expect(screen.getByLabelText("Continue with Apple").props).toMatchObject({ buttonType: Apple.AppleAuthenticationButtonType.CONTINUE, buttonStyle: Apple.AppleAuthenticationButtonStyle.WHITE, cornerRadius: theme.size.control / 2 });
@@ -108,6 +113,37 @@ describe("the first step", () => {
     expect(hasSeenWelcome()).toBe(true);
   });
 
+  test("the top safe-area edge is padded only on first launch (full screen); in the sheet, which already sits below the status bar, a theme space", async () => {
+    const metrics = { frame: { x: 0, y: 0, width: 393, height: 852 }, insets: { top: 59, bottom: 34, left: 0, right: 0 } };
+    type Node = { props: { style?: unknown }; children: (Node | string)[] | null };
+    /** The Screen: the outermost view that pads its bottom edge. */
+    const padding = () => {
+      let node = screen.toJSON() as unknown as Node | null;
+      for (;;) {
+        if (!node) throw new Error("no Screen");
+        const style = StyleSheet.flatten(node.props.style as never) as { paddingTop?: number; paddingBottom?: number } | undefined;
+        if (style?.paddingBottom !== undefined) return { paddingTop: style.paddingTop, paddingBottom: style.paddingBottom };
+        const child: Node | string | undefined = node.children?.[0];
+        node = child && typeof child !== "string" ? child : null;
+      }
+    };
+    const first = await render(<SafeAreaProvider initialMetrics={metrics}><WelcomeScreen first onDone={jest.fn()} /></SafeAreaProvider>);
+    expect(padding()).toEqual({ paddingTop: 59 + theme.space.sm, paddingBottom: 34 + theme.space.sm });
+    await first.unmount();
+    await render(<SafeAreaProvider initialMetrics={metrics}><WelcomeScreen onDone={jest.fn()} /></SafeAreaProvider>);
+    expect(padding()).toEqual({ paddingTop: theme.space.md, paddingBottom: 34 + theme.space.sm });
+    expect(button("Close")).toBeTruthy();
+  });
+
+  test("a toast still showing when the screen is left is cleared, so the next screen does not replay it", async () => {
+    configure(false);
+    await render(<WelcomeScreen first onDone={jest.fn()} />);
+    await fireEvent.press(button("Continue with Google"));
+    expect(useToast.getState().message).toBe(NOT_SET_UP);
+    await fireEvent.press(button("Continue without an account"));
+    expect(useToast.getState().message).toBeNull();
+  });
+
   test("a session that becomes signed in leaves the screen once, with the flag set (and on first launch nothing is drawn while it is read)", async () => {
     const onDone = jest.fn();
     mocked(useSession).mockReturnValue({ status: "loading" });
@@ -130,7 +166,16 @@ describe("busy", () => {
     const onDone = jest.fn();
     await render(<WelcomeScreen onDone={onDone} />);
     const apple = await screen.findByLabelText("Continue with Apple");
+    // The progress slot is always there at one height (nothing jumps); Apple's wrapper says nothing of its own while idle.
+    const slot = { height: theme.size.icon.lg };
+    expect(screen.getByTestId("welcome-working")).toHaveStyle(slot);
+    expect(screen.queryByLabelText("Signing in")).toBeNull();
+    expect(screen.getByTestId("welcome-apple").props.accessible).not.toBe(true);
     await fireEvent.press(button("Continue with Google"));
+    expect(screen.getByTestId("welcome-working")).toHaveStyle(slot);
+    expect(screen.getByLabelText("Signing in")).toBeTruthy();
+    // VoiceOver: Apple's own button cannot be dimmed, so its wrapper is the (disabled) button while busy.
+    expect(screen.getByTestId("welcome-apple").props).toMatchObject({ accessible: true, accessibilityRole: "button", accessibilityLabel: "Continue with Apple", accessibilityState: { disabled: true }, pointerEvents: "none" });
     for (const name of ["Continue with Google", "Continue with email", "Not now", "Close"]) expect(button(name)).toBeDisabled();
     await fireEvent.press(button("Continue with Google"));
     await fireEvent.press(apple);
@@ -142,6 +187,9 @@ describe("busy", () => {
     expect(onDone).not.toHaveBeenCalled();
     await act(async () => { google.resolve("cancelled"); });
     for (const name of ["Continue with Google", "Continue with email", "Not now", "Close"]) expect(button(name)).not.toBeDisabled();
+    expect(screen.queryByLabelText("Signing in")).toBeNull();
+    expect(screen.getByTestId("welcome-working")).toHaveStyle(slot);
+    expect(screen.getByTestId("welcome-apple").props.accessible).not.toBe(true);
   });
 
   test("leaving mid-request: nothing is set, toasted or left a second time when the request ends", async () => {
@@ -164,7 +212,9 @@ describe("email", () => {
   test("the email step: a back control, the title, an email field, and 'Send code' — the one gold button — off until the text looks like an address", async () => {
     await render(<WelcomeScreen first onDone={jest.fn()} />);
     await toEmail();
-    expect(screen.getByRole("header", { name: "Sign in with email" })).toBeTruthy();
+    // A heading like every other: the kit Title's own upper-casing and spacing, nothing switched off.
+    const heading = StyleSheet.flatten(screen.getByRole("header", { name: "Sign in with email" }).props.style);
+    expect(heading).toMatchObject({ fontSize: theme.type.title, textTransform: "uppercase", letterSpacing: 1.5 });
     expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
     expect(screen.getByLabelText("Email").props).toMatchObject({ keyboardType: "email-address", autoCapitalize: "none", autoCorrect: false, textContentType: "emailAddress", autoComplete: "email", returnKeyType: "send" });
     expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
@@ -265,28 +315,29 @@ describe("the code", () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  test("Resend waits 30 seconds, counting down in its label, then sends again and waits again; the timer stops with the step", async () => {
+  test("Resend waits 60 seconds, counting down in its label, then sends again and waits again; the timer stops with the step", async () => {
+    expect(RESEND_COOLDOWN_S).toBe(60);
     jest.useFakeTimers();
     const started = jest.spyOn(globalThis, "setInterval"), stopped = jest.spyOn(globalThis, "clearInterval");
     /** Intervals started and not yet cleared. */
     const running = () => started.mock.results.map((r) => r.value).filter((id) => !stopped.mock.calls.some(([c]) => c === id)).length;
     const v = await render(<WelcomeScreen first onDone={jest.fn()} />);
     await toCode();
-    expect(button("Resend code in 30 s")).toBeDisabled();
+    expect(button("Resend code in 60 s")).toBeDisabled();
     await act(async () => { jest.advanceTimersByTime(6000); });
-    expect(button("Resend code in 24 s")).toBeDisabled();
-    await fireEvent.press(button("Resend code in 24 s"));
+    expect(button("Resend code in 54 s")).toBeDisabled();
+    await fireEvent.press(button("Resend code in 54 s"));
     expect(sendEmailCode).toHaveBeenCalledTimes(1);
-    await act(async () => { jest.advanceTimersByTime(24000); });
+    await act(async () => { jest.advanceTimersByTime(54000); });
     expect(button("Resend code")).not.toBeDisabled();
     await act(async () => { jest.advanceTimersByTime(5000); });
     expect(button("Resend code")).not.toBeDisabled();
     await fireEvent.press(button("Resend code"));
     expect(sendEmailCode).toHaveBeenCalledTimes(2);
-    expect(button("Resend code in 30 s")).toBeDisabled();
+    expect(button("Resend code in 60 s")).toBeDisabled();
     expect(screen.getByTestId("welcome-note")).toHaveTextContent("We sent a new code.");
     // A failed resend says why, and can be tried again at once.
-    await act(async () => { jest.advanceTimersByTime(30000); });
+    await act(async () => { jest.advanceTimersByTime(60000); });
     mocked(sendEmailCode).mockRejectedValueOnce(new Error("Couldn't reach Clipy. Check your connection."));
     await fireEvent.press(button("Resend code"));
     expect(screen.getByTestId("welcome-error")).toHaveTextContent("Couldn't reach Clipy. Check your connection.");
@@ -294,12 +345,12 @@ describe("the code", () => {
     // Going back to the address stops the countdown; a new code starts it afresh. Unmounting leaves no timer behind.
     await fireEvent.press(button("Resend code"));
     await act(async () => { jest.advanceTimersByTime(3000); });
-    expect(button("Resend code in 27 s")).toBeTruthy();
+    expect(button("Resend code in 57 s")).toBeTruthy();
     expect(running()).toBe(1);
     await fireEvent.press(button("Use a different email"));
     expect(running()).toBe(0);
     await fireEvent.press(button("Send code"));
-    expect(button("Resend code in 30 s")).toBeTruthy();
+    expect(button("Resend code in 60 s")).toBeTruthy();
     expect(running()).toBe(1);
     await v.unmount();
     expect(running()).toBe(0);
@@ -321,20 +372,35 @@ describe("preview: no backend (the owner's phone today)", () => {
     expect(screen.getByText("Edit, caption and post your clips.")).toBeTruthy();
   });
 
-  test("the whole email walk: 'Send code' still opens the code step, which says no code was sent; 'Sign in' toasts; nothing is requested", async () => {
+  test("the whole email walk: 'Send code' still opens the code step, which says no code was sent; 'Sign in' answers under the field (no toast behind the number pad) and puts the keyboard away; nothing is requested", async () => {
     const onDone = jest.fn();
+    const dismiss = jest.spyOn(Keyboard, "dismiss").mockImplementation(() => {});
     await render(<WelcomeScreen first onDone={onDone} />);
     await toCode("me@icloud.com");
-    expect(screen.getByText("Enter the 6-digit code we sent to me@icloud.com")).toBeTruthy();
+    // No code was sent, so the line above the field does not say one was.
+    expect(screen.getByText("Enter the 6-digit code from the email.")).toBeTruthy();
+    expect(screen.queryByText(/we sent to/)).toBeNull();
     expect(screen.getByTestId("welcome-note")).toHaveTextContent("Sign-in isn't set up yet, so no code was sent.");
     await fireEvent.changeText(screen.getByLabelText("6-digit code"), "12345");
-    expect(useToast.getState().message).toBeNull();
+    expect(screen.queryByTestId("welcome-error")).toBeNull();
+    expect(dismiss).not.toHaveBeenCalled();
+    // The sixth digit: the sentence, inline, and the keyboard goes.
     await fireEvent.changeText(screen.getByLabelText("6-digit code"), "123456");
-    expect(useToast.getState().message).toBe(NOT_SET_UP);
-    await act(async () => { useToast.getState().clear(); });
-    await fireEvent.press(button("Sign in"));
-    expect(useToast.getState().message).toBe(NOT_SET_UP);
+    expect(screen.getByTestId("welcome-error")).toHaveTextContent(NOT_SET_UP);
+    expect(screen.getByTestId("welcome-error").props).toMatchObject({ accessibilityRole: "alert" });
+    expect(dismiss).toHaveBeenCalledTimes(1);
+    expect(useToast.getState().message).toBeNull();
+    // Editing takes it away again (the note returns); the button says it again.
+    await fireEvent.changeText(screen.getByLabelText("6-digit code"), "12345");
+    expect(screen.queryByTestId("welcome-error")).toBeNull();
     expect(screen.getByTestId("welcome-note")).toHaveTextContent("Sign-in isn't set up yet, so no code was sent.");
+    await fireEvent.changeText(screen.getByLabelText("6-digit code"), "123456");
+    await fireEvent.press(button("Sign in"));
+    expect(screen.getByTestId("welcome-error")).toHaveTextContent(NOT_SET_UP);
+    expect(dismiss).toHaveBeenCalledTimes(3);
+    expect(useToast.getState().message).toBeNull();
+    expect(button("Sign in")).not.toBeDisabled();
+    dismiss.mockRestore();
     // Back on the address, the same sentence is the note under the field.
     await fireEvent.press(button("Use a different email"));
     expect(screen.getByTestId("welcome-note")).toHaveTextContent(NOT_SET_UP);

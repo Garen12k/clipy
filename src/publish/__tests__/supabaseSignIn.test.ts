@@ -2,7 +2,7 @@ import * as WebBrowser from "expo-web-browser";
 
 const mockAuth = {
   signInWithOtp: jest.fn(), verifyOtp: jest.fn(), signInWithOAuth: jest.fn(), setSession: jest.fn(), exchangeCodeForSession: jest.fn(),
-  signInWithIdToken: jest.fn(), signOut: jest.fn(),
+  signInWithIdToken: jest.fn(), signOut: jest.fn(), getSession: jest.fn(),
 };
 let mockExpoGo = false;
 jest.mock("@supabase/supabase-js", () => ({ createClient: jest.fn(() => ({ auth: mockAuth })) }));
@@ -56,22 +56,32 @@ test("verifyEmailCode verifies the code as an email OTP", async () => {
 });
 
 describe("server errors become plain sentences", () => {
-  const cases: [string, object, string][] = [
-    ["an expired code", { message: "Token has expired or is invalid", status: 403, code: "otp_expired" }, WRONG],
-    ["a wrong code (older servers: message only)", { message: "Token has expired or is invalid", status: 401 }, WRONG],
-    ["invalid credentials", { message: "Invalid login credentials", status: 400, code: "invalid_credentials" }, WRONG],
-    ["the email send limit", { message: "Email rate limit exceeded", status: 429, code: "over_email_send_rate_limit" }, RATE],
-    ["the request limit", { message: "Request rate limit reached", status: 429, code: "over_request_rate_limit" }, RATE],
-    ["the 60-second rule", { message: "For security purposes, you can only request this after 43 seconds.", status: 429 }, RATE],
-    ["no network (auth-js retryable fetch error)", { name: "AuthRetryableFetchError", message: "Network request failed", status: 0 }, NET],
-    ["anything else", { message: "Database error saving new user", status: 500, code: "unexpected_failure" }, OTHER],
+  // The last column: the same error from anything but checking a code — "That code didn't work" is said only there.
+  const cases: [string, object, string, string][] = [
+    ["an expired code", { message: "Token has expired or is invalid", status: 403, code: "otp_expired" }, WRONG, OTHER],
+    ["a wrong code (older servers: message only)", { message: "Token has expired or is invalid", status: 401 }, WRONG, OTHER],
+    ["invalid credentials", { message: "Invalid login credentials", status: 400, code: "invalid_credentials" }, WRONG, OTHER],
+    ["the email send limit", { message: "Email rate limit exceeded", status: 429, code: "over_email_send_rate_limit" }, RATE, RATE],
+    ["the request limit", { message: "Request rate limit reached", status: 429, code: "over_request_rate_limit" }, RATE, RATE],
+    ["the 60-second rule", { message: "For security purposes, you can only request this after 43 seconds.", status: 429 }, RATE, RATE],
+    ["no network (auth-js retryable fetch error)", { name: "AuthRetryableFetchError", message: "Network request failed", status: 0 }, NET, NET],
+    ["anything else", { message: "Database error saving new user", status: 500, code: "unexpected_failure" }, OTHER, OTHER],
   ];
-  test.each(cases)("%s", async (_name, error, sentence) => {
+  test.each(cases)("%s", async (_name, error, sentence, elsewhere) => {
     const m = configured();
-    mockAuth.signInWithOtp.mockResolvedValueOnce({ data: {}, error });
-    await expect(m.sendEmailCode("a@b.co")).rejects.toThrow(sentence);
     mockAuth.verifyOtp.mockResolvedValueOnce({ data: {}, error });
     await expect(m.verifyEmailCode("a@b.co", "123456")).rejects.toThrow(sentence);
+    mockAuth.signInWithOtp.mockResolvedValueOnce({ data: {}, error });
+    await expect(m.sendEmailCode("a@b.co")).rejects.toThrow(elsewhere);
+  });
+  test("a token error that is not about the emailed code (a refresh token, a JWT) is never 'That code didn't work'", async () => {
+    const m = configured();
+    open.mockResolvedValueOnce({ type: "success", url: `${REDIRECT}#access_token=a&refresh_token=r` });
+    mockAuth.setSession.mockResolvedValueOnce({ data: {}, error: { message: "Invalid Refresh Token: Refresh Token Not Found", status: 400, code: "refresh_token_not_found" } });
+    await expect(m.signInWithGoogle()).rejects.toThrow(OTHER);
+    open.mockResolvedValueOnce({ type: "success", url: `${REDIRECT}?code=abc` });
+    mockAuth.exchangeCodeForSession.mockResolvedValueOnce({ data: {}, error: { message: "invalid JWT: unable to parse or verify signature, token is malformed", status: 403, code: "bad_jwt" } });
+    await expect(m.signInWithGoogle()).rejects.toThrow(OTHER);
   });
   test("a request that throws (fetch failed) is a connection problem; an unknown throw is the fallback", async () => {
     const m = configured();
@@ -118,6 +128,15 @@ describe("Google", () => {
     expect(mockAuth.setSession).not.toHaveBeenCalled();
   });
 
+  test("access_denied WITH an error_code is the server refusing (sign-ups off, …), not the user cancelling: it fails plainly", async () => {
+    const m = configured();
+    open.mockResolvedValueOnce({ type: "success", url: `${REDIRECT}?error=access_denied&error_code=signup_disabled&error_description=Signups+not+allowed+for+this+instance` });
+    await expect(m.signInWithGoogle()).rejects.toThrow(OTHER);
+    open.mockResolvedValueOnce({ type: "success", url: `${REDIRECT}#error=access_denied&error_code=signup_disabled&error_description=Signups+not+allowed` });
+    await expect(m.signInWithGoogle()).rejects.toThrow(OTHER);
+    expect(mockAuth.setSession).not.toHaveBeenCalled(); expect(mockAuth.exchangeCodeForSession).not.toHaveBeenCalled();
+  });
+
   test("failures at each step carry a plain sentence", async () => {
     const m = configured();
     mockAuth.signInWithOAuth.mockResolvedValueOnce({ data: { url: null }, error: { message: "Unsupported provider: provider is not enabled", status: 400, code: "validation_failed" } });
@@ -131,11 +150,38 @@ describe("Google", () => {
   });
 });
 
-test("signOut: a failed request is thrown as a plain sentence (the session is still there), a clean one resolves", async () => {
-  const m = configured();
-  await expect(m.signOut()).resolves.toBeUndefined();
-  mockAuth.signOut.mockResolvedValueOnce({ error: { name: "AuthRetryableFetchError", message: "Network request failed", status: 0 } });
-  await expect(m.signOut()).rejects.toThrow(NET);
-  mockAuth.signOut.mockResolvedValueOnce({ error: { message: "Internal error", status: 500 } });
-  await expect(m.signOut()).rejects.toThrow("Couldn't sign out.");
+describe("signOut", () => {
+  const offline = { name: "AuthRetryableFetchError", message: "Network request failed", status: 0 };
+  const there = { data: { session: { access_token: "at", user: { email: "me@icloud.com" } } }, error: null };
+  const gone = { data: { session: null }, error: null };
+
+  test("a clean sign-out resolves and asks nothing more", async () => {
+    await expect(configured().signOut()).resolves.toBeUndefined();
+    expect(mockAuth.getSession).not.toHaveBeenCalled();
+  });
+
+  test("an error with the session GONE (auth-js removes it even offline) resolves: this phone is signed out", async () => {
+    const m = configured();
+    mockAuth.getSession.mockResolvedValue(gone);
+    mockAuth.signOut.mockResolvedValueOnce({ error: offline });
+    await expect(m.signOut()).resolves.toBeUndefined();
+    mockAuth.signOut.mockResolvedValueOnce({ error: { message: "Internal error", status: 500 } });
+    await expect(m.signOut()).resolves.toBeUndefined();
+    mockAuth.signOut.mockRejectedValueOnce(new TypeError("Network request failed"));
+    await expect(m.signOut()).resolves.toBeUndefined();
+    expect(mockAuth.getSession).toHaveBeenCalledTimes(3);
+  });
+
+  test("an error with the session STILL there is thrown as a plain sentence", async () => {
+    const m = configured();
+    mockAuth.getSession.mockResolvedValue(there);
+    mockAuth.signOut.mockResolvedValueOnce({ error: offline });
+    await expect(m.signOut()).rejects.toThrow(NET);
+    mockAuth.signOut.mockResolvedValueOnce({ error: { message: "Internal error", status: 500 } });
+    await expect(m.signOut()).rejects.toThrow("Couldn't sign out.");
+    // The session cannot be read back either: nothing says it is gone, so nothing claims it.
+    mockAuth.signOut.mockResolvedValueOnce({ error: offline });
+    mockAuth.getSession.mockRejectedValueOnce(new Error("storage"));
+    await expect(m.signOut()).rejects.toThrow(NET);
+  });
 });

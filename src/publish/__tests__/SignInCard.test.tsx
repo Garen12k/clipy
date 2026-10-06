@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
-jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
+let mockFocus: (() => void) | null = null;
+// Like the real hook: runs when the screen gets focus; a test calls mockFocus() to come back to the screen.
+jest.mock("expo-router", () => ({ router: { push: jest.fn() }, useFocusEffect: (cb: () => void) => { mockFocus = cb; require("react").useEffect(() => { cb(); }, []); } }));
 jest.mock("../useSession", () => ({ useSession: jest.fn() }));
 import { router } from "expo-router";
 import * as Apple from "expo-apple-authentication";
@@ -30,6 +32,17 @@ test("signed out: the short text and ONE button, 'Sign in', which opens the welc
   await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
   expect(router.push).toHaveBeenCalledTimes(1);
   expect(router.push).toHaveBeenCalledWith("/welcome");
+});
+
+test.each(["signedOut", "unconfigured"])("two fast taps open ONE sign-in page (%s); back on the screen the button works again", async (status) => {
+  (useSession as jest.Mock).mockReturnValue({ status });
+  await render(<SignInCard />);
+  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  expect(router.push).toHaveBeenCalledTimes(1);
+  mockFocus!();
+  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  expect(router.push).toHaveBeenCalledTimes(2);
 });
 
 test("signed in or loading renders nothing", async () => {

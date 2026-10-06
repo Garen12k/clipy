@@ -31,20 +31,24 @@ const TOO_MANY = "Too many tries. Wait a minute, then try again.";
 const NO_CONNECTION = "Couldn't reach Clipy. Check your connection.";
 const FAILED = "Couldn't sign in.";
 
-/** A Supabase auth error (returned or thrown) as one plain sentence. The server's own wording is never shown. */
-function plain(e: unknown): Error {
+/**
+ * An auth error (returned or thrown) as one plain sentence. The server's own wording is never shown.
+ * `checkingCode`: only verifyEmailCode sets it — "That code didn't work" is said about the emailed code alone (the same words in
+ * another request's error are about a refresh token or a JWT, and get the general sentences).
+ */
+function plain(e: unknown, checkingCode = false): Error {
   const { name, message, status, code } = (e ?? {}) as { name?: string; message?: string; status?: number; code?: string };
   const text = typeof message === "string" ? message : "";
-  if (code === "otp_expired" || code === "invalid_credentials" || /expired or is invalid|invalid.*(otp|token|code)/i.test(text)) return new Error(WRONG_CODE);
+  if (checkingCode && (code === "otp_expired" || code === "invalid_credentials" || /expired or is invalid|invalid.*(otp|token|code)/i.test(text))) return new Error(WRONG_CODE);
   if (status === 429 || (typeof code === "string" && /rate_limit/.test(code)) || /rate limit|security purposes/i.test(text)) return new Error(TOO_MANY);
   if (name === "AuthRetryableFetchError" || status === 0 || /network request failed|failed to fetch|network error/i.test(text)) return new Error(NO_CONNECTION);
   return new Error(FAILED);
 }
 /** Runs one auth request: a returned `error` and a thrown one both end as a plain sentence. */
-async function ask<T extends { error: unknown }>(request: () => Promise<T>): Promise<T> {
+async function ask<T extends { error: unknown }>(request: () => Promise<T>, checkingCode = false): Promise<T> {
   let result: T;
-  try { result = await request(); } catch (e) { throw plain(e); }
-  if (result.error) throw plain(result.error);
+  try { result = await request(); } catch (e) { throw plain(e, checkingCode); }
+  if (result.error) throw plain(result.error, checkingCode);
   return result;
 }
 function configured(): SupabaseClient {
@@ -61,7 +65,7 @@ export async function sendEmailCode(email: string): Promise<void> {
 /** Signs in with the code from that email. */
 export async function verifyEmailCode(email: string, code: string): Promise<void> {
   const supabase = configured();
-  await ask(() => supabase.auth.verifyOtp({ email: email.trim(), token: code, type: "email" }));
+  await ask(() => supabase.auth.verifyOtp({ email: email.trim(), token: code, type: "email" }), true);
 }
 
 /**
@@ -98,9 +102,12 @@ export async function signInWithGoogle(): Promise<"ok" | "cancelled"> {
   try { result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo); } catch { throw new Error(FAILED); }
   if (result.type !== "success") return "cancelled";
   const p = returnParams(result.url);
-  if (p.error === "access_denied") return "cancelled"; // "Cancel" on Google's own page
+  // "Cancel" on Google's own page comes back as a bare access_denied. With an `error_code` it is the server refusing (sign-ups
+  // switched off, …): that is a failure, and is said.
+  if (p.error === "access_denied" && !p.error_code) return "cancelled";
+  if (p.error || p.error_code) throw new Error(FAILED);
   if (p.access_token && p.refresh_token) await ask(() => supabase.auth.setSession({ access_token: p.access_token, refresh_token: p.refresh_token }));
-  else if (p.code && !p.error) await ask(() => supabase.auth.exchangeCodeForSession(p.code));
+  else if (p.code) await ask(() => supabase.auth.exchangeCodeForSession(p.code));
   else throw new Error(FAILED);
   return "ok";
 }
@@ -114,16 +121,25 @@ export async function signInWithApple(): Promise<"ok" | "cancelled"> {
     const c = await AppleAuthentication.signInAsync({ requestedScopes: [AppleAuthentication.AppleAuthenticationScope.FULL_NAME, AppleAuthentication.AppleAuthenticationScope.EMAIL] });
     token = c.identityToken;
   } catch (e) {
-    if ((e as { code?: string }).code === "ERR_REQUEST_CANCELED") return "cancelled";
-    throw e;
+    if ((e as { code?: string }).code === "ERR_REQUEST_CANCELED") return "cancelled"; // closed the sheet: nothing to say
+    throw plain(e); // Apple's own wording is not shown either
   }
   if (!token) throw new Error("Apple didn't return a sign-in token.");
-  const { error } = await supabase.auth.signInWithIdToken({ provider: "apple", token });
-  if (error) throw new Error(error.message);
+  await ask(() => supabase.auth.signInWithIdToken({ provider: "apple", token }));
   return "ok";
 }
-/** Signs out of Clipy on this phone. auth-js keeps the session when the request fails, so a returned error is thrown: the caller never says "Signed out." falsely. */
+/**
+ * Signs out of Clipy on this phone. auth-js removes the stored session even when the server could not be told (offline, a server
+ * error), so a failed request alone is not a failed sign-out: it is thrown only if a session is STILL there afterwards (or cannot be
+ * read back). The caller's "Signed out." and its error are then both true.
+ */
 export async function signOut(): Promise<void> {
-  const result = await getSupabase()?.auth.signOut();
-  if (result?.error) throw new Error(plain(result.error).message === NO_CONNECTION ? NO_CONNECTION : "Couldn't sign out.");
+  const supabase = getSupabase();
+  if (!supabase) return;
+  let error: unknown = null;
+  try { error = (await supabase.auth.signOut()).error; } catch (e) { error = e; }
+  if (!error) return;
+  let still = true;
+  try { still = !!(await supabase.auth.getSession()).data.session; } catch { /* unknown: not claimed as signed out */ }
+  if (still) throw new Error(plain(error).message === NO_CONNECTION ? NO_CONNECTION : "Couldn't sign out.");
 }

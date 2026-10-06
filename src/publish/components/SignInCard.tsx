@@ -1,4 +1,5 @@
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useRef } from "react";
 import { theme } from "@/src/theme/theme";
 import { Card } from "@/src/ui/Card";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
@@ -6,12 +7,18 @@ import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Body, Title } from "@/src/ui/Text";
 import { useSession } from "../useSession";
 
-/** The app has ONE sign-in page (app/welcome.tsx); this card only opens it. */
-const openSignIn = () => router.push("/welcome");
-
 /** An invitation to sign in when signed out; an explanation when the backend isn't configured; nothing otherwise. */
 export function SignInCard() {
   const session = useSession();
+  // The app has ONE sign-in page (app/welcome.tsx); this card only opens it — once: a second tap before the sheet is up would push
+  // a second one. The ref is cleared when this screen is in front again (the sheet was closed).
+  const opening = useRef(false);
+  useFocusEffect(useCallback(() => { opening.current = false; }, []));
+  const openSignIn = () => {
+    if (opening.current) return;
+    opening.current = true;
+    router.push("/welcome");
+  };
   if (session.status === "unconfigured") {
     return (
       <Card style={{ gap: theme.space.md, alignItems: "flex-start" }}>

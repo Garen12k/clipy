@@ -9,8 +9,8 @@ import { Spinner } from "@/src/ui/Spinner";
 import { Body, Title } from "@/src/ui/Text";
 
 export const CODE_LENGTH = 6;
-/** Seconds before "Resend code" can be pressed again. */
-export const RESEND_COOLDOWN_S = 30;
+/** Seconds before "Resend code" can be pressed again: the server's default minimum gap between two emails to one address (supabase/README.md §2a). */
+export const RESEND_COOLDOWN_S = 60;
 
 /** something@something.tld — a hint that the address is complete, not a validation (the server decides). */
 export const looksLikeEmail = (text: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(text.trim());
@@ -31,8 +31,6 @@ function Working({ label }: { label: string }) {
   return <View style={{ height: theme.size.control, justifyContent: "center" }}><Spinner label={label} /></View>;
 }
 
-const heading = { textTransform: "none", letterSpacing: 0 } as const;
-
 type EmailProps = { email: string; onChange: (text: string) => void; note: string | null; error: string | null; busy: boolean; onSend: () => void };
 
 /** Step two: the address. The gold button is "Send code". */
@@ -40,7 +38,7 @@ export function EmailStep({ email, onChange, note, error, busy, onSend }: EmailP
   const ready = looksLikeEmail(email);
   return (
     <EnterView style={{ gap: theme.space.lg }}>
-      <Title size={theme.type.title} accessibilityRole="header" style={heading}>Sign in with email</Title>
+      <Title size={theme.type.title} accessibilityRole="header">Sign in with email</Title>
       <Field accessibilityLabel="Email" value={email} onChangeText={onChange} placeholder="you@example.com" editable={!busy} autoFocus
         keyboardType="email-address" autoCapitalize="none" autoCorrect={false} textContentType="emailAddress" autoComplete="email"
         returnKeyType="send" onSubmitEditing={() => { if (ready) onSend(); }} />
@@ -54,15 +52,16 @@ type CodeProps = {
   email: string; code: string; onChange: (text: string) => void; note: string | null; error: string | null;
   /** What is running, as the spinner's label ("Signing in" / "Sending code"); null = nothing. */ working: string | null;
   /** Seconds until the code can be sent again (0 = now). */ resendIn: number;
+  /** No backend: no code was sent, so the first line does not say one was. */ preview?: boolean;
   onVerify: () => void; onResend: () => void; onChangeEmail: () => void;
 };
 
 /** Step three: the code. The gold button is "Sign in". */
-export function CodeStep({ email, code, onChange, note, error, working, resendIn, onVerify, onResend, onChangeEmail }: CodeProps) {
+export function CodeStep({ email, code, onChange, note, error, working, resendIn, preview = false, onVerify, onResend, onChangeEmail }: CodeProps) {
   const busy = working !== null;
   return (
     <EnterView style={{ gap: theme.space.lg }}>
-      <Body accessibilityRole="header" style={{ fontSize: theme.type.input }}>{`Enter the 6-digit code we sent to ${email}`}</Body>
+      <Body accessibilityRole="header" style={{ fontSize: theme.type.input }}>{preview ? "Enter the 6-digit code from the email." : `Enter the 6-digit code we sent to ${email}`}</Body>
       <Field accessibilityLabel="6-digit code" value={code} onChangeText={onChange} placeholder="000000" editable={!busy} autoFocus
         keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="one-time-code" maxLength={CODE_LENGTH}
         style={{ fontVariant: ["tabular-nums"], letterSpacing: theme.space.sm }} />

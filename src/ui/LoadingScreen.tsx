@@ -8,6 +8,8 @@ import { useReducedMotion } from "./useReducedMotion";
 import { Waves } from "./Waves";
 
 const EXIT_MS = 300;
+/** The wordmark's size and letter spacing. The welcome screen, which can follow this one, draws the name with the same numbers. */
+export const WORDMARK = { size: 48, letterSpacing: 8 } as const;
 
 /** Animated brand screen shown over the app until it is ready; fades out when `leaving` turns true. */
 export function LoadingScreen({ leaving, onGone }: { leaving: boolean; onGone: () => void }) {
@@ -41,7 +43,7 @@ export function LoadingScreen({ leaving, onGone }: { leaving: boolean; onGone: (
           <Animated.View testID="loading-compass" style={spin}><Compass size={96} /></Animated.View>
           <Animated.View style={[{ alignItems: "center", gap: theme.space.sm }, up]}>
             {/* Font families fall back to the system font until the UI fonts finish loading. */}
-            <Text style={{ fontFamily: theme.fonts.title, fontSize: 48, letterSpacing: 8, color: theme.colors.text }}>CLIPY</Text>
+            <Text style={{ fontFamily: theme.fonts.title, fontSize: WORDMARK.size, letterSpacing: WORDMARK.letterSpacing, color: theme.colors.text }}>CLIPY</Text>
             <Text style={{ fontFamily: theme.fonts.bodySemi, fontSize: 11, letterSpacing: 3, color: theme.colors.accent }}>EDIT · SET SAIL · SHARE</Text>
           </Animated.View>
         </View>

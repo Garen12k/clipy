@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { Alert } from "react-native";
-jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn() }, Redirect: () => null }));
+jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn() }, Redirect: () => null, useFocusEffect: (cb: () => void) => { require("react").useEffect(() => { cb(); }, []); } }));
 jest.mock("../useSession", () => ({ useSession: jest.fn() }));
 jest.mock("../useAccounts", () => ({ useAccounts: jest.fn() }));
 jest.mock("../supabase", () => ({ signInWithApple: jest.fn(), signOut: jest.fn() }));

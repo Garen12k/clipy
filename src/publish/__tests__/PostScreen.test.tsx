@@ -5,13 +5,24 @@ const FILE = "file:///cache/exports/p1-1.mp4";
 const baseParams = { fileUri: FILE, durationSec: "21", mimeType: "video/mp4", projectId: "p1", title: "Beach day" };
 let mockParams: Record<string, string | undefined> = { ...baseParams };
 let mockFocus: (() => void) | null = null;
+const mockFocusers = new Set<() => void>();
 const mockNav = { addListener: jest.fn(() => () => {}), setOptions: jest.fn(), dispatch: jest.fn() };
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: () => true },
   useLocalSearchParams: () => mockParams,
   useNavigation: () => mockNav,
   // Like the real hook: runs once when the screen first gets focus; tests call mockFocus() to simulate coming back.
-  useFocusEffect: (cb: () => void) => { mockFocus = cb; require("react").useEffect(() => { cb(); }, []); },
+  // Several components on the screen use it (the form, the sign-in card): coming back runs each one's latest callback.
+  useFocusEffect: (cb: () => void) => {
+    const React = require("react");
+    const latest = React.useRef(cb); latest.current = cb;
+    React.useEffect(() => {
+      const run = () => latest.current();
+      mockFocusers.add(run); mockFocus = () => { for (const f of [...mockFocusers]) f(); };
+      cb();
+      return () => { mockFocusers.delete(run); };
+    }, []);
+  },
 }));
 jest.mock("expo-sharing", () => ({ shareAsync: jest.fn(async () => {}) }));
 jest.mock("@/src/lib/fileInfo", () => ({ fileSize: jest.fn() }));
@@ -44,7 +55,7 @@ const usePostReturns = (p: ReturnType<typeof post>) => (usePost as jest.Mock).mo
 let onPosted: (p: string, url: string | null) => void;
 beforeEach(() => {
   jest.clearAllMocks();
-  mockParams = { ...baseParams }; mockFocus = null;
+  mockParams = { ...baseParams }; mockFocus = null; mockFocusers.clear();
   (fileSize as jest.Mock).mockReturnValue(14000000);
   (useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: null });
   (useAccounts as jest.Mock).mockReturnValue(accounts());

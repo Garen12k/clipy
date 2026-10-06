@@ -50,9 +50,22 @@ describe("the home route", () => {
     expect(hasSeenWelcome()).toBe(true);
     expect(await screen.findByText("Your voyages")).toBeTruthy();
     expect(screen.queryByText(TAGLINE)).toBeNull();
+    // The swap mounts the real projects screen: the projects are loaded now, and the (empty) list is shown.
+    expect(storage.listProjects).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("No clips yet")).toBeTruthy();
     await first.unmount();
     await render(<Home />);
     expect(screen.getByText("Your voyages")).toBeTruthy();
+  });
+
+  test("the swap with projects on the phone: they are loaded then, and listed", async () => {
+    (storage.listProjects as jest.Mock).mockResolvedValueOnce([{ id: "p1", name: "Beach day", durationSec: 12, updatedAt: "2026-10-01T10:00:00.000Z", thumbUri: null, broken: false, postedTo: [], coverTitle: "" }]);
+    await render(<Home />);
+    expect(storage.listProjects).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", { name: "Continue without an account" }));
+    expect(await screen.findByText("Beach day")).toBeTruthy();
+    expect(storage.listProjects).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("No clips yet")).toBeNull();
   });
 
   test("signed in but no flag (a reinstall that kept its session): never the welcome screen — the projects, and the flag is set", async () => {

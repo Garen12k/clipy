@@ -1,15 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Keyboard, ScrollView, View } from "react-native";
 import { isBackendConfigured, sendEmailCode, SIGN_IN_NOT_SET_UP, signInWithApple, signInWithGoogle, verifyEmailCode } from "@/src/publish/supabase";
 import { useSession } from "@/src/publish/useSession";
 import { theme } from "@/src/theme/theme";
 import { EnterView } from "@/src/ui/Enter";
 import { IconButton } from "@/src/ui/IconButton";
+import { WORDMARK } from "@/src/ui/LoadingScreen";
 import { QuietButton } from "@/src/ui/QuietButton";
 import { Screen } from "@/src/ui/Screen";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
+import { Spinner } from "@/src/ui/Spinner";
 import { Body, Title } from "@/src/ui/Text";
 import { ToastHost, useToast } from "@/src/ui/Toast";
 import { CODE_LENGTH, CodeStep, digitsOnly, EmailStep, looksLikeEmail, RESEND_COOLDOWN_S } from "./EmailSignIn";
@@ -20,9 +22,9 @@ const FOOTER = "You only need an account to post. Editing works without one.";
 const NO_CODE_SENT = "Sign-in isn't set up yet, so no code was sent.";
 const NEW_CODE_SENT = "We sent a new code.";
 const FAILED = "Couldn't sign in.";
-/** The wordmark, as the loading screen draws it just before this screen: the same size and spacing, the kit's Title font. */
-const WORDMARK = { size: 48, letterSpacing: 8 } as const;
 const BUTTON_HEIGHT = theme.size.control;
+/** Where the first step's spinner stands while a sign-in runs: always there, at one height, so nothing moves when it appears. */
+const WORKING_SLOT = theme.size.icon.lg;
 
 const sentence = (e: unknown) => (e instanceof Error && e.message ? e.message : FAILED);
 const toast = (message: string) => useToast.getState().show(message);
@@ -64,6 +66,7 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
     if (left.current || !alive.current) return;
     left.current = true;
     markWelcomeSeen();
+    useToast.getState().clear(); // the store is app-wide: a toast still up would show again on the screen that follows
     onDone();
   }
   const signedIn = session.status === "signedIn";
@@ -124,7 +127,8 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
   }
   function verify(digits: string) {
     if (pending.current || digits.length !== CODE_LENGTH) return;
-    if (preview) { toast(SIGN_IN_NOT_SET_UP); return; }
+    // Said under the field, with the keyboard put away: a toast would sit behind the number pad and the button would look dead.
+    if (preview) { Keyboard.dismiss(); setCodeError(SIGN_IN_NOT_SET_UP); return; }
     run("Signing in", async () => {
       try { await verifyEmailCode(email, digits); }
       catch (e) { if (alive.current) setCodeError(sentence(e)); return; }
@@ -148,12 +152,17 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
     if (digits.length === CODE_LENGTH && code.length < CODE_LENGTH) verify(digits);
   }
 
+  // First launch is drawn in place, full screen: the status bar's inset applies. From Accounts / Post it is a modal sheet, which
+  // already sits below the status bar (as Export's does): only the bottom inset, and a little room above the close button.
+  const edges = first ? (["top", "bottom"] as const) : (["bottom"] as const);
+  const top = first ? undefined : { paddingTop: theme.space.md };
+
   // First launch with a backend: nothing is drawn until the stored session is read, so a signed-in user never sees this screen.
-  if (signedIn || (first && session.status === "loading")) return <Screen edges={["top", "bottom"]}>{null}</Screen>;
+  if (signedIn || (first && session.status === "loading")) return <Screen edges={edges} style={top}>{null}</Screen>;
 
   const iconColor = theme.colors.text;
   return (
-    <Screen edges={["top", "bottom"]}>
+    <Screen edges={edges} style={top}>
       <View style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.sm }}>
         {step === "email" ? <IconButton name="chevron-back-outline" accessibilityLabel="Back" disabled={busy} onPress={() => setStep("choose")} />
           : step === "code" ? <IconButton name="chevron-back-outline" accessibilityLabel="Back" disabled={busy} onPress={() => setStep("email")} />
@@ -167,11 +176,17 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
             <View style={{ flexGrow: 1, alignItems: "center", justifyContent: "center", gap: theme.space.sm, paddingVertical: theme.space.xxl }}>
               <Title size={WORDMARK.size} accessibilityRole="header" style={{ letterSpacing: WORDMARK.letterSpacing }}>Clipy</Title>
               <Body muted style={{ fontSize: theme.type.input, textAlign: "center" }}>{TAGLINE}</Body>
+              {/* Google's session is completed after its browser has closed: this is what shows that something is happening. */}
+              <View testID="welcome-working" style={{ height: WORKING_SLOT, justifyContent: "center" }}>
+                {working !== null ? <Spinner label={working} /> : null}
+              </View>
             </View>
             <View style={{ gap: theme.space.md }}>
               {/* Apple's own button (white, as Apple requires): it is the visual primary, so this step has no gold button. */}
               {apple === null ? <View testID="welcome-apple-slot" style={{ height: BUTTON_HEIGHT }} /> : apple ? (
-                <View pointerEvents={busy ? "none" : "auto"}>
+                // Apple's control cannot be dimmed or disabled: while busy its wrapper takes no touch and is what VoiceOver meets, as a disabled button.
+                <View testID="welcome-apple" pointerEvents={busy ? "none" : "auto"}
+                  {...(busy ? { accessible: true, accessibilityRole: "button" as const, accessibilityLabel: "Continue with Apple", accessibilityState: { disabled: true } } : null)}>
                   <AppleAuthentication.AppleAuthenticationButton
                     buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
                     buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
@@ -191,7 +206,7 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
           <EmailStep email={email} onChange={(text) => { setEmail(text); setEmailError(null); setEmailNote(null); }}
             note={emailNote} error={emailError} busy={busy} onSend={onSend} />
         ) : (
-          <CodeStep email={email} code={code} onChange={onCode} note={codeNote} error={codeError} working={working} resendIn={resendIn}
+          <CodeStep email={email} code={code} onChange={onCode} note={codeNote} error={codeError} working={working} resendIn={resendIn} preview={preview}
             onVerify={() => verify(code)} onResend={onResend} onChangeEmail={() => setStep("email")} />
         )}
       </ScrollView>

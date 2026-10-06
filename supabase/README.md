@@ -38,7 +38,8 @@ Clipy's welcome screen offers three ways to sign in. Each is one provider in the
 3. Change its message so it shows the code instead of a link. The body must contain `{{ .Token }}`, for example: `Your Clipy code is {{ .Token }}`. Remove the `{{ .ConfirmationURL }}` link. **Save**.
 4. Do the same for the **Confirm signup** template: a new address may get that email the first time.
 5. The code must be **6 digits** (Clipy's box takes exactly six). If the project offers an "Email OTP length" setting under the Email provider, set it to 6.
-6. Supabase's built-in email sender only sends a few emails an hour, and only to the project's own team members. For real use, connect your own email sender under **Authentication → Emails → SMTP Settings** *(may be named slightly differently)*.
+6. After a code is sent, Clipy's "Resend code" waits 60 seconds, to match Supabase's default minimum gap between two emails to the same address *(the 60-second default is from memory, not verified against a real project; if yours is set differently, tell the developer)*.
+7. Supabase's built-in email sender only sends a few emails an hour, and only to the project's own team members. For real use, connect your own email sender under **Authentication → Emails → SMTP Settings** *(may be named slightly differently)*.
 
 ### b. Google — needs a Google client in your name
 
@@ -47,7 +48,7 @@ Clipy's welcome screen offers three ways to sign in. Each is one provider in the
 3. In Supabase, click **Google**, switch it on, paste the Client ID and Client secret, **Save**.
 4. Open **Authentication → URL Configuration** and, under **Redirect URLs**, add these two (this is where Google sign-in returns to the app):
    - `clipy://welcome` — the real app.
-   - `exp://**` — Expo Go (there the address is `exp://<your computer's address>:<port>/--/welcome`, which changes with your network, so a wildcard is needed).
+   - `exp://**` — Expo Go, **testing only — remove before release** (there the address is `exp://<your computer's address>:<port>/--/welcome`, which changes with your network, so a wildcard is needed).
 5. If Google sign-in ends on a web page instead of returning to Clipy, the address in step 4 is missing or misspelt: tell the developer which address you see.
 
 ### c. Apple — works only in the real build
