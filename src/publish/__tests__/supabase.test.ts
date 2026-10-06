@@ -1,5 +1,7 @@
 const mockSignInWithIdToken = jest.fn(async () => ({ error: null }));
 jest.mock("@supabase/supabase-js", () => ({ createClient: jest.fn(() => ({ auth: { signInWithIdToken: mockSignInWithIdToken, signOut: jest.fn(async () => ({ error: null })) } })) }));
+// jest-expo answers "yes, Expo Go": this file tests the installed app (the Expo Go branch is in supabaseSignIn.test.ts).
+jest.mock("expo", () => ({ isRunningInExpoGo: () => false }));
 import * as Apple from "expo-apple-authentication";
 
 const load = () => { let m!: typeof import("../supabase"); jest.isolateModules(() => { m = require("../supabase"); }); return m; };
