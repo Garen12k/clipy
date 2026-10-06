@@ -8,10 +8,6 @@ const DIRS = ["app", "src/projects", "src/export", "src/publish"];
  * deletes that file's line and no other. The list is exact, so the table cannot go stale.
  */
 const ALLOW: Record<string, string[]> = {
-  "app/accounts.tsx": ["chevron-back"],
-  "app/post.tsx": ["chevron-back"],
-  "src/publish/components/PostRow.tsx": ["checkmark-circle", "checkbox"],
-  "src/publish/components/PostScreenBody.tsx": ["chevron-back"],
 };
 
 /** A `name=` attribute: a string, or an expression whose string literals are all candidates (`name={on ? "a" : "b"}`). */

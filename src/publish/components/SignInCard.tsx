@@ -1,18 +1,14 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useEffect, useRef, useState } from "react";
-import { View, type ViewStyle } from "react-native";
+import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { Card } from "@/src/ui/Card";
 import { Body, Title } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
 import { signInWithApple } from "../supabase";
 import { useSession } from "../useSession";
 
-/** Shared card look for the posting screens: surface, 1 px hairline, card radius, lg padding. */
-export const cardStyle: ViewStyle = {
-  backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.hairline, borderRadius: theme.radius.card, padding: theme.space.lg,
-};
-
-const BUTTON_HEIGHT = 48;
+const BUTTON_HEIGHT = theme.size.control;
 
 /** Sign in with Apple when signed out; an explanation when the backend isn't configured; nothing otherwise. */
 export function SignInCard() {
@@ -39,26 +35,26 @@ export function SignInCard() {
 
   if (session.status === "unconfigured") {
     return (
-      <View style={[cardStyle, { gap: theme.space.sm }]}>
-        <Title size={18}>Posting isn't set up yet</Title>
+      <Card style={{ gap: theme.space.sm }}>
+        <Title size={theme.type.heading}>Posting isn't set up yet</Title>
         <Body muted>Clipy's posting server hasn't been connected. You can still share with the Share button.</Body>
-      </View>
+      </Card>
     );
   }
   if (!signedOut) return null;
   return (
-    <View style={[cardStyle, { gap: theme.space.md }]}>
-      <Title size={18}>Sign in to Clipy</Title>
+    <Card style={{ gap: theme.space.md }}>
+      <Title size={theme.type.heading}>Sign in to Clipy</Title>
       <Body muted>Clipy keeps your connected accounts safe on its server.</Body>
       {available === null ? <View style={{ height: BUTTON_HEIGHT }} /> : available ? (
         <AppleAuthentication.AppleAuthenticationButton
           buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
           buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-          cornerRadius={22} style={{ height: BUTTON_HEIGHT, width: "100%" }}
+          cornerRadius={BUTTON_HEIGHT / 2} style={{ height: BUTTON_HEIGHT, width: "100%" }}
           accessibilityLabel="Sign in with Apple" onPress={onSignIn} />
       ) : (
         <Body>Sign in with Apple isn't available on this device.</Body>
       )}
-    </View>
+    </Card>
   );
 }

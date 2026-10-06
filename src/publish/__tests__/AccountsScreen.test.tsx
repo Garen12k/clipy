@@ -7,6 +7,7 @@ jest.mock("../supabase", () => ({ signInWithApple: jest.fn(), signOut: jest.fn()
 import AccountsScreen from "@/app/accounts";
 import { signOut } from "../supabase";
 import { useAccounts } from "../useAccounts";
+import { theme } from "@/src/theme/theme";
 import { useSession } from "../useSession";
 
 const p = (id: string, over = {}) => ({ id, available: false, connected: false, name: null, avatarUrl: null, needsReconnect: false, ...over });
@@ -76,4 +77,28 @@ test("load error offers Try again; footer signs out after confirmation", async (
   const buttons = alert.mock.calls[0][2] as { text: string; style?: string; onPress?: () => void }[];
   await buttons.find((b) => b.style === "destructive")!.onPress!();
   expect(signOut).toHaveBeenCalled();
+});
+
+describe("round 2 look (no behaviour)", () => {
+  test("a row is 56 pt and Connect is a compact outlined button", async () => {
+    (useAccounts as jest.Mock).mockReturnValue(hook());
+    await render(<AccountsScreen />);
+    expect(screen.getByTestId("account-row-youtube")).toHaveStyle({ minHeight: theme.size.listRow });
+    expect(screen.getByRole("button", { name: "Connect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, borderWidth: 1.5 });
+    expect(screen.getByRole("header", { name: "Accounts" })).toHaveStyle({ fontSize: theme.type.screen });
+  });
+
+  test("no gold button: Reconnect is outlined, Disconnect and Sign out are text only", async () => {
+    (useAccounts as jest.Mock).mockReturnValue(hook({ platforms: [
+      p("youtube", { available: true, connected: true, name: "My Channel", needsReconnect: true }),
+      p("tiktok", { available: true, connected: true, name: "@sunny" }),
+    ] }));
+    await render(<AccountsScreen />);
+    expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Reconnect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Disconnect TikTok" })).toHaveStyle({ height: theme.size.controlCompact });
+    expect(screen.getByRole("button", { name: "Disconnect TikTok" })).not.toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Sign out" })).not.toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByText("Sign-in expired")).toHaveStyle({ color: theme.colors.danger });
+  });
 });

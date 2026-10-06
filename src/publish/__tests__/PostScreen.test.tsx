@@ -707,3 +707,38 @@ describe("cover frame", () => {
     ]);
   });
 });
+
+describe("round 2 look (no behaviour)", () => {
+  test("the caption is the kit field; Post is the one gold button; Share… is outlined", async () => {
+    await render(<PostScreen />);
+    expect(screen.getByLabelText("Caption")).toHaveStyle({ backgroundColor: theme.elevation.tile, fontSize: theme.type.input, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md, minHeight: 96 });
+    expect(screen.getByLabelText("Caption")).toHaveProp("placeholder", "Write a caption…");
+    expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
+    expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Post");
+    expect(screen.getByRole("button", { name: "Share…" })).toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByRole("header", { name: "Post" })).toHaveStyle({ fontSize: theme.type.screen });
+  });
+
+  test("a platform row is 56 pt; Options is a compact text-only button; a note under it is small", async () => {
+    await render(<PostScreen />);
+    expect(screen.getByTestId("post-row-youtube")).toHaveStyle({ minHeight: theme.size.listRow });
+    const options = screen.getByRole("button", { name: "YouTube options" });
+    expect(options).toHaveStyle({ height: theme.size.controlCompact });
+    expect(options).not.toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByText(/private until Google reviews/i)).toHaveStyle({ fontSize: theme.type.small, color: theme.colors.textMuted });
+  });
+
+  test("a row's action is a compact outlined button; its error is red and a size larger than a note", async () => {
+    usePostReturns(post({ rows: rows({ phase: "failed", message: "The video has been rejected.", resumable: false }) }));
+    await render(<PostScreen />);
+    expect(screen.getByRole("button", { name: "Retry YouTube" })).toHaveStyle({ height: theme.size.controlCompact, borderWidth: 1.5 });
+    expect(screen.getByText("The video has been rejected.")).toHaveStyle({ fontSize: theme.type.label, color: theme.colors.danger });
+  });
+
+  test("uploading: the percentage does not jitter and the bar is a 4-pt pill", async () => {
+    usePostReturns(post({ rows: rows({ phase: "uploading", progress: 0.42 }), busy: true }));
+    await render(<PostScreen />);
+    expect(screen.getByText("42%")).toHaveStyle({ fontSize: theme.type.label, fontVariant: ["tabular-nums"] });
+    expect(screen.getByRole("progressbar")).toHaveStyle({ height: 4, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.tile });
+  });
+});

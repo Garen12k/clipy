@@ -19,8 +19,8 @@ export default function PostScreen() {
   if (target) return <PostScreenBody target={target} />;
   return (
     <Screen edges={["top", "bottom"]}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.sm }}>
-        <IconButton name="chevron-back" accessibilityLabel="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
+      <View style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.sm }}>
+        <IconButton name="chevron-back-outline" accessibilityLabel="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
       </View>
       <EmptyState emoji="🎞️" title="This video can't be posted." hint="Clipy couldn't read this video file. Go back and pick it again." />
     </Screen>

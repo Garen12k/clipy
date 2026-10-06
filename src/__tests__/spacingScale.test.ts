@@ -13,9 +13,6 @@ const ALLOW: Record<string, { max: number; why: string }> = {
   "src/editor/components/EffectPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/LayerBar.tsx": { max: 2, why: "HANDLE_W + 2 and the warning dot's padding: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/OverlayPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
-  "src/publish/components/AccountRow.tsx": { max: 1, why: "round 2, task 5" },
-  "src/publish/components/PostRow.tsx": { max: 1, why: "round 2, task 5" },
-  "src/publish/components/PostScreenBody.tsx": { max: 1, why: "round 2, task 5" },
 };
 
 /** A spacing property's name, up to its colon. */
