@@ -214,7 +214,7 @@ Every row except the first has a **back arrow** at the left that clears the sele
 
 **Strips.** Quick tools (Filter, Adjust, Speed, Volume, Opacity, Animate, Mask, Blend, Green screen, Transform, Background, Ratio, Transition, Fade, Strength) open as a small panel in place of the row. Nothing dims; you can play, scrub and tap the timeline while it is open. It rises over the two lowest timeline rows and never over the clips: with two or more rows under the clips the video keeps its size, with fewer the video gets a little smaller while the strip is open. The round **✓** closes it, and so does selecting something else. The ratio pill next to the play button and the mark between two clips open the Ratio and Transition strips. The Effects list and Trim (by numbers) are strips too.
 
-**Panels.** Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style and Beats open as a tall panel at the bottom. Nothing dims: the timeline and the row of tools give the panel their place (the timeline comes back where it was, same zoom), and the video stays above it, a little smaller (smaller still for the big panels), and keeps playing. Play, undo and redo stay usable above the panel. The round **✓** closes it, and so does selecting something else. When you type, the panel sits on the keyboard at a lower height and the video stays in view; drag the panel's content down to put the keyboard away (the panel stays open). While a voice-over is recorded the panel stays until the recording is stopped and saved, and the other tools and Export do not open. Trim's number boxes work the same way: with the keyboard up the timeline is hidden and the strip sits on the keyboard. Panels fade and rise in; closing is instant. Cover is still a pop-up sheet (it dims the screen) and Crop is a full screen.
+**Panels.** Text, Stickers, the sticker editor, Add audio, Templates, Captions, Caption style, Beats and Cover open as a tall panel at the bottom. Nothing dims: the timeline and the row of tools give the panel their place (the timeline comes back where it was, same zoom), and the video stays above it, a little smaller (smaller still for the big panels), and keeps playing. Play, undo and redo stay usable above the panel. The round **✓** closes it, and so does selecting something else. When you type, the panel sits on the keyboard at a lower height and the video stays in view; drag the panel's content down to put the keyboard away (the panel stays open). While a voice-over is recorded the panel stays until the recording is stopped and saved, and the other tools and Export do not open. Trim's number boxes work the same way: with the keyboard up the timeline is hidden and the strip sits on the keyboard. Panels fade and rise in; closing is instant. Crop is a full screen.
 
 **Aspect ratio.** Nine choices: **Auto**, 1:1, 3:2, 2:3, 16:9, 9:16, 4:3, 3:4 and 21:9.
 
@@ -428,10 +428,12 @@ on older phones. The export is Swift that has never been compiled.
   **Smaller file** asks the engine to keep the file under a size limit (`fileLengthLimit`); this is a ceiling, not a
   target, and it is untested until the first native build. 24 fps from 30 fps sources may judder slightly;
   text and sticker animations are still sampled 30 times a second at every frame rate.
-- **Cover** - **Edit** -> **Cover** (last tool). Drag the slider to pick a frame, type a short title (up to 40
-  characters), then **Done**; **Reset** goes back to the first frame. **Save to Photos** saves the picture (1080 px
-  wide, a screen capture of the cover frame, so filters and layers are not on it); it is disabled while you type
-  the title. The drafts list shows the cover and its title once you leave the editor (the picture is written when
+- **Cover** - **Edit** -> **Cover** (last tool). It opens as a panel under the video, like the other tools. Drag
+  the slider to pick a frame and type a short title (up to 40 characters): the panel shows the chosen frame with
+  the title on it, and the choice is kept as you go (one drag is one undo step, a run of typing is one); the round
+  **✓** closes the panel. **Reset** goes back to the first frame and no title. **Save to Photos** saves the picture
+  (1080 px wide, a screen capture of the cover frame, so filters and layers are not on it); it is disabled while
+  the keyboard is up. The drafts list shows the cover and its title once you leave the editor (the picture is written when
   the editor closes; if the app is killed inside the editor the first frame shows until the next close).
   The cover is sent to **Instagram only**, as the Reel's thumbnail.
 - **Snapping** - while you move or trim a bar on the timeline (text, caption, sticker, effect, audio, layer, or a

@@ -85,8 +85,8 @@ export function EditorToolbar() {
   // A main-bar entry that opens a bar without a selection (Audio, Text). Toolbar state: any change of the selection leaves it, and
   // so does the project losing its last clip (else the Text bar would come back by itself with the next clip).
   const [section, setSection] = useState<Section>(null);
-  // The two tools that are still modal (Cover is a sheet, Crop a full screen); every other tool lives in the tool store.
-  const [sheet, setSheet] = useState<"crop" | "cover" | null>(null);
+  // The one tool that is still modal (Crop, a full screen); every other tool lives in the tool store.
+  const [sheet, setSheet] = useState<"crop" | null>(null);
   const key = useEditorStore(selectionKey);
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   useEffect(() => { setSection(null); }, [key]);
@@ -264,7 +264,7 @@ export function EditorToolbar() {
     adjust: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("adjust")) : openStrip("adjust")) },
     ratio: { onPress: () => openStrip("ratio") },
     background: { onPress: () => (bar === "main" ? onPlayheadClip(() => openStrip("background")) : openStrip("background")) },
-    cover: { onPress: () => setSheet("cover") },
+    cover: { onPress: () => openStrip("cover") },
     templates: { onPress: () => openStrip("templates") },
     split: { onPress: () => { haptic("light"); apply((p) => splitClipAt(p, useEditorStore.getState().playhead)); } },
     trim: { onPress: () => openStrip("trim") },
@@ -334,7 +334,6 @@ export function EditorToolbar() {
           </EnterView>
         </View>
       )}
-      <CoverSheet visible={sheet === "cover"} onClose={() => setSheet(null)} />
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
       {/* Opened and closed through the tool store, like the strips. */}
       <TrimSheet clipId={selectedId} visible={strip?.id === "trim"} onClose={closeStrip} />
@@ -344,6 +343,7 @@ export function EditorToolbar() {
       <BeatsSheet visible={strip?.id === "beats"} onClose={closeStrip} />
       <StickerSheet visible={strip?.id === "sticker"} onClose={closeStrip} onAdded={() => {}} />
       <CaptionsSheet visible={strip?.id === "captions"} onClose={closeStrip} />
+      <CoverSheet visible={strip?.id === "cover"} onClose={closeStrip} />
       {/* The text panel and the sticker editor edit the selected overlay; Duplicate selects the copy, then re-keys the panel onto it. */}
       <TextPanel overlayId={selectedOverlayId} visible={strip?.id === "text"} onClose={closeStrip} onRetarget={rekeyStrip} />
       <StickerPanel overlayId={selectedOverlayId} visible={strip?.id === "stickerEdit"} onClose={closeStrip} onRetarget={rekeyStrip} />
