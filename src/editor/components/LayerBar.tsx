@@ -51,15 +51,14 @@ export function layerTrimFromDrag(layer: LayerClip, handle: "left" | "right", fr
   return { trimStart: layer.trimStart, trimEnd: Math.min(layer.sourceDuration, Math.max(raw, sourceAfter(layer, layer.trimStart, min))), anchor };
 }
 
-/** `number` is the number of the layer's row of the timeline (1 = the first row under the clips — the chip at the row's left edge shows the same), shown after the title so two layers can be told apart. */
-type Props = { layer: LayerClip; number?: number; missing?: boolean; selected: boolean; onPress: () => void };
+type Props = { layer: LayerClip; missing?: boolean; selected: boolean; onPress: () => void };
 
 /**
  * One layer in its own row of the layers lane (see LayerLane): tap selects, long-press drag moves it along the row, the handles
  * (shown when selected) trim it — a photo has only the end handle. It is alone in its row, so nothing covers it and it is never see-through.
  * `missing` (its file is gone): the warning badge the audio bar shows.
  */
-export function LayerBar({ layer: l, number, missing = false, selected, onPress }: Props) {
+export function LayerBar({ layer: l, missing = false, selected, onPress }: Props) {
   const pps = useEditorStore((s) => s.pixelsPerSecond);
   const store = useEditorStore.getState();
   // Drag state lives in a ref object: gesture callbacks each get their own copy of captured variables.
@@ -130,7 +129,7 @@ export function LayerBar({ layer: l, number, missing = false, selected, onPress 
         {roomy && (
           <>
             <Ionicons name={photo ? "image" : "videocam"} size={14} color={theme.colors.onAccent} />
-            <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12, flex: 1 }}>{number ? `Layer ${number}` : "Layer"}</Text>
+            <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12, flex: 1 }}>Layer</Text>
           </>
         )}
         {missing && (

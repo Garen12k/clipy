@@ -66,16 +66,7 @@ test("the lane holds one bar per layer, placed by start and output length, title
   expect(screen.getByTestId("layer-bar-v1")).toHaveStyle({ position: "absolute", left: 50, width: 200, height: 28, backgroundColor: theme.colors.laneLayer });
   expect(screen.getByTestId("layer-bar-ph")).toHaveStyle({ position: "absolute", left: 100, width: 150, backgroundColor: theme.colors.laneLayer });
   expect(screen.getByTestId("layer-bar-v2")).toHaveStyle({ position: "absolute", left: 400, width: 250 });
-  // Each bar carries the number of its row of the timeline (what the chip at the left edge shows), so two layers can be told apart:
-  // the music lane is row 1 here, so the layers are rows 2 to 4 — and 1 to 3 once the music is gone.
-  const first = laneModel(p).lanes.find((l) => l.id === "layers")!.index + 1;
-  expect(first).toBe(2);
-  ["v1", "ph", "v2"].forEach((id, i) => expect(within(screen.getByTestId(`layer-bar-${id}`)).getByText(`Layer ${first + i}`)).toBeTruthy());
-  expect(screen.queryByText("Layer 1")).toBeNull();
-  await act(() => { st().setProject({ ...p, audioTracks: [] }); });
-  ["v1", "ph", "v2"].forEach((id, i) => expect(within(screen.getByTestId(`layer-bar-${id}`)).getByText(`Layer ${1 + i}`)).toBeTruthy());
-  await act(() => { st().setProject(p); });
-  expect(screen.queryByText("Layer")).toBeNull();
+  expect(screen.getAllByText("Layer")).toHaveLength(3);
   expect(screen.getAllByLabelText("Video layer")).toHaveLength(2);
   expect(screen.getAllByLabelText("Photo layer")).toHaveLength(1);
 });
@@ -308,7 +299,7 @@ test("a very short layer is drawn 12 pt wide without a label and stays tappable;
   await render(<LayerLane />);
   expect(screen.getByTestId("layer-bar-t")).toHaveStyle({ left: 100, width: 12 });
   expect(screen.getByTestId("layer-bar-t").props.hitSlop).toEqual({ top: 2, bottom: 2, left: 8, right: 8 });
-  expect(screen.queryByText(/Layer/)).toBeNull();
+  expect(screen.queryByText("Layer")).toBeNull();
   await fireEvent.press(screen.getByTestId("layer-bar-t"));
   expect(st().selectedClipId).toBe("t");
   expect(screen.getByLabelText("Layer start handle")).toHaveStyle({ left: 0, width: 6 });

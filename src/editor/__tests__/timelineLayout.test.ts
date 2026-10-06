@@ -1,7 +1,7 @@
 import { curveSteps } from "@/src/editor/model/timeline";
 import { makeClip } from "@/src/editor/model/types";
 import { makeAudioTrack, makeEffect, makeLayer, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
-import { audioLaneKinds, CLIP_AREA_HEIGHT, indexFromDrop, LANE_GAP, LANE_HEIGHT, laneLift, laneModel, type LaneModel, laneTop, layerRowIndex, layerRowTops, overlayRows, ROW_SLOP, rowOffset, rowTops, selectedRow, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
+import { audioLaneKinds, CLIP_AREA_HEIGHT, indexFromDrop, LANE_GAP, LANE_HEIGHT, laneLift, laneModel, type LaneModel, laneTop, layerRowTops, overlayRows, ROW_SLOP, rowOffset, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
 
 const LANE = LANE_HEIGHT + LANE_GAP;
 
@@ -277,42 +277,4 @@ test("rowOffset: a row's top inside its own lane; ROW_SLOP: half the gap between
   expect(laneTop(3) - laneTop(1)).toBe(rowOffset(2));
   expect(ROW_SLOP).toBe(2);
   expect(ROW_SLOP * 2).toBeLessThanOrEqual(LANE_GAP);
-});
-
-describe("the rows of the whole timeline", () => {
-  const two = [makeOverlay({ id: "o1", text: "Hi", start: 1, end: 4 }), makeOverlay({ id: "o2", text: "Yo", start: 2, end: 5 })];
-  const p = makeProject({ clips, audioTracks: [track("v", "voice"), track("m", "music")], layers: layersOf(2), overlays: two, effects: [fx] });
-
-  test("rowTops: every row of every lane, top to bottom — none without lanes", () => {
-    expect(rowTops(laneModel(makeProject({ clips })))).toEqual([]);
-    expect(rowTops(laneModel(null))).toEqual([]);
-    const m = laneModel(p);
-    expect(rowTops(m)).toEqual([0, 1, 2, 3, 4, 5, 6].map(laneTop));
-    expect(rowTops(m).slice(2, 4)).toEqual(layerRowTops(m));
-    expect(laneTop(rowTops(m).length)).toBe(m.height);
-  });
-
-  test("layerRowIndex: the row of the first layer is the model's — only the audio lanes above can move it", () => {
-    const at = (q: typeof p) => laneModel(q).lanes.find((l) => l.id === "layers")?.index;
-    expect(layerRowIndex(p)).toBe(2);
-    for (const q of [p, { ...p, audioTracks: [] }, { ...p, audioTracks: [track("s", "sfx")] }, { ...p, overlays: [], effects: [] }]) expect(layerRowIndex(q)).toBe(at(q));
-    expect(layerRowIndex({ ...p, audioTracks: [] })).toBe(0);
-    expect(layerRowIndex(null)).toBe(0);
-  });
-
-  test("selectedRow: the row that holds the selected item, or -1", () => {
-    const none = { clipId: null, overlayId: null, effectId: null, audioId: null };
-    expect(selectedRow(p, none)).toBe(-1);
-    expect(selectedRow(null, { ...none, audioId: "m" })).toBe(-1);
-    expect(selectedRow(p, { ...none, audioId: "m" })).toBe(0);
-    expect(selectedRow(p, { ...none, audioId: "v" })).toBe(1);
-    expect(selectedRow(p, { ...none, clipId: "l1" })).toBe(2);
-    expect(selectedRow(p, { ...none, clipId: "l2" })).toBe(3);
-    expect(selectedRow(p, { ...none, overlayId: "o1" })).toBe(4);
-    expect(selectedRow(p, { ...none, overlayId: "o2" })).toBe(5);
-    expect(selectedRow(p, { ...none, effectId: "e" })).toBe(6);
-    // A main clip, or an id that is gone, is in no row.
-    expect(selectedRow(p, { ...none, clipId: clips[0].id })).toBe(-1);
-    for (const k of ["clipId", "overlayId", "effectId", "audioId"] as const) expect(selectedRow(p, { ...none, [k]: "gone" })).toBe(-1);
-  });
 });

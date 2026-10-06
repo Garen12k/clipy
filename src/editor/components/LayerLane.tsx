@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import type { LayerClip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { LANE_GAP, LANE_HEIGHT, layerRowIndex } from "../timelineLayout";
+import { LANE_GAP, LANE_HEIGHT } from "../timelineLayout";
 import { LayerBar } from "./LayerBar";
 
 const NONE: LayerClip[] = [];
@@ -17,15 +17,12 @@ export function LayerLane() {
   // A layer is selected through the same id as a clip.
   const selectedId = useEditorStore((s) => s.selectedClipId);
   const missing = useEditorStore((s) => s.missingSourceUris);
-  // The timeline row of the first layer, from the lane model (a number: the songs above push the layers down). A bar's title carries
-  // its row's number — the one the chip at the left edge of that row shows (RowNumbers).
-  const firstRow = useEditorStore((s) => layerRowIndex(s.project));
   const { select } = useEditorStore.getState();
   return (
     <View testID="layer-lane">
-      {layers.map((l, i) => (
+      {layers.map((l) => (
         <View key={l.id} testID={`layer-row-${l.id}`} style={{ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP }}>
-          <LayerBar layer={l} number={firstRow + i + 1} missing={missing.includes(l.sourceUri)} selected={l.id === selectedId} onPress={() => select(l.id === selectedId ? null : l.id)} />
+          <LayerBar layer={l} missing={missing.includes(l.sourceUri)} selected={l.id === selectedId} onPress={() => select(l.id === selectedId ? null : l.id)} />
         </View>
       ))}
     </View>
