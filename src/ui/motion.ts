@@ -28,3 +28,7 @@ export function enterTo(reduced: boolean, duration: number = theme.motion.base, 
 export function fadeOutTo(reduced: boolean): number {
   return reduced ? 0 : withTiming(0, timing(theme.motion.fast));
 }
+/** A sheet's panel coming to rest (translateY → 0): when it opens, and when a drag that did not close it lets go. No bounce (theme.motion.sheet is critically damped). */
+export function sheetTo(reduced: boolean): number {
+  return reduced ? 0 : withSpring(0, theme.motion.sheet);
+}
