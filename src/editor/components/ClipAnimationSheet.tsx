@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ANIM_COMBO, ANIM_IN } from "@/src/editor/effects";
 import { setAnimationForAllClips, setClipAnimation } from "@/src/editor/model/ops";
 import { ANIM_COMBO_IDS, ANIM_IN_IDS, COMBO_AS_MOTION, isPhoto, type AnimComboId, type AnimInId } from "@/src/editor/model/types";
@@ -18,6 +18,19 @@ export function ClipAnimationSheet({ clipId, visible, onClose }: { clipId: strin
   const layer = useIsLayer(clipId);
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const [tab, setTab] = useState<Tab>("in");
+  // Where the row starts: the selected tile in view. Worked out when the strip opens, for another clip and for another tab (the row
+  // is keyed to the tab) — NOT on every pick: a
+  // ScrollView applies a changed contentOffset at once, and the row must not move under the finger.
+  const startX = useMemo(
+    () => {
+      if (!clip) return 0;
+      const a = clip.animation;
+      if (tab !== "combo") return animationStartX(ANIM_IN_IDS, a[tab]?.id ?? null);
+      return animationStartX(isPhoto(clip) ? ANIM_COMBO_IDS.filter((id) => COMBO_AS_MOTION[id] === undefined || id === a.combo) : ANIM_COMBO_IDS, a.combo);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visible, clip?.id, tab],
+  );
   if (!clip) return null;
   const anim = clip.animation;
   const edge = tab === "combo" ? null : anim[tab];
@@ -40,7 +53,7 @@ export function ClipAnimationSheet({ clipId, visible, onClose }: { clipId: strin
     <ToolStrip visible={visible} onClose={onClose} title="Animation"
       // "Apply to all" writes the main clips: it is not offered for a layer.
       action={layer ? undefined : { label: "Apply to all clips", onPress: () => { haptic("light"); apply((p) => setAnimationForAllClips(p, clip.animation)); } }}>
-      <StripTiles key={tab} initialX={tab === "combo" ? animationStartX(comboIds, anim.combo) : animationStartX(ANIM_IN_IDS, edge?.id ?? null)} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
+      <StripTiles key={tab} initialX={startX} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
         {tab === "combo"
           ? <AnimationTiles ids={comboIds} registry={ANIM_COMBO} selected={anim.combo} onPick={pickCombo} />
           : <AnimationTiles ids={ANIM_IN_IDS} registry={ANIM_IN} selected={edge?.id ?? null} onPick={(id) => pickEdge(tab, id)} />}

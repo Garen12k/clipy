@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
 import { SPEED_CURVES } from "@/src/editor/effects";
 import { formatSpeed } from "@/src/lib/format";
@@ -115,7 +115,14 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
 
   // While the curve warning shows it takes the header's room (two lines), so the clip length steps aside.
   const warn = tab === "normal" && curveId !== null;
-  const startX = tab === "normal" ? tilesStartX(PRESETS.findIndex((s) => !curveId && clip.speed === s), PRESET_WIDTH) : tilesStartX(curveId ? SPEED_CURVE_IDS.indexOf(curveId) + 1 : 0, TILE_WIDTH);
+  // Where the row starts: the selected chip or tile in view. Worked out when the strip opens (this body is mounted per opening and
+  // per clip) and for another tab (the row is keyed to the tab) — NOT on every pick: a
+  // ScrollView applies a changed contentOffset at once, and the row must not move under the finger.
+  const startX = useMemo(
+    () => (tab === "normal" ? tilesStartX(PRESETS.findIndex((s) => !curveId && clip.speed === s), PRESET_WIDTH) : tilesStartX(curveId ? SPEED_CURVE_IDS.indexOf(curveId) + 1 : 0, TILE_WIDTH)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tab],
+  );
 
   return (
     <ToolStrip visible onClose={onClose} title={title}

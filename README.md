@@ -125,7 +125,7 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an 
 
 ## Quick edit
 
-A second button on the home screen, beside **New clip**: pick a style, pick photos and videos, and the app opens a
+A second button on the home screen, beside **New project**: pick a style, pick photos and videos, and the app opens a
 finished draft. Works fully in Expo Go.
 
 - **Six styles** (on screen they are called styles; **Templates** is a different tool inside the editor), each with its
@@ -146,7 +146,7 @@ finished draft. Works fully in Expo Go.
 - **Cancel leaves nothing behind.** Closing the sheet or cancelling the library makes no project. The music is fetched
   before the project is created, and a draft that cannot be finished is deleted again ("Couldn't make the quick edit").
   If only some items could not be read, the draft is made from the rest and a message counts them.
-- **While a project is being made** (Quick edit or New clip) the home screen takes no touches, and the editor opens only
+- **While a project is being made** (Quick edit or New project) the home screen takes no touches, and the editor opens only
   if the home screen is still in front.
 
 The styles are data (`QUICK_RECIPES` in `src/projects/quickEdit.ts`), built by one pure function (`buildQuickEdit`);
@@ -252,7 +252,7 @@ turns them into ordinary video before composing; this code is uncompiled until a
 
 Filter and Adjust are on the first row and on a selected clip's row; Transition is on a clip's row (or tap the mark between two clips); Effects is on the first row.
 
-- **Filters** — 31 filters plus None. The twelve newest, after Dream: Kodak, Fuji, Matte, Bleach, Dusk, Moody, Cinema, Blush, Grit, Silver, Indigo, Drama ("Kodak" and "Fuji" are brand names: rename them before any public release). The Filter row opens at the filter in use. Each has a **Strength** slider (0-100). "Apply to all clips"
+- **Filters** — 31 filters plus None. The twelve newest, after Dream: Amber, Jade, Matte, Bleach, Dusk, Moody, Cinema, Blush, Grit, Silver, Indigo, Drama. The Filter row opens at the filter in use. Each has a **Strength** slider (0-100). "Apply to all clips"
   copies the filter and its strength.
 - **Adjust** — twelve sliders: Brightness, Contrast, Saturation, Exposure, Warmth, Tint, Highlights,
   Shadows, Sharpen, Vignette, Fade, Grain. **Reset** sets them all back to 0; "Apply to all" copies
@@ -535,8 +535,8 @@ More looks items (ten transitions, twelve filters and eight effects; none of the
 
 Filters:
 
-56. **Split tone** (Cinema, Kodak, Fuji, Dusk, Blush, Indigo). Shadows and highlights should take their two colours: a tint, not a flat wash and not nothing. The pair is `CIFalseColor` (dark takes colour 0) laid over the picture with `CISoftLightBlendMode`; whether that reads as a tint, and in which colour space the hex colours land, is unverified. If too strong or too weak, change the `amount` in `src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together.
-57. **Warm / cool direction.** The new warm filters (Kodak, Matte, Dusk) and cool ones (Fuji, Moody) follow the Adjust "Warmth" slider (positive = warm). The older Warm / Cool filters use the opposite direction (item 1), so exactly one of the two conventions is backwards: compare Kodak with Warm and with the slider, then flip the one that is wrong (if it is the slider, the new rows flip with it).
+56. **Split tone** (Cinema, Amber, Jade, Dusk, Blush, Indigo). Shadows and highlights should take their two colours: a tint, not a flat wash and not nothing. The pair is `CIFalseColor` (dark takes colour 0) laid over the picture with `CISoftLightBlendMode`; whether that reads as a tint, and in which colour space the hex colours land, is unverified. If too strong or too weak, change the `amount` in `src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together.
+57. **Warm / cool direction.** The new warm filters (Amber, Matte, Dusk) and cool ones (Jade, Moody) follow the Adjust "Warmth" slider (positive = warm). The older Warm / Cool filters use the opposite direction (item 1), so exactly one of the two conventions is backwards: compare Amber with Warm and with the slider, then flip the one that is wrong (if it is the slider, the new rows flip with it).
 58. **Each of the twelve changes the picture**, and **Strength** 0-100 mixes it in (0 = the untouched frame, 100 = the full recipe).
 59. **Grit, Silver and Indigo** are black-and-white (Indigo then toned blue); Bleach and Drama keep some colour. Check Grit's grain and sharpening are not harsh.
 60. **An old filter on an old project** looks exactly as it did.
@@ -564,8 +564,8 @@ Transitions:
 
 Left by the reviews of the same work:
 
-76. **Temperature direction, both families side by side.** The old filters (Warm 7100 K, Sunset and Golden higher; Cool and Teal lower: `Effects.swift`) and the Adjust slider with the new recipes (`6500 - 2500*v`, warm = lower) use opposite conventions. Export Warm, Kodak, Moody and Adjust temperature +50 on the same clip and compare: one family is reversed. Fixing the old ones changes an existing look, so that is the owner's decision.
-77. **Split-tone filters may export darker than designed** (Kodak, Fuji, Dusk, Cinema, Blush, Indigo; Core Image's linear working space). If so, lower `amount` in the mirrored recipe rows (`src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together).
+76. **Temperature direction, both families side by side.** The old filters (Warm 7100 K, Sunset and Golden higher; Cool and Teal lower: `Effects.swift`) and the Adjust slider with the new recipes (`6500 - 2500*v`, warm = lower) use opposite conventions. Export Warm, Amber, Moody and Adjust temperature +50 on the same clip and compare: one family is reversed. Fixing the old ones changes an existing look, so that is the owner's decision.
+77. **Split-tone filters may export darker than designed** (Amber, Jade, Dusk, Cinema, Blush, Indigo; Core Image's linear working space). If so, lower `amount` in the mirrored recipe rows (`src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together).
 78. **Dust density** was lowered to `dustSpeck` 0.005 (from 0.02) by reasoning only: confirm by eye that the specks are a faint sprinkle and not a haze, and tune both files together (item 62).
 79. **Effect order.** The preview draws the flat layers before the shapes; the export uses list order. Strobe after Film burn hides the burn in the export but not on the phone.
 80. **White flash, Heartbeat and Strobe show the Preview tag although they are exact.** Kept on purpose: the spec promises the tag for every look.

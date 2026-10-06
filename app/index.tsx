@@ -54,7 +54,7 @@ export default function ProjectsScreen() {
   useFocusEffect(useCallback(() => { focused.current = true; return () => { focused.current = false; }; }, []));
   const openEditor = (id: string | null) => { if (id && focused.current) router.push(`/editor/${id}`); };
 
-  // New clip: the library, then the aspect-ratio picker, then the project. Nothing exists until Create is pressed.
+  // New project: the library, then the aspect-ratio picker, then the project. Nothing exists until Create is pressed.
   // The button is held back only by the two refs — the library is up, or a project is being made (its media copied) — never by
   // `pending`: if iOS drops the sheet's presentation, `pending` stays set with nothing on screen to clear it, and the button must
   // still work. The sheet itself covers the button while it is really there. A press with media still waiting starts over: the
@@ -84,8 +84,8 @@ export default function ProjectsScreen() {
   }
 
   // Quick edit: the style sheet, then the library, then the finished draft. Nothing exists until media is picked, and a draft that
-  // cannot be finished is removed again (makeQuickEdit). It shares the two refs with New clip, so the two can never run together.
-  // Like New clip, the button is never held back by its sheet's flag: if iOS drops the sheet's presentation, `quickOpen` stays true
+  // cannot be finished is removed again (makeQuickEdit). It shares the two refs with New project, so the two can never run together.
+  // Like New project, the button is never held back by its sheet's flag: if iOS drops the sheet's presentation, `quickOpen` stays true
   // with nothing on screen, so a press closes it first and opens it on the next tick — presented afresh.
   const [quickOpen, setQuickOpen] = useState(false);
   /** A draft is being made (media copied, the edit built): the buttons give way to a spinner. */
@@ -153,7 +153,7 @@ export default function ProjectsScreen() {
             <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
               <SecondaryButton title="Quick edit" onPress={onQuick} />
             </View>
-            <PrimaryButton title="New clip" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
+            <PrimaryButton title="New project" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
           </>
         )}
       </View>

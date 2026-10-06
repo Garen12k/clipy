@@ -141,3 +141,20 @@ describe("ChromaSheet", () => {
     expect(screen.queryByText("This colour is too grey to remove. Pick a stronger colour.")).toBeNull();
   });
 });
+
+type ScrollInst = ReturnType<typeof screen.getByTestId>;
+const findRowScroll = (n: ScrollInst): ScrollInst | null => { if (n.props.contentOffset !== undefined) return n; for (const c of n.children) { if (typeof c === "string") continue; const f = findRowScroll(c as ScrollInst); if (f) return f; } return null; };
+/** Where the tile row starts (the kit hands it to its ScrollView as contentOffset). */
+const rowStartX = () => findRowScroll(screen.getByTestId("strip-tiles"))!.props.contentOffset.x as number;
+
+test("Blend: the tile row keeps its offset across picks; it is worked out again at the next opening", async () => {
+  state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [{ ...makeLayer({ id: "L", sourceDuration: 2, start: 1 }), blend: "darken" }] }));
+  const view = await render(<BlendSheet clipId="L" visible onClose={() => {}} />);
+  expect(rowStartX()).toBe(5 * 80 - 72);                      // Darken is tile 5: five pitches (72 + 8) minus one tile
+  await fireEvent.press(screen.getByRole("button", { name: "Screen" }));
+  expect(layer().blend).toBe("screen");
+  expect(rowStartX()).toBe(5 * 80 - 72);                      // the row did not move under the finger
+  await view.rerender(<BlendSheet clipId="L" visible={false} onClose={() => {}} />);
+  await view.rerender(<BlendSheet clipId="L" visible onClose={() => {}} />);
+  expect(rowStartX()).toBe(8);                                // opened again: Screen is tile 1
+});

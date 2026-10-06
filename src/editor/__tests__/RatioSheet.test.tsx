@@ -87,3 +87,23 @@ test("several ratios can be tried one after another; Done closes", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "Done" }));
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+type ScrollInst = ReturnType<typeof screen.getByTestId>;
+const findRowScroll = (n: ScrollInst): ScrollInst | null => { if (n.props.contentOffset !== undefined) return n; for (const c of n.children) { if (typeof c === "string") continue; const f = findRowScroll(c as ScrollInst); if (f) return f; } return null; };
+/** Where the tile row starts (the kit hands it to its ScrollView as contentOffset). */
+const rowStartX = () => findRowScroll(screen.getByTestId("strip-tiles"))!.props.contentOffset.x as number;
+
+test("the tile row keeps its offset across picks (and the strip stays open); it is worked out again at the next opening", async () => {
+  st().setProject(makeProject({ aspectRatio: "21:9" }));
+  const onClose = jest.fn();
+  const view = await render(<RatioSheet visible onClose={onClose} />);
+  expect(rowStartX()).toBe(tilesStartX(8, TILE_WIDTH));
+  await fireEvent.press(screen.getByRole("button", { name: "1:1" }));
+  expect(st().project?.aspectRatio).toBe("1:1");
+  expect(rowStartX()).toBe(tilesStartX(8, TILE_WIDTH));       // the row did not move under the finger
+  expect(onClose).not.toHaveBeenCalled();
+  await view.rerender(<RatioSheet visible={false} onClose={onClose} />);
+  await view.rerender(<RatioSheet visible onClose={onClose} />);
+  expect(rowStartX()).toBe(tilesStartX(1, TILE_WIDTH));
+  expect(tilesStartX(1, TILE_WIDTH)).not.toBe(tilesStartX(8, TILE_WIDTH));
+});
