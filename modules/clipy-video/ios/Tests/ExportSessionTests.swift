@@ -404,6 +404,37 @@ final class ExportSessionTests: XCTestCase {
     XCTAssertNil(ExportSession.fileLengthLimit(bitrate: .greatestFiniteMagnitude, seconds: 8))   // too large for Int64
   }
 
+  /// Audio tracks are placed on a millisecond grid: every value the app stores (3 decimals) is a whole number of
+  /// ticks, so the first piece of a split ends on exactly the tick the second starts on — in the video
+  /// (`start + (cut − trimStart)`) and in the file (`cut`). On the 1/600 s grid some of these are a tick apart.
+  func testAudioTrackTimesAreOnAMillisecondGrid() {
+    XCTAssertEqual(ExportSession.audioTimescale, 1000)
+    XCTAssertEqual(ExportSession.audioTime(1.234).value, 1234)
+    XCTAssertEqual(ExportSession.audioTime(1.234).timescale, 1000)
+    func r3(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
+    var holesAt600 = 0
+    var cases = 0
+    for i in 0..<22 {
+      for j in 0..<10 {
+        for k in 0..<22 {
+          let start = r3(Double(i) * 0.137), trimStart = r3(Double(j) * 0.211)
+          let cut = r3(trimStart + 0.3 + Double(k) * 0.173)
+          let second = r3(start + (cut - trimStart))   // the second piece's start, as the app stores it
+          cases += 1
+          let firstEnd = CMTimeAdd(ExportSession.audioTime(start), CMTimeSubtract(ExportSession.audioTime(cut), ExportSession.audioTime(trimStart)))
+          XCTAssertEqual(CMTimeCompare(firstEnd, ExportSession.audioTime(second)), 0, "\(start) \(trimStart) \(cut)")
+          let oldEnd = CMTimeAdd(ExportSession.time(start), CMTimeSubtract(ExportSession.time(cut), ExportSession.time(trimStart)))
+          if CMTimeCompare(oldEnd, ExportSession.time(second)) != 0 { holesAt600 += 1 }
+        }
+      }
+    }
+    XCTAssertGreaterThan(holesAt600, cases / 5)
+    // Times of the two grids mix exactly: the video's length (1/600 s) less an audio start (1/1000 s).
+    let left = CMTimeSubtract(ExportSession.time(4.5), ExportSession.audioTime(1.234))
+    XCTAssertEqual(CMTimeCompare(left, CMTime(value: 9798, timescale: 3000)), 0)
+    XCTAssertEqual(CMTimeCompare(CMTimeMinimum(ExportSession.audioTime(2), ExportSession.time(2.5)), ExportSession.audioTime(2)), 0)
+  }
+
   /// The size for a request, as `start` computes it.
   private func size(_ aspect: String, _ frameAspect: Double, _ resolution: Int) -> CGSize {
     ExportSession.renderSize(aspect: ExportSession.aspectValue(aspect: aspect, frameAspect: frameAspect), resolution: resolution)
@@ -437,7 +468,7 @@ final class ExportSessionTests: XCTestCase {
       ("3:4", 2160, 2160, 2880),
       ("21:9", 720, 1680, 720),
       ("21:9", 1080, 2520, 1080),
-      ("21:9", 2160, 4672, 2002),
+      ("21:9", 2160, 4092, 1754),
     ]
     for row in rows {
       // The number is ignored for a "w:h" id, whatever it is — also when it is absent (0), as in an old request.
@@ -449,6 +480,20 @@ final class ExportSessionTests: XCTestCase {
     }
   }
 
+  /// The longer side is never above 4096 px, whichever way the frame is turned; 16:9 and 9:16 at 4K are under it.
+  func testRenderSizeKeepsTheLongSideInsideTheEncoder() {
+    XCTAssertEqual(ExportSession.maxLongSide, 4096)
+    XCTAssertEqual(ExportSession.renderSize(aspect: 16.0 / 9.0, resolution: 2160), CGSize(width: 3840, height: 2160))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 9.0 / 16.0, resolution: 2160), CGSize(width: 2160, height: 3840))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 21.0 / 9.0, resolution: 2160), CGSize(width: 4092, height: 1754))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 9.0 / 21.0, resolution: 2160), CGSize(width: 1754, height: 4092))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 4096.0 / 2160.0, resolution: 2160), CGSize(width: 4096, height: 2160))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 2, resolution: 2160), CGSize(width: 4096, height: 2048))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 0.5, resolution: 2160), CGSize(width: 2048, height: 4096))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 21.0 / 9.0, resolution: 1080), CGSize(width: 2520, height: 1080))
+    XCTAssertEqual(ExportSession.renderSize(aspect: 21.0 / 9.0, resolution: 720), CGSize(width: 1680, height: 720))
+  }
+
   /// "auto": the string is not a ratio, so the number decides — (frameAspect, resolution, width, height).
   func testRenderSizeForAuto() {
     let rows: [(frameAspect: Double, Int, Int, Int)] = [
@@ -456,7 +501,7 @@ final class ExportSessionTests: XCTestCase {
       (frameAspect: 1.777778, 1080, 1920, 1080),
       (frameAspect: 1.333333, 1080, 1440, 1080),
       (frameAspect: 2.333333, 1080, 2520, 1080),
-      (frameAspect: 2.333333, 2160, 4672, 2002),
+      (frameAspect: 2.333333, 2160, 4092, 1754),
       (frameAspect: 1.333333, 720, 960, 720),
     ]
     for row in rows {

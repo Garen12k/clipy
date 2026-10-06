@@ -4,6 +4,7 @@ import { Pressable, View, type GestureResponderEvent } from "react-native";
 import { clipGainAt } from "@/src/editor/model/audioMix";
 import { layerHit } from "@/src/editor/model/layerHit";
 import { resolveClipMotion } from "@/src/editor/model/motion";
+import { frameSize } from "@/src/editor/model/overlayLayout";
 import { clipAt, clipDuration, type ClipHit, clipStartTimes, findItem, hasSpeedCurve, itemOffsetAt, layersAt, outputToSource, rateAt, totalDuration } from "@/src/editor/model/timeline";
 import { frameAspect, isPhoto, type Clip } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
@@ -26,6 +27,8 @@ import { TransitionLayer } from "./TransitionLayer";
 
 /** The view the effect transform is applied to: exactly the preview frame, so it scales about the frame's centre. */
 const effectFill = { position: "absolute" as const, left: 0, top: 0, right: 0, bottom: 0 };
+/** The margin around the frame inside the slot the editor gives the preview. */
+const FRAME_PAD = theme.space.xs;
 
 /**
  * The rate the player runs at `offsetInClip`: the speed of the step under the playhead (the clip's one speed without a curve).
@@ -88,6 +91,9 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const recording = useEditorStore((s) => s.recording);
   const { seek, setPlaying, selectOverlay } = useEditorStore.getState();
   const [frame, setFrame] = useState({ w: 0, h: 0 });
+  // The slot the editor gives the preview (the padded container below), as it was last laid out; 0 × 0 until then. The frame's size
+  // is worked out from it (frameSize), so the frame is exactly the project's shape whichever side of the slot limits it.
+  const [slot, setSlot] = useState({ w: 0, h: 0 });
   const effectTransform = useEffectTransform(frame.w, frame.h);
 
   const hit = useMemo(() => (project ? clipAt(project, playhead) : null), [project, playhead]);
@@ -390,9 +396,18 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
   const empty = project.clips.length === 0;
   // Animations, keyframes and the clip's own opacity at the playhead; no overrides at all for a default clip.
   const motion = hit ? clipFrameMotion(hit.clip, hit.offsetInClip) : null;
+  // The frame: the largest box of the project's shape inside the slot's margin, as an explicit width and height. Left to the layout
+  // engine (a ratio plus flex), a frame wider than the slot had its width clamped and kept its height: not the project's shape.
+  // Until the slot has been laid out (or while it has no room) the frame keeps the ratio style it always had.
+  const box = frameSize(ratio, slot.w - 2 * FRAME_PAD, slot.h - 2 * FRAME_PAD);
+  const frameShape = box.w > 0 && box.h > 0
+    ? { width: box.w, height: box.h }
+    : { aspectRatio: ratio, maxWidth: "100%" as const, maxHeight: "100%" as const, flex: 1 };
 
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space.xs }}>
+    <View
+      onLayout={(e) => { const { width: w, height: h } = e.nativeEvent.layout; setSlot((was) => (was.w === w && was.h === h ? was : { w, h })); }}
+      style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: FRAME_PAD }}>
       <Pressable
         onPress={(e?: GestureResponderEvent) => {
           // A tap on a layer's picture (the topmost one there) selects it; with a layer selected, a tap anywhere else deselects it.
@@ -418,7 +433,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         onLayout={(e) => setFrame({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
         accessibilityLabel="Preview"
         accessibilityHint="Tap to play or pause"
-        style={{ aspectRatio: ratio, maxWidth: "100%", maxHeight: "100%", flex: 1, backgroundColor: theme.colors.surface, borderRadius: 10, overflow: "hidden" }}>
+        style={{ ...frameShape, backgroundColor: theme.colors.surface, borderRadius: 10, overflow: "hidden" }}>
         {hit && frame.w > 0 && (
           // Timeline effects shake / zoom only the picture. This view is always there (its transform comes
           // and goes) so an effect starting or ending never remounts the VideoView; the frame above clips it.

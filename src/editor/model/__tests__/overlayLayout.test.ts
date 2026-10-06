@@ -146,3 +146,40 @@ test("frameSize aspect-fits the ratio into a container", () => {
   expect(frameSize(1, 300, 500)).toEqual({ w: 300, h: 300 });
   expect(frameSize(21 / 9, 420, 400)).toEqual({ w: 420, h: 180 });
 });
+
+test("frameSize: the largest box of the shape that fits — one side always touches the container, the other never sticks out", () => {
+  // The preview's slot on a 393-wide phone less the 4-pt margin: tall (clips only) and short (three lanes).
+  expect(frameSize(9 / 16, 385, 437)).toEqual({ w: 245.8125, h: 437 });
+  expect(frameSize(1, 385, 437)).toEqual({ w: 385, h: 385 });
+  expect(frameSize(16 / 9, 385, 437)).toEqual({ w: 385, h: 216.5625 });
+  expect(frameSize(21 / 9, 385, 437)).toEqual({ w: 385, h: 165 });
+  expect(frameSize(9 / 16, 385, 341)).toEqual({ w: 191.8125, h: 341 });
+  expect(frameSize(1, 385, 341)).toEqual({ w: 341, h: 341 });
+  expect(frameSize(16 / 9, 385, 341)).toEqual({ w: 385, h: 216.5625 });
+  expect(frameSize(21 / 9, 385, 341)).toEqual({ w: 385, h: 165 });
+  for (const ar of [9 / 16, 2 / 3, 3 / 4, 4 / 5, 1, 4 / 3, 3 / 2, 16 / 9, 21 / 9]) {
+    for (const [w, h] of [[385, 437], [385, 341], [692, 192], [100, 100]]) {
+      const f = frameSize(ar, w, h);
+      expect(f.w).toBeLessThanOrEqual(w);
+      expect(f.h).toBeLessThanOrEqual(h);
+      expect(f.w === w || f.h === h).toBe(true);
+      expect(f.w / f.h).toBeCloseTo(ar, 3);
+    }
+  }
+});
+
+test("frameSize: nothing to fit into, or no shape → 0 × 0, never NaN or a negative size", () => {
+  const none = { w: 0, h: 0 };
+  expect(frameSize(1, 0, 0)).toEqual(none);
+  expect(frameSize(16 / 9, 0, 400)).toEqual(none);
+  expect(frameSize(16 / 9, 400, 0)).toEqual(none);
+  expect(frameSize(16 / 9, -8, 400)).toEqual(none);
+  expect(frameSize(16 / 9, 400, -8)).toEqual(none);
+  expect(frameSize(0, 400, 400)).toEqual(none);
+  expect(frameSize(-1, 400, 400)).toEqual(none);
+  for (const bad of [NaN, Infinity, -Infinity]) {
+    expect(frameSize(bad, 400, 400)).toEqual(none);
+    expect(frameSize(1, bad, 400)).toEqual(none);
+    expect(frameSize(1, 400, bad)).toEqual(none);
+  }
+});

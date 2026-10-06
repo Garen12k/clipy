@@ -355,7 +355,7 @@ test("an audio track that is an array (or not an object at all) is dropped", () 
   expect(p.audioTracks.map((t) => t.id)).toEqual(["ok"]);
 });
 
-test("a v1 file reaches v13 with the audio defaults", () => {
+test("a v1 file reaches v14 with the audio defaults", () => {
   const p = migrateProject(v1);
   expect(p).toMatchObject({ schemaVersion: 14, ducking: false, beatMarkers: [], audioTracks: [] });
   expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
@@ -475,7 +475,7 @@ describe("v11 to v12 (blend, green screen, region effects)", () => {
     expect(migrateProject(JSON.parse(JSON.stringify(once)))).toEqual(once);
   });
 
-  test("a v1 file reaches v13 with defaults", () => {
+  test("a v1 file reaches v14 with defaults", () => {
     expect(migrateProject(v1).clips[0]).toMatchObject({ blend: "normal", chroma: null });
   });
 });

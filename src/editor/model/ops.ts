@@ -716,6 +716,27 @@ export function setClipTransform(p: Project, clipId: string, patch: Partial<Clip
 const hasPins = (p: Project, clipId: string): boolean => (findItem(p, clipId)?.clip.keyframes.length ?? 0) > 0;
 
 /**
+ * For a short time on 2026-10-06 a build shrank clips to show the whole picture whenever the frame shape changed; the user did not want
+ * it and the build was withdrawn, but projects saved in that window kept the small clips. This puts those back to filling the frame
+ * when such a project is opened: a main clip that is centred, has no keyframes and is smaller than Fill. (Not "exactly at its Fit
+ * scale": after the build was withdrawn the frame shape could be changed again, which leaves the clip at the Fit scale of an EARLIER
+ * frame.) Projects saved outside the window are left alone, so a Fit chosen in Transform stays. Layers are never touched.
+ */
+export const AUTO_FIT_WINDOW = { from: Date.parse("2026-10-06T06:00:00Z"), to: Date.parse("2026-10-06T09:00:00Z") };
+export function undoAutoFit(p: Project): Project {
+  const saved = Date.parse(p.updatedAt);
+  if (!(saved >= AUTO_FIT_WINDOW.from && saved <= AUTO_FIT_WINDOW.to)) return p;
+  let changed = false;
+  const clips = p.clips.map((c) => {
+    const t = c.transform;
+    if (t.x !== 0 || t.y !== 0 || c.keyframes.length > 0 || t.scale >= 1) return c;
+    changed = true;
+    return { ...c, transform: { ...t, scale: 1 } };
+  });
+  return changed ? { ...p, clips } : p;
+}
+
+/**
  * Fit / Fill / Reset on a clip with keyframes write the pin at the playhead (`offsetInClip`); without an offset they do nothing —
  * the static values are hidden while pins exist and must never be edited silently. Without keyframes the offset is ignored.
  */
