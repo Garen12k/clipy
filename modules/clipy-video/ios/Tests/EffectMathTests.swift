@@ -157,6 +157,25 @@ final class EffectMathTests: XCTestCase {
     return (Double(px[0]) / 255, Double(px[1]) / 255, Double(px[2]) / 255)
   }
 
+  /// The mean (red, green, blue) of the pixels in `area` (whole pixels, Core Image space, y-up), each 0…1 — for a
+  /// frame with grain or specks on it, where one pixel says little. (0, 0, 0) for an area without a whole pixel.
+  private func mean(_ img: CIImage, _ area: CGRect) -> (r: Double, g: Double, b: Double) {
+    let w = Int(area.width), h = Int(area.height)
+    guard w > 0, h > 0 else { return (0, 0, 0) }
+    var px = [UInt8](repeating: 0, count: 4 * w * h)
+    ctx.render(img, toBitmap: &px, rowBytes: 4 * w, bounds: CGRect(x: area.minX, y: area.minY, width: CGFloat(w), height: CGFloat(h)), format: .RGBA8, colorSpace: nil)
+    var r: Double = 0
+    var g: Double = 0
+    var b: Double = 0
+    for i in 0..<(w * h) {
+      r += Double(px[4 * i])
+      g += Double(px[4 * i + 1])
+      b += Double(px[4 * i + 2])
+    }
+    let n = Double(w * h) * 255
+    return (r / n, g / n, b / n)
+  }
+
   private var grey: CIImage { CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: rect) }
 
   func testScalarFunctionsMatchTheVectors() {
@@ -463,14 +482,18 @@ final class EffectMathTests: XCTestCase {
 
   /// Dust at t = 1, k = 1: line 0 is on at x = 0.4702766 of the width. On a 1000 px wide grey frame the scratch is
   /// 3 px wide at x = 470 and half-covers the grey with #F2EBDD (0.5·0.5 + 0.5·0.949 ≈ 0.72); away from it the
-  /// frame is grey but for the faint grain.
+  /// frame is grey but for the faint grain. Both are read as the mean of an area, never as one pixel (a single pixel
+  /// can be a speck): the scratch's own 3 × 20 px, and 40 × 20 px clear of both scratches (line 1 is at x = 873).
   func testDustDrawsItsScratchWhereTheMathsSays() {
     let wide = CGSize(width: 1000, height: 20), frame = CGRect(origin: .zero, size: wide)
     let image = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: frame)
     let out = EffectRenderer.apply(type: "dust", image: image, t: 1, d: 4, k: 1, size: wide)
     XCTAssertEqual(out.extent, frame)
-    XCTAssertEqual(rgb(out, 471, 10).r, 0.72, accuracy: 0.06)
-    XCTAssertEqual(rgb(out, 100, 10).r, 0.5, accuracy: 0.06)
+    let scratch = mean(out, CGRect(x: 470, y: 0, width: 3, height: 20))
+    XCTAssertEqual(scratch.r, 0.72, accuracy: 0.06)
+    let clear = mean(out, CGRect(x: 80, y: 0, width: 40, height: 20))
+    XCTAssertEqual(clear.r, 0.5, accuracy: 0.06)
+    XCTAssertGreaterThan(scratch.r, clear.r + 0.1)
     XCTAssertTrue(EffectMath.dustScratch(t: 1, k: 1, i: 0).on)
   }
 }

@@ -153,4 +153,24 @@ describe("the eight effects of 2026-10-06 in the preview", () => {
     const ids = screen.getByTestId("effect-overlays").children.map((c) => (typeof c === "string" ? c : c.props.testID));
     expect(ids).toEqual(["effect-layer-0", "effect-shape-0"]);
   });
+
+  test("a shape is keyed by its kind and its place among that kind: a scratch coming or going leaves the burn's view mounted", async () => {
+    // The element EffectOverlays returns, read through a component that calls it (its hooks become this component's).
+    let drawn: ReturnType<typeof EffectOverlays> = null;
+    const Probe = () => { drawn = EffectOverlays(); return drawn; };
+    const keys = () => (drawn!.props.children as { key: string }[][]).map((list) => list.map((e) => e.key));
+    load([
+      makeEffect({ id: "v", type: "vhs", start: 0, end: 4, intensity: 1 }),
+      makeEffect({ id: "d", type: "dust", start: 0, end: 4, intensity: 1 }),
+      makeEffect({ id: "b", type: "filmBurn", start: 0, end: 4, intensity: 1 }),
+    ], 1.04);                                                        // film frame 12: both scratches
+    await render(<Probe />);
+    expect(keys()).toEqual([["l0"], ["scratch0", "scratch1", "burn0"]]);
+    await act(() => { useEditorStore.getState().seek(1.12); });      // frame 13: one scratch
+    expect(keys()).toEqual([["l0"], ["scratch0", "burn0"]]);
+    await act(() => { useEditorStore.getState().seek(2.04); });      // frame 24: none
+    expect(keys()).toEqual([["l0"], ["burn0"]]);
+    // The test ids are the running index they always were.
+    expect(screen.getByTestId("effect-overlays").children.map((c) => (typeof c === "string" ? c : c.props.testID))).toEqual(["effect-layer-0", "effect-shape-0"]);
+  });
 });

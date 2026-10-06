@@ -162,6 +162,33 @@ test("EffectMath.swift mirrors the ten functions of 2026-10-06, under the same n
   expect(between(swift, "static func calmEnvelope(", "\n  }\n")).toContain("return t.isFinite && d.isFinite ? envelope(t: t, d: d) : 0");
 });
 
+test("the other nine functions of 2026-10-06 have the same bodies as effectMath.ts: the expression, and the range it is kept within", () => {
+  const body = (fn: string) => between(swift, `static func ${fn}(`, "\n  }\n");
+  // heartbeatScale: two bumps `beatGap` apart, the second weaker; never below 1, never above 1 + beatAmp.
+  expect(body("heartbeatScale")).toContain("let phase = frac(EffectMath.beatHz * t)");
+  expect(body("heartbeatScale")).toContain("let beat = bump(phase / EffectMath.beatWidth) + EffectMath.beatSecond * bump((phase - EffectMath.beatGap) / EffectMath.beatWidth)");
+  expect(body("heartbeatScale")).toContain("return within(1 + EffectMath.beatAmp * k * calmEnvelope(t: t, d: d) * beat, 1, 1 + EffectMath.beatAmp, 1)");
+  // strobeOpacity: k for the first `strobeDuty` of every period.
+  expect(body("strobeOpacity")).toContain("return frac(EffectMath.strobeHz * t) < EffectMath.strobeDuty ? within(k, 0, 1, 0) : 0");
+  // burnOpacity: a slow swell, 0 … burnMax.
+  expect(body("burnOpacity")).toContain("0.5 + 0.5 * sin(tau * EffectMath.burnHz * t)");
+  expect(body("burnOpacity")).toContain("return within(EffectMath.burnMax * k * calmEnvelope(t: t, d: d) * (0.5 + 0.5 * sin(tau * EffectMath.burnHz * t)), 0, EffectMath.burnMax, 0)");
+  // burnCentreY: the middle of the height, drifting `burnDrift` each way.
+  expect(body("burnCentreY")).toContain("return within(0.5 + EffectMath.burnDrift * sin(tau * EffectMath.burnDriftHz * t), 0.5 - EffectMath.burnDrift, 0.5 + EffectMath.burnDrift, 0.5)");
+  // flareX: one margin left of the frame to one margin right of it.
+  expect(body("flareX")).toContain("1 + 2 * EffectMath.flareMargin");
+  expect(body("flareX")).toContain("return within(-EffectMath.flareMargin + (1 + 2 * EffectMath.flareMargin) * frac(EffectMath.flareHz * t), -EffectMath.flareMargin, 1 + EffectMath.flareMargin, -EffectMath.flareMargin)");
+  expect(body("flareOpacity")).toContain("return within(EffectMath.flareMax * k * calmEnvelope(t: t, d: d), 0, EffectMath.flareMax, 0)");
+  expect(body("softEdgeAmount")).toContain("return within(k * calmEnvelope(t: t, d: d), 0, 1, 0)");
+  // hueAngle: up to half a turn each way.
+  expect(body("hueAngle")).toContain("return within(Double.pi * k * calmEnvelope(t: t, d: d) * sin(tau * EffectMath.hueHz * t), -Double.pi, Double.pi, 0)");
+  // mirrorMix: full from `mirrorFull` up.
+  expect(body("mirrorMix")).toContain("return within(within(k / EffectMath.mirrorFull, 0, 1, 0) * calmEnvelope(t: t, d: d), 0, 1, 0)");
+  // dustScratch's film frame is a floor, as in TS (`Math.floor(EFFECT.dustFps * t)`).
+  expect(body("dustScratch")).toContain("let n = (EffectMath.dustFps * t).rounded(.down)");
+  expect(swift).toContain("private static let tau = 2 * Double.pi");
+});
+
 describe("the Swift test table embeds every DUST_VECTORS case", () => {
   it("has the same number of cases", () => expect([...table.matchAll(/EffectDustVector\(name: "/g)]).toHaveLength(DUST_VECTORS.length));
   it.each(DUST_VECTORS.map((v) => [v.name, v] as const))("%s", (_name, v) => {

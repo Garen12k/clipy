@@ -83,8 +83,8 @@ test("an old filter, None, null and an unknown id have no recipe steps (they are
 
 test("the preview recipe is computed from the row: the veil, 1 + saturation, 0.25·brightness + 0.1·fade", () => {
   // kodak: 1 + 0.15 ; 0.1·0.08 = 0.008        matte: 0.8 ; 0.1·0.7 = 0.07        bleach: 0.45 ; 0.25·−0.05 = −0.0125
-  expect(filterPreviewOf("kodak")).toEqual({ tint: "#FFB45A", tintOpacity: 0.14, saturation: 1.15, brightness: 0.008 });
-  expect(filterPreviewOf("matte")).toEqual({ tint: "#D9D2C5", tintOpacity: 0.18, saturation: 0.8, brightness: 0.07 });
+  expect(filterPreviewOf("kodak")).toEqual({ tint: "#D6C436", tintOpacity: 0.26, saturation: 1.15, brightness: 0.008 });
+  expect(filterPreviewOf("matte")).toEqual({ tint: "#7F8A98", tintOpacity: 0.22, saturation: 0.8, brightness: 0.07 });
   expect(filterPreviewOf("bleach")).toEqual({ tint: "#000000", tintOpacity: 0, saturation: 0.45, brightness: -0.0125 });
   // blush: 0.85 ; 0.25·0.2 + 0.1·0.3 = 0.08        silver: 0 ; 0.045        drama: 0.75 ; −0.0375
   expect(filterPreviewOf("blush")).toEqual({ tint: "#FFB3C7", tintOpacity: 0.18, saturation: 0.85, brightness: 0.08 });
@@ -92,4 +92,24 @@ test("the preview recipe is computed from the row: the veil, 1 + saturation, 0.2
   expect(filterPreviewOf("drama")).toEqual({ tint: "#000000", tintOpacity: 0.2, saturation: 0.75, brightness: -0.0375 });
   for (const id of RECIPE_FILTER_IDS) expect(FILTERS[id].preview).toEqual(filterPreviewOf(id));
   for (const id of ["grit", "silver", "indigo"] as const) expect(FILTERS[id].preview.saturation).toBe(0);      // the three black-and-whites
+});
+
+test("Kodak's thumbnail is not Warm's and Matte's is not Faded's: on mid grey they differ by at least 12 / 255 in some channel", () => {
+  const channels = (c: string) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  /** What FilterLayer's three layers (grey, tint, white / black) leave of a mid-grey picture at full strength, 0…255 per channel. */
+  const onGrey = (id: keyof typeof FILTERS): number[] => {
+    const p = FILTERS[id].preview;
+    const grey = Math.max(0, Math.min(0.55, 0.55 * (1 - p.saturation)));
+    return channels(p.tint).map((tint) => {
+      const desaturated = 128 * (1 - grey) + 128 * grey;
+      const tinted = desaturated * (1 - p.tintOpacity) + tint * p.tintOpacity;
+      return tinted * (1 - Math.abs(p.brightness)) + (p.brightness >= 0 ? 255 : 0) * Math.abs(p.brightness);
+    });
+  };
+  const apart = (a: keyof typeof FILTERS, b: keyof typeof FILTERS) => Math.max(...onGrey(a).map((v, i) => Math.abs(v - onGrey(b)[i])));
+  expect(apart("kodak", "warm")).toBeGreaterThanOrEqual(12);
+  expect(apart("matte", "faded")).toBeGreaterThanOrEqual(12);
+  // The two old neighbours are what they were.
+  expect(FILTERS.warm.preview).toEqual({ tint: "#FF9A3C", tintOpacity: 0.14, saturation: 1.1, brightness: 0.02 });
+  expect(FILTERS.faded.preview).toEqual({ tint: "#FFFFFF", tintOpacity: 0.12, saturation: 0.7, brightness: 0.08 });
 });

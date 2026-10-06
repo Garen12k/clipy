@@ -11,7 +11,7 @@ export const EFFECT = {
   glitchBandMin: 0.08, glitchBandMax: 0.2, rgbSplit: 0.008,
   beatHz: 1.25, beatAmp: 0.1, beatWidth: 0.2, beatGap: 0.28, beatSecond: 0.6, strobeHz: 2, strobeDuty: 0.4,
   burnMax: 0.6, burnHz: 0.4, burnDrift: 0.35, burnDriftHz: 0.15, burnRadius: 0.9, flareMax: 0.8, flareHz: 0.5, flareMargin: 0.2, flareY: 0.35, flareCore: 0.12, flareHalo: 0.4,
-  edgeBlur: 0.02, edgeInner: 0.25, edgeOuter: 0.75, edgeVeil: 0.35, dustFps: 12, dustChance: 0.6, dustLines: 2, dustOpacity: 0.5, dustWidth: 0.003, dustSpeck: 0.02,
+  edgeBlur: 0.02, edgeInner: 0.25, edgeOuter: 0.75, edgeVeil: 0.35, dustFps: 12, dustChance: 0.6, dustLines: 2, dustOpacity: 0.5, dustWidth: 0.003, dustSpeck: 0.005,
   hueHz: 0.25, mirrorFull: 0.5,
 } as const;
 

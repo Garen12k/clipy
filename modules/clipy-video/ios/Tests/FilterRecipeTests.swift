@@ -104,6 +104,14 @@ final class FilterRecipeTests: XCTestCase {
     } else { XCTFail("indigo") }
   }
 
+  /// Indigo on mid grey: the frame has no colour of its own, so all the colour it ends with is the split tone's
+  /// (shadows #10214F, highlights #DCE9FF, 0.8 of it mixed in) — blue clearly above red.
+  func testIndigoTonesMidGreyBlue() {
+    guard let out = FilterRecipes.apply("indigo", to: grey, time: 0) else { XCTFail("indigo"); return }
+    let c = rgb(out, 32, 18)
+    XCTAssertGreaterThan(c.b, c.r + 0.03)
+  }
+
   /// A split tone with nothing to do, or with a colour that is not #RRGGBB, hands the image back; a real one keeps the extent.
   func testSplitToneGuards() {
     let image = grey

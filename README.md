@@ -478,7 +478,7 @@ Filters:
 
 Effects:
 
-62. **Dust speck density.** The fine grain (`CIRandomGenerator` through `CIColorMatrix` and a clamp) should be visible but faint. Too many or too few specks: tune `dustSpeck` in `effectMath.ts` and `EffectMath.swift` together. The two scratches should sit where the preview draws them, 3 px wide at 1080p and 6 px at 4K. (One Swift test reads single pixels of a speckled frame; if it fails with correct looks, move its sample pixel.)
+62. **Dust speck density.** The fine grain (`CIRandomGenerator` through `CIColorMatrix` and a clamp) should be visible but faint. Too many or too few specks: tune `dustSpeck` in `effectMath.ts` and `EffectMath.swift` together. The two scratches should sit where the preview draws them, 3 px wide at 1080p and 6 px at 4K. (The Swift test reads the mean of an area, so a single speck cannot fail it.)
 63. **Soft edges.** Centre sharp, edges blurred, no dark rim. The mask relies on `CIBlendWithMask` (white = the sharp image); if inverted the centre is soft. The blur radius is 2 % of the shorter side at full Strength (about 22 px at 1080p, 43 px at 4K): check the look and the export speed at 4K (one full-frame blur per frame).
 64. **Lens flare and Film burn.** `CIRadialGradient` with a see-through outer colour should give a soft glow, not a hard disc or a grey fringe, laid on with `CIScreenBlendMode` (only ever brighter). The flare should cross left to right every two seconds at about a third of the way down (Core Image's y axis points up; one flip is done in the code). Film burn glows orange from the left edge and drifts up and down. Check neither is blown out on bright footage.
 65. **Mirror.** The left half is copied onto the right with no one-pixel seam on the centre line (check an odd-width video too); below Strength 50 it fades in.
@@ -495,3 +495,11 @@ Transitions:
 73. **Pixelate**: no jump at the first and last frame (blocks of 1-2 px at the ends; `CIPixellate` fed a clamped image), and speed at 4K (it runs on both clips).
 74. **White flash** is white, not grey, at the cut. White flash and Pixelate (like the older Dissolve and Blur) may look a little brighter in the export than in the preview in the middle of the transition: Core Image mixes in linear light, the preview in display space.
 75. **Nothing compiles until a real build does**: `FilterRecipes.swift`, `TransitionMath.swift`, `TransitionMasks.swift` and the new parts of `EffectMath.swift` / `EffectRenderer.swift` / `ClipyCompositor.swift`, and their XCTests (`FilterRecipeTests`, `TransitionMathTests`, `TransitionBlendTests`, `EffectMathTests`), were only read against `node_modules/expo-modules-core/ios`, never built.
+
+Left by the reviews of the same work:
+
+76. **Temperature direction, both families side by side.** The old filters (Warm 7100 K, Sunset and Golden higher; Cool and Teal lower: `Effects.swift`) and the Adjust slider with the new recipes (`6500 - 2500*v`, warm = lower) use opposite conventions. Export Warm, Kodak, Moody and Adjust temperature +50 on the same clip and compare: one family is reversed. Fixing the old ones changes an existing look, so that is the owner's decision.
+77. **Split-tone filters may export darker than designed** (Kodak, Fuji, Dusk, Cinema, Blush, Indigo; Core Image's linear working space). If so, lower `amount` in the mirrored recipe rows (`src/editor/model/filterRecipes.ts` and `FilterRecipes.swift` together).
+78. **Dust density** was lowered to `dustSpeck` 0.005 (from 0.02) by reasoning only: confirm by eye that the specks are a faint sprinkle and not a haze, and tune both files together (item 62).
+79. **Effect order.** The preview draws the flat layers before the shapes; the export uses list order. Strobe after Film burn hides the burn in the export but not on the phone.
+80. **White flash, Heartbeat and Strobe show the Preview tag although they are exact.** Kept on purpose: the spec promises the tag for every look.

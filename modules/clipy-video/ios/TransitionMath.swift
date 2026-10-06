@@ -72,9 +72,10 @@ enum TransitionMath {
     return 2 * p
   }
 
-  /// The clock wipe: radians swept clockwise (on screen) from 12 o'clock about the frame's centre; the incoming frame
-  /// shows inside the sweep. A point at (u, v) is at the angle atan2(u − 0.5, 0.5 − v), taken in 0…2π: straight up 0,
-  /// right π/2, down π, left 3π/2.
+  /// The clock wipe: radians swept clockwise from 12 o'clock about the frame's centre; the incoming frame shows inside
+  /// the sweep. It is the geometric angle on screen, measured on the screen and not in normalised frame units: a point
+  /// at (u, v) of a W × H frame is at the angle atan2((u − 0.5) × W, (0.5 − v) × H), taken in 0…2π: straight up 0,
+  /// right π/2, down π, left 3π/2. Only in a square frame does the sweep pass a corner at an odd multiple of π/4.
   static func clockAngle(_ progress: Double) -> Double {
     let p = unitProgress(progress)
     return tau * p

@@ -193,9 +193,9 @@ Each new filter is **one row** of a table in a new mirrored pair, `src/editor/mo
 
 | id | Label | Adjust values | Split tone (shadow → highlight, amount) | Only today's parameters? | Preview veil |
 |---|---|---|---|---|---|
-| `kodak` | Kodak | temperature 0.2, contrast 0.15, saturation 0.15, fade 0.08, grain 0.15 | `#27413A` → `#FFC98A`, 0.25 | no (tone) | `#FFB45A` 0.14 |
+| `kodak` | Kodak | temperature 0.2, contrast 0.15, saturation 0.15, fade 0.08, grain 0.15 | `#27413A` → `#FFC98A`, 0.25 | no (tone) | `#D6C436` 0.26 |
 | `fuji` | Fuji | temperature −0.12, tint −0.15, contrast 0.1, saturation 0.1, fade 0.1 | `#1F4A45` → `#F2F5E6`, 0.2 | no (tone) | `#4FD1B5` 0.12 |
-| `matte` | Matte | temperature 0.08, contrast −0.25, saturation −0.2, fade 0.7, grain 0.3 | — | **yes** | `#D9D2C5` 0.18 |
+| `matte` | Matte | temperature 0.08, contrast −0.25, saturation −0.2, fade 0.7, grain 0.3 | — | **yes** | `#7F8A98` 0.22 |
 | `bleach` | Bleach | brightness −0.05, contrast 0.5, saturation −0.55, sharpen 0.2, grain 0.2 | — | **yes** | none |
 | `dusk` | Dusk | temperature 0.15, tint 0.3, brightness −0.1, saturation 0.15, vignette 0.25 | `#3B2A6B` → `#FF9E6B`, 0.35 | no (tone) | `#C96BD9` 0.18 |
 | `moody` | Moody | temperature −0.35, brightness −0.12, contrast 0.25, saturation −0.3, fade 0.15, vignette 0.35 | — | **yes** | `#2B4C7E` 0.2 |
@@ -268,7 +268,7 @@ mirrorMix(t, d, k)      = min(1, k / mirrorFull)·env
 | `strobeDuty` | 0.4 | `flareHz` | 0.5 | `dustLines` | 2 |
 | `hueHz` | 0.25 | `flareMargin` | 0.2 | `dustOpacity` | 0.5 |
 | `mirrorFull` | 0.5 | `flareY` | 0.35 | `dustWidth` | 0.003 |
-| | | `flareCore` | 0.12 | `dustSpeck` | 0.02 |
+| | | `flareCore` | 0.12 | `dustSpeck` | 0.005 |
 | | | `flareHalo` | 0.4 | | |
 
 Colours added to `EFFECT_COLORS`: `strobe #000000`, `filmBurn #FF5A1F`, `lensFlare #FFF1D0`, `softEdges #FFFFFF`, `dust #F2EBDD`. The strobe is 2 per second (the rate of the existing Flash, under the three-per-second line for flashing content).

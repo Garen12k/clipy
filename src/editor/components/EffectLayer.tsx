@@ -82,11 +82,14 @@ export function EffectOverlays() {
   const [width, setWidth] = useState(0);
   const layers = p?.layers ?? [];
   if (layers.length === 0 && shapes.length === 0) return null;
+  // A shape's key is its kind and its place among that kind, so a scratch coming or going does not remount a gradient drawn after it.
+  const seen: Partial<Record<EffectShape["kind"], number>> = {};
+  const keyOf = (s: EffectShape) => { const n = seen[s.kind] ?? 0; seen[s.kind] = n + 1; return `${s.kind}${n}`; };
   return (
     <View testID="effect-overlays" pointerEvents="none" style={full}
       onLayout={(e) => { const w = e.nativeEvent.layout.width; setWidth((was) => (was === w ? was : w)); }}>
       {layers.map((l, i) => <View key={`l${i}`} testID={`effect-layer-${i}`} style={{ ...full, backgroundColor: l.color, opacity: l.opacity }} />)}
-      {shapes.map((s, i) => <Shape key={`s${i}`} shape={s} index={i} width={width} />)}
+      {shapes.map((s, i) => <Shape key={keyOf(s)}shape={s} index={i} width={width} />)}
     </View>
   );
 }

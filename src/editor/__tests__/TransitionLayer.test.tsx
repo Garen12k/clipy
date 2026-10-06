@@ -104,6 +104,24 @@ test("diagonal wipe: a black square of twice the diagonal, turned to the edge an
   expect(s.transform[2]).toEqual({ rotate: `${Math.atan2(0.6, 0.8)}rad` });
 });
 
+test("the dip and the shaped container carry different keys: going from one to the other mounts a fresh view, so its layout is reported", async () => {
+  // The element TransitionLayer returns, read through a component that calls it (its hooks become this component's).
+  let drawn: ReturnType<typeof TransitionLayer> = null;
+  const Probe = () => { drawn = TransitionLayer(); return drawn; };
+  load("fade", 3.75);
+  await render(<Probe />);
+  expect(drawn!.key).toBe("dip");
+  await act(() => { load("flashWhite", 4); });
+  expect(drawn!.key).toBe("dip");
+  await act(() => { load("cover", 3.75); });
+  expect(drawn!.key).toBe("shape");
+  // The fresh container starts unmeasured only until its own layout arrives.
+  await layout();
+  expect(flat("transition-shape")).toMatchObject({ transform: [{ translateX: 225 }, { translateY: 0 }] });
+  await act(() => { load("wipeClock", 4.25); });
+  expect(drawn!.key).toBe("dip");
+});
+
 test("the same size reported again sets no state (no re-render loop)", async () => {
   load("cover", 3.75);
   await render(<TransitionLayer />);

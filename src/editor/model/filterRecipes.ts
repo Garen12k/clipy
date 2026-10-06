@@ -18,9 +18,9 @@ export interface FilterRecipe { adjust: Partial<ClipAdjust>; tone: SplitTone | n
 
 /** Content values (burned into the video), allow-listed in noHexLiterals.test.ts. */
 export const FILTER_RECIPES: Record<RecipeFilterId, FilterRecipe> = {
-  kodak:      { adjust: { temperature: 0.2, contrast: 0.15, saturation: 0.15, fade: 0.08, grain: 0.15 }, tone: { shadow: "#27413A", highlight: "#FFC98A", amount: 0.25 }, veil: { color: "#FFB45A", opacity: 0.14 } },
+  kodak:      { adjust: { temperature: 0.2, contrast: 0.15, saturation: 0.15, fade: 0.08, grain: 0.15 }, tone: { shadow: "#27413A", highlight: "#FFC98A", amount: 0.25 }, veil: { color: "#D6C436", opacity: 0.26 } },
   fuji:       { adjust: { temperature: -0.12, tint: -0.15, contrast: 0.1, saturation: 0.1, fade: 0.1 }, tone: { shadow: "#1F4A45", highlight: "#F2F5E6", amount: 0.2 }, veil: { color: "#4FD1B5", opacity: 0.12 } },
-  matte:      { adjust: { temperature: 0.08, contrast: -0.25, saturation: -0.2, fade: 0.7, grain: 0.3 }, tone: null, veil: { color: "#D9D2C5", opacity: 0.18 } },
+  matte:      { adjust: { temperature: 0.08, contrast: -0.25, saturation: -0.2, fade: 0.7, grain: 0.3 }, tone: null, veil: { color: "#7F8A98", opacity: 0.22 } },
   bleach:     { adjust: { brightness: -0.05, contrast: 0.5, saturation: -0.55, sharpen: 0.2, grain: 0.2 }, tone: null, veil: { color: "#000000", opacity: 0 } },
   dusk:       { adjust: { temperature: 0.15, tint: 0.3, brightness: -0.1, saturation: 0.15, vignette: 0.25 }, tone: { shadow: "#3B2A6B", highlight: "#FF9E6B", amount: 0.35 }, veil: { color: "#C96BD9", opacity: 0.18 } },
   moody:      { adjust: { temperature: -0.35, brightness: -0.12, contrast: 0.25, saturation: -0.3, fade: 0.15, vignette: 0.35 }, tone: null, veil: { color: "#2B4C7E", opacity: 0.2 } },

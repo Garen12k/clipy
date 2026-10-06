@@ -357,7 +357,7 @@ test("an audio track that is an array (or not an object at all) is dropped", () 
 
 test("a v1 file reaches v16 with the audio defaults", () => {
   const p = migrateProject(v1);
-  expect(p).toMatchObject({ schemaVersion: 16,ducking: false, beatMarkers: [], audioTracks: [] });
+  expect(p).toMatchObject({ schemaVersion: 16, ducking: false, beatMarkers: [], audioTracks: [] });
   expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
 });
 
@@ -484,7 +484,7 @@ test("v12 → v13 adds export settings and no cover; the sanity pass repairs bot
   const clips = [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 6, speed: 2 })];   // 4 + 6 / 2 = 7 s
   const v12 = { ...makeProject({ clips }), schemaVersion: 12 } as Record<string, unknown>;
   delete v12.exportSettings; delete v12.cover;
-  expect(migrateProject(v12)).toMatchObject({ schemaVersion: 16,exportSettings: { fps: 30, quality: "high" }, cover: null });
+  expect(migrateProject(v12)).toMatchObject({ schemaVersion: 16, exportSettings: { fps: 30, quality: "high" }, cover: null });
 
   const bad = migrateProject({ ...makeProject({ clips }), exportSettings: { fps: 25, quality: "small" }, cover: { time: 99, title: "  " + "t".repeat(50) } });
   expect(bad.exportSettings).toEqual({ fps: 30, quality: "small" });
@@ -500,7 +500,7 @@ test("v13 → v14 keeps the aspect ratio; the sanity pass turns an unknown one i
   const clips = [makeClip({ id: "a", sourceDuration: 4, width: 1920, height: 1080 })];
   for (const id of ["9:16", "1:1", "16:9"] as const) {
     const v13 = { ...makeProject({ clips, aspectRatio: id }), schemaVersion: 13 };
-    expect(migrateProject(v13)).toMatchObject({ schemaVersion: 16,aspectRatio: id });
+    expect(migrateProject(v13)).toMatchObject({ schemaVersion: 16, aspectRatio: id });
   }
   for (const id of ["auto", "3:2", "2:3", "4:3", "3:4", "21:9"] as const) {
     const p = migrateProject(makeProject({ clips, aspectRatio: id }));
@@ -526,7 +526,7 @@ test("PROOF v14 → v15: the migration only ADDS the two box defaults to texts a
     makeSticker({ id: "s1", emoji: "🔥", start: 0, end: 2 }),
     makeSticker({ id: "s2", emoji: null, shape: "heart", color: "#C8102E", start: 0, end: 2 }),
   ] });
-  expect(migrateProject(now)).toEqual(now);                       // the fixture is a clean v15 project
+  expect(migrateProject(now)).toEqual(now);                       // the fixture is a clean v16 project
   // The same project as schema 14 stored it: no box fields, the old number.
   const v14 = JSON.parse(JSON.stringify(now)) as { schemaVersion: number; overlays: { kind: string; style?: Record<string, unknown> }[] };
   v14.schemaVersion = 14;

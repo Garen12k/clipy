@@ -82,7 +82,7 @@ enum EffectMath {
   static let dustLines: Double = 2
   static let dustOpacity: Double = 0.5
   static let dustWidth: Double = 0.003
-  static let dustSpeck: Double = 0.02
+  static let dustSpeck: Double = 0.005
   static let hueHz: Double = 0.25
   static let mirrorFull: Double = 0.5
 

@@ -40,11 +40,12 @@ export function TransitionLayer() {
   const curtain = transitionCurtain(project.clips[tp.index].transitionOut.type, tp.progress);
   if (!curtain) return null;
   if (curtain.kind === "dip") {
-    // The element every transition had before 2026-10-06, unchanged.
-    return <View pointerEvents="none" testID="transition-layer" style={{ position: "absolute", inset: 0, backgroundColor: curtain.color, opacity: curtain.opacity }} />;
+    // The element every transition had before 2026-10-06, unchanged. Its key and the shaped container's differ, so going from one to
+    // the other mounts a fresh view (the same view kept in place would report no layout, and the shape would wait for ever).
+    return <View key="dip" pointerEvents="none" testID="transition-layer" style={{ position: "absolute", inset: 0, backgroundColor: curtain.color, opacity: curtain.opacity }} />;
   }
   return (
-    <View pointerEvents="none" testID="transition-layer" style={fill}
+    <View key="shape" pointerEvents="none" testID="transition-layer" style={fill}
       onLayout={(e) => { const { width: w, height: h } = e.nativeEvent.layout; setFrame((was) => (was.w === w && was.h === h ? was : { w, h })); }}>
       {frame.w > 0 && frame.h > 0 ? <Shape curtain={curtain} w={frame.w} h={frame.h} /> : null}
     </View>
