@@ -122,4 +122,8 @@ export async function signInWithApple(): Promise<"ok" | "cancelled"> {
   if (error) throw new Error(error.message);
   return "ok";
 }
-export async function signOut(): Promise<void> { await getSupabase()?.auth.signOut(); }
+/** Signs out of Clipy on this phone. auth-js keeps the session when the request fails, so a returned error is thrown: the caller never says "Signed out." falsely. */
+export async function signOut(): Promise<void> {
+  const result = await getSupabase()?.auth.signOut();
+  if (result?.error) throw new Error(plain(result.error).message === NO_CONNECTION ? NO_CONNECTION : "Couldn't sign out.");
+}

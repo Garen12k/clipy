@@ -24,7 +24,7 @@ export default function AccountsScreen() {
   const confirmSignOut = () => Alert.alert("Sign out of Clipy?", "Your connected accounts stay connected.", [
     { text: "Cancel", style: "cancel" },
     { text: "Sign out", style: "destructive", onPress: async () => {
-      try { await signOut(); } catch (e) { useToast.getState().show(e instanceof Error && e.message ? e.message : "Couldn't sign out."); }
+      try { await signOut(); useToast.getState().show("Signed out."); } catch (e) { useToast.getState().show(e instanceof Error && e.message ? e.message : "Couldn't sign out."); }
     } }]);
 
   const spinner = <Spinner style={{ marginTop: theme.space.xl }} />;
@@ -55,7 +55,7 @@ export default function AccountsScreen() {
       </ScrollView>
       {signedIn ? (
         <View style={{ paddingHorizontal: theme.space.gutter, paddingTop: theme.space.md, gap: theme.space.md, alignItems: "center" }}>
-          <Body muted style={{ textAlign: "center" }}>{session.email ? `Signed in with Apple · ${session.email}` : "Signed in with Apple"}</Body>
+          <Body muted style={{ textAlign: "center" }}>{session.email ? `Signed in as ${session.email}` : "Signed in"}</Body>
           <QuietButton title="Sign out" onPress={confirmSignOut} />
         </View>
       ) : null}

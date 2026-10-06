@@ -57,7 +57,8 @@ afterEach(() => { if (jest.isMockFunction(Alert.alert)) (Alert.alert as jest.Moc
 test("signed out shows only the sign-in card", async () => {
   (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
   await render(<PostScreen />);
-  expect(screen.getByLabelText("Sign in with Apple")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  expect(router.push).toHaveBeenCalledWith("/welcome");
   expect(screen.queryByRole("button", { name: "Post" })).toBeNull();
   expect(useAccounts).toHaveBeenCalledWith(false);
 });

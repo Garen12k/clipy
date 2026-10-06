@@ -1,10 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { Alert } from "react-native";
 jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn() }, Redirect: () => null }));
 jest.mock("../useSession", () => ({ useSession: jest.fn() }));
 jest.mock("../useAccounts", () => ({ useAccounts: jest.fn() }));
 jest.mock("../supabase", () => ({ signInWithApple: jest.fn(), signOut: jest.fn() }));
+import { router } from "expo-router";
 import AccountsScreen from "@/app/accounts";
+import { useToast } from "@/src/ui/Toast";
 import { signOut } from "../supabase";
 import { useAccounts } from "../useAccounts";
 import { theme } from "@/src/theme/theme";
@@ -14,15 +16,17 @@ const p = (id: string, over = {}) => ({ id, available: false, connected: false, 
 const hook = (over = {}) => ({ status: "ready", platforms: [p("youtube", { available: true }), p("tiktok"), p("instagram"), p("facebook"), p("x")], error: null, busy: null, refresh: jest.fn(), connect: jest.fn(), disconnect: jest.fn(), ...over });
 const alertSpy = () => jest.spyOn(Alert, "alert");
 afterEach(() => { if (jest.isMockFunction(Alert.alert)) (Alert.alert as jest.Mock).mockRestore(); });
-beforeEach(() => { jest.clearAllMocks();(useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: "me@icloud.com" }); });
+beforeEach(() => { jest.clearAllMocks(); useToast.getState().clear();(useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: "me@icloud.com" }); });
 
 test("signed out: sign-in card only, accounts not requested", async () => {
   (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
   (useAccounts as jest.Mock).mockReturnValue(hook({ status: "idle", platforms: [] }));
   await render(<AccountsScreen />);
   expect(useAccounts).toHaveBeenCalledWith(false);
-  expect(screen.getByLabelText("Sign in with Apple")).toBeTruthy();
   expect(screen.queryByText("YouTube")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  expect(router.push).toHaveBeenCalledWith("/welcome");
 });
 
 test("five rows: Connect for available, Not available yet for the rest", async () => {
@@ -70,13 +74,33 @@ test("load error offers Try again; footer signs out after confirmation", async (
   expect(screen.getByText("Clipy's server is asleep or unreachable.")).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
   expect(h.refresh).toHaveBeenCalled();
-  expect(screen.getByText(/me@icloud.com/)).toBeTruthy();
+  expect(screen.getByText("Signed in as me@icloud.com")).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
   expect(alert).toHaveBeenCalledWith("Sign out of Clipy?", expect.any(String), expect.any(Array));
   expect(signOut).not.toHaveBeenCalled();
   const buttons = alert.mock.calls[0][2] as { text: string; style?: string; onPress?: () => void }[];
-  await buttons.find((b) => b.style === "destructive")!.onPress!();
+  await act(async () => { await buttons.find((b) => b.style === "destructive")!.onPress!(); });
   expect(signOut).toHaveBeenCalled();
+  expect(useToast.getState().message).toBe("Signed out.");
+});
+
+test("signed in without an email (Apple can hide it): just 'Signed in'", async () => {
+  (useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: null });
+  (useAccounts as jest.Mock).mockReturnValue(hook());
+  await render(<AccountsScreen />);
+  expect(screen.getByText("Signed in")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+});
+
+test("a failed sign-out says so and does not claim to have signed out", async () => {
+  (useAccounts as jest.Mock).mockReturnValue(hook());
+  (signOut as jest.Mock).mockRejectedValueOnce(new Error("Couldn't reach Clipy. Check your connection."));
+  const alert = alertSpy().mockImplementation(() => {});
+  await render(<AccountsScreen />);
+  await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+  const buttons = alert.mock.calls[0][2] as { style?: string; onPress?: () => void }[];
+  await act(async () => { await buttons.find((b) => b.style === "destructive")!.onPress!(); });
+  expect(useToast.getState().message).toBe("Couldn't reach Clipy. Check your connection.");
 });
 
 describe("round 2 look (no behaviour)", () => {

@@ -1,41 +1,42 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
+jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 jest.mock("../useSession", () => ({ useSession: jest.fn() }));
-jest.mock("../supabase", () => ({ signInWithApple: jest.fn() }));
+import { router } from "expo-router";
+import * as Apple from "expo-apple-authentication";
 import { SignInCard } from "../components/SignInCard";
-import { signInWithApple } from "../supabase";
 import { useSession } from "../useSession";
-import { useToast } from "@/src/ui/Toast";
 
-beforeEach(() => { jest.clearAllMocks(); useToast.getState().clear(); });
+beforeEach(() => { jest.clearAllMocks(); });
 
-test("unconfigured backend explains itself and offers no sign-in", async () => {
+test("unconfigured backend explains itself, keeps the Share hint, and its button opens the sign-in page (a preview)", async () => {
   (useSession as jest.Mock).mockReturnValue({ status: "unconfigured" });
   await render(<SignInCard />);
-  expect(screen.getByText("Posting isn't set up yet")).toBeTruthy();
-  expect(screen.queryByLabelText("Sign in with Apple")).toBeNull();
+  expect(screen.getByText("Sign-in isn't set up yet")).toBeTruthy();
+  expect(screen.getByText(/You can still share with the Share button\./)).toBeTruthy();
+  expect(screen.queryByText(/Posting isn't set up yet/)).toBeNull();
+  expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
+  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  expect(router.push).toHaveBeenCalledWith("/welcome");
 });
 
-test("signed out shows Sign in with Apple; errors are toasted; cancel is silent", async () => {
+test("signed out: the short text and ONE button, 'Sign in', which opens the welcome screen — the card hosts no Apple button", async () => {
   (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
   await render(<SignInCard />);
-  (signInWithApple as jest.Mock).mockResolvedValueOnce("cancelled");
-  await fireEvent.press(screen.getByLabelText("Sign in with Apple"));
-  expect(useToast.getState().message).toBeNull();
-  (signInWithApple as jest.Mock).mockRejectedValueOnce(new Error("Unacceptable audience in id_token"));
-  await fireEvent.press(screen.getByLabelText("Sign in with Apple"));
-  await waitFor(() => expect(useToast.getState().message).toBe("Unacceptable audience in id_token"));
-});
-
-test("no Apple button when Sign in with Apple isn't available", async () => {
-  (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
-  (require("expo-apple-authentication").isAvailableAsync as jest.Mock).mockResolvedValueOnce(false);
-  await render(<SignInCard />);
-  expect(await screen.findByText("Sign in with Apple isn't available on this device.")).toBeTruthy();
+  expect(screen.getByText("Sign in to Clipy")).toBeTruthy();
+  expect(screen.getByText("Clipy keeps your connected accounts safe on its server.")).toBeTruthy();
+  expect(screen.getAllByRole("button")).toHaveLength(1);
   expect(screen.queryByLabelText("Sign in with Apple")).toBeNull();
+  expect(Apple.isAvailableAsync).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  expect(router.push).toHaveBeenCalledTimes(1);
+  expect(router.push).toHaveBeenCalledWith("/welcome");
 });
 
 test("signed in or loading renders nothing", async () => {
   (useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: "a@b.c" });
   const v = await render(<SignInCard />);
+  expect(v.toJSON()).toBeNull();
+  (useSession as jest.Mock).mockReturnValue({ status: "loading" });
+  await v.rerender(<SignInCard />);
   expect(v.toJSON()).toBeNull();
 });

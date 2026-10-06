@@ -130,3 +130,12 @@ describe("Google", () => {
     await expect(m.signInWithGoogle()).rejects.toThrow(OTHER);
   });
 });
+
+test("signOut: a failed request is thrown as a plain sentence (the session is still there), a clean one resolves", async () => {
+  const m = configured();
+  await expect(m.signOut()).resolves.toBeUndefined();
+  mockAuth.signOut.mockResolvedValueOnce({ error: { name: "AuthRetryableFetchError", message: "Network request failed", status: 0 } });
+  await expect(m.signOut()).rejects.toThrow(NET);
+  mockAuth.signOut.mockResolvedValueOnce({ error: { message: "Internal error", status: 500 } });
+  await expect(m.signOut()).rejects.toThrow("Couldn't sign out.");
+});

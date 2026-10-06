@@ -42,9 +42,18 @@ npm run typecheck
 npm test
 ```
 
+## Signing in
+
+The first time Clipy opens it shows a welcome screen: **Continue with Apple**, **Continue with Google**, **Continue with email**, and **Continue without an account**. You only need an account to post; editing works without one. Email sign-in has no password: type your email, tap **Send code**, then type the 6-digit code from the email. After you sign in or skip, the welcome screen does not come back; open it again from **Accounts** or from the sign-in card on the Post screen (both have a **Sign in** button — it is the app's only sign-in page). Accounts shows which email you are signed in with, and **Sign out**.
+
+- **Until the server is set up** (no `.env`): the whole page can be walked through, but every sign-in says "Sign-in isn't set up yet." and no code is sent. The skip link works fully.
+- **Once the server is set up** (`supabase/README.md`, section 2): email works straight away, even in Expo Go. Google needs a Google client in your name. Apple needs the real build: inside Expo Go the button says "Apple sign-in works in the installed app, not in Expo Go."
+- **Nothing here has been run against a real server yet.** Email, Google and Apple sign-in were tested with fakes only; the Google round trip (browser and back to the app) in particular has never run.
+- Not included: passwords, profile pictures, syncing projects between devices.
+
 ## Posting (Phase 4: 4A–4D)
 
-Built: Sign in with Apple, an Accounts screen (connect / disconnect), and a Post screen that posts one video to several platforms at once. Reach Post from **Post to…** on the export result or **Post a video** on the home screen; Accounts is the icon in the home header. If one platform fails, the others still post.
+Built: signing in (see above), an Accounts screen (connect / disconnect), and a Post screen that posts one video to several platforms at once. Reach Post from **Post to…** on the export result or **Post a video** on the home screen; Accounts is the icon in the home header. If one platform fails, the others still post.
 
 - **YouTube** — uploads arrive **private** until Google audits Clipy's app; open the video and make it Public yourself.
 - **TikTok** — sent to your **TikTok inbox** as a draft; you add the caption and post it in TikTok.
@@ -53,10 +62,12 @@ Built: Sign in with Apple, an Accounts screen (connect / disconnect), and a Post
 - **X** — posts with your caption; X charges Clipy's developer account **per post** (about 1.5¢, about 20¢ if the caption has a link).
 - **Nothing has been run against the live services yet** (no real Supabase project, no developer apps). All of this was written from the platforms' documentation and tested with fakes.
 
-**Before first use:** set up the server and the developer apps by following `supabase/README.md`, and copy `.env.example` to `.env` with your Supabase URL and key. Without `.env` the app shows "Posting isn't set up yet" and the Share button still works.
+**Before first use:** set up the server and the developer apps by following `supabase/README.md`, and copy `.env.example` to `.env` with your Supabase URL and key. Without `.env` the app shows "Sign-in isn't set up yet" and the Share button still works.
 
 **What still needs you**
 - Create the Supabase project and each platform's developer app, following `supabase/README.md`.
+- Turn on sign-in in Supabase (`supabase/README.md`, section 2): the Email provider with the 6-digit code in its email, the Google provider (client ID, secret, and the two return addresses), and the Apple provider (`com.clipy.app` as the client ID).
+- Check Apple sign-in on a real build (it cannot work in Expo Go).
 - Run the device checklists in `supabase/README.md` (sections 9, 11, 12 and 13) on your iPhone.
 - An Apple Developer account and a first native build: video export and auto-captions have never been compiled.
 - Ask YouTube and TikTok to audit the app, so posts can be public (YouTube) and go straight to your profile (TikTok).
@@ -587,3 +598,10 @@ Left by the reviews of the same work:
 87. **The detector's choice between a tempo and its half near a tie depends on the sample rate** (the same 143.94 bpm clicks read 143.94 at 11,025 Hz and 71.97 at 22,050 Hz; pinned by a test in `beatDetect.test.ts`, either answer is acceptable). A Swift twin fed another sample rate than the script's may pick the other octave for some song.
 88. **A beat at exactly t = 0 is found one beat late** (pinned by a test): a song that starts on its very first sample gets its first marker one beat in.
 89. **A Quick edit draft in the export.** The music's own 1-second fade-out ends at silence exactly where the video ends, so the export's safety fade (item 24) is not laid on top of it - except for a draft that is a single clip shorter than half a second. Listen to the end of one exported draft: one smooth fade, no click.
+
+Signing in:
+
+90. **Apple sign-in on a real build.** Continue with Apple opens Apple's sheet and signs you in (Supabase's Apple provider must list `com.clipy.app` as a client ID). It has never run: in Expo Go the app refuses it on purpose.
+91. **Google sign-in comes back to the app.** After choosing a Google account the browser closes and Clipy is signed in. The return address is `clipy://welcome` in a build (`exp://…/--/welcome` in Expo Go); both must be in Supabase's allowed redirect URLs.
+92. **The welcome screen on a small iPhone.** With the keyboard open on the email and code steps, the field, the gold button, Resend code and Use a different email can all be reached (the page scrolls above the keyboard), on first launch and when opened as a sheet from Accounts.
+93. **The code from the email fills in.** iOS should offer the 6-digit code above the keyboard; choosing it signs in without pressing the button.
