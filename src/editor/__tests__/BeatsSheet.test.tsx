@@ -5,7 +5,6 @@ import { makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { StyleSheet } from "react-native";
-import { PANEL } from "@/src/ui/ToolPanel";
 import { useToast } from "@/src/ui/Toast";
 import { BeatsSheet } from "../components/BeatsSheet";
 
@@ -96,10 +95,10 @@ test("Clear all removes every marker in one undo step", async () => {
   expect(markers()).toEqual([1, 2, 6]);
 });
 
-test("it is a panel: inline, no scrim, compact, Done closes", async () => {
+test("it is a panel: inline, no scrim, regular height (it holds Find beats and Cut to beats too; the body scrolls), Done closes", async () => {
   const onClose = jest.fn();
   await render(<BeatsSheet visible onClose={onClose} />);
-  expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: 239 });
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: 429 });
   expect(screen.queryByLabelText("Close sheet")).toBeNull();
   await fireEvent.press(btn("Done"));
   expect(onClose).toHaveBeenCalledTimes(1);
@@ -109,6 +108,4 @@ test("the compact pair sits in a row as tall as a touch target, so the buttons' 
   await render(<BeatsSheet visible onClose={() => {}} />);
   const row = StyleSheet.flatten(btn("Clear all").parent?.props.style);
   expect(row).toMatchObject({ height: theme.size.touch, alignItems: "center" });
-  // Body 240 - 1 - 44 - 2 x 12 = 171 >= Tap 48 + count line 18 + row 44 + 2 gaps of 12.
-  expect(theme.size.control + 18 + theme.size.touch + 2 * theme.space.md).toBeLessThanOrEqual(PANEL.compact - 1 - PANEL.header - 2 * theme.space.md);
 });

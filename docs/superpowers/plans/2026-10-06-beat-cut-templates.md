@@ -45,7 +45,7 @@
 
 **Files more than one task edits:** none. (`BeatsSheet.tsx` and its two test files: Task 4 only. `useProjects.ts`: Task 6 only. `app/index.tsx`: Task 7 only.)
 
-**Pinned values that changed, and where:** the Beats panel's height 239 → 429 and the removed compact-fit arithmetic, both in `src/editor/__tests__/BeatsSheet.test.tsx` (Task 4). No tool count, no schema number, no guard allow-table.
+**Pinned values that changed, and where:** the Beats panel's height 239 → 429 and the removed compact-fit arithmetic, both in `src/editor/__tests__/BeatsSheet.test.tsx`, and the bar height while the Beats panel shows in `src/editor/__tests__/EditorLayout.test.tsx` line 175 (`panelHeight("compact", H)` → `"regular"`; found by the full run, after this plan was first committed) (Task 4). No tool count, no schema number, no guard allow-table.
 
 ## How Tasks 1 – 7 were verified
 
@@ -144,7 +144,7 @@ export function beatTrack(p: Project, selectedAudioId: string | null): AudioTrac
 
 ### Task 4: The Beats panel — built during planning
 
-**Files:** `src/editor/components/BeatsSheet.tsx` (rewritten around the unchanged Tap / Remove nearest / Clear all), `src/editor/__tests__/BeatsSheet.auto.test.tsx` (new), `src/editor/__tests__/BeatsSheet.test.tsx` (pinned: the panel test's title and height 239 → 429; the compact-fit arithmetic line and the now-unused `PANEL` import removed).
+**Files:** `src/editor/components/BeatsSheet.tsx` (rewritten around the unchanged Tap / Remove nearest / Clear all), `src/editor/__tests__/BeatsSheet.auto.test.tsx` (new), `src/editor/__tests__/BeatsSheet.test.tsx` (pinned: the panel test's title and height 239 → 429; the compact-fit arithmetic line and the now-unused `PANEL` import removed), `src/editor/__tests__/EditorLayout.test.tsx` (pinned: one `"compact"` → `"regular"`).
 
 **Interfaces — Produces:** `BeatsSheet({ visible, onClose })` (unchanged signature; `EditorToolbar.tsx` is not edited) and `findHint(status: string, title: string): string`.
 

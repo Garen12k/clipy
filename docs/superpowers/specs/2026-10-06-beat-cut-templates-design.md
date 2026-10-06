@@ -260,7 +260,7 @@ Nothing new. `beatMarkers`, clip trims, an ordinary music track, an ordinary tex
 ## 8. Files
 
 New: `src/editor/model/beatDetect.ts` · `src/editor/model/beats.ts` · `src/editor/musicBeats.ts` · `scripts/generate-beats.mjs` · `assets/music/beats.json` (generated) · `src/projects/quickEdit.ts` · `src/projects/quickEditFlow.ts` · `src/projects/QuickEditSheet.tsx` · their tests.
-Edited: `src/editor/components/BeatsSheet.tsx` · `src/projects/useProjects.ts` · `app/index.tsx` · `src/editor/__tests__/BeatsSheet.test.tsx` (two pinned values) · `assets/music/README.md`, `README.md`, `AGENTS.md`.
+Edited: `src/editor/components/BeatsSheet.tsx` · `src/projects/useProjects.ts` · `app/index.tsx` · `src/editor/__tests__/BeatsSheet.test.tsx` (two pinned values) · `src/editor/__tests__/EditorLayout.test.tsx` (one pinned panel size) · `assets/music/README.md`, `README.md`, `AGENTS.md`.
 Not edited: `types.ts`, `migrate.ts`, `ops.ts`, `timeline.ts`, `snap.ts`, `toolbarContext.ts`, `toolStrip.ts`, `EditorToolbar.tsx`, `AddAudioSheet.tsx`, `music.ts`, `storage.ts`, `pickMedia.ts`, `screenOptions.ts`, the kit, the theme, anything under `modules/`, `package.json`.
 
 ## 9. Preview behaviour and cost
