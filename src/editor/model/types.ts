@@ -45,7 +45,9 @@ export type FilterId = (typeof FILTER_IDS)[number];
 export const TRANSITION_TYPES = ["none", "fade", "dissolve", "slide", "zoom",
   "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur"] as const;   // "slide" keeps its id and is labelled "Slide left"
 export type TransitionType = (typeof TRANSITION_TYPES)[number];
-export const SHAPE_IDS = ["circle", "square", "roundedBox", "arrow", "star", "speechBubble", "heart"] as const;
+export const SHAPE_IDS = ["circle", "square", "roundedBox", "arrow", "star", "speechBubble", "heart",
+  "arrowCurved", "arrowDouble", "bubbleRound", "bubbleSquare", "bubbleThought", "badgeSeal", "badgeRibbon", "banner",
+  "sparkle", "burst", "frameRounded", "ring", "brackets"] as const;
 export type ShapeId = (typeof SHAPE_IDS)[number];
 export const SPEED_LIMITS = [0.25, 4] as const;
 export const TRANSITION_LIMITS = { min: 0.3, max: 1.0 };

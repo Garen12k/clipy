@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { ANIM_COMBO, ANIM_IN, ANIM_LOOP, BLENDS, CAPTION_STYLE, EFFECTS, FILTERS, SHAPES, SPEED_CURVES, STICKER_EMOJI_SCALE, STICKER_SHAPE_SCALE, TRANSITIONS } from "../effects";
-import { ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, BLEND_IDS, EFFECT_IDS, FILTER_IDS, SHAPE_IDS, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_TYPES } from "../model/types";
+import { ANIM_COMBO_IDS, ANIM_IN_IDS, ANIM_LOOP_IDS, BLEND_IDS, EFFECT_IDS, FILTER_IDS, SHAPE_IDS, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_TYPES, type ShapeId } from "../model/types";
 
 const swift = readFileSync(join(__dirname, "../../../modules/clipy-video/ios/Effects.swift"), "utf8");
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -31,7 +31,7 @@ test("registry covers every id with sane preview params", () => {
 });
 
 test("shape paths use only absolute M/L/C/Q/Z commands in a 100×100 box", () => {
-  expect(SHAPE_IDS).toHaveLength(7);
+  expect(SHAPE_IDS).toHaveLength(20);
   for (const id of SHAPE_IDS) {
     const path = SHAPES[id].path;
     expect(path.startsWith("M")).toBe(true);
@@ -113,4 +113,69 @@ test("speed curve presets: six of them, eight speeds each inside the speed limit
 test("blend registry covers every blend id with the specified labels", () => {
   expect(BLEND_IDS).toHaveLength(6);
   expect(BLEND_IDS.map((id) => BLENDS[id].label)).toEqual(["Normal", "Screen", "Multiply", "Overlay", "Lighten", "Darken"]);
+});
+
+/** Each subpath's signed area over its end points (shoelace): above 0 = clockwise in the y-down SVG box, below 0 = counter-clockwise. */
+function turns(d: string): number[] {
+  return d.split("M").filter((s) => s.trim().length > 0).map((sub) => {
+    const t = sub.replace(/([LCQZ])/g, " $1 ").trim().split(/\s+/);
+    const pts: [number, number][] = [[Number(t[0]), Number(t[1])]];
+    for (let k = 2; k < t.length && t[k] !== "Z";) {
+      const skip = t[k] === "L" ? 0 : t[k] === "Q" ? 2 : 4;        // the control points that come before the end point
+      pts.push([Number(t[k + 1 + skip]), Number(t[k + 2 + skip])]);
+      k += 3 + skip;
+    }
+    return pts.reduce((a, [x, y], j) => { const [nx, ny] = pts[(j + 1) % pts.length]; return a + x * ny - nx * y; }, 0) / 2;
+  });
+}
+// One subpath: a move, then segments that each name their command (L: one point, Q: two, C: three), then Z.
+const SUBPATH = /^M[\d.]+ [\d.]+(?: (?:L[\d.]+ [\d.]+|Q[\d.]+(?: [\d.]+){3}|C[\d.]+(?: [\d.]+){5}))+ Z$/;
+/** The subpaths (by index) that are holes. */
+const HOLES: Partial<Record<ShapeId, number[]>> = { frameRounded: [1], ring: [1] };
+
+test("twenty shapes: the first seven as they were, then the thirteen of 2026-10-06, each with its own short label", () => {
+  expect(SHAPE_IDS).toEqual(["circle", "square", "roundedBox", "arrow", "star", "speechBubble", "heart",
+    "arrowCurved", "arrowDouble", "bubbleRound", "bubbleSquare", "bubbleThought", "badgeSeal", "badgeRibbon", "banner", "sparkle", "burst", "frameRounded", "ring", "brackets"]);
+  expect(Object.keys(SHAPES)).toEqual([...SHAPE_IDS]);
+  expect(SHAPE_IDS.map((id) => SHAPES[id].label)).toEqual(["Circle", "Square", "Box", "Arrow", "Star", "Bubble", "Heart",
+    "Curved", "Two-way", "Round", "Sharp", "Thought", "Seal", "Award", "Banner", "Sparkle", "Burst", "Frame", "Ring", "Corners"]);
+  expect(SHAPES.circle.path).toBe("M50 0 C77.6 0 100 22.4 100 50 C100 77.6 77.6 100 50 100 C22.4 100 0 77.6 0 50 C0 22.4 22.4 0 50 0 Z");   // an old one, untouched
+  expect(SHAPES.heart.path).toBe("M50 90 C20 65 0 50 0 30 C0 13 13 0 28 0 C38 0 46 6 50 14 C54 6 62 0 72 0 C87 0 100 13 100 30 C100 50 80 65 50 90 Z");
+});
+
+test("the seven shapes of before 2026-10-06 are character for character what saved projects were drawn with (id, label, path, size rule)", () => {
+  // Copied from the registry as it stood at 3479ea2: a saved sticker must draw exactly as before.
+  expect(SHAPE_IDS.slice(0, 7).map((id) => [id, SHAPES[id].label, SHAPES[id].path])).toEqual([
+    ["circle", "Circle", "M50 0 C77.6 0 100 22.4 100 50 C100 77.6 77.6 100 50 100 C22.4 100 0 77.6 0 50 C0 22.4 22.4 0 50 0 Z"],
+    ["square", "Square", "M0 0 L100 0 L100 100 L0 100 Z"],
+    ["roundedBox", "Box", "M20 0 L80 0 C91 0 100 9 100 20 L100 80 C100 91 91 100 80 100 L20 100 C9 100 0 91 0 80 L0 20 C0 9 9 0 20 0 Z"],
+    ["arrow", "Arrow", "M0 35 L60 35 L60 10 L100 50 L60 90 L60 65 L0 65 Z"],
+    ["star", "Star", "M50 0 L61 35 L98 35 L68 57 L79 91 L50 70 L21 91 L32 57 L2 35 L39 35 Z"],
+    ["speechBubble", "Bubble", "M10 0 L90 0 C95.5 0 100 4.5 100 10 L100 60 C100 65.5 95.5 70 90 70 L40 70 L20 90 L25 70 L10 70 C4.5 70 0 65.5 0 60 L0 10 C0 4.5 4.5 0 10 0 Z"],
+    ["heart", "Heart", "M50 90 C20 65 0 50 0 30 C0 13 13 0 28 0 C38 0 46 6 50 14 C54 6 62 0 72 0 C87 0 100 13 100 30 C100 50 80 65 50 90 Z"],
+  ]);
+  expect(STICKER_SHAPE_SCALE).toBe(0.2);
+});
+
+test("every segment names its command (the Swift parser and `turns` both rely on it) and every subpath is closed", () => {
+  for (const id of SHAPE_IDS) {
+    const subs = SHAPES[id].path.split("M").filter((s) => s.trim().length > 0);
+    for (const sub of subs) {
+      expect(sub.trim().endsWith("Z")).toBe(true);
+      expect(`M${sub}`.trim()).toMatch(SUBPATH);
+    }
+  }
+});
+
+test("subpath directions: everything clockwise, the declared holes counter-clockwise — a hole is a hole under non-zero AND even-odd", () => {
+  for (const id of SHAPE_IDS) {
+    turns(SHAPES[id].path).forEach((area, i) => {
+      const hole = HOLES[id]?.includes(i) ?? false;
+      expect([id, i, hole ? area < 0 : area > 0]).toEqual([id, i, true]);
+    });
+  }
+  expect(Object.fromEntries(SHAPE_IDS.map((id) => [id, turns(SHAPES[id].path).length] as const).filter(([, n]) => n !== 1)))
+    .toEqual({ bubbleThought: 3, badgeRibbon: 3, frameRounded: 2, ring: 2, brackets: 4 });
+  expect(turns(SHAPES.ring.path)).toEqual([5000, -2592]);                 // by hand, over the four ends of the arcs (a square on its corner): 2 × 50² outside, −2 × 36² inside
+  expect(turns(SHAPES.brackets.path)).toEqual([500, 500, 500, 500]);      // each corner: 30 × 10 + 10 × 20
 });

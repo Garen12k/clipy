@@ -555,3 +555,11 @@ test("sanity pass: a bad box padding or corner is repaired, on texts and on capt
   expect((p.overlays[1] as TextOverlay).style).toMatchObject({ boxPadding: 0.25, boxCorner: "square" });
   expect(migrateProject(p)).toEqual(p);
 });
+
+test("the thirteen new shapes are known shapes: a sticker with one loads as it is; an unknown shape still falls back or is dropped", () => {
+  const fresh = ["arrowCurved", "arrowDouble", "bubbleRound", "bubbleSquare", "bubbleThought", "badgeSeal", "badgeRibbon", "banner", "sparkle", "burst", "frameRounded", "ring", "brackets"] as const;
+  const p = makeProject({ overlays: [...fresh.map((shape) => makeSticker({ id: shape, emoji: null, shape })), { ...makeSticker({ id: "x", emoji: null }), shape: "blob" } as unknown as Overlay] });
+  const loaded = migrateProject(p);
+  expect(loaded.overlays.map((o) => (o as { shape: string | null }).shape)).toEqual([...fresh]);
+  expect(migrateProject(loaded)).toEqual(loaded);
+});
