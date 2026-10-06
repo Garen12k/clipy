@@ -493,6 +493,7 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
   }
 
   /// Blends outgoing `a` into incoming `b` at progress `p` (0 → all `a`, 1 → all `b`). Unknown types dissolve.
+  /// The ten of 2026-10-06 take their numbers from `TransitionMath` and their images from `TransitionBlend`.
   static func blend(type: String, from a: CIImage, to b: CIImage, progress p: CGFloat, size: CGSize) -> CIImage {
     let rect = CGRect(origin: .zero, size: size)
     switch type {
@@ -547,17 +548,41 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
       let black = CIImage(color: CIColor.black).cropped(to: rect)
       let spun = a.transformed(by: turn).composited(over: black).cropped(to: rect)
       return dissolve(from: spun, to: b, progress: p).cropped(to: rect)
-    // The ten transitions of 2026-10-06. A line marked PLACEHOLDER dissolves until its blend lands.
-    case "cover": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
-    case "reveal": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
-    case "coverUp": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
-    case "revealDown": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
-    case "circleOpen": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
-    case "circleClose": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
-    case "wipeDiagonal": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
-    case "wipeClock": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
-    case "pixelate": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
-    case "flashWhite": return dissolve(from: a, to: b, progress: p).cropped(to: rect)    // MORE-LOOKS-PLACEHOLDER
+    // ---- The ten transitions of 2026-10-06 (numbers: TransitionMath; images: TransitionBlend). If a mask or a filter
+    // cannot be made, the transition is a plain dissolve. ----
+    case "cover":
+      // The incoming frame slides in from the right over the outgoing one, which stays still.
+      return TransitionBlend.slid(type, from: a, to: b, progress: p, size: size) ?? dissolve(from: a, to: b, progress: p).cropped(to: rect)
+    case "reveal":
+      // The outgoing frame slides off to the left; the incoming one is still beneath it.
+      return TransitionBlend.slid(type, from: a, to: b, progress: p, size: size) ?? dissolve(from: a, to: b, progress: p).cropped(to: rect)
+    case "coverUp":
+      // The incoming frame rises from below the screen over the still outgoing frame.
+      return TransitionBlend.slid(type, from: a, to: b, progress: p, size: size) ?? dissolve(from: a, to: b, progress: p).cropped(to: rect)
+    case "revealDown":
+      // The outgoing frame drops off the bottom of the screen; the incoming one is still beneath it.
+      return TransitionBlend.slid(type, from: a, to: b, progress: p, size: size) ?? dissolve(from: a, to: b, progress: p).cropped(to: rect)
+    case "circleOpen":
+      // The incoming frame shows inside a circle growing from the centre to the corners.
+      let r = CGFloat(TransitionMath.irisRadius(type, Double(p)) ?? 0) * TransitionBlend.halfDiagonal(size)
+      return TransitionBlend.masked(b, over: a, mask: TransitionBlend.discMask(radius: r, size: size), rect: rect) ?? dissolve(from: a, to: b, progress: p).cropped(to: rect)
+    case "circleClose":
+      // The outgoing frame stays inside a circle shrinking from the corners to the centre.
+      let r = CGFloat(TransitionMath.irisRadius(type, Double(p)) ?? 0) * TransitionBlend.halfDiagonal(size)
+      return TransitionBlend.masked(a, over: b, mask: TransitionBlend.discMask(radius: r, size: size), rect: rect) ?? dissolve(from: a, to: b, progress: p).cropped(to: rect)
+    case "wipeDiagonal":
+      // A slanted hard edge from the top-left corner of the screen to the bottom-right one.
+      return TransitionBlend.masked(b, over: a, mask: TransitionBlend.diagonalMask(edge: TransitionMath.diagonalEdge(Double(p)), size: size), rect: rect) ?? dissolve(from: a, to: b, progress: p).cropped(to: rect)
+    case "wipeClock":
+      // A clock hand sweeps once round from 12 o'clock; the incoming frame shows behind it.
+      return TransitionBlend.masked(b, over: a, mask: TransitionBlend.sectorMask(angle: TransitionMath.clockAngle(Double(p)), size: size), rect: rect) ?? dissolve(from: a, to: b, progress: p).cropped(to: rect)
+    case "pixelate":
+      // Both frames break into the same blocks — none at either end, largest at the cut — and cross-dissolve.
+      let block = CGFloat(TransitionMath.pixelSize(Double(p))) * min(size.width, size.height)
+      return dissolve(from: TransitionBlend.pixelated(a, block: block, rect: rect), to: TransitionBlend.pixelated(b, block: block, rect: rect), progress: p).cropped(to: rect)
+    case "flashWhite":
+      // To white over the first half, back from white over the second — the white dip the preview shows.
+      return TransitionBlend.flashed(p < 0.5 ? a : b, amount: CGFloat(TransitionMath.dip(Double(p))), rect: rect).cropped(to: rect)
     case "blur":
       // Both frames carry the same blur — none at either end, strongest in the middle — and cross-dissolve
       // throughout, so the picture never jumps (a sharp frame never meets a fully blurred one).
