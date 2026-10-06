@@ -1,7 +1,7 @@
 # UI polish, round 2 — home, export, post, accounts and screen transitions: design
 
 **Date:** 2026-10-06
-**Status:** Approved by the user 2026-10-06
+**Status:** Implemented 2026-10-06 (on-device checklist pending)
 **Builds on:** UI polish round 1 (`docs/superpowers/specs/2026-10-05-ui-polish-r1-design.md`: the tokens `space` / `size` / `type` / `elevation`, the three kinds of button, the ring-selected chip and tile, `src/ui/motion.ts`, `EnterView`, the Reduce Motion store, the spacing guard). No model, schema, op, publish-logic, export-logic or Swift change. No new package.
 
 ## 1. What the user gets
@@ -78,6 +78,17 @@ motion: { …today's, sheet: { mass: 1, damping: 40, stiffness: 400 } },   // wa
 - **`src/__tests__/spacingScale.test.ts`** now also reads **`src/projects`, `src/export`, `src/publish` and `app/`** (150 files in all). Starting allow-table = today's twelve editor hits plus the seven of §2, one line per file; each task deletes its own lines; the round ends at **11 hits in 5 files**, all timeline-lane geometry (`AudioBar` 2, `ClipThumbStrip` 5, `EffectPill` 1, `LayerBar` 2, `OverlayPill` 1) — the Cover sheet's line goes. The two documented blind spots stay (an apostrophe in JSX text hides the rest of its line; a value with `*` or `/` is skipped whole).
 - **New `src/__tests__/outlineIcons.test.ts`**: in `app/`, `src/projects`, `src/export`, `src/publish` every icon name given as `name="…"` (or inside `name={…}`) ends in `-outline` or starts with `logo-`. Starting allow-table = the eight filled uses of §2; it ends empty. (`src/ui` and the editor are not read: round 1's kept filled glyphs live there.)
 - `noHexLiterals.test.ts` already reads `src` and `app`. `kitSlider.test.ts` is unchanged: Cover keeps its direct slider.
+
+## 3a. As built
+
+Commits: Task 1 `96fe09e`, 2 `50a3fb5`, 3 `06ccc50`, 4 `a3fb99f`, 5 `e04085e`, 6 `c759d8b`, 7 the docs commit. Nothing a project stores changed (no schema, op or migration change).
+
+- **Numbers that changed.** `theme.motion.sheet` is `{ mass: 1, damping: 40, stiffness: 400 }` (was `{ damping: 18, stiffness: 220 }`, which ran at the default mass 4 and bounced; zeta is now exactly 1, critically damped). New tokens: `radius.cover` 16; `size.listRow` 56, `size.avatar` 32, `size.ring` 120; `type.input` 16, `type.heading` 18, `type.title` 20, `type.screen` 26. The guards end as specified: spacing allow-table at 11 hits in 5 files, outline-icon allow-table empty; both are pinned by tests.
+- **Behaviour.** The one behaviour change: the Export modal cannot be swiped away while exporting (`exportGesture`, set from the route); it cannot be seen in Expo Go, where export is unavailable. The editor allows the left-edge back swipe only (`fullScreenGestureEnabled: false`; without it iOS 26 would start the swipe anywhere). Home to editor is the standard push, Export the standard modal rise, `oauth` does not animate.
+- **Tests changed or added.** `src/ui/__tests__/Sheet.test.tsx` (spring through `sheetTo`, Reduce Motion places at once, testIDs `sheet-panel` / `sheet-header`); `src/editor/__tests__/CoverSheet.test.tsx` (Field, rest track colour, Reset as a quiet button); `src/projects/__tests__/ProjectCard.test.tsx` (no `index` prop, no animation of its own, new look); `src/export/__tests__/ExportScreenBody.test.tsx` and `ExportRoute.test.tsx` (new look; the route sets `gestureEnabled` per status); `AccountsScreen.test.tsx`, `PostScreen.test.tsx`, `theme.test.ts`, `motion.test.ts` (new cases). New files: `kit.r2.test.tsx`, `sheets.r2.test.tsx`, `home.r2.test.tsx`, `screenOptions.test.ts`, `outlineIcons.test.ts`. `outlineIcons.test.ts` has one helper (`problems`) beyond the plan so a failure says what to fix, like the spacing guard.
+- **Files outside the plan.** None. `src/ui/EmptyState.tsx` now shows its title as typed (sentence case, no letter spacing), which also affects the "can't be posted" screen.
+- **Left as it was.** The home button label "New clip". The list eases in once, no per-card stagger. Cover keeps its dimming sheet, Done-applies / else-discards and its direct slider (only the rest track colour and Reset changed). Accounts has no gold button (Reconnect outlined; Disconnect and Sign out text only). Raw sizes in files this round did not edit (`NumField`, `ToolPanel`, `ToolStrip`, `LoadingScreen`) are untouched. The editor route is not edited.
+- **What no test checks.** The device checklist at the end of the plan; how the transitions look, and whether the editor push stutters while the video starts (fallback: `animation: "fade"` on `editor/[id]/index` only); the left-edge swipe next to the timeline and sliders; the sheet spring and its drag snap-back; the keyboard over Cover's Done and the Post caption on a small iPhone; readability of the card text over bright pictures; the locked Export swipe (real build only); live Post / Accounts states (they need a live Supabase project).
 
 ## 4. Home — `app/index.tsx`, `src/projects/ProjectCard.tsx`
 

@@ -84,9 +84,13 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an 
 
 **Motion.** Buttons dip when pressed; a strip or panel fades and rises in, the row of tools fades in when it changes, messages ease in and out. Closing is instant. Nothing lasts longer than a quarter of a second, only opacity and position change (never layout next to the video), and every animation is built in `src/ui/motion.ts`. With Reduce Motion on, nothing slides or grows (`src/ui/useReducedMotion.ts`); buttons still react.
 
+**Screens.** The home, export, post and accounts screens use the same building blocks as the editor: `Field` (the one text box), `Card` (the one card surface) and `Spinner`. Each screen or state has at most one gold button (Accounts has none: Connect and Reconnect are outlined, Disconnect and Sign out are text only). A project card shows its cover with the length at the top right and the name over a dark fade; the project list eases in once when it first appears.
+
+**Moving between screens.** A project and the Post / Accounts screens slide in from the side, Export rises from the bottom (the standard iOS movements; the options live in `src/navigation/screenOptions.ts`). Swiping back works everywhere except while an export renders or uploads run; in the editor only the left edge starts the swipe. Pop-up sheets rise on a spring that cannot bounce and are placed at once with Reduce Motion.
+
 ## Layout
 
-- `app/` — screens (Expo Router): `index.tsx`, `editor/[id]/index.tsx`, `editor/[id]/export.tsx`
+- `app/` — screens (Expo Router): `index.tsx`, `post.tsx`, `accounts.tsx`, `oauth.tsx`, `editor/[id]/index.tsx`, `editor/[id]/export.tsx`
 - `src/editor/` — model (types/ops/timeline/`overlayLayout.ts`), store, and components (PreviewPlayer, Timeline,
   ClipThumbStrip, TrimHandles, ReorderHandle, EditorToolbar, RatioSheet, TrimSheet (a strip), text style panel,
   music lane). `src/editor/model/overlayLayout.ts` computes text overlay position/size as fractions of
@@ -94,6 +98,7 @@ The UI is the "Grand Voyage" look: deep navy backgrounds, a gold accent, and an 
   same formula for the native renderer.
 - `src/projects/` — project storage behind `FsAdapter`/`expoFs`, and the Projects screen pieces
 - `src/export/` — export estimate, `useExport`, `ExportScreenBody`
+- `src/navigation/` — the screen-transition options (`screenOptions.ts`)
 - `src/theme/` — theme tokens
 - `src/ui/` — shared UI primitives
 - `modules/clipy-video/` — Swift native module (`ios/`, `ios/Tests/`) and its TypeScript wrapper (`index.ts`)
