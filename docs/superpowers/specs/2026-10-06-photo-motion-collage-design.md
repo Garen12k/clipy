@@ -1,7 +1,7 @@
 # Photo motion and collages: design
 
 **Date:** 2026-10-06
-**Status:** Approved by the owner in chat ("yes"); not implemented. Plan: `docs/superpowers/plans/2026-10-06-photo-motion-collage.md`.
+**Status:** Implemented 2026-10-06 (on-device confirmation by the owner pending; export unverified until an EAS build exists). See §3a for what was built. Approved by the owner in chat ("yes"). Plan: `docs/superpowers/plans/2026-10-06-photo-motion-collage.md`.
 **Builds on:** CapCut group C1 (`2026-10-04-capcut-c1-motion-design.md`: clip animations, Combos, keyframes, `motion.ts` ↔ `Motion.swift`), group E1 (`2026-10-04-capcut-e1-layers-design.md`: layers, masks, the two-video rule), the strips and panels (`2026-10-05-editing-ui-r1-toolbar-strips-design.md`, `2026-10-05-editing-ui-r2-tall-panels-design.md`) and the looks round (`2026-10-06-more-looks-design.md`, schema v16). Schema v16 → **v17**. **No Swift change, no new package, no new asset.**
 
 ## 1. What the owner gets
@@ -37,6 +37,45 @@ Out of scope: animated crops (zooming *inside* a collage cell), a coloured colla
 | How is a collage stored? | As ordinary **layers**, each tagged `collage: { group, layout, cell, border, corner, aspect }` (§6.5). | The owner approved "each cell is still a normal layer". The tag lets Border / Corner find the cells again. |
 | Corner | A **three-stop** slider: Square, Rounded, Round = the three masks that exist. | A continuous radius needs a new stored number *and* new Swift in the mask path of every export. |
 | Does the schema bump? | **Yes, v17.** Two optional fields; absent = none; the migration adds nothing. | An older build would otherwise open a v17 project, show the photos still and export a different video without a word. |
+
+## 3a. As built
+
+Branch `photo-motion-collage`; no Swift, no new package, no new asset, none of the guard tests' allow-lists grew.
+
+**Commits.** 1 schema v17 `13857fc` · 2 photo motion maths, preview hook, export pins `6a919aa` · 3 Motion ops `a1e11aa` · 4 collage geometry `9777d62` · 5 collage ops `bfd5995` · 6 the Motion strip and the Combo tab `07fb33c` · 7 the Collage panel, `makeCollage`, `pickMedia({ limit })`, Replace re-fit `19f5d61` · review fixes `9acaba5` · 8 toolbar `d241f9b` · 9 these docs. Totals at the end: app 250 suites / 4173 tests, server 15 / 464.
+
+**Differences from the design the owner approved in chat** (to tell the owner when testing):
+- **Corner has three stops** (Square, Rounded, Round: the masks that exist), not a smooth range.
+- The seventh Motion is labelled **Corner zoom**; the layouts have short names (Side by side, Stacked, Big and two, Row of three, Grid of four, Inset).
+- A collage sits **over the main video**: Border opens gaps (0 to 6 % of the shorter side, default 0) that show the main video; there is no coloured border. The main video's sound keeps playing.
+- Refusal messages: too few pictures picked (the layout needs n) and a third video (a collage holds at most 2 videos; the same limits as Overlay: 8 layers, 0.3 s minimum).
+- **Motion, Combo and keyframes are mutually exclusive on a photo.** `setPhotoMotion` clears a Combo; a Combo clears a Motion; `toggleClipKeyframe` refuses to add a pin over an active Motion (review fix); `contextFor` hides Keyframe while a Motion is set and Motion while keyframes exist; Replace to a video drops the Motion (review fix). Keyframes win if a hand-edited file holds both.
+- A **picked clip's keyframes and Motion are not carried into its cell** (they would hide the placement, or move the picture out of its cell with no tool to remove it). A reversed video is cut at the end it plays last.
+- A **cell moved by hand** no longer follows Border / Corner / the layout tiles; the panel shows the selected cell's own tag.
+- **Fit to frame** appears (when some in-place cell was laid out for another frame shape) after a ratio change; there is no automatic re-lay.
+- `cellPlacement` floors the scale at 0.2 (`TRANSFORM_LIMITS`), and the crop limit (`CROP_MIN`) stops a very wide or very tall picture from filling its cell: an iPhone panorama in Side by side, or a 16:9 video in Row of three on a 9:21 frame, is fitted with strips of the main video at two sides. A picture beyond about 7:1 in the narrowest cells reaches over the ends of its cell (needs an unusual file).
+- Photos update **20 times a second** in the preview (the Motion is exact; the playback is less fluid than the export). Border is capped to its limits inside `collageCells` as well as in the slider.
+- §7: the tool list is now 51 ids (`collage`, `motion`).
+
+**Deviations the tasks reported.**
+- Task 1: none. Pinned numbers changed (schema 16 to 17) in `migrate.test.ts` and nine `types.*.test.ts`; the PROOF test keeps `schemaVersion: 16` on purpose.
+- Task 2: `photoMotion.test.ts` first test: `MOTION.pan` already exists (the Combos' constant), so the loop "no key of PHOTO_MOTION is in MOTION" became "`zoom`, `gentle`, `strong` are not in `MOTION`, and `MOTION` still has 29 keys". Code as in the plan. `motion.test.ts` and `motion.parity.test.ts` unedited.
+- Task 3: none; inserted after `setAnimationForAllClips`.
+- Task 4: scale floor 0.2 (above); a tag whose layout has no such cell returns the clip unchanged (`isCellInPlace` false); four tests added; tolerance 1e-6 outwards and 3e-6 inwards (six stored decimals), asserted as it is.
+- Task 5: keyframes / Motion not carried into a cell; reversed video cut at its played end; `collageLength` uses the start the layers really get (never below 0); unknown layout id refused; `refitReplacedCell` returns the same project when the new picture already fits.
+- Task 6: one test added (the tile row keeps its scroll position across picks). `ClipAnimationSheet.test.tsx` gained three tests; "picking a Combo removes a Motion" passed before the change (it pins Task 3 through the UI).
+- Task 7: both suites mock `@/src/lib/id` (Jest has no `randomUUID`); Fit to frame as above; `makeCollage` returns at once for an unknown layout; the panel body does not scroll (compact, per §6.6); `marginHorizontal: -theme.space.gutter` takes back the ToolPanel gutter (a token); tests added for a moved cell, a non-collage selection, a second tap while a pick is open, a video found too short after import.
+- Review fix round: Keyframe refused over a Motion; Motion dropped on Replace to a video; border clamped in `collageCells`; `PhotoMotionSheet` comment reworded; tests for split / duplicate carrying a Motion, one undo step for a Strength drag on a legacy Combo, layer export pins.
+- Task 8: `toolbarContext.test.ts` and `toolGroups.test.ts` / `icons.test.ts` / `EditorToolbar.test.tsx` pinned lists and the tool count (49 to 51) updated as the plan said; two extra `EditorToolbar` tests (keyframes hide Motion; making a collage keeps the panel open on the new collage). No other suite changed.
+- Files outside the plan: none.
+
+**What no test checks** (the owner's device checklist, §15, and a first EAS build):
+1. §12 item 1 to 5 are unchanged and still open (pins in the export, layers with a crop and a mask, `selectionLimit` / `orderedSelection`, smoothness of four layers plus the main video, labels and the strip header on a 375-pt screen).
+2. A photo's Motion in the export matches the preview: two pins, and the end depends on the Swift clip length against `clipDuration`.
+3. No background shows at a zoomed photo's edges in the export.
+4. A collage exports with every picture on its cell; Round and Rounded masks on non-square cells look like the preview's.
+5. The main bar with 13 buttons; `grid-outline` / `move-outline` at the bar's size; "Corner zoom" readable at 11 pt.
+6. The collage's feel with four cells while Border is dragged (each tick re-lays up to four layers).
 
 ## 4. Data model — schema v17
 
@@ -328,13 +367,46 @@ Header 44: **Collage**, (Fit to frame), ✓. Body, explicit heights: the tile ro
 
 ## 15. Device checklist (owner, Expo Go)
 
-The full step-by-step list (28 steps) is at the end of the plan. In short, on the iPhone, with a project made before this update that has a photo in it:
+Start with `npx expo start --go --port 8090` and open the app on the iPhone. Use a project you made **before** this update that has at least one photo in it. If one of its photos has a "Slow zoom" or "Pan" animation, even better.
 
-1. **Nothing changed.** Open the old project and play it: every photo and clip looks exactly as before.
-2. **Motion.** Tap a photo: there is a **Motion** button after Animate (a video has none). Tap each tile and play — the photo slowly zooms or slides, starting and ending softly, with no black edge. Drag **Strength**. **Apply to all photos** gives every photo the same motion; one **Undo** takes it back.
-3. **One at a time.** With a Motion on a photo its **Keyframe** button is gone; in **Animate → Combo** a photo now offers only Sway and Pulse. An old "Slow zoom" or "Pan" on a photo is shown as its Motion tile and plays as before.
-4. **Collage.** With nothing selected tap **Collage** (after Overlay), tap a layout, pick that many photos or videos: they fill the cells. Drag **Border** — the gap shows your main video, not a colour — and **Corner** (Square / Rounded / Round). The other layouts with the same number of pictures re-arrange them.
-5. **Still layers.** Each cell is a bar on the layers row: trim it, replace it (the new picture fills the same cell), delete it. A cell you move with your finger is then left alone by Border and Corner.
-6. **Limits.** Three videos, or too few pictures, give a message and add nothing. The main video's sound keeps playing under a collage.
-7. **Ratio.** Changing the ratio does not move a collage; **Fit to frame** in the Collage panel does.
-8. **Say what you would change:** a smooth Corner slider, a coloured border, or Motion at an even speed each need the real (native) build.
+In one line: **what you see on the phone is what the final video will show** for both new tools — no "Preview" tag. While a photo plays on the phone the movement is a little less fluid than in the final video.
+
+**Nothing changed**
+
+1. Open the old project and play it. Every photo and clip looks exactly as before — nothing moves that did not move, nothing is resized. Tell me if anything looks different.
+
+**Photo motion**
+
+2. Tap a **photo**. In the row of tools, after **Animate**, there is a new **Motion** button. Tap a **video**: no Motion button. That is right.
+3. Tap the photo, then **Motion**. You see **None, Zoom in, Zoom out, Pan left, Pan right, Pan up, Pan down, Corner zoom**; None is highlighted and the **Strength** slider is greyed out. Tell me if a name is cut off.
+4. Tap **Zoom in**, move the white line to the start of the photo and press play: the photo slowly grows. It starts and ends softly.
+5. Try each of the others the same way. **Pan** moves the photo sideways or up and down (it is slightly enlarged so no black edge shows). **Corner zoom** grows towards the top-left corner. Tell me if any goes the wrong way or shows a black edge.
+6. Drag **Strength** left and right and play again: gentle at the left, strong at the right. You feel a small tick in the middle.
+7. Tap **Apply to all photos**: every photo on the main row now has the same motion. Videos are not touched. Press **Undo** once: they are all back as they were.
+8. Tap **None**: the photo is still again.
+9. With a motion on the photo, close the strip (✓): the **Keyframe** button is gone for this photo. Set Motion to None and it is back. (A photo moves either by Motion or by keyframes, not both.)
+10. Tap the photo, **Animate**, **Combo**: for a photo you now see only **None, Sway, Pulse** — zoom and pan moved to Motion. For a video, all six are still there.
+11. If an old photo of yours had a "Slow zoom" or "Pan": tap it, then **Motion** — the matching tile is highlighted, and it plays exactly as before. It only changes if you drag Strength or tap another tile.
+12. Give a photo a **Fade** in (Animate, In) and a **Zoom in** Motion: it fades in *and* zooms.
+
+**Collages**
+
+13. Tap away so nothing is selected. On the main row, after **Overlay**, there is a new **Collage** button. Tap it: a panel with **Side by side, Stacked, Big and two, Row of three, Grid of four, Inset**, and two greyed-out sliders.
+14. Move the white line to where the collage should start (do this before step 13 next time). Tap **Side by side** and pick **two photos**. They appear next to each other, each filling its half. Tell me if a face is cut badly — the middle of each picture is what is kept. A very wide picture (a panorama) or a very tall one may not fill its cell: a strip of the main video shows at two sides. That is known; tell me if it looks wrong.
+15. The panel is still open. Drag **Border**: a gap opens between the pictures and around them. **In the gap you see your main video** — that is how it works; there is no coloured border.
+16. Drag **Corner**: three positions — **Square, Rounded, Round**.
+17. The panel now shows only **Side by side, Stacked, Inset**. Tap **Stacked**, then **Inset**: the same two pictures re-arrange. Tap ✓.
+18. On the timeline there are two new bars on the layers row. Tap one: its tools start with **Collage** (it opens the same panel again). Everything else works as for any overlay: **Trim**, **Replace**, **Filter**, drag the bar, **Delete**.
+19. Tap a cell and **Replace** it with a different picture: it fills the same cell.
+20. Drag one cell with your finger in the preview to move it. Now open **Collage** and drag **Border**: the cell you moved **stays where you put it**; the other one follows the slider. That is on purpose.
+21. Make a **Grid of four** with four photos, then a **Row of three** with one video and two photos. The collage lasts as long as the video (3 seconds with photos only), and is cut short if the project ends sooner.
+22. Try to pick **three videos** for a Row of three: a message says a collage holds at most 2 videos, and nothing is added. Pick only **two** items for a three-cell layout: a message says it needs 3.
+23. Press **Undo** after making a collage: all its cells go at once.
+24. The **sound** of the main video keeps playing under a collage. If you do not want it, tap that clip and lower **Volume**.
+25. Change **Ratio** (for example 9:16 to 1:1) with a collage on screen: the cells do **not** move by themselves and may no longer line up. Tap a cell, **Collage**, then **Fit to frame** (top right of the panel): they line up for the new shape.
+26. Close the project and open it again: motions and collages are still there, and Border / Corner still work on the collage.
+
+**Tell me**
+
+27. Is four pictures plus the main video smooth enough on your phone while playing?
+28. Would you rather have the collage's Corner as a smooth slider, a coloured border instead of seeing the video, or Motion at an even speed instead of the soft start and stop? Each of those needs the real (native) build to be changed, so I left them out for now.
