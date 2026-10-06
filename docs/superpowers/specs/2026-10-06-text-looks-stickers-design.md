@@ -1,7 +1,7 @@
 # More text looks and stickers: design
 
 **Date:** 2026-10-06
-**Status:** Approved by the user 2026-10-06
+**Status:** Implemented 2026-10-06 (Swift export unverified until an EAS build exists; on-device confirmation by the user pending)
 **Builds on:** CapCut group F (`docs/superpowers/specs/2026-10-04-capcut-f-text-captions-design.md`: `TextOverlay.style`, the stacked-text preview, the twelve text templates, the mirrored `overlayLayout.ts` ↔ `OverlayLayout.swift`), the tall panels (`2026-10-05-editing-ui-r2-tall-panels-design.md`) and UI polish rounds 1–2 (tokens, kit, guards). Schema v14 → **v15**. No new package, no new font file.
 
 ## 1. What the user gets
@@ -70,6 +70,36 @@ export const SHAPE_IDS = ["circle", "square", "roundedBox", "arrow", "star", "sp
 - **Sanity pass:** `boxPadding` non-finite → 0.25, else clamped to 0–0.6; `boxCorner` anything but the two ids → `"rounded"`. A sticker with an unknown shape falls back to its emoji or is dropped (existing rule) — the thirteen new ids are known.
 - Style numbers are stored with two decimals (existing `cleanStylePatch`); `boxCorner` passes through it untouched.
 - Captions share `TextOverlay.style`, so both fields apply to captions too (§8.2).
+
+## 3a. As built
+
+Branch `text-stickers-2`. Commits: Task 1 `3479ea2` (schema v15), Task 2 `7227c1c` (layout pair, vectors, proof), Task 3 `8d4b193` (twelve looks), Task 4 `725c25d` (preview box), Task 5 `d511ac4` (five rows), Task 6 `75e5c73` (thirteen shapes), Task 7 `b06500f` (emoji packs), Task 8 `715cecc` (export request, box corner, XCTests), Task 9 this documentation commit.
+
+**What changed from the plan's picture**
+- Outline, shadow, spacing and glow controls already existed (behind one "Style" toggle). They are now five rows that start closed; switching a row on opens it. Only `boxPadding` and `boxCorner` are new stored fields (schema v15); the migration only adds the defaults and existing texts are unchanged (the PROOF tests in `overlayLayout.test.ts` and `migrate.test.ts`).
+- A rounded corner is always half of the **default** padding (`BOX_RADIUS_FACTOR` 0.5 x `BACKGROUND_PAD_FACTOR` x font size), not half of the chosen padding; Square is 0. No radius cap was added: with a tiny padding on a very narrow text the system (Core Animation and React Native) limits the radius.
+- Twelve new looks appended (24 in all), text-only, no animation. Three use fonts the first twelve left out (Permanent Marker, Lobster, Dancing Script); no font file was added.
+- Thirteen new shapes (20 in all); paths limited to absolute `M L C Q Z`, holes by opposite winding, non-zero fill on both sides. The seven old shapes are pinned character for character.
+- Emoji in seven packs including "More"; sizes 131 / 44 / 26 / 131 / 219 / 238 / 1125 (Faces / Hands / Hearts / Food / Travel / Symbols / More), total 1,914. Search ignores the pack; recents are hidden while typing; the grid has no `getItemLayout` (a variable-height Recently used header and eight columns would make it wrong) — windowing (9 initial rows, `windowSize` 7) keeps it smooth. The pack is UI state only, not remembered between openings.
+- The preview still draws at most four text layers per text and one box per overlay.
+- Curved text and animated stickers are not built.
+
+**Deviations the tasks reported**
+- Task 1: tests written after the code (not seen red); `ops.text.test.ts` gained the two defaults in its whole style literal; schema-number titles updated in nine `types.*` / `migrate` test files.
+- Task 2: none. A new file `src/editor/model/__tests__/overlayLayout.vectors.ts` holds the eight box vectors.
+- Task 3: none.
+- Task 4: no `testID` on the background box (it would break `OverlayText.test.tsx`, which must pass unedited); the new tests find it as the body's child without a testID; new test ids `overlay-body-<id>` / `overlay-base-body-<id>`.
+- Task 5: the chevron and `expanded` state use "open and on" so a row switched off by Undo never announces "expanded"; the Text panel's box opacity slider now has a step and also writes on slide end (still one undo step). Changed test expectations: `TextStyleSection.test.tsx` (mocks, rerenders, two Style tests replaced by three), `TextPanel.style.test.tsx` (presses the rows instead of "Style"), `CaptionStyleSheet.test.tsx` (opens "Background options" first; two "Style" names became "Spacing and opacity").
+- Task 6: one extra test (the seven old shapes pinned); `StickerSheet.tsx` not touched.
+- Task 7: no `numColumns` check on the host list (a 72-row mount count proves eight columns); no `getItemLayout`.
+- Task 8: `toExportStyle` clamps the two box fields through `clampTextStyle` (never null, never out of range) with one extra test; one extra source-reading test and assertion; the request literal needed `"rounded" as const`.
+- Files outside the plan's list: the test files named above and `overlayLayout.vectors.ts`. No guard or allow-table (`spacingScale`, `outlineIcons`, `kitSlider`, `noHexLiterals`) was edited.
+
+**What no test checks**
+- The device checklist at the end of the plan (the user's Expo Go run, then an EAS build).
+- How the thirteen paths look at sticker size (checked only by script: parse, winding, self-crossing; not by eye).
+- Every item of §6.3, plus the new XCTests (`TextBoxTests`, the box vectors in `OverlayLayoutTests`, `testCompoundShapesKeepTheirHoles`), which have never been compiled.
+- Scroll smoothness of the 1,125-emoji "More" pack, and the layout of the five rows on a small phone (computed from code, not measured).
 
 ## 4. Layout numbers — `overlayLayout.ts` ↔ `OverlayLayout.swift`
 
