@@ -6,8 +6,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AspectRatio } from "@/src/editor/model/types";
 import { AFTER_PICKER_MS, AspectRatioSheet } from "@/src/projects/AspectRatioSheet";
 import { pickMedia } from "@/src/projects/pickMedia";
-import { ProjectActionsSheet } from "@/src/projects/ProjectActionsSheet";
+import { AFTER_SHEET_MS, ProjectActionsSheet } from "@/src/projects/ProjectActionsSheet";
 import { ProjectCard } from "@/src/projects/ProjectCard";
+import { QUICK, type QuickRecipeId } from "@/src/projects/quickEdit";
+import { QuickEditSheet } from "@/src/projects/QuickEditSheet";
 import { useProjects } from "@/src/projects/useProjects";
 import type { PickedAsset, ProjectSummary } from "@/src/projects";
 import { pickVideoForPost } from "@/src/publish/pickVideo";
@@ -18,12 +20,13 @@ import { haptic } from "@/src/ui/haptics";
 import { IconButton } from "@/src/ui/IconButton";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { Screen } from "@/src/ui/Screen";
+import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Spinner } from "@/src/ui/Spinner";
-import { Title } from "@/src/ui/Text";
+import { Body, Title } from "@/src/ui/Text";
 import { ToastHost } from "@/src/ui/Toast";
 
 export default function ProjectsScreen() {
-  const { projects, loading, create, rename, duplicate, remove } = useProjects();
+  const { projects, loading, create, createQuick, rename, duplicate, remove } = useProjects();
   const [actionsFor, setActionsFor] = useState<ProjectSummary | null>(null);
   /** Media picked for a new project that is waiting for its aspect ratio. */
   const [pending, setPending] = useState<PickedAsset[] | null>(null);
@@ -72,6 +75,35 @@ export default function ProjectsScreen() {
     } finally { creating.current = false; }
   }
 
+  // Quick edit: the style sheet, then the library, then the finished draft. Nothing exists until media is picked, and a draft that
+  // cannot be finished is removed again (makeQuickEdit). It shares the two refs with New clip, so the two can never run together.
+  const [quickOpen, setQuickOpen] = useState(false);
+  /** A draft is being made (media copied, the edit built): the buttons give way to a spinner. */
+  const [making, setMaking] = useState(false);
+  function onQuick() {
+    if (starting.current || creating.current) return;
+    setPending(null);
+    setQuickOpen(true);
+  }
+  async function onQuickChoose(recipeId: QuickRecipeId) {
+    if (starting.current || creating.current) return;
+    starting.current = true;
+    let assets: PickedAsset[] | null = null;
+    try {
+      setQuickOpen(false);
+      // The sheet is still fading out, and iOS drops a picker presented during that.
+      await new Promise((r) => setTimeout(r, AFTER_SHEET_MS));
+      assets = await pickMedia({ limit: QUICK.maxItems });
+    } finally { starting.current = false; }
+    if (!assets || assets.length === 0) return;
+    creating.current = true;
+    setMaking(true);
+    try {
+      const id = await createQuick(assets, recipeId);
+      if (id) router.push(`/editor/${id}`);
+    } finally { creating.current = false; setMaking(false); }
+  }
+
   return (
     <Screen>
       <View testID="home-header" style={{ height: theme.size.row, paddingLeft: theme.space.gutter, paddingRight: theme.space.sm, marginBottom: theme.space.sm, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -92,9 +124,24 @@ export default function ProjectsScreen() {
             renderItem={({ item }) => <ProjectCard summary={item} onPress={() => (item.broken ? setActionsFor(item) : router.push(`/editor/${item.id}`))} onLongPress={() => { haptic("light"); setActionsFor(item); }} />} />
         </EnterView>
       )}
-      <View style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + theme.space.lg, alignItems: "center" }}>
-        <PrimaryButton title="New clip" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
+      <View testID="home-actions" style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + theme.space.lg, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: theme.space.md }}>
+        {making ? (
+          // The pill gives the spinner and its words a surface: the cards scroll underneath.
+          <View testID="home-making" style={{ height: theme.size.control, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
+            <Spinner label="Making your quick edit" />
+            <Body>Making your quick edit</Body>
+          </View>
+        ) : (
+          <>
+            {/* An outlined button has no fill of its own: the pill behind it keeps it readable over the cards. */}
+            <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
+              <SecondaryButton title="Quick edit" onPress={onQuick} />
+            </View>
+            <PrimaryButton title="New clip" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
+          </>
+        )}
       </View>
+      <QuickEditSheet visible={quickOpen} onClose={() => setQuickOpen(false)} onChoose={onQuickChoose} />
       <AspectRatioSheet assets={pending} onCancel={() => setPending(null)} onCreate={onCreate} />
       <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onDelete={confirmDelete} />
       <ToastHost />
