@@ -6,7 +6,7 @@ import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
   clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
-  LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSFORM_LIMITS, TRANSITION_LIMITS,
+  LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
   type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
   type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
@@ -718,20 +718,18 @@ const hasPins = (p: Project, clipId: string): boolean => (findItem(p, clipId)?.c
 /**
  * For a short time on 2026-10-06 a build shrank clips to show the whole picture whenever the frame shape changed; the user did not want
  * it and the build was withdrawn, but projects saved in that window kept the small clips. This puts those back to filling the frame
- * when such a project is opened: a main clip that is centred, has no keyframes and sits exactly at its Fit scale for the frame.
- * Projects saved outside the window are left alone, so a Fit chosen in Transform stays. Layers are never touched.
+ * when such a project is opened: a main clip that is centred, has no keyframes and is smaller than Fill. (Not "exactly at its Fit
+ * scale": after the build was withdrawn the frame shape could be changed again, which leaves the clip at the Fit scale of an EARLIER
+ * frame.) Projects saved outside the window are left alone, so a Fit chosen in Transform stays. Layers are never touched.
  */
 export const AUTO_FIT_WINDOW = { from: Date.parse("2026-10-06T06:00:00Z"), to: Date.parse("2026-10-06T09:00:00Z") };
 export function undoAutoFit(p: Project): Project {
   const saved = Date.parse(p.updatedAt);
   if (!(saved >= AUTO_FIT_WINDOW.from && saved <= AUTO_FIT_WINDOW.to)) return p;
-  const { width, height } = frameSize(p);
   let changed = false;
   const clips = p.clips.map((c) => {
     const t = c.transform;
     if (t.x !== 0 || t.y !== 0 || c.keyframes.length > 0 || t.scale >= 1) return c;
-    const fit = Math.max(TRANSFORM_LIMITS.scale[0], fitScale(c, c.crop, t.rotation, width, height));
-    if (Math.abs(t.scale - fit) > 0.001) return c;
     changed = true;
     return { ...c, transform: { ...t, scale: 1 } };
   });

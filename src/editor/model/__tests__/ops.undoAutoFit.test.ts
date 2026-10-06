@@ -36,11 +36,17 @@ test("a project saved outside the window is left alone (a deliberate Fit stays)"
   expect(undoAutoFit(bad)).toBe(bad);
 });
 
-test("a placement made by hand is left alone: moved, another zoom, or keyframed", () => {
+test("a clip left at the Fit scale of an EARLIER frame (the shape was changed again afterwards) fills too", () => {
+  // Fitted for 21:9 (27/112 ≈ 0.2411), then the frame went to 4:3 with the scale kept: not the 4:3 fit (0.421875), still shrunk.
+  const stale = project({}, 27 / 112);
+  expect(undoAutoFit(stale).clips[0].transform.scale).toBe(1);
+});
+
+test("a placement made by hand is left alone: moved, zoomed in, or keyframed", () => {
   const moved = project();
   moved.clips[0] = { ...moved.clips[0], transform: { ...moved.clips[0].transform, x: 0.1 } };
   expect(undoAutoFit(moved)).toBe(moved);
-  const zoomed = project({}, 0.6);
+  const zoomed = project({}, 1.4);
   expect(undoAutoFit(zoomed)).toBe(zoomed);
   const pinned = project();
   pinned.clips[0] = { ...pinned.clips[0], keyframes: [{ time: 0, scale: FIT_4_3, x: 0, y: 0, rotation: 0, opacity: 1 }] as unknown as Project["clips"][number]["keyframes"] };
