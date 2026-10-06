@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { TextInput, View } from "react-native";
 import { clampNum, isPhoto, PHOTO, type Clip } from "@/src/editor/model/types";
 import { trimClip, trimLayer } from "@/src/editor/model/ops";
@@ -32,7 +32,12 @@ export function TrimSheet({ clipId, visible, onClose }: { clipId: string | null;
   // The fields show the clip's range, and follow it: the timeline and Undo are live under the strip, so a handle drag or an Undo
   // re-seeds both (else Apply would put the old numbers back). Typing changes nothing in the store, and this strip's own Apply
   // closes it — so what is being typed is only ever replaced by a change the user made elsewhere.
-  useEffect(() => { if (clip) { setStart(clip.trimStart.toFixed(1)); setEnd(clip.trimEnd.toFixed(1)); } }, [clip?.id, clip?.trimStart, clip?.trimEnd, visible]);
+  // Re-seeded DURING render, never from an effect: the strip is mounted (closed) for every selected item, and an effect that sets
+  // state on each frame of a handle drag leaves React an update pending after every commit — fifty in a row and the drag's next
+  // store write throws "Maximum update depth exceeded" (LayerBar.updateDepth.test.tsx).
+  const seed = clip ? `${clip.id}|${clip.trimStart}|${clip.trimEnd}|${visible}` : null;
+  const [seeded, setSeeded] = useState<string | null>(null);
+  if (clip && seed !== seeded) { setSeeded(seed); setStart(clip.trimStart.toFixed(1)); setEnd(clip.trimEnd.toFixed(1)); }
   if (!clip) return null;
 
   const submit = (from: number, to: number) => {

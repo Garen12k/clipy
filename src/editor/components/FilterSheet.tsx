@@ -24,16 +24,20 @@ export function FilterSheet({ clipId, clipIds, visible, onClose }: { clipId: str
   const layer = useIsLayer(clipId);
   const count = useEditorStore((s) => (clipIds && s.project ? mainClipIds(s.project, clipIds).length : 0));
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
-  const [thumb, setThumb] = useState<string | null>(null);
-
+  // The tiles' picture: the photo itself, or a thumbnail of the clip's first frame — the one loaded for THIS source and start, so
+  // nothing is shown while another is on its way. No effect here sets state synchronously: the strip is mounted (closed) for every
+  // selected item, and clearing the picture from an effect on each frame of a start-handle drag trips React's update-depth limit
+  // (LayerBar.updateDepth.test.tsx).
+  const [loaded, setLoaded] = useState<{ key: string; uri: string } | null>(null);
+  const photo = !!clip && isPhoto(clip);
+  const thumbKey = clip ? `${clip.sourceUri}|${clip.trimStart}|${clip.kind}` : null;
   useEffect(() => {
-    setThumb(null);
-    if (!clip) return;
-    if (isPhoto(clip)) { setThumb(clip.sourceUri); return; }
+    if (!clip || photo || thumbKey === null) return;
     let alive = true;
-    getThumb(clip.sourceUri, clip.trimStart).then((uri) => { if (alive) setThumb(uri); }).catch(() => {});
+    getThumb(clip.sourceUri, clip.trimStart).then((uri) => { if (alive) setLoaded({ key: thumbKey, uri }); }).catch(() => {});
     return () => { alive = false; };
   }, [clip?.sourceUri, clip?.trimStart, clip?.kind]);
+  const thumb = !clip ? null : photo ? clip.sourceUri : loaded?.key === thumbKey ? loaded.uri : null;
 
   const { width: windowW } = useWindowDimensions();
   // Where the row starts: the selected tile in view. Worked out when the strip opens (and for another clip) — NOT on every pick: a
