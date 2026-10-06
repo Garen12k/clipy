@@ -16,12 +16,12 @@ beforeEach(() => {
   st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4, width: 1920, height: 1080 })] }));
 });
 
-test("choosing a chip sets the aspect ratio and closes", async () => {
+test("choosing a chip sets the aspect ratio and the strip stays open", async () => {
   const onClose = jest.fn();
   await render(<RatioSheet visible onClose={onClose} />);
   await fireEvent.press(screen.getByRole("button", { name: "1:1" }));
   expect(st().project?.aspectRatio).toBe("1:1");
-  expect(onClose).toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
 });
 
 test("nine tiles in the menu's order, each a shape over its label; the project's ratio is the selected one", async () => {
@@ -56,21 +56,34 @@ test("the row opens with the selected tile in view", async () => {
 });
 
 const OTHERS = ASPECT_RATIOS.map((id, i) => [id, LABELS[i]] as const).filter(([id]) => id !== "9:16");
-test.each(OTHERS)("picking %s is one undo step and closes the strip", async (id, label) => {
+test.each(OTHERS)("picking %s is one undo step and the strip stays open", async (id, label) => {
   const onClose = jest.fn();
   await render(<RatioSheet visible onClose={onClose} />);
   await fireEvent.press(screen.getByRole("button", { name: label }));
   expect(st().project?.aspectRatio).toBe(id);
   expect(st().past).toHaveLength(1);
-  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(onClose).not.toHaveBeenCalled();
   await act(() => { st().undo(); });
   expect(st().project?.aspectRatio).toBe("9:16");
 });
 
-test("picking the ratio the project already has makes no undo step, and still closes", async () => {
+test("picking the ratio the project already has makes no undo step, and the strip stays open", async () => {
   const onClose = jest.fn();
   await render(<RatioSheet visible onClose={onClose} />);
   await fireEvent.press(screen.getByRole("button", { name: "9:16" }));
   expect(st().past).toHaveLength(0);
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+test("several ratios can be tried one after another; Done closes", async () => {
+  const onClose = jest.fn();
+  await render(<RatioSheet visible onClose={onClose} />);
+  await fireEvent.press(screen.getByRole("button", { name: "1:1" }));
+  await fireEvent.press(screen.getByRole("button", { name: "16:9" }));
+  await fireEvent.press(screen.getByRole("button", { name: "4:3" }));
+  expect(st().project?.aspectRatio).toBe("4:3");
+  expect(st().past).toHaveLength(3);
+  expect(onClose).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "Done" }));
   expect(onClose).toHaveBeenCalledTimes(1);
 });

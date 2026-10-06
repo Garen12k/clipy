@@ -202,7 +202,7 @@ Behaviour inside is unchanged: the same ops, one `apply` per tile / chip / switc
 | Mask (`MaskSheet`) | a | three tiles (box 44) | — | — |
 | Blend (`BlendSheet`) | a | six tiles (box 44) | — | "Shows in the exported video" |
 | Background (`BackgroundSheet`) | a | Black, the palette swatches, Blur | Apply to all | "Shown around a clip that does not fill the frame." |
-| Aspect ratio (`RatioSheet`) | a | the ratio chips; a pick closes the strip | — | "9:16 for TikTok, Reels and Shorts. 1:1 for feeds. 16:9 for YouTube." (two lines) |
+| Aspect ratio (`RatioSheet`) | a | the ratio tiles; the strip stays open after a pick (changed 2026-10-06 at the user's request), ✓ closes it | — | "9:16 for TikTok, Reels and Shorts. 1:1 for feeds. 16:9 for YouTube." (two lines) |
 | Transition (`TransitionSheet`) | a + slider | the eleven type chips; slider "0.50 s" | — | "Clips are too short for a transition here" when it applies; for the last clip the body is the line "No clip after this one" |
 | Transform (`TransformSheet`) | a | the six action buttons (Rotate 90°, Flip horizontal, Flip vertical, Fit, Fill, Reset) | — | — |
 | Filter (`FilterSheet`) | a + slider | filter tiles with the clip's thumbnail (52 × 52); slider "Strength 80" | Apply to all clips | — |
