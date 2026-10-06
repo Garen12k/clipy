@@ -7,7 +7,7 @@ import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
   clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
-  type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
+  clampPhotoMotion, COMBO_AS_MOTION, type PhotoMotion, type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
   type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
 } from "./types";
@@ -1151,7 +1151,7 @@ export function setClipAnimation(p: Project, clipId: string, patch: Partial<Clip
       if (e !== undefined) next = e === null ? { ...next, [k]: null } : { ...next, [k]: e, combo: null };
     }
     const clean = clampClipAnimation(next);
-    return sameJson(clean, c.animation) ? c : { ...c, animation: clean };
+    return sameJson(clean, c.animation) ? c : comboOverMotion({ ...c, animation: clean });
   });
 }
 
@@ -1160,7 +1160,59 @@ export function setAnimationForAllClips(p: Project, a: ClipAnimation): Project {
   if (!edgesOk(a) || (a.combo != null && !(ANIM_COMBO_IDS as readonly string[]).includes(a.combo))) return p;
   const same = (c: Clip) => sameJson(c.animation, clampClipAnimation(a));
   if (p.clips.every(same)) return p;
-  return touch(p, { clips: p.clips.map((c) => (same(c) ? c : { ...c, animation: clampClipAnimation(a) })) });
+  return touch(p, { clips: p.clips.map((c) => (same(c) ? c : comboOverMotion({ ...c, animation: clampClipAnimation(a) }))) });
+}
+
+/** A Combo owns the whole clip: a clip that now has one loses its photo Motion. A clip without a Motion is returned as it is. */
+function comboOverMotion(c: Clip): Clip {
+  if (c.animation.combo === null || c.motion === undefined) return c;
+  const next = { ...c };
+  delete next.motion;
+  return next;
+}
+
+/**
+ * `c` with the Motion (already clamped) or without one. A video and a photo with keyframes are returned as they are (keyframes move
+ * the photo already). A Motion clears any Combo — the two never sit on one photo — and keeps In / Out. None removes the key, and with
+ * it an older zoom / pan Combo (what the Motion tool shows as its own); Sway and Pulse stay. Same object when nothing changes.
+ */
+function withPhotoMotion(c: Clip, motion: PhotoMotion | null): Clip {
+  if (!isPhoto(c) || c.keyframes.length > 0) return c;
+  const combo = c.animation.combo;
+  if (motion === null) {
+    const twin = combo !== null && COMBO_AS_MOTION[combo] !== undefined;
+    if (c.motion === undefined && !twin) return c;
+    const next: Clip = { ...c, animation: twin ? { ...c.animation, combo: null } : c.animation };
+    delete next.motion;
+    return next;
+  }
+  const stored: PhotoMotion = { id: motion.id, strength: r2(motion.strength) };
+  if (combo === null && sameJson(c.motion, stored)) return c;
+  return { ...c, motion: stored, animation: combo === null ? c.animation : { ...c.animation, combo: null } };
+}
+
+/** `motion` as it may be stored: null for None; `undefined` when it cannot be used (an unknown id, a strength that is not a number). */
+function usableMotion(motion: PhotoMotion | null): PhotoMotion | null | undefined {
+  if (motion === null) return null;
+  const clean = clampPhotoMotion(motion);
+  return clean === null || !Number.isFinite(motion.strength) ? undefined : clean;
+}
+
+/**
+ * A photo's Motion — a main clip's or a layer's. `null` = None. Same project (no undo step) for a video, a photo with keyframes, an
+ * unknown clip, a motion that cannot be used, or no change.
+ */
+export function setPhotoMotion(p: Project, clipId: string, motion: PhotoMotion | null): Project {
+  const clean = usableMotion(motion);
+  return clean === undefined ? p : updateClip(p, clipId, (c) => withPhotoMotion(c, clean));
+}
+
+/** "Apply to all photos": every MAIN-track photo without keyframes gets the motion (None included). Layers are not touched. */
+export function setMotionForAllPhotos(p: Project, motion: PhotoMotion | null): Project {
+  const clean = usableMotion(motion);
+  if (clean === undefined) return p;
+  const clips = p.clips.map((c) => withPhotoMotion(c, clean));
+  return clips.every((c, i) => c === p.clips[i]) ? p : touch(p, { clips });
 }
 
 /** Text and stickers; captions are refused. In, Out and Loop are independent; `null` clears the one it names. */
