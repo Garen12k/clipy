@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, disabled, value, minimumValue, maximumValue, step, onSlidingStart, onValueChange }: { testID?: string; disabled?: boolean; value?: number; minimumValue?: number; maximumValue?: number; step?: number; onSlidingStart?: () => void; onValueChange?: (v: number) => void }) => <View testID={testID} {...{ disabled, value, minimumValue, maximumValue, step }} onTouchStart={() => onSlidingStart?.()} onTouchMove={(e: unknown) => onValueChange?.((e as { v?: number })?.v ?? 0.8)} />; });
 import { ANIM_COMBO, ANIM_IN } from "@/src/editor/effects";
-import { ANIM_COMBO_IDS, ANIM_IN_IDS, makeClip, makeProject } from "@/src/editor/model/types";
+import { ANIM_COMBO_IDS, ANIM_IN_IDS, makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { ClipAnimationSheet } from "../components/ClipAnimationSheet";
 
@@ -139,4 +139,38 @@ test("re-picking the selected tile adds no undo step", async () => {
 test("renders nothing when the clip is gone", async () => {
   await render(<ClipAnimationSheet clipId="zzz" visible onClose={() => {}} />);
   expect(screen.queryByText("Animation")).toBeNull();
+});
+
+describe("a photo: zoom and pan live in the Motion tool", () => {
+  const rowLabels = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string).filter((l) => !["In", "Out", "Combo", "Done", "Apply to all clips"].includes(l));
+
+  test("the Combo tab lists None, Sway and Pulse for a photo; a video still sees all six", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makePhotoClip({ id: "p" }), makeClip({ id: "a", sourceDuration: 4 })] }));
+    const view = await render(<ClipAnimationSheet clipId="p" visible onClose={() => {}} />);
+    await press("Combo");
+    expect(rowLabels()).toEqual(["None", "Sway", "Pulse"]);
+    await view.rerender(<ClipAnimationSheet clipId="a" visible onClose={() => {}} />);
+    expect(rowLabels()).toEqual(["None", ...ANIM_COMBO_IDS.map((id) => ANIM_COMBO[id].label)]);
+  });
+
+  test("a photo that already has a zoom / pan Combo keeps that tile, ringed, until it is removed", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makePhotoClip({ id: "p", animation: { in: null, out: null, combo: "zoomOutSlow" } })] }));
+    await render(<ClipAnimationSheet clipId="p" visible onClose={() => {}} />);
+    await press("Combo");
+    expect(rowLabels()).toEqual(["None", "Slow zoom out", "Sway", "Pulse"]);
+    expect(tile("Slow zoom out")).toBeSelected();
+    await press("None");
+    expect(anim().combo).toBeNull();
+    expect(rowLabels()).toEqual(["None", "Sway", "Pulse"]);
+  });
+
+  test("picking a Combo on a photo removes its Motion (one undo step)", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [{ ...makePhotoClip({ id: "p" }), motion: { id: "zoomIn", strength: 0.5 } }] }));
+    await render(<ClipAnimationSheet clipId="p" visible onClose={() => {}} />);
+    await press("Combo");
+    await press("Sway");
+    expect(anim().combo).toBe("sway");
+    expect("motion" in useEditorStore.getState().project!.clips[0]).toBe(false);
+    expect(past()).toBe(1);
+  });
 });
