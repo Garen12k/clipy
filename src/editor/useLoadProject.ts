@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { storage } from "@/src/projects";
 import { setLastFlush } from "./flush";
-import { dropEmptyText } from "./model/ops";
+import { dropEmptyText, undoAutoFit } from "./model/ops";
 import { useEditorStore } from "./store";
 import { useToolStrip } from "./toolStrip";
 
@@ -10,7 +10,7 @@ export function useLoadProject(id: string) {
   useEffect(() => {
     let alive = true;
     storage.loadProject(id)
-      .then(({ project, missingSourceUris }) => { if (!alive) return; useEditorStore.getState().setProject(project, missingSourceUris); setState({ status: "ready" }); })
+      .then(({ project, missingSourceUris }) => { if (!alive) return; useEditorStore.getState().setProject(undoAutoFit(project), missingSourceUris); setState({ status: "ready" }); })
       .catch((e: unknown) => { if (alive) setState({ status: "error", error: e instanceof Error ? e.message : String(e) }); });
     return () => {
       alive = false;
