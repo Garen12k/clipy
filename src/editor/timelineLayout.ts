@@ -78,6 +78,34 @@ export function layerRowTops(model: Pick<LaneModel, "lanes">): number[] {
   const lane = model.lanes.find((l) => l.id === "layers");
   return lane ? Array.from({ length: lane.rows }, (_, i) => laneTop(lane.index + i)) : [];
 }
+/** Where every row under the clips starts, top to bottom: each lane's rows in the model's order (empty without lanes). A row's number is its place here + 1. */
+export function rowTops(model: Pick<LaneModel, "lanes">): number[] {
+  return model.lanes.flatMap((lane) => Array.from({ length: lane.rows }, (_, i) => laneTop(lane.index + i)));
+}
+/**
+ * The row (0 = the first under the clips) of the first layer: the layers lane's `index`. Only the lanes above the layers can move
+ * it, so the model is asked without the text and the effects (packing the text rows on every store change would be work for nothing).
+ * 0 without a project.
+ */
+export function layerRowIndex(p: Pick<Project, "layers" | "audioTracks"> | null): number {
+  return p ? laneModel({ layers: p.layers, audioTracks: p.audioTracks, overlays: [], effects: [] }).lanes.find((l) => l.id === "layers")?.index ?? 0 : 0;
+}
+/** What is selected in the editor's store: a main clip or a layer (one id for both), a text / sticker, an effect, an audio track. */
+export type RowSelection = { clipId: string | null; overlayId: string | null; effectId: string | null; audioId: string | null };
+/**
+ * The row (0 = the first under the clips, as in `rowTops`) that holds the selected item, or -1: a layer's own row, a text's or a
+ * sticker's packed row (`overlayRows`), the row of an audio track's kind, the effects row. A main clip is in no row.
+ */
+export function selectedRow(p: Pick<Project, "layers" | "overlays" | "audioTracks" | "effects"> | null, sel: RowSelection): number {
+  if (!p || (sel.clipId === null && sel.overlayId === null && sel.effectId === null && sel.audioId === null)) return -1;
+  const first = (id: LaneId) => laneModel(p).lanes.find((l) => l.id === id)?.index ?? -1;
+  const within = (id: LaneId, row: number | undefined) => { const lane = first(id); return row === undefined || row < 0 || lane < 0 ? -1 : lane + row; };
+  if (sel.clipId !== null) return within("layers", p.layers.findIndex((l) => l.id === sel.clipId));
+  if (sel.overlayId !== null) return within("overlays", overlayRows(p.overlays).rowOf[sel.overlayId]);
+  if (sel.effectId !== null) return within("effects", p.effects.some((e) => e.id === sel.effectId) ? 0 : undefined);
+  const track = p.audioTracks.find((t) => t.id === sel.audioId);
+  return track ? within(track.kind, 0) : -1;
+}
 /**
  * How far a bottom area that grows by `rise` (a tool strip) may rise over the timeline: over the lanes shown, never over the clip
  * area. What is left of the rise comes out of the preview while the strip is open.

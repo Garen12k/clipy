@@ -13,8 +13,8 @@ import { ClipThumbStrip } from "./ClipThumbStrip";
 import { CutMarker } from "./CutMarker";
 import { EffectLane } from "./EffectLane";
 import { LayerLane } from "./LayerLane";
-import { LayerRowNumbers } from "./LayerRowNumbers";
 import { OverlayLane } from "./OverlayLane";
+import { RowNumbers } from "./RowNumbers";
 import { SnapGuide } from "./SnapGuide";
 
 type Props = { renderStripExtras?: (clipId: string, index: number) => React.ReactNode; onCutPress?: (index: number) => void };
@@ -93,8 +93,8 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           <SnapGuide left={pad} height={height} />
         </ScrollView>
         <View testID="timeline-playhead" pointerEvents="none" style={{ position: "absolute", left: pad - 1, top: 8, width: 2, height: height - 16, backgroundColor: theme.colors.text, borderRadius: 1 }} />
-        {/* Fixed like the playhead: the numbers of the layer rows stay at the left edge while the content scrolls under them. */}
-        <LayerRowNumbers model={model} />
+        {/* Fixed like the playhead: the numbers of the rows stay at the left edge while the content scrolls under them. */}
+        <RowNumbers model={model} />
       </View>
     </GestureDetector>
   );

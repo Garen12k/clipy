@@ -51,7 +51,7 @@ export function layerTrimFromDrag(layer: LayerClip, handle: "left" | "right", fr
   return { trimStart: layer.trimStart, trimEnd: Math.min(layer.sourceDuration, Math.max(raw, sourceAfter(layer, layer.trimStart, min))), anchor };
 }
 
-/** `number` is the layer's row number (1 = the top row), shown after the title so two layers can be told apart. */
+/** `number` is the number of the layer's row of the timeline (1 = the first row under the clips — the chip at the row's left edge shows the same), shown after the title so two layers can be told apart. */
 type Props = { layer: LayerClip; number?: number; missing?: boolean; selected: boolean; onPress: () => void };
 
 /**
