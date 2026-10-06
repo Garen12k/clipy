@@ -12,7 +12,7 @@ export const isAspectRatio = (v: unknown): v is AspectRatio => (ASPECT_RATIOS as
 export const aspectLabel = (r: AspectRatio): string => (r === "auto" ? "Auto" : r);
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 16 as const;
+export const SCHEMA_VERSION = 17 as const;
 export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
 export const EXPORT_QUALITIES = ["high", "small"] as const;
@@ -128,6 +128,31 @@ export interface OverlayAnimation { in: AnimEdge | null; out: AnimEdge | null; l
 export const NO_CLIP_ANIMATION: ClipAnimation = { in: null, out: null, combo: null };
 export const NO_OVERLAY_ANIMATION: OverlayAnimation = { in: null, out: null, loop: null };
 
+/** A slow zoom or pan over a photo's whole length (the Motion tool). The maths is `photoMotionDelta` in motion.ts. */
+export const PHOTO_MOTION_IDS = ["zoomIn", "zoomOut", "panLeft", "panRight", "panUp", "panDown", "zoomCorner"] as const;
+export type PhotoMotionId = (typeof PHOTO_MOTION_IDS)[number];
+/** `strength` 0–1, gentle … strong; 0.5 moves as far as the older zoom / pan Combos do. */
+export interface PhotoMotion { id: PhotoMotionId; strength: number }
+export const PHOTO_MOTION_LIMITS = { strength: [0, 1] as const, defaultStrength: 0.5 };
+/** The Combos the Motion tool took over for photos, and the motion each one is shown as there. */
+export const COMBO_AS_MOTION: Partial<Record<AnimComboId, PhotoMotionId>> = { zoomInSlow: "zoomIn", zoomOutSlow: "zoomOut", panLeft: "panLeft", panRight: "panRight" };
+
+/** Collage layouts, in the panel's order; how many cells each has. The rectangles are `collageCells` in collage.ts. */
+export const COLLAGE_LAYOUT_IDS = ["sideBySide", "stacked", "bigTwo", "row3", "grid4", "inset"] as const;
+export type CollageLayoutId = (typeof COLLAGE_LAYOUT_IDS)[number];
+export const COLLAGE_CELLS: Record<CollageLayoutId, number> = { sideBySide: 2, stacked: 2, bigTwo: 3, row3: 3, grid4: 4, inset: 2 };
+/** Square, Rounded, Round — the three masks there are (`CORNER_MASK[corner]`). */
+export const COLLAGE_CORNERS = [0, 1, 2] as const;
+export type CollageCorner = (typeof COLLAGE_CORNERS)[number];
+export const CORNER_MASK: readonly MaskId[] = ["none", "rounded", "circle"];
+/** `border` is a fraction of the frame's SHORTER side. */
+export const COLLAGE_LIMITS = { border: [0, 0.06] as const, borderStep: 0.005 };
+/**
+ * What makes a layer a collage cell: which collage (`group`), which layout and cell, and the border, corner and frame shape
+ * (`aspect` = width / height) it was last laid out with. Only collage.ts / collageOps.ts write it.
+ */
+export interface CollageCell { group: string; layout: CollageLayoutId; cell: number; border: number; corner: CollageCorner; aspect: number }
+
 /** One pin. Clips: `t` is SOURCE time (seconds in the file; for a photo, seconds from its start) so a pin stays on its picture
  *  through trim, split and speed changes. Overlays: `t` is seconds from the overlay's start. */
 export interface Keyframe { t: number; x: number; y: number; scale: number; rotation: number; opacity: number }
@@ -159,10 +184,25 @@ export interface Clip {
   mask: MaskId;                  // default "none"
   blend: BlendId;                // default "normal"; layers only — main clips are always "normal"
   chroma: ChromaKey | null;      // default null; layers and main clips
+  motion?: PhotoMotion;          // photos only; ABSENT = still (never null / undefined). Read it through `activePhotoMotion` / `shownPhotoMotion`
+  collage?: CollageCell;         // layers only; ABSENT = not a collage cell
 }
 /** A layer is a clip with a place on the project timeline. */
 export interface LayerClip extends Clip { start: number }   // project seconds
 export const isPhoto = (c: Clip) => c.kind === "photo";
+/**
+ * The Motion that PLAYS on a clip: a photo's stored motion, unless a Combo owns the clip or keyframes move it (the ops keep the three
+ * apart; this is the rule the preview and the export both go by should a file hold two). Never a video.
+ */
+export const activePhotoMotion = (c: Clip): PhotoMotion | null =>
+  (c.kind === "photo" && c.motion && c.animation.combo === null && c.keyframes.length === 0 ? c.motion : null);
+/** What the Motion tool shows as selected: the motion that plays, else an older zoom / pan Combo as its twin at the default strength. */
+export function shownPhotoMotion(c: Clip): PhotoMotion | null {
+  const active = activePhotoMotion(c);
+  if (active) return active;
+  const twin = c.kind === "photo" && c.animation.combo !== null ? COMBO_AS_MOTION[c.animation.combo] : undefined;
+  return twin ? { id: twin, strength: PHOTO_MOTION_LIMITS.defaultStrength } : null;
+}
 
 /** Rotation in degrees, wrapped into (−180, 180]. */
 export function normaliseRotation(deg: number): number {
@@ -258,6 +298,24 @@ export function clampOverlayAnimation(a: unknown): OverlayAnimation {
   if (!isRec(a)) return { ...NO_OVERLAY_ANIMATION };
   const loop = (ANIM_LOOP_IDS as readonly unknown[]).includes(a.loop) ? (a.loop as AnimLoopId) : null;
   return { in: clampAnimEdge(a.in), out: clampAnimEdge(a.out), loop };
+}
+/** A known motion with its strength clamped to 0–1 (not a number → the default); anything else → null. Unknown keys dropped. */
+export function clampPhotoMotion(v: unknown): PhotoMotion | null {
+  if (!isRec(v) || !(PHOTO_MOTION_IDS as readonly unknown[]).includes(v.id)) return null;
+  const [lo, hi] = PHOTO_MOTION_LIMITS.strength;
+  return { id: v.id as PhotoMotionId, strength: isNum(v.strength) ? clampNum(v.strength, lo, hi) : PHOTO_MOTION_LIMITS.defaultStrength };
+}
+/** A usable collage tag (border clamped, an unknown corner → square) or null: no group, an unknown layout, a cell outside it, no usable frame shape. */
+export function clampCollageCell(v: unknown): CollageCell | null {
+  if (!isRec(v) || typeof v.group !== "string" || v.group.length === 0 || !(COLLAGE_LAYOUT_IDS as readonly unknown[]).includes(v.layout)) return null;
+  const layout = v.layout as CollageLayoutId;
+  if (!isNum(v.cell) || !Number.isInteger(v.cell) || v.cell < 0 || v.cell >= COLLAGE_CELLS[layout]) return null;
+  if (!isNum(v.aspect) || v.aspect <= 0) return null;
+  const [lo, hi] = COLLAGE_LIMITS.border;
+  return {
+    group: v.group, layout, cell: v.cell, border: isNum(v.border) ? clampNum(v.border, lo, hi) : 0,
+    corner: (COLLAGE_CORNERS as readonly unknown[]).includes(v.corner) ? (v.corner as CollageCorner) : 0, aspect: v.aspect,
+  };
 }
 
 type KeyframeLimits = { x: readonly [number, number]; y: readonly [number, number]; scale: readonly [number, number] };
@@ -472,6 +530,8 @@ export function newLayer(clip: Clip, start: number): LayerClip {
     keyframes: clip.keyframes.map((k) => ({ ...k })),
     speedCurve: clip.speedCurve ? { ...clip.speedCurve, steps: clip.speedCurve.steps.map((s) => ({ ...s })) } : null,
     chroma: clip.chroma ? { ...clip.chroma } : null,
+    ...(clip.motion ? { motion: { ...clip.motion } } : null),
+    ...(clip.collage ? { collage: { ...clip.collage } } : null),
     transitionOut: { type: "none", duration: 0 },
     start: Math.round(Math.max(0, start) * 1000) / 1000,
   };
