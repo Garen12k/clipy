@@ -136,9 +136,9 @@ Title **Beat markers** (unchanged). Top to bottom:
 7. A row 44 pt tall: **Remove nearest** · **Clear all**, unchanged.
 
 Behaviour:
-- **Find beats** is enabled only for status `ok`. One tap = one undo step. A tap that changes nothing is no step and shows "The beat markers are already in place."
-- **The slider** before any Find only sets what the next Find does. After a Find — until the panel is closed — dragging it re-places that track's markers at each stop; the whole drag is one undo step (`beginTransaction` + `applyTransient`). It is disabled when Find beats is.
-- **Cut to beats**: §5. Toast after a cut: "Clips cut to the beat. Undo brings them back." Nothing to do: "Every cut is already on a beat." and no undo step.
+- **Find beats** is enabled only for status `ok`. One tap = one undo step. A tap that changes nothing is no step and says why: "The beat markers are already in place." when the track has beats inside the video and the project already holds them, "No beats in this part of the music." when it has none there (the music lies past the video's end, or a short trimmed piece on Fewer).
+- **The slider** before any Find only sets what the next Find does. After a Find — until the panel is closed — dragging it re-places that track's markers at each stop (only while that track is still the one Find would listen to — after an undo or a redo that changes which track is first, the slider again only sets the next Find); the whole drag is one undo step (`beginTransaction` + `applyTransient`). It is disabled when Find beats is.
+- **Cut to beats**: §5. Toast after a cut: "Clips cut to the beat. Undo brings them back." Nothing to do (every cut is on a beat already, or no cut can reach one): "Nothing more to cut." and no undo step.
 - Nothing is animated; no new strip, panel id or toolbar tool. The panel grows from compact (240 pt) to regular (46 % of the screen, 300 – 430 pt).
 
 ## 5. Cut to beats (`cutToBeats` in `src/editor/model/beats.ts`)
@@ -336,9 +336,9 @@ In one line: **Find beats works with the built-in music only for now** (not with
 
 2. In a project with a few clips, tap **Audio**, **Add audio**, **Music**, and use **Party Sector**. Tap **Audio**, then **Beats**. The panel is taller than before and has two new buttons and a slider. Under them it says "Find beats marks the beats of Party Sector."
 3. Nothing has been marked yet — opening the panel does nothing by itself.
-4. Tap **Find beats**. Small gold ticks appear along the timeline, and the count goes up.
-5. Drag the **Fewer / More** slider: left = fewer ticks (every fourth beat), middle = every second beat, right = every beat. You feel a small tick in the middle.
-6. Close the panel and press play. **Do the ticks sit on the beat of the music?** Tell me if they feel early or late — that is the one thing I could not check without your phone.
+4. Tap **Find beats**. The count in the panel goes up (the timeline is hidden while the panel is open). Tap **Done** to see the ticks: small gold ticks along the timeline.
+5. Open **Beats** again, tap **Find beats** once more, then drag the **Fewer / More** slider: left = fewer (every fourth beat), middle = every second beat, right = every beat. The count changes as you drag, and you feel a small tick in the middle. Tap **Done** to see the fewer or more ticks.
+6. With the panel closed, press play. **Do the ticks sit on the beat of the music?** Tell me if they feel early or late — that is the one thing I could not check without your phone.
 7. Press **Undo**: the ticks from the slider go back one step; again: the ticks are gone.
 8. Drag the music bar to the side. The ticks **stay where they were** — they do not follow the music. Open **Beats** and tap **Find beats** again to put them back on the beat.
 9. Add **The Frigid Seas** to another project and open **Beats**: Find beats is greyed out and it says the track has no steady beat. Add one of **your own** music files (Files): it says Find beats works with the built-in music for now. **Tap** still works for both.
@@ -346,11 +346,11 @@ In one line: **Find beats works with the built-in music only for now** (not with
 **Cut to beats**
 
 10. Use a project with at least three clips and Party Sector, and tap **Find beats** with the slider in the middle.
-11. Look at where the clips meet on the timeline, then tap **Cut to beats**. Each clip gets a little shorter so that every place where two clips meet sits on a tick. A message says "Clips cut to the beat. Undo brings them back."
+11. Tap **Done** and look at where the clips meet on the timeline. Open **Beats** again and tap **Cut to beats**. A message says "Clips cut to the beat. Undo brings them back." Tap **Done** to see the shorter clips: each one got a little shorter so that every place where two clips meet sits on a tick.
 12. Play it: the picture changes on the beat.
 13. Nothing was deleted, the order is the same, and the **last** clip was not touched.
 14. Press **Undo once**: every clip is back to its old length.
-15. Tap **Cut to beats** twice in a row: the second time it says "Every cut is already on a beat."
+15. Tap **Cut to beats** twice in a row: the second time it says "Nothing more to cut."
 16. **Know this:** text, stickers, overlays and sounds do **not** move when the clips get shorter — the same as when you trim a clip by hand. If you had a text sitting on the third clip, check where it is now. A transition on a clip that became very short (about half a second) is removed. Undo brings all of it back.
 17. With no ticks at all, **Cut to beats** is greyed out and says it needs beat markers.
 

@@ -138,7 +138,7 @@ test("Cut to beats: one tap shortens the clips onto the markers, one undo brings
   await fireEvent.press(btn("Cut to beats"));
   expect(st().project!.clips.map((c) => clipDuration(c))).toEqual([4, 3, 3]);   // 4 and 4 + 3 are on beats already
   expect(st().past).toHaveLength(0);
-  expect(useToast.getState().message).toBe("Every cut is already on a beat.");
+  expect(useToast.getState().message).toBe("Nothing more to cut.");
   await act(() => { st().apply((p) => ({ ...p, beatMarkers: [1.5, 3.5, 6] })); });
   await fireEvent.press(btn("Cut to beats"));
   expect(st().project!.clips.map((c) => clipDuration(c))).toEqual([3.5, 2.5, 3]);
@@ -155,4 +155,61 @@ test("Cut to beats is off with a single clip, and says so", async () => {
   await render(<BeatsSheet visible onClose={() => {}} />);
   expect(btn("Cut to beats")).toBeDisabled();
   expect(screen.getByText("Cut to beats needs at least two clips.")).toBeTruthy();
+});
+
+// —— Review fixes: a toast is only shown when it is true, and the slider re-places only for the track the hint names ——
+
+test("Cut to beats with no marker in reach of any cut changes nothing and does not claim the cuts are on a beat", async () => {
+  await open({ beatMarkers: [9.5] });                            // the cuts are at 4 and 7: neither is on a beat, neither can reach one
+  await fireEvent.press(btn("Cut to beats"));
+  expect(st().project!.clips.map((c) => clipDuration(c))).toEqual([4, 3, 3]);
+  expect(st().past).toHaveLength(0);
+  expect(useToast.getState().message).toBe("Nothing more to cut.");
+});
+
+test("Find beats with the music past the end of the video places nothing and says there are no beats there", async () => {
+  await open({ audioTracks: [party({ start: 20 })] });           // 10 s of video
+  await fireEvent.press(btn("Find beats"));
+  expect(markers()).toEqual([]);
+  expect(st().past).toHaveLength(0);
+  expect(screen.getByText("0 markers")).toBeTruthy();
+  expect(useToast.getState().message).toBe("No beats in this part of the music.");
+});
+
+test("Find beats on a short trimmed piece with Fewer: no fourth beat is inside it, and the toast says so", async () => {
+  await open({ audioTracks: [party({ trimStart: 0.5, trimEnd: 1.2 })] });   // every 4th beat: 0.28, 2.28 ... none in 0.5 - 1.2
+  await fireEvent(slider(), "touchStart");
+  await fireEvent(slider(), "touchMove", { v: 0 });
+  await fireEvent.press(btn("Find beats"));
+  expect(markers()).toEqual([]);
+  expect(st().past).toHaveLength(0);
+  expect(useToast.getState().message).toBe("No beats in this part of the music.");
+  // ... while every beat does reach it (0.78): that one is placed, and a second press is "already in place".
+  await fireEvent(slider(), "touchMove", { v: 2 });
+  await fireEvent.press(btn("Find beats"));
+  expect(markers()).toEqual([0.28]);
+  await fireEvent.press(btn("Find beats"));
+  expect(useToast.getState().message).toBe("The beat markers are already in place.");
+});
+
+test("after the earliest track has changed (an undo, a redo) the slider no longer re-places the old track: it only sets the next Find", async () => {
+  const funk = makeAudioTrack({ id: "funk", title: "Funked Up", sourceDuration: 66.3, start: 1 });
+  await open({ audioTracks: [party(), funk] });
+  await fireEvent.press(btn("Find beats"));                      // for Party Sector, the earliest
+  const found = markers();
+  expect(found).toHaveLength(10);
+  await act(() => { st().apply((p) => ({ ...p, audioTracks: p.audioTracks.map((t) => (t.id === "party" ? { ...t, start: 5 } : t)) })); });
+  expect(screen.getByText("Find beats marks the beats of Funked Up.")).toBeTruthy();
+  await fireEvent(slider(), "touchStart");
+  await fireEvent(slider(), "touchMove", { v: 2 });
+  expect(markers()).toEqual(found);                              // Party Sector's markers were not re-placed behind the hint's back
+  expect(st().past).toHaveLength(2);                             // the Find and the move: the drag is no undo step
+  await fireEvent.press(btn("Find beats"));                      // the next Find is for Funked Up, at the density just set
+  expect(st().past).toHaveLength(3);
+  expect(markers()).toContain(1.105);                            // Funked Up from 1 s, its first beat at 0.105 (0.28 before it stays)
+  // Now the slider follows Funked Up.
+  await fireEvent(slider(), "touchStart");
+  await fireEvent(slider(), "touchMove", { v: 0 });
+  expect(markers()).not.toEqual(found);
+  expect(st().past).toHaveLength(4);
 });
