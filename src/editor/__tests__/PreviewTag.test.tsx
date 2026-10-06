@@ -1,4 +1,4 @@
-import { DEFAULT_ADJUST, makeClip, makeEffect, makeKeyframe, makeLayer, makePhotoClip, makeProject, type Clip, type LayerClip } from "@/src/editor/model/types";
+import { DEFAULT_ADJUST, EFFECT_IDS, FILTER_IDS, TRANSITION_TYPES, makeClip, makeEffect, makeKeyframe, makeLayer, makePhotoClip, makeProject, type Clip, type LayerClip } from "@/src/editor/model/types";
 import { setClipSpeedCurve } from "@/src/editor/model/ops";
 import { needsPreviewTag } from "../components/PreviewTag";
 
@@ -161,4 +161,26 @@ describe("blend modes, green screen and blur / mosaic boxes (shown only in the e
 
 test("a curve with no steps counts as no curve (the rule timeline.ts goes by)", () => {
   expect(needsPreviewTag(one({ speedCurve: { id: "hero", steps: [] } }), 1)).toBe(false);
+});
+
+describe("the tag's truth table for every look in the registries (the rule is unchanged: any filter, any effect, any transition)", () => {
+  const cut = (type: (typeof TRANSITION_TYPES)[number]) => makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4, transitionOut: { type, duration: 1 } }), makeClip({ id: "b", sourceDuration: 4 })] });
+  test.each(FILTER_IDS.filter((id) => id !== "none"))("filter %s: tag at any strength above 0, none at 0", (id) => {
+    expect(needsPreviewTag(one({ filter: id }), 1)).toBe(true);
+    expect(needsPreviewTag(one({ filter: id, filterIntensity: 0.01 }), 1)).toBe(true);
+    expect(needsPreviewTag(one({ filter: id, filterIntensity: 0 }), 1)).toBe(false);
+  });
+  test.each([...EFFECT_IDS])("effect %s: tag while it covers the playhead — also the ones the preview draws exactly, and the ones it cannot draw", (type) => {
+    const p = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], effects: [makeEffect({ id: "e", type, start: 1, end: 2 })] });
+    expect([needsPreviewTag(p, 0.99), needsPreviewTag(p, 1), needsPreviewTag(p, 1.99), needsPreviewTag(p, 2)]).toEqual([false, true, true, false]);
+  });
+  test.each(TRANSITION_TYPES.filter((t) => t !== "none"))("transition %s: tag inside its window only", (type) => {
+    expect([needsPreviewTag(cut(type), 3.4), needsPreviewTag(cut(type), 3.6), needsPreviewTag(cut(type), 4), needsPreviewTag(cut(type), 4.5), needsPreviewTag(cut(type), 4.6)]).toEqual([false, true, true, true, false]);
+  });
+  test("None never needs the tag; the counts are the registries'", () => {
+    expect(needsPreviewTag(cut("none"), 4)).toBe(false);
+    expect(needsPreviewTag(one({ filter: null }), 1)).toBe(false);
+    expect(EFFECT_IDS).toHaveLength(20);
+    expect(TRANSITION_TYPES).toHaveLength(21);
+  });
 });
