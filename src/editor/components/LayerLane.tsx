@@ -20,9 +20,9 @@ export function LayerLane() {
   const { select } = useEditorStore.getState();
   return (
     <View testID="layer-lane">
-      {layers.map((l) => (
+      {layers.map((l, i) => (
         <View key={l.id} testID={`layer-row-${l.id}`} style={{ position: "relative", height: LANE_HEIGHT, marginTop: LANE_GAP }}>
-          <LayerBar layer={l} missing={missing.includes(l.sourceUri)} selected={l.id === selectedId} onPress={() => select(l.id === selectedId ? null : l.id)} />
+          <LayerBar layer={l} number={i + 1} missing={missing.includes(l.sourceUri)} selected={l.id === selectedId} onPress={() => select(l.id === selectedId ? null : l.id)} />
         </View>
       ))}
     </View>
