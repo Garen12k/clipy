@@ -1,8 +1,10 @@
 import { create } from "zustand";
+import { addCollage, collageRefusal, refitReplacedCell, type CollageRefusal } from "@/src/editor/model/collageOps";
 import { addClips, addLayer, replaceClipMedia } from "@/src/editor/model/ops";
 import { clipDuration, findItem, totalDuration } from "@/src/editor/model/timeline";
-import { LAYER_LIMITS, newVideoClip, type Clip, type Project } from "@/src/editor/model/types";
+import { COLLAGE_CELLS, LAYER_LIMITS, newPhotoClip, newVideoClip, type Clip, type CollageLayoutId, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { rekeyStrip } from "@/src/editor/toolStrip";
 import { newId } from "@/src/lib/id";
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
@@ -52,11 +54,26 @@ function addLayerRefusal(p: Project, clip: Clip): string {
   return clipDuration(clip) < LAYER_LIMITS.minDuration ? TOO_SHORT : LAYER_OVERLAP;
 }
 
+const ADD_FAILED = "Couldn't add those items.";
+/** What the user is told when a collage is refused. `picked` = how many items were chosen, `free` = how many layers are left. */
+function collageMessage(why: CollageRefusal, layout: CollageLayoutId, picked: number, free: number): string {
+  const n = COLLAGE_CELLS[layout];
+  switch (why) {
+    case "count": return `This layout needs ${n} photos or videos — you picked ${picked}.`;
+    case "limit": return `Not enough room: this layout adds ${n} layers and there is room for ${free}.`;
+    case "videos": return `A collage can hold ${LAYER_LIMITS.maxVideoAtOnce} videos at most. Pick photos for the other cells.`;
+    case "short": return TOO_SHORT;
+    case "overlap": return LAYER_OVERLAP;
+    default: return ADD_FAILED;
+  }
+}
+
 /**
  * Adds picked photos and videos to the open project, swaps one clip's or layer's media, or puts one picked item on top as a layer.
  * Add and Replace leave the playhead and the selection alone; a new layer is selected.
+ * A collage is n picked items placed in a layout's cells, the first one selected.
  */
-export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId: string): Promise<void>; addOverlay(): Promise<void>; busy: boolean } {
+export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId: string): Promise<void>; addOverlay(): Promise<void>; makeCollage(layout: CollageLayoutId): Promise<void>; busy: boolean } {
   const busy = useMediaBusy((s) => s.busy);
 
   const addMedia = () => withLock(async () => {
@@ -94,7 +111,8 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     if (project?.id !== projectId || !findItem(project, clipId)) return;
     // Still checked after import: the imported duration is the authoritative one.
     if (replaceClipMedia(project, clipId, media) === project) { useToast.getState().show(replaceRefusal(project, clipId, media)); return; }
-    apply((p) => replaceClipMedia(p, clipId, media));
+    // A collage cell that is in its place gets the new picture fitted to the cell, in the same undo step.
+    apply((p) => refitReplacedCell(p, replaceClipMedia(p, clipId, media), clipId));
     useEditorStore.getState().select(clipId);
   }, "Couldn't replace the clip.");
 
@@ -127,5 +145,47 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     select(clip.id);
   }, "Couldn't add that item.");
 
-  return { addMedia, replaceMedia, addOverlay, busy };
+  /**
+   * The Collage tool: n picked photos / videos become the layout's cells, as layers starting at the playhead (as it was when the
+   * layout was tapped; see `newLayerStart`). Refused with a toast before the picker (no layer room) or before anything is copied
+   * (too few, too many videos, a third video on screen); a failed import adds nothing. One undo step; the first cell is selected and
+   * the open panel is re-keyed onto it, so it stays open on the new collage.
+   */
+  const makeCollage = (layout: CollageLayoutId) => withLock(async () => {
+    const pressed = useEditorStore.getState();
+    const projectId = pressed.project?.id;
+    if (!pressed.project || !projectId || pressed.project.clips.length === 0) return;
+    const n = COLLAGE_CELLS[layout];
+    if (!n) return;   // a layout that does not exist: nothing to pick for
+    const free = LAYER_LIMITS.max - pressed.project.layers.length;
+    const tell = (why: CollageRefusal, picked: number) => useToast.getState().show(collageMessage(why, layout, picked, free));
+    if (free < n) { tell("limit", 0); return; }
+    const start = newLayerStart(pressed.project, pressed.playhead);
+    const assets = await pickMedia({ limit: n });
+    if (!assets || assets.length === 0) return;
+    const picked = assets.slice(0, n);
+    const before = useEditorStore.getState().project;
+    if (before?.id !== projectId) return;
+    // Refuse before importing, so nothing that cannot be used is copied into the project (placeholder clips for the check). A video
+    // with no duration is left to importMedia, which rejects it.
+    if (picked.every((a) => a.kind === "photo" || a.durationSec > 0)) {
+      const probes = picked.map((a) => (a.kind === "photo"
+        ? newPhotoClip({ id: newId(), sourceUri: a.uri, width: a.width, height: a.height })
+        : newVideoClip({ id: newId(), sourceUri: a.uri, width: a.width, height: a.height, sourceDuration: a.durationSec })));
+      const why = collageRefusal(before, probes, layout, start);
+      if (why) { tell(why, picked.length); return; }
+    } else if (picked.length < n) { tell("count", picked.length); return; }
+    const { clips } = await storage.importMedia(projectId, picked);
+    const { project, apply, select } = useEditorStore.getState();
+    if (project?.id !== projectId || project.clips.length === 0) return;   // the project was closed (or emptied) meanwhile: say nothing
+    if (clips.length < n) { useToast.getState().show(ADD_FAILED); return; }
+    // Still checked after import: the imported durations are the authoritative ones, and layers may have changed meanwhile.
+    const next = addCollage(project, clips, layout, start, newId());
+    if (next === project) { tell(collageRefusal(project, clips, layout, start) ?? "empty", clips.length); return; }
+    apply(() => next);
+    select(clips[0].id);
+    rekeyStrip();
+  }, ADD_FAILED);
+
+  return { addMedia, replaceMedia, addOverlay, makeCollage, busy };
 }

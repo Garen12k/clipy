@@ -46,3 +46,13 @@ test("multiple: false asks for a single item", async () => {
   expect(launch).toHaveBeenCalledWith(expect.objectContaining({ allowsMultipleSelection: false }));
   expect(launch.mock.calls[0][0].selectionLimit).toBeUndefined();
 });
+
+test("a limit asks for at most that many items, in the order they are tapped; without one nothing changes", async () => {
+  launch.mockResolvedValue({ canceled: true, assets: null });
+  await pickMedia({ limit: 3 });
+  expect(launch).toHaveBeenCalledWith(expect.objectContaining({ mediaTypes: ["images", "videos"], allowsMultipleSelection: true, selectionLimit: 3, orderedSelection: true, quality: 1 }));
+  launch.mockClear();
+  await pickMedia();
+  expect(launch.mock.calls[0][0].selectionLimit).toBe(20);
+  expect(launch.mock.calls[0][0].orderedSelection).toBeUndefined();
+});

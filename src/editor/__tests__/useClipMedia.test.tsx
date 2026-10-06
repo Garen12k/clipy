@@ -1,8 +1,10 @@
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn() }));
 jest.mock("@/src/projects", () => ({ storage: { importMedia: jest.fn() } }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
+jest.mock("@/src/lib/id", () => { let n = 0; return { newId: () => `id${++n}` }; });
 import { act, renderHook } from "@testing-library/react-native";
-import { LAYER_LIMITS, makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { addCollage } from "@/src/editor/model/collageOps";
+import { LAYER_LIMITS, makeClip, makeLayer, makePhotoClip, makeProject, type CollageLayoutId } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { storage } from "@/src/projects";
 import { pickMedia } from "@/src/projects/pickMedia";
@@ -204,4 +206,109 @@ describe("Replace on a layer", () => {
     expect(useToast.getState().message).toBe("Only two video layers can play at the same time.");
     expect(useEditorStore.getState().project!.layers[2].kind).toBe("photo");
   });
+});
+
+describe("makeCollage", () => {
+  const state = () => useEditorStore.getState();
+  const shot = (n: number) => ({ uri: `file:///p${n}.jpg`, kind: "photo", durationSec: 0, width: 1080, height: 1920 });
+  const film = (n: number, seconds = 3) => ({ uri: `file:///v${n}.mov`, kind: "video", durationSec: seconds, width: 1920, height: 1080 });
+  const run = async (layout: CollageLayoutId) => {
+    const { result } = await renderHook(() => useClipMedia());
+    await act(async () => { await result.current.makeCollage(layout); });
+  };
+
+  test("adds one layer per cell at the playhead captured at press time, in one undo step, and selects the first cell", async () => {
+    state().seek(1);
+    pick.mockImplementationOnce(async () => { state().seek(3); return [shot(1), shot(2)]; });
+    importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "n1" }), makePhotoClip({ id: "n2" })], failed: 0 });
+    await run("sideBySide");
+    expect(pick).toHaveBeenCalledWith({ limit: 2 });
+    expect(state().project!.layers.map((l) => [l.id, l.start, l.collage?.cell, l.collage?.layout])).toEqual([["n1", 1, 0, "sideBySide"], ["n2", 1, 1, "sideBySide"]]);
+    expect(new Set(state().project!.layers.map((l) => l.collage!.group)).size).toBe(1);
+    expect(state().project!.layers[0].collage!.group.length).toBeGreaterThan(0);
+    expect(state().past).toHaveLength(1);
+    expect(state().selectedClipId).toBe("n1");
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("refused before the picker opens when the layout needs more layers than are free", async () => {
+    state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: Array.from({ length: 6 }, (_, i) => ({ ...makePhotoClip({ id: `l${i}` }), start: 0 })) }));
+    await run("grid4");
+    expect(pick).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBe("Not enough room: this layout adds 4 layers and there is room for 2.");
+  });
+
+  test("refused before anything is copied: too few picked, three videos, a third video on screen", async () => {
+    pick.mockResolvedValueOnce([shot(1), shot(2)]);
+    await run("row3");
+    expect(useToast.getState().message).toBe("This layout needs 3 photos or videos — you picked 2.");
+    pick.mockResolvedValueOnce([film(1), film(2), film(3)]);
+    await run("row3");
+    expect(useToast.getState().message).toBe("A collage can hold 2 videos at most. Pick photos for the other cells.");
+    state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [makeLayer({ id: "o1", sourceDuration: 3 }), makeLayer({ id: "o2", sourceDuration: 3 })] }));
+    pick.mockResolvedValueOnce([film(1), shot(2)]);
+    await run("stacked");
+    expect(useToast.getState().message).toBe("Only two video layers can play at the same time.");
+    expect(importMedia).not.toHaveBeenCalled();
+    expect(state().past).toHaveLength(0);
+  });
+
+  test("a cancelled pick, a partly failed import and a project closed meanwhile add nothing", async () => {
+    pick.mockResolvedValueOnce(null);
+    await run("sideBySide");
+    expect(useToast.getState().message).toBeNull();
+    pick.mockResolvedValueOnce([shot(1), shot(2)]);
+    importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "n1" })], failed: 1 });
+    await run("sideBySide");
+    expect(useToast.getState().message).toBe("Couldn't add those items.");
+    expect(state().project!.layers).toHaveLength(0);
+    useToast.getState().clear();
+    pick.mockResolvedValueOnce([shot(1), shot(2)]);
+    importMedia.mockImplementationOnce(async () => { state().reset(); return { clips: [], failed: 2 }; });
+    await run("sideBySide");
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("more picked than the layout has cells: only the first ones are imported and used", async () => {
+    pick.mockResolvedValueOnce([shot(1), shot(2), shot(3)]);
+    importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "n1" }), makePhotoClip({ id: "n2" })], failed: 0 });
+    await run("stacked");
+    expect(importMedia).toHaveBeenCalledWith("p1", [shot(1), shot(2)]);
+    expect(state().project!.layers.map((l) => l.id)).toEqual(["n1", "n2"]);
+  });
+
+  test("a layout that does not exist: nothing happens, the picker does not open", async () => {
+    await run("nope" as CollageLayoutId);
+    expect(pick).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBeNull();
+    expect(state().past).toHaveLength(0);
+  });
+
+  test("the imported clips are checked again: a video found too short only after import adds nothing", async () => {
+    pick.mockResolvedValueOnce([{ ...film(1), durationSec: 0 }, shot(2)]);
+    importMedia.mockResolvedValueOnce({ clips: [makeClip({ id: "n1", sourceDuration: 0.1 }), makePhotoClip({ id: "n2" })], failed: 0 });
+    await run("sideBySide");
+    expect(useToast.getState().message).toBe("That video is too short.");
+    expect(state().project!.layers).toHaveLength(0);
+    expect(state().past).toHaveLength(0);
+  });
+
+  test("an empty project: nothing happens, the picker does not open", async () => {
+    state().setProject(makeProject());
+    await run("sideBySide");
+    expect(pick).not.toHaveBeenCalled();
+  });
+});
+
+test("Replace on a collage cell that is in its place fits the new picture to the cell, in the same undo step", async () => {
+  const base = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })] });
+  useEditorStore.getState().setProject(addCollage(base, [makePhotoClip({ id: "x1" }), makePhotoClip({ id: "x2" })], "sideBySide", 0, "g"));
+  pick.mockResolvedValueOnce([{ uri: "file:///wide.jpg", kind: "photo", durationSec: 0, width: 1920, height: 1080 }]);
+  importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "tmp", width: 1920, height: 1080 })], failed: 0 });
+  const { result } = await renderHook(() => useClipMedia());
+  await act(async () => { await result.current.replaceMedia("x1"); });
+  const s = useEditorStore.getState();
+  expect(s.project!.layers[0]).toMatchObject({ id: "x1", width: 1920, height: 1080, crop: { x: 0.420898, y: 0, w: 0.158203, h: 1 }, transform: { scale: 0.5, x: -0.25, y: 0 } });
+  expect(s.project!.layers[1].crop).toEqual({ x: 0.25, y: 0, w: 0.5, h: 1 });
+  expect(s.past).toHaveLength(1);
 });
