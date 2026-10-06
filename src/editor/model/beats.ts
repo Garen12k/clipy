@@ -2,7 +2,7 @@ import { nowIso } from "@/src/lib/clock";
 import { trackEnd } from "./audioSync";
 import { fitEffects, normaliseTransitions } from "./ops";
 import { clipDuration, sourceAfter, totalDuration } from "./timeline";
-import { clampBeatMarkers, isPhoto, type AudioTrack, type Clip, type Project } from "./types";
+import { BEAT_LIMITS, clampBeatMarkers, isPhoto, type AudioTrack, type Clip, type Project } from "./types";
 
 // Auto beat cut. Two ops, both called only from a tap (or a drag of the Fewer / More slider): `placeBeats` writes beat markers
 // from a music track's known beats, `cutToBeats` shortens main clips so their cuts land on markers. Markers are plain project
@@ -36,26 +36,61 @@ export function beatTimesFor(track: AudioTrack, sourceBeats: readonly number[], 
 }
 
 /**
- * "Find beats": the markers inside the track's stretch of the timeline are replaced by the track's beats; markers before its start
- * or after its end (tapped by hand, or found for another track) stay. The result goes through the loader's own rule
- * (`clampBeatMarkers`: sorted, spaced, at most 300). Same project for an unknown track, a project with no length, or no change.
+ * What a Find would write: `kept` = the markers outside the track's stretch of the timeline (ALL of them stay), `fresh` = the beats
+ * that go in beside them, `leftOut` = the beats that do not fit under `BEAT_LIMITS.max`. The limit is taken from the NEW beats only,
+ * from the end of the stretch: the beats are placed from its start, in order, while there is room. A beat closer than
+ * `BEAT_LIMITS.minGap` to a kept marker or to the beat before it is one marker with it (dropped, and not counted as left out).
+ * null for an unknown track or a project with no length.
  */
-export function placeBeats(p: Project, trackId: string, sourceBeats: readonly number[], every: number): Project {
+function beatPlan(p: Project, trackId: string, sourceBeats: readonly number[], every: number): { kept: number[]; fresh: number[]; leftOut: number } | null {
   const track = p.audioTracks.find((t) => t.id === trackId);
   const total = totalDuration(p);
-  if (!track || !(total > 0)) return p;
+  if (!track || !(total > 0)) return null;
   const from = track.start, to = Math.min(trackEnd(track), total);
   const kept = p.beatMarkers.filter((m) => m < from - 1e-9 || m > to + 1e-9);
-  const next = clampBeatMarkers([...kept, ...beatTimesFor(track, sourceBeats, every, total)]);
+  const gap = BEAT_LIMITS.minGap - 1e-9;
+  const spaced: number[] = [];
+  for (const t of beatTimesFor(track, sourceBeats, every, total).sort((a, b) => a - b)) {
+    if (spaced.length > 0 && t - spaced[spaced.length - 1] < gap) continue;
+    if (kept.some((m) => Math.abs(m - t) < gap)) continue;
+    spaced.push(t);
+  }
+  const fresh = spaced.slice(0, Math.max(0, BEAT_LIMITS.max - kept.length));
+  return { kept, fresh, leftOut: spaced.length - fresh.length };
+}
+
+/**
+ * "Find beats": the markers inside the track's stretch of the timeline are replaced by the track's beats; markers before its start
+ * or after its end (tapped by hand, or found for another track) ALL stay — when the project would hold more than `BEAT_LIMITS.max`
+ * markers, it is the track's later beats that are not placed (`beatsLeftOut` says how many). The result goes through the loader's
+ * own rule (`clampBeatMarkers`: sorted, spaced, at most 300). Same project for an unknown track, a project with no length, or no change.
+ */
+export function placeBeats(p: Project, trackId: string, sourceBeats: readonly number[], every: number): Project {
+  const plan = beatPlan(p, trackId, sourceBeats, every);
+  if (!plan) return p;
+  const next = clampBeatMarkers([...plan.kept, ...plan.fresh]);
   if (next.length === p.beatMarkers.length && next.every((m, i) => m === p.beatMarkers[i])) return p;
   return { ...p, beatMarkers: next, updatedAt: nowIso() };
 }
 
-/** The latest marker in [lo, hi] (each end widened by `BEAT_CUT.reach`), or null. `markers` ascending. */
+/**
+ * How many of the track's beats `placeBeats(p, trackId, sourceBeats, every)` does NOT place because the project is at its
+ * `BEAT_LIMITS.max` markers: 0 when they all fit (and for an unknown track or a project with no length). The same number before and
+ * after that Find, so the panel may ask either way.
+ */
+export function beatsLeftOut(p: Project, trackId: string, sourceBeats: readonly number[], every: number): number {
+  return beatPlan(p, trackId, sourceBeats, every)?.leftOut ?? 0;
+}
+
+/**
+ * The latest marker in [lo, hi], or null. `markers` ascending. Only the HIGH end is widened by `BEAT_CUT.reach` (a cut that close to
+ * a marker is on it); the low end is exact — a marker must leave the clip at least the minimum, or a photo cut to 0.499 s would be
+ * stretched back to 0.5 s by the loader. (The 1e-9 only forgives the binary dust of adding the clips before it up.)
+ */
 function latestMarker(markers: readonly number[], lo: number, hi: number): number | null {
   for (let i = markers.length - 1; i >= 0; i--) {
     if (markers[i] > hi + BEAT_CUT.reach) continue;
-    return markers[i] >= lo - BEAT_CUT.reach ? markers[i] : null;
+    return markers[i] >= lo - 1e-9 ? markers[i] : null;
   }
   return null;
 }
@@ -70,7 +105,8 @@ function shortened(c: Clip, length: number): Clip {
 /**
  * "Cut to beats": walks the main clips in order. Each clip that has a cut after it (every clip but the last; the last too with
  * `lastToo`) ends on the LATEST marker that keeps it at least `BEAT_CUT.minClip` long and no longer than it is now. A clip with no
- * such marker, or one already ending on a marker, is left exactly as it is. Clips are only ever shortened, from the end they play
+ * such marker (a marker that would leave it even a millisecond under the minimum is not one), or one already ending on a marker, is
+ * left exactly as it is. Clips are only ever shortened, from the end they play
  * last; none is removed, reordered or lengthened. The next clip then starts where this one really ends.
  * Like a trim by hand: transitions are re-capped (`normaliseTransitions`), effects stranded past the new end are dropped
  * (`fitEffects`), and nothing else moves — text, stickers, layers, sounds and the markers stay at their project times.
@@ -97,7 +133,11 @@ export function cutToBeats(p: Project, lastToo = false): Project {
   return { ...p, clips: fixed, effects: fitEffects(p.effects, total), updatedAt: nowIso() };
 }
 
-/** Why Cut to beats cannot do anything, or "ready". Checked in this order. */
+/**
+ * Whether Cut to beats is available (spec 5.5), checked in this order: it needs beat markers ("noMarkers"), and it needs at least two
+ * clips ("oneClip" — the last clip is never cut, so one clip has no cut to move). "ready" says the button is on, not that a tap will
+ * change anything (`cutToBeats` returns the same project when every cut is on a beat already).
+ */
 export type BeatCutState = "noMarkers" | "oneClip" | "ready";
 export function beatCutState(p: Project): BeatCutState {
   if (p.beatMarkers.length === 0) return "noMarkers";

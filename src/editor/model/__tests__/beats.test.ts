@@ -1,5 +1,6 @@
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-06T12:00:00.000Z" }));
-import { BEAT_CUT, BEAT_EVERY, DEFAULT_BEAT_DENSITY, beatCutState, beatTimesFor, beatTrack, cutToBeats, placeBeats } from "../beats";
+import { BEAT_CUT, BEAT_EVERY, DEFAULT_BEAT_DENSITY, beatCutState, beatTimesFor, beatTrack, beatsLeftOut, cutToBeats, placeBeats } from "../beats";
+import { migrateProject } from "../migrate";
 import { clipDuration, clipStartTimes, totalDuration } from "../timeline";
 import { BEAT_LIMITS, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, type Project } from "../types";
 
@@ -84,6 +85,72 @@ describe("placeBeats", () => {
   });
 });
 
+describe("placeBeats — the 300-marker limit never costs a marker outside the music's stretch", () => {
+  const r3 = (v: number) => Math.round(v * 1000) / 1000;
+  /** 203 beats, 143.94 bpm from 0.03 s: the longest bundled grid (The Field of Dreams). */
+  const grid = Array.from({ length: 203 }, (_, k) => r3(0.03 + k * 0.4169));
+  const song = (id: string, start: number) => makeAudioTrack({ id, sourceDuration: 84.64, start });
+  const valid = (markers: number[]) => {
+    expect(markers.length).toBeLessThanOrEqual(BEAT_LIMITS.max);
+    for (let i = 1; i < markers.length; i++) expect(markers[i] - markers[i - 1]).toBeGreaterThanOrEqual(BEAT_LIMITS.minGap - 1e-9);
+  };
+
+  test("150 markers tapped after the music + every beat of a 203-beat track: all 150 stay, the first 150 beats are placed, 53 are left out", () => {
+    const tapped = Array.from({ length: 150 }, (_, i) => r3(90 + i * 0.1));
+    const before = makeProject({ clips: [video("a", 120)], audioTracks: [song("m", 0)], beatMarkers: tapped });
+    const p = placeBeats(before, "m", grid, 1);
+    expect(p.beatMarkers.filter((m) => m >= 90)).toEqual(tapped);
+    expect(p.beatMarkers.filter((m) => m < 90)).toEqual(grid.slice(0, 150));
+    expect(p.beatMarkers).toHaveLength(BEAT_LIMITS.max);
+    valid(p.beatMarkers);
+    expect(beatsLeftOut(before, "m", grid, 1)).toBe(53);
+    expect(beatsLeftOut(p, "m", grid, 1)).toBe(53);                // the same answer before and after the Find
+    expect(placeBeats(p, "m", grid, 1)).toBe(p);                   // nothing changes: the same project
+    expect(migrateProject(JSON.parse(JSON.stringify(p))).beatMarkers).toEqual(p.beatMarkers);
+  });
+  test("two songs: the one found first keeps every beat, whichever comes first on the timeline; the second gets its first 97 and 106 are left out", () => {
+    const two = makeProject({ clips: [video("a", 180)], audioTracks: [song("a", 0), song("b", 90)] });
+    const late = grid.map((b) => r3(90 + b));
+    const bFirst = placeBeats(two, "b", grid, 1);
+    expect(bFirst.beatMarkers).toEqual(late);
+    const thenA = placeBeats(bFirst, "a", grid, 1);
+    expect(thenA.beatMarkers.filter((m) => m >= 90)).toEqual(late);
+    expect(thenA.beatMarkers.filter((m) => m < 90)).toEqual(grid.slice(0, 97));
+    expect(beatsLeftOut(bFirst, "a", grid, 1)).toBe(106);
+    valid(thenA.beatMarkers);
+    const aFirst = placeBeats(two, "a", grid, 1);
+    const thenB = placeBeats(aFirst, "b", grid, 1);
+    expect(thenB.beatMarkers.filter((m) => m < 90)).toEqual(grid);
+    expect(thenB.beatMarkers.filter((m) => m >= 90)).toEqual(late.slice(0, 97));
+    expect(beatsLeftOut(aFirst, "b", grid, 1)).toBe(106);
+    valid(thenB.beatMarkers);
+  });
+  test("the phase is stable under the limit: fewer beats are still beats of the every-beat grid, taken from the start in order", () => {
+    const tapped = Array.from({ length: 250 }, (_, i) => r3(90 + i * 0.1));
+    const before = makeProject({ clips: [video("a", 120)], audioTracks: [song("m", 0)], beatMarkers: tapped });
+    const p = placeBeats(before, "m", grid, 2);
+    expect(p.beatMarkers.filter((m) => m < 90)).toEqual(grid.filter((_, i) => i % 2 === 0).slice(0, 50));
+    expect(p.beatMarkers.filter((m) => m >= 90)).toEqual(tapped);
+    expect(beatsLeftOut(before, "m", grid, 2)).toBe(102 - 50);
+    expect(beatsLeftOut(before, "m", grid, 4)).toBe(51 - 50);
+  });
+  test("a marker just outside the stretch wins over a beat closer to it than the minimum gap (which is not counted as left out)", () => {
+    const before = makeProject({ clips: [video("a", 10)], audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 4, start: 2 })], beatMarkers: [1.98, 6.02] });
+    const p = placeBeats(before, "m", [0, 1, 2, 3.99], 1);         // the beats at 2 and 5.99 of the project sit 20 / 30 ms from the tapped ones
+    expect(p.beatMarkers).toEqual([1.98, 3, 4, 6.02]);
+    expect(beatsLeftOut(before, "m", [0, 1, 2, 3.99], 1)).toBe(0);
+  });
+  test("beatsLeftOut is 0 when everything fits, for an unknown track and for a project with no length; with no room nothing is placed and nothing lost", () => {
+    const p = makeProject({ clips: [video("a", 120)], audioTracks: [song("m", 0)] });
+    expect(beatsLeftOut(p, "m", grid, 1)).toBe(0);
+    expect(beatsLeftOut(p, "nope", grid, 1)).toBe(0);
+    expect(beatsLeftOut(makeProject({ audioTracks: [song("m", 0)] }), "m", grid, 1)).toBe(0);
+    const full = makeProject({ clips: [video("a", 120)], audioTracks: [song("m", 0)], beatMarkers: Array.from({ length: 300 }, (_, i) => r3(86 + i * 0.1)) });
+    expect(placeBeats(full, "m", grid, 1)).toBe(full);
+    expect(beatsLeftOut(full, "m", grid, 1)).toBe(203);
+  });
+});
+
 describe("cutToBeats — the worked vectors of the spec", () => {
   test("V1: a photo already on a beat stays; a video is shortened to the latest beat it reaches; the last clip is not touched", () => {
     const p = makeProject({ beatMarkers: [1, 2, 3, 4, 5, 6, 7, 8], clips: [photo("a", 3), video("b", 2.6), photo("c", 3), video("d", 4)] });
@@ -135,6 +202,72 @@ describe("cutToBeats — the worked vectors of the spec", () => {
     const p = makeProject({ beatMarkers: [2, 4, 6], clips: [photo("a", 2.5), photo("b", 2.5)] });
     expect(lengths(cutToBeats(p))).toEqual([2, 2.5]);
     expect(lengths(cutToBeats(p, true))).toEqual([2, 2]);
+  });
+});
+
+describe("cutToBeats — the minimum is exact, and what is stored reloads unchanged", () => {
+  const reloaded = (p: Project) => migrateProject(JSON.parse(JSON.stringify(p)));
+
+  test("a marker one millisecond under the minimum is not used (the loader would stretch that photo back to 0.5 s)", () => {
+    const p = makeProject({ beatMarkers: [0.499], clips: [photo("a", 3), photo("z", 3)] });
+    expect(cutToBeats(p)).toBe(p);
+    const two = makeProject({ beatMarkers: [0.499, 0.55], clips: [photo("a", 3), photo("z", 3)] });
+    expect(lengths(cutToBeats(two))).toEqual([0.55, 3]);
+    const later = makeProject({ beatMarkers: [1.299, 3.5], clips: [photo("a", 0.8), photo("b", 2), photo("z", 3)] });
+    expect(cutToBeats(later)).toBe(later);                        // 1.299 would leave b 0.499 s; 3.5 is past it
+  });
+  test("exactly the minimum is used, also where the clips before it do not add up cleanly in binary", () => {
+    const p = makeProject({ beatMarkers: [0.8], clips: [video("a", 0.1), video("b", 0.2), photo("c", 3), photo("z", 3)] });
+    const out = cutToBeats(p);                                    // 0.1 + 0.2 = 0.30000000000000004
+    expect(out.clips[2].trimEnd).toBe(0.5);
+    expect(reloaded(out)).toEqual(out);
+    expect(cutToBeats(out)).toBe(out);
+  });
+  test("no cut photo is ever under the loader's minimum: a cut project reloads unchanged", () => {
+    const markers = Array.from({ length: 60 }, (_, i) => Math.round((0.499 + i * 0.4993) * 1000) / 1000);
+    const p = makeProject({ beatMarkers: markers, clips: Array.from({ length: 12 }, (_, i) => photo(`p${i}`, 0.9 + (i % 5) * 0.37)) });
+    const out = cutToBeats(p, true);
+    expect(out).not.toBe(p);
+    for (const c of out.clips) expect(c.trimEnd).toBeGreaterThanOrEqual(0.5);
+    expect(reloaded(out)).toEqual(out);
+    expect(cutToBeats(out, true)).toBe(out);
+  });
+  test("a reversed clip with a speed change: the cut lands on the marker, the source head moved, the trims stay inside the source", () => {
+    const p = makeProject({ beatMarkers: [2], clips: [video("a", 8, { trimStart: 1, trimEnd: 7, reversed: true, speed: 2 }), photo("z", 3)] });
+    expect(lengths(p)).toEqual([3, 3]);
+    const out = cutToBeats(p);
+    const a = out.clips[0];
+    expect(clipDuration(a)).toBeCloseTo(2, 9);
+    expect(cuts(out)[0]).toBeCloseTo(2, 9);
+    expect(a.trimEnd).toBe(7);                                    // what it plays FIRST is kept
+    expect(a.trimStart).toBeCloseTo(3, 9);                        // 2 s at 2x = 4 source seconds before 7
+    expect(a.trimStart).toBeGreaterThanOrEqual(0);
+    expect(a.trimEnd).toBeLessThanOrEqual(a.sourceDuration);
+    expect(a).toMatchObject({ reversed: true, speed: 2 });
+    expect(reloaded(out)).toEqual(out);
+    expect(cutToBeats(out)).toBe(out);
+  });
+  test("a reversed clip on a speed curve: the same, and the curve keeps its steps", () => {
+    const steps = [{ from: 0, speed: 2 }, { from: 4, speed: 1 }];   // reversed: source 8 -> 4 at 1x (4 s), then 4 -> 0 at 2x (2 s)
+    const p = makeProject({ beatMarkers: [3, 5], clips: [video("a", 8, { reversed: true, speedCurve: { id: "montage", steps } }), photo("z", 3)] });
+    expect(lengths(p)).toEqual([6, 3]);
+    const out = cutToBeats(p);
+    const a = out.clips[0];
+    expect(clipDuration(a)).toBeCloseTo(5, 9);
+    expect(cuts(out)[0]).toBeCloseTo(5, 9);
+    expect(a.trimEnd).toBe(8);
+    expect(a.trimStart).toBeCloseTo(2, 9);                        // 4 s at 1x, then 1 s at 2x = source 4 -> 2
+    expect(a.trimStart).toBeGreaterThanOrEqual(0);
+    expect(a.speedCurve).toEqual({ id: "montage", steps });
+    expect(a.reversed).toBe(true);
+    expect(reloaded(out)).toEqual(out);
+    expect(cutToBeats(out)).toBe(out);
+  });
+  test("the worked vectors reload unchanged after the cut", () => {
+    const v1 = cutToBeats(makeProject({ beatMarkers: [1, 2, 3, 4, 5, 6, 7, 8], clips: [photo("a", 3), video("b", 2.6), photo("c", 3), video("d", 4)] }));
+    const v2 = cutToBeats(makeProject({ beatMarkers: [0.8, 1.7, 4.4], clips: [video("a", 10, { speed: 2 }), photo("z", 3)] }));
+    const v4 = cutToBeats(makeProject({ beatMarkers: [4], clips: [video("a", 8, { trimStart: 1, trimEnd: 7, reversed: true }), photo("z", 3)] }));
+    for (const out of [v1, v2, v4]) expect(reloaded(out)).toEqual(out);
   });
 });
 
@@ -204,10 +337,21 @@ describe("cutToBeats — the promises", () => {
   });
 });
 
-test("beatCutState: no markers first, then a single clip, else ready", () => {
-  expect(beatCutState(makeProject({ clips: [photo("a", 3), photo("b", 3)] }))).toBe("noMarkers");
-  expect(beatCutState(makeProject({ beatMarkers: [1], clips: [photo("a", 3)] }))).toBe("oneClip");
-  expect(beatCutState(makeProject({ beatMarkers: [1], clips: [photo("a", 3), photo("b", 3)] }))).toBe("ready");
+describe("beatCutState — when Cut to beats is available (spec 5.5): it needs beat markers, and at least two clips", () => {
+  test("no markers: refused, whatever the clips (checked first)", () => {
+    expect(beatCutState(makeProject({ clips: [photo("a", 3), photo("b", 3)] }))).toBe("noMarkers");
+    expect(beatCutState(makeProject({ clips: [photo("a", 3)] }))).toBe("noMarkers");
+    expect(beatCutState(makeProject())).toBe("noMarkers");
+  });
+  test("markers but fewer than two clips: refused", () => {
+    expect(beatCutState(makeProject({ beatMarkers: [1], clips: [photo("a", 3)] }))).toBe("oneClip");
+    expect(beatCutState(makeProject({ beatMarkers: [1] }))).toBe("oneClip");
+  });
+  test("markers and two clips: ready — also when the tap would find every cut on a beat already", () => {
+    expect(beatCutState(makeProject({ beatMarkers: [1], clips: [photo("a", 3), photo("b", 3)] }))).toBe("ready");
+    expect(beatCutState(makeProject({ beatMarkers: [3], clips: [photo("a", 3), photo("b", 3)] }))).toBe("ready");
+    expect(beatCutState(makeProject({ beatMarkers: [1], clips: [photo("a", 3), video("b", 3), photo("c", 3)] }))).toBe("ready");
+  });
 });
 
 test("beatTrack: the selected music track, else the music that starts first; never a voice-over or a sound effect", () => {

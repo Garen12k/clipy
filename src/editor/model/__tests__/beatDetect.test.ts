@@ -58,9 +58,52 @@ test("the beats are a steady grid inside the file: ascending, 3 decimals, first 
   });
 });
 
-test("the sample rate does not matter: the same clicks at 22 050 Hz give the same tempo", () => {
+test("another sample rate: 110 bpm clicks at 22 050 Hz are read as 110 bpm, first beat within 15 ms (one tempo at one other rate — not every tempo: see the tie below)", () => {
   const a = detectBeats(clicks(110, 0.25, 20, 22050), 22050)!;
   expect(Math.abs(a.bpm - 110)).toBeLessThan(0.25);
+  expect(Math.abs(a.first - 0.25)).toBeLessThan(0.015);
+});
+
+// PINNED, not promised. The sample rate CAN decide the octave. The coarse tempo is searched at WHOLE envelope lags only, and bare
+// clicks give a very narrow autocorrelation peak. 143.94 bpm is 41.78 frames at 11 025 Hz (hop 110): lag 42 is 0.22 off, its double
+// 84 is 0.44 off, so the tempo itself wins. At 22 050 Hz (hop 221) it is 41.59 frames: lag 42 is 0.41 off but the double, 83, only
+// 0.18 — the half tempo's lag fits so much better that it beats the weight towards 120 bpm (0.97 against 0.76).
+// Either answer is acceptable to the app: a half-tempo grid is still ON the beat (every second click), and Fewer / More moves
+// between the octaves. What must hold at any rate is asserted first; the octave each rate picks today is pinned after it, so a
+// change of the detector shows up here.
+test("near an octave tie the sample rate decides: the same 143.94 bpm clicks read 143.94 at 11 025 Hz and 71.97 at 22 050 Hz — both on the beat", () => {
+  const low = detectBeats(clicks(143.94, 0.03, 24, 11025), 11025)!;
+  const high = detectBeats(clicks(143.94, 0.03, 24, 22050), 22050)!;
+  const step = 60 / 143.94;
+  for (const a of [low, high]) {
+    const octave = a.bpm / 143.94;                                // 1 or 1/2, never anything else
+    expect(Math.min(Math.abs(octave - 1), Math.abs(octave - 0.5))).toBeLessThan(0.002);
+    for (const b of a.beats) {                                    // every beat found is on a click
+      const off = (((b - 0.03) % step) + step) % step;
+      expect(Math.min(off, step - off)).toBeLessThan(0.015);
+    }
+    expect(a.confidence).toBeGreaterThan(3);
+  }
+  expect(low.bpm).toBeCloseTo(143.94, 1);
+  expect(high.bpm).toBeCloseTo(71.97, 1);
+});
+
+// PINNED, not promised. A beat at exactly t = 0 is not found: the envelope's frame 0 is forced to 0 (there is no frame before it
+// to rise from), so the grid through 0 collects one onset less than the same grid one beat on, and the "first" beat is reported
+// one whole beat late. The grid is still on the beat; a track only loses its very first marker. No bundled track starts on 0
+// (the earliest shipped first beat is 0.03 s). Where a tie hides it (120 and 150 bpm at 22 050 Hz read 0) is not pinned.
+test("a beat at exactly t = 0 is found one beat late: the first beat reported is the SECOND click", () => {
+  const at120 = detectBeats(clicks(120, 0, 24), RATE)!;
+  expect(Math.abs(at120.bpm - 120)).toBeLessThan(0.25);
+  expect(Math.abs(at120.first - 0.5)).toBeLessThan(0.015);
+  expect(at120.beats[0]).toBe(at120.first);
+  for (const rate of [11025, 22050]) {
+    const at90 = detectBeats(clicks(90, 0, 24, rate), rate)!;
+    expect(Math.abs(at90.bpm - 90)).toBeLessThan(0.25);
+    expect(Math.abs(at90.first - 60 / 90)).toBeLessThan(0.015);
+  }
+  // The same clicks 50 ms later are found where they are.
+  expect(Math.abs(detectBeats(clicks(120, 0.05, 24), RATE)!.first - 0.05)).toBeLessThan(0.015);
 });
 
 test("no pulse, no answer worth using: noise has a confidence near 1; silence and a file under 4 s give null", () => {

@@ -15,8 +15,13 @@ import { detectBeats } from "../src/editor/model/beatDetect.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MUSIC = join(ROOT, "assets", "music");
-/** A track's beats are only shipped when all three hold. */
-const ACCEPT = { minConfidence: 1.5, halvesWithin: 0.005, countWithin: 1.5, durationWithin: 0.3 };
+/**
+ * A track's beats are only shipped when all three hold: the decoded length is within `durationWithin` seconds of the manifest's (else
+ * the script fails), the confidence is at least `minConfidence`, and each half of the track alone gives a tempo within `halvesWithin`
+ * of the whole's (a share: 0.1 %; the seven shipped tracks are within 0.03 %, The Frigid Seas is 21 % out).
+ * The number of beats is not checked: it is ceil((length - first) / step) by construction, as are first < step and last < length.
+ */
+const ACCEPT = { minConfidence: 1.5, halvesWithin: 0.001, durationWithin: 0.3 };
 
 const decoderDir = process.argv[2];
 const outFile = resolve(process.argv[3] ?? join(MUSIC, "beats.json"));
@@ -53,8 +58,7 @@ for (const t of manifest.tracks) {
   const half = Math.floor(mono.length / 2);
   const a = detectBeats(mono.subarray(0, half), sampleRate), b = detectBeats(mono.subarray(half), sampleRate);
   const steady = whole && a && b && Math.abs(a.bpm - whole.bpm) <= whole.bpm * ACCEPT.halvesWithin && Math.abs(b.bpm - whole.bpm) <= whole.bpm * ACCEPT.halvesWithin;
-  const counted = whole && Math.abs(whole.beats.length - ((seconds - whole.first) * whole.bpm) / 60) <= ACCEPT.countWithin;
-  const ok = !!whole && whole.confidence >= ACCEPT.minConfidence && !!steady && !!counted;
+  const ok = !!whole && whole.confidence >= ACCEPT.minConfidence && !!steady;
   tracks[t.id] = ok ? { bpm: whole.bpm, first: whole.first, confidence: whole.confidence, beats: whole.beats } : null;
   console.log(`${t.id.padEnd(20)} ${seconds.toFixed(2).padStart(6)} s  ${ok ? "OK  " : "NONE"}  bpm ${String(whole?.bpm ?? "-").padStart(7)}  halves ${a?.bpm ?? "-"} / ${b?.bpm ?? "-"}  first ${whole?.first ?? "-"}  beats ${whole?.beats.length ?? 0}  confidence ${whole?.confidence ?? "-"}`);
 }

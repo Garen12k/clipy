@@ -68,7 +68,8 @@ export function markerStep(beats: readonly number[], every: number): number {
  * then keeps the clips' own lengths and has no markers). In order:
  * 1. every photo gets `hold` marker steps, every longer video is cut to `videoHold` steps (each plus `QUICK.slack`);
  * 2. the music is laid under the video from its FIRST BEAT, so the video starts on a beat;
- * 3. markers are placed from its beats (`placeBeats`) and every clip, the last one too, is cut to them (`cutToBeats`);
+ * 3. markers are placed from its beats (`placeBeats`) and every clip, the last one too, is cut to them (`cutToBeats`); a clip the
+ *    cut did not change (it plays after the music's last beat) gives its slack back, so it has exactly its target length;
  * 4. the music is trimmed to the video's end with a fade-out; markers past the end are dropped;
  * 5. the transition on every cut, the filter on every clip, a Motion on every photo in turn, the title over the first seconds.
  * A project without clips is returned as it is.
@@ -78,16 +79,33 @@ export function buildQuickEdit(a: { recipe: QuickRecipe; project: Project; music
   if (project.clips.length === 0) return project;
   let p = project;
   const step = markerStep(beats, recipe.every);
+  /** The clips that were given slack: id -> the source end of the target length WITHOUT it. */
+  const exact = new Map<string, number>();
   if (step > 0) for (const c of project.clips) {
-    if (isPhoto(c)) p = trimClip(p, c.id, 0, r3(recipe.hold * step + QUICK.slack));
-    else {
-      const most = recipe.videoHold * step + QUICK.slack;
-      if (clipDuration(c) > most) p = trimClip(p, c.id, c.trimStart, sourceAfter(c, c.trimStart, most));
+    if (isPhoto(c)) {
+      p = trimClip(p, c.id, 0, r3(recipe.hold * step + QUICK.slack));
+      exact.set(c.id, r3(recipe.hold * step));
+    } else {
+      const most = recipe.videoHold * step;
+      if (clipDuration(c) > most + QUICK.slack) {
+        p = trimClip(p, c.id, c.trimStart, sourceAfter(c, c.trimStart, most + QUICK.slack));
+        exact.set(c.id, sourceAfter(c, c.trimStart, most));
+      }
     }
   }
   const first = beats.length > 0 ? Math.max(0, beats[0]) : 0;
   p = addAudioTrack(p, { ...music, start: 0, trimStart: first, trimEnd: music.sourceDuration, fadeIn: 0, fadeOut: 0 });
+  const slacked = p.clips;
   p = cutToBeats(placeBeats(p, music.id, beats, recipe.every), true);
+  // The slack was only there for the cut: the clips after the last one a beat reached still carry it, so each goes back to its
+  // exact target length. Only that trailing run — nothing that was cut onto a beat is touched, and no cut just made can move.
+  const same = (i: number) => p.clips[i].trimStart === slacked[i].trimStart && p.clips[i].trimEnd === slacked[i].trimEnd;
+  let tail = slacked.length;
+  while (tail > 0 && same(tail - 1)) tail--;
+  for (const before of slacked.slice(tail)) {
+    const end = exact.get(before.id);
+    if (end !== undefined) p = trimClip(p, before.id, before.trimStart, end);
+  }
   const total = totalDuration(p);
   p = updateAudioTrackById(p, music.id, { trimEnd: Math.min(music.sourceDuration, first + total), fadeOut: QUICK.fadeOut });
   if (p.beatMarkers.some((m) => m > total + 1e-9)) p = { ...p, beatMarkers: p.beatMarkers.filter((m) => m <= total + 1e-9) };

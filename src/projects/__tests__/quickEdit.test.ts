@@ -124,13 +124,49 @@ describe("buildQuickEdit — edge cases", () => {
     expect(lengths(d)).toEqual([3, 2, 0.4]);                      // c is shorter than the minimum: left as it is
     for (const c of d.clips) expect("motion" in c).toBe(false);
   });
-  test("more clips than music: the clip the music ends under is cut on its last beat; clips after it keep their target length; the music plays to its own end", () => {
+  test("more clips than music: the clip the music ends under is cut on its last beat; clips after it have exactly their target length (no slack left); the music plays to its own end", () => {
     const short = makeAudioTrack({ id: "song", sourceDuration: 5.3, title: "Song" });
     const d = draftOf(Array.from({ length: 5 }, (_, i) => photo(`p${i}`)), PLAIN, BEATS.filter((b) => b < 5.3), short);
     // The last beat is 5.0 s into the video: the clip it falls in is cut there, and the clips after it have no marker in reach.
-    expect(lengths(d)).toEqual([2, 2, 1, 2.05, 2.05]);
+    expect(lengths(d)).toEqual([2, 2, 1, 2, 2]);
+    expect(d.clips.map((c) => c.trimEnd)).toEqual([2, 2, 1, 2, 2]);
     expect(d.audioTracks[0]).toMatchObject({ trimStart: 0.25, trimEnd: 5.3 });
     expect(Math.max(...d.beatMarkers)).toBe(5);
+    expect(migrateProject(JSON.parse(JSON.stringify(d)))).toEqual(d);
+  });
+  test("past the music a long video has exactly its most steps, a short video its own length, and a clip cut onto a beat is not touched", () => {
+    const short = makeAudioTrack({ id: "song", sourceDuration: 5.3, title: "Song" });
+    const d = draftOf([photo("a"), video("b", 10), video("c", 10), video("d", 1.3), photo("e")], PLAIN, BEATS.filter((b) => b < 5.3), short);
+    expect(lengths(d)).toEqual([2, 3, 3, 1.3, 2]);                // a, b on beats (2, 5); c: 6 steps, no slack; d: its own length; e: 4 steps
+    expect(d.clips[1]).toMatchObject({ trimStart: 0, trimEnd: 3 });
+    expect(d.clips[2].trimEnd).toBeCloseTo(3, 9);
+    expect(d.clips[3].trimEnd).toBe(1.3);
+    expect(d.clips[4].trimEnd).toBe(2);
+    for (const t of clipStartTimes(d).slice(1, 3)) expect(onBeat(d, t)).toBe(true);
+    expect(migrateProject(JSON.parse(JSON.stringify(d)))).toEqual(d);
+  });
+  test("Cinematic (a 32-second song) with thirty photos: the clips under the music end on markers, the photos after it are exactly 3 s, and it reloads unchanged", () => {
+    const recipe = QUICK_RECIPES.cinematic;
+    const found = BUNDLED_BEATS[recipe.trackId]!;
+    const song = (manifest as { tracks: { id: string; title: string; durationSec: number }[] }).tracks.find((t) => t.id === recipe.trackId)!;
+    const d = draftOf(Array.from({ length: 30 }, (_, i) => photo(`p${i}`)), recipe, found.beats, makeAudioTrack({ id: "song", sourceDuration: song.durationSec, title: song.title }));
+    const target = Math.round(recipe.hold * markerStep(found.beats, recipe.every) * 1000) / 1000;
+    expect(target).toBe(3);
+    const lastMarker = Math.max(...d.beatMarkers);
+    expect(lastMarker).toBe(32);
+    const starts = clipStartTimes(d);
+    let under = 0, past = 0;
+    d.clips.forEach((c, i) => {
+      const end = starts[i] + clipDuration(c);
+      if (end <= lastMarker + BEAT_CUT.reach) { under++; expect(onBeat(d, end)).toBe(true); }
+      else { past++; expect(c.trimEnd).toBe(target); }             // exactly: not 3.05
+    });
+    expect([under, past]).toEqual([11, 19]);
+    expect(lengths(d)).toEqual([...Array(10).fill(3), 2, ...Array(19).fill(3)]);
+    expect(totalDuration(d)).toBeCloseTo(89, 6);
+    expect(d.audioTracks[0]).toMatchObject({ trimStart: found.first, trimEnd: song.durationSec, fadeOut: 1 });
+    expect(d.clips.map((c) => c.id)).toEqual(Array.from({ length: 30 }, (_, i) => `p${i}`));
+    expect(migrateProject(JSON.parse(JSON.stringify(d)))).toEqual(d);
   });
   test("no beats known: the clips keep their own lengths, there are no markers, the music starts at its start — the look is still applied", () => {
     const d = draftOf([photo("a"), video("b", 4)], PLAIN, []);
