@@ -29,7 +29,6 @@ export function useProjects() {
   }, []);
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
 
-  /** A new project from media that is already picked, with the ratio the creation picker chose. Null (and a toast) when it could not be made. */
   /** "Project N", N one above the highest in use. */
   function nextName(): string {
     const used = projects
@@ -40,6 +39,7 @@ export function useProjects() {
   }
   const partly = (picked: number, failed: number) => { if (failed > 0) useToast.getState().show(`${picked - failed} of ${picked} clips added; ${failed} couldn't be read`); };
 
+  /** A new project from media that is already picked, with the ratio the creation picker chose. Null (and a toast) when it could not be made. */
   async function create(assets: PickedAsset[], aspectRatio: AspectRatio): Promise<string | null> {
     if (assets.length === 0) return null;
     const name = nextName();
@@ -55,7 +55,11 @@ export function useProjects() {
     await reload();
     return project.id;
   }
-  /** A Quick edit draft from media that is already picked, in the style chosen. Null (and a toast) when it could not be made — no project is left behind then. */
+  /**
+   * A Quick edit draft from media that is already picked, in the style chosen. Null (and a toast) when it could not be made — no
+   * project is left behind then. Once the draft exists its id is returned even if the list cannot be re-read: the owner lands in
+   * the draft, and the list is read again when the home screen is next in front.
+   */
   async function createQuick(assets: PickedAsset[], recipeId: QuickRecipeId): Promise<string | null> {
     if (assets.length === 0) return null;
     const deps: QuickEditDeps = { storage, assetUri, newId };
@@ -67,7 +71,7 @@ export function useProjects() {
       return null;
     }
     partly(assets.length, made.failed);
-    await reload();
+    try { await reload(); } catch (e) { console.warn("reload after quick edit failed", e); }
     return made.id;
   }
   async function rename(id: string, name: string) {

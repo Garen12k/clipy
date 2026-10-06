@@ -50,7 +50,26 @@ test("nothing could be imported: it throws and no project is left behind", async
   const { deps, projects } = setup();
   await expect(makeQuickEdit(deps, "Project 1", [photo("file:///picked/gone.jpg")], "travel")).rejects.toThrow(/Couldn't import any/);
   expect(await projects()).toEqual([]);
-  expect(deps.assetUri).not.toHaveBeenCalled();
+});
+
+test("the music is resolved first: when it cannot be had (a failed download) nothing is created at all", async () => {
+  const { fs, deps, storage, projects } = setup();
+  fs.files.set("file:///picked/a.jpg", "A");
+  const create = jest.fn(storage.createProject);
+  deps.assetUri.mockRejectedValueOnce(new Error("download failed"));
+  await expect(makeQuickEdit({ ...deps, storage: { ...storage, createProject: create } }, "Project 1", [photo("file:///picked/a.jpg")], "travel")).rejects.toThrow("download failed");
+  expect(create).not.toHaveBeenCalled();
+  expect(await projects()).toEqual([]);
+});
+
+test("the order: the music's uri, then the project, then the music copied into it", async () => {
+  const { fs, deps, storage } = setup();
+  fs.files.set("file:///picked/a.jpg", "A");
+  const order: string[] = [];
+  deps.assetUri.mockImplementationOnce(async () => { order.push("assetUri"); return "file:///bundled/song.mp3"; });
+  const spied = { ...storage, createProject: jest.fn((...a: Parameters<typeof storage.createProject>) => { order.push("createProject"); return storage.createProject(...a); }), importAudio: jest.fn((...a: Parameters<typeof storage.importAudio>) => { order.push("importAudio"); return storage.importAudio(...a); }) };
+  await makeQuickEdit({ ...deps, storage: spied }, "Project 1", [photo("file:///picked/a.jpg")], "travel");
+  expect(order).toEqual(["assetUri", "createProject", "importAudio"]);
 });
 
 test("the music cannot be copied: the half-made project is deleted and the error passed on", async () => {

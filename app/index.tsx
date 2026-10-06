@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useRef, useState } from "react";
 import { Alert, FlatList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AspectRatio } from "@/src/editor/model/types";
@@ -46,6 +46,14 @@ export default function ProjectsScreen() {
     } finally { picking.current = false; }
   }
 
+  // Making a project takes seconds (its media is copied), and the screen under it must not start anything else meanwhile: a second
+  // editor pushed on top of the first would have the one editor store replaced under it. So while `busy`, the header actions and
+  // the list take no touches, and the editor is opened only if this screen is still the one in front when the work is done.
+  const [busy, setBusy] = useState(false);
+  const focused = useRef(true);
+  useFocusEffect(useCallback(() => { focused.current = true; return () => { focused.current = false; }; }, []));
+  const openEditor = (id: string | null) => { if (id && focused.current) router.push(`/editor/${id}`); };
+
   // New clip: the library, then the aspect-ratio picker, then the project. Nothing exists until Create is pressed.
   // The button is held back only by the two refs — the library is up, or a project is being made (its media copied) — never by
   // `pending`: if iOS drops the sheet's presentation, `pending` stays set with nothing on screen to clear it, and the button must
@@ -58,6 +66,7 @@ export default function ProjectsScreen() {
     starting.current = true;
     try {
       setPending(null);
+      setQuickOpen(false); // the other sheet's flag: it may be set with nothing on screen
       const assets = await pickMedia();
       if (!assets || assets.length === 0) return;
       await new Promise((r) => setTimeout(r, AFTER_PICKER_MS));
@@ -69,21 +78,24 @@ export default function ProjectsScreen() {
     creating.current = true;
     const assets = pending;
     setPending(null);
-    try {
-      const id = await create(assets, aspectRatio);
-      if (id) router.push(`/editor/${id}`);
-    } finally { creating.current = false; }
+    setBusy(true);
+    try { openEditor(await create(assets, aspectRatio)); }
+    finally { creating.current = false; setBusy(false); }
   }
 
   // Quick edit: the style sheet, then the library, then the finished draft. Nothing exists until media is picked, and a draft that
   // cannot be finished is removed again (makeQuickEdit). It shares the two refs with New clip, so the two can never run together.
+  // Like New clip, the button is never held back by its sheet's flag: if iOS drops the sheet's presentation, `quickOpen` stays true
+  // with nothing on screen, so a press closes it first and opens it on the next tick — presented afresh.
   const [quickOpen, setQuickOpen] = useState(false);
   /** A draft is being made (media copied, the edit built): the buttons give way to a spinner. */
   const [making, setMaking] = useState(false);
-  function onQuick() {
+  async function onQuick() {
     if (starting.current || creating.current) return;
     setPending(null);
-    setQuickOpen(true);
+    setQuickOpen(false);
+    await new Promise((r) => setTimeout(r, 0));
+    if (!starting.current && !creating.current) setQuickOpen(true);
   }
   async function onQuickChoose(recipeId: QuickRecipeId) {
     if (starting.current || creating.current) return;
@@ -98,21 +110,23 @@ export default function ProjectsScreen() {
     if (!assets || assets.length === 0) return;
     creating.current = true;
     setMaking(true);
-    try {
-      const id = await createQuick(assets, recipeId);
-      if (id) router.push(`/editor/${id}`);
-    } finally { creating.current = false; setMaking(false); }
+    setBusy(true);
+    try { openEditor(await createQuick(assets, recipeId)); }
+    finally { creating.current = false; setMaking(false); setBusy(false); }
   }
 
+  const touch = busy ? "none" : "auto";
   return (
     <Screen>
       <View testID="home-header" style={{ height: theme.size.row, paddingLeft: theme.space.gutter, paddingRight: theme.space.sm, marginBottom: theme.space.sm, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Title size={theme.type.screen} accessibilityRole="header">Your voyages</Title>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View testID="home-header-actions" pointerEvents={touch} style={{ flexDirection: "row", alignItems: "center" }}>
           <IconButton name="paper-plane-outline" accessibilityLabel="Post a video" onPress={onPostVideo} />
           <IconButton name="person-circle-outline" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
         </View>
       </View>
+      {/* Always the same wrapper (only its pointerEvents change), so the list below never remounts and never eases in twice. */}
+      <View testID="home-list" pointerEvents={touch} style={{ flex: 1 }}>
       {loading ? <Spinner style={{ marginTop: theme.space.xxl }} /> : projects.length === 0 ? (
         <EmptyState emoji="🏝️" title="No clips yet" hint="Pick some photos or videos from your library and start your first edit." />
       ) : (
@@ -124,11 +138,13 @@ export default function ProjectsScreen() {
             renderItem={({ item }) => <ProjectCard summary={item} onPress={() => (item.broken ? setActionsFor(item) : router.push(`/editor/${item.id}`))} onLongPress={() => { haptic("light"); setActionsFor(item); }} />} />
         </EnterView>
       )}
+      </View>
       <View testID="home-actions" style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + theme.space.lg, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: theme.space.md }}>
         {making ? (
           // The pill gives the spinner and its words a surface: the cards scroll underneath.
-          <View testID="home-making" style={{ height: theme.size.control, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
-            <Spinner label="Making your quick edit" />
+          // One accessible element: VoiceOver reads the words once, not once for the spinner and once for the text.
+          <View testID="home-making" accessible accessibilityLabel="Making your quick edit" style={{ height: theme.size.control, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
+            <Spinner />
             <Body>Making your quick edit</Body>
           </View>
         ) : (

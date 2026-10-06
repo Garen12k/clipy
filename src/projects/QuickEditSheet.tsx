@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { View } from "react-native";
 import { BUNDLED_TRACKS } from "@/src/editor/music";
 import { theme } from "@/src/theme/theme";
@@ -21,7 +21,13 @@ type Props = {
 /** Quick edit, step one: pick a style. Travel is preselected every time the sheet opens. Nothing exists until media is picked. */
 export function QuickEditSheet({ visible, onClose, onChoose }: Props) {
   const [id, setId] = useState<QuickRecipeId>(QUICK_RECIPE_IDS[0]);
-  useEffect(() => { if (visible) setId(QUICK_RECIPE_IDS[0]); }, [visible]);
+  // Reset as the sheet opens, during that very render (React re-renders before anything is drawn): an effect would show the style
+  // picked last time for one frame. Not reset on closing, so the selection does not jump while the sheet fades out.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setId(QUICK_RECIPE_IDS[0]);
+  }
   return (
     <Sheet visible={visible} onClose={onClose} title="Quick edit">
       <View testID="quick-styles" style={{ gap: theme.space.sm }}>
