@@ -1,8 +1,9 @@
 import type { AnimComboId, AnimInId, AnimLoopId, BlendId, EffectId, FilterId, ShapeId, SpeedCurveId, TextOverlay, TransitionType } from "./model/types";
+import { filterPreviewOf } from "./model/filterRecipes";
 import type { IoniconName } from "./toolGroups";
 
 export interface FilterPreview { tint: string; tintOpacity: number; saturation: number; brightness: number }
-/** Preview approximations only. The real Core Image recipes live in modules/clipy-video/ios/Effects.swift, keyed by the same ids. */
+/** Preview approximations only. The first twenty have their Core Image recipes in modules/clipy-video/ios/Effects.swift; the twelve of 2026-10-06 are rows of model/filterRecipes.ts, and their preview is computed from the row. */
 export const FILTERS: Record<FilterId, { label: string; preview: FilterPreview }> = {
   none:    { label: "None",    preview: { tint: "#000000", tintOpacity: 0,    saturation: 1,   brightness: 0 } },
   warm:    { label: "Warm",    preview: { tint: "#FF9A3C", tintOpacity: 0.14, saturation: 1.1, brightness: 0.02 } },
@@ -24,6 +25,18 @@ export const FILTERS: Record<FilterId, { label: string; preview: FilterPreview }
   sepia:   { label: "Sepia",   preview: { tint: "#C8A05A", tintOpacity: 0.3,  saturation: 0,   brightness: 0 } },
   crisp:   { label: "Crisp",   preview: { tint: "#000000", tintOpacity: 0,    saturation: 1.05, brightness: 0 } },
   dream:   { label: "Dream",   preview: { tint: "#FFFFFF", tintOpacity: 0.08, saturation: 1.1, brightness: 0.03 } },
+  kodak:      { label: "Kodak",  preview: filterPreviewOf("kodak") },
+  fuji:       { label: "Fuji",   preview: filterPreviewOf("fuji") },
+  matte:      { label: "Matte",  preview: filterPreviewOf("matte") },
+  bleach:     { label: "Bleach", preview: filterPreviewOf("bleach") },
+  dusk:       { label: "Dusk",   preview: filterPreviewOf("dusk") },
+  moody:      { label: "Moody",  preview: filterPreviewOf("moody") },
+  tealOrange: { label: "Cinema", preview: filterPreviewOf("tealOrange") },
+  blush:      { label: "Blush",  preview: filterPreviewOf("blush") },
+  grit:       { label: "Grit",   preview: filterPreviewOf("grit") },
+  silver:     { label: "Silver", preview: filterPreviewOf("silver") },
+  indigo:     { label: "Indigo", preview: filterPreviewOf("indigo") },
+  drama:      { label: "Drama",  preview: filterPreviewOf("drama") },
 };
 
 export const TRANSITIONS: Record<TransitionType, { label: string }> = {

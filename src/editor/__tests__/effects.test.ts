@@ -17,7 +17,7 @@ const swiftNumber = (name: string): number => {
 };
 
 test("registry covers every id with sane preview params", () => {
-  expect(FILTER_IDS).toHaveLength(20);
+  expect(FILTER_IDS).toHaveLength(32);
   for (const id of FILTER_IDS) {
     const f = FILTERS[id];
     expect(f.label.length).toBeGreaterThan(0);
@@ -81,8 +81,11 @@ test("animation registries cover every id with the specified labels", () => {
   expect(ANIM_LOOP_IDS.map((id) => ANIM_LOOP[id].label)).toEqual(["Wiggle", "Pulse", "Spin", "Float", "Blink", "Shake"]);
 });
 
-test("every non-none filter id has a recipe case in Effects.swift filterChain", () => {
-  for (const id of FILTER_IDS) if (id !== "none") expect(swift).toContain(`case "${id}":`);
+test("every filter has its export recipe in exactly one place: the nineteen old ones a case in Effects.filterChain, the twelve of 2026-10-06 a row in FilterRecipes.swift", () => {
+  const recipes = readFileSync(join(__dirname, "../../../modules/clipy-video/ios/FilterRecipes.swift"), "utf8");
+  for (const id of FILTER_IDS.slice(1, 20)) { expect(swift).toContain(`case "${id}":`); expect(recipes).not.toContain(`"${id}": FilterRecipe(`); }
+  for (const id of FILTER_IDS.slice(20)) { expect(recipes).toContain(`"${id}": FilterRecipe(`); expect(swift).not.toContain(`case "${id}":`); }
+  expect(FILTER_IDS.slice(20)).toHaveLength(12);
 });
 
 test("every transition type except none / dissolve has its own case inside ClipyCompositor.blend", () => {

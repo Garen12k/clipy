@@ -265,12 +265,18 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
 
   /// A composed clip frame's look: the filter chain mixed in at the clip's strength (`original·(1 − s) + filtered·s`;
   /// s = 1 skips the mix, s = 0 or no filter skips the chain), then the Adjust recipe (skipped when neutral). A clip
-  /// with the defaults (strength 1, neutral adjust) gets exactly `Effects.apply(chain, to: img)`, as before.
+  /// with the defaults (strength 1, neutral adjust) gets exactly `Effects.apply(chain, to: img)`, as before. A filter
+  /// with no chain that is one of `FilterRecipes.ids` is drawn by `FilterRecipes.apply` instead, with the same mix.
   static func look(_ spec: LayerSpec, on img: CIImage, time: Double) -> CIImage {
     var out = img
     let chain = Effects.filterChain(spec.filter)
     if !chain.isEmpty, spec.filterIntensity > 0 {
       let filtered = Effects.apply(chain, to: img)
+      out = spec.filterIntensity >= 1
+        ? filtered
+        : dissolve(from: img, to: filtered, progress: CGFloat(spec.filterIntensity)).cropped(to: img.extent)
+    } else if spec.filterIntensity > 0, let filtered = FilterRecipes.apply(spec.filter, to: img, time: time) {
+      // One of the twelve recipe filters (FilterRecipes.swift): no chain, the same strength mix.
       out = spec.filterIntensity >= 1
         ? filtered
         : dissolve(from: img, to: filtered, progress: CGFloat(spec.filterIntensity)).cropped(to: img.extent)

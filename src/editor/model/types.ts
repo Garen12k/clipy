@@ -40,7 +40,8 @@ export const minAudioDuration = (kind: AudioKind): number => (kind === "sfx" ? A
 export const CLIP_VOLUME = [0, 2] as const;
 
 export const FILTER_IDS = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage",
-  "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream"] as const;
+  "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream",
+  "kodak", "fuji", "matte", "bleach", "dusk", "moody", "tealOrange", "blush", "grit", "silver", "indigo", "drama"] as const;
 export type FilterId = (typeof FILTER_IDS)[number];
 export const TRANSITION_TYPES = ["none", "fade", "dissolve", "slide", "zoom",
   "slideRight", "slideUp", "slideDown", "wipe", "spin", "blur",   // "slide" keeps its id and is labelled "Slide left"
