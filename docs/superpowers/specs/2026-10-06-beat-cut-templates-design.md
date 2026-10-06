@@ -1,7 +1,7 @@
 # Auto beat cut and Quick edit: design
 
 **Date:** 2026-10-06
-**Status:** Approved by the owner in chat ("yes"). The code was built while the plan was written (the generation route had to be proved before it could be planned around) and kept by the controller; this document describes that code. Two reviews, the docs task and the owner's on-device check are pending. Plan: `docs/superpowers/plans/2026-10-06-beat-cut-templates.md`.
+**Status:** Approved by the owner in chat ("yes"). The code was built while the plan was written (the generation route had to be proved before it could be planned around) and kept by the controller; this document describes that code. Two reviews of the whole diff followed and their findings were fixed; **§3a "As built" records what changed and is the last word where an older sentence disagrees.** The owner's on-device check (§15) is pending. Plan: `docs/superpowers/plans/2026-10-06-beat-cut-templates.md`.
 **Builds on:** beat markers and snapping (`2026-10-04-capcut-g-polish-design.md`: `Project.beatMarkers`, the Beats panel, `snap.ts`), the tall panels (`2026-10-05-editing-ui-r2-tall-panels-design.md`), the looks of 2026-10-06 (`2026-10-06-more-looks-design.md`, `2026-10-06-text-looks-stickers-design.md`), photo Motion (`2026-10-06-photo-motion-collage-design.md`, schema v17) and the home screen of `2026-10-06-ui-polish-r2-design.md`. **Schema stays v17. No Swift change, no new package, no change to `package.json`.** One new generated data file (`assets/music/beats.json`) and the script that writes it.
 
 ## 0. What Find beats can and cannot do in this build
@@ -52,6 +52,57 @@ Out of scope: Find beats for the owner's own files (needs native code); beats fo
 | Quick edit's ratio | **Auto** (the first item's shape), not asked. | One step fewer; Ratio is in the editor. |
 | Sheet or route? | A **Sheet** on the home screen, like the aspect-ratio picker. | No new screen, no entry in `screenOptions.ts`; nothing to navigate back from. |
 
+## 3a. As built
+
+Written last (2026-10-06), against the committed code. The sections below were corrected in place where a review changed a rule; this section is the summary.
+
+### Commits (branch `beat-cut-templates`, from `main` 90766dc)
+
+| Plan task | Commit | What |
+|---|---|---|
+| — | `cc9e87f` | this spec and the plan |
+| 1 + 2 | `674b700` | the detector, the generator script, `beats.json`, recognising a bundled track |
+| 3 | `776f108` | `placeBeats`, `cutToBeats` |
+| 4 | `9bc9f7f` | Find beats, Fewer / More and Cut to beats in the Beats panel |
+| 5 | `4ebf73f` | the recipes and `buildQuickEdit` |
+| 6 + 7 | `86c39c4` | `makeQuickEdit`, `createQuick`, the sheet, the home button |
+| review (model) | `21ea3c4` | see below |
+| review (UI) | `27259d6`, `2a4eb2f` | see below |
+| follow-up | `f8eaaa3` | the panel uses `beatsLeftOut` and `beatCutState` |
+| 8 | the commit that adds this section | README, AGENTS, music README, this section |
+
+Tasks 1 – 7 were built by the plan's author while the plan was written and were **not** written test-first; the two independent reviews of the whole diff were the gate. The review fixes and the follow-up were test-first (each new test was seen failing first, or the fix was confirmed by reverting it).
+
+### What the reviews changed (deviations from the first text of this spec)
+
+1. **Find beats never drops a marker outside the music (§4.4).** `placeBeats` keeps **every** marker outside the track's stretch and gives the new beats only the room left under the 300-marker limit, from the start of the stretch, in order; `beatsLeftOut(p, trackId, sourceBeats, every)` says how many beats did not fit. A kept marker closer than 50 ms (`BEAT_LIMITS.minGap`) to a beat wins: the beat is not placed (and is not counted as left out). Before, the loader's rule simply cut the sorted list at 300, which could drop hand-tapped markers late in the video.
+2. **The panel says so (§4.5).** A Find that cannot place every beat shows "Only 300 markers fit. The last beats were left out." — instead of anything else that Find would say, never as a second toast; a Fewer / More drag that re-places markers says it once, when the slider is let go.
+3. **The half-second minimum is exact (§5.1).** The low end of a clip's reachable range is no longer widened by `reach`: a marker must leave the clip at least `minClip` (0.5 s). Before, a marker 1 ms short could cut a photo to 0.499 s, which the loader stretches back to 0.5 s.
+4. **No slack left past the music (§6.2, §6.4).** In a Quick edit draft the trailing clips that the cut did not change (they play after the music's last beat) give their 0.05 s back: each is exactly its recipe length.
+5. **The generator's checks (§4.2).** The two halves of a track must agree with the whole within **0.1 %** (was 0.5 %); the beat-count check was removed (it is true by construction and proved nothing). No shipped track is affected (the worst is 0.021 %); `beats.json` was not regenerated.
+6. **True toasts (§4.5).** "Every cut is already on a beat." became "Nothing more to cut." (it was also shown when no cut could reach a beat); an unchanged Find says "No beats in this part of the music." when the track has no beats inside the video.
+7. **The slider re-places only for the track the hint names (§4.5):** after an undo or a redo that changes which track Find would listen to, it only sets the next Find.
+8. **The home screen is inert while a project is made (§6.3):** the header actions and the list take no touches (New clip and Quick edit alike), and the editor is opened only if the home screen is still focused when the work is done. The Quick edit button cannot stick after a dropped sheet (it closes and re-opens the sheet one tick apart).
+9. **The music asset is resolved before the project is created (§6.3):** a failed download creates nothing.
+10. **Smaller ones:** a failed list reload after a made draft still opens the editor; the "Making your quick edit" pill is read once by VoiceOver; the sheet shows Travel selected from its first frame when re-opened.
+11. **One rule for the Cut to beats button (§5.5):** the panel reads `beatCutState`; wording unchanged.
+12. **The draft's fade-out is not doubled in the export (§6.4, §12.5).** The first text said the export's safety fade multiplies the draft's 1-s fade-out. It does not: the music is trimmed to end where the video ends and its own fade reaches gain 0 there, and `exportTrackCurve` adds the safety fade only to music that is **not silent** at the video's end. The one exception is a draft that is a single clip shorter than 0.5 s (a music track cannot be shorter than 0.5 s, so the video cuts through its fade and the safety fade is multiplied on top). Checked by running the builder and `exportTrackCurve` on four drafts while writing this; no test pins it.
+
+### As built against what the owner was told
+
+- **Seven of the eight built-in tracks have beats.** The Frigid Seas does not (unsteady tempo).
+- **Find beats is a lookup of shipped data**, not listening: a built-in track is recognised by its title and exact source length (no stored song id, schema stays 17). It is **off for the owner's own files** until a native build.
+- **The six are called "styles" on screen.** "Templates" is the editor's tool.
+- **Text, stickers, layers and sounds do not move on a cut.** The last clip is left alone (Quick edit cuts it too, so a draft ends on a beat).
+- **Music does not loop.** Cinematic's song is 32 s, Vlog's 47 s.
+- **The Beats panel is the regular height and the timeline is hidden while it is open**: the owner closes it with the round ✓ (VoiceOver: "Done") to see the ticks and the shorter clips. On a short phone **Remove nearest** and **Clear all** need a scroll inside the panel.
+
+### What no test checks
+
+§12, item by item: (1) the reading of `expo-audio` — a fact about a package, re-read on an upgrade. (2) The generator was run by hand; Jest checks the committed `beats.json` and reads the script's `ACCEPT` constants, it never runs the script (the decoder is outside the repo), and after `21ea3c4` the script was only syntax-checked. (3) The mp3 start offset on iOS. (4) Whether the beats feel right; Bossa Nova (86) and Funked Up (87) may be half-tempo readings. (5) The end of a draft's music in a real export (deviation 12). (6) Every layout on a real phone: the two home buttons side by side, the panel's three button rows and two hint lines, its scroll on a short screen.
+
+Also unchecked: that `pointerEvents="none"` swallows taps and long presses on the cards on the device (RNTL only models `press`); that one tick is enough for iOS to present the Quick edit sheet again (if it still sticks, wait `AFTER_SHEET_MS` instead); VoiceOver reading the pill once; `onSlidingComplete` firing on the device after a Fewer / More drag (the left-out message for a drag depends on it; a Find does not). Two pinned detector behaviours are accepted, not wanted: near a tie the tempo-or-half choice depends on the sample rate, and a beat at exactly t = 0 is found one beat late. The README's first-build list carries all of these (items 84 – 89).
+
 ## 4. Finding beats
 
 ### 4.1 The detector (`beatDetect.ts`)
@@ -80,7 +131,7 @@ BEAT_DETECT = { envelopeRate: 100, windowSeconds: 0.023, minBpm: 70, maxBpm: 180
 }
 ```
 
-One entry per manifest track, in the manifest's order, one track per line; `beats` are seconds into the **file**; `null` = no steady beat. The script ships a track's beats only when all hold: the decoded length is within 0.3 s of the manifest's (else the script fails), `confidence ≥ 1.5`, each half of the track alone gives a tempo within 0.5 % of the whole, and the beat count is within 1.5 of `length × bpm / 60`.
+One entry per manifest track, in the manifest's order, one track per line; `beats` are seconds into the **file**; `null` = no steady beat. The script ships a track's beats only when all three hold: the decoded length is within 0.3 s of the manifest's (else the script fails), `confidence ≥ 1.5`, and each half of the track alone gives a tempo within **0.1 %** of the whole's (`ACCEPT.halvesWithin = 0.001`; the seven shipped tracks are within 0.03 %, The Frigid Seas is 21 % out). The number of beats is not checked: it follows from the length, the first beat and the tempo by construction.
 
 What a real run on this machine gave (2026-10-06, deterministic — two runs were byte-identical):
 
@@ -110,16 +161,25 @@ beatTimesFor(track, sourceBeats, every, total):
 
 placeBeats(project, trackId, sourceBeats, every):
   stretch = [track.start, min(track end, project end)]
-  markers = clampBeatMarkers( markers outside the stretch  +  beatTimesFor(...) )
+  kept    = the markers outside the stretch                      (ALL of them stay)
+  spaced  = beatTimesFor(...) in order, without a beat closer than 0.05 s to the beat before it or to a kept marker
+  fresh   = the first (300 − kept count) of spaced               (never fewer than 0)
+  markers = clampBeatMarkers( kept + fresh )
+
+beatsLeftOut(project, trackId, sourceBeats, every) = spaced count − fresh count
 ```
+
+A kept marker within 50 ms of a beat wins over the beat. The beats that do not fit are the track's **later** ones; a beat merged for being too close is not counted as left out. `beatsLeftOut` gives the same number before and after that Find.
 
 Vectors (beats 0.25, 0.75, … 3.75 — 120 bpm): a 4-s track at 0 → the beats as they are · the track at `start 2`, `trimStart 1`, `trimEnd 3` → 2.25, 2.75, 3.25, 3.75 · every 2nd → 0.25, 1.25, 2.25, 3.25 · every 4th → 0.25, 2.25 · every 2nd with `trimStart 1` → 0.25, 1.25, 2.25 (file beats 1.25, 2.25, 3.25: the same beats) · beats 0 … 3.5 on a track at `start 2` with markers 0.7, 2.2, 4.1, 6, 8.3 already there, every 2nd → 0.7, 2, 3, 4, 5, 8.3.
 
 **Which track.** `beatTrack(project, selectedAudioId)`: the selected track when it is music; otherwise the music track that starts first. Never a voice-over or a sound effect.
 
-**Afterwards the markers are plain project data.** Moving, trimming, splitting or deleting the music does not move them; they are where the beats *were*. Tap **Find beats** again to re-place them. The stored limit applies: at most 300 markers (every beat of the longest track is 203).
+**Afterwards the markers are plain project data.** Moving, trimming, splitting or deleting the music does not move them; they are where the beats *were*. Tap **Find beats** again to re-place them. The stored limit applies: at most 300 markers. One track alone always fits (every beat of the track with the most is 203); with markers already outside its stretch — tapped by hand, or found for another track — the later beats may not, and the panel says so (§4.5).
 
 ### 4.5 The panel (`BeatsSheet.tsx`, now a regular `ToolPanel`; the body scrolls on a small phone)
+
+As every regular panel, it takes the place of the timeline and the toolbar: **the timeline is hidden while it is open**, so the ticks and the clips are seen after closing it with the round ✓ (its VoiceOver name is "Done"). On a short phone the last row (Remove nearest · Clear all) is reached by scrolling the body.
 
 Title **Beat markers** (unchanged). Top to bottom:
 
@@ -136,7 +196,8 @@ Title **Beat markers** (unchanged). Top to bottom:
 7. A row 44 pt tall: **Remove nearest** · **Clear all**, unchanged.
 
 Behaviour:
-- **Find beats** is enabled only for status `ok`. One tap = one undo step. A tap that changes nothing is no step and says why: "The beat markers are already in place." when the track has beats inside the video and the project already holds them, "No beats in this part of the music." when it has none there (the music lies past the video's end, or a short trimmed piece on Fewer).
+- **Find beats** is enabled only for status `ok`. One tap = one undo step. A tap that changes nothing is no step and says why: "The beat markers are already in place." when the track has beats inside the video and the project already holds them, "No beats in this part of the music." when it has none there (the music lies past the video's end, or a short trimmed piece on Fewer). A successful Find that places every beat shows no toast (the count line changes, a haptic).
+- **The 300-marker limit.** When `beatsLeftOut` is above 0 for that Find, the one toast is "Only 300 markers fit. The last beats were left out." (the number is `BEAT_LIMITS.max`) — whether the Find changed the project or not: it replaces "The beat markers are already in place.", which would not be true. After a Fewer / More drag that re-places markers it is shown once, when the slider is let go (`onSlidingComplete`), never while it is dragged, and not for a drag before a Find.
 - **The slider** before any Find only sets what the next Find does. After a Find — until the panel is closed — dragging it re-places that track's markers at each stop (only while that track is still the one Find would listen to — after an undo or a redo that changes which track is first, the slider again only sets the next Find); the whole drag is one undo step (`beginTransaction` + `applyTransient`). It is disabled when Find beats is.
 - **Cut to beats**: §5. Toast after a cut: "Clips cut to the beat. Undo brings them back." Nothing to do (every cut is on a beat already, or no cut can reach one): "Nothing more to cut." and no undo step.
 - Nothing is animated; no new strip, panel id or toolbar tool. The panel grows from compact (240 pt) to regular (46 % of the screen, 300 – 430 pt).
@@ -151,10 +212,12 @@ BEAT_CUT = { minClip: 0.5, reach: 0.001 }
 t = 0
 for each main clip, in order (the last clip only when lastToo — Quick edit):
   d = clipDuration(clip)
-  m = the LATEST marker with   t + 0.5 − reach  ≤  m  ≤  t + d + reach
+  m = the LATEST marker with   t + 0.5  ≤  m  ≤  t + d + reach
   if there is one and  t + d − m > reach:   shorten the clip to  m − t
   t = t + clipDuration(the clip as it is now)
 ```
+
+Only the **high** end is widened by `reach` (a cut that close to a marker is on it). The low end is exact: a marker must give the clip a length of at least the minimum — one that would leave it even a millisecond under is not used (the code forgives 1e-9 s, the binary dust of adding up the clips before it).
 
 - A clip is shortened **at the end it plays last**: a photo's length becomes `m − t` (to the millisecond); a video's source tail moves to `sourceAfter(clip, trimStart, m − t)`; a reversed video's source head to `sourceAfter(clip, trimEnd, −(m − t))`. No speed arithmetic outside `timeline.ts`; a speed curve keeps its steps.
 - A clip with **no marker in reach** — shorter than the gap to the next marker, shorter than half a second, or past the last marker — is left exactly as it is, and the next clip is measured from where it really ends.
@@ -192,7 +255,7 @@ Text, stickers, captions, layers and collages, sounds (the music too), the cover
 
 ### 5.5 When the button is off
 
-No markers → off, "Cut to beats needs beat markers." One clip → off, "Cut to beats needs at least two clips." (`beatCutState`).
+No markers → off, "Cut to beats needs beat markers." One clip → off, "Cut to beats needs at least two clips." The rule is `beatCutState(project)` (`"noMarkers"`, then `"oneClip"`, else `"ready"`), and the panel reads it — it has no rule of its own.
 
 ## 6. Quick edit
 
@@ -217,7 +280,7 @@ Ids: filters `golden`, `vivid`, `pastel`, `tealOrange`, `vintage`, `crisp`; tran
 
 1. **Target lengths.** Every photo: `hold × step + 0.05` s. Every video longer than `videoHold × step + 0.05` s is trimmed to that at its tail. Shorter videos keep their length. (The 0.05 s is slack that step 3 removes.)
 2. **Music from its first beat.** The track is added at project 0 with `trimStart = beats[0]`, so the video starts on a beat.
-3. **Markers, then the cut.** `placeBeats` (every `every`-th beat), then `cutToBeats(…, lastToo = true)`: every clip, the last one too, ends on a marker.
+3. **Markers, then the cut.** `placeBeats` (every `every`-th beat), then `cutToBeats(…, lastToo = true)`: every clip, the last one too, ends on a marker. Then the slack is taken back where the cut did not use it: the **trailing run** of clips the cut left unchanged (they play after the music's last beat) is trimmed to exactly its target length. Only that trailing run — an unchanged clip in the middle is left alone, because shortening it would pull every later cut off its beat (it cannot happen with the shipped recipes).
 4. **Music to the video's end.** `trimEnd = min(file length, beats[0] + video length)`, fade-out 1 s; markers past the end are dropped.
 5. **The look.** The transition on every cut (capped by the ops as usual); the filter and its strength on every clip; the motions in turn on the photos; one title at x 0.5 over the first 3 s (never past the end), given the recipe's text template.
 
@@ -233,7 +296,9 @@ Only existing ops are used (`trimClip`, `addAudioTrack`, `placeBeats`, `cutToBea
 4. **Making.** The two buttons give way to a pill with a spinner and "Making your quick edit". Neither button can be pressed meanwhile.
 5. **The editor** opens on the draft, named "Project N" like any new project. Ratio: Auto.
 
-`makeQuickEdit(deps, name, assets, recipeId)` (`src/projects/quickEditFlow.ts`): `createProject` (media copied, ratio Auto) → the bundled track copied in (`importAudio`) → `buildQuickEdit` → `saveProject`. **If anything after `createProject` fails, the project is deleted** and the home screen shows "Couldn't make the quick edit". If nothing could be imported, `createProject` itself throws and removes its folder ("Couldn't import any of the selected items."). If some items could not be read, the draft is made from the rest and the usual toast counts them.
+While a project is being made — by Quick edit or by New clip — the home screen takes no touches (the header actions and the list have `pointerEvents="none"`), and the editor is opened only if the home screen is still the focused screen when the work is done.
+
+`makeQuickEdit(deps, name, assets, recipeId)` (`src/projects/quickEditFlow.ts`): the recipe's bundled track resolved to a file (`assetUri` — **first**, so a failed download creates nothing) → `createProject` (media copied, ratio Auto) → the track copied in (`importAudio`) → `buildQuickEdit` → `saveProject`. **If anything after `createProject` fails, the project is deleted** and the home screen shows "Couldn't make the quick edit". If nothing could be imported, `createProject` itself throws and removes its folder ("Couldn't import any of the selected items."). If some items could not be read, the draft is made from the rest and the usual toast counts them.
 
 ### 6.4 Edge cases
 
@@ -241,10 +306,10 @@ Only existing ops are used (`trimClip`, `addAudioTrack`, `placeBeats`, `cutToBea
 |---|---|
 | One photo | One clip of `hold` steps ending on a beat, music, title (no longer than the clip), no transition. |
 | One short video (under half a second plus a step) | Kept as it is; music under it with a fade; the title is cut to its length. |
-| 30 items | All used. Where the music is shorter than the video (Cinematic after about 10 photos, Vlog after 16, Calm after 21) the clip the music ends under is cut on its last beat, the clips after it keep their target length (plus the 0.05 s), and the rest plays without music. Not looped — the owner adds music again in the editor. |
+| 30 items | All used. Where the music is shorter than the video (Cinematic after about 10 photos, Vlog after 16, Calm after 21) the clip the music ends under is cut on its last beat, the clips after it have exactly their recipe length (no 0.05 s slack is left: Cinematic with 30 photos is 11 clips on markers, then 19 photos of exactly 3 s, 89 s in all), and the rest plays without music. Not looped — the owner adds music again in the editor. |
 | Only photos | Every one gets a motion in turn. |
 | Only videos | No motion; long ones are cut to `videoHold` steps, short ones to the latest beat they reach, very short ones are left. |
-| Video shorter than the song | The music is trimmed to the video's end with a 1-s fade-out. (In the export the existing safety fade is multiplied on top — a slightly steeper fade, §12.) |
+| Video shorter than the song | The music is trimmed to the video's end with a 1-s fade-out. The export's safety fade is **not** multiplied on top: the music ends at the video's end with gain 0, and the safety fade is only for music that is not silent there. The one exception is a single clip under 0.5 s (the music cannot be that short, so the video cuts through its fade). §12.5. |
 | A transition longer than a clip allows | Capped or left out by `setTransition` / `normaliseTransitions`, as everywhere. |
 | First item is landscape | The frame is landscape (Auto), as for New clip. Portrait photos after it are filled, as today. |
 | Cancel in the sheet or in the library | No project, no file. |
@@ -252,6 +317,9 @@ Only existing ops are used (`trimClip`, `addAudioTrack`, `placeBeats`, `cutToBea
 | The app is killed while a draft is made | A plain project with the picked media (no music, no cuts) may be left — an ordinary, usable project. |
 | A recipe's track has no beats (data regenerated without it) | The draft is still made: own lengths, no markers, the look applied. A test stops this from shipping. |
 | New clip pressed while a draft is made | Not possible: both buttons are replaced by the spinner, and the two flows share their guards. |
+| A project card or Accounts pressed while a project is made | Nothing: the header actions and the list take no touches meanwhile. |
+| The home screen is left before the draft is ready | The draft is still made and listed; the editor is not opened on top of another screen. |
+| The music cannot be fetched (Expo Go downloads it from the dev server) | Nothing is created: the music is resolved before the project. "Couldn't make the quick edit". |
 
 ## 7. What is stored
 
@@ -276,11 +344,11 @@ No request field is added and nothing under `modules/` is edited. The export nev
 
 ## 11. Testing
 
-- **Detector** (`beatDetect.test.ts`): synthetic click tracks at 75 – 150 bpm with known first beats (tempo within 0.25 bpm, first beat within 15 ms), the half-tempo rule (174 → 87), the grid's shape, another sample rate, noise (confidence under 1.5), silence and short input (null).
+- **Detector** (`beatDetect.test.ts`): synthetic click tracks at 75 – 150 bpm with known first beats (tempo within 0.25 bpm, first beat within 15 ms), the half-tempo rule (174 → 87), the grid's shape, another sample rate, noise (confidence under 1.5), silence and short input (null). Two behaviours are pinned as they are, not as wanted: the tempo-or-half choice near a tie depends on the sample rate (143.94 bpm clicks read 143.94 at 11,025 Hz and 71.97 at 22,050 Hz), and a beat at exactly t = 0 is found one beat late.
 - **Data** (`musicBeats.test.ts`): one entry per manifest track in order; every shipped track's grid is steady, inside the file, with `beats ≈ length × bpm / 60`; exactly The Frigid Seas ships without; recognition of bundled tracks (also split pieces) and non-recognition of files, recordings, effects.
 - **Model** (`beats.test.ts`): the vectors of §4.4 and §5.2; the promises (cuts on markers, only shorter, same ids and order, idempotent, nothing else moves, effects fitted, transitions re-capped, input not mutated); `beatCutState`; `beatTrack`.
-- **Panel** (`BeatsSheet.auto.test.tsx`, RNTL v14 async): each hint; opening places nothing; Find (through the track's placement, one undo step, second press); the slider before and after a Find (one undo step per drag) and after re-opening; the selected track; Cut to beats (already on the beat, a real cut, undo); the disabled states. The existing `BeatsSheet.test.tsx` keeps passing with two pinned values changed (panel height 239 → 429, and the compact-fit arithmetic removed).
-- **Quick edit** (`quickEdit.test.ts`): the recipes against the registries and the glyph map; the pacing table; the worked example of §6.2 field by field; every edge case of §6.4 that the builder decides; each shipped recipe with the shipped beats (every cut and the end on a marker, the result reloads unchanged). `quickEditFlow.test.ts` on the in-memory file system: a draft end to end, a partly failed import, and no project left behind in each failure. `quickEditHome.test.tsx`: the button, the sheet, the order sheet → library → draft, the spinner, cancel, the three toasts.
+- **Panel** (`BeatsSheet.auto.test.tsx`, RNTL v14 async): each hint; opening places nothing; Find (through the track's placement, one undo step, second press); the slider before and after a Find (one undo step per drag) and after re-opening; the selected track; Cut to beats (already on the beat, a real cut, undo); the disabled states. The existing `BeatsSheet.test.tsx` keeps passing with two pinned values changed (panel height 239 → 429, and the compact-fit arithmetic removed). `BeatsSheet.limit.test.tsx`: a Find that fits says nothing, one that does not says the 300-marker sentence exactly once (also on a second press and in a full project), a drag says it once on release and never while dragged, and the panel asks `beatCutState`.
+- **Quick edit** (`quickEdit.test.ts`): the recipes against the registries and the glyph map; the pacing table; the worked example of §6.2 field by field; every edge case of §6.4 that the builder decides; each shipped recipe with the shipped beats (every cut and the end on a marker, the result reloads unchanged). `quickEditFlow.test.ts` on the in-memory file system: a draft end to end, a partly failed import, and no project left behind in each failure. `quickEditHome.test.tsx`: the button, the sheet, the order sheet → library → draft, the spinner, cancel, the three toasts. `homeBusy.test.tsx`: no touches and one editor only while a project is made, no navigation after the screen lost focus, the button that cannot stick. `QuickEditSheet.test.tsx`: Travel selected from the first frame of every opening.
 - **Guards stay as they are:** `noHexLiterals`, `spacingScale` (no new allow-table line), `kitSlider`, `outlineIcons`, `looks.frozen`, the screen-options test (no new route). The tests were written together with the code, not before it (the plan says which ones were ever seen red).
 
 ## 12. Evidence, and what is unverified without a native build
@@ -289,7 +357,7 @@ No request field is added and nothing under `modules/` is edited. The export nev
 2. **The generation route runs here**: `npm.cmd install --prefix "$env:TEMP\clipy-beats" mpg123-decoder@1.0.3` (a WebAssembly mp3 decoder, installed outside the repo) and `node --experimental-strip-types scripts/generate-beats.mjs "$env:TEMP\clipy-beats"` on Node 22.14 produced the table of §4.2 twice, byte-identical.
 3. **Unverified: whether the phone plays a file from the same zero as the decoder.** mp3 files carry a short encoder delay (tens of milliseconds) that players may or may not skip. If iOS and the script's decoder differ, every marker is early or late by the same small amount — the owner's ears are the test (checklist 6). The fix would be one constant in the script and a re-run.
 4. **Unverified: whether the beats *feel* right musically** — the detector finds a steady pulse; whether the "first" beat is the bar's downbeat and whether a track reads at its tempo or at half or double is taste. The slider covers half and quarter; nothing covers double.
-5. **Unverified in the export:** nothing new. A Quick edit draft's music has a 1-s stored fade-out *and* gets the export's own 1-s safety fade when it plays to the end — the two multiply (the last second fades a little faster than in the preview).
+5. **Unverified in the export:** nothing new. A Quick edit draft's music has a 1-s stored fade-out that ends at gain 0 exactly at the video's end, so `exportTrackCurve` does **not** add the export's safety fade (it is only for music that is not silent there): the export's curve is the preview's. Exception: a draft that is one clip shorter than 0.5 s — the music is at least 0.5 s long, the video cuts through its fade, and the safety fade is multiplied on top. (The first text of this spec said the two fades always multiply; that was wrong.) What is unheard is the fade itself in a real export.
 6. **Unverified on a 375-pt phone:** the two buttons side by side on the home screen (about 325 pt estimated), the three button pairs in the panel, the hint lines' wrapping, the panel's scroll on a short screen.
 
 ## 13. Risks
@@ -334,9 +402,9 @@ In one line: **Find beats works with the built-in music only for now** (not with
 
 **Find beats**
 
-2. In a project with a few clips, tap **Audio**, **Add audio**, **Music**, and use **Party Sector**. Tap **Audio**, then **Beats**. The panel is taller than before and has two new buttons and a slider. Under them it says "Find beats marks the beats of Party Sector."
+2. In a project with a few clips, tap **Audio**, **Add audio**, **Music**, and use **Party Sector**. Tap **Audio**, then **Beats**. The panel is taller than before and has two new buttons and a slider. Under them it says "Find beats marks the beats of Party Sector." On a small phone, scroll inside the panel to reach **Remove nearest** and **Clear all** — tell me if anything is cut off or hard to reach.
 3. Nothing has been marked yet — opening the panel does nothing by itself.
-4. Tap **Find beats**. The count in the panel goes up (the timeline is hidden while the panel is open). Tap **Done** to see the ticks: small gold ticks along the timeline.
+4. Tap **Find beats**. The count in the panel goes up (the timeline is hidden while the panel is open). Tap **Done** — the round **✓** in the panel's top row — to see the ticks: small gold ticks along the timeline.
 5. Open **Beats** again, tap **Find beats** once more, then drag the **Fewer / More** slider: left = fewer (every fourth beat), middle = every second beat, right = every beat. The count changes as you drag, and you feel a small tick in the middle. Tap **Done** to see the fewer or more ticks.
 6. With the panel closed, press play. **Do the ticks sit on the beat of the music?** Tell me if they feel early or late — that is the one thing I could not check without your phone.
 7. Press **Undo**: the ticks from the slider go back one step; again: the ticks are gone.
@@ -353,6 +421,7 @@ In one line: **Find beats works with the built-in music only for now** (not with
 15. Tap **Cut to beats** twice in a row: the second time it says "Nothing more to cut."
 16. **Know this:** text, stickers, overlays and sounds do **not** move when the clips get shorter — the same as when you trim a clip by hand. If you had a text sitting on the third clip, check where it is now. A transition on a clip that became very short (about half a second) is removed. Undo brings all of it back.
 17. With no ticks at all, **Cut to beats** is greyed out and says it needs beat markers.
+17a. Only if you ever see "Only 300 markers fit. The last beats were left out.": a project holds at most 300 ticks. The ones you already had stayed; the last beats of the music got none. Use **Fewer**, or **Clear all** and find again.
 
 **Quick edit**
 
@@ -360,11 +429,11 @@ In one line: **Find beats works with the built-in music only for now** (not with
 19. Tap it: a sheet with **Travel, Party, Calm, Cinematic, Retro, Vlog**. Travel is highlighted and the line below names its music. Tap another one: the music named changes.
 20. Swipe the sheet down. Nothing happened and no project was made.
 21. Tap **Quick edit**, pick **Party**, tap **Choose photos and videos**, and pick about eight photos and one or two videos — the order you tap them is the order in the video. Tap Add.
-22. You see "Making your quick edit" for a moment, then the editor opens.
+22. You see "Making your quick edit" for a moment, then the editor opens. While that message shows, tapping a project on the home screen does nothing — that is on purpose.
 23. Press play: music, a cut on every other beat, a flash between clips, bright colours, "Party time" at the start, and the photos slowly zoom.
 24. It is a normal project: tap the title and change the words, tap a clip and change its filter, tap the music and swap it. Everything can be undone or changed.
 25. Try **Calm** with only photos, and **Vlog** with only videos (long videos are cut to about six seconds each; you can make them longer again with Trim).
-26. Try **Cinematic** with 15 photos: its music is only 32 seconds long, so the last photos play without music. That is known — add music again by hand if you want it.
+26. Try **Cinematic** with 15 photos: its music is only 32 seconds long, so the last photos play without music (the music does not start over). That is known — add music again by hand if you want it. Vlog's music is 47 seconds.
 27. Start a Quick edit and press **Cancel** in the photo library: nothing was made.
 28. A wide (landscape) first photo gives a wide video, as with New clip; change it with **Ratio**.
 
