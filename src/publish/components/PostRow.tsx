@@ -24,7 +24,7 @@ const BAR = 4;
 /** A standing note under a row. */
 const note = { fontSize: theme.type.small } as const;
 /** Something went wrong, or needs checking before posting again: red and a size larger than a note. */
-const alarm = { fontSize: theme.type.label, color: theme.colors.danger } as const;
+const alarm = { fontSize: theme.type.label, color: theme.colors.dangerText } as const;
 /** The row's state on the right ("Preparing…", "42%"). */
 const status = { fontSize: theme.type.label } as const;
 const ICON = theme.size.icon.lg;
@@ -71,8 +71,9 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
     if (blocker) below.push(<View key="b">{msg(blocker, true)}</View>);
   } else if (reason) {
     side = (
-      <View style={{ alignItems: "flex-end", gap: theme.space.xs }}>
-        <Body muted style={[note, reason === "Sign-in expired" ? { color: theme.colors.danger } : null]}>{reason}</Body>
+      // paddingBottom: the compact button's 4-pt bottom slop stays inside its parent, so the target is the full 44.
+      <View style={{ alignItems: "flex-end", gap: theme.space.xs, paddingBottom: theme.space.xs }}>
+        <Body muted style={[note, reason === "Sign-in expired" ? { color: theme.colors.dangerText } : null]}>{reason}</Body>
         {reason === "Not connected" ? <SecondaryButton compact title="Connect" accessibilityLabel={`Connect ${label}`} onPress={onConnect} /> : null}
         {reason === "Sign-in expired" ? <SecondaryButton compact title="Reconnect" accessibilityLabel={`Reconnect ${label}`} onPress={onReconnect} /> : null}
       </View>
@@ -92,7 +93,8 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
       {account.connected && account.name ? <Body muted numberOfLines={1} style={note}>{account.name}</Body> : null}
     </View>
   </>);
-  const rowStyle = { flex: 1, flexDirection: "row", alignItems: "center", gap: theme.space.md } as const;
+  // alignSelf stretch: the tick row is the row's full height (56), not just its content's; the content stays centred inside it.
+  const rowStyle = { flex: 1, alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: theme.space.md } as const;
 
   return (
     <View style={{ gap: theme.space.xs, paddingBottom: below.length > 0 ? theme.space.md : 0 }}>

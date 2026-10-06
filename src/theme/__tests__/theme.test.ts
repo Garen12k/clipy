@@ -23,6 +23,18 @@ test("Grand Voyage tokens", () => {
   expect(theme.motion.sheet.damping).toBe(2 * Math.sqrt(theme.motion.sheet.stiffness * theme.motion.sheet.mass));
 });
 
+test("dangerText is red text that reads (4.5:1) on the page and on a bar; danger stays the fill / border red", () => {
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a: string, b: string) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  expect(theme.colors.danger).toBe("#E5484D");
+  expect(theme.colors.dangerText).toBe("#F47A7E");
+  expect(ratio(theme.colors.dangerText, theme.elevation.bar)).toBeGreaterThanOrEqual(4.5);
+  expect(ratio(theme.colors.dangerText, theme.elevation.page)).toBeGreaterThanOrEqual(4.5);
+});
+
 test("audio lane colours: one per kind, all different from the other lanes", () => {
   expect(theme.colors).toMatchObject({ laneMusic: "#3BA7C9", laneVoice: "#4FA89B", laneSfx: "#E0916A" });
   const lanes = [theme.colors.laneText, theme.colors.laneSticker, theme.colors.laneMusic, theme.colors.laneEffect, theme.colors.laneVoice, theme.colors.laneSfx];

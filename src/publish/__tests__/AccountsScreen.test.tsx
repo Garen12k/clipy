@@ -99,6 +99,6 @@ describe("round 2 look (no behaviour)", () => {
     expect(screen.getByRole("button", { name: "Disconnect TikTok" })).toHaveStyle({ height: theme.size.controlCompact });
     expect(screen.getByRole("button", { name: "Disconnect TikTok" })).not.toHaveStyle({ borderWidth: 1.5 });
     expect(screen.getByRole("button", { name: "Sign out" })).not.toHaveStyle({ borderWidth: 1.5 });
-    expect(screen.getByText("Sign-in expired")).toHaveStyle({ color: theme.colors.danger });
+    expect(screen.getByText("Sign-in expired")).toHaveStyle({ fontSize: theme.type.label, color: theme.colors.dangerText });
   });
 });

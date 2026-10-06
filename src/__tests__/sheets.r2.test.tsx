@@ -10,7 +10,7 @@ test("project actions: Rename and Duplicate are outlined, Delete is text only an
   for (const n of ["Rename", "Duplicate"]) expect(screen.getByRole("button", { name: n })).toHaveStyle({ borderWidth: 1.5 });
   const del = screen.getByRole("button", { name: "Delete" });
   expect(del).not.toHaveStyle({ borderWidth: 1.5 });
-  expect(within(del).getByText("Delete")).toHaveStyle({ color: theme.colors.danger });
+  expect(within(del).getByText("Delete")).toHaveStyle({ color: theme.colors.dangerText });
   expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
 });
 

@@ -115,7 +115,7 @@ test("QuietButton: presses, can be disabled, danger is red, compact reaches 44 p
   await fireEvent.press(btn("Off"));
   expect(onPress).toHaveBeenCalledTimes(1);
   expect(btn("Off")).toBeDisabled();
-  expect(screen.getByText("Remove")).toHaveStyle({ color: theme.colors.danger });
+  expect(screen.getByText("Remove")).toHaveStyle({ color: theme.colors.dangerText });
   const slop = btn("Reset").props.hitSlop as { top: number; bottom: number };
   expect(theme.size.controlCompact + slop.top + slop.bottom).toBeGreaterThanOrEqual(theme.size.touch);
   expect(btn("Reset")).toHaveStyle({ minWidth: theme.size.touch });

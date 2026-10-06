@@ -181,6 +181,9 @@ describe("round 2 look: one gold button per state, values that read", () => {
     await render(<ExportScreenBody project={project} state={{ status: "error", progress: 0, message: "Not enough free space on this iPhone for the export." }} start={jest.fn()} cancel={jest.fn()} reset={reset} onSave={jest.fn()} onShare={jest.fn()} onDone={jest.fn()} />);
     expect(screen.getByText("Not enough free space on this iPhone for the export.")).toHaveStyle({ color: theme.colors.text, fontSize: theme.type.body });
     expect(screen.getByTestId("export-error")).toHaveStyle({ backgroundColor: theme.elevation.bar });
+    // The red icon is decoration: the message beside it says it all.
+    expect(screen.getByTestId("export-error-icon", { includeHiddenElements: true })).toHaveProp("accessibilityElementsHidden", true);
+    expect(screen.getByTestId("export-error-icon", { includeHiddenElements: true })).toHaveProp("importantForAccessibility", "no-hide-descendants");
     expect(gold()).toHaveLength(1);
     await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
     expect(reset).toHaveBeenCalledTimes(1);

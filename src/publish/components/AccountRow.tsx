@@ -37,7 +37,7 @@ export function AccountRow({ status, busy, onConnect, onDisconnect }: Props) {
         <View style={{ flex: 1, gap: theme.space.xs }}>
           <Body weight="semi" muted={!available}>{label}</Body>
           {connected && name ? <Body muted numberOfLines={1} style={{ fontSize: theme.type.small }}>{name}</Body> : null}
-          {detail ? <Body muted style={[{ fontSize: theme.type.small }, needsReconnect ? { color: theme.colors.danger } : null]}>{detail}</Body> : null}
+          {detail ? <Body muted style={[{ fontSize: theme.type.label }, needsReconnect ? { color: theme.colors.dangerText } : null]}>{detail}</Body> : null}
         </View>
       </View>
       {action}

@@ -71,7 +71,7 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
               <Field accessibilityLabel="Caption" multiline value={form.caption} onChangeText={form.setCaption} placeholder="Write a caption…"
                 style={{ minHeight: CAPTION_MIN, textAlignVertical: "top" }} />
               {form.captionMax !== null ? (
-                <Body muted style={[small, { alignSelf: "flex-end" }, form.overLimit ? { color: theme.colors.danger } : null]}>{`${form.caption.length} / ${form.captionMax}`}</Body>
+                <Body muted style={[small, { alignSelf: "flex-end" }, form.overLimit ? { color: theme.colors.dangerText } : null]}>{`${form.caption.length} / ${form.captionMax}`}</Body>
               ) : form.anyTicked ? (
                 // Only platforms that don't take the caption are ticked: no limit, never red.
                 <Body muted style={[small, { alignSelf: "flex-end" }]}>{String(form.caption.length)}</Body>

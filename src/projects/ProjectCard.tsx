@@ -39,9 +39,9 @@ export function ProjectCard({ summary, onPress, onLongPress }: Props) {
           <Title testID="project-cover-title" size={COVER_TITLE.size} numberOfLines={2}
             style={{ position: "absolute", left: theme.space.sm, right: theme.space.sm, bottom: COVER_TITLE.bottom, textAlign: "center", textTransform: "none", letterSpacing: 0 }}>{summary.coverTitle}</Title>
         ) : null}
-        <LinearGradient colors={["transparent", theme.colors.scrim, theme.colors.scrimStrong]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.md, paddingTop: theme.space.xxl }}>
-          <Body weight="semi" numberOfLines={1} style={{ fontSize: theme.type.body, color: summary.broken ? theme.colors.danger : theme.colors.text }}>{summary.name}</Body>
-          <Body muted numberOfLines={1} style={{ fontSize: theme.type.small }}>{secondLine}</Body>
+        <LinearGradient testID="project-card-fade" colors={["transparent", theme.colors.scrimStrong, theme.colors.scrimStrong]} locations={[0, 0.3, 1]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.md, paddingTop: theme.space.xxl }}>
+          <Body weight="semi" numberOfLines={1} style={{ fontSize: theme.type.body, color: summary.broken ? theme.colors.dangerText : theme.colors.text }}>{summary.name}</Body>
+          <Body muted numberOfLines={2} style={{ fontSize: theme.type.small }}>{secondLine}</Body>
         </LinearGradient>
       </PressableScale>
     </View>

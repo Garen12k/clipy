@@ -6,7 +6,7 @@ export const theme = {
     bg: BG, bgDeep: "#081527", bgEnd: "#0C2542", surface: "#0E2440", surfaceAlt: SURFACE_ALT, surfaceBar: SURFACE_BAR, surfaceHigh: SURFACE_HIGH,
     accent: ACCENT, onAccent: "#0A1B33",
     text: "#F6E7C1", textMuted: "#9FB3CC", hairline: "rgba(217,179,106,0.45)",
-    sea: "#1C6E9E", seaLight: "#2E86AB", danger: "#E5484D",
+    sea: "#1C6E9E", seaLight: "#2E86AB", danger: "#E5484D", /** Red for TEXT only (4.5:1 on the page and on a bar); `danger` stays for fills, borders and icons. */ dangerText: "#F47A7E",
     laneText: "#D9B36A", laneSticker: "#E86A7A", laneMusic: "#3BA7C9", laneEffect: "#9A86D6", laneVoice: "#4FA89B", laneSfx: "#E0916A", laneLayer: "#7F93B8",
     scrim: "rgba(3,10,20,0.55)", scrimStrong: "rgba(3,10,20,0.75)",
   },

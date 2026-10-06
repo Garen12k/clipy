@@ -63,8 +63,16 @@ test("round 2 look: softer corners with a hairline; the length and the second li
   expect(screen.getByText("Beach day")).toHaveStyle({ fontSize: theme.type.body, fontFamily: theme.fonts.bodySemi });
 });
 
+test("the second line may wrap to two lines, and the fade is strongest right under the text", async () => {
+  await render(<ProjectCard summary={{ ...summary, postedTo: ["youtube", "tiktok"] }} onPress={jest.fn()} onLongPress={jest.fn()} />);
+  expect(screen.getByText("Posted · YouTube, TikTok").props.numberOfLines).toBe(2);
+  const fade = screen.getByTestId("project-card-fade");
+  expect(fade.props.colors).toEqual(["transparent", theme.colors.scrimStrong, theme.colors.scrimStrong]);
+  expect(fade.props.locations).toEqual([0, 0.3, 1]);
+});
+
 test("a damaged project keeps its red border and red name", async () => {
   await render(<ProjectCard summary={{ ...summary, durationSec: 0, updatedAt: "", broken: true }} onPress={jest.fn()} onLongPress={jest.fn()} />);
   expect(screen.getByRole("button", { name: "Beach day" })).toHaveStyle({ borderWidth: 1.5, borderColor: theme.colors.danger });
-  expect(screen.getByText("Beach day")).toHaveStyle({ color: theme.colors.danger });
+  expect(screen.getByText("Beach day")).toHaveStyle({ color: theme.colors.dangerText });
 });

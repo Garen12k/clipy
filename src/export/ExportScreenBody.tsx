@@ -112,7 +112,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
       {state.status === "error" && (
         <View style={{ gap: theme.space.lg }}>
           <Card testID="export-error" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
-            <Ionicons name="alert-circle-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
+            <Ionicons testID="export-error-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="alert-circle-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
             <Body style={{ flex: 1 }}>{state.message}</Body>
           </Card>
           <PrimaryButton title="Try again" onPress={reset} />
