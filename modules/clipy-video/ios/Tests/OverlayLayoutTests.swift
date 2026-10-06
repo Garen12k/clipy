@@ -2,6 +2,32 @@ import CoreGraphics
 import XCTest
 @testable import ClipyVideo
 
+/// One case of `BOX_VECTORS` (src/editor/model/__tests__/overlayLayout.vectors.ts). overlayLayout.test.ts compares this table
+/// with the TS vectors line for line — keep the literals and the spacing identical.
+struct BoxVector {
+  let name: String
+  let fontScale: Double
+  let scale: Double
+  let background: Bool
+  let boxPadding: Double
+  let boxCorner: String
+  let frame: CGSize
+  let fontSize: CGFloat
+  let padding: CGFloat
+  let boxRadius: CGFloat
+}
+
+let boxVectors: [BoxVector] = [
+  BoxVector(name: "the old box", fontScale: 0.1, scale: 1.5, background: true, boxPadding: 0.25, boxCorner: "rounded", frame: CGSize(width: 1080, height: 1920), fontSize: 288, padding: 72, boxRadius: 36),
+  BoxVector(name: "the old box in a small preview", fontScale: 0.1, scale: 1.5, background: true, boxPadding: 0.25, boxCorner: "rounded", frame: CGSize(width: 300, height: 533), fontSize: 79.95, padding: 19.9875, boxRadius: 9.99375),
+  BoxVector(name: "wide and square", fontScale: 0.07, scale: 1, background: true, boxPadding: 0.5, boxCorner: "square", frame: CGSize(width: 1080, height: 1920), fontSize: 134.4, padding: 67.2, boxRadius: 0),
+  BoxVector(name: "tight, still rounded", fontScale: 0.07, scale: 1, background: true, boxPadding: 0.1, boxCorner: "rounded", frame: CGSize(width: 1080, height: 1920), fontSize: 134.4, padding: 13.44, boxRadius: 16.8),
+  BoxVector(name: "no padding keeps the round corner", fontScale: 0.07, scale: 1, background: true, boxPadding: 0, boxCorner: "rounded", frame: CGSize(width: 1080, height: 1920), fontSize: 134.4, padding: 0, boxRadius: 16.8),
+  BoxVector(name: "the widest", fontScale: 0.07, scale: 1, background: true, boxPadding: 0.6, boxCorner: "rounded", frame: CGSize(width: 1080, height: 1920), fontSize: 134.4, padding: 80.64, boxRadius: 16.8),
+  BoxVector(name: "no background, no box", fontScale: 0.07, scale: 1, background: false, boxPadding: 0.5, boxCorner: "rounded", frame: CGSize(width: 1080, height: 1920), fontSize: 134.4, padding: 0, boxRadius: 0),
+  BoxVector(name: "a square frame", fontScale: 0.05, scale: 2, background: true, boxPadding: 0.3, boxCorner: "rounded", frame: CGSize(width: 1080, height: 1080), fontSize: 108, padding: 32.4, boxRadius: 13.5),
+]
+
 /// The numbers pinned by src/editor/model/__tests__/overlayLayout.test.ts (which also checks that this file names
 /// them). The TS side rounds to four decimals, so compare with that accuracy.
 final class OverlayLayoutTests: XCTestCase {
@@ -18,6 +44,8 @@ final class OverlayLayoutTests: XCTestCase {
     XCTAssertEqual(l.fontSize, 288, accuracy: accuracy)
     XCTAssertEqual(l.maxWidth, 972, accuracy: accuracy)
     XCTAssertEqual(l.padding, 72, accuracy: accuracy)
+    XCTAssertEqual(l.boxRadius, 36, accuracy: accuracy)
+    XCTAssertEqual(l.boxRadius, l.padding / 2)   // exactly the corner the export drew before
     XCTAssertEqual(l.outlineWidth, 8.5333, accuracy: accuracy)
     XCTAssertEqual(l.rotation, 30, accuracy: accuracy)
     XCTAssertEqual(l.lineHeight, 345.6, accuracy: accuracy)
@@ -40,6 +68,8 @@ final class OverlayLayoutTests: XCTestCase {
     XCTAssertEqual(o.style.outlineWidth, 1)
     XCTAssertNil(o.style.shadowColor)
     XCTAssertNil(o.style.glowColor)
+    XCTAssertEqual(o.style.boxPadding, 0.25)
+    XCTAssertEqual(o.style.boxCorner, "rounded")
     XCTAssertTrue(o.words.isEmpty)
     XCTAssertNil(o.highlightColor)
     let w = ExportCaptionWord()
@@ -61,6 +91,7 @@ final class OverlayLayoutTests: XCTestCase {
     XCTAssertEqual(l.centerY, 960, accuracy: accuracy)
     XCTAssertEqual(l.fontSize, 134.4, accuracy: accuracy)
     XCTAssertEqual(l.padding, 0)
+    XCTAssertEqual(l.boxRadius, 0)
     XCTAssertEqual(l.letterSpacing, 13.44, accuracy: accuracy)
     XCTAssertEqual(l.lineHeight, 241.92, accuracy: accuracy)
     XCTAssertEqual(l.outlineWidth, 17.0667, accuracy: accuracy)
@@ -76,6 +107,20 @@ final class OverlayLayoutTests: XCTestCase {
 
     o.style.outlineColor = "#FF2D7A"
     XCTAssertEqual(OverlayLayout.layout(o, frame: frame).outlineColor, "#FF2D7A")
+  }
+
+  func testBoxVectors() {
+    for v in boxVectors {
+      var o = ExportOverlay()
+      o.fontScale = v.fontScale; o.scale = v.scale
+      o.backgroundColor = v.background ? "#000000" : nil; o.backgroundOpacity = 0.5
+      var style = ExportTextStyle(); style.boxPadding = v.boxPadding; style.boxCorner = v.boxCorner
+      o.style = style
+      let l = OverlayLayout.layout(o, frame: v.frame)
+      XCTAssertEqual(l.fontSize, v.fontSize, accuracy: accuracy, v.name)
+      XCTAssertEqual(l.padding, v.padding, accuracy: accuracy, v.name)
+      XCTAssertEqual(l.boxRadius, v.boxRadius, accuracy: accuracy, v.name)
+    }
   }
 
   func testContrastFor() {

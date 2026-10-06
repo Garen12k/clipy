@@ -184,6 +184,8 @@ struct ExportTextStyle: Record {
   @Field var shadowBlur: Double = 0                // fraction of the font size
   @Field var glowColor: String?                    // JS `null` → nil (no glow)
   @Field var glowSize: Double = 0                  // fraction of the font size
+  @Field var boxPadding: Double = 0.25             // fraction of the font size between the text and the edge of its background box
+  @Field var boxCorner: String = "rounded"         // rounded | square (anything else draws rounded)
 }
 
 /// One spoken word of a caption.

@@ -30,6 +30,7 @@ struct OverlayLayoutResult {
   let shadow: OverlayShadow?
   let glow: OverlayGlow?
   let opacity: CGFloat
+  let boxRadius: CGFloat
 }
 
 /// Mirror of `contrastFor` in src/editor/model/overlayLayout.ts: black outline for light text, white for dark.
@@ -42,7 +43,7 @@ func contrastFor(hex: String) -> String {
 
 /// Mirror of src/editor/model/overlayLayout.ts — keep the formulas identical. Reference values (frame 1080×1920,
 /// x .25 y .75 fontScale .1 scale 1.5 rotation 30, background on, neutral style): centre (270, 1440), fontSize 288,
-/// maxWidth 972, padding 72, outlineWidth 8.5333, rotation 30, lineHeight 345.6, letterSpacing 0, no shadow, no glow,
+/// maxWidth 972, padding 72, boxRadius 36, outlineWidth 8.5333, rotation 30, lineHeight 345.6, letterSpacing 0, no shadow, no glow,
 /// opacity 1.
 /// Outputs are in the frame's coordinate space with a TOP-LEFT origin (like the preview); the export flips y.
 /// The outline is proportional to frame height (OUTLINE_FACTOR = 2/450 in the TS version), so the preview glow and
@@ -53,6 +54,8 @@ enum OverlayLayout {
   static let outlineFactor: CGFloat = 2.0 / 450.0
   static let lineHeightFactor: CGFloat = 1.2
   static let backgroundPadFactor: CGFloat = 0.25
+  /// A rounded box corner = half of the DEFAULT padding (BOX_RADIUS_FACTOR): the corner every box had before the padding became adjustable.
+  static let boxRadiusFactor: CGFloat = 0.5
   static let maxWidthFactor: CGFloat = 0.9
   /// cos 45° = sin 45°: a shadow's distance goes equally right and down.
   static let shadowAngle: CGFloat = 0.7071
@@ -64,7 +67,7 @@ enum OverlayLayout {
       centerY: CGFloat(o.y) * frame.height,
       fontSize: fontSize,
       maxWidth: maxWidthFactor * frame.width,
-      padding: o.backgroundColor == nil ? 0 : backgroundPadFactor * fontSize,
+      padding: o.backgroundColor == nil ? 0 : CGFloat(o.style.boxPadding) * fontSize,
       rotation: CGFloat(o.rotation),
       letterSpacing: CGFloat(o.style.letterSpacing) * fontSize,
       lineHeight: lineHeightFactor * fontSize * CGFloat(o.style.lineSpacing),
@@ -72,7 +75,8 @@ enum OverlayLayout {
       outlineColor: o.style.outlineColor ?? contrastFor(hex: o.color),
       shadow: shadow(o, fontSize: fontSize),
       glow: glow(o, fontSize: fontSize),
-      opacity: CGFloat(o.style.opacity))
+      opacity: CGFloat(o.style.opacity),
+      boxRadius: o.backgroundColor == nil || o.style.boxCorner == "square" ? 0 : backgroundPadFactor * fontSize * boxRadiusFactor)
   }
 
   /// nil when the style has no shadow colour (the request's "no shadow").
