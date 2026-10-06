@@ -1,4 +1,4 @@
-import { clampOpacity, type AnimComboId, type AnimInId, type AnimLoopId, type Clip, type ClipTransform, type Keyframe, type Overlay } from "./types";
+import { activePhotoMotion, clampOpacity, PHOTO_MOTION_LIMITS, type AnimComboId, type AnimInId, type AnimLoopId, type Clip, type ClipTransform, type Keyframe, type Overlay, type PhotoMotionId } from "./types";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, sourceTimeAt } from "./timeline";
 
 /**
@@ -96,6 +96,55 @@ export function animLoopDelta(id: AnimLoopId, seconds: number): MotionDelta {
   return d;
 }
 
+// ---- Photo motion (the Motion tool) — TypeScript only. NOT mirrored in Motion.swift, and it must not be: every formula below is a
+// straight line in e = smooth(p), which is exactly how two keyframes are interpolated, so the export is sent the motion as two pins
+// (`photoMotionPins`, used by `toExportClip`). Changing the easing here breaks that equality; `photoMotion.test.ts` proves it.
+
+/** `zoom` / `pan` at the default strength are the older Combos' amounts (`MOTION.comboZoom`, `MOTION.pan`); `gentle` … `strong` scale them. */
+export const PHOTO_MOTION = { zoom: 0.15, pan: 0.05, gentle: 0.4, strong: 1.6 } as const;
+
+/** How far a motion goes at a strength (0–1, clamped; not a number → the default): gentle (0.4×) … strong (1.6×), exactly 1× at 0.5. */
+export const photoMotionAmount = (strength: number): number =>
+  PHOTO_MOTION.gentle + (PHOTO_MOTION.strong - PHOTO_MOTION.gentle) * clamp01(Number.isFinite(strength) ? strength : PHOTO_MOTION_LIMITS.defaultStrength);
+
+/**
+ * A photo's motion at LINEAR progress `p` through the photo (clamped to 0–1; not a number → no movement). Offsets are fractions of the
+ * frame (x right, y down). A pan is enlarged by twice its travel and a corner zoom moves by half of what it grew, so a photo that
+ * fills the frame keeps covering it.
+ */
+export function photoMotionDelta(id: PhotoMotionId, strength: number, p: number): MotionDelta {
+  const d = identity();
+  if (!Number.isFinite(p)) return d;
+  const k = photoMotionAmount(strength);
+  const e = smooth(p);
+  const zoom = PHOTO_MOTION.zoom * k;
+  const pan = PHOTO_MOTION.pan * k;
+  switch (id) {
+    case "zoomIn": d.scale = 1 + zoom * e; break;
+    case "zoomOut": d.scale = 1 + zoom * (1 - e); break;
+    case "panLeft": d.scale = 1 + 2 * pan; d.dx = pan * (1 - 2 * e); break;      // starts to the right, moves left
+    case "panRight": d.scale = 1 + 2 * pan; d.dx = pan * (2 * e - 1); break;
+    case "panUp": d.scale = 1 + 2 * pan; d.dy = pan * (1 - 2 * e); break;        // starts lower, moves up
+    case "panDown": d.scale = 1 + 2 * pan; d.dy = pan * (2 * e - 1); break;
+    case "zoomCorner": d.scale = 1 + zoom * e; d.dx = (d.scale - 1) / 2; d.dy = (d.scale - 1) / 2; break;   // the top-left corner stays put
+    default: break;
+  }
+  return d;
+}
+
+/**
+ * The motion as the export plays it: two pins in clip-local seconds, at 0 and at `length`, each the photo's own placement combined
+ * with the motion there. Null when no motion plays (`activePhotoMotion`) or there is no length. A photo runs at speed 1 from 0, so its
+ * output time is its own time.
+ */
+export function photoMotionPins(clip: Clip, length: number): Keyframe[] | null {
+  const m = activePhotoMotion(clip);
+  if (!m || !Number.isFinite(length) || !(length > 0)) return null;
+  const t = clip.transform;
+  const base: KeyValues = { x: t.x, y: t.y, scale: t.scale, rotation: t.rotation, opacity: 1 };
+  return [0, 1].map((p) => ({ t: p * length, ...combine(base, photoMotionDelta(m.id, m.strength, p)) }));
+}
+
 /** In / Out lengths that fit inside an item of `length` seconds: both shrink proportionally when `in + out > length`. */
 export function edgeDurations(inDur: number, outDur: number, length: number): { in: number; out: number } {
   const a = Number.isFinite(inDur) && inDur > 0 ? inDur : 0;
@@ -183,6 +232,9 @@ export function resolveClipMotion(clip: Clip, offsetInClip: number): { transform
     delta = a.combo
       ? animComboDelta(a.combo, length > 0 ? local / length : 0, local)
       : edgeDelta(a.in, a.out, local, length, MOTION.slideClip);
+    // A photo's Motion (never with a Combo or keyframes: `activePhotoMotion`). A clip without one skips this line's effect entirely.
+    const m = activePhotoMotion(clip);
+    if (m) delta = compose(delta, photoMotionDelta(m.id, m.strength, length > 0 ? local / length : 0));
   }
   const v = combine(base, delta);
   return { transform: { ...clip.transform, x: v.x, y: v.y, scale: v.scale, rotation: v.rotation }, opacity: clamp01(v.opacity) * clampOpacity(clip.opacity) };
@@ -211,6 +263,6 @@ export function resolveOverlayMotion(o: Overlay, time: number): KeyValues {
 
 /** Any animation or keyframe (a clip without takes exactly the old preview / export path). */
 export const hasClipMotion = (c: Clip): boolean =>
-  c.animation.in !== null || c.animation.out !== null || c.animation.combo !== null || c.keyframes.length > 0;
+  c.animation.in !== null || c.animation.out !== null || c.animation.combo !== null || c.keyframes.length > 0 || activePhotoMotion(c) !== null;
 export const hasOverlayMotion = (o: Overlay): boolean =>
   o.animation.in !== null || o.animation.out !== null || o.animation.loop !== null || o.keyframes.length > 0;

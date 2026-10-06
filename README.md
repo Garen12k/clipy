@@ -257,7 +257,14 @@ Animations and keyframes. Everything shows exactly in the preview (no "Preview" 
 
 - **Clip animations** (Edit, Animate) - **In** and **Out**: Fade, Slide left / right / up / down, Zoom in,
   Zoom out, Spin, Pop, Rise, with a **Length** slider. Or one **Combo**: Slow zoom in, Slow zoom out,
-  Pan left, Pan right, Sway, Pulse. "Apply to all clips" copies it everywhere.
+  Pan left, Pan right, Sway, Pulse (for a photo the Combo list is only Sway and Pulse: its zoom and pan are
+  the Motion tool's). "Apply to all clips" copies it everywhere.
+- **Photo motion** (select a photo, **Motion**, after Animate) - None, Zoom in, Zoom out, Pan left / right / up /
+  down, Corner zoom, with a **Strength** slider and **Apply to all photos**. It starts and ends softly. A photo has
+  either a Motion, a Combo or keyframes, never two of them: picking one removes the other, and the Keyframe tool is
+  not offered while a Motion is set. An old "Slow zoom" or "Pan" Combo on a photo shows as its Motion tile and keeps
+  playing exactly as before. The In and Out animations still work with a Motion. In the editor a photo is redrawn
+  20 times a second, so its movement is a little less fluid than in the exported video.
 - **Text and sticker animations** (Text or Stickers, Animate) - **In**, **Out** and **Loop**: Wiggle,
   Pulse, Spin, Float, Blink, Shake. Captions do not animate.
 - **Keyframes** (the diamond "Keyframe" tool in Edit, Text and Stickers) - tap it to pin the position,
@@ -340,6 +347,16 @@ Overlay is on the first row; the rest is on the row of a selected layer.
 - **Overlay** - pick a photo or a video. It is added as a layer on top of the main video at the playhead,
   small and in the middle, with its own bar on a **layers** lane of the timeline. Up to 8 layers; at most
   2 *video* layers can play at the same moment (photo layers are not limited that way).
+- **Collage** (the main bar, after Overlay; also on a collage cell's bar) - six layouts: Side by side, Stacked,
+  Big and two, Row of three, Grid of four, Inset. Pick that many photos or videos (at most 2 videos); each one is
+  an ordinary layer that fills its cell, so every layer tool works on it. **Border** (0 to 6 %) opens a gap between
+  the pictures and around them: the main video shows through it, there is no coloured border, and the main video's
+  sound keeps playing. **Corner** has three stops: Square, Rounded, Round. With a cell selected, the panel shows
+  the layout tiles of that collage (Side by side, Stacked and Inset for two pictures) and re-lays it. A cell you moved
+  by hand is left alone by the sliders and the layout tiles. After a **Ratio** change nothing moves by itself:
+  **Fit to frame** appears in the panel and lines the cells up for the new shape. A very wide or very tall picture
+  (an iPhone panorama in Side by side, a 16:9 video in Row of three on a 9:21 frame) is fitted with strips of the main
+  video showing at two sides instead of filling its cell. Replace puts the new picture into the same cell.
 - **Select** a layer by tapping it on the preview or tapping its bar. Pinch, drag and twist it on the
   preview. Long-press its bar to move it in time; drag the bar's ends to trim. **Forward** / **Back**
   change which layer is on top.
@@ -503,3 +520,9 @@ Left by the reviews of the same work:
 78. **Dust density** was lowered to `dustSpeck` 0.005 (from 0.02) by reasoning only: confirm by eye that the specks are a faint sprinkle and not a haze, and tune both files together (item 62).
 79. **Effect order.** The preview draws the flat layers before the shapes; the export uses list order. Strobe after Film burn hides the burn in the export but not on the phone.
 80. **White flash, Heartbeat and Strobe show the Preview tag although they are exact.** Kept on purpose: the spec promises the tag for every look.
+
+**Photo motion and collages** (added no native code: a Motion is exported as two keyframes on the photo, a collage as layers with a crop and a mask):
+
+81. **A photo's Motion in the export** moves the way it does in the editor: Zoom in, a Pan and Corner zoom, at Strength 0, 50 and 100 %, with an In animation too. The motion ends where the photo ends: it is sent as two pins and the second one sits at the photo's length in the app (`clipDuration`), while Swift measures the clip's own length, so a mismatch would make it stop a fraction of a second early or late.
+82. **No background at a zoomed photo's edges.** At Strength 100 and a Pan the photo still covers the frame (no black, colour or blurred background at an edge), also for a photo whose shape is far from the frame's.
+83. **A collage exports with every picture on its cell.** A four-cell collage with a border and Rounded corners looks like the preview, and so do Round corners on non-square cells: they should look like the preview's pills (Rounded and Round are masks over a non-square cell, so check the shape matches). A cell with a video plays.

@@ -13,7 +13,7 @@ import { useToast } from "@/src/ui/Toast";
 import { BAR_HEIGHT, STRIP } from "@/src/ui/ToolStrip";
 import * as ops from "@/src/editor/model/ops";
 import { deleteClip, moveClip } from "@/src/editor/model/ops";
-import { AUDIO_LIMITS, makeAudioTrack, makeClip, makeEffect, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { AUDIO_LIMITS, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 import { LANE_GAP, LANE_HEIGHT } from "../timelineLayout";
@@ -28,7 +28,7 @@ const row = () => screen.getAllByRole("button").map((b) => b.props.accessibility
 /** Closes whatever tool is open: a strip's or a panel's ✓, or the Cover sheet's scrim. */
 const closeTool = async () => { await fireEvent.press(screen.queryByRole("button", { name: "Done" }) ?? screen.getByLabelText("Close sheet")); };
 const BACK = "Back to main tools";
-const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Effects", "Filter", "Adjust", "Ratio", "Background", "Cover", "Templates"];
+const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Collage", "Effects", "Filter", "Adjust", "Ratio", "Background", "Cover", "Templates"];
 const CLIP = ["Split", "Trim", "Select", "Speed", "Volume", "Animate", "Filter", "Adjust", "Background", "Templates", "Crop", "Transform", "Opacity", "Mask", "Green screen", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate", "Delete"];
 const TEXT = ["Edit", "Animate", "Keyframe", "Duplicate", "Delete", "Add text"];
 const SOUND = ["Split", "Volume", "Fade", "Duplicate", "Delete", "Add audio", "Ducking", "Beats"];
@@ -1066,5 +1066,75 @@ describe("Select (multi-select)", () => {
     await fireEvent.press(btn("Select"));
     expect(screen.getByRole("header", { name: "1 selected" })).toBeTruthy();
     expect(st()).toMatchObject({ multiSelect: ["a"], selectedClipId: null });
+  });
+});
+
+describe("Motion and Collage on the bar", () => {
+  test("a photo has Motion: it opens the Motion strip, and a tile there is one undo step", async () => {
+    st().setProject(makeProject({ clips: [makePhotoClip({ id: "p" }), makeClip({ id: "a", sourceDuration: 4 })] }));
+    await renderBar();
+    await act(() => { st().select("p"); });
+    await fireEvent.press(btn("Motion"));
+    expect(useToolStrip.getState().open).toEqual({ id: "photoMotion", key: "clip:p" });
+    expect(screen.getByText("Apply to all photos")).toBeTruthy();
+    await fireEvent.press(btn("Zoom in"));
+    expect(st().project!.clips[0].motion).toEqual({ id: "zoomIn", strength: 0.5 });
+    expect(st().past).toHaveLength(1);
+    await closeTool();
+    gone("Keyframe");                       // a photo with a Motion: one way of moving at a time
+    await act(() => { st().select("a"); });
+    gone("Motion");
+  });
+
+  test("a photo with keyframes has Keyframe and no Motion", async () => {
+    st().setProject(makeProject({ clips: [makePhotoClip({ id: "p", keyframes: [makeKeyframe({ t: 0 })] }), makeClip({ id: "a", sourceDuration: 4 })] }));
+    await renderBar();
+    await act(() => { st().select("p"); });
+    gone("Motion");
+    expect(btn("Keyframe")).toBeTruthy();
+  });
+
+  test("Collage on the main bar opens the panel with the six layouts and nothing selected", async () => {
+    await renderBar();
+    await fireEvent.press(btn("Collage"));
+    expect(useToolStrip.getState().open).toEqual({ id: "collage", key: "none" });
+    expect(btn("Grid of four")).toBeTruthy();
+    expect(st().selectedClipId).toBeNull();
+    await closeTool();
+    expect(row()).toEqual(MAIN);
+  });
+
+  test("a collage cell has Collage first on its bar; it opens the panel on that collage", async () => {
+    const cell = { ...makePhotoClip({ id: "c" }), start: 0, transform: { scale: 0.5, x: -0.25, y: 0, rotation: 0, flipH: false, flipV: false }, crop: { x: 0.25, y: 0, w: 0.5, h: 1 },
+      collage: { group: "g", layout: "sideBySide" as const, cell: 0, border: 0, corner: 0 as const, aspect: 0.5625 } };
+    st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [cell] }));
+    await renderBar();
+    await act(() => { st().select("c"); });
+    expect(row().slice(0, 3)).toEqual([BACK, "Collage", "Trim"]);
+    gone("Motion");
+    await fireEvent.press(btn("Collage"));
+    expect(useToolStrip.getState().open).toEqual({ id: "collage", key: "clip:c" });
+    expect(btn("Side by side")).toBeSelected();
+    expect(screen.queryByRole("button", { name: "Grid of four" })).toBeNull();
+  });
+
+  test("making a collage from the main bar: the panel stays open and is on the new collage (it follows the selection)", async () => {
+    pick.mockReset(); importMedia.mockReset();
+    const photo = { uri: "file:///x.jpg", kind: "photo" as const, durationSec: 0, width: 1000, height: 1000 };
+    pick.mockResolvedValueOnce([photo, photo]);
+    importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "i1", width: 1000, height: 1000 }), makePhotoClip({ id: "i2", width: 1000, height: 1000 })], failed: 0 });
+    await renderBar();
+    await fireEvent.press(btn("Collage"));
+    await fireEvent.press(btn("Side by side"));
+    await waitFor(() => expect(st().project!.layers).toHaveLength(2));
+    const first = st().project!.layers[0];
+    expect(first.collage).toBeDefined();
+    expect(st().selectedClipId).toBe(first.id);
+    expect(useToolStrip.getState().open).toEqual({ id: "collage", key: `clip:${first.id}` });
+    await waitFor(() => expect(btn("Side by side")).toBeSelected());
+    expect(screen.queryByRole("button", { name: "Grid of four" })).toBeNull();   // edit mode: only the layouts with as many cells
+    expect(st().past).toHaveLength(1);
+    await closeTool();
+    expect(row().slice(0, 3)).toEqual([BACK, "Collage", "Trim"]);
   });
 });
