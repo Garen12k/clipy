@@ -1,11 +1,13 @@
 import { requestPermissionsAsync, saveToLibraryAsync } from "expo-media-library/legacy";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import * as Sharing from "expo-sharing";
+import { useEffect } from "react";
 import { coverTimeOf, LAST_FRAME_SLACK } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { ExportScreenBody } from "@/src/export/ExportScreenBody";
 import { exportDuration } from "@/src/export/estimate";
 import { useExport } from "@/src/export/useExport";
+import { exportGesture } from "@/src/navigation/screenOptions";
 import { isBackendConfigured } from "@/src/publish/supabase";
 import { ToastHost, useToast } from "@/src/ui/Toast";
 
@@ -13,6 +15,9 @@ export default function ExportScreen() {
   const project = useEditorStore((s) => s.project);
   const missingSourceUris = useEditorStore((s) => s.missingSourceUris);
   const { state, start, cancel, reset } = useExport(project, missingSourceUris);
+  // While the video renders the sheet cannot be swiped away (see exportGesture); Cancel is the way out.
+  const navigation = useNavigation();
+  useEffect(() => { navigation.setOptions(exportGesture(state.status)); }, [navigation, state.status]);
   if (!project) return null;
 
   // `expo-media-library`'s default (non-legacy) `saveToLibraryAsync` is a shim that throws at

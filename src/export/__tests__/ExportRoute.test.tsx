@@ -1,10 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
-jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn(), dismiss: jest.fn() } }));
+const mockNav = { setOptions: jest.fn() };
+jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn(), dismiss: jest.fn() }, useNavigation: () => mockNav }));
 jest.mock("expo-media-library/legacy", () => ({ requestPermissionsAsync: jest.fn(), saveToLibraryAsync: jest.fn() }));
 jest.mock("expo-sharing", () => ({ shareAsync: jest.fn() }));
 jest.mock("@/src/lib/fileInfo", () => ({ fileSize: () => 14000000 }));
 jest.mock("@/src/publish/supabase", () => ({ isBackendConfigured: jest.fn() }));
-jest.mock("@/src/export/useExport", () => ({ useExport: () => ({ state: { status: "done", progress: 1, fileUri: "file:///out.mp4" }, start: jest.fn(), cancel: jest.fn(), reset: jest.fn() }) }));
+const DONE = { status: "done", progress: 1, fileUri: "file:///out.mp4" };
+let mockState: { status: string; progress: number; fileUri?: string } = DONE;
+jest.mock("@/src/export/useExport", () => ({ useExport: () => ({ state: mockState, start: jest.fn(), cancel: jest.fn(), reset: jest.fn() }) }));
 import { router } from "expo-router";
 import ExportScreen from "@/app/editor/[id]/export";
 import { makeClip, makeProject } from "@/src/editor/model/types";
@@ -13,6 +16,7 @@ import { isBackendConfigured } from "@/src/publish/supabase";
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockState = DONE;
   useEditorStore.getState().reset();
   useEditorStore.getState().setProject(makeProject({ id: "p1", name: "Beach day", clips: [makeClip({ id: "a", sourceDuration: 21 })] }));
 });
@@ -62,4 +66,34 @@ describe("cover hand-off", () => {
   test("no cover, no key", async () => {
     expect("coverMs" in (await press())).toBe(false);
   });
+});
+
+test("while exporting, the sheet's swipe-down is switched off", async () => {
+  (isBackendConfigured as jest.Mock).mockReturnValue(false);
+  mockState = { status: "exporting", progress: 0.3 };
+  await render(<ExportScreen />);
+  expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();      // the way out
+});
+
+test("when the export is finished (or has not started) the sheet can be swiped down again", async () => {
+  (isBackendConfigured as jest.Mock).mockReturnValue(false);
+  mockState = { status: "exporting", progress: 0.9 };
+  const view = await render(<ExportScreen />);
+  mockState = DONE;
+  await view.rerender(<ExportScreen />);
+  expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
+  mockState = { status: "idle", progress: 0 };
+  await view.rerender(<ExportScreen />);
+  expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
+});
+
+test.each(["error", "unavailable"])("after an export that is %s the sheet can be swiped down", async (status) => {
+  (isBackendConfigured as jest.Mock).mockReturnValue(false);
+  mockState = { status: "exporting", progress: 0.4 };
+  const view = await render(<ExportScreen />);
+  expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: false });
+  mockState = { status, progress: 0 };
+  await view.rerender(<ExportScreen />);
+  expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
 });

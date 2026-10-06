@@ -4,6 +4,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { fontAssets } from "@/src/editor/fonts";
+import { ROUTE_NAMES, ROUTE_OPTIONS, STACK_OPTIONS } from "@/src/navigation/screenOptions";
 import { theme } from "@/src/theme/theme";
 import { uiFontAssets } from "@/src/theme/uiFonts";
 import { LoadingScreen } from "@/src/ui/LoadingScreen";
@@ -21,8 +22,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.bg }} onLayout={hideSplash}>
       {ready ? (
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.bg }, animation: "fade" }}>
-          <Stack.Screen name="editor/[id]/export" options={{ presentation: "modal" }} />
+        <Stack screenOptions={STACK_OPTIONS}>
+          {ROUTE_NAMES.map((name) => <Stack.Screen key={name} name={name} options={ROUTE_OPTIONS[name]} />)}
         </Stack>
       ) : null}
       {gone ? null : <LoadingScreen leaving={ready} onGone={onGone} />}
