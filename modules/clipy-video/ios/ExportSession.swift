@@ -579,6 +579,8 @@ final class ExportSession {
   /// the opacity multiplies the visibility / motion opacity; a caption's spoken words are copies above it, one per
   /// word. Every one of those is guarded, so a text with the neutral style and no words builds the container and
   /// the one text layer it always built.
+  /// The background box: its padding (`l.padding`) and its corner radius (`l.boxRadius`) are the layout's — the default
+  /// style gives the box every text had (a quarter of the font size, corners half of that).
   static func overlayLayer(_ o: ExportOverlay, renderSize: CGSize) -> CALayer {
     let l = OverlayLayout.layout(o, frame: renderSize)
     // CTFontCreateWithName never fails (it silently substitutes), so check availability through UIFont first.
@@ -626,7 +628,7 @@ final class ExportSession {
     container.position = overlayPosition(x: o.x, y: o.y, renderSize: renderSize)   // = (l.centerX, H − l.centerY)
     if let bg = o.backgroundColor {
       container.backgroundColor = UIColor(hex: bg).withAlphaComponent(CGFloat(o.backgroundOpacity)).cgColor
-      container.cornerRadius = pad / 2
+      container.cornerRadius = l.boxRadius
     }
 
     // Every text layer of this overlay: the same frame, alignment and wrapping, so the copies sit exactly on the fill.

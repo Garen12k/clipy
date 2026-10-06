@@ -246,6 +246,31 @@ final class ExportSessionTests: XCTestCase {
     XCTAssertNil(SVGPath.cgPath(from: "M0 0 A10 10 0 0 1 20 20"), "unsupported commands are rejected")
   }
 
+  /// Frames and rings are one compound path: the inner subpath is wound the other way, so it is a hole under the
+  /// shape layer's default non-zero rule — also after the export's vertical flip. Points are in the 100 × 100 box.
+  func testCompoundShapesKeepTheirHoles() throws {
+    XCTAssertEqual(Effects.shapePaths.count, 20)
+    let ring = try XCTUnwrap(SVGPath.cgPath(from: try XCTUnwrap(Effects.shapePaths["ring"])))
+    XCTAssertTrue(ring.contains(CGPoint(x: 7, y: 50), using: .winding))        // in the band (x 0…14)
+    XCTAssertFalse(ring.contains(CGPoint(x: 50, y: 50), using: .winding))      // the hole
+    let frame = try XCTUnwrap(SVGPath.cgPath(from: try XCTUnwrap(Effects.shapePaths["frameRounded"])))
+    XCTAssertTrue(frame.contains(CGPoint(x: 6, y: 50), using: .winding))
+    XCTAssertFalse(frame.contains(CGPoint(x: 50, y: 50), using: .winding))
+    // As `stickerLayer` places it: scaled to a 200-px box and flipped to y-up.
+    var flip = CGAffineTransform(a: 2, b: 0, c: 0, d: -2, tx: 0, ty: 200)
+    let placed = try XCTUnwrap(ring.copy(using: &flip))
+    XCTAssertTrue(placed.contains(CGPoint(x: 14, y: 100), using: .winding))
+    XCTAssertFalse(placed.contains(CGPoint(x: 100, y: 100), using: .winding))
+    // Subpaths wound the same way that overlap are a union, not a hole: the award's left tail under its disc.
+    let award = try XCTUnwrap(SVGPath.cgPath(from: try XCTUnwrap(Effects.shapePaths["badgeRibbon"])))
+    XCTAssertTrue(award.contains(CGPoint(x: 34, y: 66), using: .winding))
+    // Separate subpaths that do not touch: the thought bubble's two dots.
+    let thought = try XCTUnwrap(SVGPath.cgPath(from: try XCTUnwrap(Effects.shapePaths["bubbleThought"])))
+    XCTAssertTrue(thought.contains(CGPoint(x: 24, y: 80), using: .winding))
+    XCTAssertTrue(thought.contains(CGPoint(x: 9, y: 93), using: .winding))
+    XCTAssertFalse(thought.contains(CGPoint(x: 40, y: 80), using: .winding))
+  }
+
   /// Clip 1 (2 s at speed 2 → 1 s, warm, dissolve 0.5 s into clip 2) + clip 2 (2 s): 3 s total; neither source has
   /// handle material, so both edges of the transition are holds. Overlays: text, emoji sticker, heart shape.
   func testExportsWithEffects() async throws {

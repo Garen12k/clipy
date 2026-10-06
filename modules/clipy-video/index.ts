@@ -4,7 +4,7 @@ import { clipGainCurve, exportTrackCurve, type GainPoint } from "@/src/editor/mo
 import { trackEnd } from "@/src/editor/model/audioSync";
 import { edgeDurations } from "@/src/editor/model/motion";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
-import { DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type ExportFps, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
+import { clampTextStyle, DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type BoxCorner, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type ExportFps, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -20,17 +20,19 @@ export interface ExportKeyframe { t: number; x: number; y: number; scale: number
 const copyKeyframe = (k: Keyframe): ExportKeyframe => ({ t: k.t, x: k.x, y: k.y, scale: k.scale, rotation: k.rotation, opacity: k.opacity });
 const toEdge = (e: AnimEdge | null, duration: number): ExportAnimEdge | null => (e && duration > 0 ? { id: e.id, duration } : null);
 
-/** `TextStyle` as the native record has it: shadow / glow flattened, a null colour = that feature is off (its numbers are 0). */
+/** `TextStyle` as the native record has it: shadow / glow flattened, a null colour = that feature is off (its numbers are 0); the box fields are the background box's padding and corner. */
 export interface ExportTextStyle {
   opacity: number; letterSpacing: number; lineSpacing: number; outlineColor: string | null; outlineWidth: number;
   shadowColor: string | null; shadowOpacity: number; shadowDistance: number; shadowBlur: number;
   glowColor: string | null; glowSize: number;
+  boxPadding: number; boxCorner: BoxCorner;      // the background box: padding as a fraction of the font size; "rounded" | "square"
 }
 export interface ExportCaptionWord { text: string; start: number; end: number }   // seconds since the caption's start
-const toExportStyle = (s: TextStyle): ExportTextStyle => ({
+/** The box fields go through the model's clamp, so they are always a number in range and a known corner: the native record cannot decode a `null`. */
+const toExportStyle = (s: TextStyle, box: TextStyle = clampTextStyle(s)): ExportTextStyle => ({
   opacity: s.opacity, letterSpacing: s.letterSpacing, lineSpacing: s.lineSpacing, outlineColor: s.outlineColor, outlineWidth: s.outlineWidth,
   shadowColor: s.shadow?.color ?? null, shadowOpacity: s.shadow?.opacity ?? 0, shadowDistance: s.shadow?.distance ?? 0, shadowBlur: s.shadow?.blur ?? 0,
-  glowColor: s.glow?.color ?? null, glowSize: s.glow?.size ?? 0,
+  glowColor: s.glow?.color ?? null, glowSize: s.glow?.size ?? 0, boxPadding: box.boxPadding, boxCorner: box.boxCorner,
 });
 
 export interface ExportOverlay {
