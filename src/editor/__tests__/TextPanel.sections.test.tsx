@@ -133,3 +133,11 @@ test("a caption gets the same rows (no looks row); the panel is still one vertic
   expect(scroll.props.horizontal).toBeFalsy();
   expect(Object.keys(scroll.props).filter((k) => /^on.*Scroll/.test(k))).toEqual([]);
 });
+
+test("the order: text field, looks, fonts, the five style rows, then Size, colour and Align", async () => {
+  await show();
+  const tree = JSON.stringify(screen.toJSON());
+  const at = (needle: string) => { const i = tree.indexOf(needle); expect(i).toBeGreaterThan(-1); return i; };
+  const order = ["Overlay text", '"template-strip"', '"font-strip"', '"style-sections"', '"size-slider"', "Align left"].map(at);
+  expect([...order].sort((a, b) => a - b)).toEqual(order);
+});

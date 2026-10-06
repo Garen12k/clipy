@@ -137,3 +137,27 @@ describe("caption presets", () => {
     expect(CAPTION_PRESET_IDS.filter((id) => c[id].patch.highlightColor !== null)).toEqual(["karaoke"]);
   });
 });
+
+describe("the first twelve looks, frozen", () => {
+  // Copied from the file as it stood before the 2026-10-06 round (git daf7a60), plus the two box fields every text had then.
+  const box = { boxPadding: 0.25, boxCorner: "rounded" } as const;
+  const none = { opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null, ...box };
+  const FROZEN = {
+    cleanTitle: { fontId: "poppins", color: "#FFFFFF", background: null, outline: false, style: { ...none, letterSpacing: 0.02, shadow: { color: "#000000", opacity: 0.35, distance: 0.03, blur: 0.12 } } },
+    boldPop: { fontId: "anton", color: "#FFFFFF", background: null, outline: true, style: { ...none, letterSpacing: 0.02, outlineColor: "#000000", outlineWidth: 2 }, animation: { in: { id: "pop", duration: 0.4 } } },
+    neon: { fontId: "righteous", color: "#FFD6F5", background: null, outline: false, style: { ...none, letterSpacing: 0.04, glow: { color: "#FF2BD6", size: 0.45 } } },
+    subtitleBar: { fontId: "montserrat", color: "#FFFFFF", background: { color: "#000000", opacity: 0.75 }, outline: false, style: { ...none } },
+    comic: { fontId: "bangers", color: "#FFE14D", background: null, outline: true, style: { ...none, letterSpacing: 0.03, outlineColor: "#000000", outlineWidth: 2.2, shadow: { color: "#000000", opacity: 1, distance: 0.08, blur: 0 } } },
+    retro: { fontId: "pressStart", color: "#FFD23F", background: null, outline: false, style: { ...none, lineSpacing: 1.4, shadow: { color: "#D7263D", opacity: 1, distance: 0.1, blur: 0 } } },
+    handwritten: { fontId: "caveat", color: "#FFFFFF", background: null, outline: false, style: { ...none, lineSpacing: 0.9, shadow: { color: "#000000", opacity: 0.55, distance: 0.04, blur: 0.15 } } },
+    elegant: { fontId: "playfair", color: "#F7E7CE", background: null, outline: false, style: { ...none, letterSpacing: 0.08, lineSpacing: 1.15, shadow: { color: "#000000", opacity: 0.45, distance: 0.03, blur: 0.2 } } },
+    shadowed: { fontId: "oswald", color: "#FFFFFF", background: null, outline: false, style: { ...none, shadow: { color: "#000000", opacity: 0.85, distance: 0.1, blur: 0.18 } } },
+    outlineOnly: { fontId: "bebasNeue", color: "#111111", background: null, outline: true, style: { ...none, letterSpacing: 0.05, outlineColor: "#FFFFFF", outlineWidth: 2.6 } },
+    stickerLabel: { fontId: "fredoka", color: "#1B1B1F", background: { color: "#FFD23F", opacity: 1 }, outline: false, style: { ...none } },
+    softGlow: { fontId: "roboto", color: "#FFF4D6", background: null, outline: false, style: { ...none, letterSpacing: 0.01, glow: { color: "#FFB84D", size: 0.3 } } },
+  };
+  test("none of them has moved a value", () => {
+    expect(TEXT_TEMPLATE_IDS.slice(0, 12)).toEqual(Object.keys(FROZEN));
+    for (const [id, patch] of Object.entries(FROZEN)) expect(TEXT_TEMPLATES[id as keyof typeof TEXT_TEMPLATES].patch).toEqual(patch);
+  });
+});

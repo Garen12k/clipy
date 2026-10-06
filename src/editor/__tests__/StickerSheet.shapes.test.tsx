@@ -20,7 +20,7 @@ test("the Shapes tab offers all twenty shapes in the registry's order, inside th
   expect(screen.getByTestId("shape-list")).toHaveStyle({ height: panelHeight("regular", Dimensions.get("window").height) - 1 - PANEL.header - PANEL.lead });
 });
 
-test.each([["Ring", "ring"], ["Thought", "bubbleThought"], ["Corners", "brackets"], ["Two-way", "arrowDouble"]] as const)(
+test.each([["Ring", "ring"], ["Thought bubble", "bubbleThought"], ["Corner marks", "brackets"], ["Two-way arrow", "arrowDouble"]] as const)(
   "tapping %s adds that shape as a selected sticker at the playhead, in the chosen colour — one undo step", async (label, shape) => {
     const onAdded = jest.fn();
     await render(<StickerSheet visible onClose={() => {}} onAdded={onAdded} />);
@@ -39,4 +39,9 @@ test("the preview draws a compound shape as ONE path with no fill rule: the coun
   expect(path.props.d).toBe(SHAPES.ring.path);
   expect(path.props.fill).toBe("#FF0000");
   expect(path.props.fillRule).toBeUndefined();
+});
+
+test("the emoji grid renders at most twenty rows per batch, so a hard fling shows no blank bands", async () => {
+  await render(<StickerSheet visible onClose={() => {}} onAdded={() => {}} />);
+  expect(screen.getByTestId("emoji-grid").props.maxToRenderPerBatch).toBe(20);
 });

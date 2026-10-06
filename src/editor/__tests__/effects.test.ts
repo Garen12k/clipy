@@ -133,12 +133,12 @@ const SUBPATH = /^M[\d.]+ [\d.]+(?: (?:L[\d.]+ [\d.]+|Q[\d.]+(?: [\d.]+){3}|C[\d
 /** The subpaths (by index) that are holes. */
 const HOLES: Partial<Record<ShapeId, number[]>> = { frameRounded: [1], ring: [1] };
 
-test("twenty shapes: the first seven as they were, then the thirteen of 2026-10-06, each with its own short label", () => {
+test("twenty shapes: the first seven as they were, then the thirteen of 2026-10-06, each with its own label of at most two words", () => {
   expect(SHAPE_IDS).toEqual(["circle", "square", "roundedBox", "arrow", "star", "speechBubble", "heart",
     "arrowCurved", "arrowDouble", "bubbleRound", "bubbleSquare", "bubbleThought", "badgeSeal", "badgeRibbon", "banner", "sparkle", "burst", "frameRounded", "ring", "brackets"]);
   expect(Object.keys(SHAPES)).toEqual([...SHAPE_IDS]);
   expect(SHAPE_IDS.map((id) => SHAPES[id].label)).toEqual(["Circle", "Square", "Box", "Arrow", "Star", "Bubble", "Heart",
-    "Curved", "Two-way", "Round", "Sharp", "Thought", "Seal", "Award", "Banner", "Sparkle", "Burst", "Frame", "Ring", "Corners"]);
+    "Curved arrow", "Two-way arrow", "Round bubble", "Sharp bubble", "Thought bubble", "Seal badge", "Award ribbon", "Banner", "Sparkle", "Burst", "Frame", "Ring", "Corner marks"]);
   expect(SHAPES.circle.path).toBe("M50 0 C77.6 0 100 22.4 100 50 C100 77.6 77.6 100 50 100 C22.4 100 0 77.6 0 50 C0 22.4 22.4 0 50 0 Z");   // an old one, untouched
   expect(SHAPES.heart.path).toBe("M50 90 C20 65 0 50 0 30 C0 13 13 0 28 0 C38 0 46 6 50 14 C54 6 62 0 72 0 C87 0 100 13 100 30 C100 50 80 65 50 90 Z");
 });

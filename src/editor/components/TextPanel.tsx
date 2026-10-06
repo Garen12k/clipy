@@ -63,16 +63,16 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
       {/* Templates are for texts only (`applyTextTemplate` refuses captions, which have their own presets). */}
       {overlay.kind === "text" && <TemplateStrip tiles={TEXT_TEMPLATE_TILES} onPick={(templateId) => apply((x) => applyTextTemplate(x, id, templateId))} />}
       <FontStrip value={overlay.fontId} onChange={(fontId) => patch({ fontId })} />
+      <TextStyleSection style={overlay.style} outline={overlay.outline} background={overlay.background} boxOpacityTestID="opacity-slider"
+        onBegin={beginTransaction} onPatch={patchStyle} onPatchTransient={patchStyleTransient}
+        onOutline={(outline) => patch({ outline })} onBackground={(background) => patch({ background })}
+        onBackgroundTransient={(background) => applyTransient((x) => updateOverlay(x, id, { background }))} />
       <View><ValueLabel label="Size" value={`${Math.round(overlay.fontScale * 100)}%`} />
         <Slider testID="size-slider" minimumValue={OVERLAY_LIMITS.fontScale[0]} maximumValue={OVERLAY_LIMITS.fontScale[1]} value={overlay.fontScale} {...sizeSlider} /></View>
       <ColorRow value={overlay.color} onChange={(color) => patch({ color })} />
       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: theme.space.md }}>
         {(["left", "center", "right"] as Align[]).map((a) => <Chip key={a} label={`Align ${a}`} selected={overlay.align === a} onPress={() => patch({ align: a })} />)}
       </View>
-      <TextStyleSection style={overlay.style} outline={overlay.outline} background={overlay.background} boxOpacityTestID="opacity-slider"
-        onBegin={beginTransaction} onPatch={patchStyle} onPatchTransient={patchStyleTransient}
-        onOutline={(outline) => patch({ outline })} onBackground={(background) => patch({ background })}
-        onBackgroundTransient={(background) => applyTransient((x) => updateOverlay(x, id, { background }))} />
       <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" hitSlop={12} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
         <Body style={{ color: theme.colors.sea }}>Fine-tune</Body>
         <Body style={{ color: theme.colors.sea }}>{fine ? "▲" : "▼"}</Body>

@@ -86,7 +86,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               placeholder="Search" placeholderTextColor={theme.colors.textMuted}
               style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.chip, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm }} />
           </View>
-          <FlatList key={searching ? "search" : pack} testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={8} initialNumToRender={FIRST_ROWS} windowSize={7}
+          <FlatList key={searching ? "search" : pack} testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={8} initialNumToRender={FIRST_ROWS} windowSize={7} maxToRenderPerBatch={20}
             keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
             ListHeaderComponent={recent.length > 0 && !query && !typing ? (
               <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap", marginBottom: theme.space.sm }}>
@@ -111,7 +111,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={SHAPES[id].label} onPress={() => addShape(id)}
                 style={{ width: 64, alignItems: "center", gap: theme.space.xs }}>
                 <Svg width={48} height={48} viewBox="0 0 100 100"><Path d={SHAPES[id].path} fill={color} /></Svg>
-                <Body style={{ fontSize: theme.type.small }}>{SHAPES[id].label}</Body>
+                <Body numberOfLines={2} style={{ fontSize: theme.type.small, textAlign: "center" }}>{SHAPES[id].label}</Body>
               </Pressable>
             ))}
           </View>
