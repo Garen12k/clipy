@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Pressable, Switch, TextInput, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 import { overlayBaseAt } from "@/src/editor/model/motion";
 import { applyTextTemplate, deleteOverlay, duplicateOverlay, editOverlayAt, setTextStyle, updateOverlay, updateOverlayShared } from "@/src/editor/model/ops";
 import { isTextOverlay, OVERLAY_LIMITS, type Align, type Project, type TextStyle } from "@/src/editor/model/types";
@@ -11,10 +11,10 @@ import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Slider } from "@/src/ui/Slider";
 import { Body, ValueLabel } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
-import { ColorRow, CONTENT_BLACK } from "./ColorRow";
+import { ColorRow } from "./ColorRow";
 import { FontStrip } from "./FontStrip";
 import { TemplateStrip, TEXT_TEMPLATE_TILES } from "./TemplateStrip";
-import { CollapsibleTextStyle } from "./TextStyleSection";
+import { TextStyleSection } from "./TextStyleSection";
 
 type Props = { overlayId: string | null; visible: boolean; onClose: () => void; onRetarget?: (id: string) => void };
 const field = { backgroundColor: theme.elevation.tile, color: theme.colors.text, borderRadius: theme.radius.chip, fontFamily: theme.fonts.body, padding: theme.space.md, fontSize: 16, minWidth: 72 } as const;
@@ -54,10 +54,7 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
   // The style section: a switch / colour is one undo step; a slider drag is one too (beginTransaction, then transient updates).
   const patchStyle = (sp: Partial<TextStyle>) => apply((x) => setTextStyle(x, id, sp));
   const patchStyleTransient = (sp: Partial<TextStyle>) => applyTransient((x) => setTextStyle(x, id, sp));
-  const slider = (key: "fontScale" | "opacity") => ({
-    onSlidingStart: () => beginTransaction(),
-    onValueChange: (v: number) => applyTransient((x) => updateOverlay(x, id, key === "fontScale" ? { fontScale: v } : { background: { color: overlay.background?.color ?? CONTENT_BLACK, opacity: v } })),
-  });
+  const sizeSlider = { onSlidingStart: () => beginTransaction(), onValueChange: (v: number) => applyTransient((x) => updateOverlay(x, id, { fontScale: v })) };
 
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Text" bodyTestID="text-panel-scroll">
@@ -67,24 +64,15 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
       {overlay.kind === "text" && <TemplateStrip tiles={TEXT_TEMPLATE_TILES} onPick={(templateId) => apply((x) => applyTextTemplate(x, id, templateId))} />}
       <FontStrip value={overlay.fontId} onChange={(fontId) => patch({ fontId })} />
       <View><ValueLabel label="Size" value={`${Math.round(overlay.fontScale * 100)}%`} />
-        <Slider testID="size-slider" minimumValue={OVERLAY_LIMITS.fontScale[0]} maximumValue={OVERLAY_LIMITS.fontScale[1]} value={overlay.fontScale} {...slider("fontScale")} /></View>
+        <Slider testID="size-slider" minimumValue={OVERLAY_LIMITS.fontScale[0]} maximumValue={OVERLAY_LIMITS.fontScale[1]} value={overlay.fontScale} {...sizeSlider} /></View>
       <ColorRow value={overlay.color} onChange={(color) => patch({ color })} />
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Body>Background</Body>
-        <Switch accessibilityLabel="Background" value={!!overlay.background} onValueChange={(on) => patch({ background: on ? { color: CONTENT_BLACK, opacity: 0.6 } : null })} trackColor={{ true: theme.colors.accent }} />
-      </View>
-      {overlay.background && (<>
-        <ColorRow value={overlay.background.color} onChange={(color) => patch({ background: { color, opacity: overlay.background!.opacity } })} />
-        <Slider testID="opacity-slider" minimumValue={0.2} maximumValue={1} value={overlay.background.opacity} {...slider("opacity")} />
-      </>)}
       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: theme.space.md }}>
         {(["left", "center", "right"] as Align[]).map((a) => <Chip key={a} label={`Align ${a}`} selected={overlay.align === a} onPress={() => patch({ align: a })} />)}
       </View>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Body>Outline</Body>
-        <Switch accessibilityLabel="Outline" value={overlay.outline} onValueChange={(outline) => patch({ outline })} trackColor={{ true: theme.colors.accent }} />
-      </View>
-      <CollapsibleTextStyle style={overlay.style} outline={overlay.outline} onBegin={beginTransaction} onPatch={patchStyle} onPatchTransient={patchStyleTransient} />
+      <TextStyleSection style={overlay.style} outline={overlay.outline} background={overlay.background} boxOpacityTestID="opacity-slider"
+        onBegin={beginTransaction} onPatch={patchStyle} onPatchTransient={patchStyleTransient}
+        onOutline={(outline) => patch({ outline })} onBackground={(background) => patch({ background })}
+        onBackgroundTransient={(background) => applyTransient((x) => updateOverlay(x, id, { background }))} />
       <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" hitSlop={12} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
         <Body style={{ color: theme.colors.sea }}>Fine-tune</Body>
         <Body style={{ color: theme.colors.sea }}>{fine ? "▲" : "▼"}</Body>

@@ -36,6 +36,7 @@ test("a size-slider drag restyles every caption as ONE undo step", async () => {
 
 test("a background-opacity drag is ONE undo step", async () => {
   await render(<CaptionStyleSheet visible onClose={() => {}} />);
+  await fireEvent.press(screen.getByRole("button", { name: "Background options" }));
   await drag("caption-opacity-slider", [0.3, 0.5, 0.9]);
   expect(captions().map((o) => o.background)).toEqual([{ color: "#000000", opacity: 0.9 }, { color: "#000000", opacity: 0.9 }]);
   expect(useEditorStore.getState().past).toHaveLength(1);
@@ -88,7 +89,7 @@ describe("presets, sample, highlight and the style section", () => {
   test("the style section writes every caption: a switch and a drag, one undo step each", async () => {
     await show();
     expect(screen.queryByTestId("style-opacity-slider")).toBeNull();
-    await fireEvent.press(screen.getByRole("button", { name: "Style" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Spacing and opacity" }));
     await fireEvent(screen.getByLabelText("Shadow"), "valueChange", true);
     expect(captions().map((c) => c.style.shadow)).toEqual([DEFAULT_SHADOW, DEFAULT_SHADOW]);
     expect(past()).toBe(1);
@@ -157,7 +158,7 @@ describe("presets, sample, highlight and the style section", () => {
       await drag("caption-size-slider", [0.05, 0.09]);
       expect(screen.getByText("Size 9%")).toBeTruthy();
       expect((StyleSheet.flatten(screen.getByText("This is how captions look").props.style) as { fontSize: number }).fontSize).toBeCloseTo(before * 2);
-      await fireEvent.press(screen.getByRole("button", { name: "Style" }));
+      await fireEvent.press(screen.getByRole("button", { name: "Spacing and opacity" }));
       await drag("style-letter-spacing-slider", [0.05, 0.2]);
       expect(screen.getByText("Letter spacing 20")).toBeTruthy();
       await fireEvent(screen.getByLabelText("Shadow"), "valueChange", true);
