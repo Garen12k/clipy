@@ -35,9 +35,12 @@ export function TrimSheet({ clipId, visible, onClose }: { clipId: string | null;
   // Re-seeded DURING render, never from an effect: the strip is mounted (closed) for every selected item, and an effect that sets
   // state on each frame of a handle drag leaves React an update pending after every commit — fifty in a row and the drag's next
   // store write throws "Maximum update depth exceeded" (LayerBar.updateDepth.test.tsx).
+  // Only while the strip is open: closed, a handle drag under it sets no state at all. Closing forgets the seed (once), so the next
+  // opening always re-seeds — also over numbers that were typed and left behind.
   const seed = clip ? `${clip.id}|${clip.trimStart}|${clip.trimEnd}|${visible}` : null;
   const [seeded, setSeeded] = useState<string | null>(null);
-  if (clip && seed !== seeded) { setSeeded(seed); setStart(clip.trimStart.toFixed(1)); setEnd(clip.trimEnd.toFixed(1)); }
+  if (!visible) { if (seeded !== null) setSeeded(null); }
+  else if (clip && seed !== seeded) { setSeeded(seed); setStart(clip.trimStart.toFixed(1)); setEnd(clip.trimEnd.toFixed(1)); }
   if (!clip) return null;
 
   const submit = (from: number, to: number) => {

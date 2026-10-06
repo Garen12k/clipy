@@ -38,14 +38,15 @@ const frameKey = (p: Project | null): string => {
  */
 export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
-  // The stored cover, read clamped; primitives, so the panel re-renders only when one of them changes.
-  const time = useEditorStore((s) => (s.project ? coverTimeOf(s.project) : 0));
+  // The stored cover, read clamped; primitives, so the panel re-renders only when one of them changes. The panel is mounted while
+  // closed and the store changes on every tick of the playhead: closed, each of these is a constant and walks no clips.
+  const time = useEditorStore((s) => (visible && s.project ? coverTimeOf(s.project) : 0));
   const stored = useEditorStore((s) => s.project?.cover?.title ?? "");
-  const total = useEditorStore((s) => (s.project ? totalDuration(s.project) : 0));
-  const ratio = useEditorStore((s) => (s.project ? frameAspect(s.project) : 1));
-  const shown = useEditorStore((s) => frameKey(s.project));
+  const total = useEditorStore((s) => (visible && s.project ? totalDuration(s.project) : 0));
+  const ratio = useEditorStore((s) => (visible && s.project ? frameAspect(s.project) : 1));
+  const shown = useEditorStore((s) => (visible ? frameKey(s.project) : ""));
   const { width: windowW } = useWindowDimensions();
-  /** The keyboard is up: the panel is short and the frame scrolled out of the way, so it is not saved now. */
+  /** The keyboard is up: the panel is short, without its slider, and the frame scrolled out of the way, so it is not saved now. */
   const typing = useKeyboard((s) => s.height > 0);
   // The field's own text (the cover holds it trimmed, the field must keep a space just typed), and the stored title it stands for:
   // once the stored title is another one (Undo, Redo, Reset), the field shows that instead.
@@ -113,7 +114,7 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
     setDraft(null); setNote("");
   };
   // The saved picture is this panel's frame view scaled up (not an export render). Whatever happens is said in the panel, next to
-  // the button. The button is disabled while the keyboard is up (the frame is out of view then).
+  // the button. The button is disabled while the keyboard is up (the frame is out of view then), and the same line says so.
   const save = async () => {
     if (busy.current || typing) return;
     busy.current = true;
@@ -136,24 +137,31 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
     finally { busy.current = false; setSaving(false); }
   };
 
+  // The slider is the panel's lead row: it does not scroll, so it is in reach on the shortest phone, and the frame it moves is the
+  // first thing in the body, right under it. (`flex: 1` here is the row's WIDTH; its height is explicit.)
+  const timeRow = (
+    <View testID="cover-time-row" style={{ flex: 1, height: theme.size.touch, justifyContent: "center" }}>
+      <Slider testID="cover-time" accessibilityLabel="Cover time" minimumValue={0} maximumValue={total} step={0.1} value={time}
+        onSlidingStart={() => { dragging.current = true; useEditorStore.getState().beginTransaction(); }}
+        onValueChange={slide}
+        // The last value is written before the hold ends (it is still part of the drag's step), then the exact still is asked for.
+        onSlidingComplete={(v) => { slide(v); dragging.current = false; load(true); }} />
+    </View>
+  );
+  /** The line above the button: why Save is off while the keyboard is up, else what the last save came to. */
+  const message = typing ? "Close the keyboard to save." : note;
+
   return (
-    <ToolPanel visible={visible} onClose={onClose} title="Cover" action={{ label: "Reset", onPress: reset }}>
+    <ToolPanel visible={visible} onClose={onClose} title="Cover" action={{ label: "Reset", onPress: reset }} lead={timeRow}>
       <View testID="cover-frame-row" style={{ height: FRAME_HEIGHT, alignItems: "center", justifyContent: "center" }}>
         <CoverFrame ref={frameRef} uri={uri} title={title} width={FRAME_HEIGHT * ratio * scale} height={FRAME_HEIGHT * scale} />
-      </View>
-      <View testID="cover-time-row" style={{ height: theme.size.touch, justifyContent: "center" }}>
-        <Slider testID="cover-time" accessibilityLabel="Cover time" minimumValue={0} maximumValue={total} step={0.1} value={time}
-          onSlidingStart={() => { dragging.current = true; useEditorStore.getState().beginTransaction(); }}
-          onValueChange={slide}
-          // The last value is written before the hold ends (it is still part of the drag's step), then the exact still is asked for.
-          onSlidingComplete={(v) => { slide(v); dragging.current = false; load(true); }} />
       </View>
       <View style={{ gap: theme.space.xs }}>
         {/* The return key puts the keyboard away (a one-line field blurs on submit): the panel is tall again. */}
         <Field accessibilityLabel="Cover title" value={title} onChangeText={type} returnKeyType="done" placeholder="Add a title" />
         <Body muted style={{ fontSize: theme.type.small, textAlign: "right" }}>{`${Array.from(title).length} / ${COVER_LIMITS.titleMax}`}</Body>
       </View>
-      {note ? <Body muted style={{ textAlign: "center" }}>{note}</Body> : null}
+      {message ? <Body muted style={{ textAlign: "center" }}>{message}</Body> : null}
       <PrimaryButton title="Save to Photos" disabled={saving || typing} onPress={() => { void save(); }} />
     </ToolPanel>
   );

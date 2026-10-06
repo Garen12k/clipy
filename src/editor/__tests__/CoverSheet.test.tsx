@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/editor/coverFrame", () => ({ frameUriAt: jest.fn(async (_p: unknown, t: number, exact?: boolean) => `file:///f-${t}-${exact ? "still" : "thumb"}.jpg`) }));
 jest.mock("react-native-view-shot", () => ({ captureRef: jest.fn(async () => "file:///tmp/cover.jpg"), releaseCapture: jest.fn() }));
@@ -7,6 +7,7 @@ import { requestPermissionsAsync, saveToLibraryAsync } from "expo-media-library/
 import { Dimensions, PixelRatio } from "react-native";
 import { captureRef, releaseCapture } from "react-native-view-shot";
 import { frameUriAt } from "@/src/editor/coverFrame";
+import * as timeline from "@/src/editor/model/timeline";
 import { makeClip, makeProject, type Cover } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
@@ -70,13 +71,40 @@ test("Cover is an inline panel: no Modal and no scrim, an explicit height, rows 
   await open();
   expect(screen.getByRole("header", { name: "Cover" })).toBeTruthy();
   expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: panelHeight("regular", H) - 1 });
-  expect(screen.getByTestId("tool-panel-body")).toHaveStyle({ height: panelHeight("regular", H) - 1 - PANEL.header });
+  expect(screen.getByTestId("tool-panel-body")).toHaveStyle({ height: panelHeight("regular", H) - 1 - PANEL.header - PANEL.lead });
   expect(screen.queryByLabelText("Close sheet")).toBeNull();
   expect(screen.queryByTestId("tool-strip")).toBeNull();
   expect(JSON.stringify(screen.toJSON())).not.toContain('"type":"Modal"');
   expect(JSON.stringify(screen.toJSON())).toContain('"type":"View"');   // the tree really is in that string
   expect(screen.getByTestId("cover-frame-row")).toHaveStyle({ height: 240 });
   expect(screen.getByTestId("cover-time-row")).toHaveStyle({ height: theme.size.touch });
+});
+
+test("the slider sits above the body and does not scroll; the body is the frame, the title, then Save to Photos", async () => {
+  await open();
+  expect(within(screen.getByTestId("tool-panel-lead")).getByTestId("cover-time")).toBeTruthy();
+  const body = screen.getByTestId("tool-panel-body");
+  expect(within(body).queryByTestId("cover-time")).toBeNull();
+  const tree = JSON.stringify(screen.toJSON());
+  const at = ["cover-time-row", "tool-panel-body", "cover-frame-row", "Cover title", "Save to Photos"].map((name) => tree.indexOf(`"${name}"`));
+  expect(at.every((i) => i >= 0)).toBe(true);
+  expect(at).toEqual([...at].sort((a, b) => a - b));
+});
+
+test("closed, the panel reads nothing from the clips when the store changes", async () => {
+  state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], aspectRatio: "9:16", cover: { time: 2, title: "Trip" } }));
+  await render(<CoverSheet visible={false} onClose={jest.fn()} />);
+  const spies = [jest.spyOn(timeline, "coverTimeOf"), jest.spyOn(timeline, "totalDuration"), jest.spyOn(timeline, "frameAt")];
+  try {
+    await act(() => { useEditorStore.setState({ pixelsPerSecond: 81 }); });
+    await act(() => { useEditorStore.setState({ pixelsPerSecond: 82 }); });
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+  } finally { for (const spy of spies) spy.mockRestore(); }
+  // Opened, it reads the stored cover.
+  await screen.rerender(<CoverSheet visible onClose={jest.fn()} />);
+  expect(slider().props.value).toBe(2);
+  expect(slider().props.maximumValue).toBe(4);
+  await waitFor(() => expect(frame).toHaveBeenLastCalledWith(state().project, 2, true));
 });
 
 test("opening and closing leaves the project and the playhead as they were", async () => {
@@ -141,6 +169,34 @@ test("typing a title writes it: on the frame, counted, an unbroken run is one un
   await fireEvent.changeText(field(), "Trip");
   expect(state().past).toHaveLength(1);
   expect(state().future).toHaveLength(0);
+});
+
+test("typing after a drag was undone is a new undo step: the step the earlier typing opened is not continued while Redo is armed", async () => {
+  await open();
+  await fireEvent.changeText(field(), "Trip");
+  expect(state().past).toHaveLength(1);
+  await drag(5);
+  expect(state().past).toHaveLength(2);
+  await act(() => { state().undo(); });
+  expect(state().project!.cover).toEqual({ time: 0, title: "Trip" });
+  expect(state().future).toHaveLength(1);
+  await fireEvent.changeText(field(), "Trip 2");
+  // A new step, and the undone drag can no longer be redone over it.
+  expect(state().past).toHaveLength(2);
+  expect(state().future).toHaveLength(0);
+  expect(state().project!.cover).toEqual({ time: 0, title: "Trip 2" });
+  expect(field().props.value).toBe("Trip 2");
+  // The run goes on as that one step.
+  await fireEvent.changeText(field(), "Trip 23");
+  expect(state().past).toHaveLength(2);
+  // Each Undo lands on a whole state: the first typing, then no cover.
+  await act(() => { state().undo(); });
+  expect(state().project!.cover).toEqual({ time: 0, title: "Trip" });
+  expect(field().props.value).toBe("Trip");
+  await act(() => { state().undo(); });
+  expect(state().project!.cover).toBeNull();
+  expect(state().past).toHaveLength(0);
+  expect(state().future).toHaveLength(2);
 });
 
 test("the field keeps the spaces being typed; the cover holds the title trimmed, and a space alone makes no undo step", async () => {
@@ -292,12 +348,14 @@ test("the frame is the same size whatever happens (it is the picture that is sav
   expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: panelHeight("regular", H, true) - 1 });
   expect(screen.getByTestId("cover-frame")).toHaveStyle({ width: 135, height: 240 });
   expect(saveButton()).toBeDisabled();
+  expect(screen.getByText("Close the keyboard to save.")).toBeTruthy();   // why it is disabled, said above the button
   await press("Save to Photos");
   expect(permission).not.toHaveBeenCalled();
   expect(capture).not.toHaveBeenCalled();
-  // The keyboard gone: Save usable.
+  // The keyboard gone: Save usable, and the reason gone with it.
   await act(() => { useKeyboard.setState({ height: 0 }); });
   expect(saveButton()).toBeEnabled();
+  expect(screen.queryByText("Close the keyboard to save.")).toBeNull();
   await press("Save to Photos");
   await waitFor(() => expect(screen.getByText("Saved to Photos")).toBeTruthy());
 });
