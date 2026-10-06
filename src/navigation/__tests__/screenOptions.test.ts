@@ -33,6 +33,7 @@ test("per screen: the editor is pushed and swipes back from the edge only; Expor
     "post": {},
     "accounts": {},
     "oauth": { animation: "none" },
+    "welcome": { presentation: "modal" },
   });
   // Nothing switches the back swipe off for good, and no screen is given a custom transition or a duration.
   for (const o of Object.values(ROUTE_OPTIONS)) { expect(o).not.toHaveProperty("gestureEnabled"); expect(o).not.toHaveProperty("animationDuration"); }

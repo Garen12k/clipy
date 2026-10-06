@@ -30,6 +30,12 @@ export const ROUTE_OPTIONS = {
   "accounts": {},
   /** A blank screen that redirects to Accounts: it should not slide in. */
   "oauth": { animation: "none" },
+  /**
+   * The sign-in page as a ROUTE: opened from Accounts or Post (or by a link). The standard sheet from the bottom, closed by its X,
+   * "Not now" or the swipe down — one presentation for every way in, and it reads as a side step that returns to where it was opened.
+   * On first launch the same screen is not this route at all: app/index.tsx draws it in place, as the root, with nothing to go back to.
+   */
+  "welcome": { presentation: "modal" },
 } satisfies Record<string, NativeStackNavigationOptions>;
 
 export type RouteName = keyof typeof ROUTE_OPTIONS;

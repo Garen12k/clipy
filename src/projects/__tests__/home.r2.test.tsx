@@ -6,6 +6,8 @@ jest.mock("react-native-reanimated", () => {
   return { ...m, withTiming: jest.fn(m.withTiming), withDelay: jest.fn(m.withDelay) };
 });
 jest.mock("expo-router", () => ({ router: { push: jest.fn() }, useFocusEffect: (cb: () => void) => { const React = require("react"); React.useEffect(cb, []); } }));
+// Past first launch: the home route draws the projects, not the welcome screen (src/auth/__tests__/firstLaunch.test.tsx).
+jest.mock("@/src/auth/welcomeSeen", () => ({ hasSeenWelcome: () => true, markWelcomeSeen: jest.fn() }));
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn() }));
 jest.mock("@/src/publish/pickVideo", () => ({ pickVideoForPost: jest.fn() }));
 jest.mock("@/src/projects", () => ({
