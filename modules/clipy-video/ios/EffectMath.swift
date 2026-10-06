@@ -17,6 +17,12 @@ struct GlitchSlice: Equatable {
   let split: Double
 }
 
+/// `dustScratch`'s result: whether the line shows, and its place as a fraction of the width.
+struct DustScratch: Equatable {
+  let on: Bool
+  let x: Double
+}
+
 /// Mirror of src/editor/model/effectMath.ts — the constants (`EFFECT`), the colours (`EFFECT_COLORS`) and the
 /// formulas must stay identical (checked by src/editor/model/__tests__/effectMath.parity.test.ts).
 /// `t` = seconds since the effect's start, `d` = its duration, `k` = intensity.
@@ -49,6 +55,36 @@ enum EffectMath {
   static let glitchBandMin: Double = 0.08
   static let glitchBandMax: Double = 0.2
   static let rgbSplit: Double = 0.008
+  static let beatHz: Double = 1.25
+  static let beatAmp: Double = 0.1
+  static let beatWidth: Double = 0.2
+  static let beatGap: Double = 0.28
+  static let beatSecond: Double = 0.6
+  static let strobeHz: Double = 2
+  static let strobeDuty: Double = 0.4
+  static let burnMax: Double = 0.6
+  static let burnHz: Double = 0.4
+  static let burnDrift: Double = 0.35
+  static let burnDriftHz: Double = 0.15
+  static let burnRadius: Double = 0.9
+  static let flareMax: Double = 0.8
+  static let flareHz: Double = 0.5
+  static let flareMargin: Double = 0.2
+  static let flareY: Double = 0.35
+  static let flareCore: Double = 0.12
+  static let flareHalo: Double = 0.4
+  static let edgeBlur: Double = 0.02
+  static let edgeInner: Double = 0.25
+  static let edgeOuter: Double = 0.75
+  static let edgeVeil: Double = 0.35
+  static let dustFps: Double = 12
+  static let dustChance: Double = 0.6
+  static let dustLines: Double = 2
+  static let dustOpacity: Double = 0.5
+  static let dustWidth: Double = 0.003
+  static let dustSpeck: Double = 0.02
+  static let hueHz: Double = 0.25
+  static let mirrorFull: Double = 0.5
 
   /// Content values burned into the video (`EFFECT_COLORS`).
   static let flashColor = "#FFFFFF"
@@ -57,6 +93,11 @@ enum EffectMath {
   static let oldFilmColor = "#C8A05A"
   static let flickerColor = "#000000"
   static let glowColor = "#FFFFFF"
+  static let strobeColor = "#000000"
+  static let filmBurnColor = "#FF5A1F"
+  static let lensFlareColor = "#FFF1D0"
+  static let softEdgesColor = "#FFFFFF"
+  static let dustColor = "#F2EBDD"
 
   private static let tau = 2 * Double.pi
 
@@ -114,5 +155,74 @@ enum EffectMath {
       active: active, bandY: bandY, bandH: bandH,
       shift: active ? (hash(n + 0.75) * 2 - 1) * EffectMath.glitchShift * k : 0,
       split: active ? EffectMath.glitchSplit * k : 0)
+  }
+
+  /// `v` kept inside lo … hi; `rest` when it is not a finite number. Every function below ends in it, so no NaN
+  /// reaches a renderer. (`min` / `max` only ever see finite numbers here: Swift's and JavaScript's differ on NaN.)
+  static func within(_ v: Double, _ lo: Double, _ hi: Double, _ rest: Double) -> Double {
+    return v.isFinite ? min(hi, max(lo, v)) : rest
+  }
+
+  /// `envelope`, and 0 for a time or a duration that is not finite.
+  static func calmEnvelope(t: Double, d: Double) -> Double {
+    return t.isFinite && d.isFinite ? envelope(t: t, d: d) : 0
+  }
+
+  /// A smooth bump: 0 at both ends, 1 in the middle of (0, 1); 0 outside it.
+  static func bump(_ x: Double) -> Double {
+    if !(x > 0 && x < 1) { return 0 }
+    let s = sin(Double.pi * x)
+    return s * s
+  }
+
+  /// A heartbeat: two beats (the second weaker) and a rest, `beatHz` times a second. Never below 1.
+  static func heartbeatScale(t: Double, d: Double, k: Double) -> Double {
+    let phase = frac(EffectMath.beatHz * t)
+    let beat = bump(phase / EffectMath.beatWidth) + EffectMath.beatSecond * bump((phase - EffectMath.beatGap) / EffectMath.beatWidth)
+    return within(1 + EffectMath.beatAmp * k * calmEnvelope(t: t, d: d) * beat, 1, 1 + EffectMath.beatAmp, 1)
+  }
+
+  /// A dark strobe: the black layer's opacity is k for the first `strobeDuty` of every period, 0 for the rest.
+  static func strobeOpacity(t: Double, k: Double) -> Double {
+    return frac(EffectMath.strobeHz * t) < EffectMath.strobeDuty ? within(k, 0, 1, 0) : 0
+  }
+
+  static func burnOpacity(t: Double, d: Double, k: Double) -> Double {
+    return within(EffectMath.burnMax * k * calmEnvelope(t: t, d: d) * (0.5 + 0.5 * sin(tau * EffectMath.burnHz * t)), 0, EffectMath.burnMax, 0)
+  }
+
+  /// Where the burn's centre sits on the LEFT edge: a fraction of the height from the TOP of the screen.
+  static func burnCentreY(t: Double) -> Double {
+    return within(0.5 + EffectMath.burnDrift * sin(tau * EffectMath.burnDriftHz * t), 0.5 - EffectMath.burnDrift, 0.5 + EffectMath.burnDrift, 0.5)
+  }
+
+  /// The flare's centre as a fraction of the width: from one margin left of the frame to one margin right of it.
+  static func flareX(t: Double) -> Double {
+    return within(-EffectMath.flareMargin + (1 + 2 * EffectMath.flareMargin) * frac(EffectMath.flareHz * t), -EffectMath.flareMargin, 1 + EffectMath.flareMargin, -EffectMath.flareMargin)
+  }
+
+  static func flareOpacity(t: Double, d: Double, k: Double) -> Double {
+    return within(EffectMath.flareMax * k * calmEnvelope(t: t, d: d), 0, EffectMath.flareMax, 0)
+  }
+
+  /// How soft the edges are, 0…1 (× edgeBlur × the shorter side = the blur radius).
+  static func softEdgeAmount(t: Double, d: Double, k: Double) -> Double {
+    return within(k * calmEnvelope(t: t, d: d), 0, 1, 0)
+  }
+
+  /// Scratch line `i` (0 … dustLines − 1) in the film frame under `t`.
+  static func dustScratch(t: Double, k: Double, i: Double) -> DustScratch {
+    let n = (EffectMath.dustFps * t).rounded(.down)
+    return DustScratch(on: hash(n * 7 + i * 13 + 1) < EffectMath.dustChance * k, x: within(hash(n * 3 + i * 17 + 2), 0, 1, 0))
+  }
+
+  /// How far the colours are turned round the colour wheel, in radians.
+  static func hueAngle(t: Double, d: Double, k: Double) -> Double {
+    return within(Double.pi * k * calmEnvelope(t: t, d: d) * sin(tau * EffectMath.hueHz * t), -Double.pi, Double.pi, 0)
+  }
+
+  /// How much of the mirrored frame shows: full from strength `mirrorFull` up, fading below it.
+  static func mirrorMix(t: Double, d: Double, k: Double) -> Double {
+    return within(within(k / EffectMath.mirrorFull, 0, 1, 0) * calmEnvelope(t: t, d: d), 0, 1, 0)
   }
 }

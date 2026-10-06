@@ -57,6 +57,40 @@ let effectScalarVectors: [EffectScalarVector] = [
   EffectScalarVector(fn: "leakAlpha", name: "t = 1, k = 1", args: [1, 2, 1], expect: 0.21),
   EffectScalarVector(fn: "leakAlpha", name: "t = 0.5, k = 0.5", args: [0.5, 2, 0.5], expect: 0.175),
   EffectScalarVector(fn: "flickerAlpha", name: "t = 0.25 (frame 3)", args: [0.25, 1], expect: 0.06698671062971698),
+  EffectScalarVector(fn: "heartbeatScale", name: "first beat, peak", args: [0.88, 4, 1], expect: 1.1),
+  EffectScalarVector(fn: "heartbeatScale", name: "second beat, peak", args: [1.104, 4, 1], expect: 1.06),
+  EffectScalarVector(fn: "heartbeatScale", name: "rest", args: [1.36, 4, 1], expect: 1),
+  EffectScalarVector(fn: "heartbeatScale", name: "half way up, half strength", args: [0.84, 4, 0.5], expect: 1.025),
+  EffectScalarVector(fn: "heartbeatScale", name: "ramping in", args: [0.075, 4, 1], expect: 1.0495196320100808),
+  EffectScalarVector(fn: "strobeOpacity", name: "t = 0: dark", args: [0, 1], expect: 1),
+  EffectScalarVector(fn: "strobeOpacity", name: "t = 0.1: dark", args: [0.1, 1], expect: 1),
+  EffectScalarVector(fn: "strobeOpacity", name: "t = 0.2: the dark part has just ended", args: [0.2, 1], expect: 0),
+  EffectScalarVector(fn: "strobeOpacity", name: "t = 0.25: clear", args: [0.25, 1], expect: 0),
+  EffectScalarVector(fn: "strobeOpacity", name: "second period, half strength", args: [0.6, 0.5], expect: 0.5),
+  EffectScalarVector(fn: "burnOpacity", name: "peak", args: [0.625, 4, 1], expect: 0.6),
+  EffectScalarVector(fn: "burnOpacity", name: "trough", args: [1.875, 4, 1], expect: 0),
+  EffectScalarVector(fn: "burnOpacity", name: "middle, half strength", args: [1.25, 4, 0.5], expect: 0.15),
+  EffectScalarVector(fn: "burnOpacity", name: "ramping in", args: [0.075, 4, 1], expect: 0.1781071971878587),
+  EffectScalarVector(fn: "burnCentreY", name: "t = 0: the middle", args: [0], expect: 0.5),
+  EffectScalarVector(fn: "burnCentreY", name: "t = 5: highest", args: [5], expect: 0.15),
+  EffectScalarVector(fn: "burnCentreY", name: "t = 10: the middle again", args: [10], expect: 0.5),
+  EffectScalarVector(fn: "flareX", name: "start, off the left edge", args: [0], expect: -0.2),
+  EffectScalarVector(fn: "flareX", name: "quarter way", args: [0.5], expect: 0.15),
+  EffectScalarVector(fn: "flareX", name: "the centre", args: [1], expect: 0.5),
+  EffectScalarVector(fn: "flareX", name: "three quarters", args: [1.5], expect: 0.85),
+  EffectScalarVector(fn: "flareX", name: "next sweep", args: [2], expect: -0.2),
+  EffectScalarVector(fn: "flareOpacity", name: "full", args: [1, 4, 1], expect: 0.8),
+  EffectScalarVector(fn: "flareOpacity", name: "ramping in, half strength", args: [0.075, 4, 0.5], expect: 0.2),
+  EffectScalarVector(fn: "softEdgeAmount", name: "full envelope", args: [1, 4, 0.7], expect: 0.7),
+  EffectScalarVector(fn: "softEdgeAmount", name: "ramping in", args: [0.075, 4, 1], expect: 0.5),
+  EffectScalarVector(fn: "hueAngle", name: "t = 1: half a turn", args: [1, 4, 1], expect: 3.141592653589793),
+  EffectScalarVector(fn: "hueAngle", name: "t = 2: back", args: [2, 4, 1], expect: 0),
+  EffectScalarVector(fn: "hueAngle", name: "t = 1, half strength", args: [1, 4, 0.5], expect: 1.5707963267948966),
+  EffectScalarVector(fn: "hueAngle", name: "t = 3: the other way", args: [3, 4, 1], expect: -3.141592653589793),
+  EffectScalarVector(fn: "hueAngle", name: "ramping in", args: [0.075, 4, 1], expect: 0.18462731218780318),
+  EffectScalarVector(fn: "mirrorMix", name: "the default strength is a full mirror", args: [1, 4, 0.7], expect: 1),
+  EffectScalarVector(fn: "mirrorMix", name: "strength 25 is half", args: [1, 4, 0.25], expect: 0.5),
+  EffectScalarVector(fn: "mirrorMix", name: "ramping in", args: [0.075, 4, 1], expect: 0.5),
 ]
 
 let effectShakeVectors: [EffectShakeVector] = [
@@ -68,6 +102,24 @@ let effectShakeVectors: [EffectShakeVector] = [
 let effectGlitchVectors: [EffectGlitchVector] = [
   EffectGlitchVector(name: "active slice", t: 0.3, k: 1, active: true, bandY: 0.10145767707985968, bandH: 0.13413593816803768, shift: 0.07958605447551236, split: 0.01),
   EffectGlitchVector(name: "inactive slice", t: 1, k: 0.5, active: false, bandY: 0.49186976637340174, bandH: 0.11834738805497182, shift: 0, split: 0),
+]
+
+struct EffectDustVector {
+  let name: String
+  let t: Double
+  let k: Double
+  let i: Double
+  let on: Bool
+  let x: Double
+}
+
+let effectDustVectors: [EffectDustVector] = [
+  EffectDustVector(name: "frame 3, line 0: off", t: 0.25, k: 1, i: 0, on: false, x: 0.8211895695640123),
+  EffectDustVector(name: "frame 3, line 1: on", t: 0.25, k: 1, i: 1, on: true, x: 0.16190568688034546),
+  EffectDustVector(name: "frame 12, line 0: on", t: 1, k: 1, i: 0, on: true, x: 0.4702766282589437),
+  EffectDustVector(name: "frame 12, line 1: on", t: 1, k: 1, i: 1, on: true, x: 0.8728999602171825),
+  EffectDustVector(name: "frame 12, line 0, low strength: off", t: 1, k: 0.2, i: 0, on: false, x: 0.4702766282589437),
+  EffectDustVector(name: "frame 6, line 0, half strength: on", t: 0.5, k: 0.5, i: 0, on: true, x: 0.760377313970821),
 ]
 
 final class EffectMathTests: XCTestCase {
@@ -85,6 +137,15 @@ final class EffectMathTests: XCTestCase {
     case ("flashOpacity", 2): return EffectMath.flashOpacity(t: a[0], k: a[1])
     case ("leakAlpha", 3): return EffectMath.leakAlpha(t: a[0], d: a[1], k: a[2])
     case ("flickerAlpha", 2): return EffectMath.flickerAlpha(t: a[0], k: a[1])
+    case ("heartbeatScale", 3): return EffectMath.heartbeatScale(t: a[0], d: a[1], k: a[2])
+    case ("strobeOpacity", 2): return EffectMath.strobeOpacity(t: a[0], k: a[1])
+    case ("burnOpacity", 3): return EffectMath.burnOpacity(t: a[0], d: a[1], k: a[2])
+    case ("burnCentreY", 1): return EffectMath.burnCentreY(t: a[0])
+    case ("flareX", 1): return EffectMath.flareX(t: a[0])
+    case ("flareOpacity", 3): return EffectMath.flareOpacity(t: a[0], d: a[1], k: a[2])
+    case ("softEdgeAmount", 3): return EffectMath.softEdgeAmount(t: a[0], d: a[1], k: a[2])
+    case ("hueAngle", 3): return EffectMath.hueAngle(t: a[0], d: a[1], k: a[2])
+    case ("mirrorMix", 3): return EffectMath.mirrorMix(t: a[0], d: a[1], k: a[2])
     default: return nil
     }
   }
@@ -99,7 +160,7 @@ final class EffectMathTests: XCTestCase {
   private var grey: CIImage { CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: rect) }
 
   func testScalarFunctionsMatchTheVectors() {
-    XCTAssertEqual(effectScalarVectors.count, 21)
+    XCTAssertEqual(effectScalarVectors.count, 55)
     for v in effectScalarVectors {
       guard let got = value(v) else { XCTFail("\(v.fn): \(v.name)"); continue }
       XCTAssertEqual(got, v.expect, accuracy: 1e-9, "\(v.fn): \(v.name)")
@@ -126,6 +187,68 @@ final class EffectMathTests: XCTestCase {
       XCTAssertEqual(g.shift, v.shift, accuracy: 1e-9, v.name)
       XCTAssertEqual(g.split, v.split, accuracy: 1e-9, v.name)
     }
+  }
+
+  func testDustScratchMatchesTheVectors() {
+    XCTAssertEqual(effectDustVectors.count, 6)
+    for v in effectDustVectors {
+      let s = EffectMath.dustScratch(t: v.t, k: v.k, i: v.i)
+      XCTAssertEqual(s.on, v.on, v.name)
+      XCTAssertEqual(s.x, v.x, accuracy: 1e-9, v.name)
+    }
+  }
+
+  /// Time, duration and strength that are not finite or out of range give a finite value inside the function's
+  /// range (the same sweep and the same rest values as "every function is total" in effectMath.test.ts).
+  func testTheNewFunctionsAreTotal() {
+    let odd: [Double] = [.nan, .infinity, -.infinity, -1e308, -1, 0, 0.3, 1, 2, 5, 1e308]
+    func inside(_ v: Double, _ lo: Double, _ hi: Double, _ what: String) {
+      XCTAssertTrue(v.isFinite && v >= lo && v <= hi, "\(what): \(v)")
+    }
+    for t in odd {
+      inside(EffectMath.burnCentreY(t: t), 0.5 - EffectMath.burnDrift, 0.5 + EffectMath.burnDrift, "burnCentreY(\(t))")
+      inside(EffectMath.flareX(t: t), -EffectMath.flareMargin, 1 + EffectMath.flareMargin, "flareX(\(t))")
+      for k in odd {
+        inside(EffectMath.strobeOpacity(t: t, k: k), 0, 1, "strobeOpacity(\(t), \(k))")
+        let lines: [Double] = [0, 1, .nan, .infinity, -3]
+        for i in lines {
+          inside(EffectMath.dustScratch(t: t, k: k, i: i).x, 0, 1, "dustScratch(\(t), \(k), \(i))")
+        }
+        for d in odd {
+          let at = "(\(t), \(d), \(k))"
+          inside(EffectMath.heartbeatScale(t: t, d: d, k: k), 1, 1 + EffectMath.beatAmp, "heartbeatScale\(at)")
+          inside(EffectMath.burnOpacity(t: t, d: d, k: k), 0, EffectMath.burnMax, "burnOpacity\(at)")
+          inside(EffectMath.flareOpacity(t: t, d: d, k: k), 0, EffectMath.flareMax, "flareOpacity\(at)")
+          inside(EffectMath.softEdgeAmount(t: t, d: d, k: k), 0, 1, "softEdgeAmount\(at)")
+          inside(EffectMath.hueAngle(t: t, d: d, k: k), -Double.pi, Double.pi, "hueAngle\(at)")
+          inside(EffectMath.mirrorMix(t: t, d: d, k: k), 0, 1, "mirrorMix\(at)")
+        }
+      }
+    }
+    XCTAssertEqual(EffectMath.heartbeatScale(t: .nan, d: 4, k: 1), 1)
+    XCTAssertEqual(EffectMath.heartbeatScale(t: 1, d: 4, k: .nan), 1)
+    XCTAssertEqual(EffectMath.heartbeatScale(t: 0.88, d: 4, k: 9), 1 + EffectMath.beatAmp)
+    XCTAssertEqual(EffectMath.strobeOpacity(t: .nan, k: 1), 0)
+    XCTAssertEqual(EffectMath.strobeOpacity(t: 0, k: .nan), 0)
+    XCTAssertEqual(EffectMath.strobeOpacity(t: 0, k: 3), 1)
+    XCTAssertEqual(EffectMath.strobeOpacity(t: 0, k: -1), 0)
+    XCTAssertEqual(EffectMath.burnOpacity(t: .nan, d: 4, k: 1), 0)
+    XCTAssertEqual(EffectMath.burnOpacity(t: 0.625, d: 4, k: .infinity), 0)
+    XCTAssertEqual(EffectMath.burnOpacity(t: 0.625, d: 4, k: 9), EffectMath.burnMax)
+    XCTAssertEqual(EffectMath.burnCentreY(t: .nan), 0.5)
+    XCTAssertEqual(EffectMath.flareX(t: .infinity), -EffectMath.flareMargin)
+    XCTAssertEqual(EffectMath.flareOpacity(t: 1, d: .nan, k: 1), 0)
+    XCTAssertEqual(EffectMath.softEdgeAmount(t: 1, d: 4, k: .nan), 0)
+    XCTAssertEqual(EffectMath.softEdgeAmount(t: 1, d: 4, k: 7), 1)
+    XCTAssertEqual(EffectMath.hueAngle(t: .nan, d: 4, k: 1), 0)
+    XCTAssertEqual(EffectMath.hueAngle(t: 1, d: 4, k: 9), Double.pi)
+    XCTAssertEqual(EffectMath.hueAngle(t: 3, d: 4, k: 9), -Double.pi)
+    XCTAssertEqual(EffectMath.mirrorMix(t: 1, d: 4, k: .nan), 0)
+    XCTAssertEqual(EffectMath.mirrorMix(t: 1, d: 4, k: .infinity), 0)
+    XCTAssertEqual(EffectMath.mirrorMix(t: 1, d: 4, k: -1), 0)
+    XCTAssertEqual(EffectMath.mirrorMix(t: .infinity, d: .infinity, k: 1), 0)
+    XCTAssertEqual(EffectMath.dustScratch(t: .nan, k: 1, i: 0), DustScratch(on: false, x: 0))
+    XCTAssertFalse(EffectMath.dustScratch(t: 1, k: .nan, i: 0).on)
   }
 
   /// 1000 inputs, negatives included (frac is x − floor(x), so a negative product still lands in [0, 1)).

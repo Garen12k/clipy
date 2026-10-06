@@ -3,7 +3,9 @@ import { join } from "path";
 import { EFFECT, EFFECT_COLORS } from "../effectMath";
 import { EFFECT_IDS } from "../types";
 import {
-  ENVELOPE_VECTORS, FLASH_VECTORS, FLICKER_VECTORS, GLITCH_VECTORS, HASH_VECTORS, LEAK_VECTORS, PULSE_VECTORS, SHAKE_VECTORS,
+  BURN_VECTORS, BURN_Y_VECTORS, DUST_VECTORS, ENVELOPE_VECTORS, FLARE_OPACITY_VECTORS, FLARE_X_VECTORS, FLASH_VECTORS, FLICKER_VECTORS,
+  GLITCH_VECTORS, HASH_VECTORS, HEARTBEAT_VECTORS, HUE_VECTORS, LEAK_VECTORS, MIRROR_VECTORS, PULSE_VECTORS, SHAKE_VECTORS, SOFT_EDGE_VECTORS,
+  STROBE_VECTORS,
   type ScalarVector,
 } from "./effectMath.vectors";
 
@@ -36,6 +38,9 @@ const inOrder = (body: string, parts: string[]) => {
 const SCALARS: [string, ScalarVector[]][] = [
   ["hash", HASH_VECTORS], ["envelope", ENVELOPE_VECTORS], ["pulseScale", PULSE_VECTORS], ["flashOpacity", FLASH_VECTORS],
   ["leakAlpha", LEAK_VECTORS], ["flickerAlpha", FLICKER_VECTORS],
+  ["heartbeatScale", HEARTBEAT_VECTORS], ["strobeOpacity", STROBE_VECTORS], ["burnOpacity", BURN_VECTORS], ["burnCentreY", BURN_Y_VECTORS],
+  ["flareX", FLARE_X_VECTORS], ["flareOpacity", FLARE_OPACITY_VECTORS], ["softEdgeAmount", SOFT_EDGE_VECTORS], ["hueAngle", HUE_VECTORS],
+  ["mirrorMix", MIRROR_VECTORS],
 ];
 
 test("EffectMath.swift declares exactly the EFFECT constants, with the same values", () => {
@@ -139,4 +144,27 @@ test("the blur transition is continuous: both frames blurred by a radius that pe
   expect([...branch.matchAll(/blurred\(/g)]).toHaveLength(2);
   expect(branch).toMatch(/blurTransitionRadius\(/);
   expect(branch).not.toMatch(/p < 0\.5/);
+});
+
+test("EffectMath.swift mirrors the ten functions of 2026-10-06, under the same names", () => {
+  for (const fn of ["heartbeatScale", "strobeOpacity", "burnOpacity", "burnCentreY", "flareX", "flareOpacity", "softEdgeAmount", "dustScratch", "hueAngle", "mirrorMix"]) {
+    expect(swift).toMatch(new RegExp(`static func ${fn}\\(`));
+  }
+  expect(swift).toContain("struct DustScratch: Equatable {");
+  // The scratch's two hash arguments are the same expressions on both sides.
+  const dust = between(swift, "static func dustScratch(", "\n  }\n");
+  expect(dust).toContain("hash(n * 7 + i * 13 + 1) < EffectMath.dustChance * k");
+  expect(dust).toContain("hash(n * 3 + i * 17 + 2)");
+  // sin² as a product, never pow (the same double arithmetic as `Math.sin(x) ** 2` is not guaranteed for pow).
+  expect(between(swift, "static func bump(", "\n  }\n")).toMatch(/let s = sin\(Double\.pi \* x\)\s*\n\s*return s \* s/);
+  // Every result goes through one guard (finite, inside its range), written the same on both sides.
+  expect(between(swift, "static func within(", "\n  }\n")).toContain("return v.isFinite ? min(hi, max(lo, v)) : rest");
+  expect(between(swift, "static func calmEnvelope(", "\n  }\n")).toContain("return t.isFinite && d.isFinite ? envelope(t: t, d: d) : 0");
+});
+
+describe("the Swift test table embeds every DUST_VECTORS case", () => {
+  it("has the same number of cases", () => expect([...table.matchAll(/EffectDustVector\(name: "/g)]).toHaveLength(DUST_VECTORS.length));
+  it.each(DUST_VECTORS.map((v) => [v.name, v] as const))("%s", (_name, v) => {
+    expect(table).toContain(`EffectDustVector(name: "${v.name}", t: ${fmt(v.t)}, k: ${fmt(v.k)}, i: ${fmt(v.i)}, on: ${v.on}, x: ${fmt(v.x)})`);
+  });
 });
