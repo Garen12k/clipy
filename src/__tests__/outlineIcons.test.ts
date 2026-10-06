@@ -9,7 +9,6 @@ const DIRS = ["app", "src/projects", "src/export", "src/publish"];
  */
 const ALLOW: Record<string, string[]> = {
   "app/accounts.tsx": ["chevron-back"],
-  "app/index.tsx": ["paper-plane", "person-circle", "add"],
   "app/post.tsx": ["chevron-back"],
   "src/publish/components/PostRow.tsx": ["checkmark-circle", "checkbox"],
   "src/publish/components/PostScreenBody.tsx": ["chevron-back"],

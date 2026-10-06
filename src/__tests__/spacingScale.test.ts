@@ -8,14 +8,12 @@ const DIRS = ["src/ui", "src/editor/components", "src/projects", "src/export", "
  * that file's line and no other. The count is exact — fewer hits than listed fails too, so the table cannot go stale.
  */
 const ALLOW: Record<string, { max: number; why: string }> = {
-  "app/index.tsx": { max: 2, why: "round 2, task 3" },
   "src/editor/components/AudioBar.tsx": { max: 2, why: "HANDLE_W + 2 and the warning dot's padding: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/ClipThumbStrip.tsx": { max: 5, why: "the 10-pt badges on a thumbnail: 1 and 2 pt, below the 4-pt scale" },
   "src/editor/components/CoverSheet.tsx": { max: 1, why: "round 2, task 2" },
   "src/editor/components/EffectPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/LayerBar.tsx": { max: 2, why: "HANDLE_W + 2 and the warning dot's padding: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/OverlayPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
-  "src/projects/ProjectCard.tsx": { max: 1, why: "round 2, task 3" },
   "src/publish/components/AccountRow.tsx": { max: 1, why: "round 2, task 5" },
   "src/publish/components/PostOptionsSheet.tsx": { max: 1, why: "round 2, task 2" },
   "src/publish/components/PostRow.tsx": { max: 1, why: "round 2, task 5" },
