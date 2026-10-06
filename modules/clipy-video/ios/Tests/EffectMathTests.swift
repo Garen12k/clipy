@@ -376,4 +376,101 @@ final class EffectMathTests: XCTestCase {
     let e = ActiveEffectSpec(type: "glow", start: 0, end: 1, intensity: 0.5)
     XCTAssertEqual(ClipyInstruction(timeRange: range, layers: [], transition: nil, effects: [e]).effects, [e])
   }
+
+  // ---- The eight effects of 2026-10-06 ----
+
+  /// Strobe: black while frac(2t) < 0.4 (grey 0.5 under a black layer at k = 1 → 0), the frame itself otherwise.
+  /// Heartbeat on a solid frame leaves it solid (clamped edges).
+  func testHeartbeatAndStrobe() {
+    let image = grey
+    XCTAssertEqual(rgb(EffectRenderer.apply(type: "strobe", image: image, t: 0.1, d: 4, k: 1, size: size), 32, 18).r, 0, accuracy: 0.02)
+    XCTAssertEqual(rgb(EffectRenderer.apply(type: "strobe", image: image, t: 0.1, d: 4, k: 0.5, size: size), 32, 18).r, 0.25, accuracy: 0.03)
+    XCTAssertTrue(EffectRenderer.apply(type: "strobe", image: image, t: 0.25, d: 4, k: 1, size: size) === image)
+    let beat = EffectRenderer.apply(type: "heartbeat", image: image, t: 0.88, d: 4, k: 1, size: size)
+    XCTAssertEqual(beat.extent, rect)
+    for (x, y) in [(32, 18), (0, 0), (63, 35)] as [(CGFloat, CGFloat)] { XCTAssertEqual(rgb(beat, x, y).r, 0.5, accuracy: 0.03) }
+    XCTAssertTrue(EffectRenderer.apply(type: "heartbeat", image: image, t: 1.36, d: 4, k: 1, size: size) === image)     // between beats: scale 1
+  }
+
+  /// Film burn at its peak (t = 0.625, opacity 0.6; centre at burnCentreY(0.625) of the height): the left edge is
+  /// lit and warm (red rises more than blue), the right edge — beyond the 0.9 × width radius — is as it was.
+  func testFilmBurnLightsTheLeftEdge() {
+    let out = EffectRenderer.apply(type: "filmBurn", image: grey, t: 0.625, d: 4, k: 1, size: size)
+    XCTAssertEqual(out.extent, rect)
+    let y = CGFloat((36 * (1 - EffectMath.burnCentreY(t: 0.625))).rounded(.down))
+    let left = rgb(out, 0, min(35, max(0, y)))
+    XCTAssertGreaterThan(left.r, 0.6)
+    XCTAssertGreaterThan(left.r, left.b)
+    XCTAssertEqual(rgb(out, 63, 18).r, 0.5, accuracy: 0.03)
+    XCTAssertTrue(EffectRenderer.apply(type: "filmBurn", image: grey, t: 1.875, d: 4, k: 1, size: size).extent == rect)      // opacity 0: the frame
+  }
+
+  /// Lens flare at t = 1: its centre is the middle of the width, 0.35 of the height from the top (y-up: 0.65 × 36 =
+  /// 23.4). That point is brighter than the frame; a far corner is not.
+  func testLensFlareLightsItsPlace() {
+    let out = EffectRenderer.apply(type: "lensFlare", image: grey, t: 1, d: 4, k: 1, size: size)
+    XCTAssertEqual(out.extent, rect)
+    XCTAssertGreaterThan(rgb(out, 32, 23).r, 0.7)
+    XCTAssertEqual(rgb(out, 0, 0).r, 0.5, accuracy: 0.05)
+    XCTAssertEqual(rgb(out, 63, 0).r, 0.5, accuracy: 0.05)
+  }
+
+  /// Hue shift at t = 1, k = 1 is half a turn: red is no longer red. Grey has no hue and stays grey.
+  func testHueShiftTurnsColourAndLeavesGrey() {
+    let red = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: rect)
+    let turned = rgb(EffectRenderer.apply(type: "hueShift", image: red, t: 1, d: 4, k: 1, size: size), 32, 18)
+    XCTAssertLessThan(turned.r, 0.5)
+    let same = rgb(EffectRenderer.apply(type: "hueShift", image: grey, t: 1, d: 4, k: 1, size: size), 32, 18)
+    XCTAssertEqual(same.r, 0.5, accuracy: 0.03)
+    XCTAssertEqual(same.b, 0.5, accuracy: 0.03)
+    XCTAssertTrue(EffectRenderer.apply(type: "hueShift", image: grey, t: 2, d: 4, k: 1, size: size).extent == rect)
+  }
+
+  /// Mirror: a frame whose left half is white and right half black becomes white from edge to edge at full
+  /// strength; at strength 0.25 (mix 0.5) the right half is half way.
+  func testMirrorCopiesTheLeftHalfOntoTheRight() {
+    let white = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: CGRect(x: 0, y: 0, width: 32, height: 36))
+    let image = white.composited(over: CIImage(color: CIColor.black).cropped(to: rect)).cropped(to: rect)
+    let full = EffectRenderer.apply(type: "mirror", image: image, t: 1, d: 4, k: 0.7, size: size)
+    XCTAssertEqual(full.extent, rect)
+    XCTAssertEqual(rgb(full, 60, 18).r, 1, accuracy: 0.02)
+    XCTAssertEqual(rgb(full, 4, 18).r, 1, accuracy: 0.02)
+    let half = EffectRenderer.apply(type: "mirror", image: image, t: 1, d: 4, k: 0.25, size: size)
+    XCTAssertEqual(rgb(half, 60, 18).r, 0.5, accuracy: 0.05)
+    XCTAssertEqual(rgb(half, 4, 18).r, 1, accuracy: 0.02)
+  }
+
+  /// Soft edges: a solid frame stays solid (a blur of a clamped solid is the solid) and keeps its extent; on a frame
+  /// with a hard vertical edge near the right border, that edge is softened (a pixel on its dark side has picked up
+  /// light), while the same kind of edge through the centre stays sharp.
+  func testSoftEdgesKeepTheCentreAndTheExtent() {
+    let big = CGSize(width: 400, height: 400), frame = CGRect(origin: .zero, size: big)      // shorter 400: sharp within 100 px of the centre, blurred from 300 px
+    let solid = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: frame)
+    let out = EffectRenderer.apply(type: "softEdges", image: solid, t: 1, d: 4, k: 1, size: big)
+    XCTAssertEqual(out.extent, frame)
+    XCTAssertEqual(rgb(out, 200, 200).r, 0.5, accuracy: 0.03)
+    func edged(at x: CGFloat) -> CIImage {
+      let white = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: CGRect(x: 0, y: 0, width: x, height: 400))
+      return white.composited(over: CIImage(color: CIColor.black).cropped(to: frame)).cropped(to: frame)
+    }
+    // Blur radius 0.02 × 400 = 8 px. Centre edge at x = 200 (distance 0 from the centre: fully sharp).
+    let centre = EffectRenderer.apply(type: "softEdges", image: edged(at: 200), t: 1, d: 4, k: 1, size: big)
+    XCTAssertEqual(rgb(centre, 203, 200).r, 0, accuracy: 0.03)
+    // Border edge at x = 390, read in a corner (distance from the centre ≈ 269 → mostly blurred).
+    let border = EffectRenderer.apply(type: "softEdges", image: edged(at: 390), t: 1, d: 4, k: 1, size: big)
+    XCTAssertGreaterThan(rgb(border, 393, 390).r, 0.05)
+  }
+
+  /// Dust at t = 1, k = 1: line 0 is on at x = 0.4702766 of the width. On a 1000 px wide grey frame the scratch is
+  /// 3 px wide at x = 470 and half-covers the grey with #F2EBDD (0.5·0.5 + 0.5·0.949 ≈ 0.72); away from it the
+  /// frame is grey but for the faint grain.
+  func testDustDrawsItsScratchWhereTheMathsSays() {
+    let wide = CGSize(width: 1000, height: 20), frame = CGRect(origin: .zero, size: wide)
+    let image = CIImage(color: CIColor(red: 0.5, green: 0.5, blue: 0.5)).cropped(to: frame)
+    let out = EffectRenderer.apply(type: "dust", image: image, t: 1, d: 4, k: 1, size: wide)
+    XCTAssertEqual(out.extent, frame)
+    XCTAssertEqual(rgb(out, 471, 10).r, 0.72, accuracy: 0.06)
+    XCTAssertEqual(rgb(out, 100, 10).r, 0.5, accuracy: 0.06)
+    XCTAssertTrue(EffectMath.dustScratch(t: 1, k: 1, i: 0).on)
+  }
 }
