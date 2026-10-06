@@ -4,6 +4,7 @@ let mockSize = 0;
 jest.mock("@/src/lib/fileInfo", () => ({ fileSize: () => mockSize }));
 import { makeClip, makeProject, type ExportSettings } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { theme } from "@/src/theme/theme";
 import type { ExportState } from "../useExport";
 import { ExportScreenBody } from "../ExportScreenBody";
 
@@ -132,5 +133,56 @@ describe("frame rate and quality", () => {
     mockSize = 0;
     await renderBody({ status: "done", progress: 1, fileUri: "file:///out.mp4" });
     expect(screen.getByText("1080p · 0:30")).toBeTruthy();
+  });
+});
+
+describe("round 2 look: one gold button per state, values that read", () => {
+  const gold = () => screen.queryAllByTestId("primary-button");
+
+  test("idle: Export is the one gold button; the estimate is one line whose number stands out; the rows are labelled alike", async () => {
+    await renderBody({ status: "idle" });
+    expect(gold()).toHaveLength(1);
+    expect(gold()[0]).toHaveAccessibleName("Export");
+    expect(screen.getByText("Estimated size: 38 MB")).toBeTruthy();                         // still one text
+    expect(screen.getByText("38 MB")).toHaveStyle({ fontFamily: theme.fonts.bodySemi, color: theme.colors.text, fontVariant: ["tabular-nums"] });
+    for (const l of ["Resolution", "Frame rate", "Quality"]) expect(screen.getByText(l)).toHaveStyle({ fontSize: theme.type.label, color: theme.colors.textMuted });
+    expect(screen.getByTestId("export-options")).toHaveStyle({ gap: theme.space.lg });
+    expect(screen.getByText("4K needs a 4K source clip.")).toHaveStyle({ fontSize: theme.type.small });
+  });
+
+  test("unavailable (Expo Go): the card says why, the rows are still there, and there is no gold button", async () => {
+    await renderBody({ status: "unavailable" });
+    expect(screen.getByText("Export needs the native build")).toHaveStyle({ fontSize: theme.type.heading });
+    expect(screen.getByText("Everything else in Clipy works in Expo Go.")).toBeTruthy();
+    expect(gold()).toHaveLength(0);
+  });
+
+  test("exporting: the ring at its token size, a line that says so, Cancel outlined, no gold button", async () => {
+    await renderBody({ status: "exporting", progress: 0.42 });
+    expect(screen.getByRole("progressbar")).toHaveStyle({ width: theme.size.ring, height: theme.size.ring });
+    expect(screen.getByText("Exporting…")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveStyle({ borderWidth: 1.5 });
+    expect(gold()).toHaveLength(0);
+  });
+
+  test("done: the ring keeps its size, one gold button, Share outlined, Done text only, the summary stands out", async () => {
+    mockSize = 0;
+    await renderBody({ status: "done", progress: 1, fileUri: "file:///out.mp4" });
+    expect(screen.getByRole("progressbar")).toHaveStyle({ width: theme.size.ring, height: theme.size.ring });
+    expect(gold()).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Share" })).toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Done" })).not.toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByText("Ready to sail")).toHaveStyle({ fontSize: theme.type.title });
+    expect(screen.getByText("1080p · 0:30")).toHaveStyle({ fontFamily: theme.fonts.bodySemi, color: theme.colors.text });
+  });
+
+  test("failed: the message is readable (cream, in a card) and Try again is the one gold button", async () => {
+    const reset = jest.fn();
+    await render(<ExportScreenBody project={project} state={{ status: "error", progress: 0, message: "Not enough free space on this iPhone for the export." }} start={jest.fn()} cancel={jest.fn()} reset={reset} onSave={jest.fn()} onShare={jest.fn()} onDone={jest.fn()} />);
+    expect(screen.getByText("Not enough free space on this iPhone for the export.")).toHaveStyle({ color: theme.colors.text, fontSize: theme.type.body });
+    expect(screen.getByTestId("export-error")).toHaveStyle({ backgroundColor: theme.elevation.bar });
+    expect(gold()).toHaveLength(1);
+    await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
+    expect(reset).toHaveBeenCalledTimes(1);
   });
 });
