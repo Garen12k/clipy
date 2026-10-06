@@ -8,7 +8,7 @@ const within = (v: number, [lo, hi]: readonly [number, number]) => v >= lo && v 
 function expectStyleInLimits(s: TextStyle) {
   const L = TEXT_STYLE_LIMITS;
   expect(clampTextStyle(s)).toEqual(s);   // survives the sanity rule unchanged
-  expect(Object.keys(s).sort()).toEqual(["glow", "letterSpacing", "lineSpacing", "opacity", "outlineColor", "outlineWidth", "shadow"]);
+  expect(Object.keys(s).sort()).toEqual(["boxCorner", "boxPadding", "glow", "letterSpacing", "lineSpacing", "opacity", "outlineColor", "outlineWidth", "shadow"]);
   expect(within(s.opacity, L.opacity) && within(s.letterSpacing, L.letterSpacing) && within(s.lineSpacing, L.lineSpacing) && within(s.outlineWidth, L.outlineWidth)).toBe(true);
   if (s.outlineColor !== null) expect(s.outlineColor).toMatch(HEX);
   if (s.shadow) {

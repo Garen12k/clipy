@@ -86,7 +86,7 @@ test("the Swift export records carry the style, the words and the highlight with
   expect(overlay).toContainEqual(["words", "[ExportCaptionWord]", "[]"]);
   expect(overlay).toContainEqual(["highlightColor", "String?", null]);
   // The record's defaults are the neutral style.
-  expect(DEFAULT_TEXT_STYLE).toEqual({ opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null });
+  expect(DEFAULT_TEXT_STYLE).toEqual({ opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null, boxPadding: 0.25, boxCorner: "rounded" });
 });
 
 const o = makeOverlay({ id: "o", x: 0.25, y: 0.75, fontScale: 0.1, scale: 1.5, rotation: 30, background: { color: "#000000", opacity: 0.5 } });
@@ -119,7 +119,7 @@ test("the default style gives exactly the numbers from before styles existed", (
 
 test("a styled text at 1080×1920 (hand-computed — OverlayLayoutTests.swift pins the same numbers)", () => {
   const styled = makeOverlay({ id: "s", fontScale: 0.07, color: "#FFFFFF",
-    style: { opacity: 0.8, letterSpacing: 0.1, lineSpacing: 1.5, outlineColor: null, outlineWidth: 2, shadow: { ...DEFAULT_SHADOW }, glow: { ...DEFAULT_GLOW } } });
+    style: { ...DEFAULT_TEXT_STYLE, opacity: 0.8, letterSpacing: 0.1, lineSpacing: 1.5, outlineWidth: 2, shadow: { ...DEFAULT_SHADOW }, glow: { ...DEFAULT_GLOW } } });
   expect(layoutOverlay(styled, 1080, 1920)).toEqual({
     centerX: 540, centerY: 960, fontSize: 134.4, maxWidth: 972, padding: 0, rotation: 0,
     letterSpacing: 13.44,                 // 0.1 × 134.4

@@ -1,12 +1,12 @@
 import {
-  clampCaptionWords, clampTextStyle, DEFAULT_GLOW, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, isHexColor, makeOverlay, makeProject, SCHEMA_VERSION, TEXT_STYLE_LIMITS,
+  BOX_CORNERS, clampCaptionWords, clampTextStyle, DEFAULT_GLOW, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, isHexColor, makeOverlay, makeProject, SCHEMA_VERSION, TEXT_STYLE_LIMITS,
 } from "../types";
 import { linesToCaptions } from "../captions";
 
-test("schema is v14", () => expect(SCHEMA_VERSION).toBe(14));
+test("schema is v15", () => expect(SCHEMA_VERSION).toBe(15));
 
 test("defaults match the spec", () => {
-  expect(DEFAULT_TEXT_STYLE).toEqual({ opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null });
+  expect(DEFAULT_TEXT_STYLE).toEqual({ opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null, boxPadding: 0.25, boxCorner: "rounded" });
   expect(DEFAULT_SHADOW).toEqual({ color: "#000000", opacity: 0.6, distance: 0.06, blur: 0.1 });
   expect(DEFAULT_GLOW).toEqual({ color: "#FFFFFF", size: 0.25 });
   expect(TEXT_STYLE_LIMITS.lineSpacing).toEqual([0.8, 2]);
@@ -102,5 +102,37 @@ describe("factories give fresh defaults", () => {
     expect(x.style).not.toBe(y.style);
     expect(x.words).not.toBe(y.words);
   });
-  test("makeProject is v14", () => expect(makeProject().schemaVersion).toBe(14));
+  test("makeProject is v15", () => expect(makeProject().schemaVersion).toBe(15));
+});
+
+describe("the box fields (schema v15)", () => {
+  test("ids, limits and defaults: the defaults are the box every text had before", () => {
+    expect(BOX_CORNERS).toEqual(["rounded", "square"]);
+    expect(TEXT_STYLE_LIMITS.boxPadding).toEqual([0, 0.6]);
+    expect(DEFAULT_TEXT_STYLE).toMatchObject({ boxPadding: 0.25, boxCorner: "rounded" });
+    expect(Object.keys(DEFAULT_TEXT_STYLE)).toEqual(["opacity", "letterSpacing", "lineSpacing", "outlineColor", "outlineWidth", "shadow", "glow", "boxPadding", "boxCorner"]);
+  });
+  test("a style stored without them gets the defaults; every other value is kept as it is", () => {
+    const v14 = { opacity: 0.8, letterSpacing: 0.1, lineSpacing: 1.5, outlineColor: "#FF2D7A", outlineWidth: 2.2, shadow: { color: "#000000", opacity: 0.6, distance: 0.06, blur: 0.1 }, glow: { color: "#FFFFFF", size: 0.25 } };
+    expect(clampTextStyle(v14)).toEqual({ ...v14, boxPadding: 0.25, boxCorner: "rounded" });
+  });
+  test("padding is clamped to 0–0.6; anything that is not a finite number → 0.25", () => {
+    expect(clampTextStyle({ boxPadding: 0 }).boxPadding).toBe(0);
+    expect(clampTextStyle({ boxPadding: 0.6 }).boxPadding).toBe(0.6);
+    expect(clampTextStyle({ boxPadding: 9 }).boxPadding).toBe(0.6);
+    expect(clampTextStyle({ boxPadding: -1 }).boxPadding).toBe(0);
+    for (const bad of [NaN, Infinity, "0.4", null, undefined]) expect(clampTextStyle({ boxPadding: bad }).boxPadding).toBe(0.25);
+  });
+  test("corner: the two ids are kept; anything else → rounded", () => {
+    expect(clampTextStyle({ boxCorner: "square" }).boxCorner).toBe("square");
+    expect(clampTextStyle({ boxCorner: "rounded" }).boxCorner).toBe("rounded");
+    for (const bad of ["pill", "", 0, null, undefined, ["square"]]) expect(clampTextStyle({ boxCorner: bad }).boxCorner).toBe("rounded");
+  });
+  test("idempotent; a new text and a new caption carry their own fresh copy", () => {
+    const once = clampTextStyle({ boxPadding: 0.456, boxCorner: "square", extra: 1 });
+    expect(once).toMatchObject({ boxPadding: 0.456, boxCorner: "square" });   // the sanity pass clamps; it does not round
+    expect(clampTextStyle(once)).toEqual(once);
+    expect(makeOverlay({ id: "a" }).style).toEqual(DEFAULT_TEXT_STYLE);
+    expect(makeOverlay({ id: "a" }).style).not.toBe(DEFAULT_TEXT_STYLE);
+  });
 });

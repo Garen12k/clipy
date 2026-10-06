@@ -296,7 +296,7 @@ describe("toExportOverlay", () => {
   });
   it("maps a styled text, whole: shadow and glow flattened", () => {
     const style = { opacity: 0.8, letterSpacing: 0.1, lineSpacing: 1.5, outlineColor: "#FF2D7A", outlineWidth: 2,
-      shadow: { color: "#101010", opacity: 0.6, distance: 0.06, blur: 0.1 }, glow: { color: "#00E5FF", size: 0.25 } };
+      shadow: { color: "#101010", opacity: 0.6, distance: 0.06, blur: 0.1 }, glow: { color: "#00E5FF", size: 0.25 }, boxPadding: 0.25, boxCorner: "rounded" as const };
     const o = makeOverlay({ id: "o", fontId: "anton", style, words: [{ text: "Your", start: 0, end: 1 }], highlightColor: "#FFE600" });
     const e = toExportOverlay(o);
     expect(e).toEqual({

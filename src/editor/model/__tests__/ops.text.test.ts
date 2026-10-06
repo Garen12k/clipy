@@ -36,7 +36,7 @@ describe("setTextStyle", () => {
     const next = setTextStyle(p, "t", { opacity: 7, letterSpacing: -3, lineSpacing: 9, outlineWidth: 0, outlineColor: "red",
       shadow: { color: "nope", opacity: 4, distance: 4, blur: 4 }, glow: { color: "#00FF00", size: 9 } });
     expect(text(next, "t").style).toEqual({ opacity: 1, letterSpacing: -0.05, lineSpacing: 2, outlineColor: null, outlineWidth: 0.5,
-      shadow: { color: "#000000", opacity: 1, distance: 0.3, blur: 0.5 }, glow: { color: "#00FF00", size: 0.6 } });
+      shadow: { color: "#000000", opacity: 1, distance: 0.3, blur: 0.5 }, glow: { color: "#00FF00", size: 0.6 }, boxPadding: 0.25, boxCorner: "rounded" });
   });
   test("same project when nothing changes, for a sticker and for an unknown id", () => {
     expect(setTextStyle(p, "t", { opacity: 1 })).toBe(p);
