@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Modal, Pressable, View, type DimensionValue } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/src/theme/theme";
-import { Body, Title } from "./Text";
-import { useReducedMotion } from "./useReducedMotion";
+import { sheetTo } from "./motion";
+import { QuietButton } from "./QuietButton";
+import { Title } from "./Text";
+import { isReducedMotion } from "./useReducedMotion";
 
 type Props = {
   visible: boolean; onClose: () => void; title: string; children: React.ReactNode; height?: DimensionValue; action?: { label: string; onPress: () => void };
@@ -18,28 +20,27 @@ export function shouldDismiss(translationY: number, velocityY: number, height: n
   return translationY > 0 && (translationY > height * 0.25 || velocityY > 800);
 }
 
+/** Where the panel starts from, below its resting place. */
 const START_OFFSET = 320;
+const GRABBER = { width: 36, height: 4 } as const;
 
-/** Animation that brings the panel to rest: spring normally, plain timing (no spring) under Reduce Motion. */
-export function settle(reduced: boolean) {
-  return reduced ? withTiming(0, { duration: theme.motion.fade }) : withSpring(0, theme.motion.sheet);
-}
-
+/**
+ * A pop-up panel over a dimmed screen (a Modal). It rises into place on the sheet spring from motion.ts - critically damped, so it
+ * does not bounce - and springs back the same way when a drag does not close it. With Reduce Motion it is placed at once (the Modal's
+ * own cross-fade is all that moves). Closing is the Modal's fade.
+ */
 export function Sheet({ visible, onClose, title, children, height, action, avoidKeyboard }: Props) {
-  const reduced = useReducedMotion();
   const insets = useSafeAreaInsets();
   const y = useSharedValue(START_OFFSET);
   const [panelH, setPanelH] = useState(400);
 
-  useEffect(() => {
-    if (!visible) { y.value = START_OFFSET; return; }
-    y.value = settle(reduced);
-  }, [visible, reduced, y]);
+  // Only `visible` starts it. The shared value is deliberately not a dependency: it is stable on the device, but the Jest mock hands out a new one on every render.
+  useEffect(() => { y.value = visible ? sheetTo(isReducedMotion()) : START_OFFSET; }, [visible]);
 
   // runOnJS(true): callbacks run on the JS thread, so onClose needs no worklet bridge.
   const pan = Gesture.Pan().runOnJS(true)
     .onUpdate((e) => { y.value = Math.max(0, e.translationY); })
-    .onEnd((e) => { if (shouldDismiss(e.translationY, e.velocityY, panelH)) onClose(); else y.value = settle(reduced); });
+    .onEnd((e) => { if (shouldDismiss(e.translationY, e.velocityY, panelH)) onClose(); else y.value = sheetTo(isReducedMotion()); });
   const anim = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
 
   return (
@@ -48,19 +49,15 @@ export function Sheet({ visible, onClose, title, children, height, action, avoid
       <GestureHandlerRootView style={{ flex: 1 }}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" enabled={!!avoidKeyboard}>
           <Pressable style={{ flex: 1, backgroundColor: theme.colors.scrim }} onPress={onClose} accessibilityLabel="Close sheet" />
-          <Animated.View onLayout={(e) => setPanelH(e.nativeEvent.layout.height)}
-            style={[{ backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet,
+          <Animated.View testID="sheet-panel" onLayout={(e) => setPanelH(e.nativeEvent.layout.height)}
+            style={[{ backgroundColor: theme.elevation.bar, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet,
               borderTopWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: theme.space.xl, paddingBottom: insets.bottom + theme.space.lg, gap: theme.space.lg, maxHeight: height }, anim]}>
             <GestureDetector gesture={pan}>
-              <View style={{ paddingTop: theme.space.sm, gap: theme.space.md }}>
-                <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: theme.colors.textMuted, opacity: 0.5 }} />
+              <View testID="sheet-header" style={{ paddingTop: theme.space.sm, gap: theme.space.md }}>
+                <View style={{ alignSelf: "center", width: GRABBER.width, height: GRABBER.height, borderRadius: theme.radius.pill, backgroundColor: theme.colors.textMuted, opacity: 0.5 }} />
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Title size={18} accessibilityRole="header">{title}</Title>
-                  {action ? (
-                    <Pressable accessibilityRole="button" accessibilityLabel={action.label} onPress={action.onPress} hitSlop={8}>
-                      <Body weight="semi" style={{ color: theme.colors.accent, fontSize: 13 }}>{action.label}</Body>
-                    </Pressable>
-                  ) : null}
+                  <Title size={theme.type.heading} accessibilityRole="header">{title}</Title>
+                  {action ? <QuietButton compact title={action.label} onPress={action.onPress} /> : null}
                 </View>
               </View>
             </GestureDetector>

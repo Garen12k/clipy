@@ -1,14 +1,16 @@
 import Slider from "@react-native-community/slider";
 import { requestPermissionsAsync, saveToLibraryAsync } from "expo-media-library/legacy";
 import { useEffect, useRef, useState } from "react";
-import { PixelRatio, TextInput, useWindowDimensions, View } from "react-native";
+import { PixelRatio, useWindowDimensions, View } from "react-native";
 import { frameUriAt } from "@/src/editor/coverFrame";
 import { setCover } from "@/src/editor/model/ops";
 import { coverTimeOf, totalDuration } from "@/src/editor/model/timeline";
 import { COVER_LIMITS, frameAspect, type Cover } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { Field } from "@/src/ui/Field";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
+import { QuietButton } from "@/src/ui/QuietButton";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
@@ -24,7 +26,6 @@ export const coverSaveSize = (ratio: number): { width: number; height: number } 
   (ratio > 1 ? { width: Math.round(SAVE_SHORT_SIDE * ratio), height: SAVE_SHORT_SIDE } : { width: SAVE_SHORT_SIDE, height: Math.round(SAVE_SHORT_SIDE / ratio) });
 /** The draft is no cover at all: the first frame and no title (what a project without a cover already shows). */
 const isBlank = (c: Cover) => c.time === 0 && c.title.trim() === "";
-const field = { backgroundColor: theme.colors.surfaceAlt, color: theme.colors.text, borderRadius: theme.radius.chip, fontFamily: theme.fonts.body, padding: 10, fontSize: 16, minWidth: 72 } as const;
 
 /**
  * Picks the frame that stands for the video and a short title over it. The choice is a local draft: nothing is
@@ -120,21 +121,21 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
         value={time}
         onValueChange={(v) => { setTime(v); load(v, false); }}
         onSlidingComplete={(v) => { setTime(v); load(v, true); }}
-        minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.surfaceAlt} thumbTintColor={theme.colors.accent}
+        minimumTrackTintColor={theme.colors.accent} maximumTrackTintColor={theme.colors.sea} thumbTintColor={theme.colors.accent}
       />
       <View style={{ gap: theme.space.xs }}>
         {/* Cut by whole characters (code points): `maxLength` counts UTF-16 units and can split an emoji. The return key
             ends the typing (a one-line field blurs on submit), which brings the frame back to full size. */}
-        <TextInput accessibilityLabel="Cover title" value={title} onChangeText={(t) => setTitle(Array.from(t).slice(0, COVER_LIMITS.titleMax).join(""))}
+        <Field accessibilityLabel="Cover title" value={title} onChangeText={(t) => setTitle(Array.from(t).slice(0, COVER_LIMITS.titleMax).join(""))}
           returnKeyType="done" onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} onSubmitEditing={() => setTyping(false)}
-          style={field} placeholder="Add a title" placeholderTextColor={theme.colors.textMuted} />
-        <Body muted style={{ fontSize: 12, textAlign: "right" }}>{`${Array.from(title).length} / ${COVER_LIMITS.titleMax}`}</Body>
+          placeholder="Add a title" />
+        <Body muted style={{ fontSize: theme.type.small, textAlign: "right" }}>{`${Array.from(title).length} / ${COVER_LIMITS.titleMax}`}</Body>
       </View>
       {note ? <Body muted style={{ textAlign: "center" }}>{note}</Body> : null}
       <PrimaryButton title="Done" onPress={done} />
       <View style={{ flexDirection: "row", justifyContent: "center", gap: theme.space.md }}>
         <SecondaryButton title="Save to Photos" disabled={saving || typing} onPress={() => { void save(); }} />
-        <SecondaryButton title="Reset" onPress={reset} />
+        <QuietButton title="Reset" onPress={reset} />
       </View>
     </Sheet>
   );
