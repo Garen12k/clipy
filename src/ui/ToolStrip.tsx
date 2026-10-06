@@ -25,6 +25,9 @@ export const useStripPresence = create<{ count: number }>(() => ({ count: 0 }));
 const LABEL_WIDTH = 124;
 /** Where a row of uniform tiles starts so the selected one shows: its index times the pitch (tile + gap), minus one tile. */
 export const tilesStartX = (index: number, tileWidth: number): number => Math.max(0, index * (tileWidth + theme.space.sm) - tileWidth);
+/** `tilesStartX`, never past the row's end: `count` tiles of `tileWidth` (the row's gaps and its two gutters included) in a row as wide as `viewportWidth` — a strip is as wide as the window. React Native does not clamp a ScrollView's contentOffset. */
+export const tilesStartXIn = (index: number, tileWidth: number, count: number, viewportWidth: number): number =>
+  Math.min(tilesStartX(index, tileWidth), Math.max(0, count * tileWidth + (count - 1) * theme.space.sm + 2 * theme.space.gutter - viewportWidth));
 
 type Props = { visible: boolean; onClose: () => void; title: string; note?: React.ReactNode; action?: { label: string; onPress: () => void }; children: React.ReactNode };
 

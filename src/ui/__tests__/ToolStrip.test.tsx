@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { Text } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "../Chip";
-import { BAR_HEIGHT, STRIP, StripNote, StripSlider, StripTiles, ToolStrip, useStripPresence } from "../ToolStrip";
+import { BAR_HEIGHT, STRIP, StripNote, StripSlider, StripTiles, ToolStrip, tilesStartX, tilesStartXIn, useStripPresence } from "../ToolStrip";
 
 test("the height budget: bar 90, strip 154 = 1 + 44 + 72 + 36 + 1, lifted by the difference", () => {
   expect(BAR_HEIGHT).toBe(90);
@@ -72,6 +72,16 @@ test("rows have explicit heights; the slider row shows its label and trailing", 
   expect(screen.getByTestId("strip-tiles")).toHaveStyle({ height: STRIP.tiles });
   expect(screen.getByTestId("strip-slider")).toHaveStyle({ height: STRIP.slider });
   for (const t of ["tabs", "tile", "Brightness +35", "slider", "reset"]) expect(screen.getByText(t)).toBeTruthy();
+});
+
+test("tilesStartXIn: the selected tile in view, but never past the row's end", () => {
+  // 32 tiles of 52 with gaps of 8 and a 16 gutter each side: 32·52 + 31·8 + 32 = 1944 wide. In a 375 window the last start is 1569.
+  expect(tilesStartXIn(0, 52, 32, 375)).toBe(0);
+  expect(tilesStartXIn(5, 52, 32, 375)).toBe(tilesStartX(5, 52));         // 5·60 − 52 = 248: unchanged
+  expect(tilesStartXIn(20, 52, 32, 375)).toBe(1148);                       // 20·60 − 52
+  expect(tilesStartXIn(31, 52, 32, 375)).toBe(1569);                       // 31·60 − 52 = 1808 → clamped to 1944 − 375
+  // A row that fits the window never scrolls: 3·72 + 2·8 + 32 = 264 < 375.
+  expect(tilesStartXIn(2, 72, 3, 375)).toBe(0);
 });
 
 test("the lead of a tiles row is as high as the row, so a compact tab chip's slop is inside it: a real 44-pt target", async () => {

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Image, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Image, useWindowDimensions, View } from "react-native";
 import { FILTERS } from "@/src/editor/effects";
 import { forClips, mainClipIds, setClipFilter, setClipFilterIntensity, setFilterForAllClips } from "@/src/editor/model/ops";
 import { FILTER_IDS, isPhoto, type Project } from "@/src/editor/model/types";
@@ -10,7 +10,7 @@ import { haptic } from "@/src/ui/haptics";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { Slider } from "@/src/ui/Slider";
 import { Body } from "@/src/ui/Text";
-import { StripSlider, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
+import { StripSlider, StripTiles, ToolStrip, tilesStartXIn } from "@/src/ui/ToolStrip";
 import { FilterLayer } from "./FilterLayer";
 import { getThumb } from "./thumbnails";
 
@@ -35,6 +35,15 @@ export function FilterSheet({ clipId, clipIds, visible, onClose }: { clipId: str
     return () => { alive = false; };
   }, [clip?.sourceUri, clip?.trimStart, clip?.kind]);
 
+  const { width: windowW } = useWindowDimensions();
+  // Where the row starts: the selected tile in view. Worked out when the strip opens (and for another clip) — NOT on every pick: a
+  // ScrollView applies a changed contentOffset at once, and the row must not move under the finger.
+  const startX = useMemo(
+    () => tilesStartXIn(Math.max(0, FILTER_IDS.indexOf(clip?.filter ?? "none")), TILE_W, FILTER_IDS.length, windowW),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visible, clip?.id, windowW],
+  );
+
   if (!clip) return null;
   const current = clip.filter ?? "none";
   /** One clip op on the shown clip, or on every clip of the multi-selection (one project out, so one undo step). */
@@ -44,7 +53,7 @@ export function FilterSheet({ clipId, clipIds, visible, onClose }: { clipId: str
     <ToolStrip visible={visible} onClose={onClose} title={clipIds ? `Filter · ${count} ${count === 1 ? "clip" : "clips"}` : "Filter"}
       // "Apply to all" writes the main clips: it is not offered for a layer, nor for a multi-selection (which names its own clips).
       action={layer || clipIds ? undefined : { label: "Apply to all clips", onPress: () => apply((p) => setFilterForAllClips(p, clip.filter, clip.filterIntensity)) }}>
-      <StripTiles>
+      <StripTiles initialX={startX}>
         {FILTER_IDS.map((id) => {
           const def = FILTERS[id];
           const selected = current === id;

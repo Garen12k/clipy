@@ -24,6 +24,17 @@ describe("EffectSheet", () => {
     for (const id of EFFECT_IDS) expect(screen.getByRole("button", { name: EFFECTS[id].label })).toBeTruthy();
   });
 
+  test("twenty tiles: the twelve old effects first, in their order, then the eight new ones; a new one is added like an old one", async () => {
+    state().seek(1);
+    await render(<EffectSheet visible onClose={() => {}} />);
+    const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel).filter((l) => l !== "Done");
+    expect(labels).toEqual(["Glitch", "Shake", "Zoom pulse", "Blur", "VHS", "Light leak", "Flash", "RGB split", "Old film", "Glow", "Blur box", "Mosaic box",
+      "Film burn", "Lens flare", "Dust", "Heartbeat", "Hue shift", "Mirror", "Soft edges", "Strobe"]);
+    await fireEvent.press(screen.getByRole("button", { name: "Heartbeat" }));
+    expect(state().project!.effects).toEqual([{ id: "new", type: "heartbeat", start: 1, end: 3, intensity: 0.7, rect: null }]);
+    expect(state().selectedEffectId).toBe("new");
+  });
+
   test("a tile adds the effect at the playhead, selects it and closes, as one undo step", async () => {
     const onClose = jest.fn();
     state().select("a"); state().seek(3);
