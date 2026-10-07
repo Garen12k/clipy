@@ -312,7 +312,42 @@ private struct PlacedClip {
 /// frame by `ClipyCompositor` from the `overlays` of each instruction (`InstructionSplit.attach`).
 /// Events go through `onEvent`: `progress` (repeating), then exactly one of `done` / `cancelled` / `error`.
 /// Errors thrown from `start` are NOT emitted here — the caller (the module) turns them into an `error` event.
+/// Records what AVFoundation's own check of a video composition finds wrong (first-build diagnostics): each finding is one short line.
+final class CompositionCheck: NSObject, AVVideoCompositionValidationHandling {
+  var findings: [String] = []
+  func videoComposition(_ videoComposition: AVVideoComposition, shouldContinueValidatingAfterFindingInvalidValueForKey key: String) -> Bool {
+    findings.append("invalid value for \(key)")
+    return true
+  }
+  func videoComposition(_ videoComposition: AVVideoComposition, shouldContinueValidatingAfterFindingEmptyTimeRange timeRange: CMTimeRange) -> Bool {
+    findings.append("no instruction from \(timeRange.start.seconds) for \(timeRange.duration.seconds) s")
+    return true
+  }
+  func videoComposition(_ videoComposition: AVVideoComposition, shouldContinueValidatingAfterFindingInvalidTimeRangeIn videoCompositionInstruction: AVVideoCompositionInstructionProtocol) -> Bool {
+    let r = videoCompositionInstruction.timeRange
+    findings.append("bad instruction range \(r.start.seconds) + \(r.duration.seconds) s")
+    return true
+  }
+  func videoComposition(_ videoComposition: AVVideoComposition, shouldContinueValidatingAfterFindingInvalidTrackIDIn videoCompositionInstruction: AVVideoCompositionInstructionProtocol, layerInstruction: AVVideoCompositionLayerInstruction, asset: AVAsset) -> Bool {
+    findings.append("bad track id \(layerInstruction.trackID)")
+    return true
+  }
+}
+
 final class ExportSession {
+  /// Everything an error says, in one line for the app's message and the log: its description, its domain and code, the reason
+  /// and the error underneath it. (AVFoundation's own description is often only "The operation could not be completed".)
+  static func describe(_ error: Error?) -> String {
+    guard let error else { return "Export failed" }
+    let e = error as NSError
+    var parts: [String] = ["\(e.localizedDescription) [\(e.domain) \(e.code)]"]
+    if let reason = e.localizedFailureReason { parts.append(reason) }
+    if let under = e.userInfo[NSUnderlyingErrorKey] as? NSError {
+      parts.append("underlying: \(under.localizedDescription) [\(under.domain) \(under.code)]")
+    }
+    return parts.joined(separator: " | ")
+  }
+
   /// The default frames per second of the exported video (a request asks for another rate with `fps`). Whatever
   /// rate the request asks for, the still "hold" frame of a transition handle (a length of source, not an output
   /// rate) and the sampling of text / sticker motion (`OverlayMotion.fps`) stay at this one rate.
@@ -1305,6 +1340,15 @@ final class ExportSession {
     let seconds = CMTimeGetSeconds(composition.duration)
     if let limit = Self.fileLengthLimit(bitrate: request.bitrate, seconds: seconds) { session.fileLengthLimit = limit }
 
+    // First-build diagnostics: what was handed to the export, and what AVFoundation's own check says about it. Only
+    // used in the message of a failed export.
+    let check = CompositionCheck()
+    let valid = videoComposition.isValid(for: composition, timeRange: CMTimeRange(start: .zero, duration: composition.duration), validationDelegate: check)
+    let videoTracks = composition.tracks(withMediaType: .video).count
+    let audioTracks = composition.tracks(withMediaType: .audio).count
+    let facts = "size \(Int(renderSize.width))x\(Int(renderSize.height)) fps \(fps) dur \(seconds) instr \(instructions.count) vtracks \(videoTracks) atracks \(audioTracks) overlays \(overlayLayers.count) mix \(mixParams.count) valid \(valid)"
+      + (check.findings.isEmpty ? "" : " findings: " + check.findings.prefix(6).joined(separator: "; "))
+
     lock.lock()
     let cancelledBeforeExport = isCancelled
     if !cancelledBeforeExport { self.session = session }
@@ -1335,7 +1379,7 @@ final class ExportSession {
         self.onEvent(["jobId": jobId, "type": "cancelled"])
       default:
         try? FileManager.default.removeItem(at: outputURL)
-        self.onEvent(["jobId": jobId, "type": "error", "message": session.error?.localizedDescription ?? "Export failed"])
+        self.onEvent(["jobId": jobId, "type": "error", "message": ExportSession.describe(session.error) + " {" + facts + "}"])
       }
     }
   }

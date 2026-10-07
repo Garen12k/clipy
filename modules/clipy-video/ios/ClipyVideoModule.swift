@@ -68,7 +68,7 @@ public class ClipyVideoModule: Module {
           try await session.start(request)
         } catch {
           ExportSession.removeFile(atPath: outputPath)
-          self?.sendEvent("onExportEvent", ["jobId": jobId, "type": "error", "message": error.localizedDescription])
+          self?.sendEvent("onExportEvent", ["jobId": jobId, "type": "error", "message": "start: " + ExportSession.describe(error)])
           self?.dropSession(jobId)
         }
       }
