@@ -58,7 +58,7 @@ Clipy's welcome screen offers three ways to sign in. Each is one provider in the
 ### c. Apple — works only in the real build
 
 1. Click **Apple** and switch it on.
-2. In **Client IDs**, type `com.clipy.app` (Clipy's bundle ID).
+2. In **Client IDs**, type `com.astinos.clipy` (Clipy's bundle ID).
 3. The OAuth fields (Services ID, secret key) can stay empty: the Clipy app signs in natively and does not need them.
 4. Click **Save**.
 

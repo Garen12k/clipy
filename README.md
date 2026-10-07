@@ -66,7 +66,7 @@ Built: signing in (see above), an Accounts screen (connect / disconnect), and a 
 
 **What still needs you**
 - Create the Supabase project and each platform's developer app, following `supabase/README.md`.
-- Turn on sign-in in Supabase (`supabase/README.md`, section 2): the Email provider with the 6-digit code in its email, the Google provider (client ID, secret, and the two return addresses), and the Apple provider (`com.clipy.app` as the client ID).
+- Turn on sign-in in Supabase (`supabase/README.md`, section 2): the Email provider with the 6-digit code in its email, the Google provider (client ID, secret, and the two return addresses), and the Apple provider (`com.astinos.clipy` as the client ID).
 - Check Apple sign-in on a real build (it cannot work in Expo Go).
 - Run the device checklists in `supabase/README.md` (sections 9, 11, 12 and 13) on your iPhone.
 - An Apple Developer account and a first native build: video export and auto-captions have never been compiled.
@@ -601,7 +601,7 @@ Left by the reviews of the same work:
 
 Signing in:
 
-90. **Apple sign-in on a real build.** Continue with Apple opens Apple's sheet and signs you in (Supabase's Apple provider must list `com.clipy.app` as a client ID). It has never run: in Expo Go the app refuses it on purpose.
+90. **Apple sign-in on a real build.** Continue with Apple opens Apple's sheet and signs you in (Supabase's Apple provider must list `com.astinos.clipy` as a client ID). It has never run: in Expo Go the app refuses it on purpose.
 91. **Google sign-in comes back to the app.** After choosing a Google account the browser closes and Clipy is signed in. The return address is `clipy://welcome` in a build (`exp://…/--/welcome` in Expo Go); both must be in Supabase's allowed redirect URLs.
 92. **The welcome screen on a small iPhone.** With the keyboard open on the email and code steps, the field, the gold button, Resend code and Use a different email can all be reached (the page scrolls above the keyboard), on first launch and when opened as a sheet from Accounts.
 93. **The code from the email fills in.** iOS should offer the 6-digit code above the keyboard; choosing it signs in without pressing the button.

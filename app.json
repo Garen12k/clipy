@@ -8,7 +8,7 @@
     "scheme": "clipy",
     "userInterfaceStyle": "dark",
     "ios": {
-      "bundleIdentifier": "com.clipy.app",
+      "bundleIdentifier": "com.astinos.clipy",
       "supportsTablet": false,
       "usesAppleSignIn": true,
       "infoPlist": {
