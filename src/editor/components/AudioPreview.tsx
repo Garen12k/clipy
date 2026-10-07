@@ -5,6 +5,7 @@ import { restGain, trackGainAt } from "@/src/editor/model/audioMix";
 import { audioSyncStep, trackPhaseAt, type RolledFor } from "@/src/editor/model/audioSync";
 import type { AudioTrack, Project } from "@/src/editor/model/types";
 import { PREVIEW_VOLUME_CAP, shouldWriteVolume } from "@/src/editor/previewVolume";
+import { playUri, useSoundFiles } from "@/src/editor/soundFiles";
 import { useEditorStore } from "@/src/editor/store";
 
 const DRIFT_TOLERANCE = 0.25; // seconds before we re-seek the song while playing
@@ -20,6 +21,10 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
   const isPlaying = useEditorStore((s) => s.isPlaying);
   const recording = useEditorStore((s) => s.recording);
   const isMissing = useEditorStore((s) => s.missingSourceUris.includes(track.sourceUri));
+  // The file to play: the track's changed copy once it is rendered (Voice / Sound), otherwise its own file — and its own file while
+  // a Strength / Pitch slider is held, so a drag across a setting that already has a copy does not swap files back and forth.
+  // A string, so this re-renders only when the file really changes. A track without a setting: always `track.sourceUri`.
+  const uri = useSoundFiles((s) => (s.hold ? track.sourceUri : playUri(s.files, track)));
   const player = useAudioPlayer(null, { keepAudioSessionActive: true });
   const loadedUri = useRef<string | null>(null);
   // The volume last written to the player (null: none since the file was loaded), so a write that would change nothing is skipped.
@@ -37,11 +42,11 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
   // Load (or swap) the file. A missing file is never loaded: the player stays paused and the effects below do nothing.
   useEffect(() => {
     if (isMissing) { player.pause(); loadedUri.current = null; appliedVolume.current = null; started.current = false; rolling.current = null; lastSeek.current = null; return; }
-    if (loadedUri.current !== track.sourceUri) {
-      player.replace({ uri: track.sourceUri });
-      loadedUri.current = track.sourceUri; appliedVolume.current = null; started.current = false; rolling.current = null; lastSeek.current = null;
+    if (loadedUri.current !== uri) {
+      player.replace({ uri });
+      loadedUri.current = uri; appliedVolume.current = null; started.current = false; rolling.current = null; lastSeek.current = null;
     }
-  }, [track.sourceUri, isMissing, player]);
+  }, [uri, isMissing, player]);
 
   // Volume. Declared before the sync effect so that, on the tick playback enters the track, the fade's volume is written
   // before play(). Outside the track the player is paused (nothing is heard), and it rests at the track's own volume — what
@@ -50,6 +55,8 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
   // silent: 0 is written before that play(), and the sound becomes audible on the tick the playhead reaches the start.
   // This effect also re-runs for edits that have nothing to do with audio (every frame of a gesture replaces `project`):
   // it writes only when the value moved (see shouldWriteVolume), never seeks, and sets no state.
+  // `uri` is listed for a copy that becomes ready (or goes): the file was just swapped above, so its volume is written again here.
+  // For a track without a setting `uri` is `track.sourceUri`, which only changes together with `track`: no run is added.
   useEffect(() => {
     if (loadedUri.current === null) return;
     const phase = trackPhaseAt(track, playhead, isPlaying);
@@ -64,11 +71,14 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
     if (rolling.current && audioSyncStep(track, playhead, isPlaying, { started: started.current, rolling: rolling.current }).pause) return;
     player.volume = volume;
     appliedVolume.current = volume;
-  }, [project, track, playhead, isPlaying, recording, isMissing, player]);
+  }, [project, track, uri, playhead, isPlaying, recording, isMissing, player]);
 
   // Play / pause / seek: the decision is `audioSyncStep`; here it is carried out, each native call at most once per decision.
   // No timer and nothing asynchronous starts the player, so nothing can reach it after it has been released (the seek's promise
   // is caught); this runs only on a playhead tick or an edit, while the component is mounted.
+  // `uri` is listed so that a swapped file is put in its place in the same pass as the swap: the load effect above has cleared
+  // `started` / `lastSeek`, so this is an ordinary start (seek to the playhead's place in the file, then play) or an ordinary park.
+  // The copy has the timing of the original, so the source times are right for both files.
   useEffect(() => {
     if (loadedUri.current === null) return;
     const step = audioSyncStep(track, playhead, isPlaying, { started: started.current, rolling: rolling.current });
@@ -91,7 +101,7 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
     // Already playing: only re-seek once drift exceeds the tolerance. expo-audio's own clock advances in small
     // steps against the store's playhead, so re-seeking on every tick would cause audible stutter.
     if (step.drift !== null && Math.abs(player.currentTime - step.drift) > DRIFT_TOLERANCE) player.seekTo(step.drift, 0, 0).catch(() => {});
-  }, [track, playhead, isPlaying, isMissing, player]);
+  }, [track, uri, playhead, isPlaying, isMissing, player]);
 
   // useAudioPlayer releases the native player in its own unmount cleanup, which runs before
   // this one; pausing a released player throws, so swallow it (release already stopped audio).
