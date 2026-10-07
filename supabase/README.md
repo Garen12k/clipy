@@ -33,13 +33,16 @@ Clipy's welcome screen offers three ways to sign in. Each is one provider in the
 
 ### a. Email (a 6-digit code, no password) — works in Expo Go
 
-1. Click **Email** and make sure it is switched on. **Confirm email** can stay on.
+1. Click **Email** and make sure it is switched on (it is by default). **Confirm email** can stay on.
+   - *Seen on a real project, October 2026:* the email templates cannot be edited until your own email sender is connected ("Set up custom SMTP to edit templates"), and the default email holds only a link, no code. So do step 7 (the sender) FIRST.
+   - *Also seen:* a new project sends **8-digit** codes. Under **Sign In / Providers → Email**, set **Email OTP length** to **6**.
+   - If "Send code" fails, open **Logs → Auth** and click the red `/otp` row: `535 "Authentication credentials invalid"` means the sender's password (the Resend key) is wrong.
 2. Open **Authentication → Emails → Templates** *(may be named slightly differently)* and choose **Magic Link**. This is the email Clipy's "Send code" sends.
 3. Change its message so it shows the code instead of a link. The body must contain `{{ .Token }}`, for example: `Your Clipy code is {{ .Token }}`. Remove the `{{ .ConfirmationURL }}` link. **Save**.
 4. Do the same for the **Confirm signup** template: a new address may get that email the first time.
 5. The code must be **6 digits** (Clipy's box takes exactly six). If the project offers an "Email OTP length" setting under the Email provider, set it to 6.
 6. After a code is sent, Clipy's "Resend code" waits 60 seconds, to match Supabase's default minimum gap between two emails to the same address *(the 60-second default is from memory, not verified against a real project; if yours is set differently, tell the developer)*.
-7. Supabase's built-in email sender only sends a few emails an hour, and only to the project's own team members. For real use, connect your own email sender under **Authentication → Emails → SMTP Settings** *(may be named slightly differently)*.
+7. Supabase's built-in email sender only sends a few emails an hour, and only to the project's own team members. Connect your own email sender under **Authentication → Emails → SMTP Settings**. With Resend (resend.com): sender `onboarding@resend.dev`, host `smtp.resend.com`, port `465`, username `resend`, password = a Resend API key (paste it yourself; never share it). Without your own domain, Resend only delivers to the Resend account's own address.
 
 ### b. Google — needs a Google client in your name
 

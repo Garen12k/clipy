@@ -12,7 +12,7 @@ import * as Apple from "expo-apple-authentication";
 
 const REDIRECT = "exp://192.168.1.142:8090/--/welcome";
 const NOT_SET_UP = "Sign-in isn't set up yet.";
-const WRONG = "That code didn't work. Check it or send a new one.", RATE = "Too many tries. Wait a minute, then try again.", NET = "Couldn't reach Clipy. Check your connection.", OTHER = "Couldn't sign in.";
+const WRONG = "That code didn't work. Check it or send a new one.", RATE = "Too many tries. Wait a minute, then try again.", NET = "Couldn't reach Clipy. Check your connection.", SERVER = "Clipy's server had a problem. Try again in a minute.", OTHER = "Couldn't sign in.";
 const load = () => { let m!: typeof import("../supabase"); jest.isolateModules(() => { m = require("../supabase"); }); return m; };
 const configured = () => { process.env.EXPO_PUBLIC_SUPABASE_URL = "https://ref.supabase.co"; process.env.EXPO_PUBLIC_SUPABASE_KEY = "pk"; return load(); };
 const open = WebBrowser.openAuthSessionAsync as jest.Mock;
@@ -65,7 +65,11 @@ describe("server errors become plain sentences", () => {
     ["the request limit", { message: "Request rate limit reached", status: 429, code: "over_request_rate_limit" }, RATE, RATE],
     ["the 60-second rule", { message: "For security purposes, you can only request this after 43 seconds.", status: 429 }, RATE, RATE],
     ["no network (auth-js retryable fetch error)", { name: "AuthRetryableFetchError", message: "Network request failed", status: 0 }, NET, NET],
-    ["anything else", { message: "Database error saving new user", status: 500, code: "unexpected_failure" }, OTHER, OTHER],
+    // auth-js names every 5xx a "retryable fetch error" although the phone did reach the server (seen live: the email sender refused, 500).
+    ["a server failure (auth-js calls a 500 retryable)", { name: "AuthRetryableFetchError", message: "Error sending confirmation email", status: 500 }, SERVER, SERVER],
+    ["a gateway failure", { name: "AuthRetryableFetchError", message: "HTTP 503", status: 503 }, SERVER, SERVER],
+    ["a server failure with its own code", { message: "Database error saving new user", status: 500, code: "unexpected_failure" }, SERVER, SERVER],
+    ["anything else", { message: "Signups not allowed for otp", status: 422, code: "otp_disabled" }, OTHER, OTHER],
   ];
   test.each(cases)("%s", async (_name, error, sentence, elsewhere) => {
     const m = configured();

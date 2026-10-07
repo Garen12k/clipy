@@ -29,6 +29,7 @@ export const SIGN_IN_NOT_SET_UP = "Sign-in isn't set up yet.";
 const WRONG_CODE = "That code didn't work. Check it or send a new one.";
 const TOO_MANY = "Too many tries. Wait a minute, then try again.";
 const NO_CONNECTION = "Couldn't reach Clipy. Check your connection.";
+const SERVER_TROUBLE = "Clipy's server had a problem. Try again in a minute.";
 const FAILED = "Couldn't sign in.";
 
 /**
@@ -41,6 +42,8 @@ function plain(e: unknown, checkingCode = false): Error {
   const text = typeof message === "string" ? message : "";
   if (checkingCode && (code === "otp_expired" || code === "invalid_credentials" || /expired or is invalid|invalid.*(otp|token|code)/i.test(text))) return new Error(WRONG_CODE);
   if (status === 429 || (typeof code === "string" && /rate_limit/.test(code)) || /rate limit|security purposes/i.test(text)) return new Error(TOO_MANY);
+  // auth-js names every 5xx "retryable" too, but then the phone did reach the server: that is the server's trouble, not the connection's.
+  if (typeof status === "number" && status >= 500) return new Error(SERVER_TROUBLE);
   if (name === "AuthRetryableFetchError" || status === 0 || /network request failed|failed to fetch|network error/i.test(text)) return new Error(NO_CONNECTION);
   return new Error(FAILED);
 }
