@@ -3,6 +3,8 @@ jest.mock("expo-modules-core", () => {
   const native = {
     hello: () => "mock hello", exportTimeline: jest.fn(), cancelExport: jest.fn(), addListener: jest.fn(() => ({ remove: jest.fn() })),
     transcribe: jest.fn(async () => [{ text: "hi", start: 0, end: 1 }]), cancelTranscribe: jest.fn(),
+    renderSound: jest.fn(async () => ({ fileUri: "file:///out.m4a", seconds: 3, gainDb: 0 })), cancelSoundRender: jest.fn(),
+    soundInfo: jest.fn(async () => ({ hasSound: true, seconds: 3 })), probeNoiseReduction: jest.fn(async () => ({ ok: true, stage: "render", detail: "frames 1" })),
   };
   return {
     ...actual,
@@ -14,7 +16,7 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 import { photoMotionPins, resolveClipMotion, sampleKeyframes } from "@/src/editor/model/motion";
 import { curveSteps, outputOffsetOf } from "@/src/editor/model/timeline";
 import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, cancelTranscribe, exportTimeline, hello, isNativeAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, transcribe } from "../index";
+import { addExportListener, addSoundListener, cancelExport, cancelSoundRender, cancelTranscribe, exportTimeline, hello, isNativeAvailable, isSoundAvailable, isSoundCancelled, probeNoiseReduction, renderSound, SOUND_CANCELLED, soundInfo, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -442,5 +444,67 @@ describe("toExportLayer", () => {
     const e = toExportLayer(l);
     expect(e.transform).not.toBe(l.transform);
     expect(e.crop).not.toBe(l.crop);
+  });
+});
+
+describe("sound API", () => {
+  const request = { jobId: "j", sourceUri: "file:///m/a.m4a", outputPath: "file:///s/a.m4a", pitchCents: -300, distortionPreset: "", distortionWet: 0, distortionPreGain: -6,
+    delayTime: 0, delayFeedback: 0, delayWet: 0, delayLowPass: 15000, reverbPreset: "", reverbWet: 0, bands: [], level: false };
+
+  it("isSoundAvailable: only when the linked module has the render function (not in Expo Go, not in a build from before it)", () => {
+    expect(isSoundAvailable()).toBe(true);
+    jest.mocked(requireOptionalNativeModule).mockReturnValueOnce(null);
+    expect(isSoundAvailable()).toBe(false);
+    jest.mocked(requireOptionalNativeModule).mockReturnValueOnce({ hello: () => "old build", exportTimeline: jest.fn() } as never);
+    expect(isSoundAvailable()).toBe(false);
+  });
+
+  it("renderSound, cancelSoundRender, soundInfo and probeNoiseReduction forward to the native module", async () => {
+    const native = { renderSound: jest.fn(async () => ({ fileUri: "file:///s/a.m4a", seconds: 2, gainDb: 3 })), cancelSoundRender: jest.fn(),
+      soundInfo: jest.fn(async () => ({ hasSound: false, seconds: 9 })), probeNoiseReduction: jest.fn(async () => ({ ok: false, stage: "find", detail: "none" })) };
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(native as never);
+    try {
+      await expect(renderSound(request)).resolves.toEqual({ fileUri: "file:///s/a.m4a", seconds: 2, gainDb: 3 });
+      expect(native.renderSound).toHaveBeenCalledWith(request);
+      cancelSoundRender("j");
+      expect(native.cancelSoundRender).toHaveBeenCalledWith("j");
+      await expect(soundInfo("file:///m/a.mov")).resolves.toEqual({ hasSound: false, seconds: 9 });
+      await expect(probeNoiseReduction("file:///m/a.m4a")).resolves.toEqual({ ok: false, stage: "find", detail: "none" });
+    } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+  });
+
+  it("addSoundListener listens to onSoundEvent", () => {
+    const addListener = jest.fn(() => ({ remove: jest.fn() }));
+    jest.mocked(requireOptionalNativeModule).mockReturnValueOnce({ addListener } as never);
+    const cb = jest.fn();
+    addSoundListener(cb);
+    expect(addListener).toHaveBeenCalledWith("onSoundEvent", cb);
+  });
+
+  it("the sound functions throw the not-linked error without the module", () => {
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(null);
+    try {
+      expect(() => renderSound(request)).toThrow(/not linked/);
+      expect(() => cancelSoundRender("j")).toThrow(/not linked/);
+      expect(() => soundInfo("x")).toThrow(/not linked/);
+      expect(() => probeNoiseReduction("x")).toThrow(/not linked/);
+    } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+  });
+
+  it("with an older build (module present, no sound functions) they throw a plain message, never 'undefined is not a function'", () => {
+    jest.mocked(requireOptionalNativeModule).mockReturnValue({ hello: () => "old", exportTimeline: jest.fn() } as never);
+    try {
+      for (const call of [() => renderSound(request), () => cancelSoundRender("j"), () => soundInfo("x"), () => probeNoiseReduction("x")]) {
+        expect(call).toThrow(/sound tools/);
+      }
+    } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+  });
+
+  it("isSoundCancelled recognises the native cancel code only", () => {
+    expect(SOUND_CANCELLED).toBe("E_SOUND_CANCELLED");
+    expect(isSoundCancelled(Object.assign(new Error("Sound cancelled"), { code: "E_SOUND_CANCELLED" }))).toBe(true);
+    expect(isSoundCancelled(Object.assign(new Error("x"), { code: "E_SOUND" }))).toBe(false);
+    expect(isSoundCancelled(new Error("Sound cancelled"))).toBe(false);
+    expect(isSoundCancelled(null)).toBe(false);
   });
 });
