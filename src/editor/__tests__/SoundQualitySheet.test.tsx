@@ -12,7 +12,8 @@ import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { useToast } from "@/src/ui/Toast";
 import { STRIP } from "@/src/ui/ToolStrip";
-import { resetNoiseProbe, SoundQualitySheet } from "../components/SoundQualitySheet";
+import { NOISE_PROBE_CRASHED, NOISE_PROBE_KEY, resetNoiseProbe } from "../noiseProbe";
+import { SoundQualitySheet } from "../components/SoundQualitySheet";
 
 const st = () => useEditorStore.getState();
 const track = () => st().project!.audioTracks[0];
@@ -29,6 +30,7 @@ beforeEach(() => {
   log = jest.spyOn(console, "log").mockImplementation(() => {});   // the noise test writes one line per app start
   jest.mocked(isSoundAvailable).mockReturnValue(true);
   resetNoiseProbe();
+  localStorage.removeItem(NOISE_PROBE_KEY);   // the noise test has never run on this "phone"
   useSoundFiles.setState({ files: {}, hold: false });
   useToast.setState({ message: null, stamp: 0 });
   st().reset();
@@ -184,4 +186,27 @@ test("the noise test is not run outside a development session", async () => {
     await flush();
     expect(probeNoiseReduction).not.toHaveBeenCalled();
   } finally { g.__DEV__ = was; }
+});
+
+test("the noise test runs once per install: the next app start logs the stored answer and does not run it again", async () => {
+  const first = await open();
+  await flush();
+  expect(probeNoiseReduction).toHaveBeenCalledTimes(1);
+  await first.unmount();
+  resetNoiseProbe();                                                      // the app is started again
+  log.mockClear();
+  await open();
+  await flush();
+  expect(probeNoiseReduction).toHaveBeenCalledTimes(1);
+  expect(log.mock.calls).toEqual([["[noise-probe]", "(stored)", JSON.stringify({ ok: true, stage: "render", detail: "frames 220500 outputRms 0.05 latency 0" })]]);
+});
+
+test("the noise test took the app down last time: the strip opens, a crash is logged, and it is not run again", async () => {
+  localStorage.setItem(NOISE_PROBE_KEY, "started");
+  await open();
+  await flush();
+  expect(probeNoiseReduction).not.toHaveBeenCalled();
+  expect(log.mock.calls).toEqual([["[noise-probe]", NOISE_PROBE_CRASHED]]);
+  expect(screen.getByText("Sound quality")).toBeTruthy();
+  expect(screen.queryByText(/noise|crash/i)).toBeNull();                  // nothing on screen
 });

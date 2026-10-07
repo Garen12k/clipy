@@ -29,7 +29,7 @@ import { makeAudioTrack, makeClip, makeProject, NO_SOUND, type SoundSettings } f
 import { useEditorStore } from "@/src/editor/store";
 import { useToast } from "@/src/ui/Toast";
 import { isPreparing, playUri, useSoundFiles } from "../soundFiles";
-import { ensureSound, holdSounds, resetSounds, SOUND_FAILED, SOUND_UNAVAILABLE, soundDir, sweepSounds, syncSounds, useSoundRenders } from "../soundRenders";
+import { ensureSound, holdSounds, resetSounds, SOUND_CANCEL_GRACE_MS, SOUND_FAILED, SOUND_RENDER_DEADLINE_MS, SOUND_UNAVAILABLE, soundDir, sweepSounds, syncSounds, useSoundRenders } from "../soundRenders";
 
 const disk = (jest.requireMock("@/src/projects/expoFs") as { __files: Set<string> }).__files;
 const native = (jest.requireMock("@/modules/clipy-video") as { __sound: { listener: null | ((e: { jobId: string; progress: number }) => void) } }).__sound;
@@ -62,7 +62,8 @@ beforeEach(() => {
   disk.clear();
   resetSounds();
   st().reset();
-  useToast.getState().clear();
+  // The store's own functions again: a test below spies on `show`, and zustand carries the spy into every later state.
+  useToast.setState(useToast.getInitialState(), true);
 });
 
 test("soundDir is the project's own folder", () => expect(soundDir("p1")).toBe(DIR));
@@ -148,12 +149,12 @@ describe("syncSounds", () => {
   });
 
   test("nothing is rendered while a slider is held; releasing it renders what is needed then", async () => {
-    holdSounds(true);
+    holdSounds("v");
     syncSounds("p1", [{ name: DEEP, sourceUri: SRC, sound: deep }]);
     syncSounds("p1", [{ name: HIGH, sourceUri: SRC, sound: high }]);
     await flush();
     expect(render).not.toHaveBeenCalled();
-    holdSounds(false);
+    holdSounds(null);
     await flush();
     expect(render).toHaveBeenCalledTimes(1);
     expect(files()[HIGH]).toEqual({ status: "ready", uri: `${DIR}/${HIGH}` });
@@ -300,5 +301,201 @@ describe("beyond the brief", () => {
     await flush();
     expect(fs.list).toHaveBeenCalledTimes(1);
     expect([...disk].sort()).toEqual([`${DIR}/${DEEP}`, `${DIR}/${HIGH}`].sort());
+  });
+});
+
+describe("the queue is never hostage to the native side", () => {
+  /** A render the native side never answers. */
+  const never = () => render.mockImplementationOnce(() => new Promise(() => {}));
+  const pass = async (ms: number) => { await act(async () => { jest.advanceTimersByTime(ms); }); await flush(); };
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { resetSounds(); jest.runOnlyPendingTimers(); jest.useRealTimers(); });
+
+  test("the two waits are named: four seconds for a cancelled render, two minutes for any copy", () => {
+    expect(SOUND_CANCEL_GRACE_MS).toBe(4000);
+    expect(SOUND_RENDER_DEADLINE_MS).toBe(120000);
+  });
+
+  test("a cancelled render that never answers does not block the next pick", async () => {
+    never();
+    syncSounds("p1", [{ name: DEEP, sourceUri: SRC, sound: deep }]);
+    await flush();
+    syncSounds("p1", [{ name: HIGH, sourceUri: SRC, sound: high }]);
+    await flush();
+    expect(cancelSoundRender).toHaveBeenCalledWith("job1");
+    expect(render).toHaveBeenCalledTimes(1);                       // it is given a moment to say it stopped
+    await pass(SOUND_CANCEL_GRACE_MS - 1);
+    expect(render).toHaveBeenCalledTimes(1);
+    await pass(1);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render).toHaveBeenLastCalledWith(expect.objectContaining({ outputPath: `${DIR}/${HIGH}` }));
+    expect(files()).toEqual({ [HIGH]: { status: "ready", uri: `${DIR}/${HIGH}` } });
+    expect(useToast.getState().message).toBeNull();                // a cancel is not a failure
+    // Its deadline went with it: nothing more happens to it, however long the native side stays silent.
+    jest.mocked(cancelSoundRender).mockClear();
+    const after = useSoundFiles.getState();
+    await pass(SOUND_RENDER_DEADLINE_MS);
+    expect(cancelSoundRender).not.toHaveBeenCalled();
+    expect(useSoundFiles.getState()).toBe(after);
+  });
+
+  test("a cancelled render that answers late (done, or failed) changes nothing and says nothing", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    for (const late of ["ok", "fail"] as const) {
+      const open = pending();
+      syncSounds("p1", [{ name: DEEP, sourceUri: SRC, sound: deep }]);
+      await flush();
+      syncSounds("p1", [{ name: HIGH, sourceUri: SRC, sound: high }]);
+      await pass(SOUND_CANCEL_GRACE_MS);
+      const before = useSoundFiles.getState();
+      expect(before.files).toEqual({ [HIGH]: { status: "ready", uri: `${DIR}/${HIGH}` } });
+      if (late === "ok") open.ok(); else open.fail(Object.assign(new Error("sound engine: late"), { code: "E_SOUND" }));
+      await flush();
+      expect(useSoundFiles.getState()).toBe(before);               // not one write for a job nobody waits for
+      expect(useToast.getState().message).toBeNull();
+      resetSounds();
+    }
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  test("a cancelled render that does say it stopped moves the queue on at once, and its wait is taken down", async () => {
+    const open = pending();
+    syncSounds("p1", [{ name: DEEP, sourceUri: SRC, sound: deep }]);
+    await flush();
+    syncSounds("p1", [{ name: HIGH, sourceUri: SRC, sound: high }]);
+    open.fail(Object.assign(new Error("Sound cancelled"), { code: "E_SOUND_CANCELLED" }));
+    await flush();
+    expect(files()).toEqual({ [HIGH]: { status: "ready", uri: `${DIR}/${HIGH}` } });
+    const after = useSoundFiles.getState();
+    await pass(SOUND_CANCEL_GRACE_MS + SOUND_RENDER_DEADLINE_MS);
+    expect(useSoundFiles.getState()).toBe(after);
+    expect(cancelSoundRender).toHaveBeenCalledTimes(1);            // the cancel itself: no deadline came after it
+  });
+
+  test("a render nobody cancelled that never answers fails after the deadline, is told to stop, and the queue goes on", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    never();
+    syncSounds("p1", [{ name: DEEP, sourceUri: SRC, sound: deep }, { name: HIGH, sourceUri: SRC, sound: high }]);
+    await flush();
+    await pass(SOUND_RENDER_DEADLINE_MS - 1);
+    expect(files()).toEqual({ [DEEP]: { status: "busy" } });
+    expect(render).toHaveBeenCalledTimes(1);
+    await pass(1);
+    expect(files()[DEEP]).toEqual({ status: "failed", message: "sound render: no answer after 120 s" });
+    expect(cancelSoundRender).toHaveBeenCalledWith("job1");
+    expect(useToast.getState().message).toBe(SOUND_FAILED);
+    expect(warn).toHaveBeenCalledWith("sound render failed", "sound render: no answer after 120 s");
+    expect(files()[HIGH]).toEqual({ status: "ready", uri: `${DIR}/${HIGH}` });
+    warn.mockRestore();
+  });
+
+  test("the wait of the export ends the same way: ensureSound rejects with a staged sentence", async () => {
+    never();
+    const asked = ensureSound("p1", SRC, deep);
+    const seen = asked.then(() => "done", (e: Error) => e.message);
+    await flush();
+    await pass(SOUND_RENDER_DEADLINE_MS);
+    await expect(seen).resolves.toBe("sound render: no answer after 120 s");
+    // Nothing is left behind: the same copy can be asked for again.
+    const again = ensureSound("p1", SRC, deep);
+    await flush();
+    await expect(again).resolves.toBe(`${DIR}/${DEEP}`);
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
+  test("a render that answers in time leaves no wait behind: nothing happens when the deadline would have come", async () => {
+    syncSounds("p1", [{ name: DEEP, sourceUri: SRC, sound: deep }]);
+    await flush();
+    expect(files()[DEEP]?.status).toBe("ready");
+    const after = useSoundFiles.getState();
+    await pass(SOUND_RENDER_DEADLINE_MS);
+    expect(cancelSoundRender).not.toHaveBeenCalled();
+    expect(useSoundFiles.getState()).toBe(after);
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("leaving the editor while the native side is stuck: the next project starts its renders after the grace", async () => {
+    never();
+    syncSounds("p1", [{ name: DEEP, sourceUri: SRC, sound: deep }]);
+    await flush();
+    resetSounds();
+    syncSounds("p2", [{ name: HIGH, sourceUri: "file:///doc/projects/p2/media/v.m4a", sound: high }]);
+    await pass(SOUND_CANCEL_GRACE_MS);
+    expect(files()).toEqual({ [HIGH]: { status: "ready", uri: `file:///doc/projects/p2/sound/${HIGH}` } });
+  });
+});
+
+describe("a slider drag", () => {
+  const STRONG = "v-v1-deep-s80-p0-flat-l0.m4a", ALMOST = "v-v1-deep-s75-p0-flat-l0.m4a";
+
+  test("holdSounds takes the id of the dragged track; null lets go; leaving the editor lets go too", () => {
+    holdSounds("v");
+    expect(useSoundFiles.getState()).toMatchObject({ hold: true, holdTrack: "v" });
+    holdSounds(null);
+    expect(useSoundFiles.getState()).toMatchObject({ hold: false, holdTrack: null });
+    const rested = useSoundFiles.getState();
+    holdSounds(null);
+    expect(useSoundFiles.getState()).toBe(rested);                 // nothing held: no write
+    holdSounds("v");
+    resetSounds();
+    expect(useSoundFiles.getState()).toMatchObject({ hold: false, holdTrack: null });
+  });
+
+  test("the release renders the FINAL value, read from the project, not the one the manager was last told", async () => {
+    st().setProject(project({ ...deep, strength: 0.7 }));
+    holdSounds("v");
+    // The frame before the last: this is all the manager has been told when the finger lifts.
+    syncSounds("p1", [{ name: ALMOST, sourceUri: SRC, sound: { ...deep, strength: 0.75 } }]);
+    st().setProject(project({ ...deep, strength: 0.8 }));
+    holdSounds(null);
+    await flush();
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledWith(expect.objectContaining({ outputPath: `${DIR}/${STRONG}` }));
+    expect(files()).toEqual({ [STRONG]: { status: "ready", uri: `${DIR}/${STRONG}` } });
+    expect(cancelSoundRender).not.toHaveBeenCalled();
+  });
+
+  test("through the hook: a held drag renders nothing, and one copy (the last value) on release", async () => {
+    st().setProject(project(deep));
+    await renderHook(() => useSoundRenders());
+    await flush();
+    expect(render).toHaveBeenCalledTimes(1);
+    holdSounds("v");
+    await act(async () => { st().beginTransaction(); });
+    for (const strength of [0.6, 0.7, 0.75]) await act(async () => { st().applyTransient((p) => setTrackSound(p, "v", { strength })); });
+    // The last value and the release in one go: no effect has run in between.
+    await act(async () => { st().applyTransient((p) => setTrackSound(p, "v", { strength: 0.8 })); holdSounds(null); });
+    await flush();
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render).toHaveBeenLastCalledWith(expect.objectContaining({ outputPath: `${DIR}/${STRONG}` }));
+    expect(cancelSoundRender).not.toHaveBeenCalled();
+  });
+});
+
+describe("a failing engine is said once, not once per copy", () => {
+  /** Every sentence said from now on (the store's `show` is put back before each test). */
+  const said = () => { const out: string[] = []; useToast.setState({ show: (message: string) => { out.push(message); } }); return { out }; };
+
+  test("many copies fail in one go: each is marked failed, one sentence", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    render.mockRejectedValue(Object.assign(new Error("sound engine: boom"), { code: "E_SOUND" }));
+    const { out } = said();
+    const needed = Array.from({ length: 12 }, (_, i) => ({ name: `t${i}-v1-deep-s50-p0-flat-l0.m4a`, sourceUri: `file:///doc/projects/p1/media/t${i}.m4a`, sound: deep }));
+    syncSounds("p1", needed);
+    for (let i = 0; i < 12; i++) await flush();
+    expect(Object.values(files()).map((f) => f.status)).toEqual(Array(12).fill("failed"));
+    expect(out).toEqual([SOUND_FAILED]);
+    expect(warn).toHaveBeenCalledTimes(12);                        // the dev log still has every one
+    // A new pick that fails is said again: it is a new thing the owner asked for.
+    syncSounds("p1", [...needed, { name: HIGH, sourceUri: SRC, sound: high }]);
+    await flush();
+    expect(out).toEqual([SOUND_FAILED, SOUND_FAILED]);
+    // And after the project is opened again.
+    resetSounds();
+    syncSounds("p1", needed.slice(0, 3));
+    for (let i = 0; i < 3; i++) await flush();
+    expect(out).toEqual([SOUND_FAILED, SOUND_FAILED, SOUND_FAILED]);
+    warn.mockRestore();
   });
 });

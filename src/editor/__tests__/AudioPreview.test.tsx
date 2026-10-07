@@ -17,7 +17,11 @@ jest.mock("expo-audio", () => {
       set volume(v: number) { volume = v; p.calls.push(["volume", v]); },
       play: jest.fn(() => { p.playing = true; p.calls.push(["play"]); }),
       pause: jest.fn(() => { p.playing = false; p.calls.push(["pause"]); }),
-      replace: jest.fn((source: { uri: string }) => { p.uri = source.uri; p.calls.push(["replace", source.uri]); }),
+      // expo-audio on iOS (AudioPlayer.swift, replaceCurrentSource): a player that was PLAYING when its source was replaced is
+      // started again by the native side once the new item is ready — `ready()` is that moment. Nothing calls it but a test.
+      resumeWhenReady: false,
+      replace: jest.fn((source: { uri: string }) => { p.resumeWhenReady = p.playing; p.uri = source.uri; p.calls.push(["replace", source.uri]); }),
+      ready: () => { if (!p.resumeWhenReady) return; p.resumeWhenReady = false; p.playing = true; p.calls.push(["native play"]); },
       seekTo: jest.fn(async (t: number, before?: number, after?: number) => { p.calls.push(["seekTo", t, before, after]); }),
     };
     return p;
@@ -39,7 +43,7 @@ import { useSoundFiles } from "@/src/editor/soundFiles";
 import { useEditorStore } from "@/src/editor/store";
 import { AudioPreview } from "../components/AudioPreview";
 
-type FakePlayer = { calls: unknown[][]; uri: string | null; options: unknown; playing: boolean; currentTime: number; volume: number; play: jest.Mock; pause: jest.Mock; replace: jest.Mock; seekTo: jest.Mock };
+type FakePlayer = { calls: unknown[][]; uri: string | null; options: unknown; playing: boolean; currentTime: number; volume: number; ready: () => void; play: jest.Mock; pause: jest.Mock; replace: jest.Mock; seekTo: jest.Mock };
 const players = (jest.requireMock("expo-audio") as { __players: FakePlayer[] }).__players;
 const st = () => useEditorStore.getState();
 const uriOf = (id: string) => `file:///media/${id}.m4a`;
@@ -740,7 +744,8 @@ describe("a track with a sound setting", () => {
     await seek(4);
     clear();
     await act(async () => { useSoundFiles.setState({ files: { "v-v1-deep-s50-p0-flat-l0.m4a": { status: "ready", uri: COPY } } }); });
-    expect(p.calls).toEqual([["replace", COPY], ["volume", 1], ["seekTo", 3, 0, 0], ["play"]]);   // 1 + (4 - 2): never from 0
+    // Paused first: a playing player whose source is replaced is started again by the native side, whatever happens meanwhile.
+    expect(p.calls).toEqual([["pause"], ["replace", COPY], ["volume", 1], ["seekTo", 3, 0, 0], ["play"]]);   // 1 + (4 - 2): never from 0
     clear();
     p.currentTime = 3.1;
     await seek(4.1);
@@ -763,14 +768,61 @@ describe("a track with a sound setting", () => {
 
   test("while a slider is held the original plays, so a drag across a setting that has a copy does not swap files back and forth", async () => {
     load([{ ...makeAudioTrack({ id: "v", sourceDuration: 10, kind: "voice" }), sound: { ...{ voice: "deep", strength: 0.5, pitch: 0, eq: null, level: false }, strength: 0.4 } }]);
-    await act(async () => { useSoundFiles.setState({ files: { "v-v1-deep-s50-p0-flat-l0.m4a": { status: "ready", uri: COPY } }, hold: true }); });
+    await act(async () => { useSoundFiles.setState({ files: { "v-v1-deep-s50-p0-flat-l0.m4a": { status: "ready", uri: COPY } }, hold: true, holdTrack: "v" }); });
     await render(<AudioPreview />);
     const p = playerOf("v");
     clear();
     await act(async () => { st().beginTransaction(); });
     for (const strength of [0.45, 0.5, 0.55, 0.5]) await act(async () => { st().applyTransient((x) => setTrackSound(x, "v", { strength })); });
     expect(p.calls.filter((c) => c[0] === "replace")).toEqual([]);
-    await act(async () => { useSoundFiles.setState({ hold: false }); });
+    await act(async () => { useSoundFiles.setState({ hold: false, holdTrack: null }); });
     expect(p.calls.filter((c) => c[0] === "replace")).toEqual([["replace", COPY]]);
+  });
+
+  test("the file is swapped while playing and the editor is paused before the new file is ready: the player is not left playing", async () => {
+    load([{ ...makeAudioTrack({ id: "v", sourceDuration: 10, kind: "voice" }), sound: { voice: "deep", strength: 0.5, pitch: 0, eq: null, level: false } }]);
+    await render(<AudioPreview />);
+    const p = playerOf("v");
+    await setPlaying(true);
+    p.currentTime = 2;
+    await seek(2);
+    clear();
+    await act(async () => { useSoundFiles.setState({ files: { "v-v1-deep-s50-p0-flat-l0.m4a": { status: "ready", uri: COPY } } }); });
+    const names = p.calls.map((c) => c[0]);
+    expect(names.indexOf("pause")).toBeGreaterThanOrEqual(0);
+    expect(names.indexOf("pause")).toBeLessThan(names.indexOf("replace"));   // paused BEFORE the replace: the native side will not resume it
+    await setPlaying(false);
+    p.ready();                                                               // the new item is ready only now
+    expect(p.playing).toBe(false);
+    expect(p.calls.filter((c) => c[0] === "native play")).toEqual([]);
+    expect(p.calls[p.calls.length - 2]).toEqual(["pause"]);                  // the editor's pause, then the park
+    expect(p.calls[p.calls.length - 1]).toEqual(["seekTo", 2, 0, 0]);
+  });
+
+  test("the first load of a file is not preceded by a pause, with or without a setting", async () => {
+    load([makeAudioTrack({ id: "m", sourceDuration: 10 }), { ...makeAudioTrack({ id: "v", sourceDuration: 10, kind: "voice" }), sound: { voice: "deep", strength: 0.5, pitch: 0, eq: null, level: false } }]);
+    await render(<AudioPreview />);
+    for (const id of ["m", "v"]) expect(playerOf(id).calls[0]).toEqual(["replace", uriOf(id)]);
+  });
+
+  test("a slider held on ONE track: only that track plays its original; every other track keeps its copy", async () => {
+    const OTHER = "file:///doc/projects/p1/sound/w-v1-high-s50-p0-flat-l0.m4a";
+    const ready = { "v-v1-deep-s50-p0-flat-l0.m4a": { status: "ready" as const, uri: COPY }, "w-v1-high-s50-p0-flat-l0.m4a": { status: "ready" as const, uri: OTHER } };
+    load([
+      { ...makeAudioTrack({ id: "v", sourceDuration: 10, kind: "voice" }), sound: { voice: "deep", strength: 0.5, pitch: 0, eq: null, level: false } },
+      { ...makeAudioTrack({ id: "w", sourceDuration: 10, kind: "voice" }), sound: { voice: "high", strength: 0.5, pitch: 0, eq: null, level: false } },
+    ]);
+    await act(async () => { useSoundFiles.setState({ files: ready }); });
+    await render(<AudioPreview />);
+    const [v, w] = players;
+    expect([v.uri, w.uri]).toEqual([COPY, OTHER]);
+    clear();
+    await act(async () => { useSoundFiles.setState({ hold: true, holdTrack: "v" }); });
+    expect(v.calls.filter((c) => c[0] === "replace")).toEqual([["replace", uriOf("v")]]);
+    expect(w.calls).toEqual([]);                                             // not swapped, not paused, not seeked
+    clear();
+    await act(async () => { useSoundFiles.setState({ hold: false, holdTrack: null }); });
+    expect(v.calls.filter((c) => c[0] === "replace")).toEqual([["replace", COPY]]);
+    expect(w.calls).toEqual([]);
   });
 });

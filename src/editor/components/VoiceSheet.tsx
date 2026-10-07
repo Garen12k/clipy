@@ -17,11 +17,14 @@ import { STRIP, StripNote, StripSlider, StripTiles, tilesStartXIn } from "@/src/
 
 /** Pitch 0: the slider ticks lightly when a drag reaches or passes it. */
 const REST = [0] as const;
+/** Why Strength does not move while no voice is picked (it is the voice that has a strength). */
+export const STRENGTH_HINT = "Pick a voice to set its strength.";
 
 /**
  * The Voice panel of a sound bar: None or one of seven voices, how strong, and a Pitch of its own (added to the voice's). The setting
  * is stored on the track (`setTrackSound`); the changed copy is rendered by soundRenders.ts — never during a drag: a slider holds
- * the renders from slide start to slide complete (and the hold is let go when the panel is hidden, or its track goes, mid-drag).
+ * the renders from slide start to slide complete, in this track's name: it alone plays its original meanwhile (and the hold is let
+ * go when the panel is hidden, or its track goes, mid-drag).
  * A tile is one undo step, a drag one. Without the engine (Expo Go, an older build) the panel says so and changes nothing.
  * Rows have explicit heights; the body does not scroll.
  */
@@ -41,7 +44,7 @@ export function VoiceSheet({ trackId, visible, onClose }: { trackId: string | nu
   );
   // Whether a slider of this panel holds the renders right now (a ref: nothing is drawn from it).
   const held = useRef(false);
-  const release = () => { if (!held.current) return; held.current = false; holdSounds(false); };
+  const release = () => { if (!held.current) return; held.current = false; holdSounds(null); };
   // The sliders can go while one is held (the panel is hidden, the selection changed, the track was removed, the editor is left):
   // slide complete never comes then, and the renders must not stay held.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,7 +58,7 @@ export function VoiceSheet({ trackId, visible, onClose }: { trackId: string | nu
     apply((p) => setTrackSound(p, track.id, { voice }));
   };
   // The hold comes first: the manager must not see a drag's first value as a setting to render.
-  const start = (usable: boolean) => { if (!usable) return; holdSounds(true); held.current = true; beginTransaction(); };
+  const start = (usable: boolean) => { if (!usable) return; holdSounds(track.id); held.current = true; beginTransaction(); };
   const change = (patch: Partial<SoundSettings>) => { if (held.current) applyTransient((p) => setTrackSound(p, track.id, patch)); };
   const strengthOn = on && sound.voice !== null;
 
@@ -101,6 +104,13 @@ export function VoiceSheet({ trackId, visible, onClose }: { trackId: string | nu
             <StripNote lines={2}>{SOUND_UNAVAILABLE}</StripNote>
           </View>
         )}
+        {/* The same row, for the other reason a slider is off: Strength has nothing to act on until a voice is picked. It is the
+            last row of a body with an explicit height, so nothing above it moves when it comes or goes. */}
+        {on && sound.voice === null ? (
+          <View testID="voice-strength-hint" style={{ height: STRIP.slider, justifyContent: "center", paddingHorizontal: theme.space.gutter }}>
+            <StripNote>{STRENGTH_HINT}</StripNote>
+          </View>
+        ) : null}
       </View>
     </ToolPanel>
   );

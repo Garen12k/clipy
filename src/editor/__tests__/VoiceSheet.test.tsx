@@ -12,8 +12,9 @@ import { setTrackSound } from "@/src/editor/model/ops";
 import { makeAudioTrack, makeClip, makeProject, VOICE_IDS } from "@/src/editor/model/types";
 import { VOICES } from "@/src/editor/soundTools";
 import { useEditorStore } from "@/src/editor/store";
+import { theme } from "@/src/theme/theme";
 import { TILE_WIDTH } from "@/src/ui/Tile";
-import { tilesStartXIn } from "@/src/ui/ToolStrip";
+import { STRIP, tilesStartXIn } from "@/src/ui/ToolStrip";
 import { VoiceSheet } from "../components/VoiceSheet";
 
 const st = () => useEditorStore.getState();
@@ -69,13 +70,13 @@ test("a Strength drag is one undo step, and nothing is rendered until it is let 
   await open();
   await press("Robot");
   await fireEvent(strength(), "touchStart");
-  expect(holdSounds).toHaveBeenLastCalledWith(true);
+  expect(holdSounds).toHaveBeenLastCalledWith("v");                           // this track's id: only it plays its original meanwhile
   await fireEvent(strength(), "touchMove", { v: 0.8 });
   await fireEvent(strength(), "touchMove", { v: 0.25 });
   expect(track().sound).toMatchObject({ voice: "robot", strength: 0.25 });
-  expect(jest.mocked(holdSounds).mock.calls.filter(([on]) => on === false)).toHaveLength(0);
+  expect(jest.mocked(holdSounds).mock.calls.filter(([id]) => id === null)).toHaveLength(0);
   await fireEvent(strength(), "touchEnd");
-  expect(holdSounds).toHaveBeenLastCalledWith(false);
+  expect(holdSounds).toHaveBeenLastCalledWith(null);
   expect(past()).toBe(2);                                                    // the tile, the drag
   expect(screen.getByText("Strength 25 %")).toBeTruthy();
 });
@@ -105,7 +106,7 @@ test("the spinner shows while this track's copy is being rendered; closing mid-d
   expect(screen.getByLabelText("Preparing the sound")).toBeTruthy();
   jest.mocked(holdSounds).mockClear();
   await view.unmount();
-  expect(holdSounds).toHaveBeenCalledWith(false);
+  expect(holdSounds).toHaveBeenCalledWith(null);
 });
 
 test("nothing for a track that is not there", async () => {
@@ -116,14 +117,14 @@ test("nothing for a track that is not there", async () => {
 test("the hold is taken before the drag's undo step is opened, and before anything is written", async () => {
   await open();
   const seen: number[] = [];
-  jest.mocked(holdSounds).mockImplementation((on) => { if (on) seen.push(past()); });
+  jest.mocked(holdSounds).mockImplementation((id) => { if (id !== null) seen.push(past()); });
   await fireEvent(pitch(), "touchStart");
   expect(seen).toEqual([0]);
   expect(past()).toBe(1);
   await fireEvent(pitch(), "touchMove", { v: 5 });
   await fireEvent(pitch(), "touchEnd");
   expect(seen).toEqual([0]);                                                 // once per drag, not per value
-  expect(jest.mocked(holdSounds).mock.calls.map(([on]) => on)).toEqual([true, false]);
+  expect(jest.mocked(holdSounds).mock.calls.map(([id]) => id)).toEqual(["v", null]);
 });
 
 test("Strength without a voice holds nothing, writes nothing and adds no undo step", async () => {
@@ -134,7 +135,7 @@ test("Strength without a voice holds nothing, writes nothing and adds no undo st
   await fireEvent(strength(), "touchEnd");
   expect(st().project).toBe(before);
   expect(past()).toBe(0);
-  expect(jest.mocked(holdSounds).mock.calls.filter(([on]) => on === true)).toHaveLength(0);
+  expect(jest.mocked(holdSounds).mock.calls.filter(([id]) => id !== null)).toHaveLength(0);
 });
 
 test("a panel that is hidden, or whose track goes, mid-drag lets the hold go; one that was not dragged calls nothing", async () => {
@@ -143,13 +144,13 @@ test("a panel that is hidden, or whose track goes, mid-drag lets the hold go; on
   await fireEvent(pitch(), "touchMove", { v: 2 });
   jest.mocked(holdSounds).mockClear();
   await view.rerender(<VoiceSheet trackId="v" visible={false} onClose={() => {}} />);
-  expect(jest.mocked(holdSounds).mock.calls).toEqual([[false]]);
+  expect(jest.mocked(holdSounds).mock.calls).toEqual([[null]]);
   await view.rerender(<VoiceSheet trackId="v" visible onClose={() => {}} />);
   await fireEvent(pitch(), "touchStart");
   jest.mocked(holdSounds).mockClear();
   await act(async () => { st().apply((p) => ({ ...p, audioTracks: [] })); });
   expect(screen.queryByText("Voice")).toBeNull();
-  expect(jest.mocked(holdSounds).mock.calls).toEqual([[false]]);
+  expect(jest.mocked(holdSounds).mock.calls).toEqual([[null]]);
   jest.mocked(holdSounds).mockClear();
   await view.unmount();
   expect(holdSounds).not.toHaveBeenCalled();
@@ -201,4 +202,38 @@ test("without the engine the panel says so once and changes nothing", async () =
 test("with the engine there is no such sentence", async () => {
   await open();
   expect(screen.queryByText(/native build/)).toBeNull();
+});
+
+test("Strength is off without a voice, and a quiet line says why, in a row of its own height; a voice takes the line away", async () => {
+  await open();
+  const hint = screen.getByTestId("voice-strength-hint");
+  expect(hint).toHaveStyle({ height: STRIP.slider, paddingHorizontal: theme.space.gutter });
+  expect(screen.getByText("Pick a voice to set its strength.")).toBeTruthy();
+  expect(strength().props.disabled).toBe(true);
+  // The rows above it are where they were, and as tall: nothing jumps when the line comes or goes.
+  const rows = () => screen.getAllByTestId("strip-slider").map((r) => r.props.style.height);
+  expect(rows()).toEqual([STRIP.slider, STRIP.slider]);
+  await press("Deep");
+  expect(screen.queryByTestId("voice-strength-hint")).toBeNull();
+  expect(screen.queryByText("Pick a voice to set its strength.")).toBeNull();
+  expect(rows()).toEqual([STRIP.slider, STRIP.slider]);
+  await press("None");
+  expect(screen.getByText("Pick a voice to set its strength.")).toBeTruthy();
+});
+
+test("without the engine there is one line only: the one about the build", async () => {
+  jest.mocked(isSoundAvailable).mockReturnValue(false);
+  await open();
+  expect(screen.getByTestId("voice-unavailable")).toBeTruthy();
+  expect(screen.queryByTestId("voice-strength-hint")).toBeNull();
+  expect(screen.queryByText("Pick a voice to set its strength.")).toBeNull();
+});
+
+test("a drag on another track's panel holds that track", async () => {
+  await act(async () => { st().apply((p) => ({ ...p, audioTracks: [...p.audioTracks, makeAudioTrack({ id: "w", sourceDuration: 5, kind: "voice" })] })); });
+  await render(<VoiceSheet trackId="w" visible onClose={() => {}} />);
+  await fireEvent(pitch(), "touchStart");
+  expect(holdSounds).toHaveBeenLastCalledWith("w");
+  await fireEvent(pitch(), "touchEnd");
+  expect(holdSounds).toHaveBeenLastCalledWith(null);
 });

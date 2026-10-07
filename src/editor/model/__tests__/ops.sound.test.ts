@@ -2,7 +2,7 @@ jest.mock("@/src/lib/id", () => ({ newId: jest.fn(() => "new-id") }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-07T10:00:00.000Z" }));
 import { AUDIO_LIMITS, makeAudioTrack, makeClip, makeLayer, makePhotoClip, makeProject, type Project } from "../types";
 import { clipStartTimes, curveSteps } from "../timeline";
-import { duplicateAudioTrack, extractClipAudio, extractedTrackOf, extractRefusal, EXTRACT_TITLE, setTrackSound, splitAudioTrackAt, splitClipAt } from "../ops";
+import { duplicateAudioTrack, duplicateClip, extractClipAudio, extractedTrackOf, extractRefusal, EXTRACT_TITLE, setTrackSound, splitAudioTrackAt, splitClipAt } from "../ops";
 
 const track = (p: Project, id: string) => p.audioTracks.find((t) => t.id === id)!;
 const base = makeProject({
@@ -133,5 +133,31 @@ describe("extractClipAudio", () => {
       expect(track(both, "y").trimStart).toBeCloseTo(cut.clips[1].trimStart, 3);
       expect(track(both, "y").trimEnd).toBe(5);
     }
+  });
+
+  test("only a MUTED clip counts as already on the audio row: a duplicate that still has its sound gets a bar of its own", () => {
+    const twice = duplicateClip(base, "a");                                // the copy, "new-id", sits right after "a": same file, same range
+    expect(twice.clips.map((c) => c.id)).toEqual(["a", "new-id", "b", "ph"]);
+    const once = extractClipAudio(twice, "a", "x");
+    expect(extractedTrackOf(once, "a")?.id).toBe("x");                     // muted, and a bar on its file and range: already
+    expect(once.clips[1].muted).toBe(false);
+    expect(extractedTrackOf(once, "new-id")).toBeNull();                   // not muted: its sound is still in the clip
+    const both = extractClipAudio(once, "new-id", "y");
+    expect(both.audioTracks.map((t) => t.id)).toEqual(["m", "x", "y"]);
+    expect(track(both, "y")).toMatchObject({ start: 4, trimStart: 1, trimEnd: 5, kind: "sfx" });
+    expect(both.clips[1].muted).toBe(true);
+    // Each clip now finds its OWN bar (the one that lines up with it), not simply the first on the file.
+    expect(extractedTrackOf(both, "a")?.id).toBe("x");
+    expect(extractedTrackOf(both, "new-id")?.id).toBe("y");
+    expect(extractClipAudio(both, "new-id", "z")).toBe(both);
+  });
+
+  test("a clip that was un-muted again is extracted afresh; a muted clip with no bar on its file is not already there", () => {
+    const once = extractClipAudio(base, "a", "x");
+    const loud = { ...once, clips: [{ ...once.clips[0], muted: false }, once.clips[1], once.clips[2]] };
+    expect(extractedTrackOf(loud, "a")).toBeNull();
+    expect(extractClipAudio(loud, "a", "y").audioTracks.map((t) => t.id)).toEqual(["m", "x", "y"]);
+    const quiet = { ...base, clips: [{ ...base.clips[0], muted: true }, base.clips[1], base.clips[2]] };
+    expect(extractedTrackOf(quiet, "a")).toBeNull();
   });
 });

@@ -210,3 +210,37 @@ test("a stored setting stays stored where the engine is missing", async () => {
   await tap("Voice");
   expect(st().project!.audioTracks[0].sound).toEqual({ voice: "deep", strength: 0.5, pitch: 0, eq: null, level: false });
 });
+
+test("Voice on a duplicate that still has its sound: it gets a bar of its own (not the other clip's), and that is what it says", async () => {
+  // "a" and its copy share one file and one range; "a" is extracted, the copy is not.
+  await act(async () => {
+    st().setProject(makeProject({ clips: [{ ...makeClip({ id: "a", sourceDuration: 4 }), muted: true }, { ...makeClip({ id: "copy", sourceDuration: 4 }), sourceUri: "file:///media/a.mp4" }],
+      audioTracks: [makeAudioTrack({ id: "bar-a", sourceDuration: 4, sourceUri: "file:///media/a.mp4", kind: "sfx" })] }));
+  });
+  st().select("copy");
+  await render(<EditorToolbar />);
+  const { said, off } = listen();
+  await tap("Voice");
+  off();
+  expect(st().project!.audioTracks.map((t) => [t.id, t.start])).toEqual([["bar-a", 0], ["new-track", 4]]);
+  expect(st().project!.clips[1].muted).toBe(true);
+  expect(useToolStrip.getState().open).toEqual({ id: "voice", key: "audio:new-track" });
+  expect(said).toEqual([EXTRACT_MESSAGES.moved]);
+});
+
+test("Voice on a clip, and another clip is selected before the file has answered: nothing is made, nothing opens, nothing is said", async () => {
+  let answer: (v: { hasSound: boolean; seconds: number }) => void = () => {};
+  jest.mocked(soundInfo).mockImplementationOnce((() => new Promise((r) => { answer = r; })) as unknown as typeof soundInfo);
+  st().select("a");
+  await render(<EditorToolbar />);
+  await fireEvent.press(btn("Voice"));
+  await act(async () => { st().select("b"); });
+  await act(async () => { answer({ hasSound: true, seconds: 4 }); await Promise.resolve(); });
+  for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); });
+  expect(st().project!.audioTracks).toHaveLength(1);
+  expect(st().project!.clips[0].muted).toBe(false);
+  expect(st().past).toHaveLength(0);
+  expect(st().selectedClipId).toBe("b");
+  expect(openTool()).toBeNull();
+  expect(toast()).toBeNull();
+});

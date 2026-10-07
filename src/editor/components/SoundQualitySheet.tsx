@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Switch, View } from "react-native";
-import { isSoundAvailable, probeNoiseReduction } from "@/modules/clipy-video";
+import { isSoundAvailable } from "@/modules/clipy-video";
 import { setTrackSound } from "@/src/editor/model/ops";
 import { EQ_IDS, NO_SOUND, type EqId, type Project } from "@/src/editor/model/types";
+import { runNoiseProbe } from "@/src/editor/noiseProbe";
 import { isPreparing, useSoundFiles } from "@/src/editor/soundFiles";
 import { SOUND_UNAVAILABLE } from "@/src/editor/soundRenders";
 import { EQS } from "@/src/editor/soundTools";
@@ -15,28 +16,6 @@ import { Tile } from "@/src/ui/Tile";
 import { useToast } from "@/src/ui/Toast";
 import { STRIP, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
 
-/** The noise-reduction test has run in this app session. */
-let probed = false;
-/** Tests only. */
-export function resetNoiseProbe(): void { probed = false; }
-/** The one line the test writes to the dev-server log: `[noise-probe] {"ok":…,"stage":"…","detail":"…"}`. */
-const logProbe = (answer: unknown): void => console.log("[noise-probe]", JSON.stringify(answer));
-const probeFailed = (e: unknown) => ({ ok: false, stage: "call", detail: e instanceof Error ? e.message : String(e) });
-/**
- * The noise-reduction TEST (spec §9): asks the engine once per app start whether Apple's sound isolation unit can render this
- * recording, and writes the answer to the dev-server log. A development session only; nothing on screen, nothing stored, nothing
- * waited for. Neither a wrapper that throws at once (a build without the function) nor a rejected call reaches React.
- */
-function runNoiseProbe(uri: string): void {
-  if (probed || !__DEV__ || !isSoundAvailable()) return;
-  probed = true;
-  try {
-    probeNoiseReduction(uri).then(logProbe, (e: unknown) => logProbe(probeFailed(e)));
-  } catch (e) {
-    logProbe(probeFailed(e));
-  }
-}
-
 /**
  * The Sound strip of a sound bar ("Sound quality"): None or one of four equaliser presets, and Even out loudness. Both are stored on
  * the track (`setTrackSound`); the changed copy is rendered by soundRenders.ts. A tile is one undo step, the switch one.
@@ -48,6 +27,7 @@ export function SoundQualitySheet({ trackId, visible, onClose }: { trackId: stri
   const busy = useSoundFiles((s) => isPreparing(s.files, track));
   const told = useRef(false);
   const sourceUri = track?.sourceUri ?? null;
+  // The noise-reduction test (noiseProbe.ts): a development session only, once per install, to the dev log; never on screen.
   useEffect(() => { if (visible && sourceUri) runNoiseProbe(sourceUri); }, [visible, sourceUri]);
   if (!track) return null;
   const sound = track.sound ?? NO_SOUND;

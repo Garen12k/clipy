@@ -7,9 +7,10 @@ export type SoundFile = { status: "ready"; uri: string } | { status: "busy" } | 
 
 /**
  * The copies of the open project (transient: not saved, not undoable), and `hold`: a Strength or Pitch slider is being dragged,
- * so nothing is rendered until it is let go. Written only by soundRenders.ts.
+ * so nothing is rendered until it is let go. `holdTrack` is the track that slider belongs to (null: none): the one track whose
+ * preview plays its original meanwhile — every other track keeps playing its copy. Written only by soundRenders.ts.
  */
-export const useSoundFiles = create<{ files: Record<string, SoundFile>; hold: boolean }>(() => ({ files: {}, hold: false }));
+export const useSoundFiles = create<{ files: Record<string, SoundFile>; hold: boolean; holdTrack: string | null }>(() => ({ files: {}, hold: false, holdTrack: null }));
 
 /** What is known of the copy a track needs: undefined for a track as recorded, and for a copy nobody has asked for yet. */
 export function soundFileOf(files: Record<string, SoundFile>, track: AudioTrack | null): SoundFile | undefined {

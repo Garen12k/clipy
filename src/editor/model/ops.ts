@@ -452,12 +452,26 @@ export function extractRefusal(p: Project, clipId: string): ExtractRefusal | nul
  * clip's are not (a split cuts anywhere), so the bar of one half of a split clip may reach up to half a millisecond into the other.
  */
 const EXTRACT_OVERLAP = 0.001;
-/** The audio track that already holds this clip's sound: one on the clip's own file whose source range overlaps the clip's (by more than `EXTRACT_OVERLAP`). Null when there is none. */
+/** Where a clip (or a layer) starts on the timeline. */
+const itemStart = (p: Project, item: NonNullable<ReturnType<typeof findItem>>): number =>
+  item.layer ? (item.clip as LayerClip).start : clipStartTimes(p)[p.clips.findIndex((x) => x.id === item.clip.id)];
+/**
+ * The audio track that already holds this clip's sound: the clip is MUTED, and the track is on the clip's own file with a source
+ * range that overlaps the clip's (by more than `EXTRACT_OVERLAP`). Null when there is none. A clip that is not muted still has its
+ * sound in it, whatever bars are on its file — a duplicate of an extracted clip's original, or a clip un-muted again — so it is
+ * never "already" there. Of several such bars (two copies of one clip, both extracted) the one that lines up with the clip on the
+ * timeline is the clip's own; the first on a tie.
+ */
 export function extractedTrackOf(p: Project, clipId: string): AudioTrack | null {
   const item = findItem(p, clipId);
-  if (!item || isPhoto(item.clip)) return null;
+  if (!item || isPhoto(item.clip) || !item.clip.muted) return null;
   const c = item.clip;
-  return p.audioTracks.find((t) => t.sourceUri === c.sourceUri && Math.min(t.trimEnd, c.trimEnd) - Math.max(t.trimStart, c.trimStart) > EXTRACT_OVERLAP) ?? null;
+  const on = p.audioTracks.filter((t) => t.sourceUri === c.sourceUri && Math.min(t.trimEnd, c.trimEnd) - Math.max(t.trimStart, c.trimStart) > EXTRACT_OVERLAP);
+  if (on.length < 2) return on[0] ?? null;
+  // Lined up: the same source second is heard at the same project second.
+  const origin = itemStart(p, item) - c.trimStart;
+  const off = (t: AudioTrack) => Math.abs(t.start - t.trimStart - origin);
+  return on.reduce((best, t) => (off(t) < off(best) ? t : best));
 }
 /**
  * Extract audio: the clip's (or layer's) own sound becomes an audio track `trackId` — a sound effect (the one kind that neither ducks
@@ -470,7 +484,7 @@ export function extractClipAudio(p: Project, clipId: string, trackId: string): P
   const item = findItem(p, clipId);
   if (!item) return p;
   const c = item.clip;
-  const start = item.layer ? (c as LayerClip).start : clipStartTimes(p)[p.clips.findIndex((x) => x.id === c.id)];
+  const start = itemStart(p, item);
   const added = addAudioTrack(p, { id: trackId, sourceUri: c.sourceUri, title: EXTRACT_TITLE, sourceDuration: c.sourceDuration, start, trimStart: c.trimStart, trimEnd: c.trimEnd,
     volume: c.volume, kind: "sfx", fadeIn: c.fadeIn, fadeOut: c.fadeOut });
   if (added === p) return p;

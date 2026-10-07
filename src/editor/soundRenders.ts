@@ -15,8 +15,23 @@ export const SOUND_UNAVAILABLE = "Voice and sound effects need the new native bu
 export const SOUND_FAILED = "Could not prepare that sound. It plays as recorded.";
 /** Where a project's rendered copies live. Deleted with the project; swept when it is opened (`sweepSounds`). */
 export const soundDir = (projectId: string): string => `${storage.projectDir(projectId)}/sound`;
+/**
+ * How long a render that was told to stop is given to say so. After that the wait ends as a cancelled render's does, whatever the
+ * native side does later: the queue (one render at a time) must never stand still behind a render that does not answer.
+ */
+export const SOUND_CANCEL_GRACE_MS = 4000;
+/**
+ * The longest one copy may take. A render nobody cancelled that has not answered by then is told to stop and counts as failed
+ * (`sound render: no answer after 120 s`), for the editor and for an export waiting on it alike. Fixed: the manager knows a copy's
+ * file and setting, not how long the file is.
+ */
+export const SOUND_RENDER_DEADLINE_MS = 120000;
 
-type Running = { jobId: string; promise: Promise<string>; listeners: Set<(fraction: number) => void>; cancelled: boolean };
+type Running = {
+  jobId: string; promise: Promise<string>; listeners: Set<(fraction: number) => void>; cancelled: boolean;
+  /** Set while the native render is awaited: starts the grace after which the wait ends by itself (`cancel` calls it). */
+  giveUp: (() => void) | null;
+};
 /** The renders that have not answered yet, by output path: a second caller for the same copy shares the first one's render. */
 const inflight = new Map<string, Running>();
 let listening = false;
@@ -31,13 +46,48 @@ function listen(): void {
  */
 function cancel(r: Running): void {
   r.cancelled = true;
-  try { cancelSoundRender(r.jobId); } catch (e) { console.warn("sound cancel failed", e); }
+  stopNative(r.jobId);
+  r.giveUp?.();
+}
+function stopNative(jobId: string): void {
+  try { cancelSoundRender(jobId); } catch (e) { console.warn("sound cancel failed", e); }
+}
+const cancelledError = (): Error => Object.assign(new Error("Sound cancelled"), { code: SOUND_CANCELLED });
+
+/**
+ * Waits for one native render — but never for ever. It ends with the native answer, or `SOUND_CANCEL_GRACE_MS` after the render was
+ * cancelled (as a cancelled render), or at `SOUND_RENDER_DEADLINE_MS` (as a failed one, and the native side is told to stop),
+ * whichever comes first. Whatever the native side answers after that is dropped here: nobody waits for it, no state is written for
+ * it. (A copy it still finishes is simply on disk — written as `part-<name>`, then moved — and is found the next time it is needed.)
+ */
+function answered(entry: Running, start: () => Promise<unknown>): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let open = true;
+    let grace: ReturnType<typeof setTimeout> | null = null;
+    const settle = (end: () => void): void => {
+      if (!open) return;
+      open = false;
+      clearTimeout(deadline);
+      if (grace !== null) clearTimeout(grace);
+      entry.giveUp = null;
+      end();
+    };
+    const deadline = setTimeout(() => settle(() => {
+      stopNative(entry.jobId);
+      reject(new Error(`sound render: no answer after ${SOUND_RENDER_DEADLINE_MS / 1000} s`));
+    }), SOUND_RENDER_DEADLINE_MS);
+    entry.giveUp = () => { if (grace === null) grace = setTimeout(() => settle(() => reject(cancelledError())), SOUND_CANCEL_GRACE_MS); };
+    let native: Promise<unknown>;
+    try { native = start(); } catch (e) { settle(() => reject(e)); return; }
+    native.then(() => settle(resolve), (e: unknown) => settle(() => reject(e)));
+  });
 }
 
 /**
  * The copy of `sourceUri` changed by `sound`: its uri once it exists — found on disk, or rendered now (one render per copy however
- * many ask). Rejects with SOUND_UNAVAILABLE without the engine, with the native staged message when the render fails, and with the
- * cancel code when it was cancelled (`isSoundCancelled`). Used by the editor (`syncSounds`) and by the export.
+ * many ask). Rejects with SOUND_UNAVAILABLE without the engine, with the native staged message when the render fails (or does not
+ * answer in time: `answered`), and with the cancel code when it was cancelled (`isSoundCancelled`). It always settles. Used by the
+ * editor (`syncSounds`) and by the export.
  */
 export function ensureSound(projectId: string, sourceUri: string, sound: SoundSettings, onProgress?: (fraction: number) => void): Promise<string> {
   const dir = soundDir(projectId);
@@ -47,14 +97,14 @@ export function ensureSound(projectId: string, sourceUri: string, sound: SoundSe
     if (onProgress) running.listeners.add(onProgress);
     return running.promise;
   }
-  const entry: Running = { jobId: newId(), promise: Promise.resolve(path), listeners: new Set(onProgress ? [onProgress] : []), cancelled: false };
+  const entry: Running = { jobId: newId(), promise: Promise.resolve(path), listeners: new Set(onProgress ? [onProgress] : []), cancelled: false, giveUp: null };
   const work = async (): Promise<string> => {
     if (await expoFs.exists(path)) return path;
     if (!isSoundAvailable()) throw new Error(SOUND_UNAVAILABLE);
     listen();
     await expoFs.mkdir(dir);
-    if (entry.cancelled) throw Object.assign(new Error("Sound cancelled"), { code: SOUND_CANCELLED });
-    await renderSound({ ...soundChain(sound), jobId: entry.jobId, sourceUri, outputPath: path });
+    if (entry.cancelled) throw cancelledError();
+    await answered(entry, () => renderSound({ ...soundChain(sound), jobId: entry.jobId, sourceUri, outputPath: path }));
     return path;
   };
   entry.promise = work().finally(() => { inflight.delete(path); });
@@ -71,6 +121,8 @@ const setFile = (name: string, file: SoundFile | null): void => useSoundFiles.se
 /** What the open project needs now (the newest call wins), and whether the one-at-a-time loop is running. */
 let wanted: { projectId: string; needed: NeededSound[] } | null = null;
 let pumping = false;
+/** SOUND_FAILED has been said since the editor last told what it needs: an engine that fails every copy is said once, not once per copy. */
+let toldFailure = false;
 
 async function pump(): Promise<void> {
   if (pumping) return;
@@ -94,7 +146,8 @@ async function pump(): Promise<void> {
         const message = e instanceof Error ? e.message : String(e);
         console.warn("sound render failed", message);
         setFile(next.name, { status: "failed", message });
-        useToast.getState().show(SOUND_FAILED);
+        if (!toldFailure) useToast.getState().show(SOUND_FAILED);
+        toldFailure = true;
       }
     }
   } finally { pumping = false; }
@@ -106,26 +159,36 @@ async function pump(): Promise<void> {
  */
 export function syncSounds(projectId: string, needed: NeededSound[]): void {
   wanted = { projectId, needed };
+  toldFailure = false;
   const dir = soundDir(projectId);
   const keep = new Set(needed.map((n) => `${dir}/${n.name}`));
   for (const [path, r] of inflight) if (!keep.has(path)) cancel(r);
   void pump();
 }
 
-/** A Strength / Pitch drag begins (true) or ends (false): no render in between, one on release. */
-export function holdSounds(on: boolean): void {
-  if (useSoundFiles.getState().hold === on) return;
-  useSoundFiles.setState({ hold: on });
-  if (!on) void pump();
+/**
+ * A Strength / Pitch drag on the track `trackId` begins, or (null) ends: no render in between, one on release — and only that track
+ * plays its original meanwhile (`holdTrack`). The release reads what is needed from the PROJECT: the editor tells the manager after
+ * each frame is drawn, so what it last said can be one value behind the one the finger let go at.
+ */
+export function holdSounds(trackId: string | null): void {
+  const held = useSoundFiles.getState();
+  if (held.holdTrack === trackId && held.hold === (trackId !== null)) return;
+  useSoundFiles.setState({ hold: trackId !== null, holdTrack: trackId });
+  if (trackId !== null) return;
+  const s = useEditorStore.getState();
+  if (wanted && s.project && s.project.id === wanted.projectId && isSoundAvailable()) syncSounds(wanted.projectId, neededSounds(s.project, s.missingSourceUris));
+  else void pump();
 }
 
 /** The editor is left (or another project opens): every running render is cancelled and nothing is remembered. */
 export function resetSounds(): void {
   wanted = null;
+  toldFailure = false;
   for (const r of inflight.values()) cancel(r);
   const s = useSoundFiles.getState();
   // Nothing to forget (the usual case when the editor opens): no write, so nothing that reads the store renders again.
-  if (s.hold || Object.keys(s.files).length > 0) useSoundFiles.setState({ files: {}, hold: false });
+  if (s.hold || s.holdTrack !== null || Object.keys(s.files).length > 0) useSoundFiles.setState({ files: {}, hold: false, holdTrack: null });
 }
 
 /**

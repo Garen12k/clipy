@@ -6,6 +6,8 @@ import { useToast } from "@/src/ui/Toast";
 import { extractClipAudio, extractedTrackOf, extractRefusal } from "./model/ops";
 import { findItem } from "./model/timeline";
 import { useEditorStore } from "./store";
+import { selectionKey } from "./toolbarContext";
+import { useToolStrip } from "./toolStrip";
 
 /** What the owner is told. `already` is shown here when the bar was there before; `moved` is shown by the toolbar (it knows which tool was tapped). */
 export const EXTRACT_MESSAGES = {
@@ -24,7 +26,8 @@ export type Extracted = { trackId: string; made: boolean };
  * Extract audio. `extract(clipId)` puts the clip's sound on the audio row (one undo step) and selects the new bar — or selects the
  * bar that already holds it, changing nothing and saying so — or answers null after saying why not. Where the engine is linked the
  * file is asked first whether it has sound at all; where it is not (Expo Go, an old build) the bar is made without asking.
- * `busy` while that question is open.
+ * `busy` while that question is open; an answer that comes after the owner selected something else or opened a tool is dropped
+ * (null, nothing said).
  */
 export function useExtractAudio(): { extract: (clipId: string) => Promise<Extracted | null>; busy: boolean } {
   const [busy, setBusy] = useState(false);
@@ -45,13 +48,19 @@ export function useExtractAudio(): { extract: (clipId: string) => Promise<Extrac
     const item = findItem(first, clipId);
     if (!item) return null;
     if (isSoundAvailable()) {
+      // The question takes a moment, and the owner may go on meanwhile: the answer counts only if the selection is still what it
+      // was and no tool was opened (or closed) since. Otherwise nothing is made, nothing is selected and nothing is said.
+      const before = { key: selectionKey(useEditorStore.getState()), open: useToolStrip.getState().open };
+      const moved = () => selectionKey(useEditorStore.getState()) !== before.key || useToolStrip.getState().open !== before.open;
       lock.current = true;
       setBusy(true);
       try {
         const info = await soundInfo(item.clip.sourceUri);
+        if (moved()) return null;
         if (!info.hasSound) { say(EXTRACT_MESSAGES.silent); return null; }
       } catch {
         // The file could not be asked: go on. A bar without sound is harmless (the export skips it).
+        if (moved()) return null;
       } finally {
         lock.current = false;
         setBusy(false);

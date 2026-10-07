@@ -22,9 +22,10 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
   const recording = useEditorStore((s) => s.recording);
   const isMissing = useEditorStore((s) => s.missingSourceUris.includes(track.sourceUri));
   // The file to play: the track's changed copy once it is rendered (Voice / Sound), otherwise its own file — and its own file while
-  // a Strength / Pitch slider is held, so a drag across a setting that already has a copy does not swap files back and forth.
+  // a Strength / Pitch slider of THIS track is held, so a drag across a setting that already has a copy does not swap files back and
+  // forth (a drag on another track changes nothing here).
   // A string, so this re-renders only when the file really changes. A track without a setting: always `track.sourceUri`.
-  const uri = useSoundFiles((s) => (s.hold ? track.sourceUri : playUri(s.files, track)));
+  const uri = useSoundFiles((s) => (s.holdTrack === track.id ? track.sourceUri : playUri(s.files, track)));
   const player = useAudioPlayer(null, { keepAudioSessionActive: true });
   const loadedUri = useRef<string | null>(null);
   // The volume last written to the player (null: none since the file was loaded), so a write that would change nothing is skipped.
@@ -43,6 +44,12 @@ function TrackPlayer({ project, track }: { project: Project; track: AudioTrack }
   useEffect(() => {
     if (isMissing) { player.pause(); loadedUri.current = null; appliedVolume.current = null; started.current = false; rolling.current = null; lastSeek.current = null; return; }
     if (loadedUri.current !== uri) {
+      // Another file takes the place of one that is playing (or rolling silently towards its start): pause first. expo-audio starts
+      // a player again by itself when the new item is ready if it was PLAYING at the replace (AudioPlayer.swift,
+      // replaceCurrentSource) — even if the editor was paused in between, and nothing here would ever pause it then. Paused, it
+      // stays paused; the sync effect below starts it again if the editor plays. A player this component has not started is not
+      // playing: its swap, and the first load of every track, are exactly the calls they always were.
+      if (loadedUri.current !== null && (started.current || rolling.current !== null)) player.pause();
       player.replace({ uri });
       loadedUri.current = uri; appliedVolume.current = null; started.current = false; rolling.current = null; lastSeek.current = null;
     }

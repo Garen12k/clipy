@@ -44,11 +44,11 @@ Four choices inside this, each a change from the starting point in the brief:
 - **The file is named after what it is**, not a hash: `<source stem>-v1-<voice>-s<strength %>-p<pitch>-<eq>-l<0|1>.m4a` (`soundFileName`). Same source and same settings give the same name, so a file is rendered once and found again. `v1` is `SOUND_VERSION`: raise it when the tables change and old copies are no longer used.
 - **Where the files live, and when they go.** `<project>/sound/`. Deleting the project deletes them. When a project is opened in the editor, files in that folder that no track needs are removed (`sweepSounds`); nothing is swept during a session, so Undo finds its file again. A duplicated project does not copy the folder; its copies are rendered on first open.
 
-**While rendering.** The track plays its **original** sound until the copy is ready; the Voice panel / Sound strip shows the kit `Spinner` ("Preparing the sound"). Renders run one at a time. If the owner picks again before a render has finished, a render nobody needs any more is cancelled and only the newest setting is rendered.
+**While rendering.** The track plays its **original** sound until the copy is ready; the Voice panel / Sound strip shows the kit `Spinner` ("Preparing the sound"). Renders run one at a time. If the owner picks again before a render has finished, a render nobody needs any more is cancelled and only the newest setting is rendered. The queue never waits on the native side for ever: a cancelled render that has not said so within 4 seconds (`SOUND_CANCEL_GRACE_MS`) is left behind, and a render nobody cancelled that has not answered within 120 seconds (`SOUND_RENDER_DEADLINE_MS`, fixed: the manager does not know how long the file is) is told to stop and counts as failed (`sound render: no answer after 120 s`), for the editor and for a waiting export alike. Whatever the native side answers after that is ignored; a copy it still finishes is on disk and is found the next time it is needed.
 
-**A slider drag.** Strength and Pitch write the setting on every frame (one undo step: `beginTransaction` + `applyTransient`, like every slider) but nothing is rendered during the drag: the sheet calls `holdSounds(true)` on slide start and `holdSounds(false)` on slide complete (and when it unmounts). One render per drag, on release.
+**A slider drag.** Strength and Pitch write the setting on every frame (one undo step: `beginTransaction` + `applyTransient`, like every slider) but nothing is rendered during the drag: the sheet calls `holdSounds(trackId)` on slide start and `holdSounds(null)` on slide complete (and when it unmounts). One render per drag, on release, of the value the project holds at that moment. Only the dragged track plays its original during the drag; every other track keeps playing its copy.
 
-**When rendering fails.** The stored setting is **kept** (removing it would change the project without a tap). The track keeps playing its original sound, one toast says "Could not prepare that sound. It plays as recorded.", and the full native message (stage + `describe`) goes to `console.warn`. It is tried again when the setting changes or the project is opened again.
+**When rendering fails.** The stored setting is **kept** (removing it would change the project without a tap). The track keeps playing its original sound, one toast says "Could not prepare that sound. It plays as recorded." (once for everything that fails after a pick or after the project is opened, not once per copy), and the full native message (stage + `describe`) goes to `console.warn` for every copy. It is tried again when the setting changes or the project is opened again.
 
 **Reason.** Non-destructive, undoable, and the existing mix (`audioMix.ts` ↔ `AudioMix.swift`) is untouched.
 
@@ -73,7 +73,7 @@ Four choices inside this, each a change from the starting point in the brief:
 - **Speed.** A sound bar has no speed. A clip with a speed other than 1× or with a speed curve is **refused** with "Set the speed of this clip back to 1x first. Extracted sound plays at normal speed." (smallest honest behaviour; baking retimed sound natively is a later option). A reversed clip and a photo have no sound: the tool is not on their bar (`contextFor`, the same `sounds` rule as Volume).
 - **Limit.** At 12 tracks: "You have reached the audio track limit."
 - **No sound in the file.** JavaScript cannot tell. With the new build, `soundInfo(uri)` is asked first and a silent file is refused with "This clip has no sound." In Expo Go and in the build installed today the bar is made anyway and is silent. So that such a bar can never break an export, the export now **skips** an audio track whose file is a video without sound (it still fails for a non-video file without sound, as before).
-- **Twice.** A clip whose sound is already on the audio row (`extractedTrackOf`: a track with the same file whose source range overlaps the clip's) is not extracted again: the existing bar is selected and a toast says "The sound of this clip is already on the audio row."
+- **Twice.** A clip whose sound is already on the audio row is not extracted again: the existing bar is selected and a toast says "The sound of this clip is already on the audio row." The rule (`extractedTrackOf`): the clip is **muted**, and there is a track on the same file whose source range overlaps the clip's; of several such tracks, the one that lines up with the clip on the timeline. A clip that is **not** muted still has its sound in it, so it is always extracted afresh, whatever bars are on its file: a duplicate that still has its sound gets a bar of its own even when the original is extracted, and a clip that was un-muted with Volume after extracting gets a second bar when Extract audio is tapped again.
 - **Afterwards** the bar is an ordinary sound: move, trim, split, fade, duplicate, delete. It does not follow the clip (no audio bar does). Deleting the bar does not unmute the clip; the clip's Volume strip has the Mute switch.
 
 **If wrong.** A second `AVPlayer` on a large 4K file may cost memory or start late in the preview (§10 item 1). The fallback is a native extract to a real `.m4a` in the next build; the stored track would simply point at the new file.
@@ -270,17 +270,22 @@ Constants (identical on both sides): target −18 dB RMS, gate −45 dB, most bo
 | Extract on a clip at 2× or with a curve | refused with the speed sentence; nothing changes |
 | Extract at 12 tracks | refused with the limit sentence |
 | Extract twice | the existing bar is selected; toast; no second bar |
-| Extract on a muted clip | allowed: the bar gets the clip's volume; the clip stays muted (still one undo step) |
+| Extract on a duplicate that is not muted (its original is extracted) | a bar of its own; the duplicate is muted; no "already" toast |
+| Extract on a clip that was un-muted after extracting | extracted afresh: a second bar |
+| Extract on a muted clip | allowed when no bar holds its sound: the bar gets the clip's volume; the clip stays muted (still one undo step). With a bar on its file and range it counts as already extracted |
+| Something else is selected, or a tool is opened, while the file is asked whether it has sound | the answer is dropped: no bar, no selection change, no toast |
 | Extract, then Undo | the bar is gone and the clip is un-muted, in one step |
 | Clip deleted after extracting | the bar stays and still plays (the file is kept as long as the project) |
 | Split / duplicate a bar with a setting | both keep the setting and share one rendered file |
 | Trim / move a bar with a setting | no new render |
-| Strength drag | one undo step, one render on release |
-| Strength with no voice | slider disabled |
+| Strength drag | one undo step, one render on release (the final value); only the dragged track plays its original meanwhile |
+| Strength with no voice | slider disabled; a muted line under the sliders says "Pick a voice to set its strength." |
 | Pitch back to 0 with nothing else set | the `sound` key is removed (the bar is as recorded again) |
 | The tool closes mid-drag | `holdSounds(false)` on unmount |
 | Source file missing | not rendered; the track is silent as today (`missingSourceUris`) |
-| Render fails | setting kept; original plays; one toast; retried on a new setting or next open |
+| Render fails | setting kept; original plays; one toast (however many copies fail at once); retried on a new setting or next open |
+| The native side never answers | after 120 s the copy counts as failed; a cancelled render is left behind after 4 s; the next render starts |
+| A copy becomes ready while the track is playing | the player is paused, the file swapped, and playback started again at the playhead (a pause in between leaves it paused) |
 | Rendered file deleted (by iOS, or a restored backup) | found missing on open or at export and rendered again |
 | Voice-over being recorded | tools cannot be opened (`openStrip` already refuses) |
 | A track above 1.0 volume | unchanged: the gain curve applies to the copy as to the original |
@@ -295,7 +300,7 @@ Constants (identical on both sides): target −18 dB RMS, gate −45 dB, most bo
 2. `instantiate`: `try await AVAudioUnit.instantiate(with:options:)` (errors come back as errors; the plain initialiser could raise instead).
 3. `render`: the first 5 seconds of the file go through `player → unit → mixer` with the same offline loop as a real render. `detail` reports the frames rendered, the output level (RMS) and the unit's latency.
 
-It is called from **one dev-only place**: when the Sound strip opens in a development session (`__DEV__`) with the engine present, once per app start, and the result is written to the dev-server log as `[noise-probe] {...}`. No button, no text on screen. If the app closes at that moment, that is a result too (the unit raised inside Apple's code).
+It is called from **one dev-only place** (`src/editor/noiseProbe.ts`): when the Sound strip opens in a development session (`__DEV__`) with the engine present, and the result is written to the dev-server log as `[noise-probe] {...}`. No button, no text on screen. If the app closes at that moment, that is a result too (the unit raised inside Apple's code), and it must not repeat: the probe runs **once per install**. Before the native call `started` is stored (the synchronous `localStorage` of `expo-sqlite`, key `clipy.noiseProbe.v1`); after it the answer. On every later app start the strip's first opening only logs, once: `[noise-probe] (stored) {...}` when an answer is stored, or `[noise-probe] {"ok":false,"stage":"crash","detail":"the previous probe did not return"}` when only `started` is, and the probe is not run again. Storage that cannot be read or written: the probe is not run at all. To ask a later build again, raise the `v1` in the key.
 
 **What follows.** `ok: true` with an output that is not silence → next round adds a **Reduce noise** switch to the Sound strip (one more unit in the same chain). Otherwise the alternatives are: (1) a gentle fixed clean-up from units that are known to work: a high-pass at 90 Hz plus a noise gate written in `SoundMath` (helps hum and hiss between words, not noise under speech); (2) recording voice-overs with the system's Voice Isolation microphone mode, which the user switches on in Control Centre (capture only); (3) a bundled open-source denoiser (RNNoise-class), which is a much larger native piece of work.
 
@@ -322,3 +327,10 @@ It is called from **one dev-only place**: when the Sound strip opens in a develo
 ## 12. The owner's device checklist
 
 In the plan (`docs/superpowers/plans/2026-10-07-sound-tools.md`, last section): Part A can be done today in Expo Go or the installed app (Extract audio); Part B after the new build is installed from its link.
+
+Four things to know while going through it (they are how it is built, not faults):
+
+- **An extracted bar does not follow its clip.** Move, trim or split the clip and the bar stays where it was, as long as it was. Move or trim the bar by hand to match.
+- **Deleting the bar leaves the clip muted.** The sound does not come back by itself: select the clip, open Volume and switch Mute off.
+- **In the preview, the sound of an extracted bar can sit up to a quarter of a second off the picture** (lips and voice not quite together). That is the preview only; the exported video is exact.
+- **The first time the Sound strip is opened in the test build, a one-off check of the noise tool from Apple runs in the background.** Nothing shows on screen. In the worst case it could close the app once; open it again and carry on. It will not repeat.

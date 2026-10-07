@@ -276,8 +276,8 @@ export function EditorToolbar() {
     const there = extractedTrackOf(project, selectedId);
     if (there) { selectAudio(there.id); openStrip(id); return; }
     void extract(selectedId).then((r) => {
-      // The hook has selected the bar. Not if the selection has gone elsewhere since (nothing is opened on another item).
-      if (!r || !here.current || useEditorStore.getState().selectedAudioId !== r.trackId) return;
+      // The hook has just selected the bar (it answers null when the owner went elsewhere while the file was asked).
+      if (!r || !here.current) return;
       openStrip(id);
       if (r.made) useToast.getState().show(EXTRACT_MESSAGES.moved);
     });
