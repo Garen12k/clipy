@@ -1,4 +1,4 @@
-import { makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker, type Clip, type LayerClip } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker, type Clip, type LayerClip, type Project } from "@/src/editor/model/types";
 import { contextFor, selectionKey, TOOL_IDS, type ToolbarSelection } from "../toolbarContext";
 
 const none: ToolbarSelection = { clipId: null, overlayId: null, effectId: null, audioId: null, section: null };
@@ -13,9 +13,9 @@ const project = makeProject({
 });
 
 const MAIN = ["edit", "audioMenu", "textMenu", "sticker", "overlay", "collage", "effect", "filter", "adjust", "ratio", "background", "cover", "templates"];
-const CLIP = ["split", "trim", "select", "speed", "volume", "animate", "filter", "adjust", "background", "templates", "crop", "transform", "opacity", "mask", "chroma", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete"];
-const SOUND = ["audioSplit", "audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio", "ducking", "beats"];
-const LAYER = ["trim", "speed", "volume", "animate", "filter", "adjust", "crop", "transform", "opacity", "mask", "blend", "chroma", "keyframe", "layerForward", "layerBack", "replace", "reverse", "duplicate", "delete"];
+const CLIP = ["split", "trim", "select", "speed", "volume", "extractAudio", "voice", "soundQuality", "animate", "filter", "adjust", "background", "templates", "crop", "transform", "opacity", "mask", "chroma", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete"];
+const SOUND = ["audioSplit", "audioVolume", "audioFade", "voice", "soundQuality", "audioDuplicate", "audioDelete", "addAudio", "ducking", "beats"];
+const LAYER = ["trim", "speed", "volume", "extractAudio", "voice", "soundQuality", "animate", "filter", "adjust", "crop", "transform", "opacity", "mask", "blend", "chroma", "keyframe", "layerForward", "layerBack", "replace", "reverse", "duplicate", "delete"];
 const without = (list: string[], ...gone: string[]) => list.filter((t) => !gone.includes(t));
 const withMotion = (list: string[]) => list.flatMap((t) => (t === "animate" ? ["animate", "motion"] : [t]));
 
@@ -35,8 +35,8 @@ test("a main clip: Select is third, Background and Templates follow Adjust", () 
 });
 
 test("clip rules: a photo has no Speed / Volume / Reverse / Freeze; a reversed clip no Volume; the last clip no Transition; one clip no Select", () => {
-  expect(contextFor({ ...none, clipId: "p" }, project).tools).toEqual(withMotion(without(CLIP, "speed", "volume", "reverse", "freeze")));
-  expect(contextFor({ ...none, clipId: "r" }, project).tools).toEqual(without(CLIP, "volume"));
+  expect(contextFor({ ...none, clipId: "p" }, project).tools).toEqual(withMotion(without(CLIP, "speed", "volume", "extractAudio", "voice", "soundQuality", "reverse", "freeze")));
+  expect(contextFor({ ...none, clipId: "r" }, project).tools).toEqual(without(CLIP, "volume", "extractAudio", "voice", "soundQuality"));
   expect(contextFor({ ...none, clipId: "z" }, project).tools).toEqual(without(CLIP, "transition"));
   const one = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] });
   expect(contextFor({ ...none, clipId: "a" }, one).tools).toEqual(without(CLIP, "transition", "select"));
@@ -44,8 +44,8 @@ test("clip rules: a photo has no Speed / Volume / Reverse / Freeze; a reversed c
 
 test("a layer: the layer bar; a photo layer has no Speed / Volume / Reverse; a reversed layer no Volume", () => {
   expect(contextFor({ ...none, clipId: "L" }, project)).toEqual({ bar: "layer", tools: LAYER });
-  expect(contextFor({ ...none, clipId: "P" }, project)).toEqual({ bar: "layer", tools: withMotion(without(LAYER, "speed", "volume", "reverse")) });
-  expect(contextFor({ ...none, clipId: "R" }, project).tools).toEqual(without(LAYER, "volume"));
+  expect(contextFor({ ...none, clipId: "P" }, project)).toEqual({ bar: "layer", tools: withMotion(without(LAYER, "speed", "volume", "extractAudio", "voice", "soundQuality", "reverse")) });
+  expect(contextFor({ ...none, clipId: "R" }, project).tools).toEqual(without(LAYER, "volume", "extractAudio", "voice", "soundQuality"));
   for (const id of ["L", "P", "R"]) for (const t of ["split", "freeze", "transition", "select", "background", "templates", "ratio"]) expect(contextFor({ ...none, clipId: id }, project).tools).not.toContain(t);
 });
 
@@ -80,7 +80,7 @@ test("sections open a bar without a selection; a selection wins over the section
 test("Beats needs clips: not on an empty project, with or without a sound selected", () => {
   const empty = makeProject({ audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })] });
   expect(contextFor({ ...none, section: "audio" }, empty).tools).toEqual(["addAudio", "ducking"]);
-  expect(contextFor({ ...none, audioId: "m" }, empty).tools).toEqual(["audioSplit", "audioVolume", "audioFade", "audioDuplicate", "audioDelete", "addAudio", "ducking"]);
+  expect(contextFor({ ...none, audioId: "m" }, empty).tools).toEqual(["audioSplit", "audioVolume", "audioFade", "voice", "soundQuality", "audioDuplicate", "audioDelete", "addAudio", "ducking"]);
 });
 
 test("an id that no longer exists counts as no selection", () => {
@@ -97,7 +97,7 @@ test("every tool id is reachable, and no bar lists a tool twice", () => {
     for (const t of tools) seen.add(t);
   }
   expect([...seen].sort()).toEqual([...TOOL_IDS].sort());
-  expect(TOOL_IDS).toHaveLength(51);
+  expect(TOOL_IDS).toHaveLength(54);
 });
 
 test("selectionKey names what is selected; multi-select first", () => {
@@ -154,4 +154,21 @@ describe("Motion and Collage", () => {
     expect(contextFor({ ...none, clipId: "P" }, project).tools).not.toContain("collage");      // a plain layer
     expect(contextFor({ ...none, clipId: "a" }, project).tools).not.toContain("collage");      // a main clip
   });
+});
+
+test("the sound tools: on a sound's bar, and on a video's bar exactly where Volume is — never on a photo or a reversed clip", () => {
+  const three = ["extractAudio", "voice", "soundQuality"];
+  const of = (p: Project, id: string) => contextFor({ ...none, clipId: id }, p).tools;
+  const p = makeProject({
+    clips: [makeClip({ id: "v", sourceDuration: 4 }), makeClip({ id: "r", sourceDuration: 4, reversed: true }), makePhotoClip({ id: "ph" }), makeClip({ id: "fast", sourceDuration: 4, speed: 2 }), makeClip({ id: "quiet", sourceDuration: 4, muted: true })],
+    layers: [makeLayer({ id: "Lv", sourceDuration: 4 }), { ...makePhotoClip({ id: "Lp" }), start: 0 }],
+    audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })],
+  });
+  // A muted clip keeps them (as it keeps Volume): its sound can still be put on the audio row.
+  for (const id of ["v", "fast", "quiet", "Lv"]) { expect(of(p, id)).toEqual(expect.arrayContaining(three)); expect(of(p, id).indexOf("extractAudio")).toBe(of(p, id).indexOf("volume") + 1); }
+  for (const id of ["r", "ph", "Lp"]) for (const t of [...three, "volume"]) expect(of(p, id)).not.toContain(t);
+  const sound = contextFor({ ...none, audioId: "m" }, p).tools;
+  expect(sound).toEqual(expect.arrayContaining(["voice", "soundQuality"]));
+  expect(sound).not.toContain("extractAudio");
+  expect(contextFor({ ...none, section: "audio" }, p).tools).toEqual(["addAudio", "ducking", "beats"]);   // no sound selected: no sound tools
 });

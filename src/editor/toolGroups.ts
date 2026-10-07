@@ -61,6 +61,9 @@ export const TOOL_META: Record<ToolId, { label: string; icon: IoniconName }> = {
   audioFade: { label: "Fade", icon: "trending-up-outline" },
   audioDuplicate: { label: "Duplicate", icon: "copy-outline" },
   audioDelete: { label: "Delete", icon: "trash-outline" },
+  extractAudio: { label: "Extract audio", icon: "git-branch-outline" },
+  voice: { label: "Voice", icon: "mic-outline" },
+  soundQuality: { label: "Sound", icon: "stats-chart-outline" },
   // An effect.
   effectStrength: { label: "Strength", icon: "speedometer-outline" },
   effectDuplicate: { label: "Duplicate", icon: "copy-outline" },
