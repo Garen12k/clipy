@@ -52,6 +52,7 @@ Clipy's welcome screen offers three ways to sign in. Each is one provider in the
 4. Open **Authentication → URL Configuration** and, under **Redirect URLs**, add these two (this is where Google sign-in returns to the app):
    - `clipy://welcome` — the real app.
    - `exp://**` — Expo Go, **testing only — remove before release** (there the address is `exp://<your computer's address>:<port>/--/welcome`, which changes with your network, so a wildcard is needed).
+   - *Seen on the real project, October 2026:* Supabase refuses any return address whose host is a bare number (an IP such as `192.168.1.142`), even when it is listed exactly, and `exp://**` only matches addresses with a name. In Expo Go that sends you to a "localhost" page after Google. So for testing, start the dev server under a name that points at the same computer: `$env:REACT_NATIVE_PACKAGER_HOSTNAME = '192.168.1.142.nip.io'; npx.cmd expo start --go --port 8090` (use your computer's own address in the name) and open `exp://192.168.1.142.nip.io:8090` on the phone.
 5. If Google sign-in ends on a web page instead of returning to Clipy, the address in step 4 is missing or misspelt: tell the developer which address you see.
 
 ### c. Apple — works only in the real build
