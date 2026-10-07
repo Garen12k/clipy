@@ -272,6 +272,7 @@ extension UIColor {
 
 /// A clip after its asset has been loaded and its trim clamped to the source.
 private struct LoadedClip {
+  let asset: AVURLAsset                            // AVAssetTrack.asset is weak: the tracks are only usable while this lives
   let clip: ExportClip
   let srcVideo: AVAssetTrack
   let srcAudio: AVAssetTrack?
@@ -906,7 +907,7 @@ final class ExportSession {
     var audioRange: CMTimeRange? = nil
     if let srcAudio { audioRange = try? await srcAudio.load(.timeRange) }
     return LoadedClip(
-      clip: clip, srcVideo: srcVideo, srcAudio: srcAudio, audioRange: audioRange,
+      asset: asset, clip: clip, srcVideo: srcVideo, srcAudio: srcAudio, audioRange: audioRange,
       transform: Self.ciFillTransform(preferredTransform: preferredTransform, naturalSize: naturalSize, renderSize: renderSize),
       orient: Self.ciOrientTransform(preferredTransform: preferredTransform, naturalSize: naturalSize),
       start: start, end: end, sourceEnd: CMTimeMinimum(duration, videoRange.end),
@@ -972,10 +973,15 @@ final class ExportSession {
     // 1. Load every clip first: a transition window is clamped against the NEXT clip's output duration.
     //    A prepared clip has no audio track; that is handled like any silent source (no audio inserted).
     var loaded: [LoadedClip] = []
+    // Every source asset, kept until the export has finished (a track's `asset` is a weak reference).
+    var sourceAssets: [AVAsset] = []
     for clip in clips {
       if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
-      let one = try await Self.load(clip, renderSize: renderSize)
+      let one: LoadedClip
+      do { one = try await Self.load(clip, renderSize: renderSize) }
+      catch { throw ExportError.sessionFailed("load clip \(loaded.count): " + ExportSession.describe(error)) }
       loaded.append(one)
+      sourceAssets.append(one.asset)
     }
     let n = loaded.count
 
@@ -1014,7 +1020,8 @@ final class ExportSession {
     /// track's current end, so nothing already on the track shifts. False when there is nothing to insert.
     func insertScaled(_ track: AVMutableCompositionTrack, _ source: CMTimeRange, of srcTrack: AVAssetTrack, from a: CMTime, to b: CMTime) throws -> Bool {
       guard CMTimeCompare(b, a) > 0, CMTimeCompare(source.duration, .zero) > 0 else { return false }
-      try track.insertTimeRange(source, of: srcTrack, at: a)
+      do { try track.insertTimeRange(source, of: srcTrack, at: a) }
+      catch { throw ExportError.sessionFailed("insert [asset \(srcTrack.asset == nil ? "gone" : "alive")]: " + ExportSession.describe(error)) }
       let target = b - a
       if CMTimeCompare(source.duration, target) != 0 {
         track.scaleTimeRange(CMTimeRange(start: a, duration: source.duration), toDuration: target)
@@ -1033,7 +1040,8 @@ final class ExportSession {
       let sourceStart = cuts.source[0], sourceEnd = cuts.source[pieces]
       let at = cuts.output[0]
       guard CMTimeCompare(sourceEnd, sourceStart) > 0, CMTimeCompare(cuts.output[pieces], at) > 0 else { return false }
-      try track.insertTimeRange(CMTimeRange(start: sourceStart, end: sourceEnd), of: srcTrack, at: at)
+      do { try track.insertTimeRange(CMTimeRange(start: sourceStart, end: sourceEnd), of: srcTrack, at: at) }
+      catch { throw ExportError.sessionFailed("insert retimed [asset \(srcTrack.asset == nil ? "gone" : "alive")]: " + ExportSession.describe(error)) }
       for j in stride(from: pieces - 1, through: 0, by: -1) {
         let length = cuts.source[j + 1] - cuts.source[j]
         let target = cuts.output[j + 1] - cuts.output[j]
@@ -1167,6 +1175,7 @@ final class ExportSession {
       if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
       guard let audioURL = URL(string: audio.sourceUri) else { throw ExportError.sessionFailed("Invalid audio file URI: \(audio.sourceUri)") }
       let audioAsset = AVURLAsset(url: audioURL)
+      sourceAssets.append(audioAsset)
       guard let srcAudio = try await audioAsset.loadTracks(withMediaType: .audio).first else { throw ExportError.sessionFailed("No sound in audio file \(audio.sourceUri)") }
       let assetDuration = try await audioAsset.load(.duration)
       let insertAt = Self.audioTime(max(0, audio.start))
@@ -1196,6 +1205,7 @@ final class ExportSession {
       guard !unpreparedLayers.contains(i), layerStarts[i].isFinite, layerStarts[i] >= 0 else { continue }
       let at = Self.time(max(0, layerStarts[i]))
       guard CMTimeCompare(at, total) < 0, let c = try? await Self.load(layer, renderSize: renderSize) else { continue }
+      sourceAssets.append(c.asset)
       let length = CMTimeMinimum(c.outDur, total - at)
       let end = at + length
       // The source played during `length`: all of it, or — when the layer is cut short — its spans up to the cut.
@@ -1343,10 +1353,10 @@ final class ExportSession {
     // First-build diagnostics: what was handed to the export, and what AVFoundation's own check says about it. Only
     // used in the message of a failed export.
     let check = CompositionCheck()
-    let valid = videoComposition.isValid(for: composition, timeRange: CMTimeRange(start: .zero, duration: composition.duration), validationDelegate: check)
-    let videoTracks = composition.tracks(withMediaType: .video).count
-    let audioTracks = composition.tracks(withMediaType: .audio).count
-    let facts = "size \(Int(renderSize.width))x\(Int(renderSize.height)) fps \(fps) dur \(seconds) instr \(instructions.count) vtracks \(videoTracks) atracks \(audioTracks) overlays \(overlayLayers.count) mix \(mixParams.count) valid \(valid)"
+    let valid = (try? await videoComposition.isValid(for: composition, timeRange: CMTimeRange(start: .zero, duration: composition.duration), validationDelegate: check)) ?? false
+    let videoTrackCount = composition.tracks(withMediaType: .video).count
+    let audioTrackCount = composition.tracks(withMediaType: .audio).count
+    let facts = "size \(Int(renderSize.width))x\(Int(renderSize.height)) fps \(fps) dur \(seconds) instr \(instructions.count) vtracks \(videoTrackCount) atracks \(audioTrackCount) overlays \(overlayLayers.count) mix \(mixParams.count) valid \(valid)"
       + (check.findings.isEmpty ? "" : " findings: " + check.findings.prefix(6).joined(separator: "; "))
 
     lock.lock()
@@ -1367,7 +1377,9 @@ final class ExportSession {
     // From here the export reads the prepared files asynchronously: its completion handler removes the folder.
     let folderToRemove = prepFolder
     handedOff = true
+    let keepAlive = sourceAssets
     session.exportAsynchronously { [weak self] in
+      withExtendedLifetime(keepAlive) {}
       if let folderToRemove { MediaPrePass.removeFolder(folderToRemove) }
       guard let self else { return }
       DispatchQueue.main.async { self.timer?.invalidate(); self.timer = nil }

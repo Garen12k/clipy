@@ -221,6 +221,9 @@ enum MediaPrePass {
   static func encodableSize(_ size: CGSize) -> (width: Int, height: Int) {
     var w = max(2, Double(size.width)), h = max(2, Double(size.height))
     func macroblocks(_ w: Double, _ h: Double) -> Int { Int((w / 16).rounded(.up) * (h / 16).rounded(.up)) }
+    // Inside the 4096 × 2304 frame hardware H.264 takes, whichever way round (a 4:3 photo is taller than 2304 otherwise).
+    let box = min(1, 4096 / max(w, h), 2304 / min(w, h))
+    if box < 1 { w *= box; h *= box }
     if macroblocks(w, h) > maxMacroblocks {
       var k = (Double(maxMacroblocks) / Double(macroblocks(w, h))).squareRoot()
       while macroblocks(Double(Int(w * k)), Double(Int(h * k))) > maxMacroblocks { k *= 0.995 }
