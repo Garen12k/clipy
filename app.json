@@ -72,6 +72,13 @@
       "expo-asset",
       "expo-sqlite",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9c9308c6-1ff7-44bd-9783-a98325e533e5"
+      }
+    },
+    "owner": "astinos"
   }
 }
