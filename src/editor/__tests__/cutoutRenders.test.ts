@@ -41,7 +41,7 @@ const MEDIA = "file:///doc/projects/p1/media";
 const DIR = "file:///doc/projects/p1/cutout";
 const clip = makeClip({ id: "a", sourceDuration: 30, sourceUri: `${MEDIA}/abc.mov`, trimStart: 4.2, trimEnd: 9.7, cutout: true });
 const photo = makePhotoClip({ id: "ph", sourceUri: `${MEDIA}/p.jpg`, cutout: true });
-const NAME = "abc-c1-3000-11000.mov", PNG = "p-c1-photo.png";
+const NAME = "abc-c1-2000-12000.mov", PNG = "p-c1-photo.png";
 const files = () => useCutoutFiles.getState().files;
 const st = () => useEditorStore.getState();
 const tick = async (n = 40) => { for (let i = 0; i < n; i++) await Promise.resolve(); };
@@ -110,7 +110,7 @@ test("ensureCutout: a copy on disk is returned without the phone; a missing one 
   disk.clear();
   render.mockResolvedValueOnce(made(NAME));
   await expect(ensureCutout("p1", cutoutNeed(clip, []))).resolves.toBe(`${DIR}/${NAME}`);
-  expect(render).toHaveBeenCalledWith({ jobId: "job-2", sourceUri: `${MEDIA}/abc.mov`, outputPath: `${DIR}/${NAME}`, kind: "video", from: 3, to: 11,
+  expect(render).toHaveBeenCalledWith({ jobId: "job-2", sourceUri: `${MEDIA}/abc.mov`, outputPath: `${DIR}/${NAME}`, kind: "video", from: 2, to: 12,
     maxSide: 1920, minFrameGap: 0.03, minPerson: 0.005, alphaQuality: 0.75, bitsPerPixel: 0.1, stillPath: "", stillSeconds: 0 });
 });
 
@@ -308,14 +308,14 @@ describe("the queue", () => {
     try {
       render.mockImplementationOnce(() => new Promise(() => {}));
       render.mockResolvedValue(made(PNG));
-      const deadline = cutoutDeadlineMs({ photo: false, from: 3, to: 11 });
-      expect(deadline).toBe(220000);
+      const deadline = cutoutDeadlineMs({ photo: false, from: 2, to: 12 });
+      expect(deadline).toBe(260000);
       syncCutouts("p1", needed());
       await pass(CUTOUT_SETTLE_MS);
       await pass(deadline - 1);
       expect(files()).toEqual({ [NAME]: { status: "busy", progress: 0 } });
       await pass(1);
-      expect(files()[NAME]).toEqual({ status: "failed", message: "cutout render: no answer after 220 s" });
+      expect(files()[NAME]).toEqual({ status: "failed", message: "cutout render: no answer after 260 s" });
       expect(cancelCutout).toHaveBeenCalledWith("job-1");
       expect(useToast.getState().message).toBe(CUTOUT_FAILED);
       expect(files()[PNG]).toEqual({ status: "ready", uri: `${DIR}/${PNG}` });
@@ -336,7 +336,7 @@ describe("the queue", () => {
         expect(before.files).toEqual({});
         if (late === "ok") open.ok(); else open.fail(new Error("cutout writer: late"));
         await tick();
-        await pass(cutoutDeadlineMs({ photo: false, from: 3, to: 11 }));   // its deadline went with it
+        await pass(cutoutDeadlineMs({ photo: false, from: 2, to: 12 }));   // its deadline went with it
         expect(useCutoutFiles.getState()).toBe(before);              // not one write for a job nobody waits for
         expect(useToast.getState().message).toBeNull();
         expect(cancelCutout).toHaveBeenCalledTimes(1);
@@ -470,7 +470,7 @@ describe("useCutoutRenders", () => {
     const project = st().project!;
     await act(async () => { st().beginTransaction(); });
     for (let i = 1; i <= 60; i++) {
-      await act(async () => { st().applyTransient((p) => ({ ...p, clips: [{ ...p.clips[0], trimEnd: 9.7 + i / 10 }] })); });   // outwards: past the copy after 3 steps
+      await act(async () => { st().applyTransient((p) => ({ ...p, clips: [{ ...p.clips[0], trimEnd: 9.7 + i / 10 }] })); });   // outwards: its handle is past the copy after 18 steps
       await pass(16);
       expect(render).toHaveBeenCalledTimes(1);
     }
@@ -479,10 +479,10 @@ describe("useCutoutRenders", () => {
     expect(render).toHaveBeenCalledTimes(1);
     await pass(1);
     expect(render).toHaveBeenCalledTimes(2);
-    expect(render).toHaveBeenLastCalledWith(expect.objectContaining({ outputPath: `${DIR}/abc-c1-3000-17000.mov`, from: 3, to: 17 }));
+    expect(render).toHaveBeenLastCalledWith(expect.objectContaining({ outputPath: `${DIR}/abc-c1-2000-18000.mov`, from: 2, to: 18 }));
     expect(cancelCutout).not.toHaveBeenCalled();
-    expect(Object.keys(files()).sort()).toEqual([NAME, "abc-c1-3000-17000.mov"]);
-    expect(shownCutout(files(), st().project!.clips[0])).toBe(`${DIR}/abc-c1-3000-17000.mov`);
+    expect(Object.keys(files()).sort()).toEqual([NAME, "abc-c1-2000-18000.mov"]);
+    expect(shownCutout(files(), st().project!.clips[0])).toBe(`${DIR}/abc-c1-2000-18000.mov`);
     // Trimmed inwards again, and split: the same copy, nothing to render.
     await act(async () => { st().apply((p) => ({ ...p, clips: [{ ...p.clips[0], trimEnd: 8 }, { ...p.clips[0], id: "a2", trimStart: 8, trimEnd: 12 }] })); });
     await pass(CUTOUT_SETTLE_MS);

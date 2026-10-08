@@ -1,4 +1,5 @@
 import { coveringCopy, CUTOUT, CUTOUT_PREVIEW, CUTOUT_VERSION, cutoutBytes, cutoutDeadlineMs, cutoutFileName, cutoutNeed, cutoutRange, cutoutRefusal, cutoutSize, cutoutStillName, neededCutouts, parseCutoutName } from "../cutout";
+import { TRANSITION_HANDLE_MAX, transitionHandles } from "../timeline";
 import { makeClip, makeLayer, makePhotoClip, makeProject, type Clip } from "../types";
 
 const MEDIA = "file:///doc/projects/p1/media";
@@ -9,16 +10,19 @@ const SAFE = /^[A-Za-z0-9_-]+\.(mov|png)$/;
 
 test("the constants", () => {
   expect(CUTOUT_VERSION).toBe(1);
-  expect(CUTOUT).toEqual({ maxSeconds: 60, pad: 1, videoMaxSide: 1920, photoMaxSide: 2560, minFrameGap: 0.03, minPerson: 0.005, alphaQuality: 0.75, bitsPerPixel: 0.1, stillSeconds: 60, exportOpacity: 0.999 });
+  expect(CUTOUT).toEqual({ maxSeconds: 60, pad: 2, videoMaxSide: 1920, photoMaxSide: 2560, minFrameGap: 0.03, minPerson: 0.005, alphaQuality: 0.75, bitsPerPixel: 0.1, stillSeconds: 60, exportOpacity: 0.999 });
   expect(CUTOUT_PREVIEW).toEqual({ layerVideo: true, mainVideo: true });
+  // The pad is whole seconds and never less than the longest transition handle the export can read outside a trim.
+  expect(Number.isInteger(CUTOUT.pad)).toBe(true);
+  expect(CUTOUT.pad).toBeGreaterThanOrEqual(TRANSITION_HANDLE_MAX);
 });
 
-test("cutoutRange: the trim plus a second each side, on whole seconds, inside the file", () => {
+test("cutoutRange: the trim plus two seconds each side, on whole seconds, inside the file", () => {
   expect(cutoutRange({ trimStart: 0, trimEnd: 30, sourceDuration: 30 })).toEqual({ from: 0, to: 30 });
-  expect(cutoutRange({ trimStart: 4.2, trimEnd: 9.7, sourceDuration: 30 })).toEqual({ from: 3, to: 11 });
-  expect(cutoutRange({ trimStart: 2.5, trimEnd: 9, sourceDuration: 30 })).toEqual({ from: 1, to: 10 });
+  expect(cutoutRange({ trimStart: 4.2, trimEnd: 9.7, sourceDuration: 30 })).toEqual({ from: 2, to: 12 });
+  expect(cutoutRange({ trimStart: 2.5, trimEnd: 9, sourceDuration: 30 })).toEqual({ from: 0, to: 11 });
   expect(cutoutRange({ trimStart: 0.4, trimEnd: 7.25, sourceDuration: 7.25 })).toEqual({ from: 0, to: 8 });
-  expect(cutoutRange({ trimStart: 100, trimEnd: 160, sourceDuration: 600 })).toEqual({ from: 99, to: 161 });
+  expect(cutoutRange({ trimStart: 100, trimEnd: 160, sourceDuration: 600 })).toEqual({ from: 98, to: 162 });
 });
 
 test("cutoutRange is total: whole, finite, at least a second long, whatever the clip holds", () => {
@@ -34,11 +38,11 @@ test("cutoutRange is total: whole, finite, at least a second long, whatever the 
     expect(r.from).toBeGreaterThanOrEqual(0);
     expect(r.to).toBeGreaterThanOrEqual(r.from + 1);
   }
-  expect(cutoutRange({ trimStart: 9, trimEnd: 4, sourceDuration: 30 })).toEqual({ from: 8, to: 10 });      // a backwards trim is its start, nothing long
-  expect(cutoutRange({ trimStart: 5, trimEnd: 5, sourceDuration: 30 })).toEqual({ from: 4, to: 6 });
+  expect(cutoutRange({ trimStart: 9, trimEnd: 4, sourceDuration: 30 })).toEqual({ from: 7, to: 11 });      // a backwards trim is its start, nothing long
+  expect(cutoutRange({ trimStart: 5, trimEnd: 5, sourceDuration: 30 })).toEqual({ from: 3, to: 7 });
   expect(cutoutRange({ trimStart: 0, trimEnd: 50, sourceDuration: 30 })).toEqual({ from: 0, to: 30 });     // a trim past the file's end stops at the file
-  expect(cutoutRange({ trimStart: 2, trimEnd: 5, sourceDuration: NaN })).toEqual({ from: 1, to: 6 });      // an unknown length does not cap
-  expect(cutoutRange({ trimStart: NaN, trimEnd: NaN, sourceDuration: NaN })).toEqual({ from: 0, to: 1 });
+  expect(cutoutRange({ trimStart: 2, trimEnd: 5, sourceDuration: NaN })).toEqual({ from: 0, to: 7 });      // an unknown length does not cap
+  expect(cutoutRange({ trimStart: NaN, trimEnd: NaN, sourceDuration: NaN })).toEqual({ from: 0, to: 2 });
 });
 
 test("names: the source's stem, the version and the range in milliseconds; a photo has a PNG and a still movie beside it", () => {
@@ -89,11 +93,12 @@ test("cutoutFileName and parseCutoutName are total", () => {
     "-c1-0-500.mov", "-c1-photo.png", "abc-c1-photo.PNG", "abc-c1-0-500.mov.part", "part-p-c1-photo.png"]) expect(parseCutoutName(other)).toBeNull();
 });
 
-test("coveringCopy: the smallest known copy of the same file that contains the clip's trim", () => {
+test("coveringCopy: the smallest known copy of the same file that holds the clip's trim and its transition handles", () => {
   const known = ["abc-c1-3000-11000.mov", "abc-c1-0-30000.mov", "other-c1-0-30000.mov", "p-c1-photo.png"];
   expect(coveringCopy(known, video("a", { trimStart: 4.2, trimEnd: 9.7 }))).toBe("abc-c1-3000-11000.mov");
   expect(coveringCopy(known, video("a", { trimStart: 5, trimEnd: 9 }))).toBe("abc-c1-3000-11000.mov");       // trimmed inwards: the same copy
-  expect(coveringCopy(known, video("a", { trimStart: 3, trimEnd: 11 }))).toBe("abc-c1-3000-11000.mov");      // exactly its ends
+  expect(coveringCopy(known, video("a", { trimStart: 3.5, trimEnd: 10.5 }))).toBe("abc-c1-3000-11000.mov");  // with its handles (half a second at 1×) exactly its ends
+  expect(coveringCopy(known, video("a", { trimStart: 3, trimEnd: 11 }))).toBe("abc-c1-0-30000.mov");         // the trim fits, its handles do not: the larger
   expect(coveringCopy(known, video("a", { trimStart: 2.5, trimEnd: 9 }))).toBe("abc-c1-0-30000.mov");        // past the small one: the larger
   expect(coveringCopy(["abc-c1-3000-11000.mov"], video("a", { trimStart: 2.5, trimEnd: 9 }))).toBeNull();
   expect(coveringCopy(known, video("a", { sourceUri: `${MEDIA}/zzz.mov` }))).toBeNull();
@@ -105,15 +110,16 @@ test("coveringCopy: outwards past either end needs another copy; the order of th
   const small = "abc-c1-3000-11000.mov";
   expect(coveringCopy([small], video("a", { trimStart: 4.2, trimEnd: 11.2 }))).toBeNull();       // past its end
   expect(coveringCopy([small], video("a", { trimStart: 2.999, trimEnd: 9 }))).toBeNull();        // past its start
-  expect(coveringCopy([small], video("a", { trimStart: 3.0000001, trimEnd: 10.9999999 }))).toBe(small);
+  expect(coveringCopy([small], video("a", { trimStart: 3.5000001, trimEnd: 10.4999999 }))).toBe(small);
   // Two copies as long as each other: the earlier one, whichever is listed first.
   const a = "abc-c1-3000-11000.mov", b = "abc-c1-2000-10000.mov";
   const clip = video("a", { trimStart: 4, trimEnd: 9 });
   expect(coveringCopy([a, b], clip)).toBe(b);
   expect(coveringCopy([b, a], clip)).toBe(b);
-  const many = [a, "abc-c1-0-30000.mov", "abc-c1-4000-9000.mov", b];
-  expect(coveringCopy(many, clip)).toBe("abc-c1-4000-9000.mov");
-  expect(coveringCopy([...many].reverse(), clip)).toBe("abc-c1-4000-9000.mov");
+  const many = [a, "abc-c1-0-30000.mov", "abc-c1-3000-10000.mov", b];
+  expect(coveringCopy(many, clip)).toBe("abc-c1-3000-10000.mov");
+  expect(coveringCopy([...many].reverse(), clip)).toBe("abc-c1-3000-10000.mov");
+  expect(coveringCopy(["abc-c1-4000-9000.mov"], clip)).toBeNull();     // exactly the trim: no room for a transition
   // Kinds: a photo's PNG is no video copy, a video copy no photo's.
   expect(coveringCopy(["abc-c1-photo.png"], video("a"))).toBeNull();
   expect(coveringCopy(["p-c1-0-60000.mov", "p-c1-photo.mov"], photo("ph"))).toBeNull();
@@ -134,6 +140,45 @@ test("the copy planned for a clip always covers that clip, so it is found again 
     const planned = cutoutNeed(c, []);
     expect(coveringCopy([planned.name], c)).toBe(planned.name);
     expect(cutoutNeed(c, [planned.name])).toEqual(planned);
+  }
+});
+
+// I1 (review): the export reads up to half a transition × the edge speed of source OUTSIDE the trim. A copy that merely contains
+// the trim has nothing there (its timeline is empty before its first frame), so the transition would start late and jump.
+test("a copy without room for the clip's transition handles does not cover it: a new one is planned", () => {
+  const old = "abc-c1-3000-11000.mov";
+  // Trimmed outwards to the copy's very start: half a second of handle would fall before the copy's first frame.
+  const out = video("a", { trimStart: 3, trimEnd: 9.7 });
+  expect(coveringCopy([old], out)).toBeNull();
+  expect(cutoutNeed(out, [old])).toMatchObject({ name: "abc-c1-1000-12000.mov", from: 1, to: 12 });
+  // The same trim covers at 1× and not at 4×, where the handle is two seconds of source.
+  expect(coveringCopy([old], video("a", { trimStart: 4.2, trimEnd: 9.7 }))).toBe(old);
+  expect(coveringCopy([old], video("a", { trimStart: 4.2, trimEnd: 9.7, speed: 4 }))).toBeNull();
+  expect(coveringCopy([old], video("a", { trimStart: 5, trimEnd: 9, speed: 4 }))).toBe(old);          // 3 … 11 is exactly its room
+  // A curve: the head at its first speed, the tail at its last.
+  const curved = (steps: { from: number; speed: number }[]): Clip => ({ ...video("a", { trimStart: 4.2, trimEnd: 9.7 }), speedCurve: { id: "montage", steps } });
+  expect(coveringCopy([old], curved([{ from: 4.2, speed: 4 }, { from: 6, speed: 1 }]))).toBeNull();
+  expect(coveringCopy([old], curved([{ from: 4.2, speed: 1 }, { from: 6, speed: 4 }]))).toBeNull();
+  expect(coveringCopy([old], curved([{ from: 4.2, speed: 1 }, { from: 6, speed: 2 }]))).toBe(old);
+  // The tail the same way; at the file's own ends there is nothing more to hold.
+  expect(coveringCopy([old], video("a", { trimStart: 4.2, trimEnd: 10.8 }))).toBeNull();
+  expect(coveringCopy([old], video("a", { trimStart: 4.2, trimEnd: 11, sourceDuration: 11 }))).toBe(old);
+  expect(coveringCopy(["abc-c1-0-8000.mov"], video("a", { trimStart: 0, trimEnd: 7.5, speed: 4 }))).toBeNull();
+  expect(coveringCopy(["abc-c1-0-8000.mov"], video("a", { trimStart: 0, trimEnd: 6, speed: 4 }))).toBe("abc-c1-0-8000.mov");
+});
+
+test("a freshly planned copy holds everything the export can read for its clip, at any speed, on whole seconds", () => {
+  for (const speed of [0.25, 1, 2, 3.7, 4]) {
+    for (const [trimStart, trimEnd, sourceDuration] of [[0, 30, 30], [4.2, 9.7, 30], [1.9, 28.4, 30], [29.5, 30, 30], [0.4, 7.25, 7.25], [100, 160, 600], [2, 5, NaN]] as const) {
+      const c = video("a", { trimStart, trimEnd, sourceDuration, speed });
+      const { head, tail } = transitionHandles(c);
+      const { from, to } = cutoutRange(c);
+      expect(Number.isInteger(from) && Number.isInteger(to)).toBe(true);
+      expect(from).toBeLessThanOrEqual(Math.max(0, trimStart - head));
+      expect(to).toBeGreaterThanOrEqual(Math.min(Number.isFinite(sourceDuration) ? sourceDuration : Infinity, trimEnd + tail));
+      const planned = cutoutNeed(c, []);
+      expect(coveringCopy([planned.name], c)).toBe(planned.name);
+    }
   }
 });
 
@@ -175,20 +220,21 @@ test("cutoutRefusal is total", () => {
 
 test("cutoutNeed: the covering copy when there is one, else the planned one", () => {
   const clip = video("a", { trimStart: 4.2, trimEnd: 9.7 });
-  expect(cutoutNeed(clip, [])).toEqual({ name: "abc-c1-3000-11000.mov", sourceUri: `${MEDIA}/abc.mov`, photo: false, from: 3, to: 11 });
+  expect(cutoutNeed(clip, [])).toEqual({ name: "abc-c1-2000-12000.mov", sourceUri: `${MEDIA}/abc.mov`, photo: false, from: 2, to: 12 });
   expect(cutoutNeed(clip, ["abc-c1-0-30000.mov"])).toEqual({ name: "abc-c1-0-30000.mov", sourceUri: `${MEDIA}/abc.mov`, photo: false, from: 0, to: 30 });
   expect(cutoutNeed(photo("ph"), [])).toEqual({ name: "p-c1-photo.png", sourceUri: `${MEDIA}/p.jpg`, photo: true, from: 0, to: 0 });
 });
 
 test("the spec's table: trimmed inwards keeps the copy, outwards plans a new one, a split shares it", () => {
-  const known = ["abc-c1-3000-11000.mov"];
-  expect(cutoutNeed(video("a", { trimStart: 5, trimEnd: 9 }), known).name).toBe("abc-c1-3000-11000.mov");
-  expect(cutoutNeed(video("a", { trimStart: 2.5, trimEnd: 9 }), known)).toEqual({ name: "abc-c1-1000-10000.mov", sourceUri: `${MEDIA}/abc.mov`, photo: false, from: 1, to: 10 });
-  expect(cutoutNeed(video("a", { trimStart: 4.2, trimEnd: 7 }), known).name).toBe("abc-c1-3000-11000.mov");
-  expect(cutoutNeed(video("b", { trimStart: 7, trimEnd: 9.7 }), known).name).toBe("abc-c1-3000-11000.mov");
+  const known = ["abc-c1-2000-12000.mov"];
+  expect(cutoutNeed(video("a", { trimStart: 5, trimEnd: 9 }), known).name).toBe("abc-c1-2000-12000.mov");
+  expect(cutoutNeed(video("a", { trimStart: 2.5, trimEnd: 9 }), known).name).toBe("abc-c1-2000-12000.mov");      // outwards, its handle still inside
+  expect(cutoutNeed(video("a", { trimStart: 2, trimEnd: 9 }), known)).toEqual({ name: "abc-c1-0-11000.mov", sourceUri: `${MEDIA}/abc.mov`, photo: false, from: 0, to: 11 });
+  expect(cutoutNeed(video("a", { trimStart: 4.2, trimEnd: 7 }), known).name).toBe("abc-c1-2000-12000.mov");
+  expect(cutoutNeed(video("b", { trimStart: 7, trimEnd: 9.7 }), known).name).toBe("abc-c1-2000-12000.mov");
   // Back inwards after the new one exists: the smaller of the two that cover it.
-  expect(cutoutNeed(video("a", { trimStart: 5, trimEnd: 9 }), [...known, "abc-c1-1000-10000.mov"]).name).toBe("abc-c1-3000-11000.mov");
-  expect(cutoutNeed(video("a", { trimStart: 2.5, trimEnd: 9 }), [...known, "abc-c1-1000-10000.mov"]).name).toBe("abc-c1-1000-10000.mov");
+  expect(cutoutNeed(video("a", { trimStart: 5, trimEnd: 9 }), [...known, "abc-c1-0-11000.mov"]).name).toBe("abc-c1-2000-12000.mov");
+  expect(cutoutNeed(video("a", { trimStart: 2, trimEnd: 9 }), [...known, "abc-c1-0-11000.mov"]).name).toBe("abc-c1-0-11000.mov");
 });
 
 test("neededCutouts: one entry per different copy, for clips and layers whose switch is on and can be served", () => {
@@ -198,9 +244,9 @@ test("neededCutouts: one entry per different copy, for clips and layers whose sw
     layers: [{ ...makeLayer({ id: "L", sourceDuration: 12, sourceUri: `${MEDIA}/layer.mov` }), cutout: true as const }],
   });
   // The two halves of a split plan different copies until one exists …
-  expect(neededCutouts(p, [`${MEDIA}/gone.mov`], []).map((n) => n.name)).toEqual(["abc-c1-3000-8000.mov", "abc-c1-6000-11000.mov", "p-c1-photo.png", "layer-c1-0-12000.mov"]);
+  expect(neededCutouts(p, [`${MEDIA}/gone.mov`], []).map((n) => n.name)).toEqual(["abc-c1-2000-9000.mov", "abc-c1-5000-12000.mov", "p-c1-photo.png", "layer-c1-0-12000.mov"]);
   // … and share one that covers both.
-  expect(neededCutouts(p, [`${MEDIA}/gone.mov`], ["abc-c1-3000-11000.mov"]).map((n) => n.name)).toEqual(["abc-c1-3000-11000.mov", "p-c1-photo.png", "layer-c1-0-12000.mov"]);
+  expect(neededCutouts(p, [`${MEDIA}/gone.mov`], ["abc-c1-2000-12000.mov"]).map((n) => n.name)).toEqual(["abc-c1-2000-12000.mov", "p-c1-photo.png", "layer-c1-0-12000.mov"]);
   expect(neededCutouts(makeProject({ clips: [makeClip({ id: "x", sourceDuration: 4 })] }), [], [])).toEqual([]);
 });
 
@@ -239,9 +285,9 @@ test("cutoutSize is total", () => {
 test("the deadline grows with the range; the size estimate is about 9 MB per 10 seconds of 1080 × 1920", () => {
   expect(cutoutDeadlineMs({ photo: true, from: 0, to: 0 })).toBe(60000);
   expect(cutoutDeadlineMs({ photo: false, from: 3, to: 11 })).toBe(220000);
-  expect(cutoutDeadlineMs({ photo: false, from: 0, to: 62 })).toBe(1300000);
+  expect(cutoutDeadlineMs({ photo: false, from: 0, to: 64 })).toBe(1340000);
   expect(cutoutBytes(makeClip({ id: "v", sourceDuration: 10, trimStart: 0, trimEnd: 10 }))).toBe(9491200);         // range 0 – 10
-  expect(cutoutBytes(makeClip({ id: "v", sourceDuration: 600, trimStart: 100, trimEnd: 160 }))).toBe(58845440);    // range 99 – 161
+  expect(cutoutBytes(makeClip({ id: "v", sourceDuration: 600, trimStart: 100, trimEnd: 160 }))).toBe(60743680);    // range 98 – 162
   expect(cutoutBytes(photo("ph"))).toBe(5000000);
 });
 

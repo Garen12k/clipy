@@ -1,5 +1,5 @@
 import { SPEED_CURVES } from "../effects";
-import { clampNum, SPEED_CURVE_LIMITS, SPEED_LIMITS, type Clip, type LayerClip, type Project, type SpeedCurveId, type SpeedStep } from "./types";
+import { clampNum, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS, type Clip, type LayerClip, type Project, type SpeedCurveId, type SpeedStep } from "./types";
 
 // Speed arithmetic lives ONLY in this file. A clip either has one constant `speed` or a speed curve: constant-speed steps in SOURCE
 // time (step i covers [steps[i].from, steps[i + 1].from); the first step also covers everything before it, the last everything after).
@@ -75,6 +75,19 @@ export function speedSpans(c: Clip): SpeedSpan[] {
     if (to > from) spans.push({ from, to, speed: steps[i].speed });
   }
   return spans.length > 0 ? spans : [{ from: c.trimStart, to: c.trimEnd, speed: atStart }];
+}
+
+/** The most source seconds any clip's transition handle can be: half the longest transition at the highest speed. */
+export const TRANSITION_HANDLE_MAX = (TRANSITION_LIMITS.max / 2) * SPEED_LIMITS[1];
+/**
+ * The most source seconds an export may read OUTSIDE the clip's trim for a transition: half the longest transition, before the trim
+ * at the speed of the clip's first span (`head`) and after it at the speed of its last (`tail`) — ExportSession's `head` / `tail`
+ * before they are clamped to the file. Total: a speed that is not a number counts as the highest, so the answer is never too small.
+ */
+export function transitionHandles(c: Clip): { head: number; tail: number } {
+  const spans = speedSpans(c);
+  const at = (speed: number): number => (TRANSITION_LIMITS.max / 2) * (Number.isFinite(speed) ? clampNum(speed, SPEED_LIMITS[0], SPEED_LIMITS[1]) : SPEED_LIMITS[1]);
+  return { head: at(spans[0].speed), tail: at(spans[spans.length - 1].speed) };
 }
 
 /** A span as it is played: source runs from `a` to `b` (b < a when the clip is reversed). */

@@ -9,6 +9,7 @@ import { ensureCutout } from "@/src/editor/cutoutRenders";
 import { cutoutsNeeded, useCutoutFiles, type CutoutFile } from "@/src/editor/cutoutFiles";
 import { parseCutoutName } from "@/src/editor/model/cutout";
 import { setClipSpeedCurve } from "@/src/editor/model/ops";
+import { transitionHandles } from "@/src/editor/model/timeline";
 import { makeClip, makeLayer, makePhotoClip, makeProject, SPEED_CURVE_IDS } from "@/src/editor/model/types";
 import { expoFs } from "@/src/projects/expoFs";
 import { CUTOUT_EXPORT, CUTOUT_SHARE, prepareCutouts, withCutout } from "../exportCutouts";
@@ -42,13 +43,13 @@ test("prepareCutouts: nothing for clips without the switch; one copy per clip wi
   expect(ensure).not.toHaveBeenCalled();
   const seen: number[] = [];
   const out = await prepareCutouts("p1", [plain, video, photo], (f) => seen.push(f));
-  expect([...out]).toEqual([["a", `${DIR}/abc-c1-3000-11000.mov`], ["ph", `${DIR}/p-c1-photo.png`]]);
-  expect(ensure.mock.calls.map((c) => c[1].name)).toEqual(["abc-c1-3000-11000.mov", "p-c1-photo.png"]);
+  expect([...out]).toEqual([["a", `${DIR}/abc-c1-2000-12000.mov`], ["ph", `${DIR}/p-c1-photo.png`]]);
+  expect(ensure.mock.calls.map((c) => c[1].name)).toEqual(["abc-c1-2000-12000.mov", "p-c1-photo.png"]);
   expect(seen).toEqual([0.5, 1]);
 });
 
 test("prepareCutouts: a copy on disk that covers a clip is used, and a copy made for one clip serves the next", async () => {
-  jest.mocked(expoFs.list).mockResolvedValueOnce(["abc-c1-0-30000.mov", "part-abc-c1-3000-11000.mov", "notes.txt"]);
+  jest.mocked(expoFs.list).mockResolvedValueOnce(["abc-c1-0-30000.mov", "part-abc-c1-2000-12000.mov", "notes.txt"]);
   const out = await prepareCutouts("p1", [video, half], () => {});
   expect(ensure.mock.calls.map((c) => c[1].name)).toEqual(["abc-c1-0-30000.mov", "abc-c1-0-30000.mov"]);
   expect(out.get("b")).toBe(`${DIR}/abc-c1-0-30000.mov`);
@@ -56,7 +57,7 @@ test("prepareCutouts: a copy on disk that covers a clip is used, and a copy made
   ensure.mockImplementation(async (_p, need) => `${DIR}/${need.name}`);
   const wide = makeClip({ id: "w", sourceDuration: 30, sourceUri: `${MEDIA}/abc.mov`, trimStart: 4, trimEnd: 12, cutout: true });
   await prepareCutouts("p1", [wide, video], () => {});
-  expect(ensure.mock.calls.map((c) => c[1].name)).toEqual(["abc-c1-3000-13000.mov", "abc-c1-3000-13000.mov"]);     // the second clip is inside the first one's copy
+  expect(ensure.mock.calls.map((c) => c[1].name)).toEqual(["abc-c1-2000-14000.mov", "abc-c1-2000-14000.mov"]);     // the second clip is inside the first one's copy
 });
 
 test("prepareCutouts: a clip over the limit, no person, and any other failure stop the export with a plain reason", async () => {
@@ -80,7 +81,7 @@ test("prepareCutouts: once stopped it asks for nothing more and reports nothing 
 });
 
 describe("withCutout: what the export is sent", () => {
-  const COPY = `${DIR}/abc-c1-3000-11000.mov`;
+  const COPY = `${DIR}/abc-c1-2000-12000.mov`;
 
   test("no copy, or the switch off: the clip is sent as it is (the same object)", () => {
     const sent = toExportClip(video);
@@ -120,8 +121,8 @@ describe("the export asks for the copies the editor holds", () => {
       {},
       { "abc-c1-0-30000.mov": ready("abc-c1-0-30000.mov") },
       { "abc-c1-0-30000.mov": { status: "busy", progress: 0.4 } },
-      { "abc-c1-0-30000.mov": ready("abc-c1-0-30000.mov"), "abc-c1-3000-11000.mov": { status: "busy", progress: 0.1 } },
-      { "abc-c1-3000-11000.mov": { status: "failed", message: "cutout writer: boom" } },
+      { "abc-c1-0-30000.mov": ready("abc-c1-0-30000.mov"), "abc-c1-2000-12000.mov": { status: "busy", progress: 0.1 } },
+      { "abc-c1-2000-12000.mov": { status: "failed", message: "cutout writer: boom" } },
     ];
     for (const files of stores) {
       ensure.mockClear();
@@ -133,7 +134,7 @@ describe("the export asks for the copies the editor holds", () => {
   });
 
   test("a clip that shows a ready copy is not moved to a smaller one that is still being made", async () => {
-    useCutoutFiles.setState({ files: { "abc-c1-0-30000.mov": ready("abc-c1-0-30000.mov"), "abc-c1-3000-11000.mov": { status: "busy", progress: 0.1 } } });
+    useCutoutFiles.setState({ files: { "abc-c1-0-30000.mov": ready("abc-c1-0-30000.mov"), "abc-c1-2000-12000.mov": { status: "busy", progress: 0.1 } } });
     const out = await prepareCutouts("p1", [video], () => {});
     expect(out.get("a")).toBe(`${DIR}/abc-c1-0-30000.mov`);
   });
@@ -151,13 +152,13 @@ describe("the export asks for the copies the editor holds", () => {
     const seen: number[] = [];
     ensure.mockImplementationOnce(async (_p, _need, onProgress) => {
       onProgress?.(0.8);
-      useCutoutFiles.setState({ files: { "abc-c1-3000-13000.mov": { status: "busy", progress: 0 } } });
+      useCutoutFiles.setState({ files: { "abc-c1-2000-14000.mov": { status: "busy", progress: 0 } } });
       throw cancelled();
     });
     ensure.mockImplementationOnce(async (_p, need, onProgress) => { onProgress?.(0.2); onProgress?.(0.9); return `${DIR}/${need.name}`; });
     const out = await prepareCutouts("p1", [video], (f) => seen.push(f));
-    expect(ensure.mock.calls.map((c) => c[1].name)).toEqual(["abc-c1-3000-11000.mov", "abc-c1-3000-13000.mov"]);
-    expect(out.get("a")).toBe(`${DIR}/abc-c1-3000-13000.mov`);
+    expect(ensure.mock.calls.map((c) => c[1].name)).toEqual(["abc-c1-2000-12000.mov", "abc-c1-2000-14000.mov"]);
+    expect(out.get("a")).toBe(`${DIR}/abc-c1-2000-14000.mov`);
     expect(seen).toEqual([0.8, 0.9, 1]);
   });
 
@@ -177,7 +178,7 @@ describe("the export asks for the copies the editor holds", () => {
   test("a folder that cannot be read counts as empty", async () => {
     jest.mocked(expoFs.list).mockRejectedValueOnce(new Error("no folder"));
     await prepareCutouts("p1", [wide], () => {});
-    expect(ensure.mock.calls.map((c) => c[1].name)).toEqual(["abc-c1-3000-13000.mov"]);
+    expect(ensure.mock.calls.map((c) => c[1].name)).toEqual(["abc-c1-2000-14000.mov"]);
   });
 
   test("a clip whose switch is stored but that plays backwards has no copy and stops nothing", async () => {
@@ -199,6 +200,8 @@ describe("withCutout: the copy keeps the source's own times and is its own way u
     ["speed 2", makeClip({ ...base, id: "t2", trimStart: 12.25, trimEnd: 20, speed: 2 })],
     ["a speed curve", curved],
     ["the whole file", makeClip({ ...base, id: "t4", sourceDuration: 7.4 })],
+    ["speed 4 with a transition after it", { ...makeClip({ ...base, id: "t5", trimStart: 12.25, trimEnd: 20, speed: 4 }), transitionOut: { type: "dissolve" as const, duration: 1 } }],
+    ["speed 4 at the file's very end", makeClip({ ...base, id: "t6", trimStart: 22, trimEnd: 30, speed: 4 })],
   ])("%s", async (_name, clip) => {
     const out = await prepareCutouts("p1", [clip], () => {});
     const uri = out.get(clip.id) ?? "";
@@ -209,7 +212,20 @@ describe("withCutout: the copy keeps the source's own times and is its own way u
     expect(held).not.toBeNull();
     expect(held?.from).toBeLessThanOrEqual(cut.trimStart);
     expect(held?.to).toBeGreaterThanOrEqual(cut.trimEnd);
+    // … and so does the handle of a transition into or out of the clip (I1): half the longest transition at the clip's edge speed,
+    // which the export reads BEFORE trimStart / AFTER trimEnd, stopping only at the file's own ends.
+    const { head, tail } = transitionHandles(clip);
+    expect(held?.from).toBeLessThanOrEqual(Math.max(0, cut.trimStart - head));
+    expect(held?.to).toBeGreaterThanOrEqual(Math.min(clip.sourceDuration, cut.trimEnd + tail));
     expect(JSON.stringify(cut.speedSpans)).toBe(JSON.stringify(sent.speedSpans));
+  });
+  test("a copy that only contains the trim is not what a clip with a transition is sent from (I1)", async () => {
+    // The copy 3 – 11 was made for the trim 4.2 – 9.7; the clip was then trimmed outwards to the copy's very start.
+    const out3 = makeClip({ ...base, id: "o", trimStart: 3, trimEnd: 9.7 });
+    jest.mocked(expoFs.list).mockResolvedValueOnce(["abc-c1-3000-11000.mov"]);
+    const made = await prepareCutouts("p1", [out3], () => {});
+    expect(made.get("o")).toBe(`${DIR}/abc-c1-1000-12000.mov`);
+    expect(ensure.mock.calls.map((c) => [c[1].from, c[1].to])).toEqual([[1, 12]]);
   });
   test("the curve in that table really is one", () => { expect(toExportClip(curved).speedSpans.length).toBeGreaterThan(1); });
 
@@ -236,7 +252,7 @@ describe("withCutout: the copy keeps the source's own times and is its own way u
 
   test("a main clip whose opacity is not a number still gets its background (the export would count it as 1)", () => {
     const odd = { ...toExportClip(video), opacity: NaN };
-    expect(withCutout(odd, video, `${DIR}/abc-c1-3000-11000.mov`, true).opacity).toBe(0.999);
-    expect(withCutout(odd, video, `${DIR}/abc-c1-3000-11000.mov`, false).opacity).toBeNaN();
+    expect(withCutout(odd, video, `${DIR}/abc-c1-2000-12000.mov`, true).opacity).toBe(0.999);
+    expect(withCutout(odd, video, `${DIR}/abc-c1-2000-12000.mov`, false).opacity).toBeNaN();
   });
 });

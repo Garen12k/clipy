@@ -1,3 +1,4 @@
+import { transitionHandles } from "./timeline";
 import { activeCutout, isPhoto, type Clip, type Project } from "./types";
 
 /**
@@ -7,20 +8,24 @@ import { activeCutout, isPhoto, type Clip, type Project } from "./types";
  */
 export const CUTOUT_VERSION = 1;
 /**
- * `maxSeconds`: the longest trimmed source range a video may have. `pad`: seconds rendered each side of the trim. `videoMaxSide` /
+ * `maxSeconds`: the longest trimmed source range a video may have. `pad`: seconds rendered each side of the trim — whole, and never
+ * less than the longest transition handle the export reads outside a trim (`TRANSITION_HANDLE_MAX`, timeline.ts). `videoMaxSide` /
  * `photoMaxSide`: the copy's long side, at most. `minFrameGap`: a frame closer than this to the last kept one is left out (about
  * 30 a second). `minPerson`: the share of the picture the people mask must cover in at least one measured frame. `alphaQuality`:
  * the see-through layer's quality (0 … 1). `bitsPerPixel`: the colour bitrate, per pixel and frame at 30 a second. `stillSeconds`:
  * the length of a photo's still movie. `exportOpacity`: a main clip's opacity is capped at this in the export so the compositor
  * draws the clip's background behind the see-through picture.
  */
-export const CUTOUT = { maxSeconds: 60, pad: 1, videoMaxSide: 1920, photoMaxSide: 2560, minFrameGap: 0.03, minPerson: 0.005, alphaQuality: 0.75, bitsPerPixel: 0.1, stillSeconds: 60, exportOpacity: 0.999 } as const;
+export const CUTOUT = { maxSeconds: 60, pad: 2, videoMaxSide: 1920, photoMaxSide: 2560, minFrameGap: 0.03, minPerson: 0.005, alphaQuality: 0.75, bitsPerPixel: 0.1, stillSeconds: 60, exportOpacity: 0.999 } as const;
 /** Whether the preview shows a VIDEO's cut-out (a photo's always shows): off = that kind plays its original and the Preview tag shows. */
 export const CUTOUT_PREVIEW = { layerVideo: true, mainVideo: true };
 
 const EPS = 1e-6;
 const SAFE_STEM = "[A-Za-z0-9_-]+";
 const WHOLE = "(0|[1-9][0-9]{0,15})";
+/** A finished copy's name, as `cutoutFileName` writes it (built once: `parseCutoutName` runs on every playhead tick). */
+const PHOTO_NAME = new RegExp(`^(${SAFE_STEM})-c${CUTOUT_VERSION}-photo\\.png$`);
+const VIDEO_NAME = new RegExp(`^(${SAFE_STEM})-c${CUTOUT_VERSION}-${WHOLE}-${WHOLE}\\.mov$`);
 /** The longest a stem's own text may be before it is cut (a check of the whole name is added, so two long names stay apart). */
 const STEM_MAX = 80;
 const num = (v: unknown, fallback: number): number => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
@@ -55,7 +60,11 @@ function sourceSpan(c: Pick<Clip, "trimStart" | "trimEnd" | "sourceDuration">): 
   return { start, end };
 }
 
-/** The source seconds a new copy of this clip would hold: its trim plus `pad` each side, on whole seconds, inside the file. Always at least a second. */
+/**
+ * The source seconds a new copy of this clip would hold: its trim plus `pad` each side, on whole seconds, inside the file. Always at
+ * least a second. The pad is the same at every speed (a copy's name never changes with the clip's speed) and is never less than a
+ * transition handle, so the copy planned for a clip always covers it (`coveringCopy`).
+ */
 export function cutoutRange(c: Pick<Clip, "trimStart" | "trimEnd" | "sourceDuration">): { from: number; to: number } {
   const { start, end } = sourceSpan(c);
   const fileEnd = num(c.sourceDuration, 0) > 0 ? Math.ceil(c.sourceDuration) : Infinity;
@@ -83,9 +92,9 @@ export const cutoutStillName = (pngName: string): string => String(pngName).repl
 export function parseCutoutName(name: string): { stem: string; photo: boolean; from: number; to: number } | null {
   const text = String(name);
   if (text.startsWith("part-")) return null;
-  const photo = new RegExp(`^(${SAFE_STEM})-c${CUTOUT_VERSION}-photo\\.png$`).exec(text);
+  const photo = PHOTO_NAME.exec(text);
   if (photo) return { stem: photo[1], photo: true, from: 0, to: 0 };
-  const video = new RegExp(`^(${SAFE_STEM})-c${CUTOUT_VERSION}-${WHOLE}-${WHOLE}\\.mov$`).exec(text);
+  const video = VIDEO_NAME.exec(text);
   if (!video) return null;
   const from = Number(video[2]), to = Number(video[3]);
   if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || to <= from) return null;
@@ -93,9 +102,12 @@ export function parseCutoutName(name: string): { stem: string; photo: boolean; f
 }
 
 /**
- * The known copy this clip can use: a photo's own; for a video the SMALLEST copy of its file whose range contains the clip's trim
- * (of two as long as each other, the earlier: the order of `known` never decides). null when there is none. So a clip trimmed
- * INWARDS, or split, keeps its copy, and one trimmed OUTWARDS past either end of it has none until a new copy is made.
+ * The known copy this clip can use: a photo's own; for a video the SMALLEST copy of its file whose range holds everything an export
+ * can read for the clip — its trim AND the transition handle each side of it (`transitionHandles`: half a second of output at the
+ * clip's edge speed, up to `pad` seconds of source; the file's own ends need nothing beyond them). A copy that only contained the
+ * trim would have nothing where a transition into the clip begins, and the transition would start late with a jump. Of two as long
+ * as each other, the earlier: the order of `known` never decides. null when there is none. So a clip trimmed INWARDS, or split,
+ * keeps its copy, and one trimmed OUTWARDS (or sped up) until a handle passes either end of it has none until a new copy is made.
  */
 export function coveringCopy(known: readonly string[], c: Clip): string | null {
   if (isPhoto(c)) {
@@ -104,10 +116,13 @@ export function coveringCopy(known: readonly string[], c: Clip): string | null {
   }
   const stem = stemOf(c.sourceUri);
   const { start, end } = sourceSpan(c);
+  const handles = transitionHandles(c);
+  const first = Math.max(0, start - handles.head);
+  const last = Math.min(num(c.sourceDuration, 0) > 0 ? c.sourceDuration : Infinity, end + handles.tail);
   let best: { name: string; from: number; length: number } | null = null;
   for (const name of known) {
     const copy = parseCutoutName(name);
-    if (!copy || copy.photo || copy.stem !== stem || copy.from > start + EPS || copy.to < end - EPS) continue;
+    if (!copy || copy.photo || copy.stem !== stem || copy.from > first + EPS || copy.to < last - EPS) continue;
     const length = copy.to - copy.from;
     if (best === null || length < best.length || (length === best.length && copy.from < best.from)) best = { name, from: copy.from, length };
   }
