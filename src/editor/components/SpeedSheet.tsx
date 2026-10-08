@@ -1,10 +1,11 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Switch, View } from "react-native";
 import { SPEED_CURVES } from "@/src/editor/effects";
 import { formatSpeed } from "@/src/lib/format";
 import { forClips, mainClipIds, setClipSpeed, setClipSpeedCurve } from "@/src/editor/model/ops";
-import { clipDuration, curveProfile, isSmoothCurve } from "@/src/editor/model/timeline";
+import { clipDuration, curveProfile, isSlowed, isSmoothCurve } from "@/src/editor/model/timeline";
 import { SPEED_CURVE_IDS, SPEED_LIMITS, type Clip, type Project, type SpeedCurveId } from "@/src/editor/model/types";
+import { holdSteady } from "@/src/editor/steadyRenders";
 import { useEditorStore } from "@/src/editor/store";
 import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
@@ -15,10 +16,11 @@ import { Body } from "@/src/ui/Text";
 import { Tile, TILE_WIDTH } from "@/src/ui/Tile";
 import { useToast } from "@/src/ui/Toast";
 import { STRIP, StripNote, StripSlider, StripTiles, ToolStrip, tilesStartX } from "@/src/ui/ToolStrip";
+import { SmoothStatus, SmoothSwitch } from "./SmoothSlowSection";
 
 const PRESETS = [0.25, 0.5, 1, 1.5, 2, 4];
 
-type Tab = "normal" | "curve";
+type Tab = "normal" | "curve" | "slow";
 const TABS: { id: Tab; label: string }[] = [{ id: "normal", label: "Normal" }, { id: "curve", label: "Curve" }];
 
 /** A speed chip is about this wide (its text varies a little); only used to start the row near the selected one. */
@@ -79,6 +81,7 @@ const SMOOTH_REFUSED = { one: "This clip is too short for a smooth curve.", many
  * too short); `clipId` is the clip whose values are shown.
  * The Curve tab's Smooth switch chooses the form a preset is written in — a gradual ramp (32 steps) or the eight steps of before; a
  * stored curve is never rewritten by opening the strip.
+ * A third tab, Slow motion, is there while one slowed clip is shown: its switch (Smooth slow motion, SmoothSlowSection.tsx) is about the picture, not about the curve's form.
  */
 export function SpeedSheet({ clipId, clipIds, visible, onClose }: { clipId: string | null; clipIds?: string[]; visible: boolean; onClose: () => void }) {
   const clip = useItemClip(clipId);
@@ -98,6 +101,22 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
   // True from the slider's drag start to its end (two renders per drag, none per frame): the preset chips' ring follows the live
   // speed, and their lift must not spring while the slider is dragged.
   const [dragging, setDragging] = useState(false);
+  // Slow motion: a third tab, there only while the clip is slowed (any stretch under 1×), plays forwards (a reversed clip has no
+  // copy, and `setClipSmooth` refuses it without a word) and one clip is shown. A clip that stops
+  // being slowed while its tab is open (an undo, a pick on another tab cannot do it) falls back to Normal — for good (adjusted
+  // while rendering, no effect): were only the shown tab worked out, the Speed slider slowing the clip again would bring the
+  // Slow motion tab back and take the slider from under the finger.
+  const slowTab = !clipIds && !clip.reversed && isSlowed(clip);
+  if (tab === "slow" && !slowTab) setTab("normal");
+  const shown: Tab = tab === "slow" && !slowTab ? "normal" : tab;
+  // Whether the Speed slider holds the steady copies' queue right now (a ref: nothing is drawn from it). A Smooth slow motion
+  // clip's copy changes its name when the speed crosses 0.5×, and no copy may start while a finger rests in the middle of a drag.
+  const held = useRef(false);
+  const release = () => { if (!held.current) return; held.current = false; holdSteady(false); };
+  // The slider can go while it is held (another tab, the strip closed, the selection changed, the clip removed, the editor left):
+  // slide complete never comes then, and the queue must not stay held.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => release, [shown]);
   const sliderTint = curveId ? theme.colors.textMuted : theme.colors.accent;
   /** One clip op on the shown clip, or on every clip of the multi-selection (one project out, so one undo step). */
   const write = (p: Project, op: (p: Project, id: string) => Project) => (clipIds ? forClips(p, clipIds, op) : op(p, clip.id));
@@ -159,14 +178,14 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
   };
 
   // While the curve warning shows it takes the header's room (two lines), so the clip length steps aside.
-  const warn = tab === "normal" && curveId !== null;
+  const warn = shown === "normal" && curveId !== null;
   // Where the row starts: the selected chip or tile in view. Worked out when the strip opens (this body is mounted per opening and
   // per clip) and for another tab (the row is keyed to the tab) — NOT on every pick, and not when Smooth is switched: a
   // ScrollView applies a changed contentOffset at once, and the row must not move under the finger.
   const startX = useMemo(
-    () => (tab === "normal" ? tilesStartX(PRESETS.findIndex((s) => !curveId && clip.speed === s), PRESET_WIDTH) : tilesStartX(curveId ? SPEED_CURVE_IDS.indexOf(curveId) + 1 : 0, TILE_WIDTH)),
+    () => (shown === "normal" ? tilesStartX(PRESETS.findIndex((s) => !curveId && clip.speed === s), PRESET_WIDTH) : shown === "curve" ? tilesStartX(curveId ? SPEED_CURVE_IDS.indexOf(curveId) + 1 : 0, TILE_WIDTH) : 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tab],
+    [shown],
   );
 
   const profiles = smooth ? PROFILES.smooth : PROFILES.stepped;
@@ -175,32 +194,39 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
     <ToolStrip visible onClose={onClose} title={title}
       note={<>
         {warn ? null : <StripNote>Clip length {clipDuration(clip).toFixed(1)} s</StripNote>}
-        {tab === "normal" ? <StripNote lines={warn ? 2 : 1}>{curveId ? "A curve is active — moving this slider removes it." : "Audio keeps its pitch in the exported video."}</StripNote> : null}
-        {tab === "curve" && smooth ? <StripNote>{SMOOTH_HINT}</StripNote> : null}
+        {shown === "normal" ? <StripNote lines={warn ? 2 : 1}>{curveId ? "A curve is active — moving this slider removes it." : "Audio keeps its pitch in the exported video."}</StripNote> : null}
+        {shown === "curve" && smooth ? <StripNote>{SMOOTH_HINT}</StripNote> : null}
       </>}>
-      <StripTiles key={tab} initialX={startX} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
-        {tab === "normal" ? (
+      <StripTiles key={shown} initialX={startX} lead={<>
+        {TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={shown === t.id} onPress={() => setTab(t.id)} />)}
+        {slowTab ? <Chip compact key="slow" label="Slow motion" selected={shown === "slow"} onPress={() => setTab("slow")} /> : null}
+      </>}>
+        {shown === "normal" ? (
           PRESETS.map((s) => <Chip key={s} still={dragging} label={formatSpeed(s)} selected={!curveId && clip.speed === s} onPress={() => pickSpeed(s)} />)
-        ) : (
+        ) : shown === "curve" ? (
           <>
             <CurveTile id="none" label="None" speeds={null} thin={false} selected={curveId === null} onPress={() => pickCurve(null)} />
             {SPEED_CURVE_IDS.map((id) => <CurveTile key={id} id={id} label={SPEED_CURVES[id].label} speeds={profiles[id] ?? null} thin={smooth} selected={curveId === id} onPress={() => pickCurve(id)} />)}
           </>
+        ) : (
+          <SmoothSwitch clip={clip} />
         )}
       </StripTiles>
-      {tab === "normal" ? (
+      {shown === "normal" ? (
         <StripSlider label={curveId ? "Speed" : "Current speed:"} value={curveId ? undefined : formatSpeed(clip.speed)}>
           {/* With a curve the clip's constant speed is 1, so the slider rests at 1× (muted); setClipSpeed clears the curve. */}
           <Slider testID="speed-slider" minimumValue={SPEED_LIMITS[0]} maximumValue={SPEED_LIMITS[1]} step={0.05} value={clip.speed}
-            onSlidingStart={() => { setDragging(true); beginTransaction(); }} onValueChange={(v) => applyTransient((p) => write(p, (q, cid) => setClipSpeed(q, cid, v)))}
-            onSlidingComplete={() => setDragging(false)}
+            onSlidingStart={() => { holdSteady(true); held.current = true; setDragging(true); beginTransaction(); }} onValueChange={(v) => applyTransient((p) => write(p, (q, cid) => setClipSpeed(q, cid, v)))}
+            onSlidingComplete={() => { setDragging(false); release(); }}
             minimumTrackTintColor={sliderTint} thumbTintColor={sliderTint} detents={REST} />
         </StripSlider>
-      ) : (
+      ) : shown === "curve" ? (
         <View testID="speed-smooth-row" style={{ height: STRIP.slider, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.gutter }}>
           <Body style={{ fontSize: theme.type.small }}>Smooth</Body>
           <Switch accessibilityLabel="Smooth" value={smooth} onValueChange={toggleSmooth} trackColor={{ true: theme.colors.accent }} />
         </View>
+      ) : (
+        <SmoothStatus clip={clip} />
       )}
     </ToolStrip>
   );

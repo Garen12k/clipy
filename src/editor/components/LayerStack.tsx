@@ -2,8 +2,10 @@ import { useMemo } from "react";
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { shownCutout, useCutoutFiles } from "@/src/editor/cutoutFiles";
 import { CUTOUT_PREVIEW } from "@/src/editor/model/cutout";
+import { STEADY_PREVIEW } from "@/src/editor/model/steady";
 import { itemOffsetAt, layersAt } from "@/src/editor/model/timeline";
 import { isPhoto, type LayerClip } from "@/src/editor/model/types";
+import { shownSteady, useSteadyFiles } from "@/src/editor/steadyFiles";
 import { useEditorStore } from "@/src/editor/store";
 import { AdjustLayer } from "./AdjustLayer";
 import { ClipFrame, clipFrameMotion } from "./ClipFrame";
@@ -20,7 +22,10 @@ const fill = { position: "absolute" as const, left: 0, top: 0, right: 0, bottom:
  */
 function LayerPicture({ layer, offset }: { layer: LayerClip; offset: number }) {
   const cut = useCutoutFiles((s) => (CUTOUT_PREVIEW.layerVideo ? shownCutout(s.files, layer) : null));
-  const played = useMemo(() => (cut !== null ? { ...layer, sourceUri: cut } : layer), [layer, cut]);
+  // Stabilize / Smooth slow motion: the layer's steady copy, the same way (a layer has one or the other, never both).
+  const steady = useSteadyFiles((s) => (STEADY_PREVIEW.layerVideo ? shownSteady(s.files, layer) : null));
+  const shown = cut ?? steady;
+  const played = useMemo(() => (shown !== null ? { ...layer, sourceUri: shown } : layer), [layer, shown]);
   return <LayerVideo layer={played} offset={offset} />;
 }
 

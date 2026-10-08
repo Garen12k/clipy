@@ -110,9 +110,29 @@ public class ClipyVideoModule: Module {
     return cutoutJobs[id]
   }
 
+  private let steadyLock = NSLock()
+  private var steadyJobs: [String: SteadyJob] = [:]   // guarded by `steadyLock`; one entry per measuring or render that has not answered yet
+
+  private func storeSteadyJob(_ id: String, _ job: SteadyJob) {
+    steadyLock.lock(); defer { steadyLock.unlock() }
+    steadyJobs[id] = job
+  }
+
+  /// Removes `job` — only if it is still the one stored under `id`: a copy's measuring and its render share an id,
+  /// and the render may be stored before the measuring's task has let go.
+  private func dropSteadyJob(_ id: String, _ job: SteadyJob) {
+    steadyLock.lock(); defer { steadyLock.unlock() }
+    if steadyJobs[id] === job { steadyJobs[id] = nil }
+  }
+
+  private func lookupSteadyJob(_ id: String) -> SteadyJob? {
+    steadyLock.lock(); defer { steadyLock.unlock() }
+    return steadyJobs[id]
+  }
+
   public func definition() -> ModuleDefinition {
     Name("ClipyVideo")
-    Events("onExportEvent", "onSoundEvent", "onCutoutEvent")
+    Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent")
 
     // Phase 0 smoke test: proves the Swift module is linked and callable.
     Function("hello") { () -> String in
@@ -363,6 +383,72 @@ public class ClipyVideoModule: Module {
     // Stops that render at its next pass (it then rejects "E_CUTOUT_CANCELLED"). An unknown or finished job: nothing.
     Function("cancelCutout") { (jobId: String) in
       self.lookupCutoutJob(jobId)?.cancel()
+    }
+
+    // Stabilize, first half: how far each frame of the asked range moved against the frame before it (see
+    // SteadyRender.measure). Resolves `{ times, dx, dy, frames, failed }`; progress arrives as
+    // `onSteadyEvent { jobId, progress }`. Rejects "E_STEADY_CANCELLED" after `cancelSteady(jobId)`, else "E_STEADY"
+    // with a staged message. The work runs on a Swift concurrency thread; the job is stored before it starts, and
+    // every way out of the `do` answers the promise exactly once. One heavy render at a time, cut-outs included: a
+    // second one waits in `enter` (and still answers a cancel there); the gate is given back on every way out after
+    // it was taken. The source (and so its asset) lives until the measuring has returned.
+    AsyncFunction("measureShake") { (request: ShakeRequest, promise: Promise) in
+      let job = SteadyJob()
+      let jobId = request.jobId
+      self.storeSteadyJob(jobId, job)
+      Task { [weak self] in
+        defer { self?.dropSteadyJob(jobId, job) }
+        do {
+          try await SteadyRender.enter(job)
+          defer { CutoutRender.leave() }
+          let source = try await SteadySource.open(request.sourceUri)
+          var lastSent = -1.0
+          let answer: [String: Any] = try SteadyRender.measure(request, source: source, job: job, progress: { (fraction: Double) -> Void in
+            guard fraction - lastSent >= 0.01 else { return }   // at most one event a percent
+            lastSent = fraction
+            self?.sendEvent("onSteadyEvent", ["jobId": jobId, "progress": fraction])
+          })
+          promise.resolve(answer)
+        } catch SteadyError.cancelled {
+          promise.reject("E_STEADY_CANCELLED", "Steady cancelled")
+        } catch {
+          promise.reject("E_STEADY", SteadyRender.message(error))
+        }
+      }
+    }
+
+    // Stabilize, second half, and Smooth slow motion: writes the copy the request names (see SteadyRender.render).
+    // Resolves `{ fileUri, seconds, frames }`; progress, rejections, the gate and the job store as for `measureShake`.
+    AsyncFunction("renderSteady") { (request: SteadyRequest, promise: Promise) in
+      let job = SteadyJob()
+      let jobId = request.jobId
+      self.storeSteadyJob(jobId, job)
+      Task { [weak self] in
+        defer { self?.dropSteadyJob(jobId, job) }
+        do {
+          guard let outputURL = ExportSession.fileURL(from: request.outputPath) else { throw SteadyError.failed("steady output: not a file path") }
+          try await SteadyRender.enter(job)
+          defer { CutoutRender.leave() }
+          let source = try await SteadySource.open(request.sourceUri)
+          var lastSent = -1.0
+          let answer: [String: Any] = try await SteadyRender.render(request, source: source, to: outputURL, job: job, progress: { (fraction: Double) -> Void in
+            guard fraction - lastSent >= 0.01 else { return }   // at most one event a percent
+            lastSent = fraction
+            self?.sendEvent("onSteadyEvent", ["jobId": jobId, "progress": fraction])
+          })
+          promise.resolve(answer)
+        } catch SteadyError.cancelled {
+          promise.reject("E_STEADY_CANCELLED", "Steady cancelled")
+        } catch {
+          promise.reject("E_STEADY", SteadyRender.message(error))
+        }
+      }
+    }
+
+    // Stops the measuring or the render stored under that id at its next pass (it then rejects
+    // "E_STEADY_CANCELLED"). An unknown or finished job: nothing.
+    Function("cancelSteady") { (jobId: String) in
+      self.lookupSteadyJob(jobId)?.cancel()
     }
   }
 }

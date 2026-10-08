@@ -4,6 +4,7 @@ import { cutoutFileOf, cutoutNeedOf, useCutoutFiles, type CutoutFile } from "@/s
 import { isNoPerson, retryCutout } from "@/src/editor/cutoutRenders";
 import { cutoutBytes, cutoutRefusal, type CutoutRefusal } from "@/src/editor/model/cutout";
 import { setClipCutout } from "@/src/editor/model/ops";
+import { steadyOf } from "@/src/editor/model/steady";
 import { isPhoto, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useItemClip } from "@/src/editor/useItem";
@@ -19,6 +20,8 @@ import { STRIP, StripNote, ToolStrip } from "@/src/ui/ToolStrip";
 export const CUTOUT_TOO_LONG = "Remove background works on clips up to 60 seconds. Trim or split this clip first.";
 /** Said in the strip for a switched-on clip whose own file is gone: its copy is never made. */
 export const CUTOUT_FILE_MISSING = "The file of this clip is missing.";
+/** Said where the switch is tapped on a clip that has a Stabilize strength or an active Smooth slow motion: one copy per clip. */
+export const CUTOUT_WITH_STEADY = "Remove background does not work together with Stabilize or Smooth slow motion. Switch those off for this clip first.";
 const HINT = "The phone finds the person and hides everything else.";
 const PREPARING = "Preparing the cut-out";
 
@@ -68,6 +71,7 @@ export function CutoutSheet({ clipId, visible, onClose }: { clipId: string | nul
     if (next === on) return;
     if (!next) { apply((p) => setClipCutout(p, clip.id, false)); return; }
     if (!isCutoutAvailable()) { useToast.getState().show(BEATS_BACKGROUND_TOOLS); return; }
+    if (steadyOf(clip) !== null) { useToast.getState().show(CUTOUT_WITH_STEADY); return; }
     const refusal = cutoutRefusal(clip);
     if (refusal === "tooLong") { useToast.getState().show(CUTOUT_TOO_LONG); return; }
     if (refusal !== null) return;

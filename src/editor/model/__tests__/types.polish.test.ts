@@ -1,12 +1,12 @@
 import { clampCover, clampCoverTitle, clampExportSettings, COVER_LIMITS, DEFAULT_EXPORT_SETTINGS, EXPORT_FPS, EXPORT_QUALITIES, makeProject, SCHEMA_VERSION } from "../types";
 
-test("schema is v20 and a new project has the polish defaults", () => {
-  expect(SCHEMA_VERSION).toBe(20);
+test("schema is v21 and a new project has the polish defaults", () => {
+  expect(SCHEMA_VERSION).toBe(21);
   expect(EXPORT_FPS).toEqual([24, 30, 60]);
   expect(EXPORT_QUALITIES).toEqual(["high", "small"]);
   expect(COVER_LIMITS.titleMax).toBe(40);
   const p = makeProject();
-  expect(p).toMatchObject({ schemaVersion: 20, exportSettings: { fps: 30, quality: "high" }, cover: null });
+  expect(p).toMatchObject({ schemaVersion: 21, exportSettings: { fps: 30, quality: "high" }, cover: null });
   expect(p.exportSettings).not.toBe(DEFAULT_EXPORT_SETTINGS);   // its own object
 });
 

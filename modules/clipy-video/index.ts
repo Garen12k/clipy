@@ -204,6 +204,33 @@ export interface CutoutResult { fileUri: string; seconds: number; frames: number
 export type CutoutEvent = { jobId: string; progress: number };
 /** The code a cancelled cut-out render rejects with. */
 export const CUTOUT_CANCELLED = "E_CUTOUT_CANCELLED";
+/** One measuring for Stabilize: the source seconds to read, how close two measured frames may be, and the long side of the picture Vision is shown. */
+export interface ShakeRequest {
+  jobId: string; sourceUri: string; from: number; to: number;
+  minFrameGap: number; measureSide: number;
+}
+/**
+ * Per measured frame, in order: its source second and how far Vision says it must move to sit on the frame before it, as fractions
+ * of the picture's width (`dx`) and height (`dy`), exactly as Vision reported them (`steadyShifts` in steadyPath.ts decides what
+ * they mean). `failed` = frames Vision could not place (reported as 0, 0).
+ */
+export interface ShakeResult { times: number[]; dx: number[]; dy: number[]; frames: number; failed: number }
+/**
+ * One steadied and / or filled copy (the numbers are `STEADY` / `SMOOTH` in src/editor/model/steady.ts): the source range `from` …
+ * `to` written to `outputPath`, a .mov with the source's timing and sound. `times` / `dx` / `dy`: the correction of each frame
+ * (fractions of the picture; empty = none), `zoom` the fixed zoom. `grid`: 0 = the source's own frames; above 0 = that many frames
+ * per source second, the ones in between blended.
+ */
+export interface SteadyRequest {
+  jobId: string; sourceUri: string; outputPath: string; from: number; to: number;
+  maxSide: number; minFrameGap: number; grid: number; zoom: number;
+  times: number[]; dx: number[]; dy: number[];
+  bitRate: number; blendFloor: number;
+}
+export interface SteadyResult { fileUri: string; seconds: number; frames: number }
+export type SteadyEvent = { jobId: string; progress: number };
+/** The code a cancelled measuring or steady render rejects with. */
+export const STEADY_CANCELLED = "E_STEADY_CANCELLED";
 /** The code a cancelled render rejects with. */
 export const SOUND_CANCELLED = "E_SOUND_CANCELLED";
 
@@ -228,6 +255,10 @@ type ClipyVideoNative = {
   addListener(eventName: "onCutoutEvent", listener: (e: CutoutEvent) => void): EventSubscription;
   renderCutout(req: CutoutRequest): Promise<CutoutResult>;
   cancelCutout(jobId: string): void;
+  addListener(eventName: "onSteadyEvent", listener: (e: SteadyEvent) => void): EventSubscription;
+  measureShake(req: ShakeRequest): Promise<ShakeResult>;
+  renderSteady(req: SteadyRequest): Promise<SteadyResult>;
+  cancelSteady(jobId: string): void;
 };
 
 const NO_SOUND = "This build of the app has no sound tools yet. Install a newer development build.";
@@ -304,3 +335,18 @@ export function cancelCutout(jobId: string): void { batchNative("cancelCutout").
 export function addCutoutListener(cb: (e: CutoutEvent) => void): EventSubscription { return native().addListener("onCutoutEvent", cb); }
 /** True for the rejection of a cut-out render that was cancelled (`cancelCutout`). */
 export function isCutoutCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === CUTOUT_CANCELLED; }
+
+/** The module for a call that came with the build of 2026-10-10: missing = not linked (Expo Go); present but without the function = an older build. */
+function steadyNative(fn: "measureShake" | "renderSteady" | "cancelSteady"): ClipyVideoNative {
+  const m = native();
+  if (typeof m[fn] !== "function") throw new Error(NOT_IN_BUILD);
+  return m;
+}
+/** Whether the linked native module can stabilize and smooth slow motion: false in Expo Go and in a build made before this. */
+export function isSteadyAvailable(): boolean { return typeof optional()?.renderSteady === "function"; }
+export function measureShake(req: ShakeRequest): Promise<ShakeResult> { return steadyNative("measureShake").measureShake(req); }
+export function renderSteady(req: SteadyRequest): Promise<SteadyResult> { return steadyNative("renderSteady").renderSteady(req); }
+export function cancelSteady(jobId: string): void { steadyNative("cancelSteady").cancelSteady(jobId); }
+export function addSteadyListener(cb: (e: SteadyEvent) => void): EventSubscription { return native().addListener("onSteadyEvent", cb); }
+/** True for the rejection of a measuring or a steady render that was cancelled (`cancelSteady`). */
+export function isSteadyCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === STEADY_CANCELLED; }

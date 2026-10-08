@@ -214,7 +214,7 @@ the all-or-nothing flow is `makeQuickEdit` in `src/projects/quickEditFlow.ts`.
 The row of tools under the preview follows what you have selected.
 
 - **Nothing selected** - Edit, Audio, Text, Stickers, Overlay, Effects, Filter, Adjust, Ratio, Background, Cover, Templates. Edit, Filter, Adjust and Background work on the clip under the white line.
-- **A clip** - Split, Trim, Select, Speed, Volume, Extract audio, Voice, Sound, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Cut out, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete.
+- **A clip** - Split, Trim, Select, Speed, Volume, Extract audio, Voice, Sound, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Cut out, Stabilize, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete.
 - **A layer** - the same without Split, Select, Background, Templates, Transition and Freeze, plus Blend, Forward and Back.
 - **A text** - Edit, Animate, Keyframe, Duplicate, Delete, Add text. **A caption** - Edit, Captions, Duplicate, Delete, Add text. **A sticker** - Edit, Animate, Keyframe, Duplicate, Delete.
 - **A sound** - Split, Volume, Fade, Voice, Sound, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
@@ -258,6 +258,7 @@ Select a clip, then use the tools under the preview (see Editing tools).
   60 seconds of clip; not for reversed clips (and a clip with it on cannot be reversed). The original is never changed:
   switch it off and the clip is as it was. Copies live in the project's `cutout` folder and the unused ones are removed
   when the project is opened. **Needs the latest build**: in Expo Go or an older build the switch says so.
+- **Stabilize** — Off / Low / Medium / High on a video clip or layer. The phone measures the shake and prepares a steadied copy (a percent shows in the strip; the picture is zoomed in 5 / 10 / 15 %). It corrects up / down / left / right only, not twisting. Up to 60 seconds of clip; not for reversed clips and not together with Remove background (each says why). The original is never changed: Off and the clip is as it was. Copies live in the project's `steady` folder and the unused ones are removed when the project is opened. **Needs the latest build**: in Expo Go or an older build the tool says so.
 - **Freeze** — inserts a 2 s still of the frame at the playhead.
 - **Reverse** — the clip gets a badge and the preview plays forward with the "Preview" tag. The
   exported video is reversed and has no sound.
@@ -339,6 +340,7 @@ Animations and keyframes. Everything shows exactly in the preview (no "Preview" 
   Switch Smooth off." - the strip stays open so the switch can be flipped. Smooth ramps are the same stored
   field with more steps, so they need **no new build**: they preview in Expo Go and export with the build
   that was installed before this update.
+- **Slow motion** (Effects, Speed, third tab, only for a clip slowed under 1x and not reversed) - **Smooth slow motion**: the phone prepares a copy with blended in-between frames (60 or 120 a second; 120 under 0.5x) so slow motion does not stutter, in the preview and in the export. Every real frame is kept; the in-betweens are mixes of two neighbours, so fast movement looks soft. The same limits as Stabilize (60 seconds, not with Remove background). The Curve tab's **Smooth** is a different thing (the ramp's form). **Needs the latest build.**
 
 The exported video does the same, but that Swift has never been compiled.
 
@@ -485,7 +487,7 @@ Overlay is on the first row; the rest is on the row of a selected layer.
 - **Select** a layer by tapping it on the preview or tapping its bar. Pinch, drag and twist it on the
   preview. Long-press its bar to move it in time; drag the bar's ends to trim. **Forward** / **Back**
   change which layer is on top.
-- **Tools on a layer** - Trim, Transform, Animate, Keyframe, Crop, Replace, Cut out, Reverse, Duplicate, Delete,
+- **Tools on a layer** - Trim, Transform, Animate, Keyframe, Crop, Replace, Cut out, Stabilize, Reverse, Duplicate, Delete,
   Filter, Adjust, Speed and Volume. Split, Freeze, Ratio, Transition and Background do not apply to layers.
 - **Opacity** (0 to 100 %) and **Mask** (None, Rounded, Circle) work on layers and on normal clips.
 - **Blend** (layers only) - Normal, Multiply, Screen, Overlay, and more. **Green screen** (clips and layers) -
@@ -713,3 +715,16 @@ Beats and background (`BeatEnvelope.swift`, `CutoutRender.swift`; none of it had
     8. **Transitions and speed.** A transition into / out of a cut-out clip, and a cut-out clip at 4x, export without a late start, a jump or a frozen person (the copy holds `transitionHandles` of room each side).
     9. **Storage and cancel.** The size the strip says against the real `cutout` folder; switching off mid-render stops within a second and leaves no `part-` file; an Export started while the editor still renders waits and then goes on.
     10. **Find beats.** A three-minute song from Files, a clip sound and a voice-over: the markers sit on the beat by ear, the screen stays alive while it listens, and speech or ambient music is told it has no steady beat (not ordinary pop). The listening time in a development build (unoptimised) against `BEATS_DEADLINE_MS` (120 s) for a long song.
+
+97. **Stabilize and smooth** (`SteadyRender.swift`; none of it has run on a device before the first build of this round; the numbers that decide most of it are TypeScript and change without a build). Check, in this order:
+    1. **The preview plays the copy.** A stabilized or smoothed clip plays without stutter and the sound stays in step. Fallback: `STEADY_PREVIEW.mainVideo` / `.layerVideo` to false (the original shows with the Preview tag; the export is unaffected).
+    2. **The export is smooth too.** A slowed clip with Smooth slow motion exports with a new picture in every frame, not repeated frames. Fallback: only if the preview is smooth and the export is not, a second build that blends in the compositor.
+    3. **Direction.** A stabilized clip is calmer. If it shakes MORE: `STEADY.scaleX` and `scaleY` to -1 (or only the axis that is worse). No build.
+    4. **Unit.** If only the zoom changes (the numbers are far too small), or the picture lies at the edge on every frame (far too large): read the `steady shake` log line and rescale `scaleX` / `scaleY`. No build.
+    5. **Which frame is the floating one.** The same symptom and the same fix as 3 (a fresh handler per pair, the frame before in the handler).
+    6. **Time and heat.** How long 5, 20 and 60 seconds take at each strength; whether the phone stays usable. Fallbacks in TypeScript: `measureSide` smaller, `minFrameGap` larger, `slowGrid` 60.
+    7. **Quality.** Soft double images on fast movement (blending); wobble that is left; whether 5 / 10 / 15 % hides the edges; whether the copy looks softer than the original (then raise `STEADY.bitsPerPixel` or the grid factors in `steadyBitRate`, and `STEADY_VERSION`). All TypeScript.
+    8. **The writer.** HEVC at 120 frames a second of file time. If refused: "steady writer: ..." and the clip shows as it was; a build is needed only if H.264 is refused too.
+    9. **Sound** of a copy is in step, no click.
+    10. **Colours.** HDR recordings are read as 8-bit and tagged BT.709 (as for cut-outs): the copy looks like the original.
+    11. **The bridge.** A 60-second clip sends about 23 000 numbers with the render request; if the app hesitates there, raise `minFrameGap`.

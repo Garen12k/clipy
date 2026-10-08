@@ -37,6 +37,7 @@ export const TOOL_META: Record<ToolId, { label: string; icon: IoniconName }> = {
   blend: { label: "Blend", icon: "color-fill-outline" },
   chroma: { label: "Green screen", icon: "leaf-outline" },
   cutout: { label: "Cut out", icon: "body-outline" },
+  stabilize: { label: "Stabilize", icon: "hand-left-outline" },
   keyframe: { label: "Keyframe", icon: "diamond-outline" },
   transition: { label: "Transition", icon: "swap-horizontal-outline" },
   layerForward: { label: "Forward", icon: "arrow-up-outline" },

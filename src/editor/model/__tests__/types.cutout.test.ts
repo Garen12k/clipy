@@ -9,8 +9,8 @@ const project = () => makeProject({
 });
 const item = (p: ReturnType<typeof project>, id: string): Clip => [...p.clips, ...p.layers].find((c) => c.id === id)!;
 
-test("schema is v20; a new clip, photo and layer have no cutout key", () => {
-  expect(SCHEMA_VERSION).toBe(20);
+test("schema is v21; a new clip, photo and layer have no cutout key", () => {
+  expect(SCHEMA_VERSION).toBe(21);
   for (const c of [makeClip({ id: "x", sourceDuration: 3 }), makePhotoClip({ id: "y" }), makeLayer({ id: "z", sourceDuration: 3 })]) {
     expect("cutout" in c).toBe(false);
     expect(activeCutout(c)).toBe(false);

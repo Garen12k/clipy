@@ -130,7 +130,7 @@ test("every failure has a cutout stage; a cancel has its own code; the promise i
   expect(fn).toContain('promise.reject("E_CUTOUT_CANCELLED", "Cutout cancelled")');
   expect(fn).toContain('promise.reject("E_CUTOUT", CutoutRender.message(error))');
   expect(fn).toContain('self?.sendEvent("onCutoutEvent", ["jobId": jobId, "progress": fraction])');
-  expect(moduleSwift).toContain('Events("onExportEvent", "onSoundEvent", "onCutoutEvent")');
+  expect(moduleSwift).toContain('Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent")');
   expect(moduleSwift).toContain('Function("cancelCutout")');
   // One cut-out render at a time: the gate is taken inside the `do` (a cancel while waiting is answered) and always given back.
   expect(fn.indexOf("try await CutoutRender.enter(job)")).toBeGreaterThan(0);
