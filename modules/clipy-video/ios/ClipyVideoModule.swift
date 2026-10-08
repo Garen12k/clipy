@@ -140,8 +140,16 @@ public class ClipyVideoModule: Module {
         do {
           guard let outputURL = ExportSession.fileURL(from: request.outputPath) else { throw SoundError.failed("sound output: not a file path") }
           let source = try await SoundSource.open(request.sourceUri)
+          // Reduce noise: the isolation unit goes first. Making it is the one async step, so it is made here and
+          // handed to the synchronous render. No noise in the request → no unit, and the render is the old one.
+          var lead: [AVAudioNode] = []
+          if request.noiseWet.isFinite, request.noiseWet > 0 {
+            guard let noiseFormat = AVAudioFormat(standardFormatWithSampleRate: SoundRender.sampleRate, channels: 2) else { throw SoundError.failed("sound engine: no audio format") }
+            let isolation: AVAudioUnit = try await SoundNoise.make(wet: request.noiseWet, format: noiseFormat)
+            lead.append(isolation)
+          }
           var lastSent = -1.0
-          let result = try SoundRender.render(request, source: source, to: outputURL, job: job, progress: { (fraction: Double) -> Void in
+          let result = try SoundRender.render(request, source: source, lead: lead, to: outputURL, job: job, progress: { (fraction: Double) -> Void in
             guard fraction - lastSent >= 0.02 else { return }   // at most ~50 events a render
             lastSent = fraction
             self?.sendEvent("onSoundEvent", ["jobId": jobId, "progress": fraction])
@@ -159,6 +167,12 @@ public class ClipyVideoModule: Module {
     // Stops that render at its next pass (it then rejects "E_SOUND_CANCELLED"). An unknown or finished job: nothing.
     Function("cancelSoundRender") { (jobId: String) in
       self.lookupSoundJob(jobId)?.cancel()
+    }
+
+    // Whether this iPhone has Apple's sound isolation unit. Its presence also tells the app that this build knows
+    // the request's `noiseWet` (a build without this function would ignore the number and render without the unit).
+    Function("noiseAvailable") { () -> Bool in
+      return SoundNoise.isOnThisPhone()
     }
 
     // Whether the file has a sound track at all (a silent screen recording has none), and how long the file is.
