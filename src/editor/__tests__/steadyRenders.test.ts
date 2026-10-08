@@ -7,6 +7,7 @@ jest.mock("@/src/projects/expoFs", () => {
     exists: jest.fn(async (p: string) => files.has(p)), mkdir: jest.fn(async () => {}),
     list: jest.fn(async (dir: string) => [...files].filter((f) => f.startsWith(`${dir}/`)).map((f) => f.slice(dir.length + 1))),
     remove: jest.fn(async (p: string) => { files.delete(p); }),
+    writeText: jest.fn(async (p: string) => { files.add(p); }),
   } };
 });
 jest.mock("@/modules/clipy-video", () => {
@@ -14,16 +15,16 @@ jest.mock("@/modules/clipy-video", () => {
   const box: { listener: unknown } = { listener: null };
   return {
     __box: box,
-    isSteadyAvailable: jest.fn(() => true), measureShake: jest.fn(), renderSteady: jest.fn(), cancelSteady: jest.fn(),
+    isSteadyAvailable: jest.fn(() => true), isBlurAndCutsBuild: jest.fn(() => false), measureShake: jest.fn(), renderSteady: jest.fn(), cancelSteady: jest.fn(),
     addSteadyListener: jest.fn((cb: unknown) => { box.listener = cb; return { remove() {} }; }),
     STEADY_CANCELLED: "E_STEADY_CANCELLED",
     isSteadyCancelled: (e: unknown) => typeof e === "object" && e !== null && (e as { code?: string }).code === "E_STEADY_CANCELLED",
   };
 });
 import { act, renderHook } from "@testing-library/react-native";
-import { cancelSteady, isSteadyAvailable, measureShake, renderSteady } from "@/modules/clipy-video";
+import { cancelSteady, isBlurAndCutsBuild, isSteadyAvailable, measureShake, renderSteady } from "@/modules/clipy-video";
 import { setClipStabilize } from "@/src/editor/model/ops";
-import { steadyNeed } from "@/src/editor/model/steady";
+import { SMOOTH, SMOOTH_MARK, steadyNeed } from "@/src/editor/model/steady";
 import { steadyShifts } from "@/src/editor/model/steadyPath";
 import { makeClip, makeProject, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -60,6 +61,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   measure.mockReset(); render.mockReset();
   jest.mocked(isSteadyAvailable).mockReturnValue(true);
+  jest.mocked(isBlurAndCutsBuild).mockReturnValue(false);
   let n = 0;
   jest.mocked(newId).mockImplementation(() => `job-${++n}`);
   disk.clear();
@@ -239,6 +241,73 @@ test("opening a project: finished copies that are needed are known as ready; par
   expect([...disk].sort()).toEqual([`${MEDIA}/abc.mov`, `${DIR}/${NAME}`].sort());
   expect(files()).toEqual({ [NAME]: { status: "ready", uri: `${DIR}/${NAME}` } });
   expect(measure).not.toHaveBeenCalled();
+});
+
+describe("a cut inside a clip (Smooth slow motion)", () => {
+  const BOTH = "abc-s1-2-120-2000-12000.mov";   // steadied AND smooth
+
+  test("a copy with blended frames is asked about cuts with the model's threshold; a steadied-only copy's request has no such key", async () => {
+    render.mockResolvedValueOnce({ ...made(SLOW), cuts: 2, apart: 0.31 });
+    const log = jest.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await ensureSteady("p1", steadyNeed(slowed, [])!);
+      expect(render.mock.calls[0][0]).toMatchObject({ grid: 120, cutDifference: SMOOTH.cutDifference });
+      expect(SMOOTH.cutDifference).toBe(0.12);
+      // What was measured goes to the dev server's log, for tuning the threshold without a build.
+      expect(log).toHaveBeenCalledWith("steady cuts", { cuts: 2, largest: 0.31, frames: 300, limit: 0.12 });
+      log.mockClear();
+      measure.mockResolvedValueOnce(SHAKE);
+      render.mockResolvedValueOnce(made(NAME));
+      await ensureSteady("p1", steadyNeed(steadied, [])!);
+      expect(render.mock.calls[1][0].grid).toBe(0);
+      expect("cutDifference" in render.mock.calls[1][0]).toBe(false);
+      expect(log).not.toHaveBeenCalledWith("steady cuts", expect.anything());
+      // An older build answers without the two numbers: nothing is logged, nothing fails.
+      disk.clear();
+      render.mockResolvedValueOnce(made(SLOW));
+      await expect(ensureSteady("p1", steadyNeed(slowed, [])!)).resolves.toBe(`${DIR}/${SLOW}`);
+      expect(log).not.toHaveBeenCalledWith("steady cuts", expect.anything());
+    } finally { log.mockRestore(); }
+  });
+
+  test("a build that tells cuts, a folder without the mark: the smooth copies go once (they were blended across cuts), the steadied-only ones stay, and the mark is written", async () => {
+    jest.mocked(isBlurAndCutsBuild).mockReturnValue(true);
+    for (const name of [NAME, SLOW, BOTH, "cuts-999"]) disk.add(`${DIR}/${name}`);
+    st().setProject(makeProject({ id: "p1", clips: [steadied, { ...slowed, id: "b" }, { ...slowed, id: "c", stabilize: "medium" as const }] }));
+    await openSteady("p1");
+    expect([...disk].sort()).toEqual([`${DIR}/${NAME}`, `${DIR}/${SMOOTH_MARK}`].sort());
+    expect(files()).toEqual({ [NAME]: { status: "ready", uri: `${DIR}/${NAME}` } });
+    // … and the queue makes the smooth ones again.
+    expect(steadyNeeded(st().project!, [], files()).map((n) => n.name)).toEqual([NAME, SLOW, BOTH]);
+  });
+
+  test("with the mark the smooth copies are kept: nothing is removed and nothing is written again", async () => {
+    jest.mocked(isBlurAndCutsBuild).mockReturnValue(true);
+    for (const name of [NAME, SLOW, SMOOTH_MARK]) disk.add(`${DIR}/${name}`);
+    st().setProject(makeProject({ id: "p1", clips: [steadied, { ...slowed, id: "b" }] }));
+    const fs = jest.requireMock("@/src/projects/expoFs").expoFs;
+    await openSteady("p1");
+    expect([...disk].sort()).toEqual([`${DIR}/${NAME}`, `${DIR}/${SLOW}`, `${DIR}/${SMOOTH_MARK}`].sort());
+    expect(fs.writeText).not.toHaveBeenCalled();
+    expect(fs.remove).not.toHaveBeenCalled();
+    expect(Object.keys(files()).sort()).toEqual([NAME, SLOW].sort());
+  });
+
+  test("an older build keeps its smooth copies and writes no mark; a mark found there goes, so a newer build sweeps what the older one made", async () => {
+    for (const name of [SLOW, SMOOTH_MARK]) disk.add(`${DIR}/${name}`);
+    st().setProject(makeProject({ id: "p1", clips: [slowed] }));
+    const fs = jest.requireMock("@/src/projects/expoFs").expoFs;
+    await openSteady("p1");
+    expect([...disk]).toEqual([`${DIR}/${SLOW}`]);
+    expect(fs.writeText).not.toHaveBeenCalled();
+    // A module that cannot be asked counts as an older build: opening never fails on it.
+    jest.mocked(isBlurAndCutsBuild).mockImplementation(() => { throw new Error("not linked"); });
+    resetSteady();
+    st().setProject(makeProject({ id: "p1", clips: [slowed] }));
+    await openSteady("p1");
+    expect([...disk]).toEqual([`${DIR}/${SLOW}`]);
+    expect(files()).toEqual({ [SLOW]: { status: "ready", uri: `${DIR}/${SLOW}` } });
+  });
 });
 
 test("without the tool nothing is read, removed or rendered", async () => {

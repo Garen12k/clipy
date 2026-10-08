@@ -4,7 +4,8 @@ jest.mock("@/src/editor/cutoutRenders", () => ({
   isNoPerson: (m: string) => m.includes("cutout person:"),
 }));
 jest.mock("@/src/projects/expoFs", () => ({ expoFs: { list: jest.fn(async () => []) } }));
-import { toExportClip, toExportLayer } from "@/modules/clipy-video";
+jest.mock("@/modules/clipy-video", () => ({ ...jest.requireActual("@/modules/clipy-video"), isBlurAndCutsBuild: jest.fn(() => false) }));
+import { isBlurAndCutsBuild, toExportClip, toExportLayer } from "@/modules/clipy-video";
 import { ensureCutout } from "@/src/editor/cutoutRenders";
 import { cutoutsNeeded, useCutoutFiles, type CutoutFile } from "@/src/editor/cutoutFiles";
 import { parseCutoutName } from "@/src/editor/model/cutout";
@@ -12,7 +13,7 @@ import { setClipSpeedCurve } from "@/src/editor/model/ops";
 import { transitionHandles } from "@/src/editor/model/timeline";
 import { makeClip, makeLayer, makePhotoClip, makeProject, SPEED_CURVE_IDS } from "@/src/editor/model/types";
 import { expoFs } from "@/src/projects/expoFs";
-import { CUTOUT_EXPORT, CUTOUT_SHARE, prepareCutouts, withCutout } from "../exportCutouts";
+import { blursOriginal, CUTOUT_EXPORT, CUTOUT_SHARE, prepareCutouts, withCutout } from "../exportCutouts";
 
 const MEDIA = "file:///doc/projects/p1/media", DIR = "file:///doc/projects/p1/cutout";
 const ensure = jest.mocked(ensureCutout);
@@ -108,6 +109,62 @@ describe("withCutout: what the export is sent", () => {
     const out = withCutout(sent, photo, `${DIR}/p-c1-photo.png`, true);
     expect(out).toEqual({ ...sent, kind: "video", sourceUri: `${DIR}/p-c1-photo.mov`, trimStart: 0, trimEnd: 4, speed: 1, reversed: false, muted: true, speedSpans: [], opacity: 0.999 });
     expect(out.keyframes).toBe(sent.keyframes);                 // a Motion's pins travel with it
+  });
+});
+
+describe("withCutout: a Blur background behind a cut-out main clip is made from the ORIGINAL", () => {
+  const COPY = `${DIR}/abc-c1-2000-12000.mov`;
+  const blur = { type: "blur" as const };
+
+  test("a main video with Blur on a build that reads the key: the copy as before, plus the original's file as the backdrop", () => {
+    const clip = { ...video, background: blur };
+    const sent = toExportClip(clip);
+    const out = withCutout(sent, clip, COPY, true, true);
+    expect(out).toEqual({ ...sent, sourceUri: COPY, opacity: 0.999, backdrop: { uri: `${MEDIA}/abc.mov`, kind: "video" } });
+    // Nothing about timing is repeated: the copy's timeline is the original's, so the trim, speed and spans serve both.
+    expect(Object.keys(out.backdrop ?? {})).toEqual(["uri", "kind"]);
+  });
+
+  test("a main photo with Blur: the still movie as before, and the photo itself as the backdrop", () => {
+    const clip = { ...photo, background: blur };
+    const sent = toExportClip(clip);
+    const out = withCutout(sent, clip, `${DIR}/p-c1-photo.png`, true, true);
+    expect(out).toEqual({ ...sent, kind: "video", sourceUri: `${DIR}/p-c1-photo.mov`, trimStart: 0, trimEnd: 4, reversed: false, opacity: 0.999, backdrop: { uri: `${MEDIA}/p.jpg`, kind: "photo" } });
+  });
+
+  test("the key is ABSENT everywhere else: an older build, another background, a layer, no copy", () => {
+    const clip = { ...video, background: blur };
+    const sent = toExportClip(clip);
+    const before = { ...sent, sourceUri: COPY, opacity: 0.999 };
+    for (const out of [withCutout(sent, clip, COPY, true), withCutout(sent, clip, COPY, true, false)]) {
+      expect(JSON.stringify(out)).toBe(JSON.stringify(before));
+      expect("backdrop" in out).toBe(false);
+    }
+    const black = toExportClip(video);
+    expect("backdrop" in withCutout(black, video, COPY, true, true)).toBe(false);
+    const coloured = { ...video, background: { type: "color" as const, color: "#112233" } };
+    expect("backdrop" in withCutout(toExportClip(coloured), coloured, COPY, true, true)).toBe(false);
+    const layer = { ...makeLayer({ id: "L", sourceDuration: 30, sourceUri: `${MEDIA}/abc.mov`, start: 2 }), cutout: true as const, background: blur };
+    expect("backdrop" in withCutout(toExportLayer(layer), layer, COPY, false, true)).toBe(false);
+    expect(withCutout(sent, clip, undefined, true, true)).toBe(sent);
+    // toExportClip itself never writes it: every request without a cut-out is what it was.
+    expect("backdrop" in sent).toBe(false);
+  });
+
+  test("blursOriginal: the project is asked first, then the build; a module that cannot be asked counts as an older build", () => {
+    const build = jest.mocked(isBlurAndCutsBuild);
+    build.mockReturnValue(true);
+    expect(blursOriginal([plain, video])).toBe(false);                                   // no Blur behind a cut-out
+    expect(blursOriginal([{ ...plain, background: blur }])).toBe(false);                 // Blur, but no cut-out
+    expect(blursOriginal([{ ...video, background: blur, reversed: true }])).toBe(false); // played backwards: no cut-out
+    expect(build).not.toHaveBeenCalled();
+    expect(blursOriginal([plain, { ...video, background: blur }])).toBe(true);
+    build.mockReturnValue(false);
+    expect(blursOriginal([{ ...video, background: blur }])).toBe(false);
+    build.mockImplementation(() => { throw new Error("not linked"); });
+    expect(blursOriginal([{ ...video, background: blur }])).toBe(false);
+    build.mockReset();
+    build.mockReturnValue(false);
   });
 });
 

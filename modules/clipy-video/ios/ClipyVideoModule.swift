@@ -445,6 +445,13 @@ public class ClipyVideoModule: Module {
       }
     }
 
+    // The build of 2026-10-11 ("blur and cuts"): the export reads a clip's `backdrop` (the original file a cut-out
+    // clip's Blur background is made from) and a steady render reads `cutDifference` (a cut inside a clip gets no
+    // blended frames). A build without this function ignores both keys. The app asks whether the function is THERE.
+    Function("blurAndCuts") { () -> Bool in
+      return true
+    }
+
     // Stops the measuring or the render stored under that id at its next pass (it then rejects
     // "E_STEADY_CANCELLED"). An unknown or finished job: nothing.
     Function("cancelSteady") { (jobId: String) in

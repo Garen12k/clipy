@@ -13,6 +13,7 @@ import { act, render, screen } from "@testing-library/react-native";
 import { useEffect } from "react";
 import { StyleSheet, Text } from "react-native";
 import { useCutoutFiles, type CutoutFile } from "@/src/editor/cutoutFiles";
+import { useFollowerShown } from "@/src/editor/followerShown";
 import { CUTOUT_PREVIEW } from "@/src/editor/model/cutout";
 import { makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -42,6 +43,7 @@ beforeEach(() => {
   mockMounts.length = 0;
   pictureMounts = 0;
   useCutoutFiles.setState({ files: {} });
+  useFollowerShown.setState({ uri: null });
   st().reset();
   CUTOUT_PREVIEW.layerVideo = true;
   CUTOUT_PREVIEW.mainVideo = true;
@@ -61,6 +63,7 @@ describe("ClipFrame", () => {
     st().setProject(makeProject({ clips: [video] }));
     useCutoutFiles.setState({ files: ready(VIDEO) });
     await render(<ClipFrame clip={video} frameW={W} frameH={H}><Text>video</Text></ClipFrame>);
+    await act(() => { useFollowerShown.setState({ uri: `${DIR}/${VIDEO}` }); });   // its player has presented a frame of the copy (followerShown.test.tsx)
     expect(screen.getByText("video")).toBeTruthy();                           // still mounted: the player keeps the sound and the clock
     expect(style("clip-content").opacity).toBe(0);
     expect(style("clip-background").backgroundColor).toBe("#112233");
@@ -74,6 +77,7 @@ describe("ClipFrame", () => {
     await render(<ClipFrame clip={video} frameW={W} frameH={H}><Picture /></ClipFrame>);
     await act(() => { useCutoutFiles.setState({ files: { [VIDEO]: { status: "busy", progress: 0.99 } } }); });
     await act(() => { useCutoutFiles.setState({ files: ready(VIDEO) }); });
+    await act(() => { useFollowerShown.setState({ uri: `${DIR}/${VIDEO}` }); });   // its player has presented a frame of the copy (followerShown.test.tsx)
     expect(style("clip-content").opacity).toBe(0);
     const box = screen.getByTestId("clip-box").children as { props: { testID?: string } }[];
     expect(box.map((c) => c.props.testID)).toEqual(["clip-content", "clip-cutout"]);
@@ -203,6 +207,7 @@ describe("the Preview tag", () => {
     await render(<PreviewTag visible={false} />);
     expect(screen.getByTestId("preview-tag")).toBeTruthy();
     await act(() => { useCutoutFiles.setState({ files: both }); });
+    await act(() => { useFollowerShown.setState({ uri: `${DIR}/${VIDEO}` }); });   // its player has presented a frame of the copy (followerShown.test.tsx)
     expect(screen.queryByTestId("preview-tag")).toBeNull();
     await act(() => { st().seek(7); });                                         // past the layer (6 s): only the main clip, ready
     expect(screen.queryByTestId("preview-tag")).toBeNull();

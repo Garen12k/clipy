@@ -21,8 +21,24 @@ export const STEADY = { maxSeconds: 60, maxSide: 1920, minFrameGap: 0.008, measu
 export const STEADY_LEVELS: Record<StabilizeId, { level: number; zoom: number; radius: number }> = {
   low: { level: 1, zoom: 1.05, radius: 0.25 }, medium: { level: 2, zoom: 1.1, radius: 0.5 }, high: { level: 3, zoom: 1.15, radius: 1 },
 };
-/** Smooth slow motion: frames per SOURCE second of a copy — `fullGrid` when the clip's slowest stretch is `slowBelow` or faster, `slowGrid` when it is slower. */
-export const SMOOTH = { fullGrid: 60, slowGrid: 120, slowBelow: 0.5 } as const;
+/**
+ * Smooth slow motion: frames per SOURCE second of a copy — `fullGrid` when the clip's slowest stretch is `slowBelow` or faster,
+ * `slowGrid` when it is slower. `cutDifference`: two neighbouring source frames more different than this are a CUT inside the clip
+ * (it was edited before it was imported) and get no blended frames — blending two shots is a ghosted double picture. The number is
+ * the mean, over the picture and its three colours, of how far apart the two frames are (0 = the same, 1 = black against white),
+ * measured by the phone (`SteadyRender.difference`) and compared there; 0 = never asked. Ordinary movement between two neighbouring
+ * frames measures about 0.01 – 0.05 and a fast pan up to about 0.1; two different shots usually 0.15 – 0.35. Too HIGH: a cut between
+ * two similar shots still ghosts — lower it. Too LOW: fast movement steps instead of flowing — raise it. The dev server's log says
+ * what was measured ("steady cuts": the pairs taken as cuts and the largest difference seen in the copy). Changing it needs no build
+ * and no new STEADY_VERSION: smooth copies are swept by `SMOOTH_MARK` (`openSteady`).
+ */
+export const SMOOTH = { fullGrid: 60, slowGrid: 120, slowBelow: 0.5, cutDifference: 0.12 } as const;
+/**
+ * The name of an empty file in a project's steady folder that says: every smooth copy here was made by a phone that tells cuts,
+ * with THIS threshold. Without it (copies from an older build, or from another threshold) `openSteady` removes the smooth copies
+ * once, so they are made again; copies that are only steadied are never touched. Never a copy's name (`parseSteadyName` → null).
+ */
+export const SMOOTH_MARK = `cuts-${Math.round(SMOOTH.cutDifference * 1000)}`;
 /** Whether the preview shows a steady copy: off = that kind of clip plays its original and the Preview tag shows. */
 export const STEADY_PREVIEW = { layerVideo: true, mainVideo: true };
 

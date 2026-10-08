@@ -68,6 +68,7 @@ extension ExportLayer {
     out.mask = mask
     out.blend = blend
     out.chroma = chroma
+    out.backdrop = backdrop
     return out
   }
 }
@@ -144,6 +145,9 @@ enum MediaPrePass {
     // So do the blend mode and the green screen.
     out.blend = clip.blend
     out.chroma = clip.chroma
+    // The backdrop is NOT carried: it names a file with the ORIGINAL clip's timing, and a prepared file has its own
+    // (from 0, a reversed one backwards). Such a clip's Blur background is made from its own picture, as it always was.
+    out.backdrop = nil
     return out
   }
 
@@ -230,6 +234,19 @@ enum MediaPrePass {
       w *= k; h *= k
     }
     return (max(2, Int(w) & ~1), max(2, Int(h) & ~1))
+  }
+
+  /// A photo decoded upright (ImageIO applies the EXIF orientation), its long side at most `maxPixels` and never
+  /// above `maxPhotoPixels` — the decode `makePhotoVideo` does. Nil when the file cannot be read as a picture.
+  static func uprightPhoto(_ uri: String, maxPixels: Int) -> CGImage? {
+    guard let url = URL(string: uri), let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+    let options: [CFString: Any] = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceShouldCacheImmediately: true,
+      kCGImageSourceThumbnailMaxPixelSize: min(maxPhotoPixels, max(2, maxPixels)),
+    ]
+    return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
   }
 
   /// The readable error for a failed job.

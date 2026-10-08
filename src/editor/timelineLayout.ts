@@ -62,7 +62,8 @@ export type LaneModel = { lanes: Lane[]; lanesHeight: number; height: number };
  * NEED so that none covers another (`overlayRows`: bars that share no time share a row, so a run of captions is still one row, and
  * a text over a sticker makes two). Rows are all `LANE_GAP` + `LANE_HEIGHT` high and stack in the flow in this order, so a lane's
  * `top` is `laneTop` of the rows above it; `layerRowTops` gives each layer's, `rowOffset` a text / sticker row's inside its lane. A
- * project with clips only (or none) has no lanes: the timeline is the clip area. The height is not capped: every row is always visible.
+ * project with clips only (or none) has no lanes: the timeline is the clip area. `height` counts EVERY row; how much of it is on screen is
+ * `timelineFrame` (the rows past its cap scroll up and down under the clips).
  */
 export function laneModel(p: Pick<Project, "layers" | "overlays" | "audioTracks" | "effects"> | null): LaneModel {
   const found: { id: LaneId; rows: number }[] = p
@@ -83,6 +84,72 @@ export function layerRowTops(model: Pick<LaneModel, "lanes">): number[] {
  * area. What is left of the rise comes out of the preview while the strip is open.
  */
 export const laneLift = (model: Pick<LaneModel, "lanesHeight">, rise: number): number => Math.min(rise, model.lanesHeight);
+
+/** The smallest iPhone the app runs on, in points high, and how much more screen buys one more row under the clips. */
+const SMALLEST_SCREEN = 667, SCREEN_PER_ROW = 80;
+/** The rows shown under the clips on that smallest screen. A whole number AND A HALF on purpose: the row cut in half says there are more. */
+const FEWEST_ROWS = 2.5;
+/**
+ * How many rows may show under the clips on a screen `windowHeight` points high before they scroll: 2.5 on the smallest iPhone and
+ * one more for every 80 points of screen above it (3.5 at 812, 4.5 at 844, 5.5 at 932 and 956) — so of every 80 points 32 go to the
+ * timeline and 48 to the preview. Never fewer than 2.5 (80 points: more than a tool strip rises, so `laneLift` needs no cap of its own).
+ */
+export function visibleLaneRows(windowHeight: number): number {
+  const extra = Number.isFinite(windowHeight) ? Math.floor((windowHeight - SMALLEST_SCREEN) / SCREEN_PER_ROW) : 0;
+  return FEWEST_ROWS + Math.max(0, extra);
+}
+/** What the timeline takes on screen. `viewport`: the height the rows under the clips show in; `content`: the height of all of them; `scrolls`: there are more rows than show. */
+export type TimelineFrame = { height: number; viewport: number; content: number; scrolls: boolean };
+/**
+ * THE rule for the timeline's height on screen — nothing else decides it. The timeline is as high as its rows (`laneModel`) up to a
+ * cap, `visibleLaneRows` rows under the clip area; past the cap its height stops and the rows scroll up and down inside it, so the
+ * preview never gets smaller however many layers, sounds or texts are added. The clip area is never part of what scrolls. A project
+ * whose rows fit is exactly as high as before.
+ */
+export function timelineFrame(model: Pick<LaneModel, "lanesHeight">, windowHeight: number): TimelineFrame {
+  const content = model.lanesHeight, viewport = Math.min(content, visibleLaneRows(windowHeight) * (LANE_HEIGHT + LANE_GAP));
+  return { height: CLIP_AREA_HEIGHT + viewport, viewport, content, scrolls: content > viewport };
+}
+
+type Bars = Pick<Project, "layers" | "overlays" | "audioTracks" | "effects">;
+/** Every bar under the clips by id, in the order of the arrays (sounds, layers, texts and stickers, effects). Never a main clip. */
+export const barIds = (p: Bars | null): string[] => (p ? [...p.audioTracks, ...p.layers, ...p.overlays, ...p.effects].map((b) => b.id) : []);
+/** The row the bar `id` is in, counted from the first row under the clips (what `laneModel` stacks); null for a main clip or an unknown id. */
+export function barRow(p: Bars | null, id: string): number | null {
+  if (!p) return null;
+  const first = (lane: LaneId) => laneModel(p).lanes.find((l) => l.id === lane)?.index ?? null;
+  const at = (lane: LaneId, row: number) => { const i = first(lane); return i === null ? null : i + row; };
+  const track = p.audioTracks.find((t) => t.id === id);
+  if (track) return at(track.kind, 0);
+  const layer = p.layers.findIndex((l) => l.id === id);
+  if (layer >= 0) return at("layers", layer);
+  if (p.overlays.some((o) => o.id === id)) return at("overlays", overlayRows(p.overlays).rowOf[id] ?? 0);
+  return p.effects.some((e) => e.id === id) ? at("effects", 0) : null;
+}
+/**
+ * Where the rows should be scrolled to (`y` = where they are): just far enough that row `row` — its gap and its bar — shows whole,
+ * not at all when it already does, and always inside what there is (rows removed under the position, or everything fitting again,
+ * bring it back). `row` null only keeps it inside.
+ */
+export function rowScrollTarget({ y, viewport, content, row }: { y: number; viewport: number; content: number; row: number | null }): number {
+  const max = Math.max(0, content - viewport);
+  let to = Number.isFinite(y) ? y : 0;
+  if (row !== null) {
+    const top = rowOffset(row), bottom = rowOffset(row + 1);
+    if (top < to) to = top; else if (bottom > to + viewport) to = bottom - viewport;
+  }
+  return Math.min(max, Math.max(0, to));
+}
+/** The scroll thumb is never shorter than this. */
+const THUMB_MIN = 12;
+/** The thumb at the timeline's edge that says the rows scroll: its place and length inside the rows' viewport; null when every row shows. */
+export function rowsThumb({ y, viewport, content }: { y: number; viewport: number; content: number }): { top: number; height: number } | null {
+  const max = content - viewport;
+  if (!(max > 0) || !(viewport > 0)) return null;
+  const height = Math.max(THUMB_MIN, Math.min(viewport, viewport * viewport / content));
+  const at = Math.min(1, Math.max(0, (Number.isFinite(y) ? y : 0) / max));
+  return { top: at * (viewport - height), height };
+}
 export const STRIP_HEIGHT = 64;
 export const THUMB_WIDTH = 64;
 export const MIN_THUMB_INTERVAL = 0.5;

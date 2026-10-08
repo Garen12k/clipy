@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { addSteadyListener, cancelSteady, isSteadyAvailable, isSteadyCancelled, measureShake, renderSteady, STEADY_CANCELLED, type ShakeResult } from "@/modules/clipy-video";
-import { levelRule, neededSteady, parseSteadyName, STEADY, steadyDeadlineMs, type NeededSteady } from "@/src/editor/model/steady";
+import { addSteadyListener, cancelSteady, isBlurAndCutsBuild, isSteadyAvailable, isSteadyCancelled, measureShake, renderSteady, STEADY_CANCELLED, type ShakeResult } from "@/modules/clipy-video";
+import { levelRule, neededSteady, parseSteadyName, SMOOTH, SMOOTH_MARK, STEADY, steadyDeadlineMs, type NeededSteady } from "@/src/editor/model/steady";
 import { steadyShifts, type Shifts } from "@/src/editor/model/steadyPath";
 import type { Project } from "@/src/editor/model/types";
 import { STEADY_TOOLS } from "@/src/lib/buildInfo";
@@ -137,8 +137,18 @@ async function make(entry: Running, need: NeededSteady, dir: string): Promise<vo
     jobId: entry.jobId, sourceUri: need.sourceUri, outputPath: `${dir}/${need.name}`, from: need.from, to: need.to, maxSide: STEADY.maxSide,
     minFrameGap: STEADY.minFrameGap, grid: need.grid, zoom: rule === null ? 1 : rule.zoom, times: shifts.times, dx: shifts.dx, dy: shifts.dy,
     bitRate: need.bitRate, blendFloor: STEADY.blendFloor,
+    // Only a copy with blended frames is asked about cuts; a steadied-only copy's request is what it always was. (A build from
+    // before the key ignores it and blends every pair, as it always did.)
+    ...(need.grid > 0 ? { cutDifference: SMOOTH.cutDifference } : null),
   };
-  await answered(entry, () => renderSteady(request), deadline.render, "render");
+  const made = await answered(entry, () => renderSteady(request), deadline.render, "render");
+  // For tuning `SMOOTH.cutDifference` without a build: the pairs taken as cuts and the largest difference seen, in the dev server's log.
+  if (need.grid > 0 && made && typeof made.cuts === "number") console.log("steady cuts", { cuts: made.cuts, largest: made.apart, frames: made.frames, limit: SMOOTH.cutDifference });
+}
+
+/** Whether the installed build tells a cut inside a clip (`cutDifference`). A module that cannot be asked counts as one that does not. */
+function tellsCuts(): boolean {
+  try { return isBlurAndCutsBuild() === true; } catch { return false; }
 }
 
 /**
@@ -307,6 +317,10 @@ export function resetSteady(): void {
  * folder counted as known. A `part-` file always goes, and so does anything that is not a copy of this version. Run once per open
  * (there is no undo history then). Only after it may renders start. Never touches a media file or another folder. Without the
  * tool nothing is read, nothing is removed and nothing is ever rendered.
+ * Smooth copies and cuts: on a build that tells a cut inside a clip, a folder without `SMOOTH_MARK` holds smooth copies made
+ * before it could (or with another threshold) — ghosted across a cut. They go, once, like a file nobody needs, and the mark is
+ * written; the queue then makes them again. Steadied-only copies stay. On an older build nothing of this happens (and a mark
+ * found there goes with the sweep, so the copies that build makes are swept when a newer one opens the project).
  */
 export async function openSteady(projectId: string): Promise<void> {
   if (!isSteadyAvailable()) return;
@@ -318,18 +332,22 @@ export async function openSteady(projectId: string): Promise<void> {
   };
   try {
     const names = await expoFs.list(dir);
-    const left = new Set(names.filter((n) => parseSteadyName(n) !== null));
+    const cuts = tellsCuts();
+    const stale = cuts && !names.includes(SMOOTH_MARK);
+    const left = new Set(names.filter((n) => { const copy = parseSteadyName(n); return copy !== null && !(stale && copy.grid > 0); }));
     const neededNow = (): Set<string> | null => {
       const p = open();
       return p ? new Set(neededSteady(p, [], [...left]).map((n) => n.name)) : null;
     };
     for (const name of names) {
+      if (cuts && name === SMOOTH_MARK) continue;
       const needed = neededNow();
       if (needed === null) return;
       if (left.has(name) && needed.has(name)) continue;
       left.delete(name);
       await expoFs.remove(`${dir}/${name}`);
     }
+    if (stale) await expoFs.writeText(`${dir}/${SMOOTH_MARK}`, "");
     const needed = neededNow();
     if (needed === null) return;
     for (const name of left) if (needed.has(name) && useSteadyFiles.getState().files[name] === undefined) setFile(name, { status: "ready", uri: `${dir}/${name}` });

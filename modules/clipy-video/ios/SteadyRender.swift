@@ -20,7 +20,8 @@ struct ShakeRequest: Record {
 /// `SMOOTH` in src/editor/model/steady.ts). The source range goes to `outputPath`, a .mov with the source's timing
 /// and its sound. `times` / `dx` / `dy`: each frame's correction (fractions of the picture), worked out by the app
 /// (src/editor/model/steadyPath.ts). `grid`: 0 = the source's own frames; above 0 = that many frames per source
-/// second, the ones in between blended.
+/// second, the ones in between blended. `cutDifference`: two neighbouring frames more different than this (0 … 1,
+/// `difference`) are a cut and get no blended frames; 0 or absent (a request from before it existed) = never asked.
 struct SteadyRequest: Record {
   @Field var jobId: String = ""
   @Field var sourceUri: String = ""
@@ -36,6 +37,7 @@ struct SteadyRequest: Record {
   @Field var dy: [Double] = []
   @Field var bitRate: Double = 8_000_000
   @Field var blendFloor: Double = 0.02
+  @Field var cutDifference: Double = 0
 }
 
 enum SteadyError: Error, LocalizedError {
@@ -389,6 +391,27 @@ enum SteadyRender {
     return max(0, count)
   }
 
+  /// How different two held frames are: the mean, over the picture and its three colours, of how far apart the two
+  /// are, 0 (the same picture) … 1. Counted on the numbers as they are STORED: no colour management on the way in,
+  /// and the one pixel is read back as linear sRGB — Core Image's working space, so nothing is converted on the way
+  /// out either (a nil colour space would mean the context's OUTPUT space, and a gamma curve over the mean). So the
+  /// app's threshold is a plain share of a pixel's range. All of it is Core Image's: a difference blend, an area average, one pixel
+  /// read back — once a pair. Nil when it cannot be measured: the pair is then blended as it always was.
+  static func difference(_ a: CVPixelBuffer, _ b: CVPixelBuffer, rect: CGRect) -> Double? {
+    let plain: [CIImageOption: Any] = [CIImageOption.colorSpace: NSNull()]
+    let first = CIImage(cvPixelBuffer: a, options: plain)
+    let second = CIImage(cvPixelBuffer: b, options: plain)
+    guard let apart = Adjust.filtered(first, "CIDifferenceBlendMode", [kCIInputBackgroundImageKey: second]),
+          let mean = Adjust.filtered(apart.cropped(to: rect), "CIAreaAverage", [kCIInputExtentKey: CIVector(cgRect: rect)]) else {
+      return nil
+    }
+    var pixel: [UInt8] = [0, 0, 0, 0]
+    CutoutRender.context.render(mean, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                format: CIFormat.RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.linearSRGB))
+    let sum = Double(pixel[0]) + Double(pixel[1]) + Double(pixel[2])
+    return sum / 765
+  }
+
   /// Renders `image` (filling `rect`) into a buffer from the writer's pool and appends it at `stamp`.
   static func put(_ image: CIImage, at stamp: CMTime, rect: CGRect, pool: CVPixelBufferPool, space: CGColorSpace,
                   adaptor: AVAssetWriterInputPixelBufferAdaptor, writer: AVAssetWriter) throws {
@@ -427,7 +450,9 @@ enum SteadyRender {
   /// OWN source time. With a grid (a DENSITY: about that many frames a source second, not a lattice of times),
   /// blended frames (`blendsBetween`) are added between each two neighbouring kept frames A and B, evenly spaced in time
   /// between them (on the copy's clock, `timescale`), each a dissolve of A into B by its share of the way; nothing is added before the first frame or
-  /// after the last. The source's sound packets are copied beside the picture as they are. The loop serves whichever
+  /// after the last. With a `cutDifference`, a pair whose two frames are more different than that (`difference`,
+  /// measured once a pair and only for a pair that would get blended frames) is a cut inside the clip: it gets
+  /// none, so the copy steps from the one shot to the other as the source does. The source's sound packets are copied beside the picture as they are. The loop serves whichever
   /// input is ready and sleeps when neither is.
   static func render(_ request: SteadyRequest, source: SteadySource, to outputURL: URL, job: SteadyJob,
                      progress: (Double) -> Void) async throws -> [String: Any] {
@@ -445,6 +470,7 @@ enum SteadyRender {
     let grid: Double = request.grid.isFinite && request.grid >= 1 ? min(240, request.grid.rounded()) : 0
     let near: Double = request.blendFloor.isFinite ? min(0.49, max(0, request.blendFloor)) : 0.02
     let zoom: Double = request.zoom
+    let cutLimit: Double = request.cutDifference.isFinite && request.cutDifference > 0 ? min(1, request.cutDifference) : 0
 
     let reader: AVAssetReader
     do {
@@ -485,6 +511,8 @@ enum SteadyRender {
     var between = 0                                // grid only: blended frames to write before `ahead`
     var step = 1                                   // grid only: the next of them (1 … between)
     var lastTick: Int64 = 0                        // grid only: the last written frame's time on the copy's clock
+    var cuts = 0                                   // grid only: pairs left without blended frames because they are a cut
+    var mostApart = 0.0                            // grid only: the largest difference measured between two neighbours
     // The least room between two frames of the copy, on its clock: the request's gap, and never under two ticks (a
     // source frame's own time may be stored one tick off; a blended frame must still fall strictly between two).
     let room: Int64 = max(2, tick(gap))
@@ -561,9 +589,21 @@ enum SteadyRender {
                   into = 1 - before.slot
                   count = blendsBetween(at - before.time, grid: grid, gap: gap)
                 }
-                autoreleasepool {
+                // A cut is asked about once a pair, and only for a pair that would get blended frames (so there
+                // is a frame before this one, in the other buffer).
+                let asks = cutLimit > 0 && count > 0
+                let apart: Double? = autoreleasepool { () -> Double? in
                   let placed = CIImage(cvPixelBuffer: frame).clampedToExtent().transformed(by: spot).cropped(to: rect)
                   CutoutRender.context.render(placed, to: slots[into], bounds: rect, colorSpace: space)
+                  guard asks else { return nil }
+                  return difference(slots[1 - into], slots[into], rect: rect)
+                }
+                if let apart {
+                  mostApart = max(mostApart, apart)
+                  if apart > cutLimit {
+                    count = 0                      // two different shots: nothing is blended between them
+                    cuts += 1
+                  }
                 }
                 ahead = SteadyFrame(time: at, stamp: pts, tick: tick(at), slot: into)
                 between = count
@@ -607,7 +647,7 @@ enum SteadyRender {
       throw error
     }
     progress(1)
-    let answer: [String: Any] = ["fileUri": outputURL.absoluteString, "seconds": span.end, "frames": written]
+    let answer: [String: Any] = ["fileUri": outputURL.absoluteString, "seconds": span.end, "frames": written, "cuts": cuts, "apart": mostApart]
     return answer
   }
 }
