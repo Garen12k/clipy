@@ -1,16 +1,19 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-07T10:00:00.000Z" }));
 jest.mock("@/src/ui/haptics", () => ({ haptic: jest.fn() }));
-jest.mock("@/modules/clipy-video", () => ({ isSoundAvailable: jest.fn(() => true), probeNoiseReduction: jest.fn(async () => ({ ok: true, stage: "render", detail: "frames 220500 outputRms 0.05 latency 0" })) }));
-import { isSoundAvailable, probeNoiseReduction } from "@/modules/clipy-video";
+jest.mock("@/modules/clipy-video", () => ({ isSoundAvailable: jest.fn(() => true), isNoiseBuild: jest.fn(() => true), isNoiseAvailable: jest.fn(() => true), probeNoiseReduction: jest.fn(async () => ({ ok: true, stage: "render", detail: "frames 220500 outputRms 0.05 latency 0" })) }));
+jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, disabled, value, minimumValue, maximumValue, step, onSlidingStart, onValueChange, onSlidingComplete }: { testID?: string; disabled?: boolean; value?: number; minimumValue?: number; maximumValue?: number; step?: number; onSlidingStart?: () => void; onValueChange?: (v: number) => void; onSlidingComplete?: () => void }) => <View testID={testID} {...{ disabled, value, minimumValue, maximumValue, step }} onTouchStart={() => onSlidingStart?.()} onTouchMove={(e: unknown) => onValueChange?.((e as { v?: number })?.v ?? 0.8)} onTouchEnd={() => onSlidingComplete?.()} />; });
+import { isNoiseAvailable, isNoiseBuild, isSoundAvailable, probeNoiseReduction } from "@/modules/clipy-video";
+import { setTrackSound } from "@/src/editor/model/ops";
 import { useSoundFiles } from "@/src/editor/soundFiles";
-import { SOUND_UNAVAILABLE } from "@/src/editor/soundRenders";
+import { NOISE_NOT_ON_PHONE, SOUND_UNAVAILABLE } from "@/src/editor/soundRenders";
 import { EQ_IDS, makeAudioTrack, makeClip, makeProject } from "@/src/editor/model/types";
 import { EQS } from "@/src/editor/soundTools";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { useToast } from "@/src/ui/Toast";
+import { PANEL } from "@/src/ui/ToolPanel";
 import { STRIP } from "@/src/ui/ToolStrip";
 import { NOISE_PROBE_CRASHED, NOISE_PROBE_KEY, resetNoiseProbe } from "../noiseProbe";
 import { SoundQualitySheet } from "../components/SoundQualitySheet";
@@ -29,9 +32,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   log = jest.spyOn(console, "log").mockImplementation(() => {});   // the noise test writes one line per app start
   jest.mocked(isSoundAvailable).mockReturnValue(true);
+  jest.mocked(isNoiseBuild).mockReturnValue(true);
+  jest.mocked(isNoiseAvailable).mockReturnValue(true);
   resetNoiseProbe();
   localStorage.removeItem(NOISE_PROBE_KEY);   // the noise test has never run on this "phone"
-  useSoundFiles.setState({ files: {}, hold: false });
+  useSoundFiles.setState({ files: {}, hold: false, holdTrack: null });
   useToast.setState({ message: null, stamp: 0 });
   st().reset();
   st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], audioTracks: [makeAudioTrack({ id: "v", sourceDuration: 5, kind: "voice" })] }));
@@ -144,7 +149,8 @@ test("the noise test: once per app start, when the strip opens in a dev session 
   expect(probeNoiseReduction).toHaveBeenCalledWith("file:///media/v.m4a");
   expect(log).toHaveBeenCalledWith("[noise-probe]", JSON.stringify({ ok: true, stage: "render", detail: "frames 220500 outputRms 0.05 latency 0" }));
   expect(log).toHaveBeenCalledTimes(1);
-  expect(screen.queryByText(/noise/i)).toBeNull();                        // nothing on screen
+  expect(screen.queryAllByText(/noise/i).map((t) => t.props.children)).toEqual(["Reduce noise"]);   // nothing on screen but the switch's own name
+  expect(screen.queryByText(/probe|frames|outputRms/i)).toBeNull();
   expect(useToast.getState().message).toBeNull();
   await first.unmount();
   await open();
@@ -208,5 +214,151 @@ test("the noise test took the app down last time: the strip opens, a crash is lo
   expect(probeNoiseReduction).not.toHaveBeenCalled();
   expect(log.mock.calls).toEqual([["[noise-probe]", NOISE_PROBE_CRASHED]]);
   expect(screen.getByText("Sound quality")).toBeTruthy();
-  expect(screen.queryByText(/noise|crash/i)).toBeNull();                  // nothing on screen
+  expect(screen.queryAllByText(/noise/i).map((t) => t.props.children)).toEqual(["Reduce noise"]);   // nothing on screen but the switch's own name
+  expect(screen.queryByText(/probe|crash/i)).toBeNull();
+});
+
+describe("Reduce noise", () => {
+  const noise = () => screen.getByLabelText("Reduce noise");
+  const strength = () => screen.getByTestId("noise-strength");
+  const drag = async (to: number) => {
+    await fireEvent(strength(), "touchStart");
+    await fireEvent(strength(), "touchMove", { v: to });
+  };
+
+  test("the tool is a compact panel now: every row has its height and they fit the body", async () => {
+    await open();
+    expect(screen.getByTestId("tool-panel")).toBeTruthy();
+    expect(screen.queryByTestId("tool-strip")).toBeNull();
+    expect(screen.getByTestId("strip-tiles")).toHaveStyle({ height: STRIP.tiles });
+    expect(screen.getByTestId("sound-level-row")).toHaveStyle({ height: STRIP.slider });
+    expect(screen.getByTestId("sound-noise-row")).toHaveStyle({ height: STRIP.slider + theme.space.md });
+    expect(screen.getByTestId("strip-slider")).toHaveStyle({ height: STRIP.slider });
+    expect(STRIP.tiles + STRIP.slider + STRIP.slider + theme.space.md + STRIP.slider).toBeLessThanOrEqual(PANEL.compact - 1 - PANEL.header);
+    expect(screen.getByText("Best on speech. Music can sound odd.")).toBeTruthy();
+  });
+
+  test("off at first: the switch is off and Strength is greyed out at 50 %", async () => {
+    await open();
+    expect(noise().props.value).toBe(false);
+    expect(strength().props).toMatchObject({ disabled: true, minimumValue: 0, maximumValue: 1, step: 0.05, value: 0.5 });
+    expect(screen.getByText("Strength 50 %")).toBeTruthy();
+  });
+
+  test("the switch is one undo step each way; on starts in the middle; off leaves the bar as recorded", async () => {
+    await open();
+    await fireEvent(noise(), "valueChange", true);
+    expect(track().sound).toEqual({ voice: null, strength: 0.5, pitch: 0, eq: null, level: false, noise: 0.5 });
+    expect(past()).toBe(1);
+    expect(noise().props.value).toBe(true);
+    expect(strength().props.disabled).toBe(false);
+    await fireEvent(noise(), "valueChange", false);
+    expect("sound" in track()).toBe(false);
+    expect(past()).toBe(2);
+  });
+
+  test("it keeps a preset and Even out loudness, and they keep it", async () => {
+    await open();
+    await press("Warm");
+    await fireEvent(noise(), "valueChange", true);
+    await fireEvent(level(), "valueChange", true);
+    expect(track().sound).toEqual({ voice: null, strength: 0.5, pitch: 0, eq: "warm", level: true, noise: 0.5 });
+    await fireEvent(noise(), "valueChange", false);
+    expect(track().sound).toEqual({ voice: null, strength: 0.5, pitch: 0, eq: "warm", level: true });
+    expect("noise" in track().sound!).toBe(false);   // the key is gone, not undefined
+  });
+
+  test("a Strength drag is one undo step and holds the renders for this track until it is let go", async () => {
+    await open();
+    await fireEvent(noise(), "valueChange", true);
+    const before = past();
+    await drag(0.8);
+    expect(useSoundFiles.getState()).toMatchObject({ hold: true, holdTrack: "v" });
+    await fireEvent(strength(), "touchMove", { v: 0.9 });
+    expect(track().sound?.noise).toBe(0.9);
+    expect(past()).toBe(before + 1);
+    await fireEvent(strength(), "touchEnd");
+    expect(useSoundFiles.getState()).toMatchObject({ hold: false, holdTrack: null });
+    expect(screen.getByText("Strength 90 %")).toBeTruthy();
+  });
+
+  test("a drag to the far left keeps Reduce noise on, at its lightest", async () => {
+    await open();
+    await fireEvent(noise(), "valueChange", true);
+    await drag(0);
+    await fireEvent(strength(), "touchEnd");
+    expect(track().sound?.noise).toBe(0);
+    expect(noise().props.value).toBe(true);
+    expect(strength().props.disabled).toBe(false);
+    expect(screen.getByText("Strength 0 %")).toBeTruthy();
+  });
+
+  test("with the switch off a drag does nothing", async () => {
+    await open();
+    await drag(0.8);
+    expect("sound" in track()).toBe(false);
+    expect(past()).toBe(0);
+    expect(useSoundFiles.getState().hold).toBe(false);
+  });
+
+  test("the hold is let go when the panel is hidden mid-drag", async () => {
+    const view = await open();
+    await fireEvent(noise(), "valueChange", true);
+    await drag(0.8);
+    await view.rerender(<SoundQualitySheet trackId="v" visible={false} onClose={() => {}} />);
+    expect(useSoundFiles.getState()).toMatchObject({ hold: false, holdTrack: null });
+  });
+
+  test("the hold is let go when the panel goes, or its track is removed, mid-drag", async () => {
+    const view = await open();
+    await fireEvent(noise(), "valueChange", true);
+    await drag(0.8);
+    await view.unmount();
+    expect(useSoundFiles.getState()).toMatchObject({ hold: false, holdTrack: null });
+    await open();
+    await drag(0.7);
+    expect(useSoundFiles.getState()).toMatchObject({ hold: true, holdTrack: "v" });
+    await act(async () => { st().apply((p) => ({ ...p, audioTracks: [] })); });
+    expect(useSoundFiles.getState()).toMatchObject({ hold: false, holdTrack: null });
+  });
+
+  test("on a build without it the switch does not move and the sentence is said; the presets still work", async () => {
+    jest.mocked(isNoiseBuild).mockReturnValue(false);
+    jest.mocked(isNoiseAvailable).mockReturnValue(false);
+    await open();
+    await fireEvent(noise(), "valueChange", true);
+    expect("sound" in track()).toBe(false);
+    expect(past()).toBe(0);
+    expect(noise().props.value).toBe(false);
+    expect(useToast.getState().message).toBe("Reduce noise and Read aloud need the latest Clipy build. Install it from the newest build link.");
+    await press("Warm");
+    expect(track().sound?.eq).toBe("warm");
+  });
+
+  test("on an iPhone without the unit it says so", async () => {
+    jest.mocked(isNoiseAvailable).mockReturnValue(false);
+    await open();
+    await fireEvent(noise(), "valueChange", true);
+    expect(past()).toBe(0);
+    expect(useToast.getState().message).toBe(NOISE_NOT_ON_PHONE);
+  });
+
+  test("without the engine the switch changes nothing and says the engine's sentence", async () => {
+    jest.mocked(isSoundAvailable).mockReturnValue(false);
+    await open();
+    await fireEvent(noise(), "valueChange", true);
+    expect("sound" in track()).toBe(false);
+    expect(past()).toBe(0);
+    expect(useToast.getState().message).toBe(SOUND_UNAVAILABLE);
+  });
+
+  test("a noise setting that is already stored can always be switched off, whatever the build", async () => {
+    st().apply((p) => setTrackSound(p, "v", { noise: 0.75 }));
+    jest.mocked(isNoiseBuild).mockReturnValue(false);
+    jest.mocked(isNoiseAvailable).mockReturnValue(false);
+    await open();
+    expect(noise().props.value).toBe(true);
+    await fireEvent(noise(), "valueChange", false);
+    expect("sound" in track()).toBe(false);
+  });
 });
