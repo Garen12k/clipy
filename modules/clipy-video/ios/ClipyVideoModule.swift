@@ -74,6 +74,24 @@ public class ClipyVideoModule: Module {
     return speechJobs[id]
   }
 
+  private let beatLock = NSLock()
+  private var beatJobs: [String: BeatJob] = [:]   // guarded by `beatLock`; one entry per listening that has not answered yet
+
+  private func storeBeatJob(_ id: String, _ job: BeatJob) {
+    beatLock.lock(); defer { beatLock.unlock() }
+    beatJobs[id] = job
+  }
+
+  private func dropBeatJob(_ id: String) {
+    beatLock.lock(); defer { beatLock.unlock() }
+    beatJobs[id] = nil
+  }
+
+  private func lookupBeatJob(_ id: String) -> BeatJob? {
+    beatLock.lock(); defer { beatLock.unlock() }
+    return beatJobs[id]
+  }
+
   public func definition() -> ModuleDefinition {
     Name("ClipyVideo")
     Events("onExportEvent", "onSoundEvent")
@@ -257,6 +275,33 @@ public class ClipyVideoModule: Module {
     // Stops that Read aloud (it then rejects "E_READ_ALOUD_CANCELLED"). An unknown or finished job: nothing.
     Function("cancelSpeech") { (jobId: String) in
       self.lookupSpeechJob(jobId)?.cancel()
+    }
+
+    // Find beats for a file of the owner's: decodes the asked stretch of the file's sound and resolves its onset
+    // envelope `{ env, rate, seconds, from }` (see BeatEnvelope). Rejects "E_BEATS_CANCELLED" after
+    // `cancelBeatEnvelope(jobId)`, else "E_BEATS" with a staged message. The work runs on a Swift concurrency
+    // thread, never the main one; the job is stored before it starts, so a cancel that comes at once finds it, and
+    // every way out of the `do` answers the promise exactly once.
+    AsyncFunction("beatEnvelope") { (request: BeatEnvelopeRequest, promise: Promise) in
+      let job = BeatJob()
+      let jobId = request.jobId
+      self.storeBeatJob(jobId, job)
+      Task { [weak self] in
+        defer { self?.dropBeatJob(jobId) }
+        do {
+          let answer: [String: Any] = try await BeatEnvelope.run(request, job: job)
+          promise.resolve(answer)
+        } catch BeatError.cancelled {
+          promise.reject("E_BEATS_CANCELLED", "Beats cancelled")
+        } catch {
+          promise.reject("E_BEATS", BeatEnvelope.message(error))
+        }
+      }
+    }
+
+    // Stops that listening at its next buffer (it then rejects "E_BEATS_CANCELLED"). An unknown or finished job: nothing.
+    Function("cancelBeatEnvelope") { (jobId: String) in
+      self.lookupBeatJob(jobId)?.cancel()
     }
   }
 }
