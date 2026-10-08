@@ -12,7 +12,7 @@ export const isAspectRatio = (v: unknown): v is AspectRatio => (ASPECT_RATIOS as
 export const aspectLabel = (r: AspectRatio): string => (r === "auto" ? "Auto" : r);
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 18 as const;
+export const SCHEMA_VERSION = 19 as const;
 export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
 export const EXPORT_QUALITIES = ["high", "small"] as const;
@@ -47,13 +47,16 @@ export const EQ_IDS = ["bassBoost", "clearVoice", "warm", "bright"] as const;
 export type EqId = (typeof EQ_IDS)[number];
 /**
  * How an audio track is changed before it is mixed. `voice` null = none; `strength` 0–1, gentle … strong; `pitch` whole semitones
- * (added to the voice's own); `eq` null = none; `level` = Even out loudness. The file is never changed: a copy is rendered from these.
+ * (added to the voice's own); `eq` null = none; `level` = Even out loudness; `noise` = Reduce noise, ABSENT when off, else its
+ * strength 0–1. The file is never changed: a copy is rendered from these.
  */
-export interface SoundSettings { voice: VoiceId | null; strength: number; pitch: number; eq: EqId | null; level: boolean }
+export interface SoundSettings { voice: VoiceId | null; strength: number; pitch: number; eq: EqId | null; level: boolean; noise?: number }
 export const SOUND_LIMITS = { strength: [0, 1] as const, defaultStrength: 0.5, pitch: [-12, 12] as const };
+/** Reduce noise: its strength (light … strong) and where the slider starts when the switch is turned on. */
+export const NOISE_LIMITS = { strength: [0, 1] as const, defaultStrength: 0.5 };
 /** The sound as recorded. Never stored: a track without changes has NO `sound` key. */
 export const NO_SOUND: SoundSettings = { voice: null, strength: SOUND_LIMITS.defaultStrength, pitch: 0, eq: null, level: false };
-export const isNeutralSound = (s: SoundSettings): boolean => s.voice === null && s.pitch === 0 && s.eq === null && !s.level;
+export const isNeutralSound = (s: SoundSettings): boolean => s.voice === null && s.pitch === 0 && s.eq === null && !s.level && s.noise === undefined;
 
 export const FILTER_IDS = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage",
   "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream",
@@ -493,7 +496,7 @@ export const clampFade = (v: unknown): number => (isNum(v) ? clampNum(v, AUDIO_L
 
 /**
  * A usable sound setting with every value in range (strength 2 decimals, not a number → the default; pitch a whole step, not a
- * number → 0; unknown ids → none; `level` only when exactly true), or null when it is not an object or changes nothing. Idempotent.
+ * number → 0; unknown ids → none; `level` only when exactly true, `noise` only when it is a number (clamped, 2 decimals)), or null when it is not an object or changes nothing. Idempotent.
  */
 export function clampSound(v: unknown): SoundSettings | null {
   if (!isRec(v) || Array.isArray(v)) return null;
@@ -505,6 +508,8 @@ export function clampSound(v: unknown): SoundSettings | null {
     eq: (EQ_IDS as readonly unknown[]).includes(v.eq) ? (v.eq as EqId) : null,
     level: v.level === true,
   };
+  // v19: Reduce noise is optional and ABSENT unless it is a usable number.
+  if (isNum(v.noise)) s.noise = Math.round(clampNum(v.noise, NOISE_LIMITS.strength[0], NOISE_LIMITS.strength[1]) * 100) / 100;
   return isNeutralSound(s) ? null : s;
 }
 

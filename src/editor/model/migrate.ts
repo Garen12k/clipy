@@ -92,14 +92,14 @@ function normaliseLayers(v: unknown, taken: Set<string>): LayerClip[] {
 }
 
 /**
- * Brings a v2–v18 file to a safe v18 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
+ * Brings a v2–v19 file to a safe v19 shape. Idempotent, so it runs on EVERY load: unknown speed → 1, unknown filter →
  * null, unknown transition → dissolve (duration kept), transitions re-capped (last clip cleared), overlays get a kind, bad stickers fixed/dropped,
  * clips get kind/transform/crop/background/reversed defaults or repairs, photos forced to the photo rules, look fields (strength, adjust) clamped, effects repaired,
  * speed curves repaired (a curve forces speed 1; photos never have one), audio tracks get a known kind and clamped fades (at most maxTracks kept), clips get clamped fades (photos 0), clips get opacity / mask repaired, layers are repaired like clips with a start (see normaliseLayers),
  * layers keep a known blend (main clips are forced to normal), green screens are valid or null, region effects always have a clamped rect (other effects none),
  * ducking is a boolean and beat markers are sorted, spaced and capped, export settings are known values, the cover is inside the project or null,
  * the aspect ratio is one of the nine ids (v13 → v14 keeps the three old ones as they are; anything unknown → 9:16),
- * text styles get the two box fields (v14 → v15: the defaults reproduce the box every text had), and v15 → v16 adds nothing (the number only keeps an older build from repairing the ids of 2026-10-06 away), and v16 → v17 adds nothing either: a photo's Motion and a layer's collage tag are optional, kept when usable and removed when not, and v17 → v18 adds nothing either: an audio track's sound setting is optional, kept when usable and removed when not.
+ * text styles get the two box fields (v14 → v15: the defaults reproduce the box every text had), and v15 → v16 adds nothing (the number only keeps an older build from repairing the ids of 2026-10-06 away), and v16 → v17 adds nothing either: a photo's Motion and a layer's collage tag are optional, kept when usable and removed when not, and v17 → v18 adds nothing either: an audio track's sound setting is optional, kept when usable and removed when not, and v18 → v19 adds nothing either: a sound setting's noise strength is optional, kept when usable and removed when not.
  */
 function normaliseCurrent(raw: Raw): Raw {
   const mapped = (raw.clips as Clip[]).map((c) => normaliseClip(c));
@@ -144,6 +144,6 @@ export function migrateProject(raw: unknown): Project {
   if (version < 1) throw new Error("Project file is missing required fields");
   let cur = raw as Raw;
   if (version === 1) cur = v1to2(cur);
-  // v2 → v18 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
+  // v2 → v19 and the sanity pass are the same idempotent step, so corrupted files of any supported version load safely too.
   return normaliseCurrent(cur) as unknown as Project;
 }

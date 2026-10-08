@@ -3,8 +3,8 @@ import {
   minAudioDuration, newPhotoClip, newVideoClip, SCHEMA_VERSION,
 } from "../types";
 
-test("schema is v18 and the audio constants are exact", () => {
-  expect(SCHEMA_VERSION).toBe(18);
+test("schema is v19 and the audio constants are exact", () => {
+  expect(SCHEMA_VERSION).toBe(19);
   expect(AUDIO_KINDS).toEqual(["music", "voice", "sfx"]);
   expect(AUDIO_LIMITS).toEqual({ minDuration: 0.5, volume: [0, 2], maxTracks: 12, fade: [0, 5], sfxMinDuration: 0.1 });
   expect(DUCKING).toEqual({ level: 0.3, ramp: 0.3 });
@@ -42,5 +42,5 @@ test("factories carry the v10 defaults", () => {
   expect(newPhotoClip({ id: "c", sourceUri: "u", width: 1, height: 1 })).toMatchObject({ fadeIn: 0, fadeOut: 0 });
   expect(makeClip({ id: "c", sourceDuration: 3 })).toMatchObject({ fadeIn: 0, fadeOut: 0 });
   expect(makePhotoClip({ id: "p" })).toMatchObject({ fadeIn: 0, fadeOut: 0 });
-  expect(makeProject()).toMatchObject({ schemaVersion: 18, ducking: false, beatMarkers: [] });
+  expect(makeProject()).toMatchObject({ schemaVersion: 19, ducking: false, beatMarkers: [] });
 });
