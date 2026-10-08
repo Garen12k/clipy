@@ -1,5 +1,5 @@
 import { cutoutFileName } from "../cutout";
-import { coveringSteady, levelRule, neededSteady, parseSteadyName, SMOOTH, STEADY, STEADY_LEVELS, STEADY_PREVIEW, STEADY_VERSION, steadyBitRate, steadyBytes, steadyDeadlineMs, steadyFileName, steadyNeed, steadyOf, steadyRefusal } from "../steady";
+import { coveringSteady, levelRule, neededSteady, parseSteadyName, SMOOTH, SMOOTH_MARK, STEADY, STEADY_LEVELS, STEADY_PREVIEW, STEADY_VERSION, steadyBitRate, steadyBytes, steadyDeadlineMs, steadyFileName, steadyNeed, steadyOf, steadyRefusal } from "../steady";
 import { makeClip, makeLayer, makePhotoClip, makeProject, type Clip } from "../types";
 
 const MEDIA = "file:///doc/projects/p1/media";
@@ -9,7 +9,10 @@ test("the numbers", () => {
   expect(STEADY_VERSION).toBe(1);
   expect(STEADY).toEqual({ maxSeconds: 60, maxSide: 1920, minFrameGap: 0.008, measureSide: 512, bitsPerPixel: 0.12, blendFloor: 0.02, cutShift: 0.2, scaleX: 1, scaleY: 1, measureShare: 0.4 });
   expect(STEADY_LEVELS).toEqual({ low: { level: 1, zoom: 1.05, radius: 0.25 }, medium: { level: 2, zoom: 1.1, radius: 0.5 }, high: { level: 3, zoom: 1.15, radius: 1 } });
-  expect(SMOOTH).toEqual({ fullGrid: 60, slowGrid: 120, slowBelow: 0.5 });
+  expect(SMOOTH).toEqual({ fullGrid: 60, slowGrid: 120, slowBelow: 0.5, cutDifference: 0.12 });
+  // The mark carries the threshold (another threshold = another mark = the smooth copies are made again) and is never a copy's name.
+  expect(SMOOTH_MARK).toBe("cuts-120");
+  expect(parseSteadyName(SMOOTH_MARK)).toBeNull();
   expect(STEADY_PREVIEW).toEqual({ layerVideo: true, mainVideo: true });
   expect(levelRule(2)).toEqual({ zoom: 1.1, radius: 0.5 });
   expect(levelRule(0)).toBeNull();

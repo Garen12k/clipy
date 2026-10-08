@@ -1,4 +1,4 @@
-import { isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
+import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
 
 /**
  * What the INSTALLED app can do, newest ability first. Buttons and screens arrive from the dev server at once, but an ability that
@@ -6,6 +6,7 @@ import { isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSpeechAvailab
  * This names the installed build by what it has; add a row at the top whenever a build adds a native ability.
  */
 const LEVELS: { name: string; has: () => boolean }[] = [
+  { name: "blur and cuts", has: isBlurAndCutsBuild },
   { name: "stabilize and smooth", has: isSteadyAvailable },
   { name: "beats and background", has: isCutoutAvailable },
   { name: "noise, ramps and speech", has: isSpeechAvailable },

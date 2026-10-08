@@ -67,6 +67,14 @@ struct ExportChroma: Record {
   @Field var strength: Double = 0.5                // 0…1
 }
 
+/// What a main clip's BLUR background is made from when that is not the clip's own picture: the clip is sent from
+/// its see-through cut-out copy, whose blur would be a blurred silhouette, so the app names the ORIGINAL file here.
+/// It is read with the clip's own timing (a copy has its original's timeline). Absent for every other clip.
+struct ExportBackdrop: Record {
+  @Field var uri: String = ""                      // the original file
+  @Field var kind: String = "video"                // video | photo (a photo is decoded once, as a still)
+}
+
 /// A project-time effect range. Decoded here; drawn by `ClipyCompositor` through `EffectRenderer`.
 struct ExportEffect: Record {
   @Field var type: String = ""                     // Effects.effectIds (unknown → ignored)
@@ -134,6 +142,7 @@ struct ExportClip: Record {
   @Field var mask: String = "none"                 // none | rounded | circle (unknown → none): the picture box's corners
   @Field var blend: String = "normal"              // normal | screen | multiply | overlay | lighten | darken (unknown → normal); layers only
   @Field var chroma: ExportChroma?                 // green screen; JS `null` → nil (none)
+  @Field var backdrop: ExportBackdrop?             // the file a Blur background is made from; absent → nil (the clip's own picture, as ever)
 }
 
 /// A picture-in-picture layer: a clip (every `ExportClip` field, same names and defaults) placed on the timeline at
@@ -168,6 +177,7 @@ struct ExportLayer: Record {
   @Field var mask: String = "none"
   @Field var blend: String = "normal"
   @Field var chroma: ExportChroma?
+  @Field var backdrop: ExportBackdrop?
   @Field var start: Double = 0                     // composition seconds; the layer may run past the end of the video
 }
 
@@ -285,6 +295,14 @@ private struct LoadedClip {
   let speed: Double
   let spans: [SpeedSpan]                           // a speed curve fitted to [start, end]; empty → constant `speed`
   let outDur: CMTime                               // (end − start) / speed, or Σ span duration / speed — what the clip adds to the timeline
+}
+
+/// The original file of a clip that is drawn from a see-through copy, loaded for the clip's blurred background.
+private struct LoadedBackdrop {
+  let asset: AVURLAsset                            // AVAssetTrack.asset is weak: the track is only usable while this lives
+  let video: AVAssetTrack
+  let fill: CGAffineTransform                      // Core Image aspect-fill transform of THIS file (its own size and turn)
+  let sourceEnd: CMTime                            // last source time that can be read
 }
 
 /// The cut points of one retimed insert: `source[j]` (source time) lands on `output[j]` (composition time). Both
@@ -914,6 +932,31 @@ final class ExportSession {
       speed: speed, spans: spans, outDur: outDur)
   }
 
+  /// How much earlier than the clip's copy the original's picture may end, in seconds, and still be used for the
+  /// blurred background (the original is then read to its own end): a copy's picture runs to the end of the FILE,
+  /// the original's picture track can stop a few frames before that.
+  static let backdropSlack: Double = 0.5
+
+  /// Loads the file a clip's blurred background is made from (`ExportBackdrop`). Nil — that clip's background is then
+  /// made from its own picture, as it always was — when the file has no picture or cannot be read. Never throws.
+  private static func loadBackdrop(_ uri: String, renderSize: CGSize) async -> LoadedBackdrop? {
+    guard let url = URL(string: uri) else { return nil }
+    let asset = AVURLAsset(url: url)
+    do {
+      guard let video = try await asset.loadTracks(withMediaType: .video).first else { return nil }
+      let (preferredTransform, naturalSize, videoRange) = try await video.load(.preferredTransform, .naturalSize, .timeRange)
+      let duration = try await asset.load(.duration)
+      let shown = naturalSize.applying(preferredTransform)
+      guard shown.width.isFinite, shown.height.isFinite, abs(shown.width) >= 1, abs(shown.height) >= 1 else { return nil }
+      return LoadedBackdrop(
+        asset: asset, video: video,
+        fill: Self.ciFillTransform(preferredTransform: preferredTransform, naturalSize: naturalSize, renderSize: renderSize),
+        sourceEnd: CMTimeMinimum(duration, videoRange.end))
+    } catch {
+      return nil
+    }
+  }
+
   func start(_ request: ExportRequest) async throws {
     guard let outputURL = Self.fileURL(from: request.outputPath) else { throw ExportError.badOutputPath }
     guard !request.clips.isEmpty else { throw ExportError.sessionFailed("Nothing to export") }
@@ -985,6 +1028,27 @@ final class ExportSession {
     }
     let n = loaded.count
 
+    // 1b. Blur backgrounds made from another file than the clip's own (`ExportBackdrop`: a cut-out copy is
+    //     see-through, so its own blur is a silhouette). A video is loaded here and laid on a track of its own beside
+    //     the clip in step 3; a photo is decoded once, as a still. One that cannot be used is left out: that clip's
+    //     background is then made from its own picture, as it always was. Without such a clip nothing here runs.
+    var backdropSources: [Int: LoadedBackdrop] = [:]
+    var backdropStills: [Int: LayerBackdrop] = [:]
+    var backdropTracks: [Int: CMPersistentTrackID] = [:]
+    for (i, one) in loaded.enumerated() {
+      guard let asked = one.clip.backdrop, one.clip.background.type == "blur" else { continue }
+      if cancelledFlag { onEvent(["jobId": id, "type": "cancelled"]); return }
+      if asked.kind == "photo" {
+        if let image = MediaPrePass.uprightPhoto(asked.uri, maxPixels: Int(max(renderSize.width, renderSize.height))),
+           let still = LayerBackdrop.photo(image, renderSize: renderSize) {
+          backdropStills[i] = still
+        }
+      } else if let found = await Self.loadBackdrop(asked.uri, renderSize: renderSize) {
+        backdropSources[i] = found
+        sourceAssets.append(found.asset)
+      }
+    }
+
     // 2. Half-width of the transition window at each cut (window = [cut − half, cut + half]), clamped in CMTime so
     //    the two windows inside one clip never overlap (half[i−1] + half[i] ≤ outDur[i]) and a window never takes
     //    more than half of the next clip. Clip i and clip i+2 share a track, so their placements cannot overlap.
@@ -1052,6 +1116,37 @@ final class ExportSession {
       return true
     }
 
+    /// The blurred-background file of clip `i` (step 1b), laid on a video track of its own over exactly the clip's
+    /// stretch [clipStart, clipEnd): the same source times at the same composition times as the clip's own picture
+    /// (`cuts` are the cuts the clip was inserted with — the copy a clip plays has its original's timeline), and the
+    /// same held edge frame where a handle was clamped. The original is read to its own end at most (`backdropSlack`).
+    /// Whatever fails, the track is taken out again and the clip's background is made from its own picture, as it
+    /// always was: this never fails an export. Without a loaded file for `i` nothing is done.
+    func placeBackdrop(_ i: Int, cuts: RetimeCuts, edge: CMTime, from clipStart: CMTime, to clipEnd: CMTime) {
+      let pieces = min(cuts.source.count, cuts.output.count) - 1
+      guard let back = backdropSources[i], pieces >= 1 else { return }
+      let sourceStart = cuts.source[0], mainStart = cuts.output[0], mainEnd = cuts.output[pieces]
+      let sourceEnd = CMTimeMinimum(cuts.source[pieces], back.sourceEnd)
+      let short = (cuts.source[pieces] - sourceEnd).seconds
+      guard CMTimeCompare(sourceEnd, sourceStart) > 0, short.isFinite, short <= ExportSession.backdropSlack,
+            let track = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else { return }
+      var interior: [(source: CMTime, output: CMTime)] = []
+      if pieces >= 2 {
+        for j in 1..<pieces { interior.append((source: cuts.source[j], output: cuts.output[j])) }
+      }
+      let own = ExportSession.retimeCuts(from: (source: sourceStart, output: mainStart), to: (source: sourceEnd, output: mainEnd), interior: interior)
+      let held = CMTimeMinimum(edge, sourceEnd - sourceStart)
+      do {
+        _ = try insertScaled(track, CMTimeRange(start: sourceStart, duration: held), of: back.video, from: clipStart, to: mainStart)
+        let laid = try insertRetimed(track, of: back.video, cuts: own)
+        guard laid else { composition.removeTrack(track); return }
+        _ = try insertScaled(track, CMTimeRange(start: sourceEnd - held, duration: held), of: back.video, from: mainEnd, to: clipEnd)
+        backdropTracks[i] = track.trackID
+      } catch {
+        composition.removeTrack(track)
+      }
+    }
+
     for (i, c) in loaded.enumerated() {
       let k = i % 2
       let track = videoTracks[k]
@@ -1088,6 +1183,7 @@ final class ExportSession {
         _ = try insertRetimed(track, of: c.srcVideo, cuts: cuts)
         _ = try insertScaled(track, CMTimeRange(start: source.end - edge, duration: edge), of: c.srcVideo, from: mainEnd, to: clipEnd)
         videoEnd[k] = clipEnd
+        placeBackdrop(i, cuts: cuts, edge: edge, from: clipStart, to: clipEnd)
 
         // Clip audio, cut at the same points as the video: the part of the source the audio track covers, with its
         // ends mapped through the video's cuts (exactly mainStart / mainEnd when the audio covers the whole range).
@@ -1127,6 +1223,8 @@ final class ExportSession {
       _ = try insertScaled(track, source, of: c.srcVideo, from: mainStart, to: mainEnd)
       _ = try insertScaled(track, CMTimeRange(start: source.end - edge, duration: edge), of: c.srcVideo, from: mainEnd, to: clipEnd)
       videoEnd[k] = clipEnd
+      // A constant speed is one piece: the same helper then does what `insertScaled` did just above.
+      placeBackdrop(i, cuts: RetimeCuts(source: [source.start, source.end], output: [mainStart, mainEnd]), edge: edge, from: clipStart, to: clipEnd)
 
       // Clip audio (handles included, so the two clips' sound overlaps across a transition), retimed like the video.
       if let srcAudio = c.srcAudio, let audioRange = c.audioRange, let audioTrack = audioTracks[k] {
@@ -1272,6 +1370,13 @@ final class ExportSession {
     //    then the window around cut i, [bodyEnd − half, bodyEnd + half), with the outgoing and incoming layers.
     //    A layer also knows where its clip's own range sits in composition time — `bodyStart` (the cursor before the
     //    clip: no transition handle) and `outDur` (its length after speed) — so motion is resolved at clip-local time.
+    /// What clip `i`'s Blur background is made from when that is not its own picture (step 1b): a photo's still, or
+    /// the track its original was laid on. Nil for every other clip, and for one whose original could not be used.
+    func backdropOf(_ i: Int) -> LayerBackdrop? {
+      if let still = backdropStills[i] { return still }
+      guard let back = backdropSources[i], let trackID = backdropTracks[i] else { return nil }
+      return LayerBackdrop(trackID: trackID, fill: back.fill, still: nil)
+    }
     func spec(_ i: Int) -> LayerSpec {
       let c = loaded[i].clip
       return LayerSpec(
@@ -1283,7 +1388,7 @@ final class ExportSession {
         background: LayerBackground(type: c.background.type, color: c.background.color),
         filter: c.filter, filterIntensity: c.filterIntensity, adjust: c.adjust.values,
         opacity: c.opacity, mask: c.mask,
-        chroma: ExportSession.chromaKey(c.chroma),
+        chroma: ExportSession.chromaKey(c.chroma), backdrop: backdropOf(i),
         motion: ExportSession.clipMotion(c), clipStart: placed[i].bodyStart.seconds, clipLength: loaded[i].outDur.seconds)
     }
     //    Each instruction also carries the timeline effects overlapping its range (project time = composition time).

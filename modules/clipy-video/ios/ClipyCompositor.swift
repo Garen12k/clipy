@@ -31,6 +31,28 @@ enum LayerBackground {
   }
 }
 
+/// What a clip's BLUR background is made from when that is not the clip's own picture. A clip drawn from its
+/// see-through cut-out copy would blur a silhouette, so the export is handed the original: a composition track
+/// holding it over the clip's stretch (a video), or one still (a photo).
+struct LayerBackdrop {
+  /// The track with the original's frames; `kCMPersistentTrackID_Invalid` for a still.
+  let trackID: CMPersistentTrackID
+  /// That file's own cover transform (`ExportSession.ciFillTransform`); for a still, the one already applied to it.
+  let fill: CGAffineTransform
+  /// A photo's picture, already scaled to cover the frame; nil for a video.
+  let still: CIImage?
+
+  /// A photo's backdrop: `image` (upright) scaled to cover `renderSize` about its centre. Nil for an empty picture or frame.
+  static func photo(_ image: CGImage, renderSize: CGSize) -> LayerBackdrop? {
+    let w = CGFloat(image.width), h = CGFloat(image.height)
+    guard w > 0, h > 0, renderSize.width > 0, renderSize.height > 0 else { return nil }
+    let scale = max(renderSize.width / w, renderSize.height / h)
+    let cover = CGAffineTransform(scaleX: scale, y: scale)
+      .concatenating(CGAffineTransform(translationX: (renderSize.width - w * scale) / 2, y: (renderSize.height - h * scale) / 2))
+    return LayerBackdrop(trackID: kCMPersistentTrackID_Invalid, fill: cover, still: CIImage(cgImage: image).transformed(by: cover))
+  }
+}
+
 /// A clip's animation and pins as the compositor resolves them for every frame (`Motion.resolveClip`). Pin times are
 /// clip-local output seconds; edge durations are the request's already-scaled ones.
 struct ClipMotionSpec: Equatable {
@@ -85,12 +107,17 @@ final class LayerSpec {
   let clipStart: Double
   /// The clip's length in the composition, in seconds (after speed).
   let clipLength: Double
+  /// What the Blur background is made from when that is not this clip's own picture; nil for every other clip —
+  /// such a layer is drawn exactly as before.
+  let backdrop: LayerBackdrop?
 
   init(trackID: CMPersistentTrackID, fill: CGAffineTransform, orient: CGAffineTransform, crop: ClipCrop,
        transform: ClipTransform, background: LayerBackground, filter: String?,
        filterIntensity: Double = 1, adjust: AdjustValues = .neutral,
        opacity: Double = 1, mask: String = "none", transparent: Bool = false, blend: String = "normal", chroma: ChromaKey? = nil,
+       backdrop: LayerBackdrop? = nil,
        motion: ClipMotionSpec? = nil, clipStart: Double = 0, clipLength: Double = 0) {
+    self.backdrop = backdrop
     self.motion = motion
     self.clipStart = clipStart
     self.clipLength = clipLength
@@ -178,8 +205,18 @@ final class ClipyInstruction: NSObject, AVVideoCompositionInstructionProtocol {
     self.transition = transition
     self.overlays = overlays
     self.effects = effects
-    self.requiredSourceTrackIDs = (layers + overlays).map { NSNumber(value: $0.trackID) as NSValue }
+    let behind: [NSValue] = ClipyInstruction.backdropTracks(layers)
+    self.requiredSourceTrackIDs = (layers + overlays).map { NSNumber(value: $0.trackID) as NSValue } + behind
     super.init()
+  }
+
+  /// The tracks the main layers' Blur backgrounds are read from (`LayerBackdrop`; usually none): they join the
+  /// tracks the instruction asks for. A still needs no track.
+  static func backdropTracks(_ layers: [LayerSpec]) -> [NSValue] {
+    return layers.compactMap { (layer: LayerSpec) -> NSValue? in
+      guard let back = layer.backdrop, back.still == nil, back.trackID != kCMPersistentTrackID_Invalid else { return nil }
+      return NSNumber(value: back.trackID) as NSValue
+    }
   }
 }
 
@@ -217,6 +254,19 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
     func frame(_ spec: LayerSpec) -> CIImage? {
       guard let pb = req.sourceFrame(byTrackID: spec.trackID) else { return nil }
       let source = CIImage(cvPixelBuffer: pb)
+      // A Blur background made from another picture than the clip's own (`LayerBackdrop`): the still, or the frame
+      // its track has at this time. Without one — every other clip, and a moment that track has no frame for —
+      // the clip is drawn by the lines below, exactly as before.
+      if let back = spec.backdrop {
+        var behind: CIImage? = back.still
+        if behind == nil, let held = req.sourceFrame(byTrackID: back.trackID) {
+          behind = CIImage(cvPixelBuffer: held).transformed(by: back.fill)
+        }
+        if let behind {
+          let backed = ClipyCompositor.backedFrame(spec, source: source, behind: behind, time: time, size: size)
+          return ClipyCompositor.look(spec, on: backed, time: time)
+        }
+      }
       let img: CIImage
       if spec.motion != nil {
         // Animated / keyframed clip: the resolved transform replaces the static one (never the `usesFill` shortcut).
@@ -490,6 +540,30 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
         .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: NSNumber(value: Double(radius))])
         .cropped(to: rect)
     }
+  }
+
+  /// One frame of a main clip whose Blur background is made from another picture than its own (`LayerBackdrop`).
+  /// `behind` — that picture, already scaled to cover the frame — is blurred exactly as `background` blurs
+  /// (clamped, the same radius, cropped), and the clip's picture is drawn over it by the one placement chain
+  /// (`placedFrame`, handed the blurred picture as what is beneath it): at the clip's static transform, or at the
+  /// transform and opacity its motion resolves for `time` (flips from the static transform). A picture that cannot
+  /// be seen (scale ≤ 0 or opacity ≤ 0) leaves the blurred picture alone; values that cannot be placed (non-finite,
+  /// empty crop) fall back to the plain cover (`fill`) frame, as for any clip. The caller applies the clip's look.
+  static func backedFrame(_ spec: LayerSpec, source: CIImage, behind: CIImage, time: Double, size: CGSize) -> CIImage {
+    let rect = CGRect(origin: .zero, size: size)
+    let blurry = blurred(behind, radius: blurRadiusFactor * min(size.width, size.height), rect: rect).cropped(to: rect)
+    var t = spec.transform
+    var fade = 1.0
+    if let v = spec.values(at: time) {
+      t = ClipTransform(scale: CGFloat(v.scale), x: CGFloat(v.x), y: CGFloat(v.y), rotation: CGFloat(v.rotation),
+                        flipH: spec.transform.flipH, flipV: spec.transform.flipV)
+      fade = v.opacity
+    }
+    let c = spec.crop
+    let finite = [t.scale, t.x, t.y, t.rotation, c.x, c.y, c.w, c.h].allSatisfy { $0.isFinite } && fade.isFinite
+    guard finite, c.w > 0, c.h > 0 else { return source.transformed(by: spec.fill).cropped(to: rect) }
+    guard t.scale > 0, fade > 0, spec.opacity > 0 else { return blurry }
+    return placedFrame(spec, transform: t, opacity: fade, source: source, size: size, over: blurry, time: time)
   }
 
   /// Blends outgoing `a` into incoming `b` at progress `p` (0 → all `a`, 1 → all `b`). Unknown types dissolve.

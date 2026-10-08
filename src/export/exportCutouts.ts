@@ -1,4 +1,4 @@
-import { isCutoutCancelled, type ExportClip } from "@/modules/clipy-video";
+import { isBlurAndCutsBuild, isCutoutCancelled, type ExportClip } from "@/modules/clipy-video";
 import { cutoutNeedOf, useCutoutFiles, type CutoutFile } from "@/src/editor/cutoutFiles";
 import { cutoutDir, ensureCutout, isNoPerson } from "@/src/editor/cutoutRenders";
 import { CUTOUT, cutoutBytes, cutoutRefusal, cutoutStillName, parseCutoutName } from "@/src/editor/model/cutout";
@@ -113,11 +113,26 @@ export async function prepareCutouts(projectId: string, items: readonly Clip[], 
  * would have sent on (it keeps everything else too), with the see-through background that step cannot keep.
  * A MAIN clip: the opacity is capped just under 1, which makes the compositor draw the clip's background behind the see-through
  * picture (its rule for any picture that is not fully opaque). A layer is drawn over what is beneath it as it is.
+ * A MAIN clip whose background is Blur, when `backdrop` is true (the installed build reads the key — `blursOriginal`): the request
+ * also names the ORIGINAL file (`backdrop`), so the blur behind the cut-out person is the scene and not the cut-out's own
+ * silhouette. It has the copy's timing (a copy's timeline is its original's), so nothing else is said. The key is ABSENT in every
+ * other case — another background, a layer, an older build — and such a clip is sent exactly as before.
  */
-export function withCutout<T extends ExportClip>(sent: T, clip: Clip, uri: string | undefined, main: boolean): T {
+export function withCutout<T extends ExportClip>(sent: T, clip: Clip, uri: string | undefined, main: boolean, backdrop = false): T {
   if (uri === undefined || !activeCutout(clip)) return sent;
   const opacity = !main ? sent.opacity : Number.isFinite(sent.opacity) ? Math.min(sent.opacity, CUTOUT.exportOpacity) : CUTOUT.exportOpacity;
-  if (!isPhoto(clip)) return { ...sent, sourceUri: uri, opacity };
+  const behind = main && backdrop && sent.background.type === "blur" ? { backdrop: { uri: sent.sourceUri, kind: sent.kind } } : null;
+  if (!isPhoto(clip)) return { ...sent, sourceUri: uri, opacity, ...behind };
   const seconds = Math.min(Math.max(0, sent.trimEnd - sent.trimStart), CUTOUT.stillSeconds);
-  return { ...sent, kind: "video", sourceUri: cutoutStillName(uri), trimStart: 0, trimEnd: seconds, reversed: false, opacity };
+  return { ...sent, kind: "video", sourceUri: cutoutStillName(uri), trimStart: 0, trimEnd: seconds, reversed: false, opacity, ...behind };
+}
+
+/**
+ * Whether the export may name a cut-out clip's original for its Blur background: one of `clips` (the MAIN clips) is such a clip —
+ * asked first, so a project without one makes no new call — and the installed build reads the key. A module that cannot be asked
+ * counts as an older build: the request then goes out as it always did, never a failure.
+ */
+export function blursOriginal(clips: readonly Clip[]): boolean {
+  if (!clips.some((c) => activeCutout(c) && c.background.type === "blur")) return false;
+  try { return isBlurAndCutsBuild() === true; } catch { return false; }
 }

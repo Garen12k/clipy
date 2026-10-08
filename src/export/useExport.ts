@@ -5,7 +5,7 @@ import { activeCutout, clampExportSettings, DEFAULT_EXPORT_SETTINGS, EFFECT_END_
 import { steadyOf } from "@/src/editor/model/steady";
 import { addExportListener, cancelExport, exportTimeline, isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSteadyAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
-import { CUTOUT_SHARE, cutoutBytesToMake, prepareCutouts, withCutout } from "./exportCutouts";
+import { blursOriginal, CUTOUT_SHARE, cutoutBytesToMake, prepareCutouts, withCutout } from "./exportCutouts";
 import { prepareSounds, SOUND_SHARE } from "./exportSounds";
 import { prepareSteady, STEADY_SHARE, steadyBytesToMake, withSteady } from "./exportSteady";
 import { estimateBytes, exportableAudio, exportableClips, exportableLayers, requestBitrate, type Resolution } from "./estimate";
@@ -125,7 +125,9 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
       }
       /** With no copy of either kind both are the plain conversions, called exactly as before. */
       const noCopies = cutouts.size === 0 && steadies.size === 0;
-      const sendClip = (c: Clip) => withSteady(withCutout(toExportClip(c), c, cutouts.get(c.id), true), c, steadies.get(c.id));
+      /** A cut-out main clip with a Blur background also names its original, on a build that reads it (never asked without a copy). */
+      const backdrop = cutouts.size > 0 && blursOriginal(clips);
+      const sendClip = (c: Clip) => withSteady(withCutout(toExportClip(c), c, cutouts.get(c.id), true, backdrop), c, steadies.get(c.id));
       const sendLayer = (l: LayerClip) => withSteady(withCutout(toExportLayer(l), l, cutouts.get(l.id), false), l, steadies.get(l.id));
       const audioTracks = copies.size === 0
         ? mixed.audioTracks.map((t) => toExportAudioTrack(mixed, t, total)).filter((t): t is ExportAudioTrack => t !== null)

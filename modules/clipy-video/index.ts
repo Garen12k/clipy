@@ -81,6 +81,12 @@ export interface ExportClip {
   mask: MaskId;
   blend: BlendId;                // how the clip composites over what is beneath it; main clips are always "normal"
   chroma: { color: string; strength: number } | null;   // green-screen key; null = none
+  /**
+   * The file a main clip's Blur background is made from when that is not the clip's own picture: the ORIGINAL of a clip sent from
+   * its see-through cut-out copy (`withCutout`), read with the clip's own timing. ABSENT for every other clip (never null) — and
+   * on a build from before it (`isBlurAndCutsBuild`), which would ignore it.
+   */
+  backdrop?: { uri: string; kind: "video" | "photo" };
 }
 /** A layer as the export draws it: a clip placed on the timeline at `start` (composition seconds). */
 export type ExportLayer = ExportClip & { start: number };
@@ -226,8 +232,11 @@ export interface SteadyRequest {
   maxSide: number; minFrameGap: number; grid: number; zoom: number;
   times: number[]; dx: number[]; dy: number[];
   bitRate: number; blendFloor: number;
+  /** Two neighbouring frames more different than this (`SMOOTH.cutDifference`) are a cut and get no blended frames. Absent or 0 = never asked; a build from before it ignores it. */
+  cutDifference?: number;
 }
-export interface SteadyResult { fileUri: string; seconds: number; frames: number }
+/** `cuts` / `apart` (a build that knows `cutDifference`, a copy with a grid): the pairs left unblended as cuts, and the largest difference measured between two neighbours. */
+export interface SteadyResult { fileUri: string; seconds: number; frames: number; cuts?: number; apart?: number }
 export type SteadyEvent = { jobId: string; progress: number };
 /** The code a cancelled measuring or steady render rejects with. */
 export const STEADY_CANCELLED = "E_STEADY_CANCELLED";
@@ -259,6 +268,7 @@ type ClipyVideoNative = {
   measureShake(req: ShakeRequest): Promise<ShakeResult>;
   renderSteady(req: SteadyRequest): Promise<SteadyResult>;
   cancelSteady(jobId: string): void;
+  blurAndCuts(): boolean;
 };
 
 const NO_SOUND = "This build of the app has no sound tools yet. Install a newer development build.";
@@ -348,5 +358,10 @@ export function measureShake(req: ShakeRequest): Promise<ShakeResult> { return s
 export function renderSteady(req: SteadyRequest): Promise<SteadyResult> { return steadyNative("renderSteady").renderSteady(req); }
 export function cancelSteady(jobId: string): void { steadyNative("cancelSteady").cancelSteady(jobId); }
 export function addSteadyListener(cb: (e: SteadyEvent) => void): EventSubscription { return native().addListener("onSteadyEvent", cb); }
+/**
+ * Whether the linked native module is the build of 2026-10-11 or newer: it blurs a cut-out clip's ORIGINAL behind it (the request's
+ * `backdrop`) and leaves a cut inside a clip unblended in Smooth slow motion (`cutDifference`). An older build ignores both keys.
+ */
+export function isBlurAndCutsBuild(): boolean { return typeof optional()?.blurAndCuts === "function"; }
 /** True for the rejection of a measuring or a steady render that was cancelled (`cancelSteady`). */
 export function isSteadyCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === STEADY_CANCELLED; }

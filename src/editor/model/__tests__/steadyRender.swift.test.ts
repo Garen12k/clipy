@@ -16,7 +16,7 @@ const between = (source: string, from: string, to: string): string => {
   return source.slice(start, end < 0 ? undefined : end);
 };
 const fieldsOf = (record: string) => [...between(swift, `struct ${record}: Record {`, "\n}").matchAll(/@Field var (\w+)/g)].map((m) => m[1]).sort();
-const sentOf = (name: string) => [...new Set([...between(wrapper, `export interface ${name} {`, "\n}").matchAll(/(\w+): /g)].map((m) => m[1]))].sort();
+const sentOf = (name: string) => [...new Set([...between(wrapper, `export interface ${name} {`, "\n}").matchAll(/(\w+)\??: /g)].map((m) => m[1]))].sort();
 const measure = between(swift, "static func measure(", "\n  }\n");
 const render = between(swift, "static func render(", "\n  }\n");
 
@@ -24,12 +24,12 @@ test("the two request records have exactly the fields the app sends", () => {
   expect(fieldsOf("ShakeRequest")).toEqual(sentOf("ShakeRequest"));
   expect(fieldsOf("ShakeRequest")).toEqual(["from", "jobId", "measureSide", "minFrameGap", "sourceUri", "to"]);
   expect(fieldsOf("SteadyRequest")).toEqual(sentOf("SteadyRequest"));
-  expect(fieldsOf("SteadyRequest")).toEqual(["bitRate", "blendFloor", "dx", "dy", "from", "grid", "jobId", "maxSide", "minFrameGap", "outputPath", "sourceUri", "times", "to", "zoom"]);
+  expect(fieldsOf("SteadyRequest")).toEqual(["bitRate", "blendFloor", "cutDifference", "dx", "dy", "from", "grid", "jobId", "maxSide", "minFrameGap", "outputPath", "sourceUri", "times", "to", "zoom"]);
   for (const list of ["times", "dx", "dy"]) expect(swift).toContain(`@Field var ${list}: [Double] = []`);
   expect(wrapper).toContain("export interface ShakeResult { times: number[]; dx: number[]; dy: number[]; frames: number; failed: number }");
   expect(measure).toContain('let answer: [String: Any] = ["times": times, "dx": dx, "dy": dy, "frames": times.count, "failed": failed]');
-  expect(wrapper).toContain("export interface SteadyResult { fileUri: string; seconds: number; frames: number }");
-  expect(render).toContain('let answer: [String: Any] = ["fileUri": outputURL.absoluteString, "seconds": span.end, "frames": written]');
+  expect(wrapper).toContain("export interface SteadyResult { fileUri: string; seconds: number; frames: number; cuts?: number; apart?: number }");
+  expect(render).toContain('let answer: [String: Any] = ["fileUri": outputURL.absoluteString, "seconds": span.end, "frames": written, "cuts": cuts, "apart": mostApart]');
 });
 
 test("the asset lives in the source for as long as its tracks and its readers are used", () => {
@@ -169,6 +169,46 @@ test("smooth slow motion: every source frame stays as it is at its own time, and
   // No lattice of times is left, and the file's frame rate is not asked.
   expect(swift).not.toContain("gridIndex");
   expect(swift).not.toContain("nominalFrameRate");
+});
+
+test("smooth slow motion: a pair that is a cut gets no blended frames — asked once a pair, by the app's threshold, with Core Image only", () => {
+  // The threshold travels in the request; absent (an older app) or 0 = never asked, so the copy is what it always was.
+  expect(swift).toContain("@Field var cutDifference: Double = 0");
+  expect(wrapper).toMatch(/\n {2}cutDifference\?: number;/);
+  expect(render).toContain("let cutLimit: Double = request.cutDifference.isFinite && request.cutDifference > 0 ? min(1, request.cutDifference) : 0");
+  // Asked only for a pair that would get blended frames (so there IS a frame before), inside the frame's own autoreleasepool,
+  // after the new frame is in its buffer — and between the two held buffers, never per blended frame.
+  expect(render).toContain("let asks = cutLimit > 0 && count > 0");
+  const pool = between(render, "let apart: Double? = autoreleasepool { () -> Double? in", "\n                }\n");
+  expect(pool.indexOf("CutoutRender.context.render(placed, to: slots[into], bounds: rect, colorSpace: space)")).toBeGreaterThan(0);
+  expect(pool.indexOf("guard asks else { return nil }")).toBeGreaterThan(pool.indexOf("CutoutRender.context.render(placed"));
+  expect(pool).toContain("return difference(slots[1 - into], slots[into], rect: rect)");
+  expect(swift.split("difference(slots[").length - 1).toBe(1);
+  // A cut: no blended frames for the pair. A measure that failed (nil) blends as before.
+  const after = between(render, "if let apart {", "ahead = SteadyFrame(");
+  expect(after).toContain("if apart > cutLimit {");
+  expect(after).toContain("count = 0");
+  expect(render.indexOf("if apart > cutLimit {")).toBeLessThan(render.indexOf("between = count"));
+  // The measure: difference blend, area average, ONE pixel read back with the shared context; no Swift loop over pixels.
+  const measured = between(swift, "static func difference(", "\n  }\n");
+  expect(measured).toContain("-> Double? {");
+  expect(measured).toContain("[CIImageOption.colorSpace: NSNull()]");
+  expect(measured).toContain('Adjust.filtered(first, "CIDifferenceBlendMode", [kCIInputBackgroundImageKey: second])');
+  expect(measured).toContain('"CIAreaAverage", [kCIInputExtentKey: CIVector(cgRect: rect)]');
+  expect(measured).toContain("var pixel: [UInt8] = [0, 0, 0, 0]");
+  expect(measured).toContain("CutoutRender.context.render(mean, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),");
+  expect(measured).toContain("format: CIFormat.RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.linearSRGB))");
+  expect(measured).toContain("return sum / 765");
+  expect(measured).not.toMatch(/for |while |CVPixelBufferLockBaseAddress/);
+  expect(swift).not.toContain("CIContext(");                                                // the cut-out's context, no second one
+  // The stabilize path (no grid) never asks, and the timing lines are the ones pinned above.
+  const plainPath = between(render, "if grid == 0 {", "} else {");
+  expect(plainPath).not.toContain("difference(");
+});
+
+test("the build says it knows the two new request keys", () => {
+  expect(between(moduleSwift, 'Function("blurAndCuts")', "\n    }\n")).toContain("return true");
+  expect(wrapper).toContain('export function isBlurAndCutsBuild(): boolean { return typeof optional()?.blurAndCuts === "function"; }');
 });
 
 test("progress is sent at most once per percent", () => {
