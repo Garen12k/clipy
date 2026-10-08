@@ -45,7 +45,7 @@ export function needsPreviewTag(p: Project, playhead: number): boolean {
 /**
  * Whether Remove background makes the preview differ from the export at the playhead: a clip or layer on screen has the switch on
  * and the preview does not show its cut-out as the export will — the copy is not ready (or cannot be made), that kind of video
- * preview is switched off (`CUTOUT_PREVIEW`), or a main clip's background is Blur (the export blurs the cut-out picture).
+ * preview is switched off (`CUTOUT_PREVIEW`), or a main clip's background is Blur (the preview blurs a still of the first frame; the export blurs the moving original).
  */
 export function cutoutNeedsTag(p: Project, playhead: number, files: Record<string, CutoutFile>): boolean {
   const asExported = (c: Clip, main: boolean): boolean => {
