@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
+jest.mock("@/modules/clipy-video", () => ({ isSpeechAvailable: jest.fn(() => false), listVoices: jest.fn(), speakToFile: jest.fn(), cancelSpeech: jest.fn(), isSpeechCancelled: () => false, isNativeAvailable: jest.fn(() => false), isSoundAvailable: jest.fn(() => false) }));
 jest.mock("@react-native-community/slider", () => { const { View } = require("react-native"); return ({ testID, onValueChange }: { testID?: string; onValueChange?: (v: number) => void }) => <View testID={testID} onTouchEnd={() => onValueChange?.(0.12)} />; });
 import { isTextOverlay, makeClip, makeOverlay, makeProject, type Keyframe, type TextOverlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -244,4 +245,12 @@ test("the Fine-tune toggle has hit slop", async () => {
   await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
   let n = screen.getByText("Fine-tune").parent; while (n && n.props.hitSlop === undefined) n = n.parent;
   expect(n?.props.hitSlop).toBe(12);
+});
+
+test("a text has the Read aloud row under its field; a caption has none", async () => {
+  const view = await render(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+  expect(screen.getByRole("button", { name: "Read aloud options" })).toBeTruthy();
+  await act(async () => { useEditorStore.getState().apply((x) => ({ ...x, overlays: x.overlays.map((o) => (o.id === "o1" ? ({ ...o, kind: "caption" } as typeof o) : o)) })); });
+  await view.rerender(<TextPanel overlayId="o1" visible onClose={() => {}} />);
+  expect(screen.queryByRole("button", { name: "Read aloud options" })).toBeNull();
 });
