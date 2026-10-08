@@ -204,3 +204,22 @@ test("a tab without a slider holds nothing", async () => {
   await screen.unmount();
   expect(holdSteady).not.toHaveBeenCalled();
 });
+
+// Spec M3 / §8: "A reversed clip: no Stabilize tool, no Slow motion tab". `isSlowed` does not look at `reversed`, and
+// `setClipSmooth` refuses a reversed clip without a word — the switch would spring back and say nothing.
+test("a reversed clip has no Slow motion tab, however slow it is; reversed while the tab is open, it falls back to Normal", async () => {
+  st().setProject(makeProject({ clips: [makeClip({ id: "rev", sourceDuration: 8, speed: 0.5, reversed: true }), makeClip({ id: "fwd", sourceDuration: 8, speed: 0.5 })] }));
+  await act(() => { st().select("rev"); });
+  await render(<SpeedSheet clipId="rev" visible onClose={() => {}} />);
+  expect(chip("Normal")).toBeTruthy();
+  expect(chip("Curve")).toBeTruthy();
+  expect(chip("Slow motion")).toBeNull();
+  await screen.unmount();
+  await act(() => { st().select("fwd"); });
+  await render(<SpeedSheet clipId="fwd" visible onClose={() => {}} />);
+  await fireEvent.press(chip("Slow motion")!);
+  expect(screen.queryByLabelText("Smooth slow motion")).toBeTruthy();
+  await act(() => { st().apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "fwd" ? { ...c, reversed: true } : c)) })); });
+  expect(chip("Slow motion")).toBeNull();
+  expect(screen.queryByLabelText("Smooth slow motion")).toBeNull();
+});

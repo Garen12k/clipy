@@ -101,11 +101,12 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
   // True from the slider's drag start to its end (two renders per drag, none per frame): the preset chips' ring follows the live
   // speed, and their lift must not spring while the slider is dragged.
   const [dragging, setDragging] = useState(false);
-  // Slow motion: a third tab, there only while the clip is slowed (any stretch under 1×) and one clip is shown. A clip that stops
+  // Slow motion: a third tab, there only while the clip is slowed (any stretch under 1×), plays forwards (a reversed clip has no
+  // copy, and `setClipSmooth` refuses it without a word) and one clip is shown. A clip that stops
   // being slowed while its tab is open (an undo, a pick on another tab cannot do it) falls back to Normal — for good (adjusted
   // while rendering, no effect): were only the shown tab worked out, the Speed slider slowing the clip again would bring the
   // Slow motion tab back and take the slider from under the finger.
-  const slowTab = !clipIds && isSlowed(clip);
+  const slowTab = !clipIds && !clip.reversed && isSlowed(clip);
   if (tab === "slow" && !slowTab) setTab("normal");
   const shown: Tab = tab === "slow" && !slowTab ? "normal" : tab;
   // Whether the Speed slider holds the steady copies' queue right now (a ref: nothing is drawn from it). A Smooth slow motion
