@@ -5,8 +5,10 @@ import { placeClip } from "@/src/editor/model/clipLayout";
 import { CUTOUT_PREVIEW } from "@/src/editor/model/cutout";
 import { activeEffects } from "@/src/editor/model/effectMath";
 import { frameSize } from "@/src/editor/model/ops";
+import { STEADY_PREVIEW, steadyOf } from "@/src/editor/model/steady";
 import { clipAt, hasSpeedCurve, isInTransitionWindow, layersAt } from "@/src/editor/model/timeline";
 import { activeCutout, isPhoto, type Clip, type Project } from "@/src/editor/model/types";
+import { shownSteady, useSteadyFiles, type SteadyFile } from "@/src/editor/steadyFiles";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { Body } from "@/src/ui/Text";
@@ -62,14 +64,34 @@ const cutoutTagNow = (): boolean => {
 };
 
 /**
+ * Whether Stabilize / Smooth slow motion makes the preview differ from the export at the playhead: a clip or layer on screen has a
+ * setting and the preview is not showing its copy — it is not ready (or cannot be made), or that kind of preview is switched off
+ * (`STEADY_PREVIEW`).
+ */
+export function steadyNeedsTag(p: Project, playhead: number, files: Record<string, SteadyFile>): boolean {
+  const asExported = (c: Clip, main: boolean): boolean =>
+    steadyOf(c) === null || (shownSteady(files, c) !== null && (main ? STEADY_PREVIEW.mainVideo : STEADY_PREVIEW.layerVideo));
+  const hit = clipAt(p, playhead);
+  return (!!hit && !asExported(hit.clip, true)) || layersAt(p, playhead).some((l) => !asExported(l, false));
+}
+/** `steadyNeedsTag` for what the two stores hold right now. */
+const steadyTagNow = (): boolean => {
+  const s = useEditorStore.getState();
+  return !!s.project && steadyNeedsTag(s.project, s.playhead, useSteadyFiles.getState().files);
+};
+
+/**
  * Small chip shown over the preview when the current frame is an approximation of the export (see `needsPreviewTag`), or shows a
  * clip whose background the export will remove and the preview does not (`cutoutNeedsTag` — asked here, of both stores, as one
- * yes / no: the chip is drawn again only when the answer changes, not on every tick or percent).
+ * yes / no: the chip is drawn again only when the answer changes, not on every tick or percent). The same for a clip whose steady
+ * copy the preview is not showing (steadyNeedsTag).
  */
 export function PreviewTag({ visible }: { visible: boolean }) {
   const cutNow = useEditorStore(cutoutTagNow);      // asked again when the project or the playhead changes …
   const cutThen = useCutoutFiles(cutoutTagNow);     // … and when a copy does: the same answer, read from both stores
-  if (!visible && !cutNow && !cutThen) return null;
+  const steadyNow = useEditorStore(steadyTagNow);
+  const steadyThen = useSteadyFiles(steadyTagNow);
+  if (!visible && !cutNow && !cutThen && !steadyNow && !steadyThen) return null;
   return (
     <View
       testID="preview-tag"

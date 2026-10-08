@@ -4,7 +4,9 @@ import { shownCutout, useCutoutFiles } from "@/src/editor/cutoutFiles";
 import { coversFrame, maskRadius, placeClip, type PlacedClip } from "@/src/editor/model/clipLayout";
 import { CUTOUT_PREVIEW } from "@/src/editor/model/cutout";
 import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
+import { STEADY_PREVIEW } from "@/src/editor/model/steady";
 import { isPhoto, type Clip, type ClipTransform } from "@/src/editor/model/types";
+import { shownSteady, useSteadyFiles } from "@/src/editor/steadyFiles";
 import { getThumb } from "./thumbnails";
 
 /** The empty-frame colour the export also draws behind a clip (user content, not UI chrome). */
@@ -63,6 +65,8 @@ export function backgroundShows(clip: Clip, placed: PlacedClip, opacity: number 
  * Remove background (`cutout.ts`): a photo draws its PNG copy once that is ready; a main video's own picture is then hidden by
  * opacity (never unmounted) under a silent second player showing the copy (`CutoutFollower`), and a main clip's background is
  * always drawn behind a cut-out. A clip without a ready copy goes through none of it: its tree and styles are as they always were.
+ * Stabilize / Smooth slow motion (steady.ts): a main video's steady copy, once ready, plays in the same follower laid OVER the clip's
+ * own picture (the copy is opaque, so the picture underneath is not hidden and shows until the copy has loaded); nothing else changes.
  */
 export function ClipFrame({ clip, frameW, frameH, transform, opacity, transparent, overlayChildren, children }:
   { clip: Clip; frameW: number; frameH: number; transform?: ClipTransform; opacity?: number; transparent?: boolean; overlayChildren?: ReactNode; children?: ReactNode }) {
@@ -71,15 +75,22 @@ export function ClipFrame({ clip, frameW, frameH, transform, opacity, transparen
   // Remove background: the clip's cut-out copy once it is ready (null = the clip is drawn as it is). The selector returns the
   // uri itself, so a render's progress (the store changes on every percent) draws nothing here.
   const cutUri = useCutoutFiles((s) => shownCutout(s.files, clip));
+  // Stabilize / Smooth slow motion: the clip's steady copy once it is ready (null for a clip without one — and for a clip with a
+  // cut-out: the two never share a clip). The selector returns the uri itself.
+  const steadyUri = useSteadyFiles((s) => shownSteady(s.files, clip));
   const photo = isPhoto(clip);
-  // A MAIN video cannot be handed another file (the preview's players load the clip's own): its picture is hidden — it keeps
-  // playing, with the sound — and a silent player showing the copy is laid in its place. A layer's own player plays the copy.
-  const follower = !transparent && !photo && cutUri !== null && CUTOUT_PREVIEW.mainVideo;
+  // A MAIN video cannot be handed another file (the preview's players load the clip's own): a silent player showing the copy is
+  // laid in its place. Under a cut-out the clip's own picture is hidden (it keeps playing, with the sound); under a steady copy it
+  // is not — the copy covers it. A layer's own player plays the copy.
+  const cutFollower = !transparent && !photo && cutUri !== null && CUTOUT_PREVIEW.mainVideo;
+  const steadyFollower = !transparent && !photo && cutUri === null && steadyUri !== null && STEADY_PREVIEW.mainVideo;
+  const follower = cutFollower || steadyFollower;
+  const copyUri = cutFollower ? cutUri : steadyFollower ? steadyUri : null;
   // A see-through picture shows the clip's own background behind it, as the export does; so do a mask's cut-off corners, and so
   // does a cut-out on the main track (always: what was the picture's background is see-through now).
-  const cutOut = !transparent && cutUri !== null && (photo || follower);
+  const cutOut = !transparent && cutUri !== null && (photo || cutFollower);
   const showBackground = !transparent && (cutOut || backgroundShows(clip, placed, opacity, frameW, frameH));
-  // Loaded only when it is shown: suites that never show a cut-out do not load a video player for it.
+  // Loaded only when it is shown: suites that never show a copy do not load a video player for it.
   const Follower = follower ? (require("./CutoutFollower") as typeof import("./CutoutFollower")).CutoutFollower : null;
   // A clip with motion asks for its blur still up front, so the first faded frames are not black while it loads.
   const blurStill = useBlurStill(clip, !transparent && (showBackground || opacity !== undefined) && clip.background.type === "blur");
@@ -101,14 +112,14 @@ export function ClipFrame({ clip, frameW, frameH, transform, opacity, transparen
           ...(opacity === undefined ? null : { opacity }),
           ...(masked ? { borderRadius: maskRadius(placed, clip.mask) } : null),
         }}>
-        <View testID="clip-content" style={{ position: "absolute", left: -clip.crop.x * contentW, top: -clip.crop.y * contentH, width: contentW, height: contentH, ...(follower ? { opacity: 0 } : null) }}>
+        <View testID="clip-content" style={{ position: "absolute", left: -clip.crop.x * contentW, top: -clip.crop.y * contentH, width: contentW, height: contentH, ...(cutFollower ? { opacity: 0 } : null) }}>
           {photo
             ? <Image testID="clip-photo" source={{ uri: cutUri ?? clip.sourceUri }} resizeMode="stretch" style={{ width: "100%", height: "100%" }} />
             : children}
         </View>
-        {Follower && cutUri !== null ? (
-          <View testID="clip-cutout" style={{ position: "absolute", left: -clip.crop.x * contentW, top: -clip.crop.y * contentH, width: contentW, height: contentH }}>
-            <Follower clip={clip} uri={cutUri} />
+        {Follower && copyUri !== null ? (
+          <View testID={cutFollower ? "clip-cutout" : "clip-steady"} style={{ position: "absolute", left: -clip.crop.x * contentW, top: -clip.crop.y * contentH, width: contentW, height: contentH }}>
+            <Follower clip={clip} uri={copyUri} />
           </View>
         ) : null}
         {overlayChildren}
