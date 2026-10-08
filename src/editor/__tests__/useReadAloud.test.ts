@@ -9,7 +9,7 @@ jest.mock("@/modules/clipy-video", () => ({
 }));
 import { act, renderHook } from "@testing-library/react-native";
 import { cancelSpeech, isSpeechAvailable, speakToFile } from "@/modules/clipy-video";
-import { updateOverlay } from "@/src/editor/model/ops";
+import { deleteAudioTrack, moveAudioTrack, updateOverlay } from "@/src/editor/model/ops";
 import { makeAudioTrack, makeClip, makeOverlay, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { newId } from "@/src/lib/id";
@@ -88,6 +88,40 @@ test("a second reading of the same text replaces the first bar; Undo brings it b
   expect(st().past).toHaveLength(2);
   await act(async () => { st().undo(); });
   expect(tracks()[0].sourceUri).toBe(FILE);
+});
+
+test("what is said: a first reading is under the text; a reading that replaced a bar says so, wherever that bar had been moved", async () => {
+  speak.mockResolvedValue({ fileUri: "x", seconds: 1.8 });
+  const { result } = await renderHook(() => useReadAloud());
+  await act(async () => { await result.current.read("o1", "en.ava", 0.5); });
+  expect(said()).toBe("The voice is on the audio row, under the text.");
+  // The owner moves the bar away from the text, then reads again: the new bar sits where the old one was, not under the text.
+  await act(async () => { st().apply((p) => moveAudioTrack(p, tracks()[0].id, 9)); });
+  expect(tracks()[0].start).toBe(9);
+  await act(async () => { expect(await result.current.read("o1", "en.daniel", 0.5)).toBe(true); });
+  expect(tracks()).toHaveLength(1);
+  expect(tracks()[0].start).toBe(9);
+  expect(said()).toBe("The voice was replaced on the audio row.");
+  expect(READ_ALOUD.replaced).toBe("The voice was replaced on the audio row.");
+  // The bar deleted by hand: the next reading is a first one again, at the text's start.
+  await act(async () => { st().apply((p) => deleteAudioTrack(p, tracks()[0].id)); });
+  await act(async () => { expect(await result.current.read("o1", "en.ava", 0.5)).toBe(true); });
+  expect(tracks()[0].start).toBe(2);
+  expect(said()).toBe(READ_ALOUD.done);
+});
+
+test("a bar that was there when the button was tapped but deleted while the phone spoke: the reading is a new one, and says so", async () => {
+  speak.mockResolvedValueOnce({ fileUri: "x", seconds: 1.8 });
+  const { result } = await renderHook(() => useReadAloud());
+  await act(async () => { await result.current.read("o1", "en.ava", 0.5); });
+  let resolve: (v: { fileUri: string; seconds: number }) => void = () => {};
+  speak.mockReturnValueOnce(new Promise((r) => { resolve = r; }));
+  let pending: Promise<boolean> = Promise.resolve(false);
+  await act(async () => { pending = result.current.read("o1", "en.ava", 0.5); await settle(); });
+  await act(async () => { st().apply((p) => deleteAudioTrack(p, tracks()[0].id)); });
+  await act(async () => { resolve({ fileUri: "y", seconds: 2 }); expect(await pending).toBe(true); });
+  expect(tracks()).toHaveLength(1);
+  expect(said()).toBe(READ_ALOUD.done);
 });
 
 test("refusals are said before anything native runs", async () => {

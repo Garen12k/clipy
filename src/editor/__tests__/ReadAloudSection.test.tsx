@@ -118,7 +118,9 @@ test("no voices on the phone: it says so and offers no button", async () => {
 test("the list cannot be read: it says so, and the row can be closed and opened to try again", async () => {
   jest.mocked(listVoices).mockRejectedValueOnce(new Error("boom"));
   await openSection();
-  expect(screen.getByText("Could not read the list of voices.")).toBeTruthy();
+  // One sentence in one slot: what happened and what to do about it.
+  expect(screen.getByText("Could not read the list of voices. Close and open this row to try again.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Read aloud" })).toBeNull();
   await fireEvent.press(row());
   await fireEvent.press(row());
   await flush();
@@ -264,4 +266,46 @@ test("a second reading with another voice replaces the bar: one bar, one more un
   expect(speakToFile).toHaveBeenCalledTimes(2);
   expect(st().project!.audioTracks).toHaveLength(1);
   expect(st().past).toHaveLength(2);
+});
+
+test("closing the row while the phone is speaking ends the reading first: the phone is told, no bar comes later, and the row opens idle", async () => {
+  let answer: (v: { fileUri: string; seconds: number }) => void = () => {};
+  jest.mocked(speakToFile).mockReturnValue(new Promise((r) => { answer = r; }));
+  await openSection();
+  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await flush();
+  expect(screen.getByLabelText("Preparing the voice")).toBeTruthy();
+  await fireEvent.press(row());
+  await flush();
+  expect(cancelSpeech).toHaveBeenCalledTimes(1);
+  expect(row().props.accessibilityState).toMatchObject({ expanded: false });
+  // The phone finishes after all: nothing appears out of nowhere, and nothing is said.
+  await act(async () => { answer({ fileUri: "x", seconds: 1.5 }); });
+  await flush();
+  expect(st().project!.audioTracks).toHaveLength(0);
+  expect(st().past).toHaveLength(0);
+  expect(useToast.getState().message).toBeNull();
+  await fireEvent.press(row());
+  await flush();
+  expect(screen.queryByLabelText("Preparing the voice")).toBeNull();
+  expect(screen.getByRole("button", { name: "Read aloud" })).toBeTruthy();
+  expect(listVoices).toHaveBeenCalledTimes(1);                // the list it had is still good
+});
+
+test("closing the row with nothing under way tells the phone nothing", async () => {
+  await openSection();
+  await fireEvent.press(row());
+  expect(cancelSpeech).not.toHaveBeenCalled();
+  expect(row().props.accessibilityState).toMatchObject({ expanded: false });
+});
+
+test("the sentence after a reading: a first one is on the audio row under the text, a second one was replaced", async () => {
+  jest.mocked(speakToFile).mockResolvedValue({ fileUri: "x", seconds: 1.5 });
+  await openSection();
+  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await flush();
+  expect(useToast.getState().message).toBe("The voice is on the audio row, under the text.");
+  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await flush();
+  expect(useToast.getState().message).toBe("The voice was replaced on the audio row.");
 });

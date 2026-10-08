@@ -28,6 +28,8 @@ const CHIPS = { alignItems: "center", gap: theme.space.sm } as const;
 const REST = [SPEECH_LIMITS.defaultPace] as const;
 export const NO_VOICES = "No voices are installed on this iPhone.";
 export const VOICES_FAILED = "Could not read the list of voices.";
+/** How to ask again (`toggle` asks the phone anew when a failed list is opened). */
+export const VOICES_RETRY = "Close and open this row to try again.";
 export const VOICES_HINT = "These are the voices installed on this iPhone. More can be added in the iPhone Settings, under Accessibility.";
 /** Said when the words were edited while the phone was speaking them: the reading is dropped (`useReadAloud`), and the spinner would otherwise just end. */
 export const TEXT_CHANGED = "The text changed, so nothing was read. Tap Read aloud again.";
@@ -45,8 +47,8 @@ const wordsOf = (overlayId: string): string | null => {
  * installed on the iPhone, a Speed, and the button that turns the text into a voice bar (`useReadAloud`). The voice and the speed
  * are a preference of this phone (speechPrefs.ts), never project data: choosing them is no undo step and writes nothing to the project.
  * The list is asked of the phone when the row is opened, never before. Without the build that can speak, the row stays closed and
- * says what is needed. A reading under way ends when the row leaves the screen (the panel closed: the hook stops as it unmounts)
- * and when the panel moves to another text. Every row has an explicit height; nothing here animates.
+ * says what is needed. A reading under way ends when the row is closed, when it leaves the screen (the panel closed: the hook stops
+ * as it unmounts) and when the panel moves to another text. Every row has an explicit height; nothing here animates.
  */
 export function ReadAloudSection({ overlayId }: { overlayId: string }) {
   const [open, setOpen] = useState(false);
@@ -73,7 +75,8 @@ export function ReadAloudSection({ overlayId }: { overlayId: string }) {
     }, () => setLoaded({ state: "failed" }));
   };
   const toggle = () => {
-    if (open) { setOpen(false); return; }
+    // Closing while the phone is speaking ends the reading first: a bar must not appear later from a row that shows nothing.
+    if (open) { if (busy) giveUp(); setOpen(false); return; }
     if (!isSpeechAvailable()) { useToast.getState().show(READ_ALOUD.unavailable); return; }
     setOpen(true);
     if (loaded.state === "none" || loaded.state === "failed") load();
@@ -112,7 +115,7 @@ export function ReadAloudSection({ overlayId }: { overlayId: string }) {
       {open ? (
         <View style={BODY}>
           {loaded.state === "loading" ? <View style={ROW}><Spinner label="Loading voices" /></View> : null}
-          {loaded.state === "failed" ? <Body muted>{VOICES_FAILED}</Body> : null}
+          {loaded.state === "failed" ? <Body muted>{`${VOICES_FAILED} ${VOICES_RETRY}`}</Body> : null}
           {list && list.voices.length === 0 ? <Body muted>{NO_VOICES}</Body> : null}
           {list && list.voices.length > 0 ? (
             <>

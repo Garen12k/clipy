@@ -429,28 +429,57 @@ describe("Smooth", () => {
     expect(screen.getByTestId("curve-flat-none")).toBeTruthy();
   });
 
-  test("a clip too short for the smooth form is refused like any curve that does not fit; the stepped form still goes on", async () => {
+  test("a clip too short for the smooth form only: the strip stays open and says how; with Smooth off the stepped form goes on", async () => {
     useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 }), makeClip({ id: "t", sourceDuration: 0.25 })] }));
     const onClose = jest.fn();
-    const view = await render(<SpeedSheet clipId="t" visible onClose={onClose} />);
+    await render(<SpeedSheet clipId="t" visible onClose={onClose} />);
     await press("Curve");
     await press("Flash out");
     expect(clip(1).speedCurve).toBeNull();
     expect(past()).toBe(0);
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(useToast.getState().message).toBe("This clip is too short for a speed curve.");
-    // The next opening, Smooth switched off: the eight steps fit.
-    await view.rerender(<SpeedSheet clipId="t" visible={false} onClose={onClose} />);
-    await view.rerender(<SpeedSheet clipId="t" visible onClose={onClose} />);
-    await press("Curve");
+    expect(onClose).not.toHaveBeenCalled();                     // open, so the switch is there to flip
+    expect(useToast.getState().message).toBe("This clip is too short for a smooth curve. Switch Smooth off.");
+    expect(impact).not.toHaveBeenCalled();
+    expect(smooth().props.value).toBe(true);
+    expect(tile("None")).toBeSelected();
+    // The same strip, Smooth switched off: the eight steps fit.
     await setSmooth(false);
     await press("Flash out");
     expect(clip(1).speedCurve).toEqual({ id: "flashOut", steps: curveSteps("flashOut", 0, 0.25) });
     expect(past()).toBe(1);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
-  test("the switch on a stepped clip too short for the smooth form: said once, the stepped curve stays", async () => {
+  test("a clip too short for either form keeps the old refusal, Smooth on or off: the strip closes, then the speed-curve sentence", async () => {
+    // "s" (0.12 s) is too short once Flash in speeds it up, in eight steps as in 32.
+    for (const on of [true, false]) {
+      useToast.getState().clear();
+      const onClose = jest.fn();
+      const view = await render(<SpeedSheet clipId="s" visible onClose={onClose} />);
+      await press("Curve");
+      if (!on) await setSmooth(false);
+      await press("Flash in");
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(useToast.getState().message).toBe("This clip is too short for a speed curve.");
+      expect(clip(1).speedCurve).toBeNull();
+      await view.unmount();
+    }
+    expect(past()).toBe(0);
+  });
+
+  test("several clips, none long enough for the smooth form but long enough for the stepped: said for the clips, the strip stays open", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "t", sourceDuration: 0.25 }), makeClip({ id: "u", sourceDuration: 0.3 })] }));
+    const stored = useEditorStore.getState().project;
+    const onClose = jest.fn();
+    await render(<SpeedSheet clipId="t" clipIds={["t", "u"]} visible onClose={onClose} />);
+    await press("Curve");
+    await press("Flash out");
+    expect(useEditorStore.getState().project).toBe(stored);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBe("These clips are too short for a smooth curve. Switch Smooth off.");
+  });
+
+  test("the switch on a stepped clip too short for the smooth form: said once, the strip stays open, the stepped curve stays", async () => {
     useEditorStore.getState().setProject(makeProject({ clips: [stepped("t", 0.25, "flashOut")] }));
     const stored = useEditorStore.getState().project;
     const onClose = jest.fn();
@@ -458,8 +487,8 @@ describe("Smooth", () => {
     await setSmooth(true);
     expect(useEditorStore.getState().project).toBe(stored);
     expect(past()).toBe(0);
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(useToast.getState().message).toBe("This clip is too short for a speed curve.");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBe("This clip is too short for a smooth curve.");   // the switch already shows off: nothing to switch
     expect(impact).not.toHaveBeenCalled();
     expect(smooth().props.value).toBe(false);
   });

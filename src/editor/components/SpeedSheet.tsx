@@ -70,6 +70,8 @@ function CurveTile({ id, label, speeds, thin, selected, onPress }: { id: string;
 }
 
 const LAYER_REFUSED = "That speed doesn't fit this layer.";
+/** Said when only the smooth form does not fit (32 steps need a longer clip than eight). */
+const SMOOTH_REFUSED = { one: "This clip is too short for a smooth curve.", many: "These clips are too short for a smooth curve.", how: "Switch Smooth off." };
 
 /**
  * A clip's or layer's speed: one constant speed (Normal) or a speed-curve preset (Curve). The ops keep the two exclusive.
@@ -105,8 +107,11 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
   const [choice, setChoice] = useState(curveId ? isSmoothCurve(clip) : true);
   const smooth = curveId ? isSmoothCurve(clip) : choice;
 
-  /** One curve change, as one undo step. `same`: what is asked is what the shown clip already has. */
-  const writeCurve = (op: (p: Project, id: string) => Project, same: boolean) => {
+  /**
+   * One curve change, as one undo step. `same`: what is asked is what the shown clip already has. `smoothOnly`: for a change that
+   * asks for the smooth form, the sentence to say when it is only that form that does not fit — or null when no form would.
+   */
+  const writeCurve = (op: (p: Project, id: string) => Project, same: boolean, smoothOnly?: (p: Project) => string | null) => {
     const project = useEditorStore.getState().project;
     if (!project) return;
     const next = write(project, op);
@@ -116,6 +121,9 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
       // Otherwise the op refused: the preset would leave the clip shorter than a clip may be, or the clip is too short to hold the
       // form's steps (a layer: or it would break the layer rules).
       // (For a multi-selection: no selected clip could take it. Clips that can are changed; the others are skipped silently.)
+      // Only the smooth form does not fit: the strip stays open, so the Smooth switch is there to flip.
+      const how = smoothOnly?.(project) ?? null;
+      if (how !== null) { useToast.getState().show(how); return; }
       // The strip closes first, so the bar and the message show.
       onClose(); useToast.getState().show(clipIds ? "These clips are too short for a speed curve." : layer ? LAYER_REFUSED : "This clip is too short for a speed curve."); return;
     }
@@ -123,7 +131,9 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
     apply(() => next);
   };
   // Picking the active preset again is not skipped: the op re-spreads it over the clip's current trim.
-  const pickCurve = (id: SpeedCurveId | null) => writeCurve((p, cid) => setClipSpeedCurve(p, cid, id, smooth), id === curveId);
+  const pickCurve = (id: SpeedCurveId | null) => writeCurve((p, cid) => setClipSpeedCurve(p, cid, id, smooth), id === curveId,
+    // A refused smooth pick: would the eight steps go on? (Asked of the op; nothing is written.)
+    smooth && id !== null ? (p) => (write(p, (q, cid) => setClipSpeedCurve(q, cid, id, false)) !== p ? `${clipIds ? SMOOTH_REFUSED.many : SMOOTH_REFUSED.one} ${SMOOTH_REFUSED.how}` : null) : undefined);
   /**
    * The switch: the form of the next pick — and, for a clip that has a curve, that curve rewritten in the other form (one undo step).
    * Only the form changes: each clip of a multi-selection keeps its own preset, and a clip without a curve gets none.
@@ -134,7 +144,8 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
     writeCurve((p, cid) => {
       const id = cid === clip.id ? curveId : p.clips.find((c) => c.id === cid)?.speedCurve?.id;
       return id ? setClipSpeedCurve(p, cid, id, on) : p;
-    }, on === smooth);
+      // Switched on and refused: the clip keeps the stepped curve it has, and the switch still shows off — nothing to switch.
+    }, on === smooth, on ? () => (clipIds ? SMOOTH_REFUSED.many : SMOOTH_REFUSED.one) : undefined);
   };
 
   const pickSpeed = (speed: number) => {

@@ -6,7 +6,7 @@ import { storage } from "@/src/projects";
 import { expoFs } from "@/src/projects/expoFs";
 import { haptic } from "@/src/ui/haptics";
 import { useToast } from "@/src/ui/Toast";
-import { placeSpeech, speakableText, speechFileName, speechRate, speechRefusal } from "./model/speech";
+import { placeSpeech, speakableText, speechFileName, speechRate, speechRefusal, speechTracksOf } from "./model/speech";
 import { isTextOverlay } from "./model/types";
 import { useEditorStore } from "./store";
 
@@ -20,6 +20,8 @@ export const READ_ALOUD = {
   noVoice: "Pick a voice first.",
   failed: "Could not read this text aloud.",
   done: "The voice is on the audio row, under the text.",
+  // A reading that took an earlier bar's place sits where that bar was — which need not be under the text any more.
+  replaced: "The voice was replaced on the audio row.",
 } as const;
 /** The longest one reading may take. After that the phone is told to stop and the reading counts as failed. */
 export const SPEECH_DEADLINE_MS = 90000;
@@ -30,6 +32,7 @@ type Reading = { halt: () => void };
 /**
  * Read aloud. `read(overlayId, voiceId, pace)` has the phone speak the text into a new file in the project's media folder and puts
  * ONE voice bar on the audio row for it (`placeSpeech`: a later reading of the same text replaces the earlier bar) — one undo step.
+ * It then says where the voice is: under the text (`done`), or, when a bar was replaced, that it was (`replaced`).
  * It answers false after saying why not (a refusal is said before anything native runs, and leaves the preview as it was). The
  * preview is paused before the phone speaks and stays paused. The text stays selected. `busy` while the phone is speaking; a second
  * `read` is ignored meanwhile. `stop()` — and leaving — end the reading at once, whether or not the phone ever answers; so does
@@ -96,6 +99,8 @@ export function useReadAloud(): { read: (overlayId: string, voiceId: string | nu
       const now = useEditorStore.getState().project;
       const target = now && now.id === projectId ? now.overlays.find((o) => o.id === overlayId) : undefined;
       if (!now || !target || !isTextOverlay(target) || speakableText(target.text) !== text) { await forget(); return false; }
+      // Asked of the project the bar goes into: a bar read from this text that is there NOW is the one `placeSpeech` replaces.
+      const replaces = speechTracksOf(now, overlayId).length > 0;
       const placed = placeSpeech(now, overlayId, { id: newId(), sourceUri: path, seconds: made.seconds });
       if (placed === now) {
         // The op returns the same project when it refuses: no room any more, or an answer without a length.
@@ -107,7 +112,7 @@ export function useReadAloud(): { read: (overlayId: string, voiceId: string | nu
       }
       haptic("light");
       useEditorStore.getState().apply(() => placed);
-      say(READ_ALOUD.done);
+      say(replaces ? READ_ALOUD.replaced : READ_ALOUD.done);
       return true;
     } catch (e) {
       await forget();
