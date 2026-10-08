@@ -88,7 +88,7 @@ test("the file is made from the FIRST buffer's own format, and no buffer of anot
 });
 
 test("a job always ends, and exactly once: the end marker, silence after sound, nothing at all, or a cancel", () => {
-  expect(speech).toContain("static let idleSeconds: Double = 3");
+  expect(speech).toContain("static let idleSeconds: Double = 8");
   expect(speech).toContain("static let startSeconds: Double = 20");
   const watch = between(job, "private func watch(", "\n  }\n");
   expect(watch).toContain("DispatchQueue.main.asyncAfter(deadline: .now() + SpeechRender.tick)");

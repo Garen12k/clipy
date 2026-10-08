@@ -28,7 +28,7 @@ enum SpeechRender {
   /// How often a running job is looked at.
   static let tick: Double = 0.25
   /// Sound has come and then nothing for this long: the speech is over (the empty end buffer never came).
-  static let idleSeconds: Double = 3
+  static let idleSeconds: Double = 8
   /// Nothing at all for this long: this voice gives no sound here.
   static let startSeconds: Double = 20
   /// No reading is this long (a text is at most 1000 letters): a synthesizer that never stops is stopped here.
