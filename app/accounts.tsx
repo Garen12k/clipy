@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { buildLabel } from "@/src/lib/buildInfo";
 import { Alert, ScrollView, View } from "react-native";
 import { AccountRow } from "@/src/publish/components/AccountRow";
 import { SignInCard } from "@/src/publish/components/SignInCard";
@@ -59,6 +60,8 @@ export default function AccountsScreen() {
           <QuietButton title="Sign out" onPress={confirmSignOut} />
         </View>
       ) : null}
+      {/* Which app is installed: a tool can be on screen in a build too old to run it. */}
+      <Body testID="build-label" muted style={{ textAlign: "center", fontSize: theme.type.micro, paddingTop: theme.space.sm }}>{buildLabel()}</Body>
       <ToastHost />
     </Screen>
   );

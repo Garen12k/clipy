@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { NEEDS_LATEST_BUILD } from "@/src/lib/buildInfo";
 import { addSoundListener, cancelSoundRender, isSoundAvailable, isSoundCancelled, renderSound, SOUND_CANCELLED } from "@/modules/clipy-video";
 import { neededSounds, soundChain, soundFileName, type NeededSound } from "@/src/editor/model/sound";
 import type { SoundSettings } from "@/src/editor/model/types";
@@ -10,7 +11,7 @@ import { useSoundFiles, type SoundFile } from "./soundFiles";
 import { useEditorStore } from "./store";
 
 /** Said where Voice or Sound is tapped without the engine (Expo Go, or a build from before the sound tools). */
-export const SOUND_UNAVAILABLE = "Voice and sound effects need the new native build. Expo Go cannot run them.";
+export const SOUND_UNAVAILABLE = NEEDS_LATEST_BUILD("Voice and sound effects");
 /** Said once when a copy could not be rendered. The setting stays; the track plays its original. */
 export const SOUND_FAILED = "Could not prepare that sound. It plays as recorded.";
 /** Where a project's rendered copies live. Deleted with the project; swept when it is opened (`sweepSounds`). */
