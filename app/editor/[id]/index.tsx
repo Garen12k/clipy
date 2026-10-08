@@ -12,6 +12,7 @@ import { TransportRow } from "@/src/editor/components/TransportRow";
 import { TrimHandles } from "@/src/editor/components/TrimHandles";
 import type { Project } from "@/src/editor/model/types";
 import { useCutoutRenders } from "@/src/editor/cutoutRenders";
+import { useSteadyRenders } from "@/src/editor/steadyRenders";
 import { useSoundRenders } from "@/src/editor/soundRenders";
 import { useEditorStore } from "@/src/editor/store";
 import { closeForExport, openStrip } from "@/src/editor/toolStrip";
@@ -30,6 +31,7 @@ export default function EditorScreen() {
   useAutosave(save);
   useSoundRenders();
   useCutoutRenders();
+  useSteadyRenders();
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
   const project = useEditorStore((s) => s.project);
   const clipById = (clipId: string) => project?.clips.find((c) => c.id === clipId);
