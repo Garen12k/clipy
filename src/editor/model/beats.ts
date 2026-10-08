@@ -144,11 +144,14 @@ export function beatCutState(p: Project): BeatCutState {
   return p.clips.length < 2 ? "oneClip" : "ready";
 }
 
-/** The music track Find beats listens to: the selected track when it is music, else the music track that starts first (list order on a tie); null without one. */
+/**
+ * The track Find beats listens to: the selected track when it is music, else the music track that starts first (list order on a
+ * tie). A project WITHOUT any music: the selected bar, whatever its kind (a voice-over, a clip sound). null without one.
+ */
 export function beatTrack(p: Project, selectedAudioId: string | null): AudioTrack | null {
   const selected = selectedAudioId ? p.audioTracks.find((t) => t.id === selectedAudioId) : undefined;
   if (selected && selected.kind === "music") return selected;
   let best: AudioTrack | null = null;
   for (const t of p.audioTracks) if (t.kind === "music" && (best === null || t.start < best.start)) best = t;
-  return best;
+  return best ?? selected ?? null;
 }
