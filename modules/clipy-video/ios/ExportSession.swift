@@ -1468,7 +1468,7 @@ final class ExportSession {
     let valid = (try? await videoComposition.isValid(for: composition, timeRange: CMTimeRange(start: .zero, duration: composition.duration), validationDelegate: check)) ?? false
     let videoTrackCount = composition.tracks(withMediaType: .video).count
     let audioTrackCount = composition.tracks(withMediaType: .audio).count
-    let facts = "size \(Int(renderSize.width))x\(Int(renderSize.height)) fps \(fps) dur \(seconds) instr \(instructions.count) vtracks \(videoTrackCount) atracks \(audioTrackCount) overlays \(overlayLayers.count) mix \(mixParams.count) valid \(valid)"
+    let facts = "size \(Int(renderSize.width))x\(Int(renderSize.height)) fps \(fps) dur \(seconds) instr \(instructions.count) vtracks \(videoTrackCount) atracks \(audioTrackCount) overlays \(overlayLayers.count) mix \(mixParams.count) backdrops \(backdropTracks.count)/\(backdropSources.count) valid \(valid)"
       + (check.findings.isEmpty ? "" : " findings: " + check.findings.prefix(6).joined(separator: "; "))
 
     lock.lock()

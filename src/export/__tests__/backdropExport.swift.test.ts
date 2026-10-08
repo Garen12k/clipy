@@ -126,7 +126,8 @@ describe("the compositor", () => {
   test("an instruction also asks for its layers' backdrop tracks — none for every other clip", () => {
     const init = between(compositor, "init(timeRange: CMTimeRange, layers: [LayerSpec]", "\n  }\n");
     expect(init).toContain("let behind: [NSValue] = ClipyInstruction.backdropTracks(layers)");
-    expect(init).toContain("self.requiredSourceTrackIDs = (layers + overlays).map { NSNumber(value: $0.trackID) as NSValue } + behind");
+    expect(init).toContain("let own: [NSValue] = (layers + overlays).map { NSNumber(value: $0.trackID) as NSValue }");
+    expect(init).toContain("self.requiredSourceTrackIDs = own + behind");
     const tracks = between(compositor, "static func backdropTracks(", "\n  }\n");
     expect(tracks).toContain("guard let back = layer.backdrop, back.still == nil, back.trackID != kCMPersistentTrackID_Invalid else { return nil }");
   });

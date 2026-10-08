@@ -206,7 +206,8 @@ final class ClipyInstruction: NSObject, AVVideoCompositionInstructionProtocol {
     self.overlays = overlays
     self.effects = effects
     let behind: [NSValue] = ClipyInstruction.backdropTracks(layers)
-    self.requiredSourceTrackIDs = (layers + overlays).map { NSNumber(value: $0.trackID) as NSValue } + behind
+    let own: [NSValue] = (layers + overlays).map { NSNumber(value: $0.trackID) as NSValue }
+    self.requiredSourceTrackIDs = own + behind
     super.init()
   }
 
