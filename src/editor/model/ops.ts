@@ -872,6 +872,7 @@ export function setBackgroundForAllClips(p: Project, bg: ClipBackground): Projec
 /**
  * Swaps a clip's media and keeps its edits (id, filter, transform, crop, background, transition, blend, green screen, sound and its fades for videos).
  * The new clip keeps the old one's timeline length where the new media allows it. A video too short for a clip is refused.
+ * Stabilize and Smooth slow motion stay for a video (a copy of the new file is made) and go with the same step for a photo.
  */
 export function replaceClipMedia(p: Project, clipId: string, media: Pick<Clip, "sourceUri" | "sourceDuration" | "width" | "height" | "kind">): Project {
   return updateClip(p, clipId, (old) => replacedMedia(old, media), true);
@@ -898,6 +899,10 @@ function replacedMedia(old: Clip, media: Pick<Clip, "sourceUri" | "sourceDuratio
     next = { ...base, sourceDuration: media.sourceDuration, trimEnd, speedCurve };
   }
   if (next.kind !== "photo") delete next.motion;   // a Motion belongs to photos only; the key goes, it is never undefined
+  if (next.kind === "photo") {                     // Stabilize and Smooth slow motion belong to videos only: left on a photo they would
+    delete next.stabilize;                         // block Remove background without a word and come back, untapped, with the next video
+    delete next.smooth;
+  }
   return next.kind === "video" && clipDuration(next) < MIN_CLIP_SECONDS - 1e-9 ? old : next;
 }
 
@@ -1090,14 +1095,16 @@ export function setClipChroma(p: Project, id: string, chroma: ChromaKey | null):
  * Remove background on or off for a main clip or a layer (photo or video). On writes `cutout: true`; off removes the key. Refused
  * (same project) for an unknown id, a reversed clip, a value that is already in place, and a clip that has a Stabilize strength or
  * an ACTIVE Smooth slow motion (one copy per clip: the two do not combine). A Smooth slow motion switch that is idle — the clip is
- * not slowed any more, so its switch is not on screen — is removed by the same tap.
+ * not slowed any more, so its switch is not on screen — is removed by the same tap. A photo has neither tool: keys found on one
+ * (nothing writes them there) refuse nothing and are removed by the same tap.
  */
 export function setClipCutout(p: Project, id: string, on: boolean): Project {
   return updateClip(p, id, (c) => {
     if (on) {
-      if (c.cutout === true || c.reversed || c.stabilize !== undefined || (c.smooth === true && isSlowed(c))) return c;
+      if (c.cutout === true || c.reversed || (!isPhoto(c) && (c.stabilize !== undefined || (c.smooth === true && isSlowed(c))))) return c;
       const next = { ...c, cutout: true as const };
       delete next.smooth;
+      if (isPhoto(c)) delete next.stabilize;
       return next;
     }
     if (c.cutout === undefined) return c;

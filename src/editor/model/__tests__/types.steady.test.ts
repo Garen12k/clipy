@@ -1,6 +1,7 @@
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-10T10:00:00.000Z" }));
 import { migrateProject } from "../migrate";
-import { duplicateClip, setClipCutout, setClipSmooth, setClipSpeed, setClipStabilize, splitClipAt } from "../ops";
+import { duplicateClip, insertFreezeFrame, replaceClipMedia, setClipCutout, setClipSmooth, setClipSpeed, setClipStabilize, splitClipAt } from "../ops";
+import { steadyOf } from "../steady";
 import { makeClip, makeLayer, makePhotoClip, makeProject, newLayer, SCHEMA_VERSION, STABILIZE_IDS, type Clip } from "../types";
 
 const project = () => makeProject({
@@ -91,4 +92,54 @@ test("the sanity pass keeps a known strength and exactly true on a forward video
   for (const id of ["bad", "nil", "rev", "cut", "ph"]) { expect("stabilize" in clip(id)).toBe(false); expect("smooth" in clip(id)).toBe(false); }
   expect(clip("cut").cutout).toBe(true);                              // the older setting stays
   expect(migrateProject(p)).toEqual(p);
+});
+
+// ---- Replace: the keys belong to a video ----
+
+const PHOTO_MEDIA = { sourceUri: "file:///media/new.jpg", sourceDuration: 0, width: 1080, height: 1920, kind: "photo" as const };
+const VIDEO_MEDIA = { sourceUri: "file:///media/new.mp4", sourceDuration: 12, width: 1080, height: 1920, kind: "video" as const };
+
+test("Replace with a photo drops Stabilize and Smooth slow motion with the same step: absent, never undefined", () => {
+  const on = setClipSmooth(setClipStabilize(project(), "slow", "medium"), "slow", true);
+  const photo = replaceClipMedia(on, "slow", PHOTO_MEDIA);
+  expect(item(photo, "slow").kind).toBe("photo");
+  expect("stabilize" in item(photo, "slow")).toBe(false);
+  expect("smooth" in item(photo, "slow")).toBe(false);
+  expect(steadyOf(item(photo, "slow"))).toBeNull();
+  expect(migrateProject(photo)).toEqual(photo);                       // what the op leaves is what the sanity pass would
+  const layer = replaceClipMedia(setClipStabilize(project(), "L", "high"), "L", PHOTO_MEDIA);
+  expect("stabilize" in item(layer, "L")).toBe(false);
+});
+
+test("so Remove background works on that photo at once, and a video put back does not get Stabilize by itself", () => {
+  const photo = replaceClipMedia(setClipStabilize(project(), "a", "medium"), "a", PHOTO_MEDIA);
+  expect(item(setClipCutout(photo, "a", true), "a").cutout).toBe(true);
+  const back = replaceClipMedia(photo, "a", VIDEO_MEDIA);
+  expect(item(back, "a").kind).toBe("video");
+  expect("stabilize" in item(back, "a")).toBe(false);
+  expect(steadyOf(item(back, "a"))).toBeNull();
+});
+
+test("Replace with another video keeps the keys (spec 4.1): a copy of the new file is made", () => {
+  const on = setClipSmooth(setClipStabilize(project(), "slow", "medium"), "slow", true);
+  const video = replaceClipMedia(on, "slow", VIDEO_MEDIA);
+  expect(item(video, "slow")).toMatchObject({ stabilize: "medium", smooth: true, sourceUri: VIDEO_MEDIA.sourceUri });
+  expect(steadyOf(item(video, "slow"))).toEqual({ level: 2, grid: 60 });
+});
+
+test("a photo that carries the keys anyway (an older session, a hand-made file) is harmless: no copy, and Remove background is not refused and takes them away", () => {
+  const stale = { ...project(), clips: project().clips.map((c) => (c.id === "ph" ? ({ ...c, stabilize: "high", smooth: true } as Clip) : c)) };
+  expect(steadyOf(item(stale, "ph"))).toBeNull();
+  const cut = setClipCutout(stale, "ph", true);
+  expect(item(cut, "ph").cutout).toBe(true);
+  expect("stabilize" in item(cut, "ph")).toBe(false);
+  expect("smooth" in item(cut, "ph")).toBe(false);
+});
+
+test("a freeze frame cut from a clip with both keys is a photo without them, and both halves keep them", () => {
+  const on = setClipSmooth(setClipStabilize(project(), "slow", "high"), "slow", true);
+  const frozen = insertFreezeFrame(on, 10, { id: "still", sourceUri: "file:///media/still.jpg", width: 1080, height: 1920 });
+  expect("stabilize" in item(frozen, "still")).toBe(false);
+  expect("smooth" in item(frozen, "still")).toBe(false);
+  expect(frozen.clips.filter((c) => c.stabilize === "high" && c.smooth === true)).toHaveLength(2);
 });

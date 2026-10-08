@@ -111,10 +111,10 @@ export interface Clip { /* v20, unchanged */
 ```
 
 ### 4.1 Rules
-- Both keys are optional and **absent** when off. Only `setClipStabilize(p, id, level | null)` writes `stabilize` and only `setClipSmooth(p, id, on)` writes `smooth` (plus the one removal in `setClipCutout`, B4). Everything else reads `steadyOf(clip)` (`steady.ts`): `null`, or `{ level, grid }` for a video that plays forwards, has no cut-out, and has a strength or an active switch.
+- Both keys are optional and **absent** when off. Only `setClipStabilize(p, id, level | null)` writes `stabilize` and only `setClipSmooth(p, id, on)` writes `smooth` (plus two removals: the idle switch in `setClipCutout`, B4, and both keys when Replace turns the clip into a photo). Everything else reads `steadyOf(clip)` (`steady.ts`): `null`, or `{ level, grid }` for a video that plays forwards, has no cut-out, and has a strength or an active switch.
 - `setClipStabilize` refuses (same project) a photo, a reversed clip, a clip with Remove background, an unknown id or strength, and a value already in place. `setClipSmooth(…, true)` refuses the same and a clip that is not slowed. Off is never refused.
-- `setClipCutout(…, true)` now also refuses a clip with a strength or an **active** Smooth slow motion; an idle `smooth` key is removed with the tap.
-- Duplicate, split, a new layer from a clip and Replace keep the keys (they copy the clip). A freeze frame is a new photo without them.
+- `setClipCutout(…, true)` now also refuses a **video** with a strength or an **active** Smooth slow motion; an idle `smooth` key is removed with the tap. A photo has neither tool, so keys found on one refuse nothing and are removed with the tap.
+- Duplicate, split, a new layer from a clip and Replace **with a video** keep the keys (they copy the clip). Replace **with a photo** removes both in the same undo step (`replacedMedia`): left on the photo they would refuse Remove background without a word and switch Stabilize back on, untapped, when a video is put back. A freeze frame is a new photo without them.
 
 ### 4.2 The sanity pass
 `normaliseClip`: `stabilize` is kept only when it is one of the three ids, `smooth` only when it is exactly `true`, and both only on a video that is not reversed and has no `cutout` after its own rule. Anything else leaves no key. Idempotent.
@@ -242,7 +242,7 @@ Upright; `cutoutSize(width, height, 1920)`. Each frame: the source's rotation an
 | Both settings on one clip | one copy, one percent |
 | Remove background on the clip | Stabilize and Smooth slow motion say the M2 sentence and change nothing |
 | Stabilize or an active Smooth slow motion on the clip | Remove background says the mirror sentence and stays off |
-| A reversed clip | no Stabilize tool, no Slow motion tab |
+| A reversed clip | no Stabilize tool, no Slow motion tab (also when it is slowed, and when it is reversed while the tab is open: the strip falls back to Normal) |
 | A clip with a copy | Reverse is not on its bar |
 | A photo | neither tool |
 | A multi-selection in the Speed strip | no Slow motion tab |
@@ -251,7 +251,8 @@ Upright; `cutoutSize(width, height, 1920)`. Each frame: the source's rotation an
 | Trim drag, speed drag | nothing renders until the project has stood still for 0.8 s |
 | Trim outwards past the copy | a new copy; the clip shows as it was meanwhile |
 | Split, duplicate | the same copy |
-| Replace media | the keys stay; a copy of the new file is made |
+| Replace with another video | the keys stay; a copy of the new file is made |
+| Replace with a photo | both keys go with the same step (Undo brings them back with the video) |
 | A transition into or out of the clip | the copy holds the handles (2 s each side) |
 | A filter, Adjust, crop, mask, opacity, green screen, keyframes, animation | applied to the copy as to the original |
 | A cut inside the clip (two scenes in one file) | the jump is not taken as shake; each side is steadied |
