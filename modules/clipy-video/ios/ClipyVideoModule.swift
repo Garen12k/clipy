@@ -56,6 +56,24 @@ public class ClipyVideoModule: Module {
     return soundJobs[id]
   }
 
+  private let speechLock = NSLock()
+  private var speechJobs: [String: SpeechJob] = [:]   // guarded by `speechLock`; a job is held here until it has answered
+
+  private func storeSpeechJob(_ id: String, _ job: SpeechJob) {
+    speechLock.lock(); defer { speechLock.unlock() }
+    speechJobs[id] = job
+  }
+
+  private func dropSpeechJob(_ id: String) {
+    speechLock.lock(); defer { speechLock.unlock() }
+    speechJobs[id] = nil
+  }
+
+  private func lookupSpeechJob(_ id: String) -> SpeechJob? {
+    speechLock.lock(); defer { speechLock.unlock() }
+    return speechJobs[id]
+  }
+
   public func definition() -> ModuleDefinition {
     Name("ClipyVideo")
     Events("onExportEvent", "onSoundEvent")
@@ -200,6 +218,45 @@ public class ClipyVideoModule: Module {
         let answer: [String: Any] = await SoundProbe.run(uri)
         promise.resolve(answer)
       }
+    }
+
+    // The voices installed on this iPhone and the phone's own language code (see SpeechRender.voices).
+    AsyncFunction("listVoices") { (promise: Promise) in
+      let answer: [String: Any] = ["current": AVSpeechSynthesisVoice.currentLanguageCode(), "voices": SpeechRender.voices()]
+      promise.resolve(answer)
+    }
+
+    // Read aloud: speaks `text` with the voice into `outputPath` (the voice's own PCM, a .caf). Resolves
+    // `{ fileUri, seconds }`. Rejects "E_READ_ALOUD_CANCELLED" after `cancelSpeech(jobId)`, else "E_READ_ALOUD" with
+    // a staged message. The job is stored before it starts, so a cancel that comes at once finds it; the job answers
+    // exactly once (SpeechJob.end).
+    AsyncFunction("speakToFile") { (request: SpeechRequest, promise: Promise) in
+      guard let outputURL = ExportSession.fileURL(from: request.outputPath) else {
+        promise.reject("E_READ_ALOUD", "speech output: not a file path")
+        return
+      }
+      let jobId = request.jobId
+      let job = SpeechJob(outputURL: outputURL, done: { [weak self] (outcome: Result<Double, Error>) -> Void in
+        self?.dropSpeechJob(jobId)
+        switch outcome {
+        case .success(let seconds):
+          let answer: [String: Any] = ["fileUri": outputURL.absoluteString, "seconds": seconds]
+          promise.resolve(answer)
+        case .failure(let error):
+          if let own = error as? SpeechError, case .cancelled = own {
+            promise.reject("E_READ_ALOUD_CANCELLED", "Speech cancelled")
+          } else {
+            promise.reject("E_READ_ALOUD", SpeechRender.message(error))
+          }
+        }
+      })
+      self.storeSpeechJob(jobId, job)
+      job.start(text: request.text, voiceId: request.voiceId, rate: request.rate)
+    }
+
+    // Stops that Read aloud (it then rejects "E_READ_ALOUD_CANCELLED"). An unknown or finished job: nothing.
+    Function("cancelSpeech") { (jobId: String) in
+      self.lookupSpeechJob(jobId)?.cancel()
     }
   }
 }
