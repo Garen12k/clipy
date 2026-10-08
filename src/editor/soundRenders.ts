@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { NEEDS_LATEST_BUILD } from "@/src/lib/buildInfo";
-import { addSoundListener, cancelSoundRender, isSoundAvailable, isSoundCancelled, renderSound, SOUND_CANCELLED } from "@/modules/clipy-video";
+import { LATEST_TOOLS, NEEDS_LATEST_BUILD } from "@/src/lib/buildInfo";
+import { addSoundListener, cancelSoundRender, isNoiseAvailable, isNoiseBuild, isSoundAvailable, isSoundCancelled, renderSound, SOUND_CANCELLED } from "@/modules/clipy-video";
 import { neededSounds, soundChain, soundFileName, type NeededSound } from "@/src/editor/model/sound";
 import type { SoundSettings } from "@/src/editor/model/types";
 import { newId } from "@/src/lib/id";
@@ -27,6 +27,20 @@ export const SOUND_CANCEL_GRACE_MS = 4000;
  * file and setting, not how long the file is.
  */
 export const SOUND_RENDER_DEADLINE_MS = 120000;
+/**
+ * The longest one copy WITH Reduce noise may take. Apple's isolation unit is the slow part of such a render and how slow is not
+ * known before the phone has been asked, so it gets ten minutes instead of two.
+ */
+export const SOUND_NOISE_DEADLINE_MS = 600000;
+/** Said where Reduce noise is tapped on an iPhone that does not have Apple's unit (the build is new enough). */
+export const NOISE_NOT_ON_PHONE = "This iPhone cannot reduce noise.";
+/** Why Reduce noise cannot run here, or null when it can: the build is too old (it would ignore the noise number), or the phone lacks the unit. */
+export function noiseRefusal(): string | null {
+  if (!isNoiseBuild()) return LATEST_TOOLS;
+  return isNoiseAvailable() ? null : NOISE_NOT_ON_PHONE;
+}
+/** Whether the copy of this setting is made with the isolation unit — asked of the chain, as the copy's name is (strength 0 is ON; off is no `noise` at all). */
+const hasNoise = (sound: SoundSettings): boolean => soundChain(sound).noiseWet > 0;
 
 type Running = {
   jobId: string; promise: Promise<string>; listeners: Set<(fraction: number) => void>; cancelled: boolean;
@@ -57,11 +71,11 @@ const cancelledError = (): Error => Object.assign(new Error("Sound cancelled"), 
 
 /**
  * Waits for one native render — but never for ever. It ends with the native answer, or `SOUND_CANCEL_GRACE_MS` after the render was
- * cancelled (as a cancelled render), or at `SOUND_RENDER_DEADLINE_MS` (as a failed one, and the native side is told to stop),
+ * cancelled (as a cancelled render), or at `deadlineMs` (`SOUND_RENDER_DEADLINE_MS`, or `SOUND_NOISE_DEADLINE_MS` for a copy with Reduce noise; as a failed one, and the native side is told to stop),
  * whichever comes first. Whatever the native side answers after that is dropped here: nobody waits for it, no state is written for
  * it. (A copy it still finishes is simply on disk — written as `part-<name>`, then moved — and is found the next time it is needed.)
  */
-function answered(entry: Running, start: () => Promise<unknown>): Promise<void> {
+function answered(entry: Running, start: () => Promise<unknown>, deadlineMs: number): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let open = true;
     let grace: ReturnType<typeof setTimeout> | null = null;
@@ -75,8 +89,8 @@ function answered(entry: Running, start: () => Promise<unknown>): Promise<void> 
     };
     const deadline = setTimeout(() => settle(() => {
       stopNative(entry.jobId);
-      reject(new Error(`sound render: no answer after ${SOUND_RENDER_DEADLINE_MS / 1000} s`));
-    }), SOUND_RENDER_DEADLINE_MS);
+      reject(new Error(`sound render: no answer after ${deadlineMs / 1000} s`));
+    }), deadlineMs);
     entry.giveUp = () => { if (grace === null) grace = setTimeout(() => settle(() => reject(cancelledError())), SOUND_CANCEL_GRACE_MS); };
     let native: Promise<unknown>;
     try { native = start(); } catch (e) { settle(() => reject(e)); return; }
@@ -86,7 +100,8 @@ function answered(entry: Running, start: () => Promise<unknown>): Promise<void> 
 
 /**
  * The copy of `sourceUri` changed by `sound`: its uri once it exists — found on disk, or rendered now (one render per copy however
- * many ask). Rejects with SOUND_UNAVAILABLE without the engine, with the native staged message when the render fails (or does not
+ * many ask). Rejects with SOUND_UNAVAILABLE without the engine, with `noiseRefusal()` for a setting with Reduce noise where that cannot run
+ * (before the native side is asked anything), with the native staged message when the render fails (or does not
  * answer in time: `answered`), and with the cancel code when it was cancelled (`isSoundCancelled`). It always settles. Used by the
  * editor (`syncSounds`) and by the export.
  */
@@ -102,10 +117,14 @@ export function ensureSound(projectId: string, sourceUri: string, sound: SoundSe
   const work = async (): Promise<string> => {
     if (await expoFs.exists(path)) return path;
     if (!isSoundAvailable()) throw new Error(SOUND_UNAVAILABLE);
+    // Reduce noise where it cannot run: refused HERE. A build from before it would drop the request's noise number, render
+    // without the unit and leave a copy with this name on disk.
+    const noise = hasNoise(sound);
+    if (noise) { const why = noiseRefusal(); if (why) throw new Error(why); }
     listen();
     await expoFs.mkdir(dir);
     if (entry.cancelled) throw cancelledError();
-    await answered(entry, () => renderSound({ ...soundChain(sound), jobId: entry.jobId, sourceUri, outputPath: path }));
+    await answered(entry, () => renderSound({ ...soundChain(sound), jobId: entry.jobId, sourceUri, outputPath: path }), noise ? SOUND_NOISE_DEADLINE_MS : SOUND_RENDER_DEADLINE_MS);
     return path;
   };
   entry.promise = work().finally(() => { inflight.delete(path); });
