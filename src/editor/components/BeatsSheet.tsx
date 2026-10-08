@@ -205,7 +205,7 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
         <View style={{ height: theme.size.controlCompact, alignItems: "center", justifyContent: "center" }}>
           {busy
             ? <Spinner label="Listening to the music" />
-            : <Body muted style={[small, { textAlign: "center" }]}>{hint}</Body>}
+            : <Body muted numberOfLines={2} style={[small, { textAlign: "center" }]}>{hint}</Body>}
         </View>
         {cutHint ? <Body muted style={[small, { textAlign: "center" }]}>{cutHint}</Body> : null}
       </View>

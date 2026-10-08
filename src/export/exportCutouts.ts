@@ -1,7 +1,7 @@
 import { isCutoutCancelled, type ExportClip } from "@/modules/clipy-video";
 import { cutoutNeedOf, useCutoutFiles, type CutoutFile } from "@/src/editor/cutoutFiles";
 import { cutoutDir, ensureCutout, isNoPerson } from "@/src/editor/cutoutRenders";
-import { CUTOUT, cutoutRefusal, cutoutStillName, parseCutoutName } from "@/src/editor/model/cutout";
+import { CUTOUT, cutoutBytes, cutoutRefusal, cutoutStillName, parseCutoutName } from "@/src/editor/model/cutout";
 import { activeCutout, isPhoto, type Clip } from "@/src/editor/model/types";
 import { expoFs } from "@/src/projects/expoFs";
 
@@ -19,6 +19,35 @@ export const CUTOUT_EXPORT = {
  */
 const CUTOUT_ASKS = 3;
 const STOPPED = "Could not remove a background for the export: the cut-out was stopped before it was finished. Export again.";
+
+/** The finished copies in a project's cut-out folder, by name; a folder that cannot be read counts as empty. */
+async function finishedCopies(dir: string): Promise<string[]> {
+  try { return (await expoFs.list(dir)).filter((name) => parseCutoutName(name) !== null); } catch { return []; }
+}
+
+/**
+ * About how many bytes the copies that `prepareCutouts` would still have to MAKE for these clips take (`cutoutBytes` each): the
+ * export asks for that much free space on top of the video's, so a nearly full phone is told so before anything is rendered. A
+ * copy that is on disk or ready costs nothing more; a copy counted for one clip serves the next, as it will when it is made. 0 —
+ * and nothing is read — when no clip has a copy (the switch off, played backwards, over the limit).
+ */
+export async function cutoutBytesToMake(projectId: string, items: readonly Clip[]): Promise<number> {
+  const cut = items.filter((c) => activeCutout(c) && cutoutRefusal(c) === null);
+  if (cut.length === 0) return 0;
+  const dir = cutoutDir(projectId);
+  const files: Record<string, CutoutFile> = {};
+  for (const name of await finishedCopies(dir)) files[name] = { status: "ready", uri: `${dir}/${name}` };
+  Object.assign(files, useCutoutFiles.getState().files);
+  let bytes = 0;
+  for (const clip of cut) {
+    const need = cutoutNeedOf(files, clip);
+    const known = files[need.name];
+    if (known !== undefined && known.status === "ready") continue;
+    bytes += cutoutBytes(clip);
+    files[need.name] = { status: "ready", uri: `${dir}/${need.name}` };
+  }
+  return bytes;
+}
 
 /**
  * The cut-out copies of the clips and layers that have Remove background on: clip id → the copy's uri. A copy that exists (and
@@ -38,8 +67,7 @@ export async function prepareCutouts(projectId: string, items: readonly Clip[], 
   if (cut.length === 0) return out;
   if (cut.some((c) => cutoutRefusal(c) === "tooLong")) throw new Error(CUTOUT_EXPORT.tooLong);
   const dir = cutoutDir(projectId);
-  let finished: string[] = [];
-  try { finished = (await expoFs.list(dir)).filter((name) => parseCutoutName(name) !== null); } catch { finished = []; }
+  let finished: string[] = await finishedCopies(dir);
   const filesNow = (): Record<string, CutoutFile> => {
     const files: Record<string, CutoutFile> = {};
     for (const name of finished) files[name] = { status: "ready", uri: `${dir}/${name}` };

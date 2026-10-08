@@ -5,11 +5,11 @@ jest.mock("@/src/editor/cutoutRenders", () => ({ retryCutout: jest.fn(), isNoPer
 import { isCutoutAvailable } from "@/modules/clipy-video";
 import { retryCutout } from "@/src/editor/cutoutRenders";
 import { useCutoutFiles } from "@/src/editor/cutoutFiles";
-import { makeClip, makeLayer, makeProject } from "@/src/editor/model/types";
+import { makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { BEATS_BACKGROUND_TOOLS } from "@/src/lib/buildInfo";
 import { useToast } from "@/src/ui/Toast";
-import { CUTOUT_TOO_LONG, CutoutSheet, cutoutStatus } from "../components/CutoutSheet";
+import { CUTOUT_FILE_MISSING, CUTOUT_TOO_LONG, CutoutSheet, cutoutStatus } from "../components/CutoutSheet";
 
 const st = () => useEditorStore.getState();
 const sw = () => screen.getByLabelText("Remove background");
@@ -49,6 +49,43 @@ test("cutoutStatus never says a broken number", () => {
   expect(cutoutStatus(false, null, undefined, NaN)).toBe("People only. The copy takes about 1 MB.");
   expect(cutoutStatus(true, null, { status: "busy", progress: NaN }, 0)).toBe("Preparing the cut-out: 0 %");
   expect(cutoutStatus(true, null, { status: "busy", progress: 7 }, 0)).toBe("Preparing the cut-out: 100 %");
+});
+
+test("cutoutStatus: a copy that can never start says why instead of waiting; a photo has no percent", () => {
+  expect(CUTOUT_FILE_MISSING).toBe("The file of this clip is missing.");
+  expect(cutoutStatus(true, null, undefined, 0, { blocked: "build" })).toBe(BEATS_BACKGROUND_TOOLS);
+  expect(cutoutStatus(true, null, undefined, 0, { blocked: "missing" })).toBe(CUTOUT_FILE_MISSING);
+  expect(cutoutStatus(true, null, undefined, 0, { blocked: null })).toBe("Waiting to start.");
+  // Only the waiting is replaced: off, too long, and a copy that is known say what they always said.
+  expect(cutoutStatus(false, null, undefined, 9491200, { blocked: "build" })).toBe("People only. The copy takes about 9 MB.");
+  expect(cutoutStatus(true, "tooLong", undefined, 0, { blocked: "missing" })).toBe(CUTOUT_TOO_LONG);
+  expect(cutoutStatus(true, null, { status: "ready", uri: "u" }, 0, { blocked: "missing" })).toBe("Ready.");
+  expect(cutoutStatus(true, null, { status: "busy", progress: 0.5 }, 0, { blocked: "build" })).toBe("Preparing the cut-out: 50 %");
+  // The phone reports no progress for a photo: no percent that would stand at 0.
+  expect(cutoutStatus(true, null, { status: "busy", progress: 0 }, 0, { photo: true })).toBe("Preparing the cut-out.");
+  expect(cutoutStatus(true, null, { status: "busy", progress: 0 }, 0, { photo: false })).toBe("Preparing the cut-out: 0 %");
+  expect(cutoutStatus(true, null, { status: "ready", uri: "u" }, 0, { photo: true })).toBe("Ready.");
+});
+
+test("the status row of a switched-on clip that cannot be rendered: a missing file, a build without the tool, a photo", async () => {
+  const on = makeClip({ id: "a", sourceDuration: 8, cutout: true });
+  st().setProject(makeProject({ clips: [on] }), [on.sourceUri]);
+  const first = await render(<CutoutSheet clipId="a" visible onClose={() => {}} />);
+  expect(screen.getByText(CUTOUT_FILE_MISSING)).toBeTruthy();
+  expect(screen.queryByText("Waiting to start.")).toBeNull();
+  await first.unmount();
+  jest.mocked(isCutoutAvailable).mockReturnValue(false);
+  st().setProject(makeProject({ clips: [on] }));
+  const second = await render(<CutoutSheet clipId="a" visible onClose={() => {}} />);
+  expect(screen.getByText(BEATS_BACKGROUND_TOOLS)).toBeTruthy();
+  await second.unmount();
+  jest.mocked(isCutoutAvailable).mockReturnValue(true);
+  st().setProject(makeProject({ clips: [makePhotoClip({ id: "ph", sourceUri: "file:///media/p.jpg", cutout: true })] }));
+  await render(<CutoutSheet clipId="ph" visible onClose={() => {}} />);
+  expect(screen.getByText("Waiting to start.")).toBeTruthy();
+  await act(() => { useCutoutFiles.setState({ files: { "p-c1-photo.png": { status: "busy", progress: 0 } } }); });
+  expect(screen.getByText("Preparing the cut-out.")).toBeTruthy();
+  expect(screen.getByLabelText("Preparing the cut-out")).toBeTruthy();       // the spinner
 });
 
 test("the strip: a title, the switch off, and what it will take", async () => {

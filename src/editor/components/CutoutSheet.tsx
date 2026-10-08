@@ -4,7 +4,7 @@ import { cutoutFileOf, cutoutNeedOf, useCutoutFiles, type CutoutFile } from "@/s
 import { isNoPerson, retryCutout } from "@/src/editor/cutoutRenders";
 import { cutoutBytes, cutoutRefusal, type CutoutRefusal } from "@/src/editor/model/cutout";
 import { setClipCutout } from "@/src/editor/model/ops";
-import type { Clip } from "@/src/editor/model/types";
+import { isPhoto, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useItemClip } from "@/src/editor/useItem";
 import { BEATS_BACKGROUND_TOOLS } from "@/src/lib/buildInfo";
@@ -17,14 +17,21 @@ import { STRIP, StripNote, ToolStrip } from "@/src/ui/ToolStrip";
 
 /** Said where the switch is tapped on a video whose trimmed source is over the limit, and in the strip for such a clip. */
 export const CUTOUT_TOO_LONG = "Remove background works on clips up to 60 seconds. Trim or split this clip first.";
+/** Said in the strip for a switched-on clip whose own file is gone: its copy is never made. */
+export const CUTOUT_FILE_MISSING = "The file of this clip is missing.";
 const HINT = "The phone finds the person and hides everything else.";
 const PREPARING = "Preparing the cut-out";
 
-/** The strip's one status line: what the copy will take, how far it is, that it is ready, or why it is not. */
-export function cutoutStatus(on: boolean, refusal: CutoutRefusal | null, file: CutoutFile | undefined, bytes: number): string {
+/**
+ * The strip's one status line: what the copy will take, how far it is, that it is ready, or why it is not. `more.blocked`: why a
+ * copy nobody has asked for yet never will be (this build has no tool for it, or the clip's file is missing) — said instead of
+ * waiting for ever. `more.photo`: the phone reports no progress for a photo, so its line has no percent.
+ */
+export function cutoutStatus(on: boolean, refusal: CutoutRefusal | null, file: CutoutFile | undefined, bytes: number, more: { blocked?: "build" | "missing" | null; photo?: boolean } = {}): string {
   if (refusal === "tooLong") return CUTOUT_TOO_LONG;
   if (!on) return `People only. The copy takes about ${Number.isFinite(bytes) ? Math.max(1, Math.round(bytes / 1000000)) : 1} MB.`;
-  if (file === undefined) return "Waiting to start.";
+  if (file === undefined) return more.blocked === "build" ? BEATS_BACKGROUND_TOOLS : more.blocked === "missing" ? CUTOUT_FILE_MISSING : "Waiting to start.";
+  if (file.status === "busy" && more.photo === true) return `${PREPARING}.`;
   if (file.status === "busy") return `${PREPARING}: ${Number.isFinite(file.progress) ? Math.min(100, Math.max(0, Math.round(file.progress * 100))) : 0} %`;
   if (file.status === "ready") return "Ready.";
   return isNoPerson(file.message) ? "No person was found in this clip." : "Could not remove the background. Switch it off and on to try again.";
@@ -36,11 +43,13 @@ export function cutoutStatus(on: boolean, refusal: CutoutRefusal | null, file: C
  */
 function CutoutStatus({ clip }: { clip: Clip }) {
   const file = useCutoutFiles((s) => cutoutFileOf(s.files, clip));
+  const missing = useEditorStore((s) => s.missingSourceUris.includes(clip.sourceUri));
   const on = clip.cutout === true;
+  const blocked = !isCutoutAvailable() ? "build" : missing ? "missing" : null;
   return (
     <View testID="cutout-status" style={{ height: STRIP.slider, flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.gutter }}>
       {on && file !== undefined && file.status === "busy" ? <Spinner label={PREPARING} /> : null}
-      <Body muted numberOfLines={2} style={{ flex: 1, fontSize: theme.type.small }}>{cutoutStatus(on, cutoutRefusal(clip), file, cutoutBytes(clip))}</Body>
+      <Body muted numberOfLines={2} style={{ flex: 1, fontSize: theme.type.small }}>{cutoutStatus(on, cutoutRefusal(clip), file, cutoutBytes(clip), { blocked, photo: isPhoto(clip) })}</Body>
     </View>
   );
 }

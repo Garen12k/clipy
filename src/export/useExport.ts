@@ -4,7 +4,7 @@ import { clipDuration } from "@/src/editor/model/timeline";
 import { activeCutout, clampExportSettings, DEFAULT_EXPORT_SETTINGS, EFFECT_END_SLACK, frameAspect, type ExportSettings, type Project } from "@/src/editor/model/types";
 import { addExportListener, cancelExport, exportTimeline, isCutoutAvailable, isNativeAvailable, isSoundAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
-import { CUTOUT_SHARE, prepareCutouts, withCutout } from "./exportCutouts";
+import { CUTOUT_SHARE, cutoutBytesToMake, prepareCutouts, withCutout } from "./exportCutouts";
 import { prepareSounds, SOUND_SHARE } from "./exportSounds";
 import { estimateBytes, exportableAudio, exportableClips, exportableLayers, requestBitrate, type Resolution } from "./estimate";
 
@@ -55,7 +55,11 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
     setState({ status: "exporting", progress: 0 });
     try {
       const total = clips.reduce((s, c) => s + clipDuration(c), 0);
-      const need = estimateBytes(total, resolution, settings) * 2;
+      const layersOut = exportableLayers(project, missingSourceUris, total);
+      /** Whether a clip or layer goes out from a cut-out copy (never on a build from before the tool: nothing can have been switched on there). */
+      const cutting = isCutoutAvailable() && [...clips, ...layersOut].some(activeCutout);
+      // The copies still to be made are written before the video is: their room is asked for with the video's.
+      const need = estimateBytes(total, resolution, settings) * 2 + (cutting ? await cutoutBytesToMake(project.id, [...clips, ...layersOut]) : 0);
       if ((await expoFs.freeBytes()) < need) { setState({ status: "error", progress: 0, message: "Not enough free space on this iPhone for the export." }); return; }
       await expoFs.mkdir(`${expoFs.cacheDir}exports`);
       const outputPath = `${expoFs.cacheDir}exports/${project.id}-${Date.now()}.mp4`;
@@ -83,9 +87,8 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
       // A clip or layer with Remove background is exported from its cut-out copy: same timing, same sound, another file. A copy
       // that is missing is rendered first. Without the tool (a build from before it) nothing can have been switched on there:
       // the clips go out as they are.
-      const layersOut = exportableLayers(project, missingSourceUris, total);
       const cutouts = new Map<string, string>();
-      if (isCutoutAvailable() && [...clips, ...layersOut].some(activeCutout)) {
+      if (cutting) {
         const run = { stopped: false };
         preparing.current = run;
         const before = share.current;

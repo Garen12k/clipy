@@ -85,6 +85,8 @@ test("no steady beat: nothing is placed and the hint says so; too short says so 
   expect(markers()).toEqual([]);
   expect(st().past).toHaveLength(0);
   expect(screen.getByText("my song.m4a has no steady beat. Tap the beat with Tap instead.")).toBeTruthy();
+  // The row is 36 pt and the sentence carries the owner's file name: two lines at most, so a long name never runs over the row below.
+  expect(screen.getByText("my song.m4a has no steady beat. Tap the beat with Tap instead.").props.numberOfLines).toBe(2);
   expect(btn("Find beats")).toBeDisabled();
   await act(async () => { useOwnBeats.setState({ found: {} }); });
   const second = pending();

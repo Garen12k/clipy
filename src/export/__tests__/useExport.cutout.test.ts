@@ -20,7 +20,7 @@ jest.mock("@/src/editor/cutoutRenders", () => ({
   isNoPerson: (m: string) => m.includes("cutout person:"),
 }));
 jest.mock("@/src/projects/expoFs", () => ({
-  expoFs: { cacheDir: "file:///cache/", freeBytes: async () => 1e12, mkdir: async () => {}, list: async () => [] },
+  expoFs: { cacheDir: "file:///cache/", freeBytes: jest.fn(async () => 1e12), mkdir: async () => {}, list: jest.fn(async () => []) },
 }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-09T10:00:00.000Z" }));
 import { addExportListener, exportTimeline, isCutoutAvailable, toExportClip, toExportLayer } from "@/modules/clipy-video";
@@ -28,8 +28,11 @@ import { ensureCutout } from "@/src/editor/cutoutRenders";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { useCutoutFiles } from "@/src/editor/cutoutFiles";
-import { makeAudioTrack, makeClip, makeLayer, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
-import { CUTOUT_EXPORT } from "../exportCutouts";
+import { cutoutBytes } from "@/src/editor/model/cutout";
+import { DEFAULT_EXPORT_SETTINGS, makeAudioTrack, makeClip, makeLayer, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
+import { expoFs } from "@/src/projects/expoFs";
+import { estimateBytes } from "../estimate";
+import { CUTOUT_EXPORT, cutoutBytesToMake } from "../exportCutouts";
 import { useExport } from "../useExport";
 
 const DIR = "file:///doc/projects/p1/cutout";
@@ -160,6 +163,71 @@ describe("PROOF: a project without the switch exports exactly as it did before R
     const emit = jest.mocked(addExportListener).mock.calls[0][0];
     await act(async () => { emit({ jobId: "job1", type: "progress", progress: 0.5 }); });
     expect(result.current.state.progress).toBe(0.5);
+  });
+});
+
+describe("free space: the copies still to be made are counted with the video (M6)", () => {
+  const NO_SPACE = "Not enough free space on this iPhone for the export.";
+  const videoBytes = estimateBytes(14, 1080, DEFAULT_EXPORT_SETTINGS) * 2;     // the two clips: 8 s + 6 s
+  const copies = cutoutBytes(main) + cutoutBytes(layer);
+
+  test("cutoutBytesToMake: every copy not on disk and not ready, once; nothing is read for clips without the switch", async () => {
+    expect(copies).toBeGreaterThan(1000000);
+    await expect(cutoutBytesToMake("p1", [other])).resolves.toBe(0);
+    expect(expoFs.list).not.toHaveBeenCalled();
+    await expect(cutoutBytesToMake("p1", [main, other, layer])).resolves.toBe(copies);
+    await expect(cutoutBytesToMake("p1", [main, { ...main, id: "a2", trimEnd: 4 }])).resolves.toBe(cutoutBytes(main));                          // the second piece is served by the first one's copy
+    await expect(cutoutBytesToMake("p1", [{ ...main, id: "a2", trimEnd: 4 }, main])).resolves.toBe(cutoutBytes({ ...main, trimEnd: 4 }) + cutoutBytes(main));   // … but not the other way round
+    jest.mocked(expoFs.list).mockResolvedValueOnce(["a-c1-0-8000.mov", "part-l-c1-0-5000.mov"]);
+    await expect(cutoutBytesToMake("p1", [main, { ...main, id: "a2", trimEnd: 4 }, layer])).resolves.toBe(cutoutBytes(layer));   // both pieces are served by the copy on disk
+    useCutoutFiles.setState({ files: { "a-c1-0-8000.mov": { status: "ready", uri: `${DIR}/a-c1-0-8000.mov` }, "l-c1-0-5000.mov": { status: "busy", progress: 0.5 } } });
+    await expect(cutoutBytesToMake("p1", [main, layer])).resolves.toBe(cutoutBytes(layer));     // a busy copy is still to be written
+    jest.mocked(expoFs.list).mockRejectedValueOnce(new Error("no folder"));
+    useCutoutFiles.setState({ files: {} });
+    await expect(cutoutBytesToMake("p1", [main, layer])).resolves.toBe(copies);                 // a folder that cannot be read counts as empty
+    // A clip that has no copy (it plays backwards, or is over the limit) adds nothing.
+    await expect(cutoutBytesToMake("p1", [{ ...main, reversed: true }, makeClip({ id: "l", sourceDuration: 300, cutout: true })])).resolves.toBe(0);
+  });
+
+  test("room for the video but not for the copies: the export says so before anything is rendered", async () => {
+    jest.mocked(expoFs.freeBytes).mockResolvedValueOnce(videoBytes + copies - 1);
+    const { result } = await renderHook(() => useExport(project, []));
+    await act(async () => { await result.current.start(1080); });
+    expect(result.current.state).toEqual({ status: "error", progress: 0, message: NO_SPACE });
+    expect(ensureCutout).not.toHaveBeenCalled();
+    expect(exportTimeline).not.toHaveBeenCalled();
+  });
+
+  test("exactly enough for both, or the copies already on disk: it goes out", async () => {
+    jest.mocked(expoFs.freeBytes).mockResolvedValueOnce(videoBytes + copies);
+    const first = await renderHook(() => useExport(project, []));
+    await act(async () => { await first.result.current.start(1080); });
+    expect(exportTimeline).toHaveBeenCalledTimes(1);
+    jest.clearAllMocks();
+    jest.mocked(expoFs.freeBytes).mockResolvedValueOnce(videoBytes);
+    jest.mocked(expoFs.list).mockResolvedValue(["a-c1-0-8000.mov", "l-c1-0-5000.mov"]);
+    try {
+      const second = await renderHook(() => useExport(project, []));
+      await act(async () => { await second.result.current.start(1080); });
+      expect(exportTimeline).toHaveBeenCalledTimes(1);
+    } finally { jest.mocked(expoFs.list).mockResolvedValue([]); }
+  });
+
+  test("a project without the switch needs what it always needed, and its folder is not read", async () => {
+    jest.mocked(expoFs.freeBytes).mockResolvedValueOnce(estimateBytes(6, 1080, DEFAULT_EXPORT_SETTINGS) * 2);
+    const { result } = await renderHook(() => useExport(makeProject({ id: "p1", clips: [other] }), []));
+    await act(async () => { await result.current.start(1080); });
+    expect(exportTimeline).toHaveBeenCalledTimes(1);
+    expect(expoFs.list).not.toHaveBeenCalled();
+  });
+
+  test("on a build without the tool no copy is counted", async () => {
+    jest.mocked(isCutoutAvailable).mockReturnValue(false);
+    jest.mocked(expoFs.freeBytes).mockResolvedValueOnce(videoBytes);
+    const { result } = await renderHook(() => useExport(project, []));
+    await act(async () => { await result.current.start(1080); });
+    expect(exportTimeline).toHaveBeenCalledTimes(1);
+    expect(expoFs.list).not.toHaveBeenCalled();
   });
 });
 
