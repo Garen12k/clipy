@@ -13,9 +13,9 @@ const project = makeProject({
 });
 
 const MAIN = ["edit", "audioMenu", "textMenu", "sticker", "overlay", "collage", "effect", "filter", "adjust", "ratio", "background", "cover", "templates"];
-const CLIP = ["split", "trim", "select", "speed", "volume", "extractAudio", "voice", "soundQuality", "animate", "filter", "adjust", "background", "templates", "crop", "transform", "opacity", "mask", "chroma", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete"];
+const CLIP = ["split", "trim", "select", "speed", "volume", "extractAudio", "voice", "soundQuality", "animate", "filter", "adjust", "background", "templates", "crop", "transform", "opacity", "mask", "chroma", "cutout", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete"];
 const SOUND = ["audioSplit", "audioVolume", "audioFade", "voice", "soundQuality", "audioDuplicate", "audioDelete", "addAudio", "ducking", "beats"];
-const LAYER = ["trim", "speed", "volume", "extractAudio", "voice", "soundQuality", "animate", "filter", "adjust", "crop", "transform", "opacity", "mask", "blend", "chroma", "keyframe", "layerForward", "layerBack", "replace", "reverse", "duplicate", "delete"];
+const LAYER = ["trim", "speed", "volume", "extractAudio", "voice", "soundQuality", "animate", "filter", "adjust", "crop", "transform", "opacity", "mask", "blend", "chroma", "cutout", "keyframe", "layerForward", "layerBack", "replace", "reverse", "duplicate", "delete"];
 const without = (list: string[], ...gone: string[]) => list.filter((t) => !gone.includes(t));
 const withMotion = (list: string[]) => list.flatMap((t) => (t === "animate" ? ["animate", "motion"] : [t]));
 
@@ -36,7 +36,7 @@ test("a main clip: Select is third, Background and Templates follow Adjust", () 
 
 test("clip rules: a photo has no Speed / Volume / Reverse / Freeze; a reversed clip no Volume; the last clip no Transition; one clip no Select", () => {
   expect(contextFor({ ...none, clipId: "p" }, project).tools).toEqual(withMotion(without(CLIP, "speed", "volume", "extractAudio", "voice", "soundQuality", "reverse", "freeze")));
-  expect(contextFor({ ...none, clipId: "r" }, project).tools).toEqual(without(CLIP, "volume", "extractAudio", "voice", "soundQuality"));
+  expect(contextFor({ ...none, clipId: "r" }, project).tools).toEqual(without(CLIP, "volume", "extractAudio", "voice", "soundQuality", "cutout"));
   expect(contextFor({ ...none, clipId: "z" }, project).tools).toEqual(without(CLIP, "transition"));
   const one = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] });
   expect(contextFor({ ...none, clipId: "a" }, one).tools).toEqual(without(CLIP, "transition", "select"));
@@ -45,7 +45,7 @@ test("clip rules: a photo has no Speed / Volume / Reverse / Freeze; a reversed c
 test("a layer: the layer bar; a photo layer has no Speed / Volume / Reverse; a reversed layer no Volume", () => {
   expect(contextFor({ ...none, clipId: "L" }, project)).toEqual({ bar: "layer", tools: LAYER });
   expect(contextFor({ ...none, clipId: "P" }, project)).toEqual({ bar: "layer", tools: withMotion(without(LAYER, "speed", "volume", "extractAudio", "voice", "soundQuality", "reverse")) });
-  expect(contextFor({ ...none, clipId: "R" }, project).tools).toEqual(without(LAYER, "volume", "extractAudio", "voice", "soundQuality"));
+  expect(contextFor({ ...none, clipId: "R" }, project).tools).toEqual(without(LAYER, "volume", "extractAudio", "voice", "soundQuality", "cutout"));
   for (const id of ["L", "P", "R"]) for (const t of ["split", "freeze", "transition", "select", "background", "templates", "ratio"]) expect(contextFor({ ...none, clipId: id }, project).tools).not.toContain(t);
 });
 
@@ -97,7 +97,7 @@ test("every tool id is reachable, and no bar lists a tool twice", () => {
     for (const t of tools) seen.add(t);
   }
   expect([...seen].sort()).toEqual([...TOOL_IDS].sort());
-  expect(TOOL_IDS).toHaveLength(54);
+  expect(TOOL_IDS).toHaveLength(55);
 });
 
 test("selectionKey names what is selected; multi-select first", () => {
