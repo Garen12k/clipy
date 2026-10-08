@@ -81,7 +81,7 @@ export function steadyNeedsTag(p: Project, playhead: number, files: Record<strin
  */
 const steadyTagNow = (): boolean => {
   const s = useEditorStore.getState();
-  return !!s.project && isSteadyAvailable() && steadyNeedsTag(s.project, s.playhead, useSteadyFiles.getState().files);
+  return !!s.project && steadyNeedsTag(s.project, s.playhead, useSteadyFiles.getState().files) && isSteadyAvailable();   // the build is asked last: only for a frame that would show the tag
 };
 
 /**
