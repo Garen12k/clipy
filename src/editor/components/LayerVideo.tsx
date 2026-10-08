@@ -19,8 +19,13 @@ const videoFill = { width: "100%" as const, height: "100%" as const };
  * written to the player goes through a "last applied" ref, so a re-render that changes nothing for the player (every frame of a
  * gesture replaces the project) writes nothing. No effect here sets React state. A reversed layer previews forwards and silent, as
  * a reversed clip does.
+ *
+ * `onShown` (the main clip's follower asks; a layer does not): called with the file's uri once the player has PRESENTED a frame of
+ * the file it was last handed — it reported readyToPlay for that load AND the view rendered a first frame since (`onFirstFrameRender`:
+ * AVKit's ready-for-display of the current item), in either order. Both are forgotten when another file is loaded. Without the
+ * prop the view is handed no handler and nothing here differs.
  */
-export function LayerVideo({ layer, offset }: { layer: LayerClip; offset: number }) {
+export function LayerVideo({ layer, offset, onShown }: { layer: LayerClip; offset: number; onShown?: (uri: string) => void }) {
   const isPlaying = useEditorStore((s) => s.isPlaying);
   const recording = useEditorStore((s) => s.recording);
   // Created once (a constant source: the file is loaded with replaceAsync below) and released by the hook when this unmounts.
@@ -29,6 +34,10 @@ export function LayerVideo({ layer, offset }: { layer: LayerClip; offset: number
   // The file the player was last told to load, and whether it has reported readyToPlay since (seeks wait for that).
   const loadedUri = useRef<string | null>(null);
   const ready = useRef(false);
+  // Whether the view has rendered a first frame since that file was asked for, and whom to tell (the latest handler).
+  const framed = useRef(false);
+  const shownTo = useRef(onShown);
+  const tellShown = () => { if (ready.current && framed.current && loadedUri.current !== null) shownTo.current?.(loadedUri.current); };
   // play() has been called for the current stretch of playback (cleared by pause / a new file): play() once, pause() once.
   const started = useRef(false);
   // Where the paused player was last seeked to; null once it may have moved (it played, or the file changed).
@@ -63,13 +72,13 @@ export function LayerVideo({ layer, offset }: { layer: LayerClip; offset: number
     if (Math.abs(player.currentTime - t) / rate > DRIFT_TOLERANCE) player.currentTime = t;
   };
 
-  useEffect(() => { latest.current = { layer, offset: local, isPlaying }; });
+  useEffect(() => { latest.current = { layer, offset: local, isPlaying }; shownTo.current = onShown; });
 
   // Load (or swap, after Replace) the file. Nothing is seeked until it reports readyToPlay.
   useEffect(() => {
     if (loadedUri.current === layer.sourceUri) return;
     loadedUri.current = layer.sourceUri;
-    ready.current = false; started.current = false; lastSeek.current = null;
+    ready.current = false; framed.current = false; started.current = false; lastSeek.current = null;
     player.replaceAsync({ uri: layer.sourceUri }).catch(() => {});
   }, [layer.sourceUri, player]);
 
@@ -91,6 +100,7 @@ export function LayerVideo({ layer, offset }: { layer: LayerClip; offset: number
       ready.current = true;
       const now = latest.current;
       sync(now.layer, now.offset, now.isPlaying);
+      tellShown();
     });
     // useVideoPlayer releases the native player in its own unmount cleanup, which runs before this one: every call on it here
     // may throw, so each is swallowed (the release already stopped the picture and the sound).
@@ -100,5 +110,6 @@ export function LayerVideo({ layer, offset }: { layer: LayerClip; offset: number
     };
   }, [player]);
 
-  return <VideoView testID={`layer-video-${layer.id}`} player={player} style={videoFill} contentFit="fill" nativeControls={false} />;
+  const firstFrame = onShown ? { onFirstFrameRender: () => { framed.current = true; tellShown(); } } : null;
+  return <VideoView testID={`layer-video-${layer.id}`} player={player} style={videoFill} contentFit="fill" nativeControls={false} {...firstFrame} />;
 }

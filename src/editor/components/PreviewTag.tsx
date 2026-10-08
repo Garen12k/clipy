@@ -1,6 +1,7 @@
 import { View } from "react-native";
 import { isSteadyAvailable } from "@/modules/clipy-video";
 import { shownCutout, useCutoutFiles, type CutoutFile } from "@/src/editor/cutoutFiles";
+import { useFollowerShown } from "@/src/editor/followerShown";
 import { adjustNeedsTag } from "@/src/editor/model/adjust";
 import { placeClip } from "@/src/editor/model/clipLayout";
 import { CUTOUT_PREVIEW } from "@/src/editor/model/cutout";
@@ -13,7 +14,7 @@ import { shownSteady, useSteadyFiles, type SteadyFile } from "@/src/editor/stead
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { Body } from "@/src/ui/Text";
-import { backgroundShows, clipFrameMotion } from "./ClipFrame";
+import { backgroundShows, clipFrameMotion, mainFollower } from "./ClipFrame";
 
 /**
  * Whether the preview only approximates the current frame: the clip has a filter (at a strength above 0), the playhead is in a
@@ -85,17 +86,37 @@ const steadyTagNow = (): boolean => {
 };
 
 /**
+ * Whether the main clip at the playhead has a ready copy that the preview is not SHOWING yet: its second player (`mainFollower`,
+ * the rule `ClipFrame` mounts it by) has not presented a frame of that copy (`shown` — `followerShown.ts`), so the clip's own
+ * picture is still what is on screen. A copy on disk is not a picture.
+ */
+export function followerNeedsTag(p: Project, playhead: number, cutFiles: Record<string, CutoutFile>, steadyFiles: Record<string, SteadyFile>, shown: string | null): boolean {
+  const hit = clipAt(p, playhead);
+  if (!hit) return false;
+  const followed = mainFollower(hit.clip, shownCutout(cutFiles, hit.clip), shownSteady(steadyFiles, hit.clip));
+  return followed !== null && followed.uri !== shown;
+}
+/** `followerNeedsTag` for what the four stores hold right now. */
+const followerTagNow = (): boolean => {
+  const s = useEditorStore.getState();
+  return !!s.project && followerNeedsTag(s.project, s.playhead, useCutoutFiles.getState().files, useSteadyFiles.getState().files, useFollowerShown.getState().uri);
+};
+
+/**
  * Small chip shown over the preview when the current frame is an approximation of the export (see `needsPreviewTag`), or shows a
  * clip whose background the export will remove and the preview does not (`cutoutNeedsTag` — asked here, of both stores, as one
  * yes / no: the chip is drawn again only when the answer changes, not on every tick or percent). The same for a clip whose steady
- * copy the preview is not showing (steadyNeedsTag).
+ * copy the preview is not showing (steadyNeedsTag), and for a main clip whose ready copy has not reached the screen yet
+ * (`followerNeedsTag`: the tag goes with the copy's first presented frame, not with the file).
  */
 export function PreviewTag({ visible }: { visible: boolean }) {
   const cutNow = useEditorStore(cutoutTagNow);      // asked again when the project or the playhead changes …
   const cutThen = useCutoutFiles(cutoutTagNow);     // … and when a copy does: the same answer, read from both stores
   const steadyNow = useEditorStore(steadyTagNow);
   const steadyThen = useSteadyFiles(steadyTagNow);
-  if (!visible && !cutNow && !cutThen && !steadyNow && !steadyThen) return null;
+  // One answer read from four stores: asked again whenever any of them changes.
+  const waitA = useEditorStore(followerTagNow), waitB = useCutoutFiles(followerTagNow), waitC = useSteadyFiles(followerTagNow), waitD = useFollowerShown(followerTagNow);
+  if (!visible && !cutNow && !cutThen && !steadyNow && !steadyThen && !waitA && !waitB && !waitC && !waitD) return null;
   return (
     <View
       testID="preview-tag"
