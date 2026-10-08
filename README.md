@@ -320,6 +320,19 @@ Animations and keyframes. Everything shows exactly in the preview (no "Preview" 
   curve. Photos have no speed. Trim and split keep the curve on its pictures; Replace spreads the preset
   over the new clip. The preview changes speed as it plays, so a curved clip shows the "Preview" tag
   (speed changes can hitch and the sound changes pitch in steps).
+- **Smooth** (a switch under the Curve tiles) - on, a preset is written as a gradual ramp of 32 small pieces
+  instead of eight sudden steps; off, it is the eight steps of before. It is **on** for a clip that has no
+  curve yet; a clip that already has a curve shows the form it really has (a clip from an older project:
+  off), and nothing is rewritten by opening the strip. Flipping the switch on a clip with a curve rewrites
+  that curve in the other form (one Undo). The tile pictures follow the switch: eight bars, or 32 thin bars
+  drawn from the numbers that are stored. The smooth shapes are not the stepped ones made softer: **Jump
+  cut** becomes a wave between slow and fast, **Montage** dips to 0.75× instead of 0.5×, and a smooth clip
+  comes out a little shorter (Hero on an 8-second clip: 6.58 s instead of 7.67 s). The range stays 0.25× to
+  4×, and slow parts still repeat frames ("Slow parts can look choppy."). A clip shorter than about a third
+  of a second (0.32 s of source) cannot take the smooth form: "This clip is too short for a smooth curve.
+  Switch Smooth off." - the strip stays open so the switch can be flipped. Smooth ramps are the same stored
+  field with more steps, so they need **no new build**: they preview in Expo Go and export with the build
+  that was installed before this update.
 
 The exported video does the same, but that Swift has never been compiled.
 
@@ -384,9 +397,19 @@ Everything here is under **Audio** on the first row, or on the row of a selected
   (-12 to +12 semitones, on its own or added to a voice). Robot is a metallic comb with a light distortion, not a
   vocoder. On a video clip the same button first moves the clip's sound to the audio row (the same step as Extract
   audio, one Undo) and opens on the new bar.
-- **Sound** (the strip is titled "Sound quality") - equaliser presets None, Bass boost, Clear voice, Warm, Bright,
+- **Sound** (the panel is titled "Sound quality") - equaliser presets None, Bass boost, Clear voice, Warm, Bright,
   and **Even out loudness**: one overall gain from a gated level measurement of the original (not LUFS, not a
   compressor; it can also turn a loud recording down, by at most 6 dB), with a soft clip so it never distorts.
+  It is a compact panel now, like Voice: the timeline is hidden while it is open.
+- **Reduce noise** (in the same Sound panel) - a switch and a **Strength** slider. Apple's voice isolation keeps
+  the voice and lowers the background (wind, traffic, a fan, room hum). Best on speech; music can sound odd, and
+  the line under the switch says so. Strength runs from "the noise is halved" at the left to "only the voice" at
+  the right. It is the first step of the changed copy, so a Voice or an equaliser on the same bar works on the
+  cleaned sound; Even out loudness still measures the recording as it was. The original file is never changed,
+  and switching it off brings the recording back. On a video clip the button first moves the clip's sound to the
+  audio row, as Voice and Sound do. A copy with Reduce noise may take much longer to make (it is given ten
+  minutes instead of two). **Needs the latest build**: in an older build the switch does not move and one
+  sentence says so; on an iPhone without Apple's unit it says "This iPhone cannot reduce noise."
 
 The original file is never changed. Picking an effect renders a changed copy **once** (the whole file, so a long one
 takes longer), kept in the project's `sound` folder under a name that says the setting, and removed when no bar
@@ -395,6 +418,17 @@ is dragged only that bar plays its original and the copy is rendered once, when 
 made, the setting stays, the original plays and one message says so. The export prepares any missing copy first
 (the first 10 % of its progress) and stops with the reason if one cannot be made. **Voice and Sound need the native
 build**: in Expo Go, or in a build from before this update, they show one sentence and change nothing.
+- **Read aloud** (in the Text panel, the **Read aloud** row under the templates; texts only, not captions) - the
+  row is closed at first. Open, it shows the languages and the voices installed on the iPhone (more can be added
+  in the iPhone's Settings, under Accessibility), a **Speed** slider and the **Read aloud** button. The speech
+  becomes an ordinary bar on the voice row that starts where the text starts, named after the first words; move,
+  trim, fade it or give it a Voice like any sound. Tapping Read aloud again for the same text **replaces** that
+  bar where it stands, keeping its volume, fades and sound setting (one Undo brings the earlier one back). Emoji
+  are not read; a text with nothing to read or with more than 1000 characters is refused with one sentence.
+  While the phone prepares the voice the button's place shows a spinner and **Stop**; Stop, closing the row or
+  the panel, or 90 seconds without an answer end it and no bar is made. The last voice and speed are remembered
+  on the phone, not in the project. **Needs the latest build**: in Expo Go or an older build the row stays
+  closed and one sentence says so.
 - **Ducking** - a switch in the Audio tools: music dips to 30 % while a voice-over plays.
 - **Beats** - tap along to drop beat markers, shown as ticks on the timeline. The panel is a regular tall panel: the
   timeline is hidden while it is open, so tap the round **✓** to see the ticks and the clips. On a short phone
@@ -635,4 +669,23 @@ Sound tools (`SoundRender.swift`, `SoundMath.swift`; none of it has run on a dev
     4. **Render time.** A 10-second voice-over, a 3-minute song with Hall, and the sound of a long video, against the 120-second deadline (`SOUND_RENDER_DEADLINE_MS`); and that Cancel / a new pick is answered well inside the 4-second grace (`SOUND_CANCEL_GRACE_MS`).
     5. **AAC priming.** The `.m4a` copies come from `AVAudioFile` (about 2112 frames of encoder priming). A copy must start without a gap or a click and end without a click, in the preview and in the export.
     6. **Loudness and clipping.** Even out loudness on a very quiet recording and next to the bundled music; Bass boost on loud music must not crackle (the soft clip).
-    7. **The noise probe.** In a development build the first time the Sound strip opens, `probeNoiseReduction` runs Apple's voice clean-up unit once and logs one line, `[noise-probe] {"ok":...,"stage":...,"detail":...}`, in the dev-server log; it shows nothing on screen. If the unit raises inside Apple's code the app may close once; it will not repeat (the key `clipy.noiseProbe.v1` in `localStorage`; raise the `v1` to ask again). The answer decides whether a Reduce noise switch is possible.
+    7. **The noise probe.** In a development build the first time the Sound panel opens, `probeNoiseReduction` runs Apple's voice clean-up unit once and logs one line, `[noise-probe] {"ok":...,"stage":...,"detail":...}`, in the dev-server log; it shows nothing on screen. If the unit raises inside Apple's code the app may close once; it will not repeat (the key `clipy.noiseProbe.v1` in `localStorage`; raise the `v1` to ask again). The answer decides whether a Reduce noise switch is possible.
+
+Noise, ramps and speech (`SoundNoise` in `SoundRender.swift`, `SpeechRender.swift`; smooth ramps are TypeScript only and can be checked on the build installed before this round):
+
+95. **Noise, ramps and speech.** Check, in this order:
+    1. **Smooth ramps in the preview.** The picture moves evenly and the sound does not crackle or warble across the 31 changes of rate inside one clip (a stepped curve has 7). If it does, `SMOOTH_PER_SLICE` (timeline.ts) is the first thing to lower; no build needed.
+    2. **Smooth ramps in the export.** The same two questions, and whether the sound keeps its pitch: the export stretches the sound in 32 short pieces with AVFoundation's default algorithm. The exported clip is as long as on the timeline. Bullet's 0.3× middle is where repeated frames show most.
+    3. **Very short smooth clips.** A smooth clip trimmed to about half a second, exported: each of its 32 pieces is shorter than a frame. No black frame, no gap, the right length. If it misbehaves, the floor in `presetCurve` (ops.ts) can be raised without a build.
+    4. **A smooth layer over a slow main clip.** An overlay with a smooth curve on top of a main clip at 0.25×: both keep their own speed in the preview and in the export, and the export starts in a reasonable time with several smooth clips in one project.
+    5. **The shapes.** Smooth Jump cut is a wave, smooth Montage dips to 0.75×: do they feel right, or should Jump cut stay stepped?
+    6. **Reduce noise works.** A noisy voice-over comes out clean; a Voice (Deep) and an equaliser after it still work (the probe ran the unit alone, for five seconds).
+    7. **Strength is honoured.** Far left and far right must sound clearly different. If both ends sound the same, the unit did not take the mix that was set before the engine started (`SoundNoise.make`).
+    8. **Render time with Reduce noise.** A 10-second, a 1-minute and a 5-minute recording, against the 600-second deadline (`SOUND_NOISE_DEADLINE_MS`).
+    9. **Reduce noise with Even out loudness.** The level is measured on the noisy original, so a noisy recording with long pauses can come out a little too loud.
+    10. **Read aloud: each voice's format.** A default, an Enhanced and a Premium voice each make a bar that plays to its end. A voice whose sound the file cannot take fails cleanly ("Could not read this text aloud."; the log says `speech output: this voice gives a sound the file cannot take`) and needs a converter in a later build.
+    11. **Read aloud: the end of a reading.** The bar appears soon after the speech is made. If every reading takes about eight seconds longer than it should, the synthesizer never sends its empty end buffer and the job is ending on its silence rule (`idleSeconds`).
+    12. **Read aloud and other apps' audio.** With music playing in another app, tap Read aloud: does that music dip or stop? And after a reading, does the preview still play with sound?
+    13. **The `.caf` file.** A spoken bar plays in the preview, takes a Voice or Reduce noise (the same render as any sound), and is heard in the exported video.
+    14. **Arabic text.** An Arabic text with an Arabic voice is read whole, with its words joined as written; an emoji inside it is skipped.
+    15. **Stop.** Stop during a long reading: no bar, and a new reading can start at once.

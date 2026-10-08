@@ -1,7 +1,7 @@
 # Reduce noise, smooth speed ramps, Read aloud: design
 
 **Date:** 2026-10-08
-**Status:** Approved by the owner in chat ("yes"), with one correction found afterwards (the ramps, below). Plan: `docs/superpowers/plans/2026-10-08-noise-ramps-speech.md`.
+**Status:** Implemented 2026-10-08 (on-device confirmation by the owner pending); §3a says what was built and §12 is the corrected checklist. Approved by the owner in chat ("yes"), with one correction found afterwards (the ramps, below). Plan: `docs/superpowers/plans/2026-10-08-noise-ramps-speech.md`.
 **Builds on:** the sound tools (`2026-10-07-sound-tools-design.md`: `AudioTrack.sound`, `soundChain`, `SoundRender.swift`, `ensureSound`), the speed curves (`2026-10-04-capcut-c2-speed-curves-design.md`: `Clip.speedCurve`, `timeline.ts`, `SpeedSpans.swift`, `insertRetimed`), the strips and panels, and the build label (main `762ff53`). Schema v18 → **v19** (one optional field, for Reduce noise only). **New Swift** for two of the three features (one new native build). No new package, no new asset.
 
 ## What this batch does and does not do
@@ -107,6 +107,86 @@ A smooth curve is stored in the existing `Clip.speedCurve.steps`: 32 steps inste
 ### D. Build label and gating
 
 `LEVELS` gains a first row `{ name: "noise, ramps and speech", has: isSpeechAvailable }` (`isSpeechAvailable()` = the module has `speakToFile`). Both new native tools say `NEEDS_LATEST_BUILD("Reduce noise and Read aloud")` on an older build and in Expo Go.
+
+## 3a. As built (2026-10-08)
+
+Everything below was checked against the committed code. Where it differs from the design above or below, this section is right.
+
+**Commits (branch `noise-ramps-speech`, from `main` 762ff53).**
+
+| Task | Commit | What |
+|---|---|---|
+| 4 | 0670d38 | the wrapper: `isNoiseBuild`, `isNoiseAvailable`, `isSpeechAvailable`, `listVoices`, `speakToFile`, `cancelSpeech`, `isSpeechCancelled`; `LEVELS` row "noise, ramps and speech"; `LATEST_TOOLS` |
+| 1 | 1932c1d | schema 19, `SoundSettings.noise?`, `NOISE_LIMITS`, `clampSound`, PROOF migration |
+| 2 | f3d6c74 | `SMOOTH_PER_SLICE`, `smoothSpeedAt`, `curveProfile`, `smoothCurveSteps`, `isSmoothCurve` (39 lines added to `timeline.ts`, none changed); `setClipSpeedCurve(…, smooth = false)`; the stepped PROOF |
+| 5 | 5dfcbdc | `noiseWet` in `soundChain`, the `-n<percent>` name, the Swift record's `noiseWet` field |
+| 3 | 775a8c9 | `speech.ts`: `speakableText`, `speechRate`, `speechFileName`, `speechTracksOf`, `speechRefusal`, `placeSpeech`, the voice lists |
+| 10 | 5a0741b | the Smooth switch and the 32-bar pictures in `SpeedSheet.tsx` |
+| 6 | 6ba6a6c | Swift: `SoundNoise`, `SoundRender.render(…, lead:)`, `noiseAvailable` |
+| 8 | 9f8379d | `noiseRefusal`, `SOUND_NOISE_DEADLINE_MS`, the refusal in `ensureSound` |
+| 11 | 948254a | `speechPrefs.ts`, `useReadAloud.ts` |
+| 9 | 0b0a1a6 | the Sound tool as a compact panel with Reduce noise and Strength; `soundQuality` is a `PanelId` |
+| 12 | ab46d8e | `ReadAloudSection.tsx`, mounted in `TextPanel.tsx` for texts |
+| 7 | f27a4ba | Swift: `SpeechRender.swift`, `listVoices` / `speakToFile` / `cancelSpeech` in the module |
+| 13 | ea17b3f | the Swift read-through's one fix (below) |
+| review | 6652c87 | TypeScript fixes from the batch review (below) and the export pin for smooth clips |
+| 14 | this commit | README, AGENTS, this section, the checklist |
+
+Tests at the end: app 4856 (292 suites), server 464 (15 suites), typecheck clean.
+
+**Builds.** One EAS build was started, from ea17b3f, after the read-through. It was still running when this section was written: its id and its result are not recorded here, and nothing in this section has been confirmed by a compiler or a phone. The review commit after it (6652c87) is TypeScript only, so the build's Swift is the Swift of this branch.
+
+**The Swift read-through (Task 13).** Verdict: no compile blocker found, build it. One finding was fixed before the build: a reading was called finished after 3 seconds without a buffer, which could cut a slow voice short; `SpeechRender.idleSeconds` is now **8** (ea17b3f). One finding was left as optional: the isolation unit's mix is set but not read back, so a unit that ignores the value is found only by ear (§10 item 4). The unknowns the read-through could not settle are the phone checks of §10.
+
+**The batch review (6652c87).** Five changes, each test-first:
+- A smooth pick that does not fit while the stepped form would: the strip **stays open** and says "This clip is too short for a smooth curve. Switch Smooth off." (several clips: "These clips are too short for a smooth curve. Switch Smooth off."). Switching Smooth on for a stepped clip too short for it says "This clip is too short for a smooth curve." and also leaves the strip open. A clip too short for either form keeps the old behaviour: the strip closes, "This clip is too short for a speed curve." This replaces what A4 and the §8 row say.
+- Closing the Read aloud row while the phone is speaking ends the reading first (before, the reading carried on unseen and a bar appeared later).
+- After a reading that replaced a bar the toast is "The voice was replaced on the audio row." (the new bar sits where the old one stood, which need not be under the text); a first reading keeps "The voice is on the audio row, under the text."
+- When the list of voices cannot be read the row says "Could not read the list of voices. Close and open this row to try again."
+- `timeline.smooth.export.test.ts`: what `toExportClip` sends for a smooth clip, as literals worked out apart from the app's code (Hero on 8 s: 32 spans of 0.25 s, 6.584331 s; reversed; trimmed inside a piece; the 0.32 s minimum; a layer).
+
+**Smooth ramps, as built.**
+- The six presets are unchanged; the Curve tab has a **Smooth** switch in a 36-pt row under the tiles. For a clip without a curve it starts on (local state); for a clip with a curve it is **read from the clip on every render** (`isSmoothCurve`), so it is still true after an Undo. The design seeded it once.
+- With several clips selected the switch changes the **form only**: each clip keeps its own preset and a clip without a curve gets none. The design would have written the shown clip's preset to all of them.
+- A smooth curve is `Clip.speedCurve.steps` with 32 steps, recognised by its step count. No Swift, no schema change: it previews in Expo Go and exports with the build installed before this batch.
+- The stepped proof lives in its own file, `timeline.stepped.proof.test.ts` (§6.4 names `timeline.smooth.test.ts`, which holds a copy of the block). It imports nothing the batch added, was seen green before `timeline.ts` was touched and is byte-identical after. It is the file that is never edited to make a change pass.
+- `smoothSpeedAt` answers 1 for a shape without speeds (one guard beyond §6.1). The numbers of §6.2 were recomputed twice by scripts that do not use the app's code, and match.
+- A clip under 0.32 source seconds cannot take the smooth form (0.32 exactly can); the stepped form needs 0.08.
+
+**Reduce noise, as built.**
+- `sound.noise` is the strength, 0–1 in hundredths, **absent when off**; `noise: 0` is ON at the lightest (50 %, name `-n0`). `noiseWet(s) = 100 − 50·(1 − s)²`, three decimals; a strength that is not a number gives the plain chain and the plain name.
+- Swift: `SoundNoise.make(wet:format:)` runs in the module's `Task` (the batch's one `await`), and the unit is handed to the unchanged synchronous render as `lead: [AVAudioNode] = []` (a default, so a render without noise passes an empty array and takes the same path as before). A strength that is not finite is refused (`sound noise: the strength is not a number`) rather than rendered at 100 %. `process`, `measure`, `units(for:)` and `SoundProbe` have no diff; loudness is measured on the dry source.
+- `noiseRefusal()` asks the build, then the phone; `ensureSound` asks it before `mkdir` or any native call, and a copy already on disk is returned without asking. Whether a setting has noise is asked of the chain (`soundChain(sound).noiseWet > 0`), like the copy's name.
+- The panel: tiles 72, Even out loudness 36, Reduce noise 48 (with "Best on speech. Music can sound odd."), Strength 36. The spinner moved to the header slot, as in Voice. Without the sound engine the Reduce noise switch says the sound-engine sentence once, like the tiles; with the engine but an older build it says `LATEST_TOOLS` on every tap. In Expo Go the Sound button itself says the engine sentence and the panel does not open.
+
+**Read aloud, as built.**
+- `speakableText` drops emoji, pictographs, arrows (U+2190–21FF) and geometric shapes (U+25A0–25FF) by code-point range; variation selectors, the keycap mark and tag characters go without a gap. A zero-width joiner **between two letters stays** (the design removed every joiner, which would have cut Arabic, Persian and Indic words in two); a non-joiner is ordinary text. A text of only spaces and unheard marks is "".
+- File names: `speech-<overlay id>-<new id>.caf`, with any character outside letters, digits and "-" escaped so two ids never share a name. Where one text's id begins another's, a file belongs to the longer one.
+- `placeSpeech` refuses through `speechRefusal` (so a text edited to nothing or past 1000 characters during the reading changes nothing) and writes the kept sound setting with `setTrackSound`. The replaced reading's file is kept: Undo needs it. Nothing ever trims those files; they go with the project.
+- `useReadAloud`: Stop, closing the row, another text in the panel, and leaving end the reading **at once** on the app's side, whether or not the phone answers; the phone is told once. An answer after that, for another project, for a text that is gone, or for words that changed is dropped and its file removed. Words changed during a reading: "The text changed, so nothing was read. Tap Read aloud again." The deadline is 90 s.
+- Swift (`SpeechRender.swift`): empty text is refused natively as well; silence is counted in 0.25-second looks, not read from the clock (an app suspended mid-speech does not come back to a "finished" reading); a reading ends on the empty buffer after sound, or after **8 s** of looks without a buffer; it fails after 20 s with no sound at all, or past 1800 s of speech (`speech render: the speech did not stop`); a buffer in a format the file cannot take is a clean failure; the job is kept one second past its end so the synthesizer is not released inside its own callback. Neither the audio session nor `usesApplicationAudioSession` is touched.
+
+**Existing tests whose expectations changed** (each because of a rule this batch changed on purpose):
+- The pinned schema number 18 → 19 in `migrate.test.ts` and the `types.*` tests (Task 1).
+- `sound.test.ts`: the `NEUTRAL` chain literal gained `noiseWet: 0`; `index.test.ts`: the request literal gained it (Task 5).
+- `soundRender.swift.test.ts`: the pinned type list gained `SoundNoise`, the pinned stage list gained `noise` (Task 6).
+- `SoundQualitySheet.test.tsx`: "the noise test: once per app start…" and "the noise test took the app down last time…" asserted that no text holds the word "noise"; they now assert the only one is the switch's name (Task 9).
+- `SpeedSheet.test.tsx`: "a pick sets the curve in one undo step…" (the stored speeds are the smooth profile), "each preset draws eight bars…" (switches Smooth off first), "shows the clip's output length…" (7.7 s → 6.6 s) (Task 10); "a clip too short for the smooth form…" and "the switch on a stepped clip too short for the smooth form…" (the strip stays open, the new sentences) (review).
+- `LayerSheets.test.tsx`: "Speed: re-picking the current speed is silent; a refused curve gets the layer message" switches Smooth off first (Task 10; a file outside the plan's list).
+- `ReadAloudSection.test.tsx`: "the list cannot be read…" expects the sentence with its hint (review).
+
+No guard test in `src/__tests__` changed, `looks.frozen.test.ts` and every `*.parity.test.ts` are untouched, and `git diff main` is empty for `SpeedSpans.swift`, `ExportSession.swift`, `AudioMix.swift`, `SoundMath.swift`, `PreviewPlayer.tsx`, `LayerVideo.tsx`, `timelineScroll.ts`, `audioMix.ts`, `toolbarContext.ts`, `EditorToolbar.tsx`, `src/ui`, `src/theme`, `package.json`, `app.json`, `eas.json` and `assets/`.
+
+**What no test checks (§10, item by item).** The tests read the Swift as text and run the TypeScript; none of them hears or sees anything.
+1. Smooth ramps in the preview: evenness, and the sound across 31 rate changes. Tests pin only the numbers the player is given.
+2. Smooth ramps in the export: the spans sent are pinned; what `scaleTimeRange` and the default time-pitch algorithm make of 32 short pieces is not, nor a clip whose pieces are shorter than a frame, nor export start-up with many smooth clips.
+3. Whether the shapes feel right.
+4. Reduce noise: that the unit cleans, that the mix set before the engine starts is honoured (both ends of Strength), that it works with other units after it and over a whole file, and how long it takes.
+5. Reduce noise with Even out loudness: the level of the result.
+6. Read aloud: that the synthesizer sends an empty end buffer, each voice's buffer format, that Enhanced / Premium voices work, that Stop stops the synthesizer, and whether tapping Read aloud dips or stops other apps' audio.
+7. A `.caf` through the sound render (Voice, Reduce noise on a spoken bar).
+8. A `.caf` in the preview player and in the export.
+Also unseen: the look of the compact Sound panel and of the 32-bar tiles, the Switch thumb returning after a refused tap, and Arabic read by an Arabic voice.
 
 ## 4. Data model: schema v19
 
@@ -298,62 +378,71 @@ isSpeechCancelled(e: unknown): boolean
 
 ## 12. The owner's device checklist
 
-In one line: **Part A works with the app you already have** (smooth ramps, and the new switches saying they need the new app). **Part B needs the new app**, installed once from the link I send.
+Corrected to the code as built. **Part A works with the app you already have** (the one whose Accounts screen reads "App build: sound tools"). **Part B needs the new app**, installed once from the link I send.
 
-### Part A: smooth ramps (today)
+### Part A: with the app you have now
 
-Open the installed app (or Expo Go with `npx expo start --go --port 8090`). Use a project from **before** this update in which a clip has a Speed **Curve** (Hero, for example), and a second, ordinary clip of about eight seconds.
+Open the installed app. (Expo Go also shows the smooth ramps and the Read aloud row, but the **Sound** panel does not open in Expo Go and nothing can be exported there, so use the installed app.) Use a project from **before** this update in which a clip has a Speed **Curve** (Hero, for example), and add a second, ordinary clip of about eight seconds.
 
 **Nothing changed**
 
 1. Play the old project. The clip with the curve looks and sounds exactly as before, and the project is as long as before. Tell me if anything is different.
-2. Tap that clip, **Speed**, **Curve**. Its tile is ringed and the new **Smooth** switch is **off**. The small pictures on the tiles are eight bars, as before. Close the strip without touching anything: nothing changed.
+2. Tap that clip, **Speed**, **Curve**. Its tile is ringed, the new **Smooth** switch is **off**, and the small pictures are eight bars, as before. Close without touching anything: nothing changed.
 
-**Smooth**
+**Smooth ramps**
 
-3. Tap the ordinary clip, **Speed**, **Curve**. The **Smooth** switch is **on** and the pictures are now soft shapes made of thin bars. A line at the top says slow parts can look choppy.
-4. Tap **Hero** and play. The clip speeds up, slows down in the middle and speeds up again, gradually, without sudden jumps. Listen to the sound: is it clean, or does it crackle?
-5. Switch **Smooth** off. The same clip now changes speed in steps, like the old one, and its length changes a little. Switch it on again. Each flip of the switch is one **Undo**.
-6. Try **Bullet**, **Montage**, **Jump cut**, **Flash in** and **Flash out** with Smooth on. For each: does it feel right? Jump cut is now a wave between slow and fast, not a jump; tell me if you want it to stay stepped.
-7. In Bullet's slow middle the picture can look a little choppy (the phone repeats frames). That is the known limit. Tell me if it is worse than you expected.
+3. Tap the ordinary clip, **Speed**, **Curve**. **Smooth** is **on** and the pictures are soft shapes made of thin bars. A line at the top says slow parts can look choppy.
+4. Tap **Hero** and play. The clip speeds up, slows down in the middle and speeds up again, gradually, with no sudden jumps. Is the sound clean, or does it crackle?
+5. Switch **Smooth** off: the same clip now changes speed in steps and gets a little longer. Switch it on again. Each flip is one **Undo**.
+6. Try **Bullet**, **Montage**, **Jump cut**, **Flash in** and **Flash out** with Smooth on. Does each feel right? Jump cut is now a wave between slow and fast, not a jump: tell me if you want it to stay stepped.
+7. In Bullet's slow middle the picture can look a little choppy. That is the known limit. Tell me if it is worse than you expected.
 8. **Split** a smooth clip in the middle: both halves play as before the split.
-9. Export the project (this works in the installed app, not in Expo Go). In the exported video the smooth clip matches the preview, and its sound is clean. Tell me if the sound crackles or its pitch changes.
+9. Cut a clip down to a tiny sliver (a quarter of a second) and tap a Curve tile with Smooth on: a message says the clip is too short for a smooth curve and to switch Smooth off, and the strip stays open. Switch Smooth off and tap the tile again: it works.
+10. Export the project. In the exported video the smooth clip matches what you saw, and its sound is clean. Tell me if the sound crackles or its pitch changes.
 
-**The two tools that need the new app**
+**The Sound panel's new look**
 
-10. Tap a voice-over, **Sound**. It now opens as a taller panel, with **Even out loudness**, **Reduce noise** and **Strength**. Tap the **Reduce noise** switch: a message says it needs the latest build, and nothing changes. The presets and Even out loudness work as before.
-11. Tap a text, open the Text panel, and tap the **Read aloud** row under the text field: the same message. That is right.
-12. Open **Accounts**: it still reads "App build: sound tools".
+11. Tap a voice-over, **Sound**. It now opens as a taller panel (the timeline is hidden while it is open): the presets, **Even out loudness**, **Reduce noise** and **Strength**. The presets and Even out loudness work as before.
+12. Tap the **Reduce noise** switch: a message says it needs the latest build, the switch stays off, and nothing changes. That is right.
 
-### Part B: Reduce noise and Read aloud (after installing the new app)
+**Read aloud, not yet**
+
+13. Tap a text and open the Text panel. Under the templates there is a **Read aloud** row. Tap it: the same message, and the row stays closed. That is right.
+14. Open **Accounts**: it still reads "App build: sound tools".
+
+### Part B: after installing the new app
 
 Install the new app from the link. **Accounts** now reads "App build: noise, ramps and speech".
 
 **Reduce noise**
 
-13. Record a voice-over of about ten seconds somewhere noisy (a fan, a tap running, a window open to the street). Tap it, **Sound**, and switch **Reduce noise** on. A spinner shows; while it spins you hear the recording as it was. Tell me how long it took.
-14. Play: the voice is still there and the noise is clearly lower. Switch it off: the noise is back. Your recording was never changed.
-15. Drag **Strength** to the far left and let go, listen; then to the far right, listen. Left should leave some noise, right almost none. Tell me if both ends sound the same.
-16. At full strength, does the voice sound natural, or thin and watery?
-17. With Reduce noise on, also pick **Voice**, **Deep** on the same bar: you get a deep voice without the noise.
-18. Switch **Even out loudness** on as well: is the result too loud?
-19. Put Reduce noise on a **music** track: it will sound odd. That is expected; the line under the switch says so.
-20. Tap a **video** clip with a noisy sound, **Sound**: its sound moves to the audio row (as before) and Reduce noise works on it.
-21. Try a recording of about a minute, and one of several minutes: how long do the spinners take?
-22. Export: the cleaned sound is in the video.
+15. Record a voice-over of about ten seconds somewhere noisy (a fan, a running tap, an open window). Tap it, **Sound**, and switch **Reduce noise** on. A spinner shows; while it spins you hear the recording as it was. Tell me how long it took.
+16. Play: the voice is still there and the noise is clearly lower. Switch it off: the noise is back. Your recording was never changed.
+17. Drag **Strength** to the far left and let go, listen; then to the far right, listen. Left should leave some noise, right almost none. **Tell me if both ends sound the same.**
+18. At full strength, does the voice sound natural, or thin and watery?
+19. With Reduce noise on, also pick **Voice**, **Deep** on the same bar: a deep voice without the noise.
+20. Switch **Even out loudness** on as well: is the result too loud?
+21. Put Reduce noise on a **music** track: it will sound odd. That is expected; the line under the switch says so.
+22. Tap a **video** clip with noisy sound, **Sound**: its sound moves to the audio row (as before) and Reduce noise works on it.
+23. Try a recording of about a minute, and one of several minutes: how long do the spinners take?
+24. Export: the cleaned sound is in the video.
 
 **Read aloud**
 
-23. Add a text, type a sentence, and tap the **Read aloud** row under the text field. It opens: languages, voices, **Speed**, and a **Read aloud** button.
-24. Pick a voice and tap **Read aloud**. After a moment a message says the voice is on the audio row; a bar with the first words of your text sits on the voice row, starting where the text starts. Play: you hear your sentence.
-25. Pick another voice, or move **Speed**, and tap **Read aloud** again: the bar is **replaced**, not doubled. One **Undo** brings the earlier one back.
-26. Move the bar, trim it, give it **Voice**, **Echo**: it behaves like any sound.
-27. Try a second language you have a voice for, with a text in that language.
-28. Type only an emoji and tap Read aloud: a message says there is nothing to read.
-29. Type a long paragraph, tap Read aloud, and tap **Stop** while the spinner shows: no bar is made.
-30. Export: the spoken bar is in the video.
+25. Add a text, type a sentence, and tap the **Read aloud** row. It opens: languages, voices, **Speed**, and a **Read aloud** button.
+26. Pick a voice and tap **Read aloud**. After a moment a message says the voice is on the audio row; a bar with the first words of your text sits on the voice row, starting where the text starts. Play: you hear your sentence. Tell me how long the wait was.
+27. Pick another voice, or move **Speed**, and tap **Read aloud** again: a message says the voice was replaced, and there is still **one** bar. One **Undo** brings the earlier one back.
+28. Move the bar somewhere else, then tap **Read aloud** once more: the new bar sits where you moved the old one.
+29. Trim the bar and give it **Voice**, **Echo**: it behaves like any sound.
+30. Try each kind of voice you have (ordinary, Enhanced, Premium). Tell me if any voice gives no bar or no sound.
+31. Type an Arabic sentence, pick an Arabic voice, and tap Read aloud: the whole sentence is read, with the words as written.
+32. Type only an emoji and tap Read aloud: a message says there is nothing to read.
+33. Type a long paragraph, tap Read aloud, and tap **Stop** while the spinner shows: no bar is made, and you can start again at once.
+34. Start a reading and close the Read aloud row while the spinner shows: no bar appears afterwards.
+35. Play music in another app (Music, Spotify), come back and tap Read aloud: does the other app's music dip or stop?
+36. Export: the spoken bar is in the video.
 
 **Tell me**
 
-31. Which voices sound good enough to use? Did any voice give no sound at all?
-32. Was the video still playing normally after a reading, with sound?
+37. Which voices sound good enough to use?
+38. Was the video still playing normally after a reading, with sound?
