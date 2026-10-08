@@ -1,7 +1,7 @@
 import { clampOpacity, LAYER_LIMITS, makeClip, makeLayer, makePhotoClip, makeProject, MASK, MASK_IDS, newLayer, newPhotoClip, newVideoClip, SCHEMA_VERSION } from "../types";
 
 test("schema constants", () => {
-  expect(SCHEMA_VERSION).toBe(19);
+  expect(SCHEMA_VERSION).toBe(20);
   expect(MASK_IDS).toEqual(["none", "rounded", "circle"]);
   expect(LAYER_LIMITS).toEqual({ max: 8, maxVideoAtOnce: 2, defaultScale: 0.4, minDuration: 0.3 });
   expect(MASK).toEqual({ roundedRadius: 0.12 });

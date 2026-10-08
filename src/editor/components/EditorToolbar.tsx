@@ -38,6 +38,7 @@ import { ChromaSheet } from "./ChromaSheet";
 import { ClipAnimationSheet } from "./ClipAnimationSheet";
 import { CollageSheet } from "./CollageSheet";
 import { CoverSheet } from "./CoverSheet";
+import { CutoutSheet } from "./CutoutSheet";
 import { CropScreen } from "./CropScreen";
 import { EffectSheet } from "./EffectSheet";
 import { EffectStrengthSheet } from "./EffectStrengthSheet";
@@ -310,6 +311,7 @@ export function EditorToolbar() {
     mask: { onPress: () => openStrip("mask") },
     blend: { onPress: () => openStrip("blend") },
     chroma: { onPress: () => openStrip("chroma") },
+    cutout: { onPress: () => openStrip("cutout") },
     keyframe: { icon: pin === "remove" ? "diamond" : undefined, disabled: pin === "off", active: pin === "remove", onPress: toggleKeyframe },
     transition: { onPress: () => openStrip("transition") },
     layerForward: { onPress: () => reorderSelected("forward") },
@@ -399,6 +401,7 @@ export function EditorToolbar() {
       <MaskSheet clipId={selectedId} visible={strip?.id === "mask"} onClose={closeStrip} />
       <BlendSheet clipId={selectedId} visible={strip?.id === "blend"} onClose={closeStrip} />
       <ChromaSheet clipId={selectedId} visible={strip?.id === "chroma"} onClose={closeStrip} />
+      <CutoutSheet clipId={selectedId} visible={strip?.id === "cutout"} onClose={closeStrip} />
       <AudioVolumeSheet trackId={selectedAudioId} visible={strip?.id === "audioVolume"} onClose={closeStrip} />
       <AudioFadeSheet target={selectedAudioId ? { type: "track", id: selectedAudioId } : null} visible={strip?.id === "audioFade"} onClose={closeStrip} />
       {/* Voice (a compact panel) and Sound (a strip) edit the selected sound bar; on a clip the toolbar selects the clip's extracted bar first. */}

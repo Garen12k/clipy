@@ -10,8 +10,10 @@ jest.mock("@/modules/clipy-video", () => ({
   toExportLayer: jest.requireActual("@/modules/clipy-video").toExportLayer,
   toExportAudioTrack: jest.requireActual("@/modules/clipy-video").toExportAudioTrack,
   isSoundAvailable: jest.fn(() => true),
+  isCutoutAvailable: jest.fn(() => false),
 }));
 jest.mock("@/src/editor/soundRenders", () => ({ ensureSound: jest.fn(async (_p: string, uri: string) => `${uri}.copy`) }));
+jest.mock("@/src/editor/cutoutRenders", () => ({ cutoutDir: () => "", ensureCutout: jest.fn(), isNoPerson: () => false }));
 jest.mock("@/src/projects/expoFs", () => ({
   expoFs: { cacheDir: "file:///cache/", freeBytes: async () => 1e12, mkdir: async () => {} },
 }));

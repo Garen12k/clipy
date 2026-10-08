@@ -6,6 +6,7 @@ import { clipDuration } from "@/src/editor/model/timeline";
 import { makeAudioTrack, makeClip, makePhotoClip, makeProject, type AudioTrack, type Project } from "@/src/editor/model/types";
 import { BUNDLED_BEATS } from "@/src/editor/musicBeats";
 import { useEditorStore } from "@/src/editor/store";
+import { BEATS_BACKGROUND_TOOLS } from "@/src/lib/buildInfo";
 import { useToast } from "@/src/ui/Toast";
 import { BeatsSheet, findHint } from "../components/BeatsSheet";
 
@@ -30,7 +31,7 @@ beforeEach(() => { impact.mockClear(); useToast.getState().clear(); st().reset()
 test("the hint says in one sentence what Find beats will do, or why it cannot", () => {
   expect(findHint("ok", "Party Sector")).toBe("Find beats marks the beats of Party Sector.");
   expect(findHint("unsteady", "The Frigid Seas")).toBe("The Frigid Seas has no steady beat. Tap the beat with Tap instead.");
-  expect(findHint("own", "")).toBe("Find beats works with the built-in music for now. For your own music, tap the beat with Tap.");
+  expect(findHint("own", "", false)).toBe("For your own music, Find beats needs the latest Clipy build. Until then, tap the beat with Tap.");
   expect(findHint("none", "")).toBe("Add music to find its beats.");
 });
 
@@ -46,10 +47,14 @@ test("no music: Find beats and the slider are off and the hint says to add music
   expect(st().past).toHaveLength(0);
 });
 
-test("music of the owner's own: Find beats is off and one sentence says why; nothing is placed", async () => {
+test("music of the owner's own on a build without the listener: the hint says so, a tap says the sentence, nothing is placed", async () => {
   await open({ audioTracks: [own()] });
-  expect(btn("Find beats")).toBeDisabled();
-  expect(screen.getByText("Find beats works with the built-in music for now. For your own music, tap the beat with Tap.")).toBeTruthy();
+  expect(btn("Find beats")).toBeEnabled();
+  expect(screen.getByText("For your own music, Find beats needs the latest Clipy build. Until then, tap the beat with Tap.")).toBeTruthy();
+  await fireEvent.press(btn("Find beats"));
+  expect(useToast.getState().message).toBe(BEATS_BACKGROUND_TOOLS);
+  expect(markers()).toEqual([]);
+  expect(st().past).toHaveLength(0);
 });
 
 test("the bundled track without a steady beat: off, and the hint names it", async () => {
@@ -113,7 +118,7 @@ test("Fewer / More after a Find re-places the markers as it is dragged — the w
 
 test("the selected music track is the one listened to; hand-tapped markers outside its stretch are kept", async () => {
   await open({ audioTracks: [own(), party({ start: 6 })], beatMarkers: [1.5, 7] });
-  expect(btn("Find beats")).toBeDisabled();                      // the first music track is the owner's own file
+  expect(btn("Find beats")).toBeEnabled();                       // the first music track is the owner's own file: it can be listened to
   await act(() => { st().selectAudio("party"); });
   expect(btn("Find beats")).toBeEnabled();
   await fireEvent.press(btn("Find beats"));

@@ -12,7 +12,7 @@ export const isAspectRatio = (v: unknown): v is AspectRatio => (ASPECT_RATIOS as
 export const aspectLabel = (r: AspectRatio): string => (r === "auto" ? "Auto" : r);
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 19 as const;
+export const SCHEMA_VERSION = 20 as const;
 export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
 export const EXPORT_QUALITIES = ["high", "small"] as const;
@@ -205,6 +205,7 @@ export interface Clip {
   chroma: ChromaKey | null;      // default null; layers and main clips
   motion?: PhotoMotion;          // photos only; ABSENT = still (never null / undefined). Read it through `activePhotoMotion` / `shownPhotoMotion`
   collage?: CollageCell;         // layers only; ABSENT = not a collage cell
+  cutout?: true;                 // Remove background: ABSENT = off (never false / null / undefined). Written only by `setClipCutout`; read it through `activeCutout`
 }
 /** A layer is a clip with a place on the project timeline. */
 export interface LayerClip extends Clip { start: number }   // project seconds
@@ -222,6 +223,12 @@ export function shownPhotoMotion(c: Clip): PhotoMotion | null {
   const twin = c.kind === "photo" && c.animation.combo !== null ? COMBO_AS_MOTION[c.animation.combo] : undefined;
   return twin ? { id: twin, strength: PHOTO_MOTION_LIMITS.defaultStrength } : null;
 }
+
+/**
+ * Whether Remove background applies to a clip: the switch is on and the clip plays forwards (a reversed clip is exported from a
+ * reversed copy that has no see-through background, so it shows as it is). The one rule the preview, the copies and the export go by.
+ */
+export const activeCutout = (c: Clip): boolean => c.cutout === true && !c.reversed;
 
 /** Rotation in degrees, wrapped into (−180, 180]. */
 export function normaliseRotation(deg: number): number {

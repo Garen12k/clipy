@@ -184,6 +184,26 @@ export interface SpeechRequest { jobId: string; text: string; voiceId: string; r
 export interface SpeechResult { fileUri: string; seconds: number }
 /** The code a cancelled Read aloud rejects with. */
 export const SPEECH_CANCELLED = "E_READ_ALOUD_CANCELLED";
+/** One Find beats for a file of the owner's: the seconds of the file to listen to (`to` at or before `from` = to the end). */
+export interface BeatEnvelopeRequest { jobId: string; sourceUri: string; from: number; to: number }
+/** The onset envelope of that stretch (`onsetEnvelope` in src/editor/model/beatDetect.ts): `rate` values a second, `seconds` of sound decoded, starting at `from` in the file. */
+export interface BeatEnvelopeResult { env: number[]; rate: number; seconds: number; from: number }
+/** The code a cancelled Find beats rejects with. */
+export const BEATS_CANCELLED = "E_BEATS_CANCELLED";
+/**
+ * One cut-out copy (the numbers are `CUTOUT` in src/editor/model/cutout.ts). Video: the source range `from` … `to` is written to
+ * `outputPath` (a .mov with a see-through background, the source's timing and sound). Photo: `outputPath` is a PNG and `stillPath`
+ * a `stillSeconds` long movie of the same picture.
+ */
+export interface CutoutRequest {
+  jobId: string; sourceUri: string; outputPath: string; kind: "video" | "photo"; from: number; to: number;
+  maxSide: number; minFrameGap: number; minPerson: number; alphaQuality: number; bitsPerPixel: number; stillPath: string; stillSeconds: number;
+}
+/** `person` = the largest share of a measured frame the people mask covered (0 … 1). */
+export interface CutoutResult { fileUri: string; seconds: number; frames: number; person: number }
+export type CutoutEvent = { jobId: string; progress: number };
+/** The code a cancelled cut-out render rejects with. */
+export const CUTOUT_CANCELLED = "E_CUTOUT_CANCELLED";
 /** The code a cancelled render rejects with. */
 export const SOUND_CANCELLED = "E_SOUND_CANCELLED";
 
@@ -203,6 +223,11 @@ type ClipyVideoNative = {
   listVoices(): Promise<SpeechVoices>;
   speakToFile(req: SpeechRequest): Promise<SpeechResult>;
   cancelSpeech(jobId: string): void;
+  beatEnvelope(req: BeatEnvelopeRequest): Promise<BeatEnvelopeResult>;
+  cancelBeatEnvelope(jobId: string): void;
+  addListener(eventName: "onCutoutEvent", listener: (e: CutoutEvent) => void): EventSubscription;
+  renderCutout(req: CutoutRequest): Promise<CutoutResult>;
+  cancelCutout(jobId: string): void;
 };
 
 const NO_SOUND = "This build of the app has no sound tools yet. Install a newer development build.";
@@ -259,3 +284,23 @@ export function speakToFile(req: SpeechRequest): Promise<SpeechResult> { return 
 export function cancelSpeech(jobId: string): void { latestNative("cancelSpeech").cancelSpeech(jobId); }
 /** True for the rejection of a Read aloud that was cancelled (`cancelSpeech`). */
 export function isSpeechCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === SPEECH_CANCELLED; }
+
+/** The module for a call that came with the build of 2026-10-09: missing = not linked (Expo Go); present but without the function = an older build. */
+function batchNative(fn: "beatEnvelope" | "cancelBeatEnvelope" | "renderCutout" | "cancelCutout"): ClipyVideoNative {
+  const m = native();
+  if (typeof m[fn] !== "function") throw new Error(NOT_IN_BUILD);
+  return m;
+}
+/** Whether the linked native module can listen to a file for its beats: false in Expo Go and in a build made before this. */
+export function isBeatEnvelopeAvailable(): boolean { return typeof optional()?.beatEnvelope === "function"; }
+export function beatEnvelope(req: BeatEnvelopeRequest): Promise<BeatEnvelopeResult> { return batchNative("beatEnvelope").beatEnvelope(req); }
+export function cancelBeatEnvelope(jobId: string): void { batchNative("cancelBeatEnvelope").cancelBeatEnvelope(jobId); }
+/** True for the rejection of a Find beats that was cancelled (`cancelBeatEnvelope`). */
+export function isBeatsCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === BEATS_CANCELLED; }
+/** Whether the linked native module can remove a background: false in Expo Go and in a build made before this. */
+export function isCutoutAvailable(): boolean { return typeof optional()?.renderCutout === "function"; }
+export function renderCutout(req: CutoutRequest): Promise<CutoutResult> { return batchNative("renderCutout").renderCutout(req); }
+export function cancelCutout(jobId: string): void { batchNative("cancelCutout").cancelCutout(jobId); }
+export function addCutoutListener(cb: (e: CutoutEvent) => void): EventSubscription { return native().addListener("onCutoutEvent", cb); }
+/** True for the rejection of a cut-out render that was cancelled (`cancelCutout`). */
+export function isCutoutCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === CUTOUT_CANCELLED; }

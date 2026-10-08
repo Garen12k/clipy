@@ -184,7 +184,7 @@ test("no type and no static name is declared twice", () => {
 });
 
 test("the module registers the four functions and the event", () => {
-  expect(moduleSwift).toContain('Events("onExportEvent", "onSoundEvent")');
+  expect(moduleSwift).toContain('Events("onExportEvent", "onSoundEvent", "onCutoutEvent")');
   for (const name of ["renderSound", "soundInfo", "probeNoiseReduction"]) expect(moduleSwift).toContain(`AsyncFunction("${name}")`);
   expect(moduleSwift).toContain('Function("cancelSoundRender")');
   expect(moduleSwift).toContain('promise.reject("E_SOUND_CANCELLED", "Sound cancelled")');

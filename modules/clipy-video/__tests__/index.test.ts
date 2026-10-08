@@ -16,7 +16,7 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 import { photoMotionPins, resolveClipMotion, sampleKeyframes } from "@/src/editor/model/motion";
 import { curveSteps, outputOffsetOf } from "@/src/editor/model/timeline";
 import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
-import { addExportListener, addSoundListener, cancelExport, cancelSoundRender, cancelSpeech, cancelTranscribe, exportTimeline, hello, isNativeAvailable, isNoiseAvailable, isNoiseBuild, isSoundAvailable, isSoundCancelled, isSpeechAvailable, isSpeechCancelled, listVoices, probeNoiseReduction, renderSound, SOUND_CANCELLED, soundInfo, speakToFile, SPEECH_CANCELLED, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, transcribe } from "../index";
+import { addCutoutListener, addExportListener, addSoundListener, beatEnvelope, BEATS_CANCELLED, cancelBeatEnvelope, cancelCutout, cancelExport, cancelSoundRender, cancelSpeech, cancelTranscribe, CUTOUT_CANCELLED, exportTimeline, hello, isBeatEnvelopeAvailable, isBeatsCancelled, isCutoutAvailable, isCutoutCancelled, isNativeAvailable, isNoiseAvailable, isNoiseBuild, isSoundAvailable, isSoundCancelled, isSpeechAvailable, isSpeechCancelled, listVoices, probeNoiseReduction, renderCutout, renderSound, SOUND_CANCELLED, soundInfo, speakToFile, SPEECH_CANCELLED, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -569,5 +569,68 @@ describe("noise and speech API (the build of 2026-10-08)", () => {
     expect(isSpeechCancelled(Object.assign(new Error("x"), { code: "E_READ_ALOUD" }))).toBe(false);
     expect(isSpeechCancelled(new Error("Speech cancelled"))).toBe(false);
     expect(isSpeechCancelled(null)).toBe(false);
+  });
+});
+
+describe("beats and background API (the build of 2026-10-09)", () => {
+  const beats = { jobId: "j", sourceUri: "file:///doc/projects/p1/media/song.m4a", from: 0, to: 180 };
+  const cutout = { jobId: "c", sourceUri: "file:///doc/projects/p1/media/v.mov", outputPath: "file:///doc/projects/p1/cutout/v-c1-0-9000.mov", kind: "video" as const,
+    from: 0, to: 9, maxSide: 1920, minFrameGap: 0.03, minPerson: 0.005, alphaQuality: 0.75, bitsPerPixel: 0.1, stillPath: "", stillSeconds: 0 };
+  const old = { hello: () => "old", exportTimeline: jest.fn(), renderSound: jest.fn(), speakToFile: jest.fn(), noiseAvailable: jest.fn(() => true) };   // the build before this batch
+  const latest = { ...old, beatEnvelope: jest.fn(), cancelBeatEnvelope: jest.fn(), renderCutout: jest.fn(), cancelCutout: jest.fn(), addListener: jest.fn() };
+
+  it("isBeatEnvelopeAvailable / isCutoutAvailable: only when the linked module has the functions", () => {
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(latest as never);
+    try {
+      expect(isBeatEnvelopeAvailable()).toBe(true);
+      expect(isCutoutAvailable()).toBe(true);
+    } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+    for (const module of [null, old]) {
+      jest.mocked(requireOptionalNativeModule).mockReturnValue(module as never);
+      try {
+        expect(isBeatEnvelopeAvailable()).toBe(false);
+        expect(isCutoutAvailable()).toBe(false);
+      } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+    }
+  });
+
+  it("the calls forward to the native module with the request as it is", async () => {
+    const answer = { env: [0, 1.5, 0.25], rate: 100, seconds: 0.03, from: 0 };
+    const made = { fileUri: cutout.outputPath, seconds: 9, frames: 270, person: 0.31 };
+    const sub = { remove: jest.fn() };
+    const native = { beatEnvelope: jest.fn(async () => answer), cancelBeatEnvelope: jest.fn(), renderCutout: jest.fn(async () => made), cancelCutout: jest.fn(), addListener: jest.fn(() => sub) };
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(native as never);
+    try {
+      await expect(beatEnvelope(beats)).resolves.toEqual(answer);
+      expect(native.beatEnvelope).toHaveBeenCalledWith(beats);
+      cancelBeatEnvelope("j");
+      expect(native.cancelBeatEnvelope).toHaveBeenCalledWith("j");
+      await expect(renderCutout(cutout)).resolves.toEqual(made);
+      expect(native.renderCutout).toHaveBeenCalledWith(cutout);
+      cancelCutout("c");
+      expect(native.cancelCutout).toHaveBeenCalledWith("c");
+      const cb = jest.fn();
+      expect(addCutoutListener(cb)).toBe(sub);
+      expect(native.addListener).toHaveBeenCalledWith("onCutoutEvent", cb);
+    } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+  });
+
+  it("without the module they throw the not-linked error; with an older build a plain sentence, never 'undefined is not a function'", () => {
+    const calls = [() => beatEnvelope(beats), () => cancelBeatEnvelope("j"), () => renderCutout(cutout), () => cancelCutout("c")];
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(null);
+    try { for (const call of calls) expect(call).toThrow(/not linked/); } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(old as never);
+    try { for (const call of calls) expect(call).toThrow(/latest Clipy build/); } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+  });
+
+  it("the cancel codes are recognised, and only they", () => {
+    expect(BEATS_CANCELLED).toBe("E_BEATS_CANCELLED");
+    expect(CUTOUT_CANCELLED).toBe("E_CUTOUT_CANCELLED");
+    expect(isBeatsCancelled(Object.assign(new Error("Beats cancelled"), { code: "E_BEATS_CANCELLED" }))).toBe(true);
+    expect(isBeatsCancelled(Object.assign(new Error("x"), { code: "E_BEATS" }))).toBe(false);
+    expect(isBeatsCancelled(null)).toBe(false);
+    expect(isCutoutCancelled(Object.assign(new Error("Cutout cancelled"), { code: "E_CUTOUT_CANCELLED" }))).toBe(true);
+    expect(isCutoutCancelled(Object.assign(new Error("x"), { code: "E_CUTOUT" }))).toBe(false);
+    expect(isCutoutCancelled(new Error("Cutout cancelled"))).toBe(false);
   });
 });

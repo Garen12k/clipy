@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { useEditorStore } from "./store";
 import { selectionKey } from "./toolbarContext";
 
-export type StripId = "filter" | "adjust" | "speed" | "volume" | "opacity" | "mask" | "blend" | "chroma" | "transform" | "background"
+export type StripId = "filter" | "adjust" | "speed" | "volume" | "opacity" | "mask" | "blend" | "chroma" | "cutout" | "transform" | "background"
   | "clipAnimation" | "overlayAnimation" | "transition" | "ratio" | "audioFade" | "audioVolume" | "effectStrength" | "effect" | "trim" | "photoMotion";
 export type PanelId = "beats" | "templates" | "captions" | "addAudio" | "sticker" | "text" | "stickerEdit" | "collage" | "cover" | "voice" | "soundQuality";
 export type OpenToolId = StripId | PanelId;

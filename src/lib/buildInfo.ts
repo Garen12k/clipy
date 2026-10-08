@@ -1,4 +1,4 @@
-import { isNativeAvailable, isSoundAvailable, isSpeechAvailable } from "@/modules/clipy-video";
+import { isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSpeechAvailable } from "@/modules/clipy-video";
 
 /**
  * What the INSTALLED app can do, newest ability first. Buttons and screens arrive from the dev server at once, but an ability that
@@ -6,6 +6,7 @@ import { isNativeAvailable, isSoundAvailable, isSpeechAvailable } from "@/module
  * This names the installed build by what it has; add a row at the top whenever a build adds a native ability.
  */
 const LEVELS: { name: string; has: () => boolean }[] = [
+  { name: "beats and background", has: isCutoutAvailable },
   { name: "noise, ramps and speech", has: isSpeechAvailable },
   { name: "sound tools", has: isSoundAvailable },
   { name: "export only (older)", has: isNativeAvailable },
@@ -22,3 +23,6 @@ export const NEEDS_LATEST_BUILD = (what: string): string => `${what} need the la
 
 /** Said where Reduce noise or Read aloud is tapped in Expo Go or in a build from before them. */
 export const LATEST_TOOLS = NEEDS_LATEST_BUILD("Reduce noise and Read aloud");
+
+/** Said where Find beats (for music of the owner's own) or Remove background is tapped in Expo Go or in a build from before them. */
+export const BEATS_BACKGROUND_TOOLS = NEEDS_LATEST_BUILD("Beats in your own music and Remove background");

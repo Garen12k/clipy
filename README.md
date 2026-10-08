@@ -214,7 +214,7 @@ the all-or-nothing flow is `makeQuickEdit` in `src/projects/quickEditFlow.ts`.
 The row of tools under the preview follows what you have selected.
 
 - **Nothing selected** - Edit, Audio, Text, Stickers, Overlay, Effects, Filter, Adjust, Ratio, Background, Cover, Templates. Edit, Filter, Adjust and Background work on the clip under the white line.
-- **A clip** - Split, Trim, Select, Speed, Volume, Extract audio, Voice, Sound, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete.
+- **A clip** - Split, Trim, Select, Speed, Volume, Extract audio, Voice, Sound, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Cut out, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete.
 - **A layer** - the same without Split, Select, Background, Templates, Transition and Freeze, plus Blend, Forward and Back.
 - **A text** - Edit, Animate, Keyframe, Duplicate, Delete, Add text. **A caption** - Edit, Captions, Duplicate, Delete, Add text. **A sticker** - Edit, Animate, Keyframe, Duplicate, Delete.
 - **A sound** - Split, Volume, Fade, Voice, Sound, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
@@ -252,6 +252,12 @@ Select a clip, then use the tools under the preview (see Editing tools).
 - **Photos** — add photos as clips (3 s by default, 0.5-60 s by dragging the end handle). The "+" tile
   at the end of the timeline adds photos and videos.
 - **Replace** — swap a clip's media and keep its edits.
+- **Cut out (Remove background)** — a switch on a photo, a video clip or a layer. The phone finds the person and
+  prepares a cut-out copy (a photo at once; a video takes roughly as long as the clip, with a percent in the strip). On a
+  layer the person stands over what is beneath it; on the main track, over the clip's background colour. People only; up to
+  60 seconds of clip; not for reversed clips (and a clip with it on cannot be reversed). The original is never changed:
+  switch it off and the clip is as it was. Copies live in the project's `cutout` folder and the unused ones are removed
+  when the project is opened. **Needs the latest build**: in Expo Go or an older build the switch says so.
 - **Freeze** — inserts a 2 s still of the frame at the playhead.
 - **Reverse** — the clip gets a badge and the preview plays forward with the "Preview" tag. The
   exported video is reversed and has no sound.
@@ -434,9 +440,13 @@ build**: in Expo Go, or in a build from before this update, they show one senten
   timeline is hidden while it is open, so tap the round **✓** to see the ticks and the clips. On a short phone
   **Remove nearest** and **Clear all** need a scroll inside the panel.
 - **Find beats** (in the Beats panel) places the markers of the music for you - the selected music track, else the one
-  that starts first. **Built-in music only**: it looks up beats that ship with the app (`assets/music/beats.json`), it
-  does not listen to anything. **Seven of the eight tracks** have beats; **The Frigid Seas** has no steady beat and the
-  button says so. For your own music files the button is off until a native build (item 84 below) - use **Tap**. The
+  that starts first. **The built-in tracks** use beats that ship with the app (`assets/music/beats.json`): **seven of the
+  eight** have beats; **The Frigid Seas** has no steady beat and the button says so. **A song from Files, a clip sound or a
+  recording** works too: the phone listens for a few seconds (a spinner says "Listening to the music"; a five-minute song
+  may take 10-20 seconds), then places the markers. A sound without a clear, steady beat is said to have none (use **Tap**).
+  With music in the project it listens to the music, even when another bar is selected. What it hears is remembered only
+  until you leave the project. **Own music needs the latest build** (the built-in tracks do not): in Expo Go or an older
+  build the button says so. The
   **Fewer / More** slider chooses every fourth beat, every second (where it rests) or every beat; after a Find, and
   until the panel is closed, dragging it re-places the markers (one drag = one Undo). Find replaces the markers under
   the music's stretch of the timeline and keeps every marker outside it. A project holds at most 300 markers: when
@@ -475,7 +485,7 @@ Overlay is on the first row; the rest is on the row of a selected layer.
 - **Select** a layer by tapping it on the preview or tapping its bar. Pinch, drag and twist it on the
   preview. Long-press its bar to move it in time; drag the bar's ends to trim. **Forward** / **Back**
   change which layer is on top.
-- **Tools on a layer** - Trim, Transform, Animate, Keyframe, Crop, Replace, Reverse, Duplicate, Delete,
+- **Tools on a layer** - Trim, Transform, Animate, Keyframe, Crop, Replace, Cut out, Reverse, Duplicate, Delete,
   Filter, Adjust, Speed and Volume. Split, Freeze, Ratio, Transition and Background do not apply to layers.
 - **Opacity** (0 to 100 %) and **Mask** (None, Rounded, Circle) work on layers and on normal clips.
 - **Blend** (layers only) - Normal, Multiply, Screen, Overlay, and more. **Green screen** (clips and layers) -
@@ -646,7 +656,7 @@ Left by the reviews of the same work:
 
 **Beats and Quick edit** (added no native code; the beats of the built-in tracks are shipped data, found on the development machine):
 
-84. **Find beats for your own music files is not built.** It needs native code that decodes a file with AVFoundation (`AVAssetReader` -> mono PCM) and runs the same detector: write `BeatDetect.swift` as the twin of `src/editor/model/beatDetect.ts` (constants and vectors identical, as for every mirrored maths file) behind `isAvailable`, and have the Beats panel call it for a track `beatsOf` reports as `own`. Until then the button is off and one sentence says why.
+84. **Find beats for your own music files** is built (item 96): `BeatEnvelope.swift` decodes the file and returns the onset envelope, the one mirrored stage; the tempo stays TypeScript. On a build without it the button is off and one sentence says why.
 85. **The mp3 start offset.** The shipped beats were measured from the first sample of the script's decoder (`mpg123-decoder`); iOS may start an mp3 a few tens of milliseconds earlier or later (encoder delay). If the markers of every built-in track are early or late by the same small amount - in the editor and in the **exported** video - that is one constant to shift in `scripts/generate-beats.mjs`, then a re-run. Check by ear, in both.
 86. **Bossa Nova (86 bpm) and Funked Up (87 bpm) may be half-tempo readings.** The detector looks between 70 and 180 beats a minute and prefers the reading nearer 120; if these two feel like they are marked on every second beat, their real tempo is double. Fewer / More cannot give more than the shipped beats.
 87. **The detector's choice between a tempo and its half near a tie depends on the sample rate** (the same 143.94 bpm clicks read 143.94 at 11,025 Hz and 71.97 at 22,050 Hz; pinned by a test in `beatDetect.test.ts`, either answer is acceptable). A Swift twin fed another sample rate than the script's may pick the other octave for some song.
@@ -689,3 +699,17 @@ Noise, ramps and speech (`SoundNoise` in `SoundRender.swift`, `SpeechRender.swif
     13. **The `.caf` file.** A spoken bar plays in the preview, takes a Voice or Reduce noise (the same render as any sound), and is heard in the exported video.
     14. **Arabic text.** An Arabic text with an Arabic voice is read whole, with its words joined as written; an emoji inside it is skipped.
     15. **Stop.** Stop during a long reading: no bar, and a new reading can start at once.
+
+Beats and background (`BeatEnvelope.swift`, `CutoutRender.swift`; none of it had run on a device before the first build of this round, which installs as "App build: beats and background" on the Accounts screen):
+
+96. **Beats and background.** Check, in this order:
+    1. **Transparency in the preview.** A cut-out video layer shows the video beneath it, not a black box; a main clip shows its background colour. If it is black, set `CUTOUT_PREVIEW.layerVideo` / `.mainVideo` to false (no build) and the Preview tag shows.
+    2. **Transparency in the export.** The exported video shows the person over the layer beneath / the background colour, not over black. If black, the compositor does not get the copy's alpha: a second build.
+    3. **Time.** A 5-second, a 20-second and a 60-second clip, against the deadline (`60 s + 20 x` the copy's length); the phone stays usable and does not get hot.
+    4. **Edges.** Hair, fast movement, a second person, a person entering late; and "No person was found" on a landscape clip (it is known only at the end of the render). A dark rim around the person means the alpha is read as straight, not premultiplied.
+    5. **A main clip's follower.** The cut-out picture is in step with the sound (it may trail by up to a quarter of a second), the person does not appear late after a cut, playback does not stutter with two video layers.
+    6. **Colours.** The person looks the same with the switch on and off, especially on video shot in HDR (the copy is read as 8-bit and tagged BT.709).
+    7. **Sound.** A cut-out clip sounds the same in the preview and the export, with no click at its start; a clip that does not start at 0 of its file keeps picture and sound in step.
+    8. **Transitions and speed.** A transition into / out of a cut-out clip, and a cut-out clip at 4x, export without a late start, a jump or a frozen person (the copy holds `transitionHandles` of room each side).
+    9. **Storage and cancel.** The size the strip says against the real `cutout` folder; switching off mid-render stops within a second and leaves no `part-` file; an Export started while the editor still renders waits and then goes on.
+    10. **Find beats.** A three-minute song from Files, a clip sound and a voice-over: the markers sit on the beat by ear, the screen stays alive while it listens, and speech or ambient music is told it has no steady beat (not ordinary pop). The listening time in a development build (unoptimised) against `BEATS_DEADLINE_MS` (120 s) for a long song.

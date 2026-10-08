@@ -74,9 +74,45 @@ public class ClipyVideoModule: Module {
     return speechJobs[id]
   }
 
+  private let beatLock = NSLock()
+  private var beatJobs: [String: BeatJob] = [:]   // guarded by `beatLock`; one entry per listening that has not answered yet
+
+  private func storeBeatJob(_ id: String, _ job: BeatJob) {
+    beatLock.lock(); defer { beatLock.unlock() }
+    beatJobs[id] = job
+  }
+
+  private func dropBeatJob(_ id: String) {
+    beatLock.lock(); defer { beatLock.unlock() }
+    beatJobs[id] = nil
+  }
+
+  private func lookupBeatJob(_ id: String) -> BeatJob? {
+    beatLock.lock(); defer { beatLock.unlock() }
+    return beatJobs[id]
+  }
+
+  private let cutoutLock = NSLock()
+  private var cutoutJobs: [String: CutoutJob] = [:]   // guarded by `cutoutLock`; one entry per render that has not answered yet
+
+  private func storeCutoutJob(_ id: String, _ job: CutoutJob) {
+    cutoutLock.lock(); defer { cutoutLock.unlock() }
+    cutoutJobs[id] = job
+  }
+
+  private func dropCutoutJob(_ id: String) {
+    cutoutLock.lock(); defer { cutoutLock.unlock() }
+    cutoutJobs[id] = nil
+  }
+
+  private func lookupCutoutJob(_ id: String) -> CutoutJob? {
+    cutoutLock.lock(); defer { cutoutLock.unlock() }
+    return cutoutJobs[id]
+  }
+
   public func definition() -> ModuleDefinition {
     Name("ClipyVideo")
-    Events("onExportEvent", "onSoundEvent")
+    Events("onExportEvent", "onSoundEvent", "onCutoutEvent")
 
     // Phase 0 smoke test: proves the Swift module is linked and callable.
     Function("hello") { () -> String in
@@ -257,6 +293,76 @@ public class ClipyVideoModule: Module {
     // Stops that Read aloud (it then rejects "E_READ_ALOUD_CANCELLED"). An unknown or finished job: nothing.
     Function("cancelSpeech") { (jobId: String) in
       self.lookupSpeechJob(jobId)?.cancel()
+    }
+
+    // Find beats for a file of the owner's: decodes the asked stretch of the file's sound and resolves its onset
+    // envelope `{ env, rate, seconds, from }` (see BeatEnvelope). Rejects "E_BEATS_CANCELLED" after
+    // `cancelBeatEnvelope(jobId)`, else "E_BEATS" with a staged message. The work runs on a Swift concurrency
+    // thread, never the main one; the job is stored before it starts, so a cancel that comes at once finds it, and
+    // every way out of the `do` answers the promise exactly once.
+    AsyncFunction("beatEnvelope") { (request: BeatEnvelopeRequest, promise: Promise) in
+      let job = BeatJob()
+      let jobId = request.jobId
+      self.storeBeatJob(jobId, job)
+      Task { [weak self] in
+        defer { self?.dropBeatJob(jobId) }
+        do {
+          let answer: [String: Any] = try await BeatEnvelope.run(request, job: job)
+          promise.resolve(answer)
+        } catch BeatError.cancelled {
+          promise.reject("E_BEATS_CANCELLED", "Beats cancelled")
+        } catch {
+          promise.reject("E_BEATS", BeatEnvelope.message(error))
+        }
+      }
+    }
+
+    // Stops that listening at its next buffer (it then rejects "E_BEATS_CANCELLED"). An unknown or finished job: nothing.
+    Function("cancelBeatEnvelope") { (jobId: String) in
+      self.lookupBeatJob(jobId)?.cancel()
+    }
+
+    // Remove background: renders the cut-out copy the request names (see CutoutRender). Resolves
+    // `{ fileUri, seconds, frames, person }`; progress arrives as `onCutoutEvent { jobId, progress }`. Rejects
+    // "E_CUTOUT_CANCELLED" after `cancelCutout(jobId)`, else "E_CUTOUT" with a staged message. The work runs on a
+    // Swift concurrency thread; the job is stored before it starts, and every way out of the `do` answers the
+    // promise exactly once. One render at a time: a second one waits in `enter` (and still answers a cancel there);
+    // the gate is given back on every way out after it was taken. The source (and so its asset) lives until the
+    // render has returned.
+    AsyncFunction("renderCutout") { (request: CutoutRequest, promise: Promise) in
+      let job = CutoutJob()
+      let jobId = request.jobId
+      self.storeCutoutJob(jobId, job)
+      Task { [weak self] in
+        defer { self?.dropCutoutJob(jobId) }
+        do {
+          guard let outputURL = ExportSession.fileURL(from: request.outputPath) else { throw CutoutError.failed("cutout output: not a file path") }
+          try await CutoutRender.enter(job)
+          defer { CutoutRender.leave() }
+          let answer: [String: Any]
+          if request.kind == "photo" {
+            answer = try await CutoutRender.renderPhoto(request, to: outputURL, job: job)
+          } else {
+            let source = try await CutoutSource.open(request.sourceUri)
+            var lastSent = -1.0
+            answer = try await CutoutRender.renderVideo(request, source: source, to: outputURL, job: job, progress: { (fraction: Double) -> Void in
+              guard fraction - lastSent >= 0.02 else { return }   // at most ~50 events a render
+              lastSent = fraction
+              self?.sendEvent("onCutoutEvent", ["jobId": jobId, "progress": fraction])
+            })
+          }
+          promise.resolve(answer)
+        } catch CutoutError.cancelled {
+          promise.reject("E_CUTOUT_CANCELLED", "Cutout cancelled")
+        } catch {
+          promise.reject("E_CUTOUT", CutoutRender.message(error))
+        }
+      }
+    }
+
+    // Stops that render at its next pass (it then rejects "E_CUTOUT_CANCELLED"). An unknown or finished job: nothing.
+    Function("cancelCutout") { (jobId: String) in
+      self.lookupCutoutJob(jobId)?.cancel()
     }
   }
 }

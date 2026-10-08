@@ -105,10 +105,10 @@ function bestPhase(env: Float64Array, period: number): { phase: number; mean: nu
 }
 
 /**
- * The beat period in envelope frames: the autocorrelation peak between `maxBpm` and `minBpm`, weighted towards `priorBpm`, then
- * refined to the period whose best grid collects the most onset strength. 0 when the envelope is too short or flat.
+ * The coarse beat period in envelope frames: the autocorrelation peak between `maxBpm` and `minBpm`, weighted towards `priorBpm`.
+ * 0 when the envelope is too short or flat.
  */
-export function beatPeriod(env: Float64Array, rate: number): number {
+export function coarsePeriod(env: Float64Array, rate: number): number {
   const lo = Math.max(2, Math.floor((60 * rate) / BEAT_DETECT.maxBpm)), hi = Math.ceil((60 * rate) / BEAT_DETECT.minBpm);
   if (env.length < hi * 4) return 0;
   let mean = 0;
@@ -123,32 +123,76 @@ export function beatPeriod(env: Float64Array, rate: number): number {
     const score = acc * Math.exp(-0.5 * octaves * octaves);
     if (score > coarseScore) { coarseScore = score; coarse = lag; }
   }
-  if (coarse === 0) return 0;
-  let fine = coarse, fineScore = -1;
-  for (let s = -BEAT_DETECT.fineSteps; s <= BEAT_DETECT.fineSteps; s++) {
-    const period = coarse * (1 + (BEAT_DETECT.fineSpan * s) / BEAT_DETECT.fineSteps);
-    const { mean: m } = bestPhase(env, period);
-    if (m > fineScore) { fineScore = m; fine = period; }
+  return coarse;
+}
+
+/** The best period of the fine search so far, and the onset strength its best grid collects. */
+export interface FineBest { period: number; score: number }
+/** Where the fine search starts: the coarse period itself, beaten by the first step looked at. */
+export const fineStart = (coarse: number): FineBest => ({ period: coarse, score: -1 });
+/**
+ * Steps `from` (inclusive) to `to` (exclusive) of the fine search around `coarse`, carrying the best so far: step `s` tries the
+ * period `coarse * (1 + fineSpan * s / fineSteps)`. The whole search is the steps −fineSteps … fineSteps in rising order; a range
+ * outside that is clamped, so the search can be run a few steps at a time (the app pauses between slices) with the same answer:
+ * a step is a whole number and is worked out from `s` alone, and nothing but the best so far passes from one step to the next.
+ * A `coarse` that is not a positive finite number has no steps (the best so far comes back).
+ */
+export function finePeriodSlice(env: Float64Array, coarse: number, from: number, to: number, best: FineBest): FineBest {
+  let period = best.period, score = best.score;
+  if (!(coarse > 0) || coarse === Infinity) return { period, score };
+  const first = Math.max(Math.ceil(from), -BEAT_DETECT.fineSteps), end = Math.min(Math.ceil(to), BEAT_DETECT.fineSteps + 1);
+  for (let s = first; s < end; s++) {
+    const tried = coarse * (1 + (BEAT_DETECT.fineSpan * s) / BEAT_DETECT.fineSteps);
+    const { mean: m } = bestPhase(env, tried);
+    if (m > score) { score = m; period = tried; }
   }
-  return fine;
+  return { period, score };
+}
+
+/**
+ * The beat period in envelope frames: the coarse period, then refined to the period whose best grid collects the most onset
+ * strength. 0 when the envelope is too short or flat.
+ */
+export function beatPeriod(env: Float64Array, rate: number): number {
+  const coarse = coarsePeriod(env, rate);
+  if (coarse === 0) return 0;
+  return finePeriodSlice(env, coarse, -BEAT_DETECT.fineSteps, BEAT_DETECT.fineSteps + 1, fineStart(coarse)).period;
 }
 
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
 
-/** Tempo, first beat and every beat of a mono signal; null when no steady pulse can be measured (too short, silent). */
-export function detectBeats(samples: Float32Array, sampleRate: number): BeatAnalysis | null {
-  if (!(sampleRate > 0) || samples.length < sampleRate * 4) return null;
-  const { env, rate } = onsetEnvelope(samples, sampleRate);
-  const period = beatPeriod(env, rate);
-  if (!(period > 0)) return null;
+/**
+ * Tempo, first beat and every beat inside `seconds` for an envelope and its period; null without a period or without any onset
+ * (and for a period, a rate or a length that is not a finite number: there is no grid to lay).
+ */
+export function beatsFromPeriod(env: Float64Array, rate: number, period: number, seconds: number): BeatAnalysis | null {
+  if (!(period > 0) || !(rate > 0) || period === Infinity || rate === Infinity || !(seconds < Infinity)) return null;
   const { phase, mean } = bestPhase(env, period);
   let all = 0;
   for (let i = 0; i < env.length; i++) all += env[i];
   all /= env.length;
   if (!(all > 0)) return null;
-  const duration = samples.length / sampleRate;
   const step = period / rate, first = phase / rate;
   const beats: number[] = [];
-  for (let k = 0; first + k * step < duration; k++) beats.push(r3(first + k * step));
+  for (let k = 0; first + k * step < seconds; k++) beats.push(r3(first + k * step));
   return { bpm: Math.round((60 / step) * 100) / 100, first: r3(first), beats, confidence: Math.round((mean / all) * 100) / 100 };
+}
+
+/** Tempo, first beat and every beat of a mono signal; null when no steady pulse can be measured (too short, silent). */
+export function detectBeats(samples: Float32Array, sampleRate: number): BeatAnalysis | null {
+  if (!(sampleRate > 0) || samples.length < sampleRate * 4) return null;
+  const { env, rate } = onsetEnvelope(samples, sampleRate);
+  return beatsFromPeriod(env, rate, beatPeriod(env, rate), samples.length / sampleRate);
+}
+
+/**
+ * When a track's beats are good enough to place (the rule scripts/generate-beats.mjs ships the bundled tracks by): a confidence of
+ * at least `minConfidence`, and each half of the track alone gives a tempo within `halvesWithin` (a share) of the whole's.
+ */
+export const BEAT_ACCEPT = { minConfidence: 1.5, halvesWithin: 0.001 } as const;
+/** The rule itself, for the whole track and its two halves. */
+export function isSteady(whole: BeatAnalysis | null, a: BeatAnalysis | null, b: BeatAnalysis | null): boolean {
+  if (!whole || !a || !b) return false;
+  const within = whole.bpm * BEAT_ACCEPT.halvesWithin;
+  return whole.confidence >= BEAT_ACCEPT.minConfidence && Math.abs(a.bpm - whole.bpm) <= within && Math.abs(b.bpm - whole.bpm) <= within;
 }

@@ -24,7 +24,7 @@ const renderBar = () => render(<EditorToolbar />);
 const select = (id: string | null) => act(() => { state().select(id); });
 const photoLayer = (id: string, start = 0): LayerClip => ({ ...makePhotoClip({ id }), start });
 const BACK = "Back to main tools";
-const LAYER = ["Trim", "Speed", "Volume", "Extract audio", "Voice", "Sound", "Animate", "Filter", "Adjust", "Crop", "Transform", "Opacity", "Mask", "Blend", "Green screen", "Keyframe", "Forward", "Back", "Replace", "Reverse", "Duplicate", "Delete"];
+const LAYER = ["Trim", "Speed", "Volume", "Extract audio", "Voice", "Sound", "Animate", "Filter", "Adjust", "Crop", "Transform", "Opacity", "Mask", "Blend", "Green screen", "Cut out", "Keyframe", "Forward", "Back", "Replace", "Reverse", "Duplicate", "Delete"];
 
 beforeEach(() => {
   closeStrip();
