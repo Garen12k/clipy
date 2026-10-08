@@ -55,7 +55,7 @@ Each has the decision, the reason, and what it costs if it turns out wrong.
 *Reason.* The translational request is on every iPhone since iOS 11 and its result is two numbers whose meaning can be fixed in TypeScript. The homographic request returns a 3 × 3 matrix whose conventions are not documented on its page; getting it wrong warps the picture. The tracking variants (`VNTrackTranslationalImageRegistrationRequest`) are iOS 17.
 *If wrong.* Footage that mostly twists (a walking shot held at arm's length) stays shaky. A later build can add rotation; the request already carries per-frame numbers, so it would add fields, not replace any.
 
-**S2. The camera path is TypeScript only — no mirrored pair.** `src/editor/model/steadyPath.ts` (pure, no imports): the frame-to-frame steps are added up into a path; the path is smoothed with a centred, symmetric, triangular window (`radius` seconds each side: 0.25 / 0.5 / 1.0 for Low / Medium / High; near the ends the window shrinks so it stays symmetric, which makes a steady pan need no correction at all); a frame's correction is path − smoothed path, clamped to what the zoom hides, `(zoom − 1) / 2` of the picture each way. A step larger than `cutShift` (0.2 of the picture) on either axis is a cut or a failed measurement and counts as no movement. `scaleX` / `scaleY` (1, 1) turn Vision's numbers into corrections: −1 flips a direction, another number rescales.
+**S2. The camera path is TypeScript only — no mirrored pair.** `src/editor/model/steadyPath.ts` (pure, no imports): the frame-to-frame steps are added up into a path; the path is smoothed with a centred, symmetric, triangular window (`radius` seconds each side: 0.25 / 0.5 / 1.0 for Low / Medium / High; near the ends the window shrinks so it stays symmetric, which makes a steady pan need no correction at all); a frame's correction is zoom × (path − smoothed path) — the phone zooms a frame about its centre first and moves it second, so a shake of *d* measured on the un-zoomed picture is *zoom · d* on screen and only a move of that size cancels it — clamped to what the zoom hides, `(zoom − 1) / 2` of the picture each way. A step larger than `cutShift` (0.2 of the picture) on either axis is a cut or a failed measurement and counts as no movement. `scaleX` / `scaleY` (1, 1) turn Vision's numbers into corrections: −1 flips a direction, another number rescales.
 *Reason.* Swift cannot be run or tested here; Jest can test this. The native side receives the finished corrections (`times`, `dx`, `dy`) and only applies them, as the sound tools receive numbers.
 *If wrong.* Nothing to keep identical in two languages. The request carries up to about 7 700 × 3 numbers for the longest copy (a 64-second range at 120 frames a second); if the bridge is slow with that, `STEADY.minFrameGap` lowers the count.
 
@@ -131,16 +131,17 @@ export function smoothPath(times: readonly number[], path: readonly number[], ra
 export function steadyShifts(shake: Shake, rule: PathRule): { times: number[]; dx: number[]; dy: number[] };
 ```
 
-`steadyShifts`: frames whose time is not a number or not later than the one before are left out. The path at frame *i* is the sum of the steps up to *i*, a step counting as 0 when either of its numbers is not finite or larger than `cutShift`. `smoothPath` at frame *i*: `r = min(radius, tᵢ − t₀, tₙ − tᵢ)`; with `r = 0` the path itself, else the mean of the path over the frames within `r` of `tᵢ`, each weighted `1 − |tⱼ − tᵢ| / r`. The correction is `scale × (path − smooth)`, clamped to ± `(zoom − 1) / 2`, rounded to five decimals.
+`steadyShifts`: frames whose time is not a number or not later than the one before are left out. The path at frame *i* is the sum of the steps up to *i*, a step counting as 0 when either of its numbers is not finite or larger than `cutShift`. `smoothPath` at frame *i*: `r = min(radius, tᵢ − t₀, tₙ − tᵢ)`; with `r = 0` the path itself, else the mean of the path over the frames within `r` of `tᵢ`, each weighted `1 − |tⱼ − tᵢ| / r`. The correction is `scale × zoom × (path − smooth)`, clamped to ± `(zoom − 1) / 2`, rounded to five decimals. The factor `zoom` is there because the native side scales about the centre by `zoom` and THEN translates (§6.4): content that sits *d* off its calm place (a fraction of the un-zoomed picture, which is what Vision measured) is *zoom · d* off after the scaling, and the clamp is already in those zoomed units. Without the factor (zoom − 1) of every shake stays in: 5 / 10 / 15 %. A zoom that is not a number or is under 1 multiplies by 1 (and clamps to 0).
 
 **Worked vectors** (21 frames, 0.1 s apart; pinned in `steadyPath.test.ts`):
 
 | Steps (dx) | Rule | Corrections (dx) |
 |---|---|---|
 | every step 0.01 (a steady pan) | radius 0.5, zoom 1.1 | all 0 |
-| 0 except step 10 = +0.05 and step 11 = −0.05 (one jolt) | radius 0.5, zoom 1.1 | frame 10: 0.04; frames 9 and 11: −0.008; frames 6–8 and 12–14: −0.002 / −0.004 / −0.006 mirrored; the rest 0 |
-| the same jolt | radius 0.5, zoom 1.05 | frame 10: 0.025 (clamped) |
-| the same jolt | `scaleX` −1 | frame 10: −0.04 |
+| 0 except step 10 = +0.05 and step 11 = −0.05 (one jolt) | radius 0.5, zoom 1.1 | frame 10: 0.044 (= 1.1 × 0.04); frames 9 and 11: −0.0088; frames 6–8 and 12–14: −0.0022 / −0.0044 / −0.0066 mirrored; the rest 0 |
+| the same jolt | radius 0.5, zoom 1.05 | frame 10: 0.025 (1.05 × 0.04 = 0.042, clamped) |
+| the same jolt | radius 0.5, zoom 1.5 | frame 10: 0.06 (= 1.5 × 0.04, under its clamp of 0.25) |
+| the same jolt | `scaleX` −1 | frame 10: −0.044 |
 | 0 except step 10 = 0.5 (a cut) | any | all 0 |
 
 `STEADY_LEVELS = { low: { level: 1, zoom: 1.05, radius: 0.25 }, medium: { level: 2, zoom: 1.1, radius: 0.5 }, high: { level: 3, zoom: 1.15, radius: 1 } }`.

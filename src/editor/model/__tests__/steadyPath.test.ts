@@ -16,12 +16,36 @@ test("a steady pan needs no correction at all (the window is centred and symmetr
   near(out.dy, zeros());
 });
 
-test("the spec's vector: one jolt is pulled back, its neighbours give a little", () => {
+test("the spec's vector: one jolt is pulled back, its neighbours give a little (each number is the zoom, 1.1, times path − calm path)", () => {
   const want = zeros();
-  want[10] = 0.04; want[9] = want[11] = -0.008; want[8] = want[12] = -0.006; want[7] = want[13] = -0.004; want[6] = want[14] = -0.002;
+  want[10] = 0.044; want[9] = want[11] = -0.0088; want[8] = want[12] = -0.0066; want[7] = want[13] = -0.0044; want[6] = want[14] = -0.0022;
   const out = steadyShifts(jolt(), RULE);
   near(out.dx, want);
   near(out.dy, zeros());
+});
+
+// The phone zooms a frame about its centre FIRST and moves it SECOND: a point p of the picture lands at (p − c)·zoom + c + move.
+// Vision measured the shake on the un-zoomed picture, so a frame that sits d off its calm place is zoom·d off on screen after
+// the zoom — and only a move of zoom·d puts it back. Sending d would leave (zoom − 1)·d of every shake in: 5 / 10 / 15 %.
+test("why the zoom multiplies: a shake of d on the un-zoomed picture is cancelled by a move of zoom·d", () => {
+  for (const zoom of [1.3, 1.5, 2]) {                       // wide enough that the clamp is not reached
+    const shake = jolt();
+    const out = steadyShifts(shake, { ...RULE, zoom });
+    let at = 0;
+    const path = shake.dx.map((s) => (at += s));
+    const calm = smoothPath(times, path, RULE.radius);
+    path.forEach((p, i) => {
+      const off = -(p - calm[i]);                           // where the content sits, off its calm place, before the zoom
+      expect(off * zoom + out.dx[i]).toBeCloseTo(0, 4);     // zoomed about the centre, then moved: back on the calm place
+    });
+    expect(out.dx[10]).toBeCloseTo(0.04 * zoom, 5);
+  }
+});
+
+test("the zoom multiplies before the clamp; a zoom that is no number or under 1 hides nothing, so nothing is moved", () => {
+  expect(steadyShifts(jolt(), { ...RULE, zoom: 1.06 }).dx[10]).toBeCloseTo(0.03, 5);     // 0.04 × 1.06 = 0.0424, held at 0.03
+  expect(steadyShifts(jolt(), { ...RULE, zoom: 1.09 }).dx[10]).toBeCloseTo(0.0436, 5);   // under its clamp of 0.045
+  for (const zoom of [NaN, Infinity, 0.5, -2]) expect(steadyShifts(jolt(), { ...RULE, zoom }).dx.every((v) => v === 0)).toBe(true);
 });
 
 test("a correction never exceeds what the zoom hides: (zoom − 1) / 2 each way", () => {
@@ -31,10 +55,10 @@ test("a correction never exceeds what the zoom hides: (zoom − 1) / 2 each way"
 });
 
 test("scaleX / scaleY turn Vision's numbers: −1 flips a direction, another number rescales", () => {
-  expect(steadyShifts(jolt(), { ...RULE, scaleX: -1 }).dx[10]).toBeCloseTo(-0.04, 5);
-  expect(steadyShifts(jolt(), { ...RULE, scaleX: 0.5 }).dx[10]).toBeCloseTo(0.02, 5);
+  expect(steadyShifts(jolt(), { ...RULE, scaleX: -1 }).dx[10]).toBeCloseTo(-0.044, 5);
+  expect(steadyShifts(jolt(), { ...RULE, scaleX: 0.5 }).dx[10]).toBeCloseTo(0.022, 5);
   const up: Shake = { times, dx: zeros(), dy: jolt().dx as number[] };
-  expect(steadyShifts(up, { ...RULE, scaleY: -1 }).dy[10]).toBeCloseTo(-0.04, 5);
+  expect(steadyShifts(up, { ...RULE, scaleY: -1 }).dy[10]).toBeCloseTo(-0.044, 5);
 });
 
 test("a step larger than cutShift on either axis is a cut, not shake: it moves nothing", () => {
@@ -89,10 +113,10 @@ test("a jitter around a pan is taken out and the pan is kept: what is left moves
   const out = steadyShifts({ times: t, dx, dy: t.map(() => 0) }, { ...RULE, zoom: 1.5 });
   let at = 0;
   const path = dx.map((s) => (at += s));
-  const left = path.map((p, i) => p - out.dx[i]);          // where the picture is after its correction
+  const left = path.map((p, i) => p - out.dx[i] / 1.5);    // where the picture is after its correction (the move is in zoomed units)
   for (let i = 6; i < n - 5; i++) {                        // away from the ends, where the window is whole
     expect(Math.abs(left[i] - left[i - 1] - pan)).toBeLessThan(shake * 0.1);
-    expect(Math.abs(out.dx[i])).toBeGreaterThan(shake * 0.4);   // and the frames really are moved
+    expect(Math.abs(out.dx[i]) / 1.5).toBeGreaterThan(shake * 0.4);   // and the frames really are moved
   }
 });
 
@@ -108,7 +132,7 @@ test("after a cut each side is steadied by itself: a jolt long after the cut is 
   const t = Array.from({ length: n }, (_, i) => i / 10);
   const dx = new Array<number>(n).fill(0); dx[10] = 0.6; dx[30] = 0.05; dx[31] = -0.05;
   const out = steadyShifts({ times: t, dx, dy: new Array<number>(n).fill(0) }, RULE).dx;
-  expect(out[30]).toBeCloseTo(0.04, 5);
+  expect(out[30]).toBeCloseTo(0.044, 5);
   for (let i = 0; i <= 20; i++) expect(out[i]).toBe(0);
 });
 

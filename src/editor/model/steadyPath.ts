@@ -6,7 +6,7 @@
 export interface Shake { times: readonly number[]; dx: readonly number[]; dy: readonly number[] }
 /**
  * `radius`: seconds of path each side of a frame that its calm position is averaged over. `zoom`: the copy's fixed zoom — a
- * correction is never larger than what it hides. `cutShift`: a step larger than this (on either axis) is a cut or a failed
+ * correction is multiplied by it (the phone zooms first and moves second) and is never larger than what it hides. `cutShift`: a step larger than this (on either axis) is a cut or a failed
  * measurement, not shake. `scaleX` / `scaleY`: what one unit of Vision's step is as a correction — 1 as reported, −1 the other
  * way, another number for another unit.
  */
@@ -45,9 +45,13 @@ export function smoothPath(times: readonly number[], path: readonly number[], ra
 
 /**
  * The correction of every measured frame. The steps are added up into the path the picture took (a step that is a cut counts as no
- * movement, on both axes); the path is made calm (`smoothPath`); a frame is moved by path − calm path, turned by `scaleX` /
- * `scaleY`, never further than the zoom hides ((zoom − 1) / 2 of the picture each way), to five decimals. A frame whose time is
- * not a number, or not later than the frame before it, is left out. Total: any input gives finite numbers.
+ * movement, on both axes); the path is made calm (`smoothPath`); a frame is moved by zoom × (path − calm path), turned by
+ * `scaleX` / `scaleY`, never further than the zoom hides ((zoom − 1) / 2 of the picture each way), to five decimals. A frame
+ * whose time is not a number, or not later than the frame before it, is left out. Total: any input gives finite numbers.
+ *
+ * Why × zoom: the shake was measured on the un-zoomed picture, and the phone scales a frame about its centre by `zoom` BEFORE it
+ * moves it (`SteadyRender.swift`). A frame d off its calm place is zoom·d off after the scaling, so the move that cancels it is
+ * zoom·d; the clamp is already in those zoomed units.
  */
 export function steadyShifts(shake: Shake, rule: PathRule): Shifts {
   const n = Math.min(shake.times.length, shake.dx.length, shake.dy.length);
@@ -61,7 +65,8 @@ export function steadyShifts(shake: Shake, rule: PathRule): Shifts {
     times.push(t); x.push(atX); y.push(atY);
   }
   const limit = real(rule.zoom) ? Math.max(0, (rule.zoom - 1) / 2) : 0;
-  const scaleX = real(rule.scaleX) ? rule.scaleX : 1, scaleY = real(rule.scaleY) ? rule.scaleY : 1;
+  const zoomBy = real(rule.zoom) && rule.zoom >= 1 ? rule.zoom : 1;
+  const scaleX = (real(rule.scaleX) ? rule.scaleX : 1) * zoomBy, scaleY = (real(rule.scaleY) ? rule.scaleY : 1) * zoomBy;
   const calmX = smoothPath(times, x, rule.radius), calmY = smoothPath(times, y, rule.radius);
   const held = (v: number): number => Math.round(Math.min(limit, Math.max(-limit, v)) * 1e5) / 1e5 || 0;   // `|| 0`: never −0
   return { times, dx: x.map((at, i) => held(scaleX * (at - calmX[i]))), dy: y.map((at, i) => held(scaleY * (at - calmY[i]))) };
