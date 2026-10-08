@@ -135,7 +135,8 @@ describe("the compositor", () => {
   it("an instruction carries its overlays and asks for their tracks", () => {
     expect(all).toMatch(/let overlays: \[LayerSpec\]/);
     expect(all).toMatch(/overlays: \[LayerSpec\] = \[\], effects: \[ActiveEffectSpec\] = \[\]\)/);
-    expect(all).toContain("self.requiredSourceTrackIDs = (layers + overlays).map { NSNumber(value: $0.trackID) as NSValue }");
+    expect(all).toContain("let own: [NSValue] = (layers + overlays).map { NSNumber(value: $0.trackID) as NSValue }");
+    expect(all).toContain("self.requiredSourceTrackIDs = own + behind");
   });
   it("draws the main frame, then each overlay in order, then the timeline effects", () => {
     const body = between(all, "func startRequest(", "\n  }\n");
