@@ -6,8 +6,8 @@ import { SPEED_CURVES } from "../../effects";
 
 const video = { kind: "video" as const };
 
-test("schema is v18; curve ids and limits are as specified", () => {
-  expect(SCHEMA_VERSION).toBe(18);
+test("schema is v19; curve ids and limits are as specified", () => {
+  expect(SCHEMA_VERSION).toBe(19);
   expect(SPEED_CURVE_IDS).toEqual(["montage", "hero", "bullet", "jumpCut", "flashIn", "flashOut"]);
   expect(SPEED_CURVE_LIMITS).toEqual({ slices: 8, maxSteps: 64, minStep: 0.01 });
 });

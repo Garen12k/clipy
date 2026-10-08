@@ -16,7 +16,7 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 import { photoMotionPins, resolveClipMotion, sampleKeyframes } from "@/src/editor/model/motion";
 import { curveSteps, outputOffsetOf } from "@/src/editor/model/timeline";
 import { DEFAULT_ADJUST, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
-import { addExportListener, addSoundListener, cancelExport, cancelSoundRender, cancelTranscribe, exportTimeline, hello, isNativeAvailable, isSoundAvailable, isSoundCancelled, probeNoiseReduction, renderSound, SOUND_CANCELLED, soundInfo, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, transcribe } from "../index";
+import { addExportListener, addSoundListener, cancelExport, cancelSoundRender, cancelSpeech, cancelTranscribe, exportTimeline, hello, isNativeAvailable, isNoiseAvailable, isNoiseBuild, isSoundAvailable, isSoundCancelled, isSpeechAvailable, isSpeechCancelled, listVoices, probeNoiseReduction, renderSound, SOUND_CANCELLED, soundInfo, speakToFile, SPEECH_CANCELLED, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, transcribe } from "../index";
 
 describe("clipy-video wrapper", () => {
   it("hello() returns the native module's greeting", () => {
@@ -449,7 +449,7 @@ describe("toExportLayer", () => {
 
 describe("sound API", () => {
   const request = { jobId: "j", sourceUri: "file:///m/a.m4a", outputPath: "file:///s/a.m4a", pitchCents: -300, distortionPreset: "", distortionWet: 0, distortionPreGain: -6,
-    delayTime: 0, delayFeedback: 0, delayWet: 0, delayLowPass: 15000, reverbPreset: "", reverbWet: 0, bands: [], level: false };
+    delayTime: 0, delayFeedback: 0, delayWet: 0, delayLowPass: 15000, reverbPreset: "", reverbWet: 0, bands: [], level: false, noiseWet: 0 };
 
   it("isSoundAvailable: only when the linked module has the render function (not in Expo Go, not in a build from before it)", () => {
     expect(isSoundAvailable()).toBe(true);
@@ -506,5 +506,68 @@ describe("sound API", () => {
     expect(isSoundCancelled(Object.assign(new Error("x"), { code: "E_SOUND" }))).toBe(false);
     expect(isSoundCancelled(new Error("Sound cancelled"))).toBe(false);
     expect(isSoundCancelled(null)).toBe(false);
+  });
+});
+
+// Keep this block LAST: it resets the shared native-module mock.
+describe("noise and speech API (the build of 2026-10-08)", () => {
+  const speech = { jobId: "j", text: "Hello", voiceId: "en.samantha", rate: 0.5, outputPath: "file:///doc/projects/p1/media/speech-o1-s1.caf" };
+  const old = { hello: () => "old", exportTimeline: jest.fn(), renderSound: jest.fn() };   // the build with the sound tools, before this batch
+
+  const latest = { ...old, noiseAvailable: jest.fn(() => true), listVoices: jest.fn(), speakToFile: jest.fn(), cancelSpeech: jest.fn() };
+
+  it("isSpeechAvailable / isNoiseBuild: only when the linked module has the functions", () => {
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(latest as never);
+    try {
+      expect(isSpeechAvailable()).toBe(true);
+      expect(isNoiseBuild()).toBe(true);
+      expect(isNoiseAvailable()).toBe(true);
+    } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+    for (const module of [null, old]) {
+      jest.mocked(requireOptionalNativeModule).mockReturnValue(module as never);
+      try {
+        expect(isSpeechAvailable()).toBe(false);
+        expect(isNoiseBuild()).toBe(false);
+        expect(isNoiseAvailable()).toBe(false);
+      } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+    }
+  });
+
+  it("isNoiseAvailable asks the phone, and a native side that answers no or throws counts as no", () => {
+    jest.mocked(requireOptionalNativeModule).mockReturnValueOnce({ noiseAvailable: () => true } as never);
+    expect(isNoiseAvailable()).toBe(true);
+    jest.mocked(requireOptionalNativeModule).mockReturnValueOnce({ noiseAvailable: () => false } as never);
+    expect(isNoiseAvailable()).toBe(false);
+    jest.mocked(requireOptionalNativeModule).mockReturnValueOnce({ noiseAvailable: () => { throw new Error("boom"); } } as never);
+    expect(isNoiseAvailable()).toBe(false);
+  });
+
+  it("listVoices, speakToFile and cancelSpeech forward to the native module", async () => {
+    const native = { listVoices: jest.fn(async () => ({ current: "el-GR", voices: [{ id: "v", name: "Melina", language: "el-GR", languageName: "Greek (Greece)", quality: 1 }] })),
+      speakToFile: jest.fn(async () => ({ fileUri: speech.outputPath, seconds: 1.5 })), cancelSpeech: jest.fn() };
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(native as never);
+    try {
+      await expect(listVoices()).resolves.toEqual({ current: "el-GR", voices: [{ id: "v", name: "Melina", language: "el-GR", languageName: "Greek (Greece)", quality: 1 }] });
+      await expect(speakToFile(speech)).resolves.toEqual({ fileUri: speech.outputPath, seconds: 1.5 });
+      expect(native.speakToFile).toHaveBeenCalledWith(speech);
+      cancelSpeech("j");
+      expect(native.cancelSpeech).toHaveBeenCalledWith("j");
+    } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+  });
+
+  it("without the module they throw the not-linked error; with an older build a plain sentence, never 'undefined is not a function'", () => {
+    const calls = [() => listVoices(), () => speakToFile(speech), () => cancelSpeech("j")];
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(null);
+    try { for (const call of calls) expect(call).toThrow(/not linked/); } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+    jest.mocked(requireOptionalNativeModule).mockReturnValue(old as never);
+    try { for (const call of calls) expect(call).toThrow(/latest Clipy build/); } finally { jest.mocked(requireOptionalNativeModule).mockReset(); }
+  });
+
+  it("isSpeechCancelled recognises the native cancel code only", () => {
+    expect(SPEECH_CANCELLED).toBe("E_READ_ALOUD_CANCELLED");
+    expect(isSpeechCancelled(Object.assign(new Error("Speech cancelled"), { code: "E_READ_ALOUD_CANCELLED" }))).toBe(true);
+    expect(isSpeechCancelled(Object.assign(new Error("x"), { code: "E_READ_ALOUD" }))).toBe(false);
+    expect(isSpeechCancelled(new Error("Speech cancelled"))).toBe(false);
+    expect(isSpeechCancelled(null)).toBe(false);
   });
 });

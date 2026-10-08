@@ -15,21 +15,23 @@ jest.mock("@/modules/clipy-video", () => {
   return {
     __sound: sound,
     isSoundAvailable: jest.fn(() => true), renderSound: jest.fn(), cancelSoundRender: jest.fn(),
+    isNoiseBuild: jest.fn(() => true), isNoiseAvailable: jest.fn(() => true),
     addSoundListener: jest.fn((cb: unknown) => { sound.listener = cb; return { remove() {} }; }),
     SOUND_CANCELLED: "E_SOUND_CANCELLED",
     isSoundCancelled: (e: unknown) => typeof e === "object" && e !== null && (e as { code?: string }).code === "E_SOUND_CANCELLED",
   };
 });
 import { act, renderHook } from "@testing-library/react-native";
-import { cancelSoundRender, isSoundAvailable, renderSound } from "@/modules/clipy-video";
+import { cancelSoundRender, isNoiseAvailable, isNoiseBuild, isSoundAvailable, renderSound } from "@/modules/clipy-video";
 import { newId } from "@/src/lib/id";
 import { setTrackSound } from "@/src/editor/model/ops";
 import { neededSounds, soundChain } from "@/src/editor/model/sound";
 import { makeAudioTrack, makeClip, makeProject, NO_SOUND, type SoundSettings } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { prepareSounds } from "@/src/export/exportSounds";
 import { useToast } from "@/src/ui/Toast";
 import { isPreparing, playUri, useSoundFiles } from "../soundFiles";
-import { ensureSound, holdSounds, resetSounds, SOUND_CANCEL_GRACE_MS, SOUND_FAILED, SOUND_RENDER_DEADLINE_MS, SOUND_UNAVAILABLE, soundDir, sweepSounds, syncSounds, useSoundRenders } from "../soundRenders";
+import { ensureSound, holdSounds, NOISE_NOT_ON_PHONE, noiseRefusal, resetSounds, SOUND_CANCEL_GRACE_MS, SOUND_NOISE_DEADLINE_MS, SOUND_FAILED, SOUND_RENDER_DEADLINE_MS, SOUND_UNAVAILABLE, soundDir, sweepSounds, syncSounds, useSoundRenders } from "../soundRenders";
 
 const disk = (jest.requireMock("@/src/projects/expoFs") as { __files: Set<string> }).__files;
 const native = (jest.requireMock("@/modules/clipy-video") as { __sound: { listener: null | ((e: { jobId: string; progress: number }) => void) } }).__sound;
@@ -497,5 +499,188 @@ describe("a failing engine is said once, not once per copy", () => {
     for (let i = 0; i < 3; i++) await flush();
     expect(out).toEqual([SOUND_FAILED, SOUND_FAILED, SOUND_FAILED]);
     warn.mockRestore();
+  });
+});
+
+describe("PROOF: a setting without noise is rendered exactly as before Reduce noise existed", () => {
+  // Written before the manager knew Reduce noise and green then; never edited to make a change pass.
+  const pass = async (ms: number) => { await act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); jest.advanceTimersByTime(ms); for (let i = 0; i < 8; i++) await Promise.resolve(); }); };
+  // The worst case: a build from before Reduce noise, on a phone without the unit.
+  beforeEach(() => { jest.mocked(isNoiseBuild).mockReturnValue(false); jest.mocked(isNoiseAvailable).mockReturnValue(false); });
+  afterEach(() => { resetSounds(); jest.useRealTimers(); jest.mocked(isNoiseBuild).mockReturnValue(true); jest.mocked(isNoiseAvailable).mockReturnValue(true); });
+
+  test("the same one native call under the same name, and the noise questions are never asked", async () => {
+    await expect(ensureSound("p1", SRC, deep)).resolves.toBe("file:///doc/projects/p1/sound/v-v1-deep-s50-p0-flat-l0.m4a");
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledWith({ ...soundChain(deep), jobId: "job1", sourceUri: SRC, outputPath: "file:///doc/projects/p1/sound/v-v1-deep-s50-p0-flat-l0.m4a" });
+    expect(render.mock.calls[0][0].noiseWet).toBe(0);
+    await expect(ensureSound("p1", SRC, { ...NO_SOUND, level: true })).resolves.toMatch(/-l1\.m4a$/);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(isNoiseBuild).not.toHaveBeenCalled();
+    expect(isNoiseAvailable).not.toHaveBeenCalled();
+    expect(cancelSoundRender).not.toHaveBeenCalled();
+  });
+
+  test("through the editor's queue: ready, nothing said", async () => {
+    syncSounds("p1", [{ name: DEEP, sourceUri: SRC, sound: deep }, { name: HIGH, sourceUri: SRC, sound: high }]);
+    await flush();
+    expect(files()).toEqual({ [DEEP]: { status: "ready", uri: `${DIR}/${DEEP}` }, [HIGH]: { status: "ready", uri: `${DIR}/${HIGH}` } });
+    expect(useToast.getState().message).toBeNull();
+    expect(isNoiseBuild).not.toHaveBeenCalled();
+    expect(isNoiseAvailable).not.toHaveBeenCalled();
+  });
+
+  test("its deadline is two minutes to the millisecond, with the same sentence", async () => {
+    jest.useFakeTimers();
+    render.mockReturnValue(new Promise(() => {}));                       // the native side never answers
+    const outcome = jest.fn();
+    ensureSound("p1", SRC, deep).then(outcome, outcome);
+    await pass(119999);
+    expect(outcome).not.toHaveBeenCalled();
+    expect(cancelSoundRender).not.toHaveBeenCalled();
+    await pass(1);
+    expect(outcome).toHaveBeenCalledTimes(1);
+    expect((outcome.mock.calls[0][0] as Error).message).toBe("sound render: no answer after 120 s");
+    expect(cancelSoundRender).toHaveBeenCalledTimes(1);
+    expect(cancelSoundRender).toHaveBeenCalledWith("job1");
+  });
+});
+
+describe("Reduce noise in the manager", () => {
+  const noisy: SoundSettings = { ...NO_SOUND, noise: 0.5 };
+  const COPY = `${DIR}/v-v1-plain-s0-p0-flat-l0-n50.m4a`;
+  const pass = async (ms: number) => { await act(async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); jest.advanceTimersByTime(ms); for (let i = 0; i < 8; i++) await Promise.resolve(); }); };
+
+  beforeEach(() => {
+    disk.clear();
+    resetSounds();
+    render.mockReset();
+    jest.mocked(cancelSoundRender).mockClear();
+    jest.mocked(isSoundAvailable).mockReturnValue(true);
+    jest.mocked(isNoiseBuild).mockReturnValue(true);
+    jest.mocked(isNoiseAvailable).mockReturnValue(true);
+    jest.mocked(newId).mockReturnValue("job-n");
+  });
+  afterEach(() => { jest.useRealTimers(); });
+
+  test("noiseRefusal: the build first, then the phone", () => {
+    expect(noiseRefusal()).toBeNull();
+    jest.mocked(isNoiseAvailable).mockReturnValue(false);
+    expect(noiseRefusal()).toBe(NOISE_NOT_ON_PHONE);
+    jest.mocked(isNoiseBuild).mockReturnValue(false);
+    expect(noiseRefusal()).toBe("Reduce noise and Read aloud need the latest Clipy build. Install it from the newest build link.");
+    expect(NOISE_NOT_ON_PHONE).toBe("This iPhone cannot reduce noise.");
+  });
+
+  test("a noise setting is rendered with the mix in the request and under its own name", async () => {
+    render.mockResolvedValue({ fileUri: COPY, seconds: 5, gainDb: 0 });
+    await expect(ensureSound("p1", SRC, noisy)).resolves.toBe(COPY);
+    expect(render).toHaveBeenCalledWith({ ...soundChain(noisy), jobId: "job-n", sourceUri: SRC, outputPath: COPY });
+    expect(render.mock.calls[0][0].noiseWet).toBe(87.5);
+  });
+
+  test("on a build or a phone without it the native side is never asked: an older build would render without the unit under this name", async () => {
+    jest.mocked(isNoiseBuild).mockReturnValue(false);
+    jest.mocked(isNoiseAvailable).mockReturnValue(false);
+    await expect(ensureSound("p1", SRC, noisy)).rejects.toThrow(/latest Clipy build/);
+    jest.mocked(isNoiseBuild).mockReturnValue(true);
+    await expect(ensureSound("p1", SRC, noisy)).rejects.toThrow(NOISE_NOT_ON_PHONE);
+    expect(render).not.toHaveBeenCalled();
+    // A setting without noise does not ask the question at all.
+    render.mockResolvedValue({ fileUri: "x", seconds: 5, gainDb: 0 });
+    await expect(ensureSound("p1", SRC, deep)).resolves.toMatch(/-deep-/);
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  test("a copy that is already on disk is used without asking anything", async () => {
+    disk.add(COPY);
+    jest.mocked(isNoiseAvailable).mockReturnValue(false);
+    await expect(ensureSound("p1", SRC, noisy)).resolves.toBe(COPY);
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  test("a render with noise has ten minutes; one without keeps its two", async () => {
+    expect(SOUND_NOISE_DEADLINE_MS).toBe(600000);
+    jest.useFakeTimers();
+    render.mockReturnValue(new Promise(() => {}));                       // the native side never answers
+    const slow = ensureSound("p1", SRC, noisy);
+    const outcome = jest.fn();
+    slow.then(outcome, outcome);
+    await pass(SOUND_RENDER_DEADLINE_MS + 1000);
+    expect(outcome).not.toHaveBeenCalled();                              // still waiting after the plain deadline
+    expect(cancelSoundRender).not.toHaveBeenCalled();
+    await pass(SOUND_NOISE_DEADLINE_MS);
+    expect(outcome).toHaveBeenCalledTimes(1);
+    expect((outcome.mock.calls[0][0] as Error).message).toBe("sound render: no answer after 600 s");
+    expect(cancelSoundRender).toHaveBeenCalledWith("job-n");
+  });
+
+  test("the lightest strength (0) is ON: refused where it cannot run, ten minutes where it can", async () => {
+    const lightest: SoundSettings = { ...NO_SOUND, noise: 0 };
+    jest.mocked(isNoiseBuild).mockReturnValue(false);
+    await expect(ensureSound("p1", SRC, lightest)).rejects.toThrow(/latest Clipy build/);
+    expect(render).not.toHaveBeenCalled();
+    jest.mocked(isNoiseBuild).mockReturnValue(true);
+    jest.useFakeTimers();
+    render.mockReturnValue(new Promise(() => {}));
+    const outcome = jest.fn();
+    ensureSound("p1", SRC, lightest).then(outcome, outcome);
+    await pass(SOUND_RENDER_DEADLINE_MS + 1000);
+    expect(render).toHaveBeenCalledWith(expect.objectContaining({ noiseWet: 50, outputPath: `${DIR}/v-v1-plain-s0-p0-flat-l0-n0.m4a` }));
+    expect(outcome).not.toHaveBeenCalled();
+    await pass(SOUND_NOISE_DEADLINE_MS);
+    expect(outcome).toHaveBeenCalledTimes(1);
+  });
+
+  test("a cancelled render with noise still waits only the four seconds", async () => {
+    jest.useFakeTimers();
+    render.mockReturnValue(new Promise(() => {}));
+    const outcome = jest.fn();
+    ensureSound("p1", SRC, noisy).then(outcome, outcome);
+    await pass(1000);
+    resetSounds();
+    expect(cancelSoundRender).toHaveBeenCalledWith("job-n");
+    await pass(SOUND_CANCEL_GRACE_MS - 1);
+    expect(outcome).not.toHaveBeenCalled();
+    await pass(1);
+    expect((outcome.mock.calls[0][0] as { code?: string }).code).toBe("E_SOUND_CANCELLED");
+  });
+
+  test("a project that holds a noise setting on such a build: not rendered, failed with the reason, said once, the setting stays and the original plays", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    jest.mocked(isNoiseBuild).mockReturnValue(false);
+    jest.mocked(isNoiseAvailable).mockReturnValue(false);
+    render.mockResolvedValue({ fileUri: "x", seconds: 5, gainDb: 0 });
+    const said: string[] = [];
+    useToast.setState({ show: (message: string) => { said.push(message); } });
+    st().setProject(project(noisy));
+    const before = st().project;
+    const name = neededSounds(before!)[0].name;
+    const hook = await renderHook(() => useSoundRenders());
+    await flush();
+    for (let i = 0; i < 3; i++) { await hook.rerender({}); await act(async () => { st().seek(i + 1); }); }
+    await flush();
+    expect(render).not.toHaveBeenCalled();
+    expect(files()).toEqual({ [name]: { status: "failed", message: "Reduce noise and Read aloud need the latest Clipy build. Install it from the newest build link." } });
+    expect(said).toEqual([SOUND_FAILED]);
+    expect(st().project).toBe(before);                                   // the project is not written
+    expect(st().project!.audioTracks[0].sound).toEqual(noisy);
+    expect(playUri(files(), st().project!.audioTracks[0])).toBe(SRC);
+    // The other copies of the project are still rendered: only the noise one is refused.
+    syncSounds("p1", [{ name, sourceUri: SRC, sound: noisy }, { name: HIGH, sourceUri: SRC, sound: high }]);
+    await flush();
+    expect(files()[HIGH]).toEqual({ status: "ready", uri: `${DIR}/${HIGH}` });
+    expect(render).toHaveBeenCalledTimes(1);
+    await hook.unmount();
+    warn.mockRestore();
+  });
+
+  test("the export stops with the plain reason instead of waiting", async () => {
+    jest.mocked(isNoiseAvailable).mockReturnValue(false);
+    const track = { ...makeAudioTrack({ id: "v", sourceDuration: 5, sourceUri: SRC, kind: "voice" }), sound: noisy };
+    await expect(prepareSounds("p1", [track], () => {})).rejects.toThrow("Could not prepare a sound for the export: This iPhone cannot reduce noise.");
+    jest.mocked(isNoiseBuild).mockReturnValue(false);
+    await expect(prepareSounds("p1", [track], () => {})).rejects.toThrow("Could not prepare a sound for the export: Reduce noise and Read aloud need the latest Clipy build. Install it from the newest build link.");
+    expect(render).not.toHaveBeenCalled();
   });
 });

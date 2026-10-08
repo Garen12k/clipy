@@ -1,9 +1,9 @@
 import { EQ_IDS, makeAudioTrack, makeProject, NO_SOUND, VOICE_IDS, type SoundSettings } from "../types";
-import { BAND_TYPES, DISTORTION_PRESETS, EQ_TABLE, neededSounds, PITCH_CENTS_LIMIT, REVERB_PRESETS, SOUND_VERSION, soundChain, soundFileName, VOICE_TABLE } from "../sound";
+import { BAND_TYPES, DISTORTION_PRESETS, EQ_TABLE, neededSounds, noiseWet, PITCH_CENTS_LIMIT, REVERB_PRESETS, SOUND_VERSION, soundChain, soundFileName, VOICE_TABLE } from "../sound";
 
 const set = (patch: Partial<SoundSettings>): SoundSettings => ({ ...NO_SOUND, ...patch });
 const voice = (id: SoundSettings["voice"], strength: number) => soundChain(set({ voice: id, strength }));
-const NEUTRAL = { pitchCents: 0, distortionPreset: "", distortionWet: 0, distortionPreGain: -6, delayTime: 0, delayFeedback: 0, delayWet: 0, delayLowPass: 15000, reverbPreset: "", reverbWet: 0, bands: [], level: false };
+const NEUTRAL = { pitchCents: 0, distortionPreset: "", distortionWet: 0, distortionPreGain: -6, delayTime: 0, delayFeedback: 0, delayWet: 0, delayLowPass: 15000, reverbPreset: "", reverbWet: 0, bands: [], level: false, noiseWet: 0 };
 
 test("no setting is a chain that does nothing", () => {
   expect(soundChain(NO_SOUND)).toEqual(NEUTRAL);
@@ -136,4 +136,93 @@ test("neededSounds: one entry per different copy the project plays; none for a t
   expect(neededSounds(p).map((n) => n.name)).toContain("gone-v1-deep-s50-p0-flat-l0.m4a");
   expect(neededSounds(makeProject())).toEqual([]);
   expect(JSON.stringify(p)).toBe(before);                                    // reading never changes the project
+});
+
+// PROOF — written against the code from before Reduce noise and green there; never edited to make a change pass. Copies on the
+// owner's phone are found again by these names, and play these numbers.
+describe("PROOF: a setting without noise keeps the name and the numbers it had", () => {
+  const src = "file:///doc/projects/p1/media/abc.mov";
+  const OFF = { pitchCents: 0, distortionPreset: "", distortionWet: 0, distortionPreGain: -6, delayTime: 0, delayFeedback: 0, delayWet: 0, delayLowPass: 15000, reverbPreset: "", reverbWet: 0, bands: [], level: false };
+
+  test("SOUND_VERSION stays 1 and the names are the names on disk", () => {
+    expect(SOUND_VERSION).toBe(1);
+    expect(soundFileName(src, { voice: "deep", strength: 0.5, pitch: -3, eq: "warm", level: true })).toBe("abc-v1-deep-s50-pm3-warm-l1.m4a");
+    expect(soundFileName(src, { voice: null, strength: 0.5, pitch: 2, eq: null, level: false })).toBe("abc-v1-plain-s0-p2-flat-l0.m4a");
+    expect(soundFileName(src, { voice: "robot", strength: 1, pitch: 0, eq: "bright", level: false })).toBe("abc-v1-robot-s100-p0-bright-l0.m4a");
+    expect(soundFileName(src, { voice: "echo", strength: 0.33, pitch: 12, eq: "bassBoost", level: false })).toBe("abc-v1-echo-s33-p12-bassBoost-l0.m4a");
+    expect(soundFileName(src, { voice: "telephone", strength: 0, pitch: 0, eq: "clearVoice", level: true })).toBe("abc-v1-telephone-s0-p0-clearVoice-l1.m4a");
+    expect(soundFileName(src, { voice: null, strength: 0.5, pitch: 0, eq: null, level: true })).toBe("abc-v1-plain-s0-p0-flat-l1.m4a");
+  });
+
+  test("the chains are the chains those copies were rendered from, number for number", () => {
+    // toMatchObject: every number of before is there unchanged (a nested array must match whole); a later key may only be added.
+    expect(soundChain({ voice: "deep", strength: 0.5, pitch: -3, eq: "warm", level: true })).toMatchObject({ ...OFF, pitchCents: -750, level: true,
+      bands: [{ type: "lowShelf", frequency: 200, gain: 3, bandwidth: 1 }, { type: "parametric", frequency: 3500, gain: -2, bandwidth: 1.5 }, { type: "highShelf", frequency: 8000, gain: -3, bandwidth: 1 }] });
+    expect(soundChain({ voice: null, strength: 0.5, pitch: 2, eq: null, level: false })).toMatchObject({ ...OFF, pitchCents: 200 });
+    expect(soundChain({ voice: "robot", strength: 1, pitch: 0, eq: null, level: false })).toMatchObject({ pitchCents: -300, distortionPreset: "speechCosmicInterference", distortionWet: 30,
+      distortionPreGain: -6, delayTime: 0.012, delayFeedback: 85, delayWet: 70, delayLowPass: 8000, reverbPreset: "", reverbWet: 0, bands: [], level: false });
+    expect(soundChain({ voice: "echo", strength: 0.33, pitch: 12, eq: null, level: false })).toMatchObject({ ...OFF, pitchCents: 1200, delayTime: 0.273, delayFeedback: 34.9, delayWet: 29.9, delayLowPass: 6000 });
+    expect(soundChain({ voice: "hall", strength: 0.5, pitch: 0, eq: null, level: true })).toMatchObject({ ...OFF, reverbPreset: "largeHall", reverbWet: 37.5, level: true });
+    expect(soundChain({ voice: "telephone", strength: 1, pitch: 0, eq: "bright", level: false })).toMatchObject({ ...OFF, bands: [
+      { type: "highPass", frequency: 500, gain: 0, bandwidth: 1 }, { type: "lowPass", frequency: 2600, gain: 0, bandwidth: 1 }, { type: "parametric", frequency: 1800, gain: 8, bandwidth: 1 },
+      { type: "parametric", frequency: 3000, gain: 2, bandwidth: 1 }, { type: "highShelf", frequency: 6500, gain: 5, bandwidth: 1 }] });
+    // The key order is what the request is built from: the old keys stay first, in their order.
+    expect(Object.keys(soundChain({ voice: null, strength: 0.5, pitch: 0, eq: null, level: false })).slice(0, 12)).toEqual(Object.keys(OFF));
+  });
+});
+
+describe("Reduce noise", () => {
+  test("noiseWet: 50 % at the lightest, 87.5 % in the middle, everything at the strongest", () => {
+    expect([0, 0.25, 0.5, 0.75, 1].map(noiseWet)).toEqual([50, 71.875, 87.5, 96.875, 100]);
+    expect(noiseWet(-2)).toBe(50);
+    expect(noiseWet(7)).toBe(100);
+    expect(noiseWet(NaN)).toBe(50);
+    expect(noiseWet(Infinity)).toBe(50);                                       // not a number of the slider: the lightest
+    expect(noiseWet(-Infinity)).toBe(50);
+    expect(noiseWet("0.5" as unknown as number)).toBe(50);
+    for (let i = 0; i <= 100; i++) {                                           // total, inside 50 … 100, never going down
+      const w = noiseWet(i / 100);
+      expect(w).toBeGreaterThanOrEqual(50);
+      expect(w).toBeLessThanOrEqual(100);
+      if (i > 0) expect(w).toBeGreaterThanOrEqual(noiseWet((i - 1) / 100));
+    }
+  });
+
+  test("the chain carries the mix only when the setting has noise, and nothing else moves", () => {
+    expect(soundChain(set({})).noiseWet).toBe(0);
+    expect(soundChain(set({ noise: 0.5 }))).toEqual({ ...NEUTRAL, noiseWet: 87.5 });
+    expect(soundChain(set({ noise: 0 }))).toEqual({ ...NEUTRAL, noiseWet: 50 });
+    expect(soundChain(set({ voice: "deep", strength: 0.5, noise: 1 }))).toEqual({ ...NEUTRAL, pitchCents: -450, noiseWet: 100 });
+    expect(soundChain({ ...set({}), noise: "loud" as unknown as number }).noiseWet).toBe(0);   // not a number: off
+    for (const noise of [NaN, Infinity, -Infinity, null, undefined]) expect(soundChain({ ...set({}), noise: noise as unknown as number })).toEqual(NEUTRAL);
+    expect(soundChain(set({ noise: 7 })).noiseWet).toBe(100);
+    expect(soundChain(set({ noise: -7 })).noiseWet).toBe(50);
+    // The mix is the chain's last key: the request's old keys keep their order.
+    expect(Object.keys(soundChain(set({ noise: 0.5 }))).pop()).toBe("noiseWet");
+  });
+
+  test("the copy of a noise setting has its own name; two strengths are two copies", () => {
+    const src = "file:///doc/projects/p1/media/abc.m4a";
+    expect(soundFileName(src, set({ noise: 0.5 }))).toBe("abc-v1-plain-s0-p0-flat-l0-n50.m4a");
+    expect(soundFileName(src, set({ noise: 0 }))).toBe("abc-v1-plain-s0-p0-flat-l0-n0.m4a");
+    expect(soundFileName(src, { voice: "deep", strength: 0.5, pitch: -3, eq: "warm", level: true, noise: 0.75 })).toBe("abc-v1-deep-s50-pm3-warm-l1-n75.m4a");
+    expect(soundFileName(src, set({ noise: 0.5 }))).not.toBe(soundFileName(src, set({ noise: 0.6 })));
+    // Read the way the chain reads it: out of range is the end of the range, not a number is no noise part at all.
+    expect(soundFileName(src, set({ noise: 7 }))).toBe("abc-v1-plain-s0-p0-flat-l0-n100.m4a");
+    expect(soundFileName(src, set({ noise: -7 }))).toBe("abc-v1-plain-s0-p0-flat-l0-n0.m4a");
+    for (const noise of [NaN, Infinity, "loud", null, undefined]) expect(soundFileName(src, { ...set({}), noise: noise as unknown as number })).toBe("abc-v1-plain-s0-p0-flat-l0.m4a");
+    expect(soundFileName(src, set({ noise: 1 }))).toMatch(/^[A-Za-z0-9_-]+\.m4a$/);
+  });
+
+  test("a setting without noise: the chain's one new number is 0, the rest is what it was", () => {
+    const { noiseWet: mix, ...rest } = soundChain({ voice: "robot", strength: 1, pitch: 0, eq: null, level: false });
+    expect(mix).toBe(0);
+    expect(rest).toEqual({ pitchCents: -300, distortionPreset: "speechCosmicInterference", distortionWet: 30, distortionPreGain: -6, delayTime: 0.012, delayFeedback: 85, delayWet: 70,
+      delayLowPass: 8000, reverbPreset: "", reverbWet: 0, bands: [], level: false });
+  });
+
+  test("neededSounds: a noise setting needs a copy like any other", () => {
+    const p = makeProject({ audioTracks: [{ ...makeAudioTrack({ id: "v", sourceDuration: 5 }), sound: set({ noise: 0.5 }) }] });
+    expect(neededSounds(p).map((n) => n.name)).toEqual(["v-v1-plain-s0-p0-flat-l0-n50.m4a"]);
+  });
 });

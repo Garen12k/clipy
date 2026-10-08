@@ -5,7 +5,7 @@ import * as Haptics from "expo-haptics";
 import { StyleSheet } from "react-native";
 import { SPEED_CURVES } from "@/src/editor/effects";
 import { setClipSpeed, setClipSpeedCurve } from "@/src/editor/model/ops";
-import { curveSteps } from "@/src/editor/model/timeline";
+import { clipDuration, curveProfile, curveSteps, isSmoothCurve, smoothCurveSteps } from "@/src/editor/model/timeline";
 import { makeClip, makeLayer, makePhotoClip, makeProject, SPEED_CURVE_IDS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
@@ -72,7 +72,7 @@ describe("curve tiles", () => {
     await press("Curve");
     await press("Hero");
     expect(clip().speedCurve?.id).toBe("hero");
-    expect(clip().speedCurve?.steps.map((s) => s.speed)).toEqual([1, 2, 3, 0.5, 0.5, 3, 2, 1]);
+    expect(clip().speedCurve?.steps.map((s) => s.speed)).toEqual(curveProfile("hero", true));
     expect(clip().speed).toBe(1);
     expect(past()).toBe(1);
     expect(impact).toHaveBeenCalledTimes(1);
@@ -156,6 +156,7 @@ describe("curve tiles", () => {
   test("each preset draws eight bars, speed / 4 of the sparkline's height; None draws a flat line", async () => {
     await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
     await press("Curve");
+    await fireEvent(screen.getByLabelText("Smooth"), "valueChange", false);
     const h = flat("curve-spark-hero").height as number;
     expect(h).toBeGreaterThan(0);
     for (const id of SPEED_CURVE_IDS) {
@@ -225,9 +226,10 @@ describe("length label", () => {
     expect(screen.getByText("Clip length 4.0 s")).toBeTruthy();
     await press("Curve");
     expect(screen.getByText("Clip length 4.0 s")).toBeTruthy();
-    // Hero over 8 s: 1 s slices at 1, 2, 3, 0.5, 0.5, 3, 2, 1 → 1 + 0.5 + 0.333 + 2 + 2 + 0.333 + 0.5 + 1 = 7.67 s.
+    // Hero over 8 s, smooth (a new pick): 32 pieces of 0.25 s at the speeds of curveProfile("hero", true) → 6.58 s.
     await press("Hero");
-    expect(screen.getByText("Clip length 7.7 s")).toBeTruthy();
+    expect(clipDuration(clip())).toBeCloseTo(6.584331, 6);
+    expect(screen.getByText("Clip length 6.6 s")).toBeTruthy();
     await press("Normal");   // the curve warning takes the header: no length line here
     expect(screen.queryByText(/Clip length/)).toBeNull();
   });
@@ -315,4 +317,226 @@ test("the tile row keeps its offset across picks, on both tabs; the next opening
   await view.rerender(<SpeedSheet clipId="a" visible={false} onClose={() => {}} />);
   await view.rerender(<SpeedSheet clipId="a" visible onClose={() => {}} />);
   expect(rowStartX()).toBe(6 * 80 - 72);                      // opens on Curve: None, then Flash out as tile 6
+});
+
+describe("Smooth", () => {
+  const smooth = () => screen.getByLabelText("Smooth");
+  const setSmooth = (on: boolean) => fireEvent(smooth(), "valueChange", on);
+  const stepped = (id: string, seconds: number, curve: "bullet" | "flashOut") => ({ ...makeClip({ id, sourceDuration: seconds }), speedCurve: { id: curve, steps: curveSteps(curve, 0, seconds) } });
+
+  test("the Curve tab has a Smooth row of the slider row's height; the Normal tab has none", async () => {
+    await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+    expect(screen.queryByLabelText("Smooth")).toBeNull();
+    await press("Curve");
+    expect(flat("speed-smooth-row").height).toBe(36);
+    expect(flat("speed-smooth-row").paddingHorizontal).toBe(theme.space.gutter);
+    expect(screen.queryByTestId("speed-slider")).toBeNull();
+  });
+
+  test("on for a clip without a curve: a tile writes the smooth form, in one undo step", async () => {
+    await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+    await press("Curve");
+    expect(smooth().props.value).toBe(true);
+    await press("Hero");
+    expect(clip().speedCurve).toEqual({ id: "hero", steps: smoothCurveSteps("hero", 0, 8) });
+    expect(isSmoothCurve(clip())).toBe(true);
+    expect(past()).toBe(1);
+  });
+
+  test("a clip from an old project: its stepped curve is shown as it is — the switch is off, and opening the strip changes nothing", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [stepped("a", 8, "bullet")] }));
+    const stored = clip();
+    await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+    expect(tile("Bullet")).toBeSelected();
+    expect(smooth().props.value).toBe(false);
+    expect(clip()).toBe(stored);
+    expect(past()).toBe(0);
+    // Its tile again, in the form it has: still nothing.
+    await press("Bullet");
+    expect(clip()).toBe(stored);
+  });
+
+  test("opening the strip, changing tabs and closing it write nothing: the same project object, no undo step, no haptic", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [stepped("a", 8, "bullet"), makeClip({ id: "b", sourceDuration: 6 })] }));
+    const stored = useEditorStore.getState().project;
+    for (const id of ["a", "b"]) {
+      const view = await render(<SpeedSheet clipId={id} visible onClose={() => {}} />);
+      await press("Normal"); await press("Curve"); await press("Normal"); await press("Curve");
+      await view.rerender(<SpeedSheet clipId={id} visible={false} onClose={() => {}} />);
+      await view.unmount();
+    }
+    expect(useEditorStore.getState().project).toBe(stored);
+    expect(past()).toBe(0);
+    expect(impact).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBeNull();
+  });
+
+  test("the switch rewrites the clip's curve in the other form: one undo step each way, the same preset", async () => {
+    useEditorStore.getState().apply((p) => setClipSpeedCurve(p, "a", "hero"));
+    await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+    const before = past();
+    await setSmooth(true);
+    expect(clip().speedCurve).toEqual({ id: "hero", steps: smoothCurveSteps("hero", 0, 8) });
+    expect(past()).toBe(before + 1);
+    expect(tile("Hero")).toBeSelected();
+    await setSmooth(false);
+    expect(clip().speedCurve).toEqual({ id: "hero", steps: curveSteps("hero", 0, 8) });
+    expect(past()).toBe(before + 2);
+    await act(() => { useEditorStore.getState().undo(); });
+    expect(isSmoothCurve(clip())).toBe(true);
+  });
+
+  test("the switch shows the form the clip's curve has, also after an undo", async () => {
+    useEditorStore.getState().apply((p) => setClipSpeedCurve(p, "a", "hero"));
+    await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+    await setSmooth(true);
+    expect(smooth().props.value).toBe(true);
+    await act(() => { useEditorStore.getState().undo(); });
+    expect(isSmoothCurve(clip())).toBe(false);
+    expect(smooth().props.value).toBe(false);
+    expect(flat("curve-bar-hero-0").width).toBe(3);
+    // A tile now writes the form shown: stepped.
+    await press("Montage");
+    expect(clip().speedCurve).toEqual({ id: "montage", steps: curveSteps("montage", 0, 8) });
+  });
+
+  test("with no curve the switch only chooses the form of the next pick: no undo step", async () => {
+    await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+    await press("Curve");
+    await setSmooth(false);
+    expect(past()).toBe(0);
+    expect(clip().speedCurve).toBeNull();
+    expect(impact).not.toHaveBeenCalled();
+    await press("Montage");
+    expect(clip().speedCurve).toEqual({ id: "montage", steps: curveSteps("montage", 0, 8) });
+  });
+
+  test("the pictures follow the switch: 32 thin bars from the stored numbers when on, the eight bars of before when off", async () => {
+    await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+    await press("Curve");
+    const h = flat("curve-spark-hero").height as number;
+    for (const id of SPEED_CURVE_IDS) {
+      curveProfile(id, true).forEach((speed, i) => expect(flat(`curve-bar-${id}-${i}`).height).toBeCloseTo((speed / 4) * h, 10));
+      expect(screen.queryByTestId(`curve-bar-${id}-32`)).toBeNull();
+    }
+    expect(flat("curve-bar-hero-0").width).toBe(1);
+    await setSmooth(false);
+    for (const id of SPEED_CURVE_IDS) {
+      SPEED_CURVES[id].shape.forEach((speed, i) => expect(flat(`curve-bar-${id}-${i}`).height).toBeCloseTo((speed / 4) * h, 10));
+      expect(screen.queryByTestId(`curve-bar-${id}-8`)).toBeNull();
+    }
+    expect(flat("curve-bar-hero-0").width).toBe(3);
+    expect(screen.getByTestId("curve-flat-none")).toBeTruthy();
+  });
+
+  test("a clip too short for the smooth form only: the strip stays open and says how; with Smooth off the stepped form goes on", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 }), makeClip({ id: "t", sourceDuration: 0.25 })] }));
+    const onClose = jest.fn();
+    await render(<SpeedSheet clipId="t" visible onClose={onClose} />);
+    await press("Curve");
+    await press("Flash out");
+    expect(clip(1).speedCurve).toBeNull();
+    expect(past()).toBe(0);
+    expect(onClose).not.toHaveBeenCalled();                     // open, so the switch is there to flip
+    expect(useToast.getState().message).toBe("This clip is too short for a smooth curve. Switch Smooth off.");
+    expect(impact).not.toHaveBeenCalled();
+    expect(smooth().props.value).toBe(true);
+    expect(tile("None")).toBeSelected();
+    // The same strip, Smooth switched off: the eight steps fit.
+    await setSmooth(false);
+    await press("Flash out");
+    expect(clip(1).speedCurve).toEqual({ id: "flashOut", steps: curveSteps("flashOut", 0, 0.25) });
+    expect(past()).toBe(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("a clip too short for either form keeps the old refusal, Smooth on or off: the strip closes, then the speed-curve sentence", async () => {
+    // "s" (0.12 s) is too short once Flash in speeds it up, in eight steps as in 32.
+    for (const on of [true, false]) {
+      useToast.getState().clear();
+      const onClose = jest.fn();
+      const view = await render(<SpeedSheet clipId="s" visible onClose={onClose} />);
+      await press("Curve");
+      if (!on) await setSmooth(false);
+      await press("Flash in");
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(useToast.getState().message).toBe("This clip is too short for a speed curve.");
+      expect(clip(1).speedCurve).toBeNull();
+      await view.unmount();
+    }
+    expect(past()).toBe(0);
+  });
+
+  test("several clips, none long enough for the smooth form but long enough for the stepped: said for the clips, the strip stays open", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "t", sourceDuration: 0.25 }), makeClip({ id: "u", sourceDuration: 0.3 })] }));
+    const stored = useEditorStore.getState().project;
+    const onClose = jest.fn();
+    await render(<SpeedSheet clipId="t" clipIds={["t", "u"]} visible onClose={onClose} />);
+    await press("Curve");
+    await press("Flash out");
+    expect(useEditorStore.getState().project).toBe(stored);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBe("These clips are too short for a smooth curve. Switch Smooth off.");
+  });
+
+  test("the switch on a stepped clip too short for the smooth form: said once, the strip stays open, the stepped curve stays", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [stepped("t", 0.25, "flashOut")] }));
+    const stored = useEditorStore.getState().project;
+    const onClose = jest.fn();
+    await render(<SpeedSheet clipId="t" visible onClose={onClose} />);
+    await setSmooth(true);
+    expect(useEditorStore.getState().project).toBe(stored);
+    expect(past()).toBe(0);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBe("This clip is too short for a smooth curve.");   // the switch already shows off: nothing to switch
+    expect(impact).not.toHaveBeenCalled();
+    expect(smooth().props.value).toBe(false);
+  });
+
+  test("the limit is said while Smooth is on, in the header", async () => {
+    await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+    await press("Curve");
+    expect(screen.getByText("Slow parts can look choppy.")).toBeTruthy();
+    await setSmooth(false);
+    expect(screen.queryByText("Slow parts can look choppy.")).toBeNull();
+  });
+
+  test("several clips: a tile writes the form the switch shows to every clip that can take it", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 }), makeClip({ id: "b", sourceDuration: 6 }), makeClip({ id: "t", sourceDuration: 0.25 })] }));
+    await render(<SpeedSheet clipId="a" clipIds={["a", "b", "t"]} visible onClose={() => {}} />);
+    await press("Curve");
+    await press("Hero");
+    expect(isSmoothCurve(clip(0))).toBe(true);
+    expect(isSmoothCurve(clip(1))).toBe(true);
+    expect(clip(2).speedCurve).toBeNull();                      // too short for 32 steps: skipped silently
+    expect(past()).toBe(1);
+  });
+
+  test("several clips: the switch changes the form only — each clip keeps its own preset, a clip without a curve gets none", async () => {
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 }), makeClip({ id: "b", sourceDuration: 6 }), makeClip({ id: "c", sourceDuration: 6 })] }));
+    useEditorStore.getState().apply((p) => setClipSpeedCurve(setClipSpeedCurve(p, "a", "hero"), "b", "bullet"));
+    await render(<SpeedSheet clipId="a" clipIds={["a", "b", "c"]} visible onClose={() => {}} />);
+    const before = past();
+    await setSmooth(true);
+    expect(clip(0).speedCurve).toEqual({ id: "hero", steps: smoothCurveSteps("hero", 0, 8) });
+    expect(clip(1).speedCurve).toEqual({ id: "bullet", steps: smoothCurveSteps("bullet", 0, 6) });
+    expect(clip(2).speedCurve).toBeNull();
+    expect(past()).toBe(before + 1);
+  });
+
+  test("the tile row keeps its offset when the switch is flipped", async () => {
+    useEditorStore.getState().apply((p) => setClipSpeedCurve(p, "a", "flashOut"));
+    await render(<SpeedSheet clipId="a" visible onClose={() => {}} />);
+    const at = rowStartX();
+    expect(at).toBe(6 * 80 - 72);
+    const row = findRowScroll(screen.getByTestId("strip-tiles"));
+    await setSmooth(true);
+    expect(isSmoothCurve(clip())).toBe(true);
+    expect(rowStartX()).toBe(at);
+    expect(findRowScroll(screen.getByTestId("strip-tiles"))).toBe(row);   // the same row: it was not remounted
+    await setSmooth(false);
+    await press("None");
+    await setSmooth(true);
+    expect(rowStartX()).toBe(at);
+  });
 });

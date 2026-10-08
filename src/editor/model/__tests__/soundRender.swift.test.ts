@@ -153,7 +153,7 @@ test("the loudness maths is SoundMath's: nothing here computes a level, a gain o
 test("every failure names its stage, and an Error is always described", () => {
   const messages = [...render.matchAll(/SoundError\.failed\("([^"]*)"/g)].map((m) => m[1]);
   expect(messages.length).toBeGreaterThanOrEqual(10);
-  for (const m of messages) expect(m).toMatch(/^sound (open|reader|engine|output|render): /);
+  for (const m of messages) expect(m).toMatch(/^sound (open|reader|engine|output|render|noise): /);
   // A `catch` that rethrows as a SoundError carries the description of what it caught.
   const rethrown = [...render.matchAll(/catch \{ throw SoundError\.failed\(([^\n]*)\) \}/g)];
   expect(rethrown.length).toBeGreaterThanOrEqual(6);
@@ -170,10 +170,10 @@ test("nothing is force-unwrapped, force-cast or force-tried", () => {
 
 test("no type and no static name is declared twice", () => {
   const types = [...render.matchAll(/^(?:final class|struct|enum) (\w+)/gm)].map((m) => m[1]);
-  expect(types.sort()).toEqual(["SoundBand", "SoundError", "SoundJob", "SoundProbe", "SoundReader", "SoundRender", "SoundRenderRequest", "SoundSource"]);
+  expect(types.sort()).toEqual(["SoundBand", "SoundError", "SoundJob", "SoundNoise", "SoundProbe", "SoundReader", "SoundRender", "SoundRenderRequest", "SoundSource"]);
   const others = ["ExportSession.swift", "ClipyVideoModule.swift", "MediaPrePass.swift", "Transcriber.swift", "AudioMix.swift", "SoundMath.swift"].map((f) => code(read(f))).join("\n");
   for (const t of types) expect(others).not.toMatch(new RegExp(`(?:class|struct|enum) ${t}\\b`));
-  for (const owner of ["SoundRender", "SoundProbe"]) {
+  for (const owner of ["SoundRender", "SoundProbe", "SoundNoise"]) {
     const body = between(render, `enum ${owner} {`, "\n}\n");
     const values = [...body.matchAll(/static (?:let|var) (\w+)/g)].map((m) => m[1]);
     const funcs = [...body.matchAll(/static func (\w+)\(/g)].map((m) => m[1]);
@@ -262,4 +262,96 @@ test("the export skips a video without sound that sits on the audio row, and sti
   const guardElse = between(loop, "guard let srcAudio = try await audioAsset.loadTracks(withMediaType: .audio).first else {", "\n      }");
   expect(guardElse).toContain("if !pictures.isEmpty { continue }");
   expect(loop.match(/pictures/g)).toHaveLength(2);
+});
+
+describe("Reduce noise (SoundNoise)", () => {
+  const noise = between(render, "enum SoundNoise {", "\n}\n");
+  const renderSoundFn = between(moduleSwift, 'AsyncFunction("renderSound")', "\n    }\n");
+  const make = between(noise, "static func make(", "\n  }\n");
+
+  test("the unit is made the way the probe proved: found, instantiated with await, given the format before the engine sees it", () => {
+    expect(noise).toContain("kAudioUnitType_Effect");
+    expect(noise).toContain("kAudioUnitSubType_AUSoundIsolation");
+    expect(noise).toContain("kAudioUnitManufacturer_Apple");
+    expect(noise).toContain("AudioComponentFindNext(nil, &wanted)");
+    expect(make).toMatch(/static func make\(wet: Double, format: AVAudioFormat\) async throws -> AVAudioUnit/);
+    expect(make).toContain("try await AVAudioUnit.instantiate(with: component(), options: [])");
+    expect(make).toContain("try SoundProbe.accepts(unit, format: format)");
+    expect(make.indexOf("isOnThisPhone()")).toBeLessThan(make.indexOf("AVAudioUnit.instantiate"));
+    expect(make.indexOf("AVAudioUnit.instantiate")).toBeLessThan(make.indexOf("SoundProbe.accepts"));
+    expect(make.indexOf("SoundProbe.accepts")).toBeLessThan(make.indexOf("kAUSoundIsolationParam_WetDryMixPercent"));
+    // The description is the probe's own, field for field.
+    const probed = /AudioComponentDescription\(([^)]*)\)/.exec(between(render, "enum SoundProbe {", "\n}\n"))?.[1].replace(/\s+/g, " ");
+    const made = /AudioComponentDescription\(([^)]*)\)/.exec(noise)?.[1].replace(/\s+/g, " ");
+    expect(made).toBeDefined();
+    expect(made).toBe(probed);
+  });
+
+  test("the strength is set through the parameter tree, else through AudioUnitSetParameter, and a failure is said — never a render at another strength", () => {
+    expect(make).toContain("parameter(withAddress: AUParameterAddress(kAUSoundIsolationParam_WetDryMixPercent))");
+    expect(make).toContain("AudioUnitSetParameter(unit.audioUnit, kAUSoundIsolationParam_WetDryMixPercent, kAudioUnitScope_Global, 0,");
+    expect(make).toContain('throw SoundError.failed("sound noise: the strength could not be set (\\(status))")');
+    expect(make).toContain("SoundRender.bounded(wet, 0, 100)");
+    // A strength that is not a number is refused before anything is made: `bounded` would let a NaN through.
+    expect(make).toContain('guard wet.isFinite else { throw SoundError.failed("sound noise: the strength is not a number") }');
+    expect(make.indexOf("guard wet.isFinite")).toBeLessThan(make.indexOf("SoundRender.bounded(wet, 0, 100)"));
+  });
+
+  test("every failure of the unit has the noise stage", () => {
+    const thrown = [...noise.matchAll(/SoundError\.failed\("([^"]*)/g)].map((m) => m[1]);
+    expect(thrown.length).toBeGreaterThanOrEqual(4);
+    for (const text of thrown) expect(text.startsWith("sound noise: ")).toBe(true);
+    expect((noise.match(/ExportSession\.describe\(error\)/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // Every `try` of it is inside a do / catch that restages the error; nothing is forced.
+    expect(make.match(/\btry\b/g)?.length).toBe(make.match(/\bdo \{/g)?.length);
+    expect(make.match(/catch \{ throw SoundError\.failed\("sound noise: " \+ ExportSession\.describe\(error\)\) \}/g)?.length).toBe(make.match(/\bdo \{/g)?.length);
+    // The module passes a SoundError's own text on unchanged, so the stage reaches the app.
+    expect(between(render, "static func message(", "\n  }\n")).toContain("if let own = error as? SoundError, let text = own.errorDescription { return text }");
+  });
+
+  test("nothing newer than iOS 16.4 is named: no high-quality sound type, no availability check needed", () => {
+    expect(noise).not.toContain("HighQuality");
+    expect(noise).not.toContain("kAUSoundIsolationParam_SoundToIsolate");
+    expect(noise).not.toContain("#available");
+    expect(noise).not.toContain("withAudioUnit");   // iOS 27
+  });
+
+  test("the render puts the unit FIRST, before the request's own units, and a request without noise makes none", () => {
+    // `lead` is a defaulted parameter: a caller that does not name it gets the chain of before.
+    expect(renderFn).toMatch(/static func render\(_ request: SoundRenderRequest, source: SoundSource, lead: \[AVAudioNode\] = \[\], to outputURL: URL, job: SoundJob,/);
+    expect(renderFn).toContain("let chain: [AVAudioNode] = lead + units(for: request)");
+    expect(renderFn.match(/\blead\b/g)).toHaveLength(2);
+    // The loop takes the chain in order and connects each unit after the one before it, the first after the player.
+    expect(renderFn).toContain("SoundRender.process(source, units: chain,");
+    expect(processFn).toContain("var previous: AVAudioNode = player\n    for unit in units {\n      engine.attach(unit)\n      engine.connect(previous, to: unit, format: format)\n      previous = unit\n    }");
+    // Its latency is counted with the other units'.
+    expect(processFn).toContain("for unit in units { latencySeconds += unit.latency }");
+    expect(renderSoundFn).toContain("var lead: [AVAudioNode] = []");
+    expect(renderSoundFn).toContain("if request.noiseWet.isFinite, request.noiseWet > 0 {");
+    expect(renderSoundFn).toContain("try await SoundNoise.make(wet: request.noiseWet, format: noiseFormat)");
+    expect(renderSoundFn).toContain("try SoundRender.render(request, source: source, lead: lead, to: outputURL, job: job, progress:");
+    expect(renderSoundFn.indexOf("SoundNoise.make")).toBeLessThan(renderSoundFn.indexOf("SoundRender.render("));
+    // The unit is made in the render format, inside the `if`, and nowhere else.
+    const branch = between(renderSoundFn, "if request.noiseWet.isFinite, request.noiseWet > 0 {", "\n          }");
+    expect(branch).toContain("AVAudioFormat(standardFormatWithSampleRate: SoundRender.sampleRate, channels: 2)");
+    expect(branch).toContain("SoundNoise.make(");
+    expect(branch).toContain("lead.append(isolation)");
+    expect(moduleSwift.match(/SoundNoise\.make\(/g)).toHaveLength(1);
+    expect(render.match(/SoundNoise\./g)).toBeNull();
+    // The loop itself is the one the probe ran: untouched, synchronous.
+    expect(processFn).not.toContain("await");
+    expect(renderFn).not.toContain("await");
+    expect(between(render, "static func units(", "\n  }\n")).not.toContain("noiseWet");
+  });
+
+  test("the module says whether this iPhone has the unit: synchronously, without making one", () => {
+    expect(moduleSwift).toContain('Function("noiseAvailable") { () -> Bool in');
+    expect(moduleSwift).not.toContain('AsyncFunction("noiseAvailable")');
+    expect(between(moduleSwift, 'Function("noiseAvailable")', "\n    }")).toContain("return SoundNoise.isOnThisPhone()");
+    const has = between(noise, "static func isOnThisPhone(", "\n  }\n");
+    expect(has.split("{")[0]).toBe("static func isOnThisPhone() -> Bool ");
+    expect(has).toContain("return AudioComponentFindNext(nil, &wanted) != nil");
+    expect(has).not.toMatch(/instantiate|AVAudioEngine|\btry\b|await/);
+    expect(wrapper).toContain("m.noiseAvailable() === true");
+  });
 });

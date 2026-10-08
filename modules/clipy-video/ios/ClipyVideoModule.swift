@@ -56,6 +56,24 @@ public class ClipyVideoModule: Module {
     return soundJobs[id]
   }
 
+  private let speechLock = NSLock()
+  private var speechJobs: [String: SpeechJob] = [:]   // guarded by `speechLock`; a job is held here until it has answered
+
+  private func storeSpeechJob(_ id: String, _ job: SpeechJob) {
+    speechLock.lock(); defer { speechLock.unlock() }
+    speechJobs[id] = job
+  }
+
+  private func dropSpeechJob(_ id: String) {
+    speechLock.lock(); defer { speechLock.unlock() }
+    speechJobs[id] = nil
+  }
+
+  private func lookupSpeechJob(_ id: String) -> SpeechJob? {
+    speechLock.lock(); defer { speechLock.unlock() }
+    return speechJobs[id]
+  }
+
   public func definition() -> ModuleDefinition {
     Name("ClipyVideo")
     Events("onExportEvent", "onSoundEvent")
@@ -140,8 +158,16 @@ public class ClipyVideoModule: Module {
         do {
           guard let outputURL = ExportSession.fileURL(from: request.outputPath) else { throw SoundError.failed("sound output: not a file path") }
           let source = try await SoundSource.open(request.sourceUri)
+          // Reduce noise: the isolation unit goes first. Making it is the one async step, so it is made here and
+          // handed to the synchronous render. No noise in the request → no unit, and the render is the old one.
+          var lead: [AVAudioNode] = []
+          if request.noiseWet.isFinite, request.noiseWet > 0 {
+            guard let noiseFormat = AVAudioFormat(standardFormatWithSampleRate: SoundRender.sampleRate, channels: 2) else { throw SoundError.failed("sound engine: no audio format") }
+            let isolation: AVAudioUnit = try await SoundNoise.make(wet: request.noiseWet, format: noiseFormat)
+            lead.append(isolation)
+          }
           var lastSent = -1.0
-          let result = try SoundRender.render(request, source: source, to: outputURL, job: job, progress: { (fraction: Double) -> Void in
+          let result = try SoundRender.render(request, source: source, lead: lead, to: outputURL, job: job, progress: { (fraction: Double) -> Void in
             guard fraction - lastSent >= 0.02 else { return }   // at most ~50 events a render
             lastSent = fraction
             self?.sendEvent("onSoundEvent", ["jobId": jobId, "progress": fraction])
@@ -159,6 +185,12 @@ public class ClipyVideoModule: Module {
     // Stops that render at its next pass (it then rejects "E_SOUND_CANCELLED"). An unknown or finished job: nothing.
     Function("cancelSoundRender") { (jobId: String) in
       self.lookupSoundJob(jobId)?.cancel()
+    }
+
+    // Whether this iPhone has Apple's sound isolation unit. Its presence also tells the app that this build knows
+    // the request's `noiseWet` (a build without this function would ignore the number and render without the unit).
+    Function("noiseAvailable") { () -> Bool in
+      return SoundNoise.isOnThisPhone()
     }
 
     // Whether the file has a sound track at all (a silent screen recording has none), and how long the file is.
@@ -186,6 +218,45 @@ public class ClipyVideoModule: Module {
         let answer: [String: Any] = await SoundProbe.run(uri)
         promise.resolve(answer)
       }
+    }
+
+    // The voices installed on this iPhone and the phone's own language code (see SpeechRender.voices).
+    AsyncFunction("listVoices") { (promise: Promise) in
+      let answer: [String: Any] = ["current": AVSpeechSynthesisVoice.currentLanguageCode(), "voices": SpeechRender.voices()]
+      promise.resolve(answer)
+    }
+
+    // Read aloud: speaks `text` with the voice into `outputPath` (the voice's own PCM, a .caf). Resolves
+    // `{ fileUri, seconds }`. Rejects "E_READ_ALOUD_CANCELLED" after `cancelSpeech(jobId)`, else "E_READ_ALOUD" with
+    // a staged message. The job is stored before it starts, so a cancel that comes at once finds it; the job answers
+    // exactly once (SpeechJob.end).
+    AsyncFunction("speakToFile") { (request: SpeechRequest, promise: Promise) in
+      guard let outputURL = ExportSession.fileURL(from: request.outputPath) else {
+        promise.reject("E_READ_ALOUD", "speech output: not a file path")
+        return
+      }
+      let jobId = request.jobId
+      let job = SpeechJob(outputURL: outputURL, done: { [weak self] (outcome: Result<Double, Error>) -> Void in
+        self?.dropSpeechJob(jobId)
+        switch outcome {
+        case .success(let seconds):
+          let answer: [String: Any] = ["fileUri": outputURL.absoluteString, "seconds": seconds]
+          promise.resolve(answer)
+        case .failure(let error):
+          if let own = error as? SpeechError, case .cancelled = own {
+            promise.reject("E_READ_ALOUD_CANCELLED", "Speech cancelled")
+          } else {
+            promise.reject("E_READ_ALOUD", SpeechRender.message(error))
+          }
+        }
+      })
+      self.storeSpeechJob(jobId, job)
+      job.start(text: request.text, voiceId: request.voiceId, rate: request.rate)
+    }
+
+    // Stops that Read aloud (it then rejects "E_READ_ALOUD_CANCELLED"). An unknown or finished job: nothing.
+    Function("cancelSpeech") { (jobId: String) in
+      self.lookupSpeechJob(jobId)?.cancel()
     }
   }
 }

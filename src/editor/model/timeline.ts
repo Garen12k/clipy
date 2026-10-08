@@ -19,6 +19,45 @@ export function curveSteps(id: SpeedCurveId, trimStart: number, trimEnd: number)
   return SPEED_CURVES[id].shape.slice(0, SPEED_CURVE_LIMITS.slices).map((speed, i) => ({ from: trimStart + i * slice, speed: clampNum(speed, SPEED_LIMITS[0], SPEED_LIMITS[1]) }));
 }
 
+/** Smooth ramps: every one of a preset's slices is cut into this many pieces (8 × 4 = 32 steps, under SPEED_CURVE_LIMITS.maxSteps). */
+export const SMOOTH_PER_SLICE = 4;
+const r4 = (v: number): number => Math.round(v * 1e4) / 1e4;
+/**
+ * A preset's speed at position `u` (0 … 1 along the clip) when it is smooth: each slice's speed sits at the slice's centre, a
+ * straight line joins neighbouring centres, and before the first / after the last centre the edge speed holds. Total: a position
+ * that is not a number counts as the start, and a shape without speeds plays at 1.
+ */
+export function smoothSpeedAt(shape: readonly number[], u: number): number {
+  if (shape.length === 0) return 1;
+  const last = shape.length - 1;
+  const x = u * shape.length - 0.5;
+  if (!(x > 0)) return shape[0];
+  if (x >= last) return shape[last];
+  const i = Math.floor(x);
+  return shape[i] + (shape[i + 1] - shape[i]) * (x - i);
+}
+/**
+ * The speeds of a preset's pieces in source order, clamped to SPEED_LIMITS: its eight slice speeds, or — smooth — 32, each the
+ * smooth speed at its piece's centre (4 decimals). What a tile draws and what a pick stores are both this list.
+ */
+export function curveProfile(id: SpeedCurveId, smooth: boolean): number[] {
+  const shape = SPEED_CURVES[id].shape.slice(0, SPEED_CURVE_LIMITS.slices).map((speed) => clampNum(speed, SPEED_LIMITS[0], SPEED_LIMITS[1]));
+  if (!smooth) return shape;
+  const pieces = shape.length * SMOOTH_PER_SLICE;
+  return Array.from({ length: pieces }, (_, j) => r4(smoothSpeedAt(shape, (j + 0.5) / pieces)));
+}
+/**
+ * The smooth form of a preset: equal pieces of [trimStart, trimEnd] with the speeds of `curveProfile(id, true)`. Like `curveSteps`
+ * it does not judge the range: one too short (or empty, or not a number) is refused where the curve is stored (`presetCurve`, ops.ts).
+ */
+export function smoothCurveSteps(id: SpeedCurveId, trimStart: number, trimEnd: number): SpeedStep[] {
+  const speeds = curveProfile(id, true);
+  const piece = (trimEnd - trimStart) / speeds.length;
+  return speeds.map((speed, j) => ({ from: trimStart + j * piece, speed }));
+}
+/** True when the clip's curve is a smooth ramp: it holds more steps than a stepped preset has (the app stores exactly 8 or exactly 32). */
+export const isSmoothCurve = (c: Pick<Clip, "speedCurve">): boolean => !!c.speedCurve && c.speedCurve.steps.length > SPEED_CURVE_LIMITS.slices;
+
 /**
  * The clip's source range cut into constant-speed spans in SOURCE order, covering exactly [trimStart, trimEnd]: one span for a
  * constant-speed clip. Zero-length spans are omitted — except that a clip with no length at all still gets its one (empty) span,

@@ -13,6 +13,7 @@ import { Body, ValueLabel } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow } from "./ColorRow";
 import { FontStrip } from "./FontStrip";
+import { ReadAloudSection } from "./ReadAloudSection";
 import { TemplateStrip, TEXT_TEMPLATE_TILES } from "./TemplateStrip";
 import { TextStyleSection } from "./TextStyleSection";
 
@@ -62,6 +63,8 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
         style={{ ...field, minHeight: 64, textAlignVertical: "top" }} placeholder="Your text" placeholderTextColor={theme.colors.textMuted} />
       {/* Templates are for texts only (`applyTextTemplate` refuses captions, which have their own presets). */}
       {overlay.kind === "text" && <TemplateStrip tiles={TEXT_TEMPLATE_TILES} onPick={(templateId) => apply((x) => applyTextTemplate(x, id, templateId))} />}
+      {/* Read aloud is for texts only: a caption is already somebody speaking. */}
+      {overlay.kind === "text" && <ReadAloudSection overlayId={id} />}
       <FontStrip value={overlay.fontId} onChange={(fontId) => patch({ fontId })} />
       <TextStyleSection style={overlay.style} outline={overlay.outline} background={overlay.background} boxOpacityTestID="opacity-slider"
         onBegin={beginTransaction} onPatch={patchStyle} onPatchTransient={patchStyleTransient}

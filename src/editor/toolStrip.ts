@@ -4,8 +4,8 @@ import { useEditorStore } from "./store";
 import { selectionKey } from "./toolbarContext";
 
 export type StripId = "filter" | "adjust" | "speed" | "volume" | "opacity" | "mask" | "blend" | "chroma" | "transform" | "background"
-  | "clipAnimation" | "overlayAnimation" | "transition" | "ratio" | "audioFade" | "audioVolume" | "effectStrength" | "effect" | "trim" | "photoMotion" | "soundQuality";
-export type PanelId = "beats" | "templates" | "captions" | "addAudio" | "sticker" | "text" | "stickerEdit" | "collage" | "cover" | "voice";
+  | "clipAnimation" | "overlayAnimation" | "transition" | "ratio" | "audioFade" | "audioVolume" | "effectStrength" | "effect" | "trim" | "photoMotion";
+export type PanelId = "beats" | "templates" | "captions" | "addAudio" | "sticker" | "text" | "stickerEdit" | "collage" | "cover" | "voice" | "soundQuality";
 export type OpenToolId = StripId | PanelId;
 /** `key` = the selection key when it opened. Nothing else is remembered: a tool reads its item from the selection on every render. */
 export type OpenStrip = { id: OpenToolId; key: string };

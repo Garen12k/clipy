@@ -29,6 +29,7 @@ struct SoundRenderRequest: Record {
   @Field var reverbWet: Double = 0
   @Field var bands: [SoundBand] = []
   @Field var level: Bool = false
+  @Field var noiseWet: Double = 0                  // Reduce noise: the isolation unit's wet/dry mix in percent; 0 = no unit
 }
 
 enum SoundError: Error, LocalizedError {
@@ -421,7 +422,8 @@ enum SoundRender {
 
   /// One whole render: measure (if asked), process, write AAC under a `part-` name, move it into place. On any
   /// failure or cancel the partial file is removed and nothing is left at `outputURL` that was not there before.
-  static func render(_ request: SoundRenderRequest, source: SoundSource, to outputURL: URL, job: SoundJob,
+  /// `lead` are units placed first in the chain, in order (none unless the caller names them).
+  static func render(_ request: SoundRenderRequest, source: SoundSource, lead: [AVAudioNode] = [], to outputURL: URL, job: SoundJob,
                      progress: (Double) -> Void) throws -> (seconds: Double, gainDb: Double) {
     guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2) else { throw SoundError.failed("sound engine: no audio format") }
     while !gate.lock(before: Date(timeIntervalSinceNow: 0.05)) {
@@ -442,7 +444,8 @@ enum SoundRender {
     defer { if !finished { try? FileManager.default.removeItem(at: partURL) } }
 
     let settings: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 2, AVEncoderBitRateKey: bitRate]
-    let chain: [AVAudioNode] = units(for: request)
+    // `lead` = units that go before the request's own (Reduce noise: the isolation unit, made by the caller because making it is async).
+    let chain: [AVAudioNode] = lead + units(for: request)
     let linearGain: Double = SoundMath.dbToGain(gainDb)
     // The file lives only inside this scope: leaving it releases the file, which finishes it — before it is moved.
     let frames: Int = try autoreleasepool { () throws -> Int in
@@ -466,6 +469,45 @@ enum SoundRender {
     catch { throw SoundError.failed("sound output: " + ExportSession.describe(error)) }
     finished = true
     return (seconds: Double(frames) / sampleRate, gainDb: gainDb)
+  }
+}
+
+/// Reduce noise: Apple's sound isolation unit, FIRST in a render's chain (it is trained on natural speech, so it
+/// must hear the recording before pitch, echo or filters change it). Made exactly as the probe proved on the phone
+/// (`SoundProbe`): instantiated with `AVAudioUnit.instantiate` (a failure is an error, not a crash), then given the
+/// render format on its first input and output bus BEFORE the engine connects it (a refusal is an error too).
+enum SoundNoise {
+  static func component() -> AudioComponentDescription {
+    return AudioComponentDescription(componentType: kAudioUnitType_Effect, componentSubType: kAudioUnitSubType_AUSoundIsolation,
+                                     componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0)
+  }
+
+  /// Whether this iPhone has the unit at all. Only looks the component up: nothing is instantiated.
+  static func isOnThisPhone() -> Bool {
+    var wanted: AudioComponentDescription = component()
+    return AudioComponentFindNext(nil, &wanted) != nil
+  }
+
+  /// The unit, ready for the engine: `wet` percent of the isolated voice (0 … 100), the render format taken.
+  /// Throws `sound noise: …`. It never returns a unit whose strength is not the one asked for.
+  static func make(wet: Double, format: AVAudioFormat) async throws -> AVAudioUnit {
+    guard wet.isFinite else { throw SoundError.failed("sound noise: the strength is not a number") }
+    guard isOnThisPhone() else { throw SoundError.failed("sound noise: the sound isolation unit is not on this iPhone") }
+    let unit: AVAudioUnit
+    do { unit = try await AVAudioUnit.instantiate(with: component(), options: []) }
+    catch { throw SoundError.failed("sound noise: " + ExportSession.describe(error)) }
+    do { try SoundProbe.accepts(unit, format: format) }
+    catch { throw SoundError.failed("sound noise: " + ExportSession.describe(error)) }
+    let percent: Float = Float(SoundRender.bounded(wet, 0, 100))
+    if let tree = unit.auAudioUnit.parameterTree,
+       let mix = tree.parameter(withAddress: AUParameterAddress(kAUSoundIsolationParam_WetDryMixPercent)) {
+      mix.value = percent
+      return unit
+    }
+    // No parameter tree, or no such parameter in it: the older way of setting the same number.
+    let status: OSStatus = AudioUnitSetParameter(unit.audioUnit, kAUSoundIsolationParam_WetDryMixPercent, kAudioUnitScope_Global, 0, percent, 0)
+    guard status == noErr else { throw SoundError.failed("sound noise: the strength could not be set (\(status))") }
+    return unit
   }
 }
 
