@@ -1,12 +1,12 @@
 import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
-import { clipAt, clipDuration, clipStartTimes, curveSteps, findItem, hasSpeedCurve, layerEnd, sourceAfter, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
+import { clipAt, clipDuration, clipStartTimes, curveSteps, findItem, hasSpeedCurve, isSmoothCurve, layerEnd, smoothCurveSteps, sourceAfter, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
   clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, activePhotoMotion, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
-  LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
+  LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_LIMITS, TRANSITION_LIMITS,
   clampPhotoMotion, clampSound, COMBO_AS_MOTION, NO_SOUND, type PhotoMotion, type SoundSettings, type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
   type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
@@ -598,9 +598,10 @@ export function setClipSpeed(p: Project, clipId: string, speed: number): Project
 /**
  * A preset writes its steps across the clip's current [trimStart, trimEnd] and sets `speed` to 1; `null` clears the curve (speed
  * stays 1). Same project when nothing changes (the same preset with the same steps, or clearing no curve). Refused: photos, an unknown
- * id, and a curve that would leave the clip shorter than MIN_CLIP_SECONDS.
+ * id, and a curve that would leave the clip shorter than MIN_CLIP_SECONDS. `smooth` writes the preset as a gradual ramp
+ * (`smoothCurveSteps`, 32 steps) instead of eight steps; it needs a longer clip (32 steps of at least `minStep`).
  */
-export function setClipSpeedCurve(p: Project, clipId: string, id: SpeedCurveId | null): Project {
+export function setClipSpeedCurve(p: Project, clipId: string, id: SpeedCurveId | null, smooth = false): Project {
   if (id !== null && !(SPEED_CURVE_IDS as readonly string[]).includes(id)) return p;
   const min = findItem(p, clipId)?.layer ? LAYER_LIMITS.minDuration : MIN_CLIP_SECONDS;
   return updateClip(p, clipId, (c) => {
@@ -612,7 +613,7 @@ export function setClipSpeedCurve(p: Project, clipId: string, id: SpeedCurveId |
       // never under the slowest speed there is.
       return { ...c, speedCurve: null, speed: clamp(cappedSpeed(c, 1, min), SPEED_LIMITS) };
     }
-    const speedCurve = presetCurve(c, id, c.trimStart, c.trimEnd);
+    const speedCurve = presetCurve(c, id, c.trimStart, c.trimEnd, smooth);
     if (!speedCurve) return c;
     if (c.speed === 1 && sameJson(speedCurve, c.speedCurve)) return c;
     const next = { ...c, speed: 1, speedCurve };
@@ -621,12 +622,14 @@ export function setClipSpeedCurve(p: Project, clipId: string, id: SpeedCurveId |
 }
 
 /**
- * The preset's steps across [trimStart, trimEnd], through the sanity rule so what is stored reloads unchanged. Null when the range
- * is too short to hold every slice (the sanity rule merges steps under `minStep`): a collapsed curve is never stored.
+ * The preset's steps across [trimStart, trimEnd] — eight, or 32 when `smooth` — through the sanity rule so what is stored reloads
+ * unchanged. Null when the range is too short to hold every step (the sanity rule merges steps under `minStep`): a collapsed curve
+ * is never stored.
  */
-function presetCurve(c: Pick<Clip, "kind">, id: SpeedCurveId, trimStart: number, trimEnd: number): SpeedCurve | null {
-  const curve = clampSpeedCurve({ id, steps: curveSteps(id, trimStart, trimEnd) }, c);
-  return curve && curve.steps.length >= SPEED_CURVE_LIMITS.slices ? curve : null;
+function presetCurve(c: Pick<Clip, "kind">, id: SpeedCurveId, trimStart: number, trimEnd: number, smooth = false): SpeedCurve | null {
+  const steps = smooth ? smoothCurveSteps(id, trimStart, trimEnd) : curveSteps(id, trimStart, trimEnd);
+  const curve = clampSpeedCurve({ id, steps }, c);
+  return curve && curve.steps.length >= steps.length ? curve : null;
 }
 
 export function setClipFilter(p: Project, clipId: string, filter: FilterId | null): Project {
@@ -891,7 +894,7 @@ function replacedMedia(old: Clip, media: Pick<Clip, "sourceUri" | "sourceDuratio
     // Same speed (or the same curve, re-applied below), so the new clip takes the old clip's SOURCE span where the new media allows it.
     const trimEnd = Math.min(media.sourceDuration, old.trimEnd - old.trimStart);
     // A curve's steps sit on the old media's source times: the same preset is written again across the new range.
-    const speedCurve = old.speedCurve ? presetCurve(base, old.speedCurve.id, 0, trimEnd) : null;
+    const speedCurve = old.speedCurve ? presetCurve(base, old.speedCurve.id, 0, trimEnd, isSmoothCurve(old)) : null;
     next = { ...base, sourceDuration: media.sourceDuration, trimEnd, speedCurve };
   }
   if (next.kind !== "photo") delete next.motion;   // a Motion belongs to photos only; the key goes, it is never undefined
