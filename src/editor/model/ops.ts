@@ -1087,6 +1087,20 @@ export function setClipChroma(p: Project, id: string, chroma: ChromaKey | null):
 }
 
 /**
+ * Remove background on or off for a main clip or a layer (photo or video). On writes `cutout: true`; off removes the key. Refused
+ * (same project) for an unknown id, a reversed clip, and a value that is already in place.
+ */
+export function setClipCutout(p: Project, id: string, on: boolean): Project {
+  return updateClip(p, id, (c) => {
+    if (on) return c.cutout === true || c.reversed ? c : { ...c, cutout: true as const };
+    if (c.cutout === undefined) return c;
+    const next = { ...c };
+    delete next.cutout;
+    return next;
+  });
+}
+
+/**
  * Splits the video clip under `outputTime` and puts a still (PHOTO.freezeSeconds long) between the halves. The still copies the clip's
  * filter, crop, background, opacity, mask and green screen (its blend is normal: it is a main-track clip), and its transform — of a keyframed clip the placement shown at the freeze moment; the right half keeps the original transition. Refused (same project) on a photo, a missing clip,
  * or within MIN_CLIP_SECONDS of either end. Overlays and music are not shifted, like every other length-changing op here.

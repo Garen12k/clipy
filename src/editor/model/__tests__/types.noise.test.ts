@@ -1,8 +1,8 @@
 import { setTrackSound } from "../ops";
 import { clampSound, isNeutralSound, makeAudioTrack, makeProject, NO_SOUND, NOISE_LIMITS, SCHEMA_VERSION, type SoundSettings } from "../types";
 
-test("schema is v19; the noise strength runs 0–1 and starts in the middle; the sound as recorded has no noise key", () => {
-  expect(SCHEMA_VERSION).toBe(19);
+test("schema is v20; the noise strength runs 0–1 and starts in the middle; the sound as recorded has no noise key", () => {
+  expect(SCHEMA_VERSION).toBe(20);
   expect(NOISE_LIMITS).toEqual({ strength: [0, 1], defaultStrength: 0.5 });
   expect("noise" in NO_SOUND).toBe(false);
   expect("sound" in makeAudioTrack({ id: "m", sourceDuration: 5 })).toBe(false);
