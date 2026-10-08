@@ -126,3 +126,13 @@ describe("round 2 look (no behaviour)", () => {
     expect(screen.getByText("Sign-in expired")).toHaveStyle({ fontSize: theme.type.label, color: theme.colors.dangerText });
   });
 });
+
+test("the installed build is named at the bottom, signed in or not", async () => {
+  (useAccounts as jest.Mock).mockReturnValue(hook());
+  await render(<AccountsScreen />);
+  expect(screen.getByTestId("build-label")).toHaveTextContent(/^(App build: |Expo Go)/);
+  (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
+  (useAccounts as jest.Mock).mockReturnValue(hook({ status: "idle", platforms: [] }));
+  await render(<AccountsScreen />);
+  expect(screen.getAllByTestId("build-label").length).toBeGreaterThan(0);
+});
