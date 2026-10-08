@@ -150,7 +150,9 @@ test("Speed: re-picking the current speed is silent; a refused curve gets the la
   expect(onClose).not.toHaveBeenCalled();
   expect(useToast.getState().message).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "Curve" }));
-  // Bullet over L's 2 s of source plays for about 2.1 s (its slow middle): past 2 s it would be a third video at once.
+  // Bullet in steps (Smooth off; a smooth Bullet is shorter and fits) over L's 2 s of source plays for about 2.1 s (its slow middle):
+  // past 2 s it would be a third video at once.
+  await fireEvent(screen.getByLabelText("Smooth"), "valueChange", false);
   expect(clipDuration(layer(setClipSpeedCurve(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 8 })], layers: [layerNow()] }), "L", "bullet"), "L"))).toBeGreaterThan(2);
   await fireEvent.press(screen.getByRole("button", { name: SPEED_CURVES.bullet.label }));
   expect(layerNow().speedCurve).toBeNull();
