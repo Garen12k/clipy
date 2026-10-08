@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
-import { addTextOverlay, canSplitAudioAt, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, dropEmptyText, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, duplicateOverlay, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitAudioTrackAt, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
+import { isSoundAvailable } from "@/modules/clipy-video";
+import { addTextOverlay, canSplitAudioAt, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, dropEmptyText, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, duplicateOverlay, extractedTrackOf, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitAudioTrackAt, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
 import { clipAt, findItem, itemOffsetAt } from "@/src/editor/model/timeline";
 import { AUDIO_LIMITS, makeOverlay } from "@/src/editor/model/types";
+import { SOUND_UNAVAILABLE } from "@/src/editor/soundRenders";
 import { useEditorStore } from "@/src/editor/store";
 import { useClipMedia } from "@/src/editor/useClipMedia";
 import { useItemClip } from "@/src/editor/useItem";
 import { useFreezeFrame } from "@/src/editor/useFreezeFrame";
+import { EXTRACT_MESSAGES, useExtractAudio } from "@/src/editor/useExtractAudio";
 import { TOOL_META, type IoniconName } from "@/src/editor/toolGroups";
 import { contextFor, selectionKey, type Section, type SelectionState, type ToolbarSelection, type ToolId } from "@/src/editor/toolbarContext";
 import { laneLift, laneModel } from "@/src/editor/timelineLayout";
@@ -40,6 +43,7 @@ import { EffectSheet } from "./EffectSheet";
 import { EffectStrengthSheet } from "./EffectStrengthSheet";
 import { OverlayAnimationSheet } from "./OverlayAnimationSheet";
 import { RatioSheet } from "./RatioSheet";
+import { SoundQualitySheet } from "./SoundQualitySheet";
 import { SpeedSheet } from "./SpeedSheet";
 import { FilterSheet } from "./FilterSheet";
 import { MaskSheet } from "./MaskSheet";
@@ -53,6 +57,7 @@ import { TextPanel } from "./TextPanel";
 import { TransformSheet } from "./TransformSheet";
 import { TransitionSheet } from "./TransitionSheet";
 import { TrimSheet } from "./TrimSheet";
+import { VoiceSheet } from "./VoiceSheet";
 import { VolumeSheet } from "./VolumeSheet";
 
 /** A sound could not be copied or cut in two: the project already has every track it may have. */
@@ -67,7 +72,7 @@ const selOf = (s: SelectionState, section: Section): ToolbarSelection => ({ clip
  * only gives each tool its action), a back arrow on every bar but the main one, and — in the bar's place — the open tool strip.
  * A tool that does not apply is not on the bar; the only disabled buttons are momentary (Keyframe off its item, a sound's Split where
  * the white line cannot cut it, Replace / Overlay / Collage
- * during a pick, Freeze during a capture). The height is explicit; while a strip shows the area grows upwards over the timeline's
+ * during a pick, Freeze during a capture, Extract audio / Voice / Sound while a clip's file is asked whether it has sound). The height is explicit; while a strip shows the area grows upwards over the timeline's
  * lowest lanes (a negative top margin) instead of pushing the preview. The root must stay a direct child of the screen, after the timeline.
  * A tall panel (`ToolPanel`) takes the bar's place too, at its own explicit height and without a lift: the editor's layout hides the timeline then.
  * While a tool has the keyboard the bottom padding is the keyboard's height instead of the safe area's, and a strip is not lifted either.
@@ -119,6 +124,10 @@ export function EditorToolbar() {
   const insets = useSafeAreaInsets();
   const { replaceMedia, addOverlay, busy: mediaBusy } = useClipMedia();
   const { freeze, busy: freezeBusy } = useFreezeFrame();
+  const { extract, busy: extractBusy } = useExtractAudio();
+  // The file question of a Voice / Sound tap on a clip may be answered after the editor was left: nothing is opened or said then.
+  const here = useRef(true);
+  useEffect(() => { here.current = true; return () => { here.current = false; }; }, []);
 
   // Keyframe acts on the selected text / sticker, else on the selected clip / layer.
   // "off": the playhead is not on it (or it is a caption); otherwise whether it sits on a pin. A primitive, so playhead ticks re-render only on a change.
@@ -251,6 +260,29 @@ export function EditorToolbar() {
     apply((p) => reorderLayer(p, selectedId, direction));
   };
 
+  /** Extract audio: the clip's sound becomes a bar, or is found on the audio row. The hook selects that bar and says what there is to say. */
+  const extractSelected = () => { if (selectedId) void extract(selectedId); };
+  /**
+   * Voice / Sound. On a sound's bar the tool opens. On a clip's bar the clip's sound is first found on the audio row, or put there
+   * (one undo step, and it says so): that bar is selected first and the tool opened second, so the tool's key is the bar. A refused
+   * extract has said why and opens nothing. Without the sound engine (Expo Go, an older build) it says so and nothing changes — not
+   * even the extract.
+   */
+  const openSoundTool = (id: "voice" | "soundQuality") => {
+    if (!isSoundAvailable()) { useToast.getState().show(SOUND_UNAVAILABLE); return; }
+    if (bar === "audio") { openStrip(id); return; }
+    const { project, selectAudio } = useEditorStore.getState();
+    if (!project || !selectedId) return;
+    const there = extractedTrackOf(project, selectedId);
+    if (there) { selectAudio(there.id); openStrip(id); return; }
+    void extract(selectedId).then((r) => {
+      // The hook has just selected the bar (it answers null when the owner went elsewhere while the file was asked).
+      if (!r || !here.current) return;
+      openStrip(id);
+      if (r.made) useToast.getState().show(EXTRACT_MESSAGES.moved);
+    });
+  };
+
   // What each tool does. Labels and icons come from TOOL_META (`icon` here overrides); `disabled` is only ever momentary.
   const ACTIONS: Record<ToolId, { onPress: () => void; disabled?: boolean; active?: boolean; icon?: IoniconName }> = {
     edit: { onPress: () => onPlayheadClip(() => {}) },
@@ -303,6 +335,9 @@ export function EditorToolbar() {
     audioFade: { onPress: () => openStrip("audioFade") },
     audioDuplicate: { onPress: duplicateSelectedAudio },
     audioDelete: { onPress: deleteSelectedAudio },
+    extractAudio: { disabled: extractBusy, onPress: extractSelected },
+    voice: { disabled: extractBusy, onPress: () => openSoundTool("voice") },
+    soundQuality: { disabled: extractBusy, onPress: () => openSoundTool("soundQuality") },
     effectStrength: { onPress: () => openStrip("effectStrength") },
     effectDuplicate: { onPress: duplicateSelectedEffect },
     effectDelete: { onPress: () => { if (selectedEffectId) { haptic("medium"); apply((p) => deleteEffect(p, selectedEffectId)); } } },
@@ -366,6 +401,9 @@ export function EditorToolbar() {
       <ChromaSheet clipId={selectedId} visible={strip?.id === "chroma"} onClose={closeStrip} />
       <AudioVolumeSheet trackId={selectedAudioId} visible={strip?.id === "audioVolume"} onClose={closeStrip} />
       <AudioFadeSheet target={selectedAudioId ? { type: "track", id: selectedAudioId } : null} visible={strip?.id === "audioFade"} onClose={closeStrip} />
+      {/* Voice (a compact panel) and Sound (a strip) edit the selected sound bar; on a clip the toolbar selects the clip's extracted bar first. */}
+      <VoiceSheet trackId={selectedAudioId} visible={strip?.id === "voice"} onClose={closeStrip} />
+      <SoundQualitySheet trackId={selectedAudioId} visible={strip?.id === "soundQuality"} onClose={closeStrip} />
       <VolumeSheet clipId={selectedId} visible={strip?.id === "volume"} onClose={closeStrip} />
       <TransitionSheet clipIndex={selectedIndex} visible={strip?.id === "transition"} onClose={closeStrip} />
     </View>

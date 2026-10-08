@@ -214,10 +214,10 @@ the all-or-nothing flow is `makeQuickEdit` in `src/projects/quickEditFlow.ts`.
 The row of tools under the preview follows what you have selected.
 
 - **Nothing selected** - Edit, Audio, Text, Stickers, Overlay, Effects, Filter, Adjust, Ratio, Background, Cover, Templates. Edit, Filter, Adjust and Background work on the clip under the white line.
-- **A clip** - Split, Trim, Select, Speed, Volume, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete.
+- **A clip** - Split, Trim, Select, Speed, Volume, Extract audio, Voice, Sound, Animate, Filter, Adjust, Background, Templates, Crop, Transform, Opacity, Mask, Green screen, Keyframe, Transition, Replace, Reverse, Freeze, Duplicate, Delete.
 - **A layer** - the same without Split, Select, Background, Templates, Transition and Freeze, plus Blend, Forward and Back.
 - **A text** - Edit, Animate, Keyframe, Duplicate, Delete, Add text. **A caption** - Edit, Captions, Duplicate, Delete, Add text. **A sticker** - Edit, Animate, Keyframe, Duplicate, Delete.
-- **A sound** - Split, Volume, Fade, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
+- **A sound** - Split, Volume, Fade, Voice, Sound, Duplicate, Delete, Add audio, Ducking, Beats. **An effect** - Strength, Duplicate, Delete.
 - **Audio** and **Text** (from the first row) open their own row: Add audio, Ducking, Beats; Add text, Captions.
 
 The bar is 90 pt high; a strip is 154 pt with a 44-pt header.
@@ -375,6 +375,26 @@ Everything here is under **Audio** on the first row, or on the row of a selected
   drag its handles to trim.
 - **Split** (first on a selected sound's row) cuts the sound in two at the white line; the second piece becomes the selected one. It is greyed where the line is off the sound or closer than 0.5 s to one of its ends (0.1 s for a sound effect). The first piece keeps the fade in, the second the fade out.
 - **Clip sound** - a clip's own sound also has **Fade in** and **Fade out** (in the clip's Volume strip).
+- **Extract audio** (a video clip's row, after Volume) - the clip's sound becomes a bar named "Clip sound" on the
+  sound-effects lane, exactly where the clip is, and the clip is muted. The bar is an ordinary sound (move, trim,
+  split, fade, delete) and **no longer follows the clip**; deleting the bar leaves the clip muted (Volume, Mute off
+  brings it back). Not for a clip that is sped up, slowed down or reversed, and not for a photo. One Undo puts it
+  back. It works in Expo Go and in the build installed before this update.
+- **Voice** (on a sound bar) - None, Deep, High, Chipmunk, Robot, Echo, Hall, Telephone; **Strength**; **Pitch**
+  (-12 to +12 semitones, on its own or added to a voice). Robot is a metallic comb with a light distortion, not a
+  vocoder. On a video clip the same button first moves the clip's sound to the audio row (the same step as Extract
+  audio, one Undo) and opens on the new bar.
+- **Sound** (the strip is titled "Sound quality") - equaliser presets None, Bass boost, Clear voice, Warm, Bright,
+  and **Even out loudness**: one overall gain from a gated level measurement of the original (not LUFS, not a
+  compressor; it can also turn a loud recording down, by at most 6 dB), with a soft clip so it never distorts.
+
+The original file is never changed. Picking an effect renders a changed copy **once** (the whole file, so a long one
+takes longer), kept in the project's `sound` folder under a name that says the setting, and removed when no bar
+needs it. Until the copy is ready the bar plays its original (with a small spinner); while a Strength or Pitch slider
+is dragged only that bar plays its original and the copy is rendered once, when you let go. If a copy cannot be
+made, the setting stays, the original plays and one message says so. The export prepares any missing copy first
+(the first 10 % of its progress) and stops with the reason if one cannot be made. **Voice and Sound need the native
+build**: in Expo Go, or in a build from before this update, they show one sentence and change nothing.
 - **Ducking** - a switch in the Audio tools: music dips to 30 % while a voice-over plays.
 - **Beats** - tap along to drop beat markers, shown as ticks on the timeline. The panel is a regular tall panel: the
   timeline is hidden while it is open, so tap the round **✓** to see the ticks and the clips. On a short phone
@@ -605,3 +625,14 @@ Signing in:
 91. **Google sign-in comes back to the app.** After choosing a Google account the browser closes and Clipy is signed in. The return address is `clipy://welcome` in a build (`exp://…/--/welcome` in Expo Go); both must be in Supabase's allowed redirect URLs.
 92. **The welcome screen on a small iPhone.** With the keyboard open on the email and code steps, the field, the gold button, Resend code and Use a different email can all be reached (the page scrolls above the keyboard), on first launch and when opened as a sheet from Accounts.
 93. **The code from the email fills in.** iOS should offer the 6-digit code above the keyboard; choosing it signs in without pressing the button.
+
+Sound tools (`SoundRender.swift`, `SoundMath.swift`; none of it has run on a device before the first build of this round):
+
+94. **Sound tools.** Check, in this order:
+    1. **Late pitched voices.** Chipmunk, High, Deep, or Pitch alone: clap next to a video, or watch lips. `AVAudioUnitTimePitch` may report no latency; if so the pitched copy is late by a few hundredths of a second (and misses that much at its end). If it is, compensate in `SoundRender.process`.
+    2. **The source swap.** When a copy becomes ready while the bar plays, the preview swaps the file (pause, replace, seek, play). A short dropout is expected; it must not restart from zero or drift.
+    3. **Lip-sync of an extracted bar.** In the PREVIEW the bar is a second player and can sit up to a quarter of a second off the picture (`DRIFT_TOLERANCE`); the export is exact. Judge the export.
+    4. **Render time.** A 10-second voice-over, a 3-minute song with Hall, and the sound of a long video, against the 120-second deadline (`SOUND_RENDER_DEADLINE_MS`); and that Cancel / a new pick is answered well inside the 4-second grace (`SOUND_CANCEL_GRACE_MS`).
+    5. **AAC priming.** The `.m4a` copies come from `AVAudioFile` (about 2112 frames of encoder priming). A copy must start without a gap or a click and end without a click, in the preview and in the export.
+    6. **Loudness and clipping.** Even out loudness on a very quiet recording and next to the bundled music; Bass boost on loud music must not crackle (the soft clip).
+    7. **The noise probe.** In a development build the first time the Sound strip opens, `probeNoiseReduction` runs Apple's voice clean-up unit once and logs one line, `[noise-probe] {"ok":...,"stage":...,"detail":...}`, in the dev-server log; it shows nothing on screen. If the unit raises inside Apple's code the app may close once; it will not repeat (the key `clipy.noiseProbe.v1` in `localStorage`; raise the `v1` to ask again). The answer decides whether a Reduce noise switch is possible.

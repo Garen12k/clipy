@@ -1,13 +1,13 @@
 import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
-import { clipAt, clipDuration, curveSteps, findItem, layerEnd, sourceAfter, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
+import { clipAt, clipDuration, clipStartTimes, curveSteps, findItem, hasSpeedCurve, layerEnd, sourceAfter, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
   clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, activePhotoMotion, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_CURVE_LIMITS, SPEED_LIMITS, TRANSITION_LIMITS,
-  clampPhotoMotion, COMBO_AS_MOTION, type PhotoMotion, type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
+  clampPhotoMotion, clampSound, COMBO_AS_MOTION, NO_SOUND, type PhotoMotion, type SoundSettings, type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
   type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
 } from "./types";
@@ -416,6 +416,79 @@ export function splitAudioTrackAt(p: Project, id: string, time: number, pieceId:
   const cut = audioSplitPieces(p, id, time);
   if (!cut) return p;
   return touch(p, { audioTracks: [...p.audioTracks.slice(0, cut.index), cut.first, { ...cut.second, id: pieceId }, ...p.audioTracks.slice(cut.index + 1)] });
+}
+
+/**
+ * Changes how the track `id` sounds (the Voice and Sound tools): the patch is merged into its setting — or into none — and clamped
+ * (`clampSound`). A setting that changes nothing REMOVES the key: a track as recorded has no `sound`. Same project for an unknown
+ * track and when nothing changes. Nothing is rendered here; the editor renders the copy the setting needs (soundRenders.ts).
+ */
+export function setTrackSound(p: Project, trackId: string, patch: Partial<SoundSettings>): Project {
+  const i = p.audioTracks.findIndex((t) => t.id === trackId);
+  if (i < 0) return p;
+  const cur = p.audioTracks[i];
+  const sound = clampSound({ ...(cur.sound ?? NO_SOUND), ...patch });
+  if (sameJson(sound, cur.sound ?? null)) return p;
+  const next: AudioTrack = { ...cur };
+  delete next.sound;
+  if (sound) next.sound = sound;
+  const audioTracks = p.audioTracks.slice(); audioTracks[i] = next;
+  return touch(p, { audioTracks });
+}
+
+/** The title of a bar made by Extract audio. */
+export const EXTRACT_TITLE = "Clip sound";
+/** Why a clip's sound cannot be put on the audio row: it has none (a photo, a reversed clip, no such clip), it is not at normal speed (a sound bar has no speed), or the project has every track it may have. */
+export type ExtractRefusal = "noSound" | "speed" | "limit";
+export function extractRefusal(p: Project, clipId: string): ExtractRefusal | null {
+  const item = findItem(p, clipId);
+  if (!item || isPhoto(item.clip) || item.clip.reversed) return "noSound";
+  if (item.clip.speed !== 1 || hasSpeedCurve(item.clip)) return "speed";
+  if (p.audioTracks.length >= AUDIO_LIMITS.maxTracks) return "limit";
+  return null;
+}
+/**
+ * How much (source seconds) a track and a clip must share to be the same sound. A track's trims are stored to the millisecond and a
+ * clip's are not (a split cuts anywhere), so the bar of one half of a split clip may reach up to half a millisecond into the other.
+ */
+const EXTRACT_OVERLAP = 0.001;
+/** Where a clip (or a layer) starts on the timeline. */
+const itemStart = (p: Project, item: NonNullable<ReturnType<typeof findItem>>): number =>
+  item.layer ? (item.clip as LayerClip).start : clipStartTimes(p)[p.clips.findIndex((x) => x.id === item.clip.id)];
+/**
+ * The audio track that already holds this clip's sound: the clip is MUTED, and the track is on the clip's own file with a source
+ * range that overlaps the clip's (by more than `EXTRACT_OVERLAP`). Null when there is none. A clip that is not muted still has its
+ * sound in it, whatever bars are on its file — a duplicate of an extracted clip's original, or a clip un-muted again — so it is
+ * never "already" there. Of several such bars (two copies of one clip, both extracted) the one that lines up with the clip on the
+ * timeline is the clip's own; the first on a tie.
+ */
+export function extractedTrackOf(p: Project, clipId: string): AudioTrack | null {
+  const item = findItem(p, clipId);
+  if (!item || isPhoto(item.clip) || !item.clip.muted) return null;
+  const c = item.clip;
+  const on = p.audioTracks.filter((t) => t.sourceUri === c.sourceUri && Math.min(t.trimEnd, c.trimEnd) - Math.max(t.trimStart, c.trimStart) > EXTRACT_OVERLAP);
+  if (on.length < 2) return on[0] ?? null;
+  // Lined up: the same source second is heard at the same project second.
+  const origin = itemStart(p, item) - c.trimStart;
+  const off = (t: AudioTrack) => Math.abs(t.start - t.trimStart - origin);
+  return on.reduce((best, t) => (off(t) < off(best) ? t : best));
+}
+/**
+ * Extract audio: the clip's (or layer's) own sound becomes an audio track `trackId` — a sound effect (the one kind that neither ducks
+ * the music nor is ducked, so the mix stays what it was) on the clip's OWN file, at the clip's place on the timeline, with its source
+ * range, volume and fades — and the clip is muted. One project out: one undo step. Refused (same project) where `extractRefusal`
+ * says so, when the sound is already on the audio row (`extractedTrackOf`) and when `trackId` is taken.
+ */
+export function extractClipAudio(p: Project, clipId: string, trackId: string): Project {
+  if (extractRefusal(p, clipId) !== null || extractedTrackOf(p, clipId) !== null) return p;
+  const item = findItem(p, clipId);
+  if (!item) return p;
+  const c = item.clip;
+  const start = itemStart(p, item);
+  const added = addAudioTrack(p, { id: trackId, sourceUri: c.sourceUri, title: EXTRACT_TITLE, sourceDuration: c.sourceDuration, start, trimStart: c.trimStart, trimEnd: c.trimEnd,
+    volume: c.volume, kind: "sfx", fadeIn: c.fadeIn, fadeOut: c.fadeOut });
+  if (added === p) return p;
+  return setClipMuted(added, clipId, true);   // an already muted clip: unchanged, and `added` is still one project out
 }
 
 /**

@@ -38,9 +38,27 @@ public class ClipyVideoModule: Module {
     if transcriber === t { transcriber = nil }
   }
 
+  private let soundLock = NSLock()
+  private var soundJobs: [String: SoundJob] = [:]   // guarded by `soundLock`; one entry per render that has not answered yet
+
+  private func storeSoundJob(_ id: String, _ job: SoundJob) {
+    soundLock.lock(); defer { soundLock.unlock() }
+    soundJobs[id] = job
+  }
+
+  private func dropSoundJob(_ id: String) {
+    soundLock.lock(); defer { soundLock.unlock() }
+    soundJobs[id] = nil
+  }
+
+  private func lookupSoundJob(_ id: String) -> SoundJob? {
+    soundLock.lock(); defer { soundLock.unlock() }
+    return soundJobs[id]
+  }
+
   public func definition() -> ModuleDefinition {
     Name("ClipyVideo")
-    Events("onExportEvent")
+    Events("onExportEvent", "onSoundEvent")
 
     // Phase 0 smoke test: proves the Swift module is linked and callable.
     Function("hello") { () -> String in
@@ -106,6 +124,68 @@ public class ClipyVideoModule: Module {
 
     Function("cancelTranscribe") { () -> Void in
       if let running = self.swapTranscriber(nil) { running.cancel() }
+    }
+
+    // Renders the source through the request's units into `outputPath` (see SoundRender). Resolves
+    // `{ fileUri, seconds, gainDb }`; progress arrives as `onSoundEvent { jobId, progress }`. Rejects
+    // "E_SOUND_CANCELLED" after `cancelSoundRender(jobId)`, else "E_SOUND" with a staged message.
+    // The work runs on a Swift concurrency thread, never the main one. The job is stored before that work starts, so
+    // a cancel that comes at once finds it; every way out of the `do` answers the promise exactly once.
+    AsyncFunction("renderSound") { (request: SoundRenderRequest, promise: Promise) in
+      let job = SoundJob()
+      let jobId = request.jobId
+      self.storeSoundJob(jobId, job)
+      Task { [weak self] in
+        defer { self?.dropSoundJob(jobId) }
+        do {
+          guard let outputURL = ExportSession.fileURL(from: request.outputPath) else { throw SoundError.failed("sound output: not a file path") }
+          let source = try await SoundSource.open(request.sourceUri)
+          var lastSent = -1.0
+          let result = try SoundRender.render(request, source: source, to: outputURL, job: job, progress: { (fraction: Double) -> Void in
+            guard fraction - lastSent >= 0.02 else { return }   // at most ~50 events a render
+            lastSent = fraction
+            self?.sendEvent("onSoundEvent", ["jobId": jobId, "progress": fraction])
+          })
+          let answer: [String: Any] = ["fileUri": outputURL.absoluteString, "seconds": result.seconds, "gainDb": result.gainDb]
+          promise.resolve(answer)
+        } catch SoundError.cancelled {
+          promise.reject("E_SOUND_CANCELLED", "Sound cancelled")
+        } catch {
+          promise.reject("E_SOUND", SoundRender.message(error))
+        }
+      }
+    }
+
+    // Stops that render at its next pass (it then rejects "E_SOUND_CANCELLED"). An unknown or finished job: nothing.
+    Function("cancelSoundRender") { (jobId: String) in
+      self.lookupSoundJob(jobId)?.cancel()
+    }
+
+    // Whether the file has a sound track at all (a silent screen recording has none), and how long the file is.
+    AsyncFunction("soundInfo") { (uri: String, promise: Promise) in
+      Task {
+        guard let url = ExportSession.fileURL(from: uri) else {
+          promise.reject("E_URI", "Invalid file")
+          return
+        }
+        let asset = AVURLAsset(url: url)
+        do {
+          let found = try await asset.loadTracks(withMediaType: .audio)
+          let length = try await asset.load(.duration)
+          let answer: [String: Any] = ["hasSound": !found.isEmpty, "seconds": length.seconds.isFinite ? length.seconds : 0]
+          promise.resolve(answer)
+        } catch {
+          promise.reject("E_SOUND", "sound info: " + ExportSession.describe(error))
+        }
+      }
+    }
+
+    // The noise-reduction test (dev only; see SoundProbe). Always resolves.
+    AsyncFunction("probeNoiseReduction") { (uri: String, promise: Promise) in
+      Task {
+        let answer: [String: Any] = await SoundProbe.run(uri)
+        promise.resolve(answer)
+      }
     }
   }
 }

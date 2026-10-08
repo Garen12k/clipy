@@ -9,13 +9,16 @@ jest.mock("@/modules/clipy-video", () => ({
   toExportEffect: jest.requireActual("@/modules/clipy-video").toExportEffect,
   toExportLayer: jest.requireActual("@/modules/clipy-video").toExportLayer,
   toExportAudioTrack: jest.requireActual("@/modules/clipy-video").toExportAudioTrack,
+  isSoundAvailable: jest.fn(() => true),
 }));
+jest.mock("@/src/editor/soundRenders", () => ({ ensureSound: jest.fn(async (_p: string, uri: string) => `${uri}.copy`) }));
 jest.mock("@/src/projects/expoFs", () => ({
   expoFs: { cacheDir: "file:///cache/", freeBytes: async () => 1e12, mkdir: async () => {} },
 }));
 jest.mock("@/src/lib/id", () => ({ newId: () => "split-right" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
-import { exportTimeline } from "@/modules/clipy-video";
+import { addExportListener, cancelExport, exportTimeline, isSoundAvailable } from "@/modules/clipy-video";
+import { ensureSound } from "@/src/editor/soundRenders";
 import { insertFreezeFrame, setClipReversed, setTransition, splitClipAt } from "@/src/editor/model/ops";
 import { makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
 import { toExportLayer as toLayer } from "@/modules/clipy-video";
@@ -342,5 +345,235 @@ describe("the frame's shape in the request", () => {
   });
   test("the size estimate and the bitrate do not depend on the ratio", () => {
     expect(estimateBytes(10, 1080)).toBe(12_500_000);
+  });
+});
+
+describe("PROOF: a project without sound settings exports exactly as it did before the sound tools", () => {
+  // Written and seen green against useExport.ts as it was BEFORE the sound tools touched it; never edited to make a change pass.
+  const PINNED = "{\"clips\":[{\"sourceUri\":\"file:///media/a.mp4\",\"trimStart\":0,\"trimEnd\":4,\"volume\":1.5,\"muted\":true,\"speed\":2,\"filter\":\"warm\",\"transition\":{\"type\":\"fade\",\"duration\":0.5},\"kind\":\"video\",\"sourceWidth\":1080,\"sourceHeight\":1920,\"transform\":{\"scale\":1,\"x\":0,\"y\":0,\"rotation\":0,\"flipH\":false,\"flipV\":false},\"crop\":{\"x\":0,\"y\":0,\"w\":1,\"h\":1},\"background\":{\"type\":\"black\",\"color\":null},\"reversed\":false,\"filterIntensity\":1,\"adjust\":{\"brightness\":0,\"contrast\":0,\"saturation\":0,\"exposure\":0,\"temperature\":0,\"tint\":0,\"highlights\":0,\"shadows\":0,\"sharpen\":0,\"vignette\":0,\"fade\":0,\"grain\":0},\"animIn\":null,\"animOut\":null,\"animCombo\":null,\"keyframes\":[],\"speedSpans\":[],\"gain\":[{\"time\":0,\"gain\":0},{\"time\":2,\"gain\":0}],\"opacity\":1,\"mask\":\"none\",\"blend\":\"normal\",\"chroma\":null},{\"sourceUri\":\"file:///media/b.mp4\",\"trimStart\":0,\"trimEnd\":6,\"volume\":1,\"muted\":false,\"speed\":1,\"filter\":null,\"transition\":{\"type\":\"none\",\"duration\":0},\"kind\":\"video\",\"sourceWidth\":1080,\"sourceHeight\":1920,\"transform\":{\"scale\":1,\"x\":0,\"y\":0,\"rotation\":0,\"flipH\":false,\"flipV\":false},\"crop\":{\"x\":0,\"y\":0,\"w\":1,\"h\":1},\"background\":{\"type\":\"black\",\"color\":null},\"reversed\":false,\"filterIntensity\":1,\"adjust\":{\"brightness\":0,\"contrast\":0,\"saturation\":0,\"exposure\":0,\"temperature\":0,\"tint\":0,\"highlights\":0,\"shadows\":0,\"sharpen\":0,\"vignette\":0,\"fade\":0,\"grain\":0},\"animIn\":null,\"animOut\":null,\"animCombo\":null,\"keyframes\":[],\"speedSpans\":[],\"gain\":[{\"time\":0,\"gain\":1},{\"time\":6,\"gain\":1}],\"opacity\":1,\"mask\":\"none\",\"blend\":\"normal\",\"chroma\":null},{\"sourceUri\":\"file:///media/c.mp4\",\"trimStart\":0,\"trimEnd\":5,\"volume\":1,\"muted\":false,\"speed\":1,\"filter\":null,\"transition\":{\"type\":\"none\",\"duration\":0},\"kind\":\"video\",\"sourceWidth\":1080,\"sourceHeight\":1920,\"transform\":{\"scale\":1,\"x\":0,\"y\":0,\"rotation\":0,\"flipH\":false,\"flipV\":false},\"crop\":{\"x\":0,\"y\":0,\"w\":1,\"h\":1},\"background\":{\"type\":\"black\",\"color\":null},\"reversed\":false,\"filterIntensity\":1,\"adjust\":{\"brightness\":0,\"contrast\":0,\"saturation\":0,\"exposure\":0,\"temperature\":0,\"tint\":0,\"highlights\":0,\"shadows\":0,\"sharpen\":0,\"vignette\":0,\"fade\":0,\"grain\":0},\"animIn\":null,\"animOut\":null,\"animCombo\":null,\"keyframes\":[],\"speedSpans\":[],\"gain\":[{\"time\":0,\"gain\":1},{\"time\":5,\"gain\":1}],\"opacity\":1,\"mask\":\"none\",\"blend\":\"normal\",\"chroma\":null}],\"layers\":[],\"overlays\":[{\"kind\":\"text\",\"text\":\"Hey\",\"fontPostScriptName\":\"Anton-Regular\",\"fontScale\":0.07,\"color\":\"#F4F4F5\",\"backgroundColor\":null,\"backgroundOpacity\":0,\"outline\":true,\"align\":\"center\",\"emoji\":null,\"shape\":null,\"x\":0.5,\"y\":0.5,\"scale\":1,\"rotation\":0,\"start\":0,\"end\":2,\"animIn\":null,\"animOut\":null,\"animLoop\":null,\"keyframes\":[],\"style\":{\"opacity\":1,\"letterSpacing\":0,\"lineSpacing\":1,\"outlineColor\":null,\"outlineWidth\":1,\"shadowColor\":null,\"shadowOpacity\":0,\"shadowDistance\":0,\"shadowBlur\":0,\"glowColor\":null,\"glowSize\":0,\"boxPadding\":0.25,\"boxCorner\":\"rounded\"},\"words\":[],\"highlightColor\":null},{\"kind\":\"sticker\",\"text\":\"\",\"fontPostScriptName\":\"\",\"fontScale\":0,\"color\":\"#F5C542\",\"backgroundColor\":null,\"backgroundOpacity\":0,\"outline\":false,\"align\":\"center\",\"emoji\":\"⭐\",\"shape\":null,\"x\":0.5,\"y\":0.5,\"scale\":1,\"rotation\":0,\"start\":0,\"end\":2,\"animIn\":null,\"animOut\":null,\"animLoop\":null,\"keyframes\":[],\"style\":{\"opacity\":1,\"letterSpacing\":0,\"lineSpacing\":1,\"outlineColor\":null,\"outlineWidth\":1,\"shadowColor\":null,\"shadowOpacity\":0,\"shadowDistance\":0,\"shadowBlur\":0,\"glowColor\":null,\"glowSize\":0,\"boxPadding\":0.25,\"boxCorner\":\"rounded\"},\"words\":[],\"highlightColor\":null}],\"effects\":[],\"audioTracks\":[{\"sourceUri\":\"file:///media/m.m4a\",\"start\":0,\"trimStart\":0,\"trimEnd\":9,\"gain\":[{\"time\":0,\"gain\":1},{\"time\":9,\"gain\":1}]}],\"aspectRatio\":\"9:16\",\"frameAspect\":0.5625,\"resolution\":1080,\"fps\":30,\"bitrate\":0,\"outputPath\":\"file:///cache/exports/p1-1700000000000.mp4\"}";
+
+  test("the same request, the same calls in the same order, the same progress numbers", async () => {
+    const order: string[] = [];
+    const fs = jest.requireMock("@/src/projects/expoFs").expoFs;
+    const orig = { freeBytes: fs.freeBytes, mkdir: fs.mkdir };
+    fs.freeBytes = async () => { order.push("freeBytes"); return 1e12; };
+    fs.mkdir = async (dir: string) => { order.push(`mkdir ${dir}`); };
+    jest.mocked(exportTimeline).mockImplementationOnce(async () => { order.push("exportTimeline"); return "job1"; });
+    const now = jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
+    try {
+      const { result } = await renderHook(() => useExport(project, []));
+      const seen: unknown[] = [];
+      let running: Promise<void> = Promise.resolve();
+      await act(async () => { running = result.current.start(1080); await Promise.resolve(); });
+      seen.push(result.current.state);
+      await act(async () => { await running; });
+      seen.push(result.current.state);
+      expect(order).toEqual(["freeBytes", "mkdir file:///cache/exports", "exportTimeline"]);
+      expect(exportTimeline).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(jest.mocked(exportTimeline).mock.calls[0][0])).toBe(PINNED);
+      expect(ensureSound).not.toHaveBeenCalled();
+      const emit = jest.mocked(addExportListener).mock.calls[0][0];
+      for (const progress of [0, 0.05, 0.1, 0.5, 1]) {
+        await act(async () => { emit({ jobId: "job1", type: "progress", progress }); });
+        seen.push(result.current.state);
+      }
+      await act(async () => { emit({ jobId: "other", type: "progress", progress: 0.7 }); });
+      seen.push(result.current.state);
+      await act(async () => { emit({ jobId: "job1", type: "done", fileUri: "file:///cache/exports/out.mp4" }); });
+      seen.push(result.current.state);
+      expect(seen).toEqual([
+        { status: "exporting", progress: 0 },
+        { status: "exporting", progress: 0 },
+        { status: "exporting", progress: 0 },
+        { status: "exporting", progress: 0.05 },
+        { status: "exporting", progress: 0.1 },
+        { status: "exporting", progress: 0.5 },
+        { status: "exporting", progress: 1 },
+        { status: "exporting", progress: 1 },
+        { status: "done", progress: 1, fileUri: "file:///cache/exports/out.mp4" },
+      ]);
+    } finally { fs.freeBytes = orig.freeBytes; fs.mkdir = orig.mkdir; now.mockRestore(); }
+  });
+
+  test("Cancel reaches the video export, and only it", async () => {
+    const { result } = await renderHook(() => useExport(project, []));
+    await act(async () => { await result.current.start(1080); });
+    await act(async () => { result.current.cancel(); });
+    expect(jest.mocked(cancelExport).mock.calls).toEqual([["job1"]]);
+    expect(result.current.state).toEqual({ status: "exporting", progress: 0 });   // idle comes with the native "cancelled" event
+    const emit = jest.mocked(addExportListener).mock.calls[0][0];
+    await act(async () => { emit({ jobId: "job1", type: "cancelled" }); });
+    expect(result.current.state).toEqual({ status: "idle", progress: 0 });
+  });
+});
+
+describe("sound settings", () => {
+  const voiced = { ...makeAudioTrack({ id: "v", sourceUri: "file:///media/v.m4a", sourceDuration: 6, kind: "voice" as const, start: 1, trimStart: 0.5, trimEnd: 4, volume: 1.2, fadeIn: 0.5 }),
+    sound: { voice: "deep" as const, strength: 0.5, pitch: 0, eq: null, level: false } };
+  const second = { ...makeAudioTrack({ id: "w", sourceUri: "file:///media/w.m4a", sourceDuration: 3, kind: "sfx" as const, start: 2 }),
+    sound: { voice: null, strength: 0.5, pitch: 0, eq: "warm" as const, level: false } };
+  const withSound = makeProject({ id: "p1", clips: [b], audioTracks: [makeAudioTrack({ id: "m", sourceUri: "file:///media/m.m4a", sourceDuration: 9 }), voiced] });
+  const withTwo = { ...withSound, audioTracks: [...withSound.audioTracks, second] };
+  const sent = () => jest.mocked(exportTimeline).mock.calls[0][0];
+  /** Lets everything that is not waiting for a render run. */
+  const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  /** A render that answers when the test says so. */
+  const pendingRender = () => {
+    const held: { resolve: (uri: string) => void; reject: (e: unknown) => void; progress?: (f: number) => void } = { resolve: () => {}, reject: () => {} };
+    jest.mocked(ensureSound).mockImplementationOnce((_p, _uri, _s, onProgress) => new Promise<string>((resolve, reject) => { held.resolve = resolve; held.reject = reject; held.progress = onProgress; }));
+    return held;
+  };
+
+  test("a track with a setting is exported from its copy, with the range and the gain it would have had", async () => {
+    const { sound: _setting, ...asRecorded } = voiced;
+    const plainProject = { ...withSound, audioTracks: [withSound.audioTracks[0], asRecorded] };
+    const first = await renderHook(() => useExport(plainProject, []));
+    await act(async () => { await first.result.current.start(1080); });
+    const before = sent().audioTracks;
+    jest.clearAllMocks();
+    const { result } = await renderHook(() => useExport(withSound, []));
+    await act(async () => { await result.current.start(1080); });
+    expect(ensureSound).toHaveBeenCalledTimes(1);
+    expect(jest.mocked(ensureSound).mock.calls[0].slice(0, 3)).toEqual(["p1", "file:///media/v.m4a", voiced.sound]);
+    expect(sent().audioTracks).toEqual([before[0], { ...before[1], sourceUri: "file:///media/v.m4a.copy" }]);
+  });
+
+  test("a project without settings asks for nothing and its progress is the export's own", async () => {
+    const { result } = await renderHook(() => useExport(project, []));
+    await act(async () => { await result.current.start(1080); });
+    expect(ensureSound).not.toHaveBeenCalled();
+    const emit = jest.mocked(addExportListener).mock.calls[0][0];
+    await act(async () => { emit({ jobId: "job1", type: "progress", progress: 0.5 }); });
+    expect(result.current.state.progress).toBe(0.5);
+  });
+
+  test("with a setting the sounds take the first tenth of the progress", async () => {
+    const { result } = await renderHook(() => useExport(withSound, []));
+    await act(async () => { await result.current.start(1080); });
+    const emit = jest.mocked(addExportListener).mock.calls[0][0];
+    await act(async () => { emit({ jobId: "job1", type: "progress", progress: 0.5 }); });
+    expect(result.current.state.progress).toBeCloseTo(0.55, 9);
+  });
+
+  test("a copy that cannot be rendered stops the export with the reason; nothing is sent", async () => {
+    jest.mocked(ensureSound).mockRejectedValueOnce(new Error("sound engine: boom"));
+    const { result } = await renderHook(() => useExport(withSound, []));
+    await act(async () => { await result.current.start(1080); });
+    expect(result.current.state).toEqual({ status: "error", progress: 0, message: "Could not prepare a sound for the export: sound engine: boom" });
+    expect(exportTimeline).not.toHaveBeenCalled();
+  });
+
+  test("a track with a setting that lies wholly after the video is not rendered", async () => {
+    const late = { ...withSound, audioTracks: [{ ...voiced, start: 99 }] };
+    const { result } = await renderHook(() => useExport(late, []));
+    await act(async () => { await result.current.start(1080); });
+    expect(ensureSound).not.toHaveBeenCalled();
+    expect(sent().audioTracks).toEqual([]);
+  });
+
+  test("a track with a setting whose file is missing is neither rendered nor sent", async () => {
+    const { result } = await renderHook(() => useExport(withSound, ["file:///media/v.m4a"]));
+    await act(async () => { await result.current.start(1080); });
+    expect(ensureSound).not.toHaveBeenCalled();
+    expect(sent().audioTracks.map((t) => t.sourceUri)).toEqual(["file:///media/m.m4a"]);
+  });
+
+  test("the copies are ready before the video export is asked for, and the ring moves while they are made", async () => {
+    const render = pendingRender();
+    const { result } = await renderHook(() => useExport(withSound, []));
+    await act(async () => { void result.current.start(1080); });
+    await settle();
+    expect(ensureSound).toHaveBeenCalledTimes(1);
+    expect(exportTimeline).not.toHaveBeenCalled();
+    expect(result.current.state).toEqual({ status: "exporting", progress: 0 });
+    await act(async () => { render.progress?.(0.5); });
+    expect(result.current.state.progress).toBeCloseTo(0.05, 9);
+    await act(async () => { render.resolve("file:///sound/v-copy.m4a"); });
+    await settle();
+    expect(result.current.state.progress).toBeCloseTo(0.1, 9);
+    expect(sent().audioTracks.map((t) => t.sourceUri)).toEqual(["file:///media/m.m4a", "file:///sound/v-copy.m4a"]);
+  });
+
+  test("Cancel while the sounds are prepared: back to idle at once, no further copy, and the video export never starts", async () => {
+    const render = pendingRender();
+    const { result } = await renderHook(() => useExport(withTwo, []));
+    await act(async () => { void result.current.start(1080); });
+    await settle();
+    await act(async () => { render.progress?.(0.5); });
+    await act(async () => { result.current.cancel(); });
+    expect(result.current.state).toEqual({ status: "idle", progress: 0 });
+    expect(cancelExport).not.toHaveBeenCalled();
+    await act(async () => { render.progress?.(0.9); render.resolve("file:///sound/v-copy.m4a"); });
+    await settle();
+    expect(ensureSound).toHaveBeenCalledTimes(1);
+    expect(exportTimeline).not.toHaveBeenCalled();
+    expect(result.current.state).toEqual({ status: "idle", progress: 0 });
+  });
+
+  test("a render that fails after Cancel says nothing", async () => {
+    const render = pendingRender();
+    const { result } = await renderHook(() => useExport(withSound, []));
+    await act(async () => { void result.current.start(1080); });
+    await settle();
+    await act(async () => { result.current.cancel(); });
+    await act(async () => { render.reject(new Error("sound engine: boom")); });
+    await settle();
+    expect(result.current.state).toEqual({ status: "idle", progress: 0 });
+    expect(exportTimeline).not.toHaveBeenCalled();
+  });
+
+  test("Export again after such a Cancel is one whole export; the cancelled one stays silent when its render answers", async () => {
+    const stale = pendingRender();
+    const { result } = await renderHook(() => useExport(withSound, []));
+    await act(async () => { void result.current.start(1080); });
+    await settle();
+    await act(async () => { result.current.cancel(); });
+    await act(async () => { await result.current.start(1080); });
+    expect(exportTimeline).toHaveBeenCalledTimes(1);
+    expect(sent().audioTracks.map((t) => t.sourceUri)).toEqual(["file:///media/m.m4a", "file:///media/v.m4a.copy"]);
+    const emit = jest.mocked(addExportListener).mock.calls[0][0];
+    await act(async () => { emit({ jobId: "job1", type: "progress", progress: 0.5 }); });
+    await act(async () => { stale.progress?.(0.2); stale.resolve("file:///sound/stale.m4a"); });
+    await settle();
+    expect(exportTimeline).toHaveBeenCalledTimes(1);
+    expect(result.current.state.status).toBe("exporting");
+    expect(result.current.state.progress).toBeCloseTo(0.55, 9);
+    await act(async () => { result.current.cancel(); });
+    expect(jest.mocked(cancelExport).mock.calls).toEqual([["job1"]]);
+  });
+
+  test("reset while the sounds are prepared stops it too", async () => {
+    const render = pendingRender();
+    const { result } = await renderHook(() => useExport(withSound, []));
+    await act(async () => { void result.current.start(1080); });
+    await settle();
+    await act(async () => { result.current.reset(); });
+    await act(async () => { render.resolve("file:///sound/v-copy.m4a"); });
+    await settle();
+    expect(exportTimeline).not.toHaveBeenCalled();
+    expect(result.current.state).toEqual({ status: "idle", progress: 0 });
+  });
+
+  test("an export after one with sounds, of a project without: the progress is the export's own again", async () => {
+    const view = await renderHook(({ p }: { p: typeof withSound }) => useExport(p, []), { initialProps: { p: withSound } });
+    await act(async () => { await view.result.current.start(1080); });
+    await view.rerender({ p: project });
+    await act(async () => { await view.result.current.start(1080); });
+    const emit = jest.mocked(addExportListener).mock.calls[0][0];
+    await act(async () => { emit({ jobId: "job1", type: "progress", progress: 0.5 }); });
+    expect(view.result.current.state.progress).toBe(0.5);
+  });
+
+  test("without the sound engine the tracks go out as recorded: nothing is asked and the progress is the export's own", async () => {
+    jest.mocked(isSoundAvailable).mockReturnValue(false);
+    try {
+      const { result } = await renderHook(() => useExport(withSound, []));
+      await act(async () => { await result.current.start(1080); });
+      expect(ensureSound).not.toHaveBeenCalled();
+      expect(sent().audioTracks.map((t) => t.sourceUri)).toEqual(["file:///media/m.m4a", "file:///media/v.m4a"]);
+      const emit = jest.mocked(addExportListener).mock.calls[0][0];
+      await act(async () => { emit({ jobId: "job1", type: "progress", progress: 0.5 }); });
+      expect(result.current.state.progress).toBe(0.5);
+    } finally { jest.mocked(isSoundAvailable).mockReturnValue(true); }
   });
 });

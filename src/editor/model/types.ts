@@ -12,7 +12,7 @@ export const isAspectRatio = (v: unknown): v is AspectRatio => (ASPECT_RATIOS as
 export const aspectLabel = (r: AspectRatio): string => (r === "auto" ? "Auto" : r);
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 17 as const;
+export const SCHEMA_VERSION = 18 as const;
 export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
 export const EXPORT_QUALITIES = ["high", "small"] as const;
@@ -38,6 +38,22 @@ export const DUCKING = { level: 0.3, ramp: 0.3 };
 export const BEAT_LIMITS = { max: 300, minGap: 0.05 };
 export const minAudioDuration = (kind: AudioKind): number => (kind === "sfx" ? AUDIO_LIMITS.sfxMinDuration : AUDIO_LIMITS.minDuration);
 export const CLIP_VOLUME = [0, 2] as const;
+
+/** The voices of the Voice tool, in the panel's order. The numbers behind each are `VOICE_TABLE` in sound.ts. */
+export const VOICE_IDS = ["deep", "high", "chipmunk", "robot", "echo", "hall", "telephone"] as const;
+export type VoiceId = (typeof VOICE_IDS)[number];
+/** The equaliser presets of the Sound tool, in the strip's order (`EQ_TABLE` in sound.ts). */
+export const EQ_IDS = ["bassBoost", "clearVoice", "warm", "bright"] as const;
+export type EqId = (typeof EQ_IDS)[number];
+/**
+ * How an audio track is changed before it is mixed. `voice` null = none; `strength` 0–1, gentle … strong; `pitch` whole semitones
+ * (added to the voice's own); `eq` null = none; `level` = Even out loudness. The file is never changed: a copy is rendered from these.
+ */
+export interface SoundSettings { voice: VoiceId | null; strength: number; pitch: number; eq: EqId | null; level: boolean }
+export const SOUND_LIMITS = { strength: [0, 1] as const, defaultStrength: 0.5, pitch: [-12, 12] as const };
+/** The sound as recorded. Never stored: a track without changes has NO `sound` key. */
+export const NO_SOUND: SoundSettings = { voice: null, strength: SOUND_LIMITS.defaultStrength, pitch: 0, eq: null, level: false };
+export const isNeutralSound = (s: SoundSettings): boolean => s.voice === null && s.pitch === 0 && s.eq === null && !s.level;
 
 export const FILTER_IDS = ["none", "warm", "cool", "vivid", "faded", "mono", "noir", "vintage",
   "sunset", "golden", "teal", "pastel", "film", "chrome", "instant", "process", "tonal", "sepia", "crisp", "dream",
@@ -469,10 +485,28 @@ export interface AudioTrack {
   kind: AudioKind;   // default "music"
   fadeIn: number;    // seconds, 0–5
   fadeOut: number;   // seconds, 0–5 (fitting both to the length is the mixing maths' job, not the model's)
+  sound?: SoundSettings;   // ABSENT = as recorded (never null / undefined / neutral). Written only by `setTrackSound`
 }
 
 /** A finite number clamped to AUDIO_LIMITS.fade; anything else → 0. */
 export const clampFade = (v: unknown): number => (isNum(v) ? clampNum(v, AUDIO_LIMITS.fade[0], AUDIO_LIMITS.fade[1]) : 0);
+
+/**
+ * A usable sound setting with every value in range (strength 2 decimals, not a number → the default; pitch a whole step, not a
+ * number → 0; unknown ids → none; `level` only when exactly true), or null when it is not an object or changes nothing. Idempotent.
+ */
+export function clampSound(v: unknown): SoundSettings | null {
+  if (!isRec(v) || Array.isArray(v)) return null;
+  const [sLo, sHi] = SOUND_LIMITS.strength, [pLo, pHi] = SOUND_LIMITS.pitch;
+  const s: SoundSettings = {
+    voice: (VOICE_IDS as readonly unknown[]).includes(v.voice) ? (v.voice as VoiceId) : null,
+    strength: isNum(v.strength) ? Math.round(clampNum(v.strength, sLo, sHi) * 100) / 100 : SOUND_LIMITS.defaultStrength,
+    pitch: isNum(v.pitch) ? clampNum(Math.round(v.pitch), pLo, pHi) + 0 : 0,   // + 0: a rounded −0 is stored as 0
+    eq: (EQ_IDS as readonly unknown[]).includes(v.eq) ? (v.eq as EqId) : null,
+    level: v.level === true,
+  };
+  return isNeutralSound(s) ? null : s;
+}
 
 /** Finite, ≥ 0, sorted, rounded to 3 decimals; one closer than `minGap` to the previous KEPT one is dropped; at most `max` kept. Idempotent. */
 export function clampBeatMarkers(v: unknown): number[] {

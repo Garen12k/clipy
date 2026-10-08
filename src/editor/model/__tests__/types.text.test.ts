@@ -3,7 +3,7 @@ import {
 } from "../types";
 import { linesToCaptions } from "../captions";
 
-test("schema is v17", () => expect(SCHEMA_VERSION).toBe(17));
+test("schema is v18", () => expect(SCHEMA_VERSION).toBe(18));
 
 test("defaults match the spec", () => {
   expect(DEFAULT_TEXT_STYLE).toEqual({ opacity: 1, letterSpacing: 0, lineSpacing: 1, outlineColor: null, outlineWidth: 1, shadow: null, glow: null, boxPadding: 0.25, boxCorner: "rounded" });
@@ -102,7 +102,7 @@ describe("factories give fresh defaults", () => {
     expect(x.style).not.toBe(y.style);
     expect(x.words).not.toBe(y.words);
   });
-  test("makeProject is v17", () => expect(makeProject().schemaVersion).toBe(17));
+  test("makeProject is v18", () => expect(makeProject().schemaVersion).toBe(18));
 });
 
 describe("the box fields (schema v15)", () => {

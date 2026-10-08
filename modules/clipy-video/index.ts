@@ -3,6 +3,7 @@ import { FONTS } from "@/src/editor/fonts";
 import { clipGainCurve, exportTrackCurve, type GainPoint } from "@/src/editor/model/audioMix";
 import { trackEnd } from "@/src/editor/model/audioSync";
 import { edgeDurations, photoMotionPins } from "@/src/editor/model/motion";
+import type { SoundChain } from "@/src/editor/model/sound";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
 import { clampTextStyle, DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type BoxCorner, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type ExportFps, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
@@ -166,6 +167,17 @@ export function toExportOverlay(o: Overlay): ExportOverlay {
 // Declaring `addListener` ourselves avoids relying on that broken generic.
 export interface TranscriptSegment { text: string; start: number; end: number }
 
+/** One render: the units' numbers (`soundChain` in src/editor/model/sound.ts), the file to read and the file to write. `jobId` is the caller's, so a render can be cancelled before it answers. */
+export interface SoundRenderRequest extends SoundChain { jobId: string; sourceUri: string; outputPath: string }
+/** `seconds` = the length of the copy (the source's); `gainDb` = what Even out loudness applied (0 when it is off). */
+export interface SoundRenderResult { fileUri: string; seconds: number; gainDb: number }
+export type SoundEvent = { jobId: string; progress: number };
+export interface SoundInfo { hasSound: boolean; seconds: number }
+/** The answer of the noise-reduction test: whether Apple's sound isolation unit rendered a saved recording, the stage it reached and what it reported. */
+export interface NoiseProbe { ok: boolean; stage: string; detail: string }
+/** The code a cancelled render rejects with. */
+export const SOUND_CANCELLED = "E_SOUND_CANCELLED";
+
 type ClipyVideoNative = {
   hello(): string;
   exportTimeline(req: ExportRequest): Promise<string>;
@@ -173,8 +185,14 @@ type ClipyVideoNative = {
   addListener(eventName: "onExportEvent", listener: (e: ExportEvent) => void): EventSubscription;
   transcribe(uri: string, trimStart: number, trimEnd: number): Promise<TranscriptSegment[]>;
   cancelTranscribe(): void;
+  addListener(eventName: "onSoundEvent", listener: (e: SoundEvent) => void): EventSubscription;
+  renderSound(req: SoundRenderRequest): Promise<SoundRenderResult>;
+  cancelSoundRender(jobId: string): void;
+  soundInfo(uri: string): Promise<SoundInfo>;
+  probeNoiseReduction(uri: string): Promise<NoiseProbe>;
 };
 
+const NO_SOUND = "This build of the app has no sound tools yet. Install a newer development build.";
 const NOT_LINKED = "ClipyVideo native module is not linked. Use a development build (eas build --profile development), not Expo Go.";
 
 function optional(): ClipyVideoNative | null { return requireOptionalNativeModule<ClipyVideoNative>("ClipyVideo"); }
@@ -188,3 +206,19 @@ export function cancelExport(jobId: string): void { native().cancelExport(jobId)
 export function addExportListener(cb: (e: ExportEvent) => void): EventSubscription { return native().addListener("onExportEvent", cb); }
 export function transcribe(uri: string, trimStart: number, trimEnd: number): Promise<TranscriptSegment[]> { return native().transcribe(uri, trimStart, trimEnd); }
 export function cancelTranscribe(): void { native().cancelTranscribe(); }
+
+/** The module for a sound call: missing = not linked (Expo Go); present but without the function = a build from before the sound tools. */
+function soundNative(fn: "renderSound" | "cancelSoundRender" | "soundInfo" | "probeNoiseReduction"): ClipyVideoNative {
+  const m = native();
+  if (typeof m[fn] !== "function") throw new Error(NO_SOUND);
+  return m;
+}
+/** Whether the linked native module can render sound: false in Expo Go and in a build made before the sound tools. */
+export function isSoundAvailable(): boolean { return typeof optional()?.renderSound === "function"; }
+export function renderSound(req: SoundRenderRequest): Promise<SoundRenderResult> { return soundNative("renderSound").renderSound(req); }
+export function cancelSoundRender(jobId: string): void { soundNative("cancelSoundRender").cancelSoundRender(jobId); }
+export function addSoundListener(cb: (e: SoundEvent) => void): EventSubscription { return native().addListener("onSoundEvent", cb); }
+export function soundInfo(uri: string): Promise<SoundInfo> { return soundNative("soundInfo").soundInfo(uri); }
+export function probeNoiseReduction(uri: string): Promise<NoiseProbe> { return soundNative("probeNoiseReduction").probeNoiseReduction(uri); }
+/** True for the rejection of a render that was cancelled (`cancelSoundRender`). */
+export function isSoundCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === SOUND_CANCELLED; }

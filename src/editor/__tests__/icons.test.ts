@@ -22,6 +22,7 @@ test("the icon of each tool", () => {
     overlayEdit: "create-outline", overlayDuplicate: "copy-outline", overlayDelete: "trash-outline", text: "add-circle-outline", captions: "chatbox-ellipses-outline",
     addAudio: "add-circle-outline", ducking: "volume-low-outline", beats: "pulse-outline", audioVolume: "volume-medium-outline", audioFade: "trending-up-outline",
     audioDuplicate: "copy-outline", audioDelete: "trash-outline", audioSplit: "cut-outline",
+    extractAudio: "git-branch-outline", voice: "mic-outline", soundQuality: "stats-chart-outline",
     effectStrength: "speedometer-outline", effectDuplicate: "copy-outline", effectDelete: "trash-outline",
     collage: "grid-outline", motion: "move-outline",
   });

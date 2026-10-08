@@ -1164,7 +1164,8 @@ final class ExportSession {
 
     // Audio tracks (music, voice-overs, sound effects): one composition track each, the trimmed source placed at
     // `start` and clamped to the file's and the video's length, played with the request's gain curve (composition
-    // seconds). A track that cannot be used fails the export, as a bad music file always did: an invalid URI and a
+    // seconds). A track that cannot be used fails the export, as a bad music file always did (except a video file
+    // without sound, which is skipped): an invalid URI and a
     // file without an audio track throw `sessionFailed`, and a file that cannot be read throws AVFoundation's error.
     // The insert time and the source range are built on the millisecond grid (`audioTime`), so the pieces of a split
     // track are back to back to the sample; `total` and the file's duration keep their own timescales (the
@@ -1176,7 +1177,13 @@ final class ExportSession {
       guard let audioURL = URL(string: audio.sourceUri) else { throw ExportError.sessionFailed("Invalid audio file URI: \(audio.sourceUri)") }
       let audioAsset = AVURLAsset(url: audioURL)
       sourceAssets.append(audioAsset)
-      guard let srcAudio = try await audioAsset.loadTracks(withMediaType: .audio).first else { throw ExportError.sessionFailed("No sound in audio file \(audio.sourceUri)") }
+      guard let srcAudio = try await audioAsset.loadTracks(withMediaType: .audio).first else {
+        // A clip's sound put on the audio row (Extract audio) whose video turns out to have no sound: there is nothing
+        // to mix, and that is not a failure. Any other file without sound still fails the export, as it always did.
+        let pictures = (try? await audioAsset.loadTracks(withMediaType: .video)) ?? []
+        if !pictures.isEmpty { continue }
+        throw ExportError.sessionFailed("No sound in audio file \(audio.sourceUri)")
+      }
       let assetDuration = try await audioAsset.load(.duration)
       let insertAt = Self.audioTime(max(0, audio.start))
       let srcEnd = CMTimeMinimum(Self.audioTime(max(0, audio.trimEnd)), assetDuration)
