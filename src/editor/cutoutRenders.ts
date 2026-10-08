@@ -8,6 +8,7 @@ import { storage } from "@/src/projects";
 import { expoFs } from "@/src/projects/expoFs";
 import { useToast } from "@/src/ui/Toast";
 import { cutoutsNeeded, useCutoutFiles, type CutoutFile } from "./cutoutFiles";
+import { takeTurn } from "./renderTurn";
 import { useEditorStore } from "./store";
 
 /** Said once when a copy could not be rendered. The switch stays on; the clip shows as it was. */
@@ -91,40 +92,14 @@ function answered(entry: Running, start: () => Promise<unknown>, deadlineMs: num
   });
 }
 
-/** Settles when the native call before this one is over (it only ever resolves): the turn is free when it has. */
-let turn: Promise<void> = Promise.resolve();
 /**
  * One native render at a time, whoever asks (the editor's queue, the export): the phone renders one cut-out at a time anyway and a
  * second call would WAIT there, with its deadline already running. So `run` (the native call with its deadline) starts only when
  * the call before it is over. A call that is cancelled while it waits answers as a cancelled render AT ONCE and never reaches the
  * phone. The turn is always given on: `run` always settles (`answered`), a call that throws counts as over, and a call that was
- * cancelled while waiting passes the turn on the moment it gets it.
+ * cancelled while waiting passes the turn on the moment it gets it. The turn itself is shared with every other heavy render (renderTurn.ts).
  */
-function inTurn(entry: Running, run: () => Promise<void>): Promise<void> {
-  const before = turn;
-  let over: () => void = () => {};
-  turn = new Promise<void>((resolve) => { over = resolve; });
-  return new Promise<void>((resolve, reject) => {
-    let waiting = true;
-    entry.giveUp = () => {
-      if (!waiting) return;
-      waiting = false;
-      reject(cancelledError());
-    };
-    void before.then(() => {
-      if (!waiting || entry.cancelled) {   // cancelled while it waited: nothing was started
-        if (waiting) { waiting = false; reject(cancelledError()); }
-        over();
-        return;
-      }
-      waiting = false;
-      entry.giveUp = null;
-      let running: Promise<void>;
-      try { running = run(); } catch (e) { reject(e); over(); return; }
-      running.then(resolve, reject).then(over, over);
-    });
-  });
-}
+const inTurn = (entry: Running, run: () => Promise<void>): Promise<void> => takeTurn(entry, run, cancelledError);
 
 const requestFor = (need: NeededCutout, jobId: string, dir: string): CutoutRequest => ({
   jobId, sourceUri: need.sourceUri, outputPath: `${dir}/${need.name}`, kind: need.photo ? "photo" : "video", from: need.from, to: need.to,
