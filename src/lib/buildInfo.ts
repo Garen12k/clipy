@@ -1,4 +1,4 @@
-import { isNativeAvailable, isSoundAvailable } from "@/modules/clipy-video";
+import { isNativeAvailable, isSoundAvailable, isSpeechAvailable } from "@/modules/clipy-video";
 
 /**
  * What the INSTALLED app can do, newest ability first. Buttons and screens arrive from the dev server at once, but an ability that
@@ -6,6 +6,7 @@ import { isNativeAvailable, isSoundAvailable } from "@/modules/clipy-video";
  * This names the installed build by what it has; add a row at the top whenever a build adds a native ability.
  */
 const LEVELS: { name: string; has: () => boolean }[] = [
+  { name: "noise, ramps and speech", has: isSpeechAvailable },
   { name: "sound tools", has: isSoundAvailable },
   { name: "export only (older)", has: isNativeAvailable },
 ];
@@ -18,3 +19,6 @@ export function buildLabel(): string {
 
 /** What a tool says when the installed app is too old for it — with what to do about it. `what` is plural ("Voice and sound effects"). */
 export const NEEDS_LATEST_BUILD = (what: string): string => `${what} need the latest Clipy build. Install it from the newest build link.`;
+
+/** Said where Reduce noise or Read aloud is tapped in Expo Go or in a build from before them. */
+export const LATEST_TOOLS = NEEDS_LATEST_BUILD("Reduce noise and Read aloud");

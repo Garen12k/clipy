@@ -175,6 +175,15 @@ export type SoundEvent = { jobId: string; progress: number };
 export interface SoundInfo { hasSound: boolean; seconds: number }
 /** The answer of the noise-reduction test: whether Apple's sound isolation unit rendered a saved recording, the stage it reached and what it reported. */
 export interface NoiseProbe { ok: boolean; stage: string; detail: string }
+/** One installed voice. `languageName` is the language in the phone's own language; `quality` is Apple's raw value (1 default, 2 enhanced, 3 premium). */
+export interface SpeechVoice { id: string; name: string; language: string; languageName: string; quality: number }
+/** `current` = the phone's language code (BCP 47), to start the picker on. */
+export interface SpeechVoices { current: string; voices: SpeechVoice[] }
+/** One Read aloud: the text as it is spoken, the voice, the rate (0 … 1, 0.5 = the system's normal pace) and the file to write. */
+export interface SpeechRequest { jobId: string; text: string; voiceId: string; rate: number; outputPath: string }
+export interface SpeechResult { fileUri: string; seconds: number }
+/** The code a cancelled Read aloud rejects with. */
+export const SPEECH_CANCELLED = "E_READ_ALOUD_CANCELLED";
 /** The code a cancelled render rejects with. */
 export const SOUND_CANCELLED = "E_SOUND_CANCELLED";
 
@@ -190,6 +199,10 @@ type ClipyVideoNative = {
   cancelSoundRender(jobId: string): void;
   soundInfo(uri: string): Promise<SoundInfo>;
   probeNoiseReduction(uri: string): Promise<NoiseProbe>;
+  noiseAvailable(): boolean;
+  listVoices(): Promise<SpeechVoices>;
+  speakToFile(req: SpeechRequest): Promise<SpeechResult>;
+  cancelSpeech(jobId: string): void;
 };
 
 const NO_SOUND = "This build of the app has no sound tools yet. Install a newer development build.";
@@ -222,3 +235,27 @@ export function soundInfo(uri: string): Promise<SoundInfo> { return soundNative(
 export function probeNoiseReduction(uri: string): Promise<NoiseProbe> { return soundNative("probeNoiseReduction").probeNoiseReduction(uri); }
 /** True for the rejection of a render that was cancelled (`cancelSoundRender`). */
 export function isSoundCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === SOUND_CANCELLED; }
+
+const NOT_IN_BUILD = "This build of the app cannot do that yet. Install the latest Clipy build.";
+/** The module for a call that came with the build of 2026-10-08: missing = not linked (Expo Go); present but without the function = an older build. */
+function latestNative(fn: "listVoices" | "speakToFile" | "cancelSpeech"): ClipyVideoNative {
+  const m = native();
+  if (typeof m[fn] !== "function") throw new Error(NOT_IN_BUILD);
+  return m;
+}
+/** Whether the linked native module can read a text aloud: false in Expo Go and in a build made before Read aloud. */
+export function isSpeechAvailable(): boolean { return typeof optional()?.speakToFile === "function"; }
+/** Whether the linked native module knows Reduce noise at all (a build made before it would ignore the request's noise number). */
+export function isNoiseBuild(): boolean { return typeof optional()?.noiseAvailable === "function"; }
+/** Whether Reduce noise can run: the build knows it AND this iPhone has Apple's sound isolation unit. Never throws. */
+export function isNoiseAvailable(): boolean {
+  try {
+    const m = optional();
+    return !!m && typeof m.noiseAvailable === "function" && m.noiseAvailable() === true;
+  } catch { return false; }
+}
+export function listVoices(): Promise<SpeechVoices> { return latestNative("listVoices").listVoices(); }
+export function speakToFile(req: SpeechRequest): Promise<SpeechResult> { return latestNative("speakToFile").speakToFile(req); }
+export function cancelSpeech(jobId: string): void { latestNative("cancelSpeech").cancelSpeech(jobId); }
+/** True for the rejection of a Read aloud that was cancelled (`cancelSpeech`). */
+export function isSpeechCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === SPEECH_CANCELLED; }
