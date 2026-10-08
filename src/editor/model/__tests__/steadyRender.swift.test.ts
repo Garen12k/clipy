@@ -68,23 +68,27 @@ test("writing: HEVC or H.264, only with settings the writer says it can apply, i
 test("the copy keeps the source's timeline and its sound", () => {
   expect(render).toContain("writer.startSession(atSourceTime: .zero)");
   expect(render).toContain("writer.endSession(atSourceTime: range.end)");
-  expect(render).toContain("guard adaptor.append(out, withPresentationTime: pts) else");                       // a source frame at its own time
-  expect(render).toContain("CMTime(seconds: span.start + Double(gridIndex) / grid, preferredTimescale: 6000)"); // a grid frame on the grid
+  expect(between(swift, "static func put(", "\n  }\n")).toContain("guard adaptor.append(out, withPresentationTime: stamp) else");
+  expect(render).toContain("try put(placed, at: pts, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)");      // no grid: a source frame at its own time
+  expect(render).toContain("ahead = SteadyFrame(time: at, stamp: pts, slot: into)");
+  expect(render).toContain("try put(own, at: b.stamp, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)");     // a grid: the same
+  expect(render).toContain("guard reader.status == .completed else");                                                                // every source frame was read
   expect(render).toContain("AVAssetReaderTrackOutput(track: audio, outputSettings: nil)");
   expect(render).toContain("AVAssetWriterInput(mediaType: .audio, outputSettings: nil, sourceFormatHint: source.audioHint)");
   expect(render).toContain("guard writer.status == .writing else");
 });
 
-test("a frame is zoomed about its centre and moved by its correction; an in-between frame is a dissolve by time, or the nearer frame", () => {
+test("a frame is zoomed about its centre and moved by its correction, taken from the line between the two entries around its time", () => {
   const placement = between(swift, "static func placement(", "\n  }\n");
   expect(placement).toContain("CGAffineTransform(translationX: -w / 2, y: -h / 2)");
   expect(placement).toContain("CGAffineTransform(scaleX: z, y: z)");
   expect(placement).toContain("CGAffineTransform(translationX: w / 2 + CGFloat(move.x) * w, y: h / 2 + CGFloat(move.y) * h)");
   expect(render).toContain(".clampedToExtent()");
-  expect(render).toContain("weight = min(1, max(0, (at - a.time) / (b.time - a.time)))");
-  expect(render).toContain('Adjust.filtered(first, "CIDissolveTransition", ["inputTargetImage": second, "inputTime": NSNumber(value: weight)])');
   const shift = between(swift, "static func shift(", "\n  }\n");
-  expect(shift).toContain("abs(times[cursor + 1] - time) <= abs(times[cursor] - time)");   // the entry nearest the frame's time
+  expect(shift).toContain("while cursor + 1 < count, times[cursor + 1] <= time { cursor += 1 }");   // the entry at or before the frame's time
+  expect(shift).toContain("let part = min(1, max(0, (time - times[cursor]) / room))");
+  expect(shift).toContain("return (x0 + (x1 - x0) * part, y0 + (y1 - y0) * part)");
+  expect(shift).toContain("guard cursor + 1 < count, time > times[cursor] else { return (x0, y0) }");
 });
 
 test("one heavy render at a time on the phone: the cut-out's gate, taken while a cancel is still answered", () => {
@@ -119,7 +123,7 @@ test("every failure names its stage, and nothing is forced", () => {
 test("a correction is looked up by TIME, is nothing outside the measured stretch, and never moves the picture further than the zoom hides", () => {
   const shift = between(swift, "static func shift(", "\n  }\n");
   expect(shift).toContain("guard time >= times[0] - edge, time <= times[count - 1] + edge else { return (0, 0) }");
-  expect(shift).not.toMatch(/dx\[kept\]|dx\[written\]|dx\[gridIndex\]/);
+  expect(shift).not.toMatch(/dx\[kept\]|dx\[written\]|dx\[step\]/);
   const hidden = between(swift, "static func hidden(", "\n  }\n");
   expect(hidden).toContain("let most = (z - 1) / 2");
   expect(hidden).toContain("min(most, max(-most, move.x))");
@@ -130,13 +134,28 @@ test("a correction is looked up by TIME, is nothing outside the measured stretch
   expect(placement.indexOf("CGAffineTransform(scaleX: z, y: z)")).toBeLessThan(placement.indexOf("CGFloat(move.x) * w"));
 });
 
-test("a source that already has the grid's frames keeps its own frames at their own times: none dropped, none blended", () => {
-  expect(between(swift, "final class SteadySource", "\n}\n")).toContain("try await video.load(.nominalFrameRate)");
-  expect(render).toContain("let grid: Double = wanted > 0 && source.keptRate(gap: gap) >= wanted - 0.5 ? 0 : wanted");
-  const kept = between(swift, "func keptRate(", "\n  }\n");
-  expect(kept).toContain("guard frameRate.isFinite, frameRate > 0 else { return 0 }");
-  // Frames the grid no longer needs are still taken from the reader, so the sound beside them is never held up.
-  expect(render).toContain("if picturesDone, !sourceDone, !soundsDone {");
+test("smooth slow motion: every source frame stays as it is at its own time, and blended frames go only BETWEEN two neighbours", () => {
+  // How many: round(gap x grid) - 1, none above the cap (a hole is not filled), never closer together than minFrameGap.
+  const count = between(swift, "static func blendsBetween(", "\n  }\n");
+  expect(swift).toContain("static let mostBetween = 16");
+  expect(count).toContain("let asked = (length * grid).rounded() - 1");
+  expect(count).toContain("guard asked.isFinite, asked >= 1, asked <= Double(mostBetween) else { return 0 }");
+  expect(count).toContain("if room.isFinite, room < Double(count + 1) { count = Int(room.rounded(.down)) - 1 }");
+  expect(count).toContain("return max(0, count)");
+  expect(render).toContain("count = blendsBetween(at - before.time, grid: grid, gap: gap)");
+  // Where and what: evenly between the two, a dissolve by the share of the way; never a second copy of a neighbour.
+  expect(render).toContain("let weight = Double(step) / Double(between + 1)");
+  expect(render).toContain("let stamp = CMTime(seconds: a.time + (b.time - a.time) * weight, preferredTimescale: 6000)");
+  expect(render).toContain("if weight > near, weight < 1 - near, CMTimeCompare(stamp, a.stamp) > 0, CMTimeCompare(stamp, b.stamp) < 0 {");
+  expect(render).toContain('guard let mixed = Adjust.filtered(first, "CIDissolveTransition", ["inputTargetImage": second, "inputTime": NSNumber(value: weight)]) else {');
+  expect(render).toContain("try put(mixed.cropped(to: rect), at: stamp, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)");
+  // The blended frames of a pair are written before the pair's second frame, and that frame before the next is read.
+  expect(render.indexOf("try put(mixed.cropped(to: rect)")).toBeLessThan(render.indexOf("try put(own, at: b.stamp"));
+  expect(render.indexOf("try put(own, at: b.stamp")).toBeLessThan(render.indexOf("pictures.copyNextSampleBuffer()"));
+  expect(render.split("pictures.copyNextSampleBuffer()").length - 1).toBe(1);
+  // No lattice of times is left, and the file's frame rate is not asked.
+  expect(swift).not.toContain("gridIndex");
+  expect(swift).not.toContain("nominalFrameRate");
 });
 
 test("progress is sent at most once per percent", () => {

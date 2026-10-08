@@ -78,10 +78,9 @@ final class SteadySource {
   let preferredTransform: CGAffineTransform
   let naturalSize: CGSize
   let seconds: Double
-  let frameRate: Double                            // the file's own frames per second; 0 = not known
 
   init(asset: AVURLAsset, video: AVAssetTrack, audio: AVAssetTrack?, audioHint: CMFormatDescription?,
-       preferredTransform: CGAffineTransform, naturalSize: CGSize, seconds: Double, frameRate: Double) {
+       preferredTransform: CGAffineTransform, naturalSize: CGSize, seconds: Double) {
     self.asset = asset
     self.video = video
     self.audio = audio
@@ -89,14 +88,6 @@ final class SteadySource {
     self.preferredTransform = preferredTransform
     self.naturalSize = naturalSize
     self.seconds = seconds
-    self.frameRate = frameRate
-  }
-
-  /// How many frames a second a render keeps of this file: its own rate, or what `gap` (the least time between two
-  /// kept frames) lets through. 0 = not known.
-  func keptRate(gap: Double) -> Double {
-    guard frameRate.isFinite, frameRate > 0 else { return 0 }
-    return gap > 0 ? min(frameRate, 1 / gap) : frameRate
   }
 
   static func open(_ uri: String) async throws -> SteadySource {
@@ -108,7 +99,6 @@ final class SteadySource {
       }
       let (preferredTransform, naturalSize) = try await video.load(.preferredTransform, .naturalSize)
       let length = try await asset.load(.duration)
-      let nominal: Float = try await video.load(.nominalFrameRate)
       let audio: AVAssetTrack? = try await asset.loadTracks(withMediaType: .audio).first
       // Only a description of SOUND is handed to the writer: an input given another media type's description stops the app.
       var audioHint: CMFormatDescription? = nil
@@ -120,8 +110,7 @@ final class SteadySource {
       }
       return SteadySource(asset: asset, video: video, audio: audio, audioHint: audioHint,
                           preferredTransform: preferredTransform, naturalSize: naturalSize,
-                          seconds: length.seconds.isFinite ? length.seconds : 0,
-                          frameRate: nominal.isFinite && nominal > 0 ? Double(nominal) : 0)
+                          seconds: length.seconds.isFinite ? length.seconds : 0)
     } catch let own as SteadyError {
       throw own
     } catch {
@@ -130,16 +119,18 @@ final class SteadySource {
   }
 }
 
-/// One corrected source frame held for blending: its source second and which of the two held buffers it is in.
+/// One corrected source frame held for blending: its source second, its own presentation time and which of the two
+/// held buffers it is in.
 struct SteadyFrame {
   let time: Double
+  let stamp: CMTime
   let slot: Int
 }
 
 /// Stabilize and Smooth slow motion, the native part. Nothing here decides a number: what Vision's steps mean, the
 /// corrections, the zoom, the grid and the bitrate come from the app. `measure` reports how far each frame moved
-/// against the frame before it; `render` writes the frames, moved and zoomed as told, on their own times or on a
-/// uniform grid with blended frames in between. All the pixel work is Core Image's, Vision's and the encoder's.
+/// against the frame before it; `render` writes the frames, moved and zoomed as told, on their own times, with
+/// blended frames added between them when asked. All the pixel work is Core Image's, Vision's and the encoder's.
 enum SteadyRender {
   /// What a failure says to the app: a SteadyError's own staged text, anything else described in full.
   static func message(_ error: Error) -> String {
@@ -341,20 +332,57 @@ enum SteadyRender {
     }
   }
 
-  /// The correction for a frame at `time`: the entry whose TIME is nearest (never the entry with the frame's index:
-  /// the app leaves frames out), found by walking on from `cursor` (frames come in order, so the walk never goes
-  /// back). No entries, or a frame outside the stretch the entries cover → no correction.
+  /// The correction for a frame at `time`, looked up by TIME (never by the frame's index: the app leaves frames
+  /// out): on a straight line between the entry at or before it and the entry after it, found by walking on from
+  /// `cursor` (frames come in order, so the walk never goes back). No entries, or a frame outside the stretch the
+  /// entries cover → no correction.
   static func shift(at time: Double, times: [Double], dx: [Double], dy: [Double], cursor: inout Int) -> (x: Double, y: Double) {
     let count = min(times.count, min(dx.count, dy.count))
-    guard count > 0 else { return (0, 0) }
+    guard count > 0, time.isFinite else { return (0, 0) }
     let edge = 0.05
     guard time >= times[0] - edge, time <= times[count - 1] + edge else { return (0, 0) }
     if cursor < 0 { cursor = 0 }
     if cursor >= count { cursor = count - 1 }
-    while cursor + 1 < count, abs(times[cursor + 1] - time) <= abs(times[cursor] - time) { cursor += 1 }
-    let x = dx[cursor]
-    let y = dy[cursor]
-    return (x.isFinite ? x : 0, y.isFinite ? y : 0)
+    while cursor + 1 < count, times[cursor + 1] <= time { cursor += 1 }
+    let x0 = dx[cursor].isFinite ? dx[cursor] : 0
+    let y0 = dy[cursor].isFinite ? dy[cursor] : 0
+    guard cursor + 1 < count, time > times[cursor] else { return (x0, y0) }
+    let room = times[cursor + 1] - times[cursor]
+    guard room.isFinite, room > 0 else { return (x0, y0) }
+    let part = min(1, max(0, (time - times[cursor]) / room))
+    let x1 = dx[cursor + 1].isFinite ? dx[cursor + 1] : 0
+    let y1 = dy[cursor + 1].isFinite ? dy[cursor + 1] : 0
+    return (x0 + (x1 - x0) * part, y0 + (y1 - y0) * part)
+  }
+
+  /// No pair of source frames gets more blended frames than this: a hole in the file (dropped frames, a pause) is
+  /// left as it is.
+  static let mostBetween = 16
+
+  /// How many blended frames go between two neighbouring source frames `length` seconds apart, so that the copy
+  /// reaches about `grid` frames a second there: `round(length × grid) − 1`; none for a pair already that close,
+  /// none above `mostBetween` (a hole is not filled), and never so many that two frames of the copy are closer than `gap`.
+  static func blendsBetween(_ length: Double, grid: Double, gap: Double) -> Int {
+    guard length.isFinite, length > 0, grid.isFinite, grid > 0 else { return 0 }
+    let asked = (length * grid).rounded() - 1
+    guard asked.isFinite, asked >= 1, asked <= Double(mostBetween) else { return 0 }
+    var count = Int(asked)
+    if gap > 0 {
+      let room = length / gap
+      if room.isFinite, room < Double(count + 1) { count = Int(room.rounded(.down)) - 1 }
+    }
+    return max(0, count)
+  }
+
+  /// Renders `image` (filling `rect`) into a buffer from the writer's pool and appends it at `stamp`.
+  static func put(_ image: CIImage, at stamp: CMTime, rect: CGRect, pool: CVPixelBufferPool, space: CGColorSpace,
+                  adaptor: AVAssetWriterInputPixelBufferAdaptor, writer: AVAssetWriter) throws {
+    let out = try poolBuffer(pool)
+    CutoutRender.context.render(image, to: out, bounds: rect, colorSpace: space)
+    CutoutRender.tag(out)
+    guard adaptor.append(out, withPresentationTime: stamp) else {
+      throw SteadyError.failed("steady writer: " + ExportSession.describe(writer.error))
+    }
   }
 
   /// A correction held to what the zoom hides: the picture, scaled about its centre by `zoom`, reaches
@@ -380,12 +408,12 @@ enum SteadyRender {
   }
 
   /// A steady copy. Frames of the asked range are read, placed (`placement`) and written into a session that starts
-  /// at zero and ends at the range's end, so the copy has the source's timeline. Without a grid every kept frame is
-  /// written at its OWN source time. With a grid a frame is written at `start + k / grid` for every k inside the
-  /// range: the kept frame before that moment (`held`) dissolved into the one after it (`ahead`) by time; before the
-  /// first frame and after the last, that frame itself. (A file that already has the grid's frames a second is
-  /// written without a grid.) The source's sound packets are copied beside the picture as
-  /// they are. The loop serves whichever input is ready and sleeps when neither is.
+  /// at zero and ends at the range's end, so the copy has the source's timeline. EVERY kept frame is written at its
+  /// OWN source time. With a grid (a DENSITY: about that many frames a source second, not a lattice of times),
+  /// blended frames (`blendsBetween`) are added between each two neighbouring kept frames A and B, evenly spaced in time
+  /// between them, each a dissolve of A into B by its share of the way; nothing is added before the first frame or
+  /// after the last. The source's sound packets are copied beside the picture as they are. The loop serves whichever
+  /// input is ready and sleeps when neither is.
   static func render(_ request: SteadyRequest, source: SteadySource, to outputURL: URL, job: SteadyJob,
                      progress: (Double) -> Void) async throws -> [String: Any] {
     let span = try sourceSpan(from: request.from, to: request.to, seconds: source.seconds)
@@ -399,10 +427,7 @@ enum SteadyRender {
     let dx: [Double] = request.dx
     let dy: [Double] = request.dy
     let gap: Double = request.minFrameGap.isFinite && request.minFrameGap > 0 ? request.minFrameGap : 0
-    let wanted: Double = request.grid.isFinite && request.grid >= 1 ? min(240, request.grid.rounded()) : 0
-    // A file that already has the grid's frames a second (or more) keeps its OWN frames at their own times: a grid
-    // would drop some of them and blend the rest.
-    let grid: Double = wanted > 0 && source.keptRate(gap: gap) >= wanted - 0.5 ? 0 : wanted
+    let grid: Double = request.grid.isFinite && request.grid >= 1 ? min(240, request.grid.rounded()) : 0
     let near: Double = request.blendFloor.isFinite ? min(0.49, max(0, request.blendFloor)) : 0.02
     let zoom: Double = request.zoom
 
@@ -440,10 +465,10 @@ enum SteadyRender {
     var kept = 0                                   // source frames used
     var written = 0                                // frames in the copy
     var lastKept = -Double.infinity
-    var held: SteadyFrame? = nil                   // grid only: the kept frame at or before the next grid moment
-    var ahead: SteadyFrame? = nil                  // grid only: the kept frame after `held`
-    var sourceDone = false
-    var gridIndex = 0
+    var held: SteadyFrame? = nil                   // grid only: the last kept frame, already written
+    var ahead: SteadyFrame? = nil                  // grid only: the kept frame after `held`, not yet written
+    var between = 0                                // grid only: blended frames to write before `ahead`
+    var step = 1                                   // grid only: the next of them (1 … between)
     var picturesDone = false
     var soundsDone = soundInput == nil
     do {
@@ -458,96 +483,74 @@ enum SteadyRender {
         var worked = false
         if !picturesDone, pictureInput.isReadyForMoreMediaData {
           worked = true
-          if grid == 0 || (ahead == nil && !sourceDone) {
-            // The next source frame: written at once (no grid), or held for the grid frames around it.
-            if let sample = pictures.copyNextSampleBuffer() {
-              let pts = CMSampleBufferGetPresentationTimeStamp(sample)
-              let at = pts.seconds
-              if at.isFinite, at >= span.start - 0.0005, at > lastKept, at - lastKept >= gap, let frame = CMSampleBufferGetImageBuffer(sample) {
-                let move = hidden(shift(at: at, times: times, dx: dx, dy: dy, cursor: &cursor), zoom: zoom)
-                let spot = placement(upright: upright, width: size.width, height: size.height, zoom: zoom, move: move)
-                if grid == 0 {
-                  try autoreleasepool { () throws -> Void in
-                    // The edge pixels are repeated outwards first, so a rounding sliver at the rim is never black.
-                    let placed = CIImage(cvPixelBuffer: frame).clampedToExtent().transformed(by: spot).cropped(to: rect)
-                    let out = try poolBuffer(pool)
-                    CutoutRender.context.render(placed, to: out, bounds: rect, colorSpace: space)
-                    CutoutRender.tag(out)
-                    guard adaptor.append(out, withPresentationTime: pts) else {
-                      throw SteadyError.failed("steady writer: " + ExportSession.describe(writer.error))
-                    }
-                  }
-                  written += 1
-                  progress(min(1, max(0, (at - span.start) / (span.end - span.start))))
-                } else {
-                  var into = 0
-                  if let before = held { into = 1 - before.slot }
-                  autoreleasepool {
-                    let placed = CIImage(cvPixelBuffer: frame).clampedToExtent().transformed(by: spot).cropped(to: rect)
-                    CutoutRender.context.render(placed, to: slots[into], bounds: rect, colorSpace: space)
-                  }
-                  let made = SteadyFrame(time: at, slot: into)
-                  if held == nil { held = made } else { ahead = made }
-                }
-                kept += 1
-                lastKept = at
-              }
-            } else {
-              sourceDone = true
-              if grid == 0 {
-                picturesDone = true
-                pictureInput.markAsFinished()
-              }
-            }
-          } else if let a = held {
-            // One grid frame — or one step on to the next pair of source frames.
-            let at = span.start + Double(gridIndex) / grid
-            if at >= span.end - 0.0005 {
-              picturesDone = true
-              pictureInput.markAsFinished()
-            } else if let b = ahead, at >= b.time {
-              held = b
-              ahead = nil
-            } else {
-              var weight = 0.0
-              if let b = ahead, b.time > a.time { weight = min(1, max(0, (at - a.time) / (b.time - a.time))) }
-              let stamp = CMTime(seconds: span.start + Double(gridIndex) / grid, preferredTimescale: 6000)
-              try autoreleasepool { () throws -> Void in
-                // The held buffers are read back as what they were written as (they carry no colour tag of their own).
-                let first = CIImage(cvPixelBuffer: slots[a.slot], options: [CIImageOption.colorSpace: space])
-                var image = first
-                if let b = ahead, weight > near {
+          if let b = ahead {
+            if step <= between, let a = held {
+              // One blended frame between A and B, at its share of the way from A's time to B's.
+              let weight = Double(step) / Double(between + 1)
+              let stamp = CMTime(seconds: a.time + (b.time - a.time) * weight, preferredTimescale: 6000)
+              // Never a second copy of a neighbour (a share within `near` of an end), never a time out of order.
+              if weight > near, weight < 1 - near, CMTimeCompare(stamp, a.stamp) > 0, CMTimeCompare(stamp, b.stamp) < 0 {
+                let mixedIn: Bool = try autoreleasepool { () throws -> Bool in
+                  // The held buffers are read back as what they were written as (they carry no colour tag of their own).
+                  let first = CIImage(cvPixelBuffer: slots[a.slot], options: [CIImageOption.colorSpace: space])
                   let second = CIImage(cvPixelBuffer: slots[b.slot], options: [CIImageOption.colorSpace: space])
-                  if weight >= 1 - near {
-                    image = second
-                  } else if let mixed = Adjust.filtered(first, "CIDissolveTransition", ["inputTargetImage": second, "inputTime": NSNumber(value: weight)]) {
-                    image = mixed.cropped(to: rect)
-                  } else if weight >= 0.5 {
-                    image = second                 // no dissolve on this iPhone: the nearer frame
+                  guard let mixed = Adjust.filtered(first, "CIDissolveTransition", ["inputTargetImage": second, "inputTime": NSNumber(value: weight)]) else {
+                    return false                   // no dissolve on this iPhone: no frame is added
                   }
+                  try put(mixed.cropped(to: rect), at: stamp, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)
+                  return true
                 }
-                let out = try poolBuffer(pool)
-                CutoutRender.context.render(image, to: out, bounds: rect, colorSpace: space)
-                CutoutRender.tag(out)
-                guard adaptor.append(out, withPresentationTime: stamp) else {
-                  throw SteadyError.failed("steady writer: " + ExportSession.describe(writer.error))
-                }
+                if mixedIn { written += 1 }
+              }
+              step += 1
+            } else {
+              // The source frame itself, at its own time.
+              try autoreleasepool { () throws -> Void in
+                let own = CIImage(cvPixelBuffer: slots[b.slot], options: [CIImageOption.colorSpace: space])
+                try put(own, at: b.stamp, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)
               }
               written += 1
-              gridIndex += 1
-              progress(min(1, max(0, (at - span.start) / (span.end - span.start))))
+              held = b
+              ahead = nil
+              progress(min(1, max(0, (b.time - span.start) / (span.end - span.start))))
+            }
+          } else if let sample = pictures.copyNextSampleBuffer() {
+            let pts = CMSampleBufferGetPresentationTimeStamp(sample)
+            let at = pts.seconds
+            if at.isFinite, at >= span.start - 0.0005, at > lastKept, at - lastKept >= gap, let frame = CMSampleBufferGetImageBuffer(sample) {
+              let move = hidden(shift(at: at, times: times, dx: dx, dy: dy, cursor: &cursor), zoom: zoom)
+              let spot = placement(upright: upright, width: size.width, height: size.height, zoom: zoom, move: move)
+              if grid == 0 {
+                try autoreleasepool { () throws -> Void in
+                  // The edge pixels are repeated outwards first, so a rounding sliver at the rim is never black.
+                  let placed = CIImage(cvPixelBuffer: frame).clampedToExtent().transformed(by: spot).cropped(to: rect)
+                  try put(placed, at: pts, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)
+                }
+                written += 1
+                progress(min(1, max(0, (at - span.start) / (span.end - span.start))))
+              } else {
+                // Held in a buffer of its own: the blended frames before it and the frame itself are made from it.
+                var into = 0
+                var count = 0
+                if let before = held {
+                  into = 1 - before.slot
+                  count = blendsBetween(at - before.time, grid: grid, gap: gap)
+                }
+                autoreleasepool {
+                  let placed = CIImage(cvPixelBuffer: frame).clampedToExtent().transformed(by: spot).cropped(to: rect)
+                  CutoutRender.context.render(placed, to: slots[into], bounds: rect, colorSpace: space)
+                }
+                ahead = SteadyFrame(time: at, stamp: pts, slot: into)
+                between = count
+                step = 1
+              }
+              kept += 1
+              lastKept = at
             }
           } else {
-            // A grid, the source is at its end and no frame was kept: nothing to write.
             picturesDone = true
             pictureInput.markAsFinished()
           }
-        }
-        if picturesDone, !sourceDone, !soundsDone {
-          // The grid ended before the reader's last frames: they are still taken (and dropped), so the reader is
-          // never left holding pictures while the sound beside them is wanted.
-          worked = true
-          if pictures.copyNextSampleBuffer() == nil { sourceDone = true }
         }
         if !soundsDone, let soundInput, let sounds, soundInput.isReadyForMoreMediaData {
           worked = true
@@ -563,16 +566,11 @@ enum SteadyRender {
         }
         if !worked { try await Task.sleep(nanoseconds: 2_000_000) }
       }
-      // With a grid the picture can be finished before the reader has handed out its last frame (the range's end is
-      // reached first): the reader is then still reading, which is not a failure.
-      guard reader.status == .completed || (grid > 0 && reader.status == .reading) else {
-        throw SteadyError.failed("steady reader: " + ExportSession.describe(reader.error))
-      }
+      guard reader.status == .completed else { throw SteadyError.failed("steady reader: " + ExportSession.describe(reader.error)) }
       guard kept > 0, written > 0 else { throw SteadyError.failed("steady render: no picture came out") }
       if job.isCancelled { throw SteadyError.cancelled }
       // The last append can fail the writer after the loop's own check: never end a session on a writer that is not writing.
       guard writer.status == .writing else { throw SteadyError.failed("steady writer: " + ExportSession.describe(writer.error)) }
-      if reader.status == .reading { reader.cancelReading() }
       writer.endSession(atSourceTime: range.end)
       await writer.finishWriting()
       guard writer.status == .completed else { throw SteadyError.failed("steady writer: " + ExportSession.describe(writer.error)) }
