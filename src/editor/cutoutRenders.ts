@@ -31,7 +31,10 @@ export const CUTOUT_SETTLE_MS = 800;
 
 type Running = {
   jobId: string; promise: Promise<string>; listeners: Set<(fraction: number) => void>; cancelled: boolean;
-  /** Set while the native render is awaited: starts the grace after which the wait ends by itself (`cancel` calls it). */
+  /**
+   * What a cancel does to the wait (`cancel` calls it). While the render waits for its turn: ends the wait at once. While the
+   * native render is awaited: starts the grace after which the wait ends by itself.
+   */
   giveUp: (() => void) | null;
 };
 /** The renders that have not answered yet, by output path: a second caller for the same copy shares the first one's render. */
@@ -88,6 +91,41 @@ function answered(entry: Running, start: () => Promise<unknown>, deadlineMs: num
   });
 }
 
+/** Settles when the native call before this one is over (it only ever resolves): the turn is free when it has. */
+let turn: Promise<void> = Promise.resolve();
+/**
+ * One native render at a time, whoever asks (the editor's queue, the export): the phone renders one cut-out at a time anyway and a
+ * second call would WAIT there, with its deadline already running. So `run` (the native call with its deadline) starts only when
+ * the call before it is over. A call that is cancelled while it waits answers as a cancelled render AT ONCE and never reaches the
+ * phone. The turn is always given on: `run` always settles (`answered`), a call that throws counts as over, and a call that was
+ * cancelled while waiting passes the turn on the moment it gets it.
+ */
+function inTurn(entry: Running, run: () => Promise<void>): Promise<void> {
+  const before = turn;
+  let over: () => void = () => {};
+  turn = new Promise<void>((resolve) => { over = resolve; });
+  return new Promise<void>((resolve, reject) => {
+    let waiting = true;
+    entry.giveUp = () => {
+      if (!waiting) return;
+      waiting = false;
+      reject(cancelledError());
+    };
+    void before.then(() => {
+      if (!waiting || entry.cancelled) {   // cancelled while it waited: nothing was started
+        if (waiting) { waiting = false; reject(cancelledError()); }
+        over();
+        return;
+      }
+      waiting = false;
+      entry.giveUp = null;
+      let running: Promise<void>;
+      try { running = run(); } catch (e) { reject(e); over(); return; }
+      running.then(resolve, reject).then(over, over);
+    });
+  });
+}
+
 const requestFor = (need: NeededCutout, jobId: string, dir: string): CutoutRequest => ({
   jobId, sourceUri: need.sourceUri, outputPath: `${dir}/${need.name}`, kind: need.photo ? "photo" : "video", from: need.from, to: need.to,
   maxSide: need.photo ? CUTOUT.photoMaxSide : CUTOUT.videoMaxSide, minFrameGap: CUTOUT.minFrameGap, minPerson: CUTOUT.minPerson,
@@ -103,7 +141,8 @@ async function onDisk(dir: string, need: NeededCutout): Promise<boolean> {
 /**
  * The cut-out copy `need` names: its uri once it exists — found on disk, or rendered now (one render per copy however many ask).
  * Rejects with BEATS_BACKGROUND_TOOLS without the tool, with the native staged message when the render fails or does not answer in
- * time, and with the cancel code when it was cancelled (`isCutoutCancelled`). It always settles. `onProgress` gets the phone's own
+ * time, and with the cancel code when it was cancelled (`isCutoutCancelled`). It always settles. Native renders take turns
+ * (`inTurn`): the deadline of a render counts from the moment the phone is handed it. `onProgress` gets the phone's own
  * fractions. `need` comes from `cutoutNeedOf` / `cutoutsNeeded`. Used by the editor (`syncCutouts`) and by the export.
  */
 export function ensureCutout(projectId: string, need: NeededCutout, onProgress?: (fraction: number) => void): Promise<string> {
@@ -121,7 +160,7 @@ export function ensureCutout(projectId: string, need: NeededCutout, onProgress?:
     listen();
     await expoFs.mkdir(dir);
     if (entry.cancelled) throw cancelledError();
-    await answered(entry, () => renderCutout(requestFor(need, entry.jobId, dir)), cutoutDeadlineMs(need));
+    await inTurn(entry, () => answered(entry, () => renderCutout(requestFor(need, entry.jobId, dir)), cutoutDeadlineMs(need)));
     return path;
   };
   entry.promise = work().finally(() => { inflight.delete(path); });

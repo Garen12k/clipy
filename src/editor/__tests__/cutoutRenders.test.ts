@@ -427,6 +427,132 @@ describe("the queue", () => {
   });
 });
 
+// The native side renders one cut-out at a time (`CutoutRender.enter`) and a second call WAITS there. The editor's queue and the
+// export both call `ensureCutout`, so two calls can be open at once; the wait must not count against the second one's deadline.
+describe("one native render at a time, whoever asks", () => {
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(async () => { resetCutouts(); jest.runOnlyPendingTimers(); await tick(); jest.useRealTimers(); });
+  const pass = async (ms: number) => { jest.advanceTimersByTime(ms); await tick(); };
+  const whole: Clip = { ...clip, id: "w", trimStart: 0, trimEnd: 30 };
+  const WHOLE = "abc-c1-0-30000.mov";
+  /** What became of a call: "open" until it settles. */
+  const watch = (p: Promise<string>) => {
+    const seen: { state: "open" | "done" | "failed"; error: unknown } = { state: "open", error: null };
+    p.then(() => { seen.state = "done"; }, (e: unknown) => { seen.state = "failed"; seen.error = e; });
+    return seen;
+  };
+  const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+  const code = (e: unknown): unknown => (e as { code?: unknown } | null)?.code;
+
+  test("a second copy is not handed to the phone while the first is there, and its deadline starts only when its turn comes", async () => {
+    const first = pending(WHOLE);
+    render.mockImplementationOnce(() => new Promise(() => {}));     // the photo's render never answers
+    const a = watch(ensureCutout("p1", cutoutNeed(whole, [])));     // the editor's: 660 s
+    const b = watch(ensureCutout("p1", cutoutNeed(photo, [])));     // the export's: 60 s
+    await tick();
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenLastCalledWith(expect.objectContaining({ outputPath: `${DIR}/${WHOLE}` }));
+    await pass(5 * cutoutDeadlineMs({ photo: true, from: 0, to: 0 }));   // five times the photo's deadline, spent waiting
+    expect(b.state).toBe("open");
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(cancelCutout).not.toHaveBeenCalled();
+    first.ok();
+    await tick();
+    expect(a.state).toBe("done");
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render).toHaveBeenLastCalledWith(expect.objectContaining({ outputPath: `${DIR}/${PNG}` }));
+    await pass(cutoutDeadlineMs({ photo: true, from: 0, to: 0 }) - 1);
+    expect(b.state).toBe("open");
+    await pass(1);
+    expect(b.state).toBe("failed");
+    expect(message(b.error)).toBe("cutout render: no answer after 60 s");
+  });
+
+  test("a call that waits for its turn is cancelled at once and never reaches the phone; the queue goes on behind it", async () => {
+    const first = pending(WHOLE);
+    render.mockResolvedValue(made(NAME));
+    const a = watch(ensureCutout("p1", cutoutNeed(whole, [])));
+    const b = watch(ensureCutout("p1", cutoutNeed(photo, [])));
+    await tick();
+    resetCutouts();                                                 // the editor is left: both are cancelled
+    await tick();
+    expect(b.state).toBe("failed");                                 // at once: no grace, no waiting for the first
+    expect(code(b.error)).toBe("E_CUTOUT_CANCELLED");
+    expect(a.state).toBe("open");                                   // the running one is given its grace
+    const c = watch(ensureCutout("p1", cutoutNeed(clip, [])));      // asked while the first still winds down
+    await tick();
+    expect(render).toHaveBeenCalledTimes(1);
+    first.fail(cancelled());                                        // the phone says it stopped
+    await tick();
+    expect(code(a.error)).toBe("E_CUTOUT_CANCELLED");
+    expect(c.state).toBe("done");
+    expect(render).toHaveBeenCalledTimes(2);                        // the photo's never started
+    expect(render).toHaveBeenLastCalledWith(expect.objectContaining({ outputPath: `${DIR}/${NAME}` }));
+  });
+
+  test("every way out gives the turn on: a failure, a deadline, the grace after a cancel, a call that throws", async () => {
+    const next = async (): Promise<void> => {
+      const before = render.mock.calls.length;
+      render.mockResolvedValueOnce(made(PNG));
+      const n = watch(ensureCutout("p1", cutoutNeed(photo, [])));
+      await tick();
+      expect(render).toHaveBeenCalledTimes(before + 1);
+      expect(n.state).toBe("done");
+    };
+    // A failure.
+    render.mockRejectedValueOnce(new Error("cutout writer: boom"));
+    const failed = watch(ensureCutout("p1", cutoutNeed(clip, [])));
+    await tick();
+    expect(message(failed.error)).toBe("cutout writer: boom");
+    await next();
+    // A deadline.
+    render.mockImplementationOnce(() => new Promise(() => {}));
+    const late = watch(ensureCutout("p1", cutoutNeed(clip, [])));
+    await tick();
+    await pass(cutoutDeadlineMs({ photo: false, from: 2, to: 12 }));
+    expect(message(late.error)).toBe("cutout render: no answer after 260 s");
+    await next();
+    // A cancel the phone never answers: the grace.
+    render.mockImplementationOnce(() => new Promise(() => {}));
+    const stopped = watch(ensureCutout("p1", cutoutNeed(clip, [])));
+    await tick();
+    resetCutouts();
+    render.mockResolvedValueOnce(made(PNG));
+    const behind = watch(ensureCutout("p1", cutoutNeed(photo, [])));
+    await pass(CUTOUT_CANCEL_GRACE_MS - 1);
+    expect(stopped.state).toBe("open");
+    expect(behind.state).toBe("open");
+    await pass(1);
+    expect(code(stopped.error)).toBe("E_CUTOUT_CANCELLED");
+    expect(behind.state).toBe("done");
+    // A native call that throws instead of answering.
+    render.mockImplementationOnce(() => { throw new Error("cutout render: no module"); });
+    const thrown = watch(ensureCutout("p1", cutoutNeed(clip, [])));
+    await tick();
+    expect(message(thrown.error)).toBe("cutout render: no module");
+    await next();
+  });
+
+  test("the editor's queue and another caller (the export) take turns", async () => {
+    st().setProject(makeProject({ clips: [clip] }));
+    await openCutouts("p1");
+    const editor = pending(NAME);
+    render.mockResolvedValueOnce(made(PNG));
+    syncCutouts("p1", neededCutouts(st().project!, [], knownCopies(files())));
+    await pass(CUTOUT_SETTLE_MS);
+    expect(files()[NAME]).toEqual({ status: "busy", progress: 0 });
+    const mine = watch(ensureCutout("p1", cutoutNeed(photo, [])));   // the export asks for a copy the editor does not hold
+    await pass(200000);
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(mine.state).toBe("open");                                // 200 s behind the editor's render: still waiting, not failed
+    editor.ok();
+    await tick();
+    expect(files()[NAME]?.status).toBe("ready");
+    expect(mine.state).toBe("done");
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("useCutoutRenders", () => {
   const flush = async () => { for (let i = 0; i < 8; i++) await act(async () => { await Promise.resolve(); }); };
   const pass = async (ms: number) => { await act(async () => { jest.advanceTimersByTime(ms); }); await flush(); };
