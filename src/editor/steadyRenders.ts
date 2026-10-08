@@ -146,7 +146,9 @@ async function make(entry: Running, need: NeededSteady, dir: string): Promise<vo
  * Rejects with STEADY_TOOLS without the tool, with the staged message when the phone fails or does not answer in time, and with
  * the cancel code when it was cancelled (`isSteadyCancelled`). It always settles. Heavy native renders of every kind take turns
  * (`takeTurn`): a deadline counts from the moment the phone is handed the call. `onProgress` gets one fraction for the whole copy.
- * `need` comes from `steadyNeedOf` / `steadyNeeded`. Used by the editor (`syncSteady`) and by the export.
+ * `need` comes from `steadyNeedOf` / `steadyNeeded`. Used by the editor (`syncSteady`) and by the export. A copy of the OPEN
+ * project that is known as failed and is there after all (the export made it) becomes known as ready: the strip stops saying it
+ * failed and the preview shows it. Nothing else is written for a caller outside the queue.
  */
 export function ensureSteady(projectId: string, need: NeededSteady, onProgress?: (fraction: number) => void): Promise<string> {
   const dir = steadyDir(projectId);
@@ -166,7 +168,11 @@ export function ensureSteady(projectId: string, need: NeededSteady, onProgress?:
     await takeTurn(entry, () => make(entry, need, dir), cancelledError);
     return path;
   };
-  entry.promise = work().finally(() => { inflight.delete(path); });
+  entry.promise = work().then((uri) => {
+    const known = useSteadyFiles.getState().files[need.name];
+    if (wanted !== null && wanted.projectId === projectId && known !== undefined && known.status === "failed") setFile(need.name, { status: "ready", uri });
+    return uri;
+  }).finally(() => { inflight.delete(path); });
   inflight.set(path, entry);
   return entry.promise;
 }

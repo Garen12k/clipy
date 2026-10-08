@@ -414,3 +414,30 @@ test("a failed copy that is no longer needed is forgotten; the longest measuring
   for (let i = 0; i < 3; i++) { await tick(); jest.advanceTimersByTime(0); }
   await expect(done).resolves.toBe(`${DIR}/${NAME}`);
 });
+
+// The export makes the copies it needs through `ensureSteady` too, under the mounted editor. One that had failed in the editor's
+// queue and is then made for the export is there: the strip must not go on saying "Could not stabilize this clip…".
+test("a copy that failed in the queue and is then made for someone else (the export) is known as ready; nothing else is written for a caller outside the queue", async () => {
+  st().setProject(makeProject({ id: "p1", clips: [slowed] }));
+  await openSteady("p1");
+  render.mockRejectedValueOnce(new Error("steady writer: boom"));
+  syncSteady("p1", steadyNeeded(st().project!, [], files()));
+  jest.advanceTimersByTime(STEADY_SETTLE_MS);
+  await tick();
+  expect(files()[SLOW]).toEqual({ status: "failed", message: "steady writer: boom" });
+  expect(shownSteady(files(), slowed)).toBeNull();
+
+  render.mockImplementationOnce(async () => { disk.add(`${DIR}/${SLOW}`); return made(SLOW); });
+  await expect(ensureSteady("p1", steadyNeed(slowed, [])!)).resolves.toBe(`${DIR}/${SLOW}`);
+  expect(files()[SLOW]).toEqual({ status: "ready", uri: `${DIR}/${SLOW}` });
+  expect(shownSteady(files(), slowed)).toBe(`${DIR}/${SLOW}`);
+
+  // A copy nobody has failed at is not written by a caller outside the queue, and another project's copy never is.
+  useSteadyFiles.setState({ files: {} });
+  await ensureSteady("p1", steadyNeed(slowed, [])!);
+  expect(files()).toEqual({});
+  useSteadyFiles.setState({ files: { [SLOW]: { status: "failed", message: "x" } } });
+  disk.add(`file:///doc/projects/p2/steady/${SLOW}`);
+  await ensureSteady("p2", steadyNeed(slowed, [])!);
+  expect(files()[SLOW]).toEqual({ status: "failed", message: "x" });
+});
