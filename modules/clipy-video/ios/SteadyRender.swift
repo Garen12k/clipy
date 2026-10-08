@@ -119,11 +119,12 @@ final class SteadySource {
   }
 }
 
-/// One corrected source frame held for blending: its source second, its own presentation time and which of the two
-/// held buffers it is in.
+/// One corrected source frame held for blending: its source second, its own presentation time, that time on the
+/// copy's clock (`SteadyRender.tick`) and which of the two held buffers it is in.
 struct SteadyFrame {
   let time: Double
   let stamp: CMTime
+  let tick: Int64
   let slot: Int
 }
 
@@ -201,7 +202,8 @@ enum SteadyRender {
   }
 
   /// How far every kept frame of the range moved against the kept frame before it, as Vision reports it: the
-  /// transform that aligns THIS frame (the request's targeted image) with the frame before (the handler's image),
+  /// transform that aligns THIS frame (the request's targeted image) with the frame before (the image of a handler
+  /// made for that one pair),
   /// its `tx` / `ty` divided by the measured picture's width / height. The first frame reports 0, 0. A frame Vision
   /// cannot place reports 0, 0 and is counted in `failed`: it never fails the measuring. One synchronous loop.
   static func measure(_ request: ShakeRequest, source: SteadySource, job: SteadyJob, progress: (Double) -> Void) throws -> [String: Any] {
@@ -224,7 +226,6 @@ enum SteadyRender {
 
     let slots: [CVPixelBuffer] = [try bgraBuffer(width: size.width, height: size.height), try bgraBuffer(width: size.width, height: size.height)]
     let space = CutoutRender.videoSpace()
-    let handler = VNSequenceRequestHandler()
     let gap = request.minFrameGap.isFinite && request.minFrameGap > 0 ? request.minFrameGap : 0
     var times: [Double] = []
     var dx: [Double] = []
@@ -248,7 +249,8 @@ enum SteadyRender {
         guard !times.isEmpty else { return (0, 0, true) }
         let registration = VNTranslationalImageRegistrationRequest(targetedCVPixelBuffer: slots[slot], options: [:], completionHandler: nil)
         do {
-          try handler.perform([registration], on: slots[1 - slot])
+          // A handler of its own for every pair: nothing of an earlier frame can be remembered for a buffer that is used again.
+          try VNImageRequestHandler(cvPixelBuffer: slots[1 - slot], options: [:]).perform([registration])
         } catch {
           return (0, 0, false)
         }
@@ -307,6 +309,9 @@ enum SteadyRender {
     let settings = try videoSettings(width: width, height: height, bitRate: bitRate, writer: writer)
     let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
     input.expectsMediaDataInRealTime = false
+    // The picture track's own clock, set before writing starts (never on a sound input): every time written here is
+    // stored on it, and the blended frames are made on it exactly.
+    input.mediaTimeScale = SteadyRender.timescale
     let attributes: [String: Any] = [
       kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
       kCVPixelBufferWidthKey as String: width,
@@ -353,6 +358,16 @@ enum SteadyRender {
     let x1 = dx[cursor + 1].isFinite ? dx[cursor + 1] : 0
     let y1 = dy[cursor + 1].isFinite ? dy[cursor + 1] : 0
     return (x0 + (x1 - x0) * part, y0 + (y1 - y0) * part)
+  }
+
+  /// The clock of the copy's picture track, in ticks a second: 1/600, 1/6000 and 1001/30000 of a second are whole
+  /// numbers of ticks.
+  static let timescale: CMTimeScale = 30000
+
+  /// A source second on that clock (0 for a number that is not one).
+  static func tick(_ seconds: Double) -> Int64 {
+    guard seconds.isFinite, abs(seconds) < 1_000_000_000 else { return 0 }
+    return Int64((seconds * Double(timescale)).rounded())
   }
 
   /// No pair of source frames gets more blended frames than this: a hole in the file (dropped frames, a pause) is
@@ -411,7 +426,7 @@ enum SteadyRender {
   /// at zero and ends at the range's end, so the copy has the source's timeline. EVERY kept frame is written at its
   /// OWN source time. With a grid (a DENSITY: about that many frames a source second, not a lattice of times),
   /// blended frames (`blendsBetween`) are added between each two neighbouring kept frames A and B, evenly spaced in time
-  /// between them, each a dissolve of A into B by its share of the way; nothing is added before the first frame or
+  /// between them (on the copy's clock, `timescale`), each a dissolve of A into B by its share of the way; nothing is added before the first frame or
   /// after the last. The source's sound packets are copied beside the picture as they are. The loop serves whichever
   /// input is ready and sleeps when neither is.
   static func render(_ request: SteadyRequest, source: SteadySource, to outputURL: URL, job: SteadyJob,
@@ -469,6 +484,10 @@ enum SteadyRender {
     var ahead: SteadyFrame? = nil                  // grid only: the kept frame after `held`, not yet written
     var between = 0                                // grid only: blended frames to write before `ahead`
     var step = 1                                   // grid only: the next of them (1 … between)
+    var lastTick: Int64 = 0                        // grid only: the last written frame's time on the copy's clock
+    // The least room between two frames of the copy, on its clock: the request's gap, and never under two ticks (a
+    // source frame's own time may be stored one tick off; a blended frame must still fall strictly between two).
+    let room: Int64 = max(2, tick(gap))
     var picturesDone = false
     var soundsDone = soundInput == nil
     do {
@@ -487,9 +506,11 @@ enum SteadyRender {
             if step <= between, let a = held {
               // One blended frame between A and B, at its share of the way from A's time to B's.
               let weight = Double(step) / Double(between + 1)
-              let stamp = CMTime(seconds: a.time + (b.time - a.time) * weight, preferredTimescale: 6000)
-              // Never a second copy of a neighbour (a share within `near` of an end), never a time out of order.
-              if weight > near, weight < 1 - near, CMTimeCompare(stamp, a.stamp) > 0, CMTimeCompare(stamp, b.stamp) < 0 {
+              let spot = tick(a.time + (b.time - a.time) * weight)
+              let stamp = CMTime(value: CMTimeValue(spot), timescale: SteadyRender.timescale)
+              // Never a second copy of a neighbour (a share within `near` of an end), and never closer than `room`
+              // to the frame written before it or to the source frame after it — all three on the copy's clock.
+              if weight > near, weight < 1 - near, spot - lastTick >= room, b.tick - spot >= room {
                 let mixedIn: Bool = try autoreleasepool { () throws -> Bool in
                   // The held buffers are read back as what they were written as (they carry no colour tag of their own).
                   let first = CIImage(cvPixelBuffer: slots[a.slot], options: [CIImageOption.colorSpace: space])
@@ -500,7 +521,10 @@ enum SteadyRender {
                   try put(mixed.cropped(to: rect), at: stamp, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)
                   return true
                 }
-                if mixedIn { written += 1 }
+                if mixedIn {
+                  written += 1
+                  lastTick = spot
+                }
               }
               step += 1
             } else {
@@ -510,6 +534,7 @@ enum SteadyRender {
                 try put(own, at: b.stamp, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)
               }
               written += 1
+              lastTick = b.tick
               held = b
               ahead = nil
               progress(min(1, max(0, (b.time - span.start) / (span.end - span.start))))
@@ -540,7 +565,7 @@ enum SteadyRender {
                   let placed = CIImage(cvPixelBuffer: frame).clampedToExtent().transformed(by: spot).cropped(to: rect)
                   CutoutRender.context.render(placed, to: slots[into], bounds: rect, colorSpace: space)
                 }
-                ahead = SteadyFrame(time: at, stamp: pts, slot: into)
+                ahead = SteadyFrame(time: at, stamp: pts, tick: tick(at), slot: into)
                 between = count
                 step = 1
               }

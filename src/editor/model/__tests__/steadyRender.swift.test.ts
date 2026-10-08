@@ -43,7 +43,9 @@ test("the asset lives in the source for as long as its tracks and its readers ar
 
 test("measuring: the frame is registered against the frame BEFORE it, with the iOS 11 request, and a failure is no movement", () => {
   expect(measure).toContain("VNTranslationalImageRegistrationRequest(targetedCVPixelBuffer: slots[slot], options: [:], completionHandler: nil)");
-  expect(measure).toContain("try handler.perform([registration], on: slots[1 - slot])");
+  // The frame before is the image of a handler made for that one pair (never one handler that is handed the same two buffers again).
+  expect(measure).toContain("try VNImageRequestHandler(cvPixelBuffer: slots[1 - slot], options: [:]).perform([registration])");
+  expect(swift).not.toContain("VNSequenceRequestHandler");
   expect(measure).toContain("Double(found.alignmentTransform.tx) / Double(size.width)");
   expect(measure).toContain("Double(found.alignmentTransform.ty) / Double(size.height)");
   expect(measure).toContain("guard !times.isEmpty else { return (0, 0, true) }");          // the first frame has nothing before it
@@ -70,7 +72,7 @@ test("the copy keeps the source's timeline and its sound", () => {
   expect(render).toContain("writer.endSession(atSourceTime: range.end)");
   expect(between(swift, "static func put(", "\n  }\n")).toContain("guard adaptor.append(out, withPresentationTime: stamp) else");
   expect(render).toContain("try put(placed, at: pts, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)");      // no grid: a source frame at its own time
-  expect(render).toContain("ahead = SteadyFrame(time: at, stamp: pts, slot: into)");
+  expect(render).toContain("ahead = SteadyFrame(time: at, stamp: pts, tick: tick(at), slot: into)");
   expect(render).toContain("try put(own, at: b.stamp, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)");     // a grid: the same
   expect(render).toContain("guard reader.status == .completed else");                                                                // every source frame was read
   expect(render).toContain("AVAssetReaderTrackOutput(track: audio, outputSettings: nil)");
@@ -145,8 +147,19 @@ test("smooth slow motion: every source frame stays as it is at its own time, and
   expect(render).toContain("count = blendsBetween(at - before.time, grid: grid, gap: gap)");
   // Where and what: evenly between the two, a dissolve by the share of the way; never a second copy of a neighbour.
   expect(render).toContain("let weight = Double(step) / Double(between + 1)");
-  expect(render).toContain("let stamp = CMTime(seconds: a.time + (b.time - a.time) * weight, preferredTimescale: 6000)");
-  expect(render).toContain("if weight > near, weight < 1 - near, CMTimeCompare(stamp, a.stamp) > 0, CMTimeCompare(stamp, b.stamp) < 0 {");
+  expect(render).toContain("let spot = tick(a.time + (b.time - a.time) * weight)");
+  expect(render).toContain("let stamp = CMTime(value: CMTimeValue(spot), timescale: SteadyRender.timescale)");
+  // … and never closer than the request's gap (at least two ticks) to the frame before it or the source frame after it, on the copy's own clock.
+  expect(render).toContain("let room: Int64 = max(2, tick(gap))");
+  expect(render).toContain("if weight > near, weight < 1 - near, spot - lastTick >= room, b.tick - spot >= room {");
+  expect(render.split("lastTick = ").length - 1).toBe(2);                                    // after a blended frame, after a source frame
+  expect(swift).toContain("static let timescale: CMTimeScale = 30000");
+  expect(between(swift, "static func tick(", "\n  }\n")).toContain("return Int64((seconds * Double(timescale)).rounded())");
+  // The picture track is given that clock before writing starts; the sound input is not touched.
+  const made = between(swift, "static func makeWriter(", "\n  }\n");
+  expect(made).toContain("input.mediaTimeScale = SteadyRender.timescale");
+  expect(swift.split("mediaTimeScale").length - 1).toBe(1);
+  expect(made.indexOf("input.mediaTimeScale")).toBeLessThan(made.indexOf("writer.add(input)"));
   expect(render).toContain('guard let mixed = Adjust.filtered(first, "CIDissolveTransition", ["inputTargetImage": second, "inputTime": NSNumber(value: weight)]) else {');
   expect(render).toContain("try put(mixed.cropped(to: rect), at: stamp, rect: rect, pool: pool, space: space, adaptor: adaptor, writer: writer)");
   // The blended frames of a pair are written before the pair's second frame, and that frame before the next is read.
