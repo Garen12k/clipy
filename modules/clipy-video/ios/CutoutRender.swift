@@ -461,6 +461,8 @@ enum CutoutRender {
       guard kept > 0 else { throw CutoutError.failed("cutout render: no picture came out") }
       guard person >= needed else { throw CutoutError.failed("cutout person: no person found") }
       if job.isCancelled { throw CutoutError.cancelled }
+      // The last append can fail the writer after the loop's own check: never end a session on a writer that is not writing.
+      guard writer.status == .writing else { throw CutoutError.failed("cutout writer: " + ExportSession.describe(writer.error)) }
       writer.endSession(atSourceTime: range.end)
       await writer.finishWriting()
       guard writer.status == .completed else { throw CutoutError.failed("cutout writer: " + ExportSession.describe(writer.error)) }
@@ -540,6 +542,7 @@ enum CutoutRender {
           throw CutoutError.failed("cutout writer: " + ExportSession.describe(writer.error))
         }
       }
+      guard writer.status == .writing else { throw CutoutError.failed("cutout writer: " + ExportSession.describe(writer.error)) }
       input.markAsFinished()
       writer.endSession(atSourceTime: total)
       await writer.finishWriting()
