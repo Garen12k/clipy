@@ -12,7 +12,7 @@ export const isAspectRatio = (v: unknown): v is AspectRatio => (ASPECT_RATIOS as
 export const aspectLabel = (r: AspectRatio): string => (r === "auto" ? "Auto" : r);
 export const MIN_CLIP_SECONDS = 0.1;
 
-export const SCHEMA_VERSION = 20 as const;
+export const SCHEMA_VERSION = 21 as const;
 export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
 export const EXPORT_QUALITIES = ["high", "small"] as const;
@@ -179,6 +179,10 @@ export const KEYFRAME_LIMITS = { minGap: 0.05, max: 50, opacity: [0, 1] as const
 /** Two pin times closer than `minGap` are the same pin. The 1e-9 makes pins exactly `minGap` apart distinct despite float noise (0.15 − 0.1 < 0.05). */
 export const isSamePinTime = (a: number, b: number): boolean => Math.abs(a - b) < KEYFRAME_LIMITS.minGap - 1e-9;
 
+/** Stabilize strengths, gentle … strong. What each one means (window, zoom) is `STEADY_LEVELS` in steady.ts. */
+export const STABILIZE_IDS = ["low", "medium", "high"] as const;
+export type StabilizeId = (typeof STABILIZE_IDS)[number];
+
 export interface Clip {
   id: string; sourceUri: string; sourceDuration: number; width: number; height: number;
   trimStart: number; trimEnd: number;
@@ -206,6 +210,8 @@ export interface Clip {
   motion?: PhotoMotion;          // photos only; ABSENT = still (never null / undefined). Read it through `activePhotoMotion` / `shownPhotoMotion`
   collage?: CollageCell;         // layers only; ABSENT = not a collage cell
   cutout?: true;                 // Remove background: ABSENT = off (never false / null / undefined). Written only by `setClipCutout`; read it through `activeCutout`
+  stabilize?: StabilizeId;       // Stabilize: ABSENT = off (never null / undefined). Written only by `setClipStabilize`; read it through `steadyOf` (steady.ts)
+  smooth?: true;                 // Smooth slow motion: ABSENT = off (never false / null / undefined). Written only by `setClipSmooth`; counts only while the clip is slowed (`steadyOf`)
 }
 /** A layer is a clip with a place on the project timeline. */
 export interface LayerClip extends Clip { start: number }   // project seconds

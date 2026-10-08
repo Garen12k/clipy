@@ -1,15 +1,15 @@
 import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
-import { clipAt, clipDuration, clipStartTimes, curveSteps, findItem, hasSpeedCurve, isSmoothCurve, layerEnd, smoothCurveSteps, sourceAfter, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
+import { clipAt, clipDuration, clipStartTimes, curveSteps, findItem, hasSpeedCurve, isSlowed, isSmoothCurve, layerEnd, smoothCurveSteps, sourceAfter, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
   clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, activePhotoMotion, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
-  LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_LIMITS, TRANSITION_LIMITS,
+  LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_LIMITS, STABILIZE_IDS, TRANSITION_LIMITS,
   clampPhotoMotion, clampSound, COMBO_AS_MOTION, NO_SOUND, type PhotoMotion, type SoundSettings, type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
-  type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
+  type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StabilizeId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
 } from "./types";
 import { totalDuration } from "./timeline";
 import type { Template } from "../templates";
@@ -1088,15 +1088,56 @@ export function setClipChroma(p: Project, id: string, chroma: ChromaKey | null):
 
 /**
  * Remove background on or off for a main clip or a layer (photo or video). On writes `cutout: true`; off removes the key. Refused
- * (same project) for an unknown id, a reversed clip, and a value that is already in place.
+ * (same project) for an unknown id, a reversed clip, a value that is already in place, and a clip that has a Stabilize strength or
+ * an ACTIVE Smooth slow motion (one copy per clip: the two do not combine). A Smooth slow motion switch that is idle — the clip is
+ * not slowed any more, so its switch is not on screen — is removed by the same tap.
  */
 export function setClipCutout(p: Project, id: string, on: boolean): Project {
   return updateClip(p, id, (c) => {
-    if (on) return c.cutout === true || c.reversed ? c : { ...c, cutout: true as const };
+    if (on) {
+      if (c.cutout === true || c.reversed || c.stabilize !== undefined || (c.smooth === true && isSlowed(c))) return c;
+      const next = { ...c, cutout: true as const };
+      delete next.smooth;
+      return next;
+    }
     if (c.cutout === undefined) return c;
     const next = { ...c };
     delete next.cutout;
     return next;
+  });
+}
+
+/**
+ * Stabilize for a video clip or layer: a strength, or null for off (the key is removed). Refused (same project) for an unknown id
+ * or strength, a photo, a reversed clip, a clip with Remove background, and a value that is already in place. Off is never refused.
+ */
+export function setClipStabilize(p: Project, id: string, level: StabilizeId | null): Project {
+  if (level !== null && !(STABILIZE_IDS as readonly string[]).includes(level)) return p;
+  return updateClip(p, id, (c) => {
+    if (level === null) {
+      if (c.stabilize === undefined) return c;
+      const next = { ...c };
+      delete next.stabilize;
+      return next;
+    }
+    return isPhoto(c) || c.reversed || c.cutout === true || c.stabilize === level ? c : { ...c, stabilize: level };
+  });
+}
+
+/**
+ * Smooth slow motion on or off for a video clip or layer. On writes `smooth: true` and is refused (same project) for an unknown id,
+ * a photo, a reversed clip, a clip with Remove background, a clip that is not slowed (`isSlowed`) and a value already in place.
+ * Off removes the key and is never refused. Changing the speed afterwards never touches the key.
+ */
+export function setClipSmooth(p: Project, id: string, on: boolean): Project {
+  return updateClip(p, id, (c) => {
+    if (!on) {
+      if (c.smooth === undefined) return c;
+      const next = { ...c };
+      delete next.smooth;
+      return next;
+    }
+    return isPhoto(c) || c.reversed || c.cutout === true || c.smooth === true || !isSlowed(c) ? c : { ...c, smooth: true as const };
   });
 }
 

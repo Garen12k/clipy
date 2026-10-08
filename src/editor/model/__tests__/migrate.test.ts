@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { migrateProject } from "../migrate";
-import { setClipChroma, setClipSpeedCurve, setPhotoMotion, setTrackSound } from "../ops";
+import { setClipChroma, setClipCutout, setClipSpeed, setClipSpeedCurve, setPhotoMotion, setTrackSound } from "../ops";
 import { ANIM_COMBO_IDS, CROP_MIN, DEFAULT_ADJUST, DEFAULT_SHADOW, DEFAULT_TEXT_STYLE, DEFAULT_TRANSFORM, EFFECT_IDS, FILTER_IDS, FULL_CROP, makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker, NO_CLIP_ANIMATION, NO_OVERLAY_ANIMATION, PHOTO, SCHEMA_VERSION, TRANSITION_TYPES, type AudioTrack, type Clip, type EffectItem, type LayerClip, type Overlay, type TextOverlay } from "../types";
 
 const v1 = {
@@ -113,7 +113,7 @@ test("v5 → v6 adds the look defaults", () => {
   const v5 = { ...makeProject(), schemaVersion: 5, clips: [c] } as Record<string, unknown>;
   delete v5.effects;
   const p = migrateProject(v5);
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p.effects).toEqual([]);
 });
@@ -124,7 +124,7 @@ test("v6 → v7 adds animation / keyframe defaults to clips and every overlay", 
   const t = makeOverlay({ id: "t" }) as unknown as Record<string, unknown>; delete t.animation; delete t.keyframes;
   const s = makeSticker({ id: "s" }) as unknown as Record<string, unknown>; delete s.animation; delete s.keyframes;
   const p = migrateProject({ ...makeProject(), schemaVersion: 6, clips: [c], overlays: [t, s] });
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.overlays[0]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
   expect(p.overlays[1]).toMatchObject({ animation: NO_OVERLAY_ANIMATION, keyframes: [] });
@@ -157,7 +157,7 @@ test("sanity pass repairs motion fields; idempotent", () => {
 
 test("v1 chain reaches schema 9 with look, motion and speed-curve defaults", () => {
   const p = migrateProject(v1);
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   expect(p.clips[0]).toMatchObject({ animation: NO_CLIP_ANIMATION, keyframes: [] });
   expect(p.clips[0]).toMatchObject({ filterIntensity: 1, adjust: DEFAULT_ADJUST });
   expect(p).toMatchObject({ exportSettings: { fps: 30, quality: "high" }, cover: null });
@@ -219,7 +219,7 @@ test("v7 → v8 adds speedCurve: null to every clip", () => {
   const ph = makePhotoClip({ id: "p" }) as unknown as Record<string, unknown>;
   delete ph.speedCurve;
   const p = migrateProject({ ...makeProject(), schemaVersion: 7, clips: [c, ph] });
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   expect(p.clips[0]).toMatchObject({ speedCurve: null, speed: 2 });
   expect(p.clips[1]).toMatchObject({ speedCurve: null, speed: 1 });
   expect(migrateProject(v1).clips[0].speedCurve).toBeNull();
@@ -252,7 +252,7 @@ test("v8 → v9 adds style, words and highlightColor to text and captions; stick
   const c = makeOverlay({ id: "c", kind: "caption" }) as unknown as Record<string, unknown>; delete c.style; delete c.words; delete c.highlightColor;
   const s = makeSticker({ id: "s" });
   const p = migrateProject({ ...makeProject(), schemaVersion: 8, overlays: [t, c, s] });
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   expect(p.overlays[0]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
   expect(p.overlays[1]).toMatchObject({ style: DEFAULT_TEXT_STYLE, words: [], highlightColor: null });
   expect(p.overlays[2]).toEqual(s);
@@ -318,7 +318,7 @@ test("v9 → v10: the single track becomes music with no fades; clips fades 0; d
   const raw = { ...makeProject(), schemaVersion: 9, clips: [clip], audioTracks: [track] } as Record<string, unknown>;
   delete raw.ducking; delete raw.beatMarkers;
   const p = migrateProject(raw);
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   expect(p.audioTracks[0]).toMatchObject({ id: "a", kind: "music", fadeIn: 0, fadeOut: 0, volume: 1 });
   expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
   expect(p.ducking).toBe(false);
@@ -358,7 +358,7 @@ test("an audio track that is an array (or not an object at all) is dropped", () 
 
 test("a v1 file reaches v18 with the audio defaults", () => {
   const p = migrateProject(v1);
-  expect(p).toMatchObject({ schemaVersion: 20, ducking: false, beatMarkers: [], audioTracks: [] });
+  expect(p).toMatchObject({ schemaVersion: 21, ducking: false, beatMarkers: [], audioTracks: [] });
   expect(p.clips[0]).toMatchObject({ fadeIn: 0, fadeOut: 0 });
 });
 
@@ -368,7 +368,7 @@ describe("v11 — layers, opacity, mask", () => {
 
   test("v10 gets opacity 1, mask none and no layers", () => {
     const p = migrateProject(raw({ clips: [strip(makeClip({ id: "a", sourceDuration: 5 }))], layers: undefined }));
-    expect(p.schemaVersion).toBe(20);
+    expect(p.schemaVersion).toBe(21);
     expect(p.layers).toEqual([]);
     expect(p.clips[0]).toMatchObject({ opacity: 1, mask: "none" });
   });
@@ -425,7 +425,7 @@ describe("v11 to v12 (blend, green screen, region effects)", () => {
   test("adds the defaults to clips, layers and effects", () => {
     const eff = { id: "e", type: "shake", start: 0, end: 2, intensity: 0.5 };
     const p = migrateProject(raw({ clips: [strip(makeClip({ id: "c", sourceDuration: 5 }))], layers: [strip(makeLayer({ id: "l", sourceDuration: 5 }))], effects: [eff] }));
-    expect(p.schemaVersion).toBe(20);
+    expect(p.schemaVersion).toBe(21);
     expect(p.clips[0]).toMatchObject({ blend: "normal", chroma: null });
     expect(p.layers[0]).toMatchObject({ blend: "normal", chroma: null });
     expect(p.effects[0].rect).toBeNull();
@@ -485,7 +485,7 @@ test("v12 → v13 adds export settings and no cover; the sanity pass repairs bot
   const clips = [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 6, speed: 2 })];   // 4 + 6 / 2 = 7 s
   const v12 = { ...makeProject({ clips }), schemaVersion: 12 } as Record<string, unknown>;
   delete v12.exportSettings; delete v12.cover;
-  expect(migrateProject(v12)).toMatchObject({ schemaVersion: 20, exportSettings: { fps: 30, quality: "high" }, cover: null });
+  expect(migrateProject(v12)).toMatchObject({ schemaVersion: 21, exportSettings: { fps: 30, quality: "high" }, cover: null });
 
   const bad = migrateProject({ ...makeProject({ clips }), exportSettings: { fps: 25, quality: "small" }, cover: { time: 99, title: "  " + "t".repeat(50) } });
   expect(bad.exportSettings).toEqual({ fps: 30, quality: "small" });
@@ -501,7 +501,7 @@ test("v13 → v14 keeps the aspect ratio; the sanity pass turns an unknown one i
   const clips = [makeClip({ id: "a", sourceDuration: 4, width: 1920, height: 1080 })];
   for (const id of ["9:16", "1:1", "16:9"] as const) {
     const v13 = { ...makeProject({ clips, aspectRatio: id }), schemaVersion: 13 };
-    expect(migrateProject(v13)).toMatchObject({ schemaVersion: 20, aspectRatio: id });
+    expect(migrateProject(v13)).toMatchObject({ schemaVersion: 21, aspectRatio: id });
   }
   for (const id of ["auto", "3:2", "2:3", "4:3", "3:4", "21:9"] as const) {
     const p = migrateProject(makeProject({ clips, aspectRatio: id }));
@@ -511,7 +511,7 @@ test("v13 → v14 keeps the aspect ratio; the sanity pass turns an unknown one i
   for (const bad of ["4:5", "", "Auto", 16 / 9, null, undefined, { w: 9, h: 16 }]) {
     expect(migrateProject({ ...makeProject({ clips }), aspectRatio: bad }).aspectRatio).toBe("9:16");
   }
-  expect(SCHEMA_VERSION).toBe(20);
+  expect(SCHEMA_VERSION).toBe(21);
 });
 
 test("PROOF v14 → v15: the migration only ADDS the two box defaults to texts and captions — every stored value stays, stickers are untouched", () => {
@@ -536,7 +536,7 @@ test("PROOF v14 → v15: the migration only ADDS the two box defaults to texts a
   const p = migrateProject(v14);
   expect(JSON.stringify(v14)).toBe(frozen);                       // the stored object is not mutated
   expect(p).toEqual(now);                                         // nothing but the number and the two defaults differs from the file
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   p.overlays.forEach((o, i) => {
     if (o.kind === "sticker") { expect(o).toEqual(v14.overlays[i]); expect(o).not.toHaveProperty("style"); return; }
     const { boxPadding, boxCorner, ...stored } = o.style;
@@ -579,7 +579,7 @@ test("PROOF v15 → v16: the migration changes the number and nothing else — e
   const p = migrateProject(v15);
   expect(JSON.stringify(v15)).toBe(frozen);                       // the stored object is not mutated
   expect({ ...p, schemaVersion: 15 }).toEqual(v15);               // nothing but the number differs from the file
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   expect(migrateProject(p)).toEqual(p);
 });
 
@@ -612,7 +612,7 @@ test("PROOF v16 → v17: the migration changes the number and nothing else — p
   const p = migrateProject(v16);
   expect(JSON.stringify(v16)).toBe(frozen);                       // the stored object is not mutated
   expect({ ...p, schemaVersion: 16 }).toEqual(v16);               // nothing but the number differs from the file
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   // `toEqual` does not see a key that holds undefined: check that the keys themselves are absent.
   for (const c of [...p.clips, ...p.layers]) { expect("motion" in c).toBe(false); expect("collage" in c).toBe(false); }
   expect(migrateProject(p)).toEqual(p);
@@ -663,7 +663,7 @@ test("PROOF v17 → v18: the migration changes the number and nothing else — m
   const p = migrateProject(v17);
   expect(JSON.stringify(v17)).toBe(frozen);                       // the stored object is not mutated
   expect({ ...p, schemaVersion: 17 }).toEqual(v17);               // nothing but the number differs from the file
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   // `toEqual` does not see a key that holds undefined: check that the key itself is absent.
   for (const t of p.audioTracks) expect("sound" in t).toBe(false);
   expect(migrateProject(p)).toEqual(p);
@@ -706,7 +706,7 @@ test("PROOF v18 → v19: the migration changes the number and nothing else — s
   const p = migrateProject(v18);
   expect(JSON.stringify(v18)).toBe(frozen);                         // the stored object is not mutated
   expect({ ...p, schemaVersion: 18 }).toEqual(v18);                 // nothing but the number differs from the file
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   for (const t of p.audioTracks) if (t.sound) expect("noise" in t.sound).toBe(false);
   expect(p.clips[0].speedCurve).toEqual({ id: "hero", steps: [1, 2, 3, 0.5, 0.5, 3, 2, 1].map((speed, i) => ({ from: i, speed })) });
   expect(migrateProject(p)).toEqual(p);
@@ -747,8 +747,36 @@ test("PROOF v19 → v20: the migration changes the number and nothing else — a
   const p = migrateProject(v19);
   expect(JSON.stringify(v19)).toBe(frozen);                         // the stored object is not mutated
   expect({ ...p, schemaVersion: 19 }).toEqual(v19);                 // nothing but the number differs from the file
-  expect(p.schemaVersion).toBe(20);
+  expect(p.schemaVersion).toBe(21);
   for (const c of [...p.clips, ...p.layers]) expect("cutout" in c).toBe(false);
   expect(p.audioTracks[0].sound?.noise).toBe(0.75);
+  expect(migrateProject(p)).toEqual(p);
+});
+
+test("PROOF v20 → v21: the migration changes the number and nothing else — a cut-out, a smooth speed curve, a slowed clip, a green screen, a photo's Motion, a layer, a noise setting, music and beats are kept as stored, and nothing gains a stabilize or smooth key", () => {
+  let now = makeProject({
+    clips: [makeClip({ id: "a", sourceDuration: 8 }), makePhotoClip({ id: "ph", seconds: 4 }), makeClip({ id: "g", sourceDuration: 6 }), makeClip({ id: "s", sourceDuration: 6 }), makeClip({ id: "c", sourceDuration: 5 })],
+    layers: [makeLayer({ id: "L", sourceDuration: 5, start: 1.5 })],
+    audioTracks: [makeAudioTrack({ id: "v1", sourceDuration: 6, kind: "voice", start: 3 }), makeAudioTrack({ id: "m1", sourceDuration: 30, trimStart: 2.5, trimEnd: 10 })],
+    ducking: true, beatMarkers: [1, 2.5, 9.75],
+  });
+  now = setTrackSound(now, "v1", { noise: 0.75 });
+  now = setClipSpeedCurve(now, "a", "hero", true);                  // a smooth curve: 32 steps
+  now = setClipChroma(now, "g", { color: "#00FF00", strength: 0.5 });
+  now = setPhotoMotion(now, "ph", { id: "zoomIn", strength: 0.5 });
+  now = setClipSpeed(now, "s", 0.5);                                // slowed, as old projects have it: frames repeat
+  now = setClipCutout(now, "c", true);
+  expect(now.clips[0].speedCurve?.steps).toHaveLength(32);
+  expect(migrateProject(now)).toEqual(now);                         // the fixture is a clean v21 project
+  const v20 = JSON.parse(JSON.stringify(now)) as { schemaVersion: number };
+  v20.schemaVersion = 20;
+  const frozen = JSON.stringify(v20);
+  const p = migrateProject(v20);
+  expect(JSON.stringify(v20)).toBe(frozen);                         // the stored object is not mutated
+  expect({ ...p, schemaVersion: 20 }).toEqual(v20);                 // nothing but the number differs from the file
+  expect(p.schemaVersion).toBe(21);
+  for (const c of [...p.clips, ...p.layers]) { expect("stabilize" in c).toBe(false); expect("smooth" in c).toBe(false); }
+  expect(p.clips[4].cutout).toBe(true);
+  expect(p.clips[3].speed).toBe(0.5);
   expect(migrateProject(p)).toEqual(p);
 });

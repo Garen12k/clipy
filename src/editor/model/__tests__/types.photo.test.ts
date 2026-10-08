@@ -7,8 +7,8 @@ import {
 const zoom: PhotoMotion = { id: "zoomIn", strength: 0.8 };
 const photo = (extra: Partial<Clip> = {}): Clip => ({ ...makePhotoClip({ id: "p" }), ...extra });
 
-test("schema is v20; the motion ids, the layouts and their limits are as specified", () => {
-  expect(SCHEMA_VERSION).toBe(20);
+test("schema is v21; the motion ids, the layouts and their limits are as specified", () => {
+  expect(SCHEMA_VERSION).toBe(21);
   expect(PHOTO_MOTION_IDS).toEqual(["zoomIn", "zoomOut", "panLeft", "panRight", "panUp", "panDown", "zoomCorner"]);
   expect(PHOTO_MOTION_LIMITS).toEqual({ strength: [0, 1], defaultStrength: 0.5 });
   expect(COLLAGE_LAYOUT_IDS).toEqual(["sideBySide", "stacked", "bigTwo", "row3", "grid4", "inset"]);

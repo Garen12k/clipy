@@ -1,7 +1,7 @@
 import { clampSound, EQ_IDS, isNeutralSound, makeAudioTrack, NO_SOUND, SCHEMA_VERSION, SOUND_LIMITS, VOICE_IDS, type SoundSettings } from "../types";
 
-test("schema is v20; the voices, the equaliser presets and their limits are as specified", () => {
-  expect(SCHEMA_VERSION).toBe(20);
+test("schema is v21; the voices, the equaliser presets and their limits are as specified", () => {
+  expect(SCHEMA_VERSION).toBe(21);
   expect(VOICE_IDS).toEqual(["deep", "high", "chipmunk", "robot", "echo", "hall", "telephone"]);
   expect(EQ_IDS).toEqual(["bassBoost", "clearVoice", "warm", "bright"]);
   expect(SOUND_LIMITS).toEqual({ strength: [0, 1], defaultStrength: 0.5, pitch: [-12, 12] });

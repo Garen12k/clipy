@@ -76,6 +76,17 @@ export function speedSpans(c: Clip): SpeedSpan[] {
   }
   return spans.length > 0 ? spans : [{ from: c.trimStart, to: c.trimEnd, speed: atStart }];
 }
+/**
+ * The slowest speed any stretch of the clip plays at inside its trim: its constant speed, or the lowest speed of its curve's spans.
+ * Total: a speed that is not a number is not counted, and a clip without one that is plays at 1.
+ */
+export function slowestSpeed(c: Clip): number {
+  let slowest = Infinity;
+  for (const s of speedSpans(c)) if (Number.isFinite(s.speed) && s.speed < slowest) slowest = s.speed;
+  return Number.isFinite(slowest) ? slowest : 1;
+}
+/** True when any stretch of a video plays below 1× (slow motion: where its frames are shown more than once). Never a photo. */
+export const isSlowed = (c: Clip): boolean => c.kind !== "photo" && slowestSpeed(c) < 1 - 1e-9;
 
 /** The most source seconds any clip's transition handle can be: half the longest transition at the highest speed. */
 export const TRANSITION_HANDLE_MAX = (TRANSITION_LIMITS.max / 2) * SPEED_LIMITS[1];
