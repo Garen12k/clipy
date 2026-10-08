@@ -1,4 +1,5 @@
 import { View } from "react-native";
+import { isSteadyAvailable } from "@/modules/clipy-video";
 import { shownCutout, useCutoutFiles, type CutoutFile } from "@/src/editor/cutoutFiles";
 import { adjustNeedsTag } from "@/src/editor/model/adjust";
 import { placeClip } from "@/src/editor/model/clipLayout";
@@ -74,10 +75,13 @@ export function steadyNeedsTag(p: Project, playhead: number, files: Record<strin
   const hit = clipAt(p, playhead);
   return (!!hit && !asExported(hit.clip, true)) || layersAt(p, playhead).some((l) => !asExported(l, false));
 }
-/** `steadyNeedsTag` for what the two stores hold right now. */
+/**
+ * `steadyNeedsTag` for what the two stores hold right now. Never on a build without the tool: no copy can be made there and the
+ * export sends such a clip as it is (`useExport`), so the preview already shows what goes out.
+ */
 const steadyTagNow = (): boolean => {
   const s = useEditorStore.getState();
-  return !!s.project && steadyNeedsTag(s.project, s.playhead, useSteadyFiles.getState().files);
+  return !!s.project && isSteadyAvailable() && steadyNeedsTag(s.project, s.playhead, useSteadyFiles.getState().files);
 };
 
 /**
