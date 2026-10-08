@@ -29,7 +29,7 @@ const row = () => screen.getAllByRole("button").map((b) => b.props.accessibility
 const closeTool = async () => { await fireEvent.press(screen.getByRole("button", { name: "Done" })); };
 const BACK = "Back to main tools";
 const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Collage", "Effects", "Filter", "Adjust", "Ratio", "Background", "Cover", "Templates"];
-const CLIP = ["Split", "Trim", "Select", "Speed", "Volume", "Extract audio", "Voice", "Sound", "Animate", "Filter", "Adjust", "Background", "Templates", "Crop", "Transform", "Opacity", "Mask", "Green screen", "Cut out", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate", "Delete"];
+const CLIP = ["Split", "Trim", "Select", "Speed", "Volume", "Extract audio", "Voice", "Sound", "Animate", "Filter", "Adjust", "Background", "Templates", "Crop", "Transform", "Opacity", "Mask", "Green screen", "Cut out", "Stabilize", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate", "Delete"];
 const TEXT = ["Edit", "Animate", "Keyframe", "Duplicate", "Delete", "Add text"];
 const SOUND = ["Split", "Volume", "Fade", "Voice", "Sound", "Duplicate", "Delete", "Add audio", "Ducking", "Beats"];
 
