@@ -1,7 +1,7 @@
 # Sound tools: Extract audio, Voice changer, Sound quality (and a noise-reduction test): design
 
 **Date:** 2026-10-07
-**Status:** Design approved by the owner in chat ("yes"). Not built yet. Plan: `docs/superpowers/plans/2026-10-07-sound-tools.md`.
+**Status:** Implemented 2026-10-08 (on-device confirmation by the owner pending); section 3a says what was built. Plan: `docs/superpowers/plans/2026-10-07-sound-tools.md`.
 **Builds on:** CapCut group D (`2026-10-04-capcut-d-audio-design.md`: audio tracks, fades, ducking, `audioMix.ts` ↔ `AudioMix.swift`), the strips and panels (`2026-10-05-editing-ui-r1-toolbar-strips-design.md`, `2026-10-05-editing-ui-r2-tall-panels-design.md`), and the first working native build (main `024a0a0`, 7 October 2026). Schema v17 → **v18**. **New Swift** (one new native build). No new package, no new asset.
 
 ## What this round does and does not do
@@ -119,6 +119,80 @@ A sound bar has no speed, so effects there have no speed interaction. Pitch chan
 - **RNTL (native mocked):** the Voice panel, the Sound strip, the toolbar actions, the render manager, the preview swapping to the copy, the export preparing sounds.
 - **Swift itself:** no XCTest (it runs nowhere). A **Swift read-through review** by an independent reviewer before the build, then **one EAS build**.
 - **The owner's device checklist** (§12) for everything only ears can judge.
+
+## 3a. As built (2026-10-08)
+
+Everything below was checked against the committed code. Where it differs from the design above, this section is right.
+
+**Commits (branch `sound-tools`, from `main` 024a0a0).**
+
+| Task | Commit | What |
+|---|---|---|
+| 1 | 6fc88bf | schema 18, `SoundSettings`, `clampSound`, `VOICES` / `EQS`, PROOF migration |
+| 2 | 624ba4d | `soundMath.ts`, `sound.ts` (tables, `soundChain`, `soundFileName`, `neededSounds`) |
+| 3 | f14de54 | `setTrackSound`, `extractClipAudio`, `extractRefusal`, `extractedTrackOf` |
+| 4 | 4fd431a | the wrapper's `renderSound`, `cancelSoundRender`, `soundInfo`, `probeNoiseReduction`, `isSoundAvailable` |
+| 5 | 392c9c8 | `SoundMath.swift` and its parity test |
+| 6 | 13e4268 | `SoundRender.swift`, the module functions, the probe, the silent-video skip in `ExportSession.swift` |
+| 7 | ff41b07 | `soundFiles.ts`, `soundRenders.ts`, the preview plays the copy |
+| 8 | 2ec446f | `useExtractAudio` |
+| 9 | 50ab8e5 | the Voice panel |
+| 10 | b4277e1 | the Sound strip and the dev-only noise probe |
+| 11 | c551221 | toolbar: Extract audio, Voice, Sound |
+| 12 | 25f3e6a | export: copies prepared first, the uri swapped |
+| fix round 1 | c0e0ac7 | review of the TypeScript side (below) |
+
+**Builds.** One EAS development build for the round: `10e9be42-3474-4350-8f7b-c0e2aef00a4c`, from commit `13e4268` (the commit that holds all the Swift). It FINISHED: the Swift compiled at the first attempt, so no second build was needed. Fix round 1 changed TypeScript only, so it needs no build. Nothing has been tried on the phone yet.
+
+**Native changes.** Only `SoundMath.swift` (new), `SoundRender.swift` (new), `ClipyVideoModule.swift` and the one `guard` in the audio-track loop of `ExportSession.swift`. `AudioMix.swift`, `audioMix.ts`, `audioSync.ts`, `timeline.ts`, `PreviewPlayer.tsx`, `timelineScroll.ts`, `src/ui`, `src/theme` and the guard tests in `src/__tests__` are untouched.
+
+**How it works, as built.**
+
+- Effects live on an audio-row item only: `AudioTrack.sound`, optional, absent when off, written only by `setTrackSound`. A video clip has no setting. **Voice** or **Sound** on a clip first runs Extract audio (one undo step), selects the new bar and opens the tool on it ("The sound of this clip is now its own bar.").
+- **Extract audio** works at normal speed only (refused with "Set the speed of this clip back to 1x first. Extracted sound plays at normal speed."), not on a reversed clip or a photo (the tools are not shown). The bar is named "Clip sound", sits on the sound-effects lane, and does not follow the clip afterwards. Deleting the bar leaves the clip muted. A clip counts as already extracted only while it is **muted** and a matching bar exists (with several matches, the one lined up with the clip); a duplicate that is not muted is extracted afresh.
+- The toolbar button says **Sound**; its strip is titled **Sound quality**.
+- **Robot** is a metallic comb with a light distortion, not a vocoder. **Even out loudness** is one overall gain from a gated level measurement of the dry source (`levelGainDb`: at most +18 dB, at most -6 dB; not LUFS, not a compressor), guarded by `softClip` on every output sample.
+- While a copy is prepared the bar plays its original, with a spinner ("Preparing the sound"). During a Strength / Pitch drag only the dragged track plays its original (`holdSounds(trackId)`) and the copy is rendered once, on release. A failed render keeps the setting, plays the original and is said once per project open (`SOUND_FAILED`).
+- Copies live in `<project>/sound/`, are named after the setting (`soundFileName`), and the ones no bar needs are swept when a project is opened. Export prepares missing copies first (`SOUND_SHARE`, the first 10 % of its progress) and stops with "Could not prepare a sound for the export: <reason>" if one cannot be rendered.
+- In Expo Go, or on a build without the sound functions, Extract audio works; Voice and Sound show `SOUND_UNAVAILABLE` ("Voice and sound effects need the new native build. Expo Go cannot run them.") and change nothing.
+- Native: `SoundRender.swift` is an offline `AVAudioEngine` (44.1 kHz, stereo, float) that reads the source streamed through `AVAssetReader` (any container, a video included), writes AAC to a `part-` file and moves it into place, renders one at a time, and answers a cancel with `E_SOUND_CANCELLED`. `SoundMath.swift` is the only mirrored pair of the round (with `soundMath.ts`); the preset numbers live in TypeScript and travel in the request. A JS-side safety net keeps the queue moving: a cancelled render is left behind after `SOUND_CANCEL_GRACE_MS` (4 s), and a render with no answer after `SOUND_RENDER_DEADLINE_MS` (120 s) counts as failed. `outdoorGeneral` is listed in `sound.ts` but left out of the Swift reverb table because it needs a newer iOS than the module's 16.4 target; no voice uses it.
+- The noise probe (`noiseProbe.ts`): in a development build, the first time the Sound strip opens with the engine present, `probeNoiseReduction` runs Apple's voice clean-up unit on the file and logs one line, `[noise-probe] {...}`. It runs once per install (key `clipy.noiseProbe.v1`; raise the `v1` to run it again). In the worst case the unit raises inside Apple's code and the app closes once; the next start logs `[noise-probe] {"ok":false,"stage":"crash",...}` and does not run it again.
+
+**Findings of the Swift read-through and their fixes.** The Swift could not be compiled here; it was read against `node_modules/expo-modules-core/ios` by its author (Task 6) and by an independent reviewer (Task 13), and the EAS build then compiled it.
+
+- `AVAudioUnitReverbPreset.outdoorGeneral` is iOS 27 only, so naming it would not compile. Dropped from the Swift table.
+- `promise.resolve([...])` with a mixed literal does not compile; the answers are built as `[String: Any]` first.
+- Hardening added during the read: the engine status is a `switch` with `@unknown default`; a frame cap and a stall limit end the loop; the unit latency is clamped before `Int(...)`; buffers are checked for two channels and a sane frame count; the file's processing format is compared with the render format before the first write (a mismatch raises an Objective-C exception Swift cannot catch); each pass runs in `autoreleasepool`; one render at a time through a lock that still answers a cancel while waiting.
+- Reviewer (Task 13): no compile blocker, verdict "build it". B1: the probe could stop the app through an Objective-C exception inside Apple's unit (not catchable from Swift); covered by the persisted once-per-install guard. C1: pitched voices may be late if `AVAudioUnitTimePitch` reports latency 0 (phone check 1 below).
+
+**Fix round 1 (c0e0ac7), from the review of the TypeScript side.** I-1 the render queue is never hostage to the native side (the grace and the deadline above; the release of a drag renders the final value). I-2 a playing track is paused before its file is swapped (otherwise expo-audio resumes it after the editor paused). I-3 only a muted clip counts as already extracted. M-1 an Extract answer that arrives after the selection or the open tool changed is dropped. M-2 `holdSounds(trackId | null)`, so only the dragged track plays its original. M-3 "Pick a voice to set its strength." under the sliders. M-4 a failure is said once per project open. M-5 the probe is persisted and does not repeat after a crash.
+
+**Deviations the tasks reported.**
+
+- Task 1: the existing PROOF v16 -> v17 test asserted the current schema number of the migrated output; it is now 18 (title and fixture untouched). The pinned 17 became 18 in `migrate.test.ts` and ten `types.*.test.ts`.
+- Task 2: `sound.ts` is hardened for input `clampSound` never lets through (NaN strength, an id that is a property of `Object.prototype`); results for valid settings are as designed. Two sources whose names differ only in characters outside `A-Z a-z 0-9 _ -` would share a copy name (media files have generated ids, so this should not occur).
+- Task 3: `extractedTrackOf` overlaps with a 1 ms tolerance (stored trims are rounded to 3 decimals, a split clip's are not); the new bar can sit up to 0.5 ms off the clip.
+- Task 4: a module that is linked but lacks a sound function (an old build) throws "This build of the app has no sound tools yet..." instead of a raw TypeError.
+- Task 6: see the findings above.
+- Task 7: a render cancelled before it reached the native side never starts; `uri` is in the volume and sync effect dependency lists of `AudioPreview`; while a slider is held the original plays; a failed setting picked again in the same session is not retried.
+- Task 8: the hook selects the new bar and says "already" itself.
+- Task 9: the hold is taken before `beginTransaction` and let go on hide / other track / track gone / unmount; without the engine the panel says so and changes nothing.
+- Task 10: the probe call is wrapped in `try`; taps are gated on the engine.
+- Task 11: Voice / Sound on an already extracted clip find the bar with `extractedTrackOf` and say nothing; the tool opens only if the new bar is still the selection. Pinned lists changed in `toolbarContext.test.ts` (51 -> 54 tool ids), `icons.test.ts`, `EditorToolbar.test.tsx`, `EditorToolbar.layers.test.tsx`.
+- Task 12: Cancel during the preparation stops the export but not the native render already running (it finishes for the editor's copy); a project with no sound setting takes literally the old path (PROOF tests pinned against the old code).
+- Fix round 1: the I-2 pause applies only to a player this component started (one existing expectation changed: "the copy becomes ready while playing" now starts with `pause`); `extractedTrackOf` prefers the bar lined up with the clip; the "Pick a voice" line sits in the 36-pt row under the sliders; the probe key carries a version; `soundRenders.test.ts` restores the toast store between tests.
+- Files outside the plan: `src/editor/noiseProbe.ts` (the probe moved out of the strip), `soundFiles.ts` gained `soundFileOf`.
+
+**What no test checks (section 10, item by item).**
+
+1. An extracted bar on a large video: the second player's start, sync and memory. In the preview it can sit up to a quarter of a second off the picture; the export is exact.
+2. How each voice sounds, Robot above all; whether Strength feels even.
+3. Pitched voices against the picture: if `AVAudioUnitTimePitch` reports no latency, a pitched copy is late by a few hundredths of a second.
+4. Render time for a 10-second recording, a 3-minute song and a long video's sound. The 120 s deadline is a guess, and the 4 s grace needs the native cancel to answer promptly.
+5. Even out loudness against the bundled music; the soft clip with Bass boost.
+6. AAC priming: a gapless start and no click at the end; and the preview's source swap (a short dropout, no restart from zero, no drift).
+7. The probe's answer, and whether the app survives it.
+8. Also unverified: a second render of one output path while a cancelled first one is still writing its `part-` file (a Swift-side per-output guard would close it); nothing at all has run on a phone yet.
 
 ## 4. Data model: schema v18
 
@@ -326,7 +400,7 @@ It is called from **one dev-only place** (`src/editor/noiseProbe.ts`): when the 
 
 ## 12. The owner's device checklist
 
-In the plan (`docs/superpowers/plans/2026-10-07-sound-tools.md`, last section): Part A can be done today in Expo Go or the installed app (Extract audio); Part B after the new build is installed from its link.
+The full text is at the end of this section (it is also the last section of the plan, `docs/superpowers/plans/2026-10-07-sound-tools.md`): Part A can be done today in Expo Go or the installed app (Extract audio); Part B after the new build is installed from its link.
 
 Four things to know while going through it (they are how it is built, not faults):
 
@@ -334,3 +408,76 @@ Four things to know while going through it (they are how it is built, not faults
 - **Deleting the bar leaves the clip muted.** The sound does not come back by itself: select the clip, open Volume and switch Mute off.
 - **In the preview, the sound of an extracted bar can sit up to a quarter of a second off the picture** (lips and voice not quite together). That is the preview only; the exported video is exact.
 - **The first time the Sound strip is opened in the test build, a one-off check of the noise tool from Apple runs in the background.** Nothing shows on screen. In the worst case it could close the app once; open it again and carry on. It will not repeat.
+
+### The checklist, in full
+
+In one line: **Part A works today** (Expo Go, or the app you already installed). **Part B needs the new app**, which you install once from the link I send. (The build for it, EAS 10e9be42-3474-4350-8f7b-c0e2aef00a4c, finished and the Swift compiled; nothing has been tried on a phone yet.)
+
+### Part A: Extract audio (today)
+
+Start with `npx expo start --go --port 8090` and open the app on the iPhone, or open the installed app. Use a project you made **before** this update that has a video with sound and, if you have one, some music.
+
+**Nothing changed**
+
+1. Open the old project and play it. It looks and sounds exactly as before. Tell me if anything is different.
+
+**Extract audio**
+
+2. Tap a **video** clip. In the row of tools, right after **Volume**, there are three new buttons: **Extract audio**, **Voice**, **Sound**. Tap a **photo**: none of the three. That is right. Tell me if a name is cut off.
+3. Tap the video clip, then **Extract audio**. A new bar named **Clip sound** appears on the sound-effects row under the clip, exactly as long as the clip, and it is now selected. Play: the video sounds the same as before.
+4. Tap the clip, then **Volume**: the **Mute** switch is on. That is how you can tell the clip's own sound is off and the bar is what you hear.
+5. Drag the **Clip sound** bar a little to the right and play: the sound now comes late. Press **Undo**: it is back in place.
+6. Try **Split**, **Fade** and **Volume** on the bar: they work as for any sound.
+7. Tap the clip again and tap **Extract audio** a second time: no second bar is made. The first one is selected and a message says the sound is already on the audio row.
+8. Press **Undo** until the bar is gone: the clip's Mute switch is off again and the video sounds as before. Extracting was one single Undo.
+9. Give a clip a **Speed** of 2x, then tap **Extract audio**: a message tells you to set the speed back to 1x first, and nothing changes.
+10. Tap **Reverse** on a clip: the three sound buttons are gone for that clip (a reversed clip has no sound). Tap Reverse again to bring them back.
+11. Delete the **Clip sound** bar: the clip stays muted. To hear it again, tap the clip, **Volume**, and switch **Mute** off.
+12. In Expo Go, or in the app you installed before today: tap **Voice** or **Sound**. A message says these need the new native build. Nothing else happens. That is right.
+
+**Tell me**
+
+13. With an extracted bar under a long video: does the sound start on time when you press play in the middle, and does it stay in step with the picture?
+
+### Part B: Voice, Sound and the noise test (after installing the new app)
+
+Install the new app from the link. Open a project and record a short **voice-over** (Audio, Add audio, Record), about ten seconds of talking.
+
+**Voice**
+
+14. Tap the voice-over bar. The row of tools now has **Voice** and **Sound** after **Fade**. Tap **Voice**: you see **None, Deep, High, Chipmunk, Robot, Echo, Hall, Telephone**, a **Strength** slider (greyed out) and a **Pitch** slider at 0.
+15. Tap **Deep**. A small spinner shows at the top for a moment. While it spins you still hear your normal voice; when it stops, play: your voice is deeper. Tell me how long the spinner took.
+16. Try each of the others. For each, tell me in a word or two how it sounds and whether it is too weak, too strong or about right. **Robot** is the one I most need your ears for: it should sound metallic and artificial; it will not sound like a film robot.
+17. With **Echo** selected, drag **Strength** from left to right and let go. While you drag you hear the normal voice; a moment after you let go you hear the new echo. Gentle at the left, strong at the right.
+18. Tap **None**, then drag **Pitch** to **+3**: the voice is a little higher, with no other effect. Drag it to **−3**: a little lower. You feel a small tick at 0.
+19. Pick **Deep** and also set **Pitch** to **+2**: slightly less deep than Deep alone. The two add up.
+20. Press **Undo** a few times: each tap of a tile and each drag of a slider is one step back.
+21. Tap **None** and set Pitch to **0**: the bar is your original recording again. Your recording was never changed.
+22. With **Deep** on, **Split** the bar in the middle: both halves are still deep, straight away, with no spinner.
+23. With a voice on, watch a part where you can see lips or a clap: is the changed sound still in step with the picture? Tell me if it is early or late.
+
+**Voice on a video**
+
+24. Tap a **video** clip, then **Voice**. A message says the sound of this clip is now its own bar; the bar appears and the Voice panel is open on it. Tap **Chipmunk**: the video's sound is high. Press **Undo** twice: first the voice goes, then the sound is back inside the clip.
+
+**Sound**
+
+25. Tap the voice-over bar, then **Sound**. The strip is titled **Sound quality**: **None, Bass boost, Clear voice, Warm, Bright**, and a switch **Even out loudness**.
+26. Tap each preset and play. Tell me which ones you can clearly hear and whether any is unpleasant.
+27. Record a second voice-over **very quietly** (hold the phone far away). Tap it, **Sound**, and switch on **Even out loudness**. After the spinner it should be about as loud as your normal recording. Switch it off: quiet again.
+28. Put a bundled music track under both recordings and play: with **Even out loudness** on, do the voice and the music sit well together? Too loud, too quiet, or right?
+29. Put **Bass boost** on a loud music track: does it distort or crackle? It should not.
+
+**Export**
+
+30. Export the project. The progress starts with a short "sounds" part and then the video. In the exported video every voice and sound setting is there, exactly as in the editor, and fades and volume still work on those bars.
+31. Close the app completely, open the project again and play: the effects are still there (there may be no spinner at all, because the changed sounds are kept).
+
+**The noise test (you do nothing special)**
+
+32. The first time you opened **Sound** on a recording in the new app, the phone quietly tried Apple's voice clean-up on it and wrote the result to my log. Just tell me you have done step 25, and tell me if the app **closed by itself** at that moment. I will read the answer and tell you whether a **Reduce noise** switch is possible next round.
+
+**Tell me**
+
+33. A three-minute song with **Hall**: how long does the spinner take?
+34. Would you rather hear the previous effect while a new one is being prepared, instead of the original? And would you like the voice tools to work on a clip without moving its sound to the audio row? Both are possible later; I left them out to keep this round safe.
