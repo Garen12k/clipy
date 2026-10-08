@@ -1,10 +1,13 @@
 import { View } from "react-native";
+import { shownCutout, useCutoutFiles, type CutoutFile } from "@/src/editor/cutoutFiles";
 import { adjustNeedsTag } from "@/src/editor/model/adjust";
 import { placeClip } from "@/src/editor/model/clipLayout";
+import { CUTOUT_PREVIEW } from "@/src/editor/model/cutout";
 import { activeEffects } from "@/src/editor/model/effectMath";
 import { frameSize } from "@/src/editor/model/ops";
 import { clipAt, hasSpeedCurve, isInTransitionWindow, layersAt } from "@/src/editor/model/timeline";
-import type { Project } from "@/src/editor/model/types";
+import { activeCutout, isPhoto, type Clip, type Project } from "@/src/editor/model/types";
+import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { Body } from "@/src/ui/Text";
 import { backgroundShows, clipFrameMotion } from "./ClipFrame";
@@ -35,9 +38,38 @@ export function needsPreviewTag(p: Project, playhead: number): boolean {
   return backgroundShows(c, placeClip({ width: c.width, height: c.height }, c.crop, motion.transform ?? c.transform, f.width, f.height), motion.opacity, f.width, f.height);
 }
 
-/** Small chip shown over the preview when the current frame is an approximation of the export (see `needsPreviewTag`). */
+/**
+ * Whether Remove background makes the preview differ from the export at the playhead: a clip or layer on screen has the switch on
+ * and the preview does not show its cut-out as the export will — the copy is not ready (or cannot be made), that kind of video
+ * preview is switched off (`CUTOUT_PREVIEW`), or a main clip's background is Blur (the export blurs the cut-out picture).
+ */
+export function cutoutNeedsTag(p: Project, playhead: number, files: Record<string, CutoutFile>): boolean {
+  const asExported = (c: Clip, main: boolean): boolean => {
+    if (!activeCutout(c)) return true;
+    if (shownCutout(files, c) === null) return false;
+    if (main && c.background.type === "blur") return false;
+    if (isPhoto(c)) return true;
+    return main ? CUTOUT_PREVIEW.mainVideo : CUTOUT_PREVIEW.layerVideo;
+  };
+  const hit = clipAt(p, playhead);
+  return (!!hit && !asExported(hit.clip, true)) || layersAt(p, playhead).some((l) => !asExported(l, false));
+}
+
+/** `cutoutNeedsTag` for what the two stores hold right now. */
+const cutoutTagNow = (): boolean => {
+  const s = useEditorStore.getState();
+  return !!s.project && cutoutNeedsTag(s.project, s.playhead, useCutoutFiles.getState().files);
+};
+
+/**
+ * Small chip shown over the preview when the current frame is an approximation of the export (see `needsPreviewTag`), or shows a
+ * clip whose background the export will remove and the preview does not (`cutoutNeedsTag` — asked here, of both stores, as one
+ * yes / no: the chip is drawn again only when the answer changes, not on every tick or percent).
+ */
 export function PreviewTag({ visible }: { visible: boolean }) {
-  if (!visible) return null;
+  const cutNow = useEditorStore(cutoutTagNow);      // asked again when the project or the playhead changes …
+  const cutThen = useCutoutFiles(cutoutTagNow);     // … and when a copy does: the same answer, read from both stores
+  if (!visible && !cutNow && !cutThen) return null;
   return (
     <View
       testID="preview-tag"

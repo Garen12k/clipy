@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Image, View } from "react-native";
+import { shownCutout, useCutoutFiles } from "@/src/editor/cutoutFiles";
 import { coversFrame, maskRadius, placeClip, type PlacedClip } from "@/src/editor/model/clipLayout";
+import { CUTOUT_PREVIEW } from "@/src/editor/model/cutout";
 import { hasClipMotion, resolveClipMotion } from "@/src/editor/model/motion";
 import { isPhoto, type Clip, type ClipTransform } from "@/src/editor/model/types";
 import { getThumb } from "./thumbnails";
@@ -58,13 +60,27 @@ export function backgroundShows(clip: Clip, placed: PlacedClip, opacity: number 
  * A mask (`clip.mask`) rounds the picture box by `maskRadius`; the box clips, so the picture and `overlayChildren` are cut to it.
  * `transparent` (layers): no background at all — what the picture does not cover shows what is beneath.
  * `overlayChildren` are drawn inside the picture box above the picture (a layer's own filter / adjust layers).
+ * Remove background (`cutout.ts`): a photo draws its PNG copy once that is ready; a main video's own picture is then hidden by
+ * opacity (never unmounted) under a silent second player showing the copy (`CutoutFollower`), and a main clip's background is
+ * always drawn behind a cut-out. A clip without a ready copy goes through none of it: its tree and styles are as they always were.
  */
 export function ClipFrame({ clip, frameW, frameH, transform, opacity, transparent, overlayChildren, children }:
   { clip: Clip; frameW: number; frameH: number; transform?: ClipTransform; opacity?: number; transparent?: boolean; overlayChildren?: ReactNode; children?: ReactNode }) {
   const placed = placeClip({ width: clip.width, height: clip.height }, clip.crop, transform ?? clip.transform, frameW, frameH);
   const masked = clip.mask !== "none";
-  // A see-through picture shows the clip's own background behind it, as the export does; so do a mask's cut-off corners.
-  const showBackground = !transparent && backgroundShows(clip, placed, opacity, frameW, frameH);
+  // Remove background: the clip's cut-out copy once it is ready (null = the clip is drawn as it is). The selector returns the
+  // uri itself, so a render's progress (the store changes on every percent) draws nothing here.
+  const cutUri = useCutoutFiles((s) => shownCutout(s.files, clip));
+  const photo = isPhoto(clip);
+  // A MAIN video cannot be handed another file (the preview's players load the clip's own): its picture is hidden — it keeps
+  // playing, with the sound — and a silent player showing the copy is laid in its place. A layer's own player plays the copy.
+  const follower = !transparent && !photo && cutUri !== null && CUTOUT_PREVIEW.mainVideo;
+  // A see-through picture shows the clip's own background behind it, as the export does; so do a mask's cut-off corners, and so
+  // does a cut-out on the main track (always: what was the picture's background is see-through now).
+  const cutOut = !transparent && cutUri !== null && (photo || follower);
+  const showBackground = !transparent && (cutOut || backgroundShows(clip, placed, opacity, frameW, frameH));
+  // Loaded only when it is shown: suites that never show a cut-out do not load a video player for it.
+  const Follower = follower ? (require("./CutoutFollower") as typeof import("./CutoutFollower")).CutoutFollower : null;
   // A clip with motion asks for its blur still up front, so the first faded frames are not black while it loads.
   const blurStill = useBlurStill(clip, !transparent && (showBackground || opacity !== undefined) && clip.background.type === "blur");
   const contentW = placed.width / clip.crop.w, contentH = placed.height / clip.crop.h;
@@ -85,11 +101,16 @@ export function ClipFrame({ clip, frameW, frameH, transform, opacity, transparen
           ...(opacity === undefined ? null : { opacity }),
           ...(masked ? { borderRadius: maskRadius(placed, clip.mask) } : null),
         }}>
-        <View testID="clip-content" style={{ position: "absolute", left: -clip.crop.x * contentW, top: -clip.crop.y * contentH, width: contentW, height: contentH }}>
-          {isPhoto(clip)
-            ? <Image testID="clip-photo" source={{ uri: clip.sourceUri }} resizeMode="stretch" style={{ width: "100%", height: "100%" }} />
+        <View testID="clip-content" style={{ position: "absolute", left: -clip.crop.x * contentW, top: -clip.crop.y * contentH, width: contentW, height: contentH, ...(follower ? { opacity: 0 } : null) }}>
+          {photo
+            ? <Image testID="clip-photo" source={{ uri: cutUri ?? clip.sourceUri }} resizeMode="stretch" style={{ width: "100%", height: "100%" }} />
             : children}
         </View>
+        {Follower && cutUri !== null ? (
+          <View testID="clip-cutout" style={{ position: "absolute", left: -clip.crop.x * contentW, top: -clip.crop.y * contentH, width: contentW, height: contentH }}>
+            <Follower clip={clip} uri={cutUri} />
+          </View>
+        ) : null}
         {overlayChildren}
       </View>
     </View>
