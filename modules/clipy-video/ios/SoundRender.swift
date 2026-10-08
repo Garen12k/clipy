@@ -29,6 +29,7 @@ struct SoundRenderRequest: Record {
   @Field var reverbWet: Double = 0
   @Field var bands: [SoundBand] = []
   @Field var level: Bool = false
+  @Field var noiseWet: Double = 0                  // Reduce noise: the isolation unit's wet/dry mix in percent; 0 = no unit
 }
 
 enum SoundError: Error, LocalizedError {

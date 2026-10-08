@@ -449,7 +449,7 @@ describe("toExportLayer", () => {
 
 describe("sound API", () => {
   const request = { jobId: "j", sourceUri: "file:///m/a.m4a", outputPath: "file:///s/a.m4a", pitchCents: -300, distortionPreset: "", distortionWet: 0, distortionPreGain: -6,
-    delayTime: 0, delayFeedback: 0, delayWet: 0, delayLowPass: 15000, reverbPreset: "", reverbWet: 0, bands: [], level: false };
+    delayTime: 0, delayFeedback: 0, delayWet: 0, delayLowPass: 15000, reverbPreset: "", reverbWet: 0, bands: [], level: false, noiseWet: 0 };
 
   it("isSoundAvailable: only when the linked module has the render function (not in Expo Go, not in a build from before it)", () => {
     expect(isSoundAvailable()).toBe(true);

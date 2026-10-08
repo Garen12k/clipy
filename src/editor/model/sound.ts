@@ -22,7 +22,7 @@ export const DISTORTION_PRESETS: readonly string[] = ["drumsBitBrush", "drumsBuf
 export interface SoundBand { type: BandType; frequency: number; gain: number; bandwidth: number }
 /**
  * The units of one render and their values. A unit is left out when its switch is off: pitch 0, a wet mix of 0 or an empty preset
- * name, no bands. `level` = Even out loudness (measured inside the render).
+ * name, no bands. `level` = Even out loudness (measured inside the render). `noiseWet` = Reduce noise, off at 0.
  */
 export interface SoundChain {
   pitchCents: number;
@@ -31,6 +31,8 @@ export interface SoundChain {
   reverbPreset: string; reverbWet: number;
   bands: SoundBand[];
   level: boolean;
+  /** Reduce noise: the isolation unit's wet / dry mix in percent, first in the chain. 0 = no unit. */
+  noiseWet: number;
 }
 /** AVAudioUnitTimePitch.pitch runs −2400 … 2400 cents. */
 export const PITCH_CENTS_LIMIT = 2400;
@@ -79,12 +81,24 @@ const eqOf = (s: SoundSettings): EqId | null => (has(EQ_TABLE, s.eq) ? s.eq : nu
 const strengthOf = (s: SoundSettings): number => clamp(Number.isFinite(s.strength) ? s.strength : 0, 0, 1);
 /** Whole semitones; + 0: a rounded −0 is 0. */
 const pitchOf = (s: SoundSettings): number => (Number.isFinite(s.pitch) ? Math.round(s.pitch) + 0 : 0);
+/** The noise strength of a setting, or null when Reduce noise is off (no key, or not a number). */
+const noiseOf = (s: SoundSettings): number | null => (typeof s.noise === "number" && Number.isFinite(s.noise) ? clamp(s.noise, 0, 1) : null);
+/**
+ * Reduce noise, strength 0 … 1 → the unit's wet / dry mix in percent. The mix is a straight blend, so what is left of the noise is
+ * `1 − wet`: 50 % (−6 dB) at the lightest, 87.5 % (−18 dB) in the middle, 100 % (the isolated voice alone) at the strongest —
+ * a curve, so equal slider steps sound like equal steps.
+ */
+export function noiseWet(strength: number): number {
+  const k = Number.isFinite(strength) ? clamp(strength, 0, 1) : 0;
+  return Math.round((100 - 50 * (1 - k) * (1 - k)) * 1000) / 1000;
+}
 
 /** The units and numbers of a setting. A setting that changes nothing gives a chain that switches every unit off. */
 export function soundChain(s: SoundSettings): SoundChain {
   const voice = voiceOf(s), eq = eqOf(s);
   const row = voice ? VOICE_TABLE[voice] : null;
   const k = strengthOf(s);
+  const noise = noiseOf(s);
   const voiceBands: SoundBand[] = (row?.bands ?? []).map((b) => ({ type: b.type, frequency: at(b.frequency, k), gain: at(b.gain, k), bandwidth: b.bandwidth }));
   const eqBands: SoundBand[] = (eq ? EQ_TABLE[eq] : []).map((b) => ({ ...b }));
   return {
@@ -94,6 +108,7 @@ export function soundChain(s: SoundSettings): SoundChain {
     reverbPreset: row?.reverb?.preset ?? "", reverbWet: row?.reverb ? at(row.reverb.wet, k) : 0,
     bands: [...voiceBands, ...eqBands],
     level: s.level === true,
+    noiseWet: noise === null ? 0 : noiseWet(noise),
   };
 }
 
@@ -101,12 +116,16 @@ const stemOf = (uri: string): string => (uri.split("/").pop() ?? "").replace(/\.
 /**
  * The file a setting's copy of a source is kept in: the source's name and the setting, so the same pair is rendered once and found
  * again. Without a voice the strength does not count. Example: `abc-v1-deep-s50-pm3-warm-l1.m4a`.
+ * With Reduce noise on the name ends `-n<strength %>`: `abc-v1-plain-s0-p0-flat-l0-n50.m4a`.
  */
 export function soundFileName(sourceUri: string, s: SoundSettings): string {
   const voice = voiceOf(s), semitones = pitchOf(s);
   const strength = voice ? Math.round(strengthOf(s) * 100) : 0;
   const pitch = `p${semitones < 0 ? "m" : ""}${Math.abs(semitones)}`;
-  return `${stemOf(String(sourceUri))}-v${SOUND_VERSION}-${voice ?? "plain"}-s${strength}-${pitch}-${eqOf(s) ?? "flat"}-l${s.level === true ? 1 : 0}.m4a`;
+  const noise = noiseOf(s);
+  // The noise part is there only when Reduce noise is on: a setting without it keeps the name it always had.
+  const tail = noise === null ? "" : `-n${Math.round(noise * 100)}`;
+  return `${stemOf(String(sourceUri))}-v${SOUND_VERSION}-${voice ?? "plain"}-s${strength}-${pitch}-${eqOf(s) ?? "flat"}-l${s.level === true ? 1 : 0}${tail}.m4a`;
 }
 
 /** One copy the project plays: its file name, the source it is rendered from and the setting. */
