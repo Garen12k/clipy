@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normaliseTransitions } from "@/src/editor/model/ops";
 import { clipDuration } from "@/src/editor/model/timeline";
-import { activeCutout, clampExportSettings, DEFAULT_EXPORT_SETTINGS, EFFECT_END_SLACK, frameAspect, type ExportSettings, type Project } from "@/src/editor/model/types";
-import { addExportListener, cancelExport, exportTimeline, isCutoutAvailable, isNativeAvailable, isSoundAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
+import { activeCutout, clampExportSettings, DEFAULT_EXPORT_SETTINGS, EFFECT_END_SLACK, frameAspect, type Clip, type ExportSettings, type LayerClip, type Project } from "@/src/editor/model/types";
+import { steadyOf } from "@/src/editor/model/steady";
+import { addExportListener, cancelExport, exportTimeline, isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSteadyAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
 import { CUTOUT_SHARE, cutoutBytesToMake, prepareCutouts, withCutout } from "./exportCutouts";
 import { prepareSounds, SOUND_SHARE } from "./exportSounds";
+import { prepareSteady, STEADY_SHARE, steadyBytesToMake, withSteady } from "./exportSteady";
 import { estimateBytes, exportableAudio, exportableClips, exportableLayers, requestBitrate, type Resolution } from "./estimate";
 
 export type ExportState = { status: "idle" | "unavailable" | "exporting" | "done" | "error"; progress: number; fileUri?: string; message?: string };
@@ -58,8 +60,10 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
       const layersOut = exportableLayers(project, missingSourceUris, total);
       /** Whether a clip or layer goes out from a cut-out copy (never on a build from before the tool: nothing can have been switched on there). */
       const cutting = isCutoutAvailable() && [...clips, ...layersOut].some(activeCutout);
+      /** Whether a clip or layer goes out from a steady copy. The project is asked FIRST: one without the two settings makes no new call at all. */
+      const steadying = [...clips, ...layersOut].some((c) => steadyOf(c) !== null) && isSteadyAvailable();
       // The copies still to be made are written before the video is: their room is asked for with the video's.
-      const need = estimateBytes(total, resolution, settings) * 2 + (cutting ? await cutoutBytesToMake(project.id, [...clips, ...layersOut]) : 0);
+      const need = estimateBytes(total, resolution, settings) * 2 + (cutting ? await cutoutBytesToMake(project.id, [...clips, ...layersOut]) : 0) + (steadying ? await steadyBytesToMake(project.id, [...clips, ...layersOut]) : 0);
       if ((await expoFs.freeBytes()) < need) { setState({ status: "error", progress: 0, message: "Not enough free space on this iPhone for the export." }); return; }
       await expoFs.mkdir(`${expoFs.cacheDir}exports`);
       const outputPath = `${expoFs.cacheDir}exports/${project.id}-${Date.now()}.mp4`;
@@ -102,6 +106,27 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
         } finally { if (preparing.current === run) preparing.current = null; }
         if (run.stopped) return;
       }
+      // A clip or layer with Stabilize or an active Smooth slow motion is exported from its steady copy: same timing, same sound,
+      // another file. A copy that is missing is made first.
+      const steadies = new Map<string, string>();
+      if (steadying) {
+        const run = { stopped: false };
+        preparing.current = run;
+        const before = share.current;
+        share.current = before + STEADY_SHARE;
+        try {
+          const made = await prepareSteady(project.id, [...clips, ...layersOut], (f) => setState((s) => (!run.stopped && s.status === "exporting" ? { ...s, progress: before + f * STEADY_SHARE } : s)), () => run.stopped);
+          made.forEach((uri, id) => steadies.set(id, uri));
+        } catch (e) {
+          if (run.stopped) return;   // cancelled meanwhile: there is nothing to say
+          throw e;
+        } finally { if (preparing.current === run) preparing.current = null; }
+        if (run.stopped) return;
+      }
+      /** With no copy of either kind both are the plain conversions, called exactly as before. */
+      const noCopies = cutouts.size === 0 && steadies.size === 0;
+      const sendClip = (c: Clip) => withSteady(withCutout(toExportClip(c), c, cutouts.get(c.id), true), c, steadies.get(c.id));
+      const sendLayer = (l: LayerClip) => withSteady(withCutout(toExportLayer(l), l, cutouts.get(l.id), false), l, steadies.get(l.id));
       const audioTracks = copies.size === 0
         ? mixed.audioTracks.map((t) => toExportAudioTrack(mixed, t, total)).filter((t): t is ExportAudioTrack => t !== null)
         : mixed.audioTracks.flatMap((t): ExportAudioTrack[] => {
@@ -109,9 +134,9 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
           return sent ? [{ ...sent, sourceUri: copies.get(t.id) ?? sent.sourceUri }] : [];
         });
       jobId.current = await exportTimeline({
-        clips: cutouts.size === 0 ? clips.map(toExportClip) : clips.map((c) => withCutout(toExportClip(c), c, cutouts.get(c.id), true)),
+        clips: noCopies ? clips.map(toExportClip) : clips.map(sendClip),
         // A layer running past the end is sent whole (the native side clips it); one starting at the end is dropped.
-        layers: cutouts.size === 0 ? layersOut.map(toExportLayer) : layersOut.map((l) => withCutout(toExportLayer(l), l, cutouts.get(l.id), false)),
+        layers: noCopies ? layersOut.map(toExportLayer) : layersOut.map(sendLayer),
         overlays: project.overlays.filter((o) => o.end > o.start).map(toExportOverlay),
         effects: project.effects
           .map((e) => ({ ...e, start: Math.max(0, e.start), end: Math.min(total, e.end) }))
