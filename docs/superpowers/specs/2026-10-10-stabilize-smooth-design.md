@@ -1,7 +1,7 @@
 # Stabilize, Smooth slow motion: design
 
 **Date:** 2026-10-10
-**Status:** Built on branch `stabilize-smooth`; not yet run on a phone. Plan: `docs/superpowers/plans/2026-10-10-stabilize-smooth.md`. Where the build differs from the approved design the text below says what was **built**: B1, §6.3 and §6.6 (marked *as built*), §5 (the zoom factor) and §4.1 (Replace with a photo).
+**Status:** Implemented 2026-10-10 (on-device confirmation by the owner pending). Built on branch `stabilize-smooth`; not yet run on a phone. Plan: `docs/superpowers/plans/2026-10-10-stabilize-smooth.md`. Where the build differs from the approved design the text below says what was **built**: B1, §6.3 and §6.6 (marked *as built*), §5 (the zoom factor) and §4.1 (Replace with a photo).
 **Builds on:** Remove background (`2026-10-09-beats-background-design.md`: a stored switch, a rendered copy that keeps the source's timeline, `cutout.ts`, `cutoutFiles.ts`, `cutoutRenders.ts` with `inTurn`, `exportCutouts.ts`, `CutoutFollower`, `CutoutRender.swift`), speed and ramps (`timeline.ts`, `SpeedSheet.tsx`, `SpeedSpans.swift`), the build label (`src/lib/buildInfo.ts`). Branch `stabilize-smooth` from `main` 3d54486. Schema v20 → **v21** (two optional keys). **New Swift** in one new file (one new native build). No new package, no new asset.
 
 ## What this batch does and does not do
@@ -98,6 +98,46 @@ Each has the decision, the reason, and what it costs if it turns out wrong.
 ### C. Build label and gating
 
 `LEVELS` gains a first row `{ name: "stabilize and smooth", has: isSteadyAvailable }`. Both tools say `STEADY_TOOLS` on an older build and in Expo Go.
+
+## 3a. As built
+
+**Commits (branch `stabilize-smooth`, base `main` 3d54486).**
+
+| Task | What | Commit |
+|---|---|---|
+| spec, plan | the design and the plan | 8f01294 |
+| 4 | `renderTurn.ts` (`takeTurn`); the cut-out queue uses it, its suite unedited | 1a1d338 |
+| 2 | `measureShake` / `renderSteady` wrappers, `STEADY_TOOLS`, the build label | de278d8 |
+| 3 | `steadyPath.ts` | fef06cd |
+| 1 | schema v21, `setClipStabilize` / `setClipSmooth`, `isSlowed`, PROOF migration | e97ff8d |
+| 5 | `steady.ts` | 3d49b46 |
+| 6 | `SteadyRender.swift` + module registration | 414b831, rework 3217c41, review fixes 6644b7e |
+| 7 | `steadyFiles.ts`, `steadyRenders.ts` | 83b55cf |
+| 8 | the preview (`ClipFrame`, `LayerStack`, `PreviewTag`) | 519cde9 |
+| 10 | the Slow motion tab | fac008e |
+| 11 | the export (`exportSteady.ts`, `useExport.ts`) | 91154f4 |
+| 9 | the Stabilize tool, Remove background's refusal | c08c7b8 |
+| 12, 13 fix wave | W1 8cc7934, I1 95ef711, I2 f16e7e2, M3 0e9bc6a, M4 ffcf456 + 6f619ec, spec 4f3c849 | |
+
+**Build.** One EAS build, `2137c817-d1af-4f71-b4e0-791e65745d4a`, started at 6644b7e (after the Swift review) and finished; it took one build because the Swift review found nothing that would not compile or would crash. The TypeScript fixes after it (8cc7934 ... 6f619ec) need no build. The Swift has therefore compiled once on EAS; it has not run on a phone.
+
+**Findings of the two reviews and their fixes.**
+- Swift review: nothing that would not compile, nothing that would crash or hang. **W1** (the correction was computed in un-zoomed units, so 5 to 15 % of the shake was left in) fixed in TypeScript, 8cc7934. **W2** (the track's clock left to the writer) fixed: `mediaTimeScale` 30000 on the picture input, 6644b7e. The "other image" doubt of the sequence handler: removed, a fresh `VNImageRequestHandler` per pair of frames, 6644b7e. **W3** (a cut inside a clip gets blended frames across it) and **W4** (bits per frame halve at the dense grids) left on purpose; W4 is one TypeScript number to change after phone check 7.
+- TypeScript review: **I1** (a reversed slowed clip showed the Slow motion tab) fixed, 95ef711. **I2** (Replace with a photo kept the keys) fixed, f16e7e2. **M3** (a copy the export made stayed "failed" in the editor) fixed, 0e9bc6a. **M4** (the Preview tag on a build without the tool) fixed, ffcf456, and asked last because the build lookup is not free on every playhead tick, 6f619ec. **Left:** M1 (the first and last `radius` seconds of an untrimmed copy are steadied less; the spec's rule, decide after phone check 8), M2 (a trim drag does not hold the queue; nothing wrong is stored, the cut-out queue behaves the same), M5 (a freeze frame of a stabilized clip is the un-zoomed picture), M6 (the strip at Off while the Smooth copy is busy shows the hint), M7 (bar sizes as plain numbers; `theme.size` has no entries for them).
+
+**Deviations from the plan (values that changed, behaviour that changed).**
+- `grid` is a density: every kept source frame keeps its own time, and k = `round(gap x grid) - 1` blended frames go between neighbours (none under 1 or above 16 or closer than `minFrameGap`). Not a time lattice from `from` (that made a 29.97 fps source soft everywhere). The frame-rate bypass and the drain of the first Swift were removed.
+- `steadyShifts` multiplies by the level's zoom before the clamp (W1); the table and vectors in §5 changed with it.
+- Measuring: a fresh `VNImageRequestHandler` per pair, not one `VNSequenceRequestHandler`.
+- The copy's picture track has a 1/30000 clock; in-betweens are stamped on it.
+- Added to Task 7: `holdSteady` (wired by Task 10 around every speed drag) and `STEADY_LONG_PATH` (300; a breath around a long path). A measuring without its three lists fails as "steady measure: no numbers came back".
+- Replace with a photo drops both keys (one undo step); `setClipCutout` on a photo ignores and removes stale keys.
+- Reverse is also absent from a clip with a steady copy; the Slow motion tab is absent on a reversed clip.
+- A copy that failed in the editor and is then made by the export is known as ready (done in `ensureSteady`, not `exportSteady.ts`, because `useExport.steady.test.ts` holds a PROOF block).
+- Tests whose expectations changed: the schema literal 20 to 21 in `migrate.test.ts` (18 assertions; the v19 to v20 PROOF test only in its asserted number) and in thirteen `types.*.test.ts` files; the pinned `Events(...)` string in `cutoutRender.swift.test.ts` and `soundRender.swift.test.ts`; `toolbarContext.test.ts` (`stabilize` added to the bars and to four `without(...)` lists, 55 to 56 tools); `steadyRenders.test.ts` hook test (one `getTimerCount` assertion replaced by counting the queue's own waits); `StabilizeSheet.test.tsx` (`await screen.unmount()`). No PROOF, frozen or guard test was edited to pass.
+- Files outside the plan's list: `src/editor/components/CutoutSheet.tsx` (the refusal sentence), `toolStrip.ts`, `toolGroups.ts`.
+
+**What no test checks (section 10, item by item).** Every item of section 10 is phone-only; the tests pin the text of the Swift and the TypeScript maths, not what Vision returns or what the phone shows. Items 1 (the preview plays the copy), 2 (the export picks the denser frames), 3 to 5 (direction, unit and which image is floating; the zoom factor of W1 can over-correct if the native order is not what the Swift-reading test pins), 6 (time and heat), 7 (quality, softness, edges), 8 (HEVC at 120 fps; H.264 is the fallback), 9 (sound), 10 (colours of HDR), 11 (the size of the bridge). Also only on the phone: the percent climbing 0 to 40 to 100, two players on a stabilized main clip, a jump in size before the copy has loaded, a faint double image at opacity under 1, and the editor pausing for a moment at 40 % on the longest copy at High.
 
 ## 4. Data model: schema v21
 
