@@ -1,7 +1,7 @@
 # Find beats in your own music, Remove background: design
 
 **Date:** 2026-10-09
-**Status:** Approved by the owner in chat ("yes"); not built yet. Plan: `docs/superpowers/plans/2026-10-09-beats-background.md`.
+**Status:** Implemented 2026-10-09 (on-device confirmation by the owner pending); as built: section 3a. Plan: `docs/superpowers/plans/2026-10-09-beats-background.md`.
 **Builds on:** auto beat cut (`2026-10-06-beat-cut-templates-design.md`: `beatDetect.ts`, `beats.ts`, `musicBeats.ts`, `BeatsSheet.tsx`), the sound tools (`2026-10-07-sound-tools-design.md`: a stored setting, a rendered copy, a one-at-a-time manager), layers / masks / green screen (`ClipFrame`, `LayerStack`, `ClipyCompositor.swift`), the build label (`src/lib/buildInfo.ts`). Branch `beats-background` from `main` 9ac3073. Schema v19 → **v20** (one optional field, for Remove background only). **New Swift** for both features, in two new files (one new native build). No new package, no new asset.
 
 ## What this batch does and does not do
@@ -90,6 +90,72 @@ Each has the decision, the reason, and what it costs if it turns out wrong.
 ### C. Build label and gating
 
 `LEVELS` gains a first row `{ name: "beats and background", has: isCutoutAvailable }`. Both tools say `BEATS_BACKGROUND_TOOLS` = "Beats in your own music and Remove background need the latest Clipy build. Install it from the newest build link." on an older build and in Expo Go.
+
+## 3a. As built
+
+Branch `beats-background`, from `main` 9ac3073; spec and plan `10ffd30`. App tests 5087, server tests 464, typecheck clean.
+
+**Commits, by task.**
+
+| Task | Commit | What |
+|---|---|---|
+| 1 | `ba0d87d` | schema v20, `Clip.cutout?`, `activeCutout`, `setClipCutout`, the v19 to v20 PROOF |
+| 2 | `0188019` | the detector in resumable pieces (`coarsePeriod`, `finePeriodSlice`, `beatsFromPeriod`), `BEAT_ACCEPT` / `isSteady`, the `beatTrack` fallback; the pinned PROOF |
+| 3 | `4919e86` | `cutout.ts`: names, ranges, `coveringCopy`, refusals (codes), sizes |
+| 4 | `5b0244a` | the wrapper in `modules/clipy-video/index.ts`, the `LEVELS` row "beats and background", `BEATS_BACKGROUND_TOOLS` |
+| 5 | `a9bb705` | `ownBeats.ts`: range, session cache, sliced analysis, the one listener |
+| 6 | `352271b` | Find beats for own music in `BeatsSheet.tsx` |
+| 7 | `88c450a` | `BeatEnvelope.swift`, the module functions, `beatEnvelope.parity.test.ts` |
+| 8 | `9d290cb` | `cutoutFiles.ts`, `cutoutRenders.ts` (queue, deadline, sweep) |
+| 9 | `5ef07cd` | preview: `CutoutFollower`, `ClipFrame`, `LayerStack`, `PreviewTag` |
+| 10 | `8075ef3` | the Cut out tool, `CutoutSheet` strip, `contextFor` |
+| 11 | `b8726af` | export: `exportCutouts.ts`, `useExport.ts` |
+| 12 | `c542e74` | `CutoutRender.swift`, `renderCutout` / `cancelCutout`, `onCutoutEvent` |
+| 13 | `053b808`, `ad820dc`, `50eb293`, `78f1202` | the Swift guard, then the fix wave (below) |
+
+**Builds.** One: EAS build `c3b4ef28-2941-4d26-bf9b-50f1460e287e`, started at `053b808` after the Swift read-through, finished. It was one build because both features add native code in two new files and nothing else, and the read-through found no compile error. The three fix-wave commits after it are TypeScript only, so they reach the phone from the dev server. A second build is needed only if the phone checks on transparency (section 10, items 1 and 2) fail in the compositor, or a Swift finding below turns out to matter.
+
+**Swift read-through (no toolchain).** No compile error found. Findings:
+- H1, the native gate stays taken if a blocking call (`copyNextSampleBuffer`, `perform`, `finishWriting`) never returns: parked; the JS deadline frees the queue, but later renders would time out until the app restarts.
+- H2, `endSession` on a writer that has stopped writing: fixed in `053b808` (a `writer.status == .writing` guard before `endSession` / `finishWriting`).
+- W1, waiting at the native gate ate the JS deadline: fixed in TypeScript (`inTurn`, below).
+- W2, two native renders of one path: not a collision (the second waits at the gate until the first has removed or placed its part file); at most one wasted render. Parked.
+- W3, "No person" is known only after the whole video is rendered: kept; expect the delay.
+- W4, beats up to one packet (about 23 ms) late for a file over 10 minutes: negligible, kept.
+- C1, C2 (cosmetic: the `evenSize` fallback differs from `cutoutSize`; `seconds` in a video's result is the range's end): kept.
+
+**TypeScript review and the fix wave.**
+- I1 (`ad820dc`): a transition into or out of a cut-out clip could read source the copy does not hold. `CUTOUT.pad` is now 2 (was 1); `coveringCopy` requires head and tail room (`transitionHandles` and `TRANSITION_HANDLE_MAX` = 2 in `timeline.ts`, the only place a handle meets a speed); a freshly planned copy always satisfies its own rule at every speed. The longest copy is 64 s (was 62), its deadline 1340 s (about 22 min), about 61 MB for 60 seconds. `CUTOUT_VERSION` stays 1 (never shipped).
+- M5 / W1 (`50eb293`): `inTurn` in `cutoutRenders.ts`, one queue around the native call shared by the editor and the export; a deadline starts when the call's turn comes.
+- `78f1202`: M1 the strip says why a copy cannot start (`CUTOUT_FILE_MISSING`, or `BEATS_BACKGROUND_TOOLS`); M2 a photo shows no percent; M3 the Beats hint keeps to two lines; M6 the export's free-space check counts the copies still to be made (`cutoutBytesToMake`).
+- Left on purpose: M4 (the preview can move between two READY copies: one reload), M8 (a resting finger mid-trim can start a render), M9 (a one-load background flash on a cut-out main clip), part of M10 (test gaps: the Cut out button press, the follower's real sync).
+
+**Deviations the tasks reported.**
+- Values: `CUTOUT.pad` 1 to 2; `BEAT_MESSAGES` has a fourth key, `gaveUp` (shown in the hint's row when a listening hits its 120 s deadline); `ListenAnswer` has `"unavailable"`; `BEATS_BREATH_MS` = 8 (the slices hand the thread back at least every 8 ms); a refusal is a code (`"reversed"` | `"tooLong"`), the sentences live in `CutoutSheet.tsx` and `exportCutouts.ts`.
+- Names: a source file name that is not already safe gets an 8-hex FNV-1a of the whole name appended; `parseCutoutName` is strict (canonical numbers, `to > from`, a safe stem); of two covering copies of equal length the earlier `from` wins.
+- Native: `BeatEnvelope.swift` reads with `AVAssetReaderAudioMixOutput` (SoundRender's pattern; a 5.1 file is downmixed by AVFoundation) and its FFT works on pointer buffers (the development build is unoptimised); `CutoutRender.swift` blends with `CIBlendWithRedMask` (Vision's mask is one channel), ends its session with `endSession(atSourceTime: range.end)`, writes BT.709, has its own native gate (`enter` / `leave`), and a nil filter or output throws.
+- Manager: ready copies are asked before busy ones (`cutoutNeedOf`, `cutoutsNeeded`, `cutoutPercent`); the hook subscribes to the stores outside React; no timer when nothing waits; progress in whole percent; a failed copy nobody needs is forgotten (so off and on retries); without the tool `openCutouts` does not set `opened`.
+- Beats: a second call for the same stretch joins the first; what is remembered is not listened to again; a malformed native answer rejects; the native call is made at once.
+- Export: names come from the editor's store; a stopped render is asked for again up to 3 times; progress never runs back; a photo keeps its speed and spans; a main clip's non-finite opacity becomes 0.999; the gate in `useExport.ts` is `some(activeCutout)`.
+- Preview: selectors return the uri or a boolean (never `s.files`); `LayerStack` has a private `LayerPicture`.
+- Toolbar: the switch row of `CutoutSheet` is its own `View` of height `STRIP.tiles`, not `StripTiles`.
+- Tests whose expectations changed: the pinned schema number 19 to 20 in `migrate.test.ts` (including the outputs asserted by older PROOFs) and in `types.audio`, `types.clip`, `types.layers`, `types.layers2`, `types.look`, `types.motion`, `types.noise`, `types.photo`, `types.polish`, `types.sound`, `types.speed`, `types.text`; three expectations in `BeatsSheet.auto.test.tsx` (own music is no longer off); the pinned tool lists in `toolbarContext.test.ts`, `EditorToolbar.test.tsx`, `EditorToolbar.layers.test.tsx` and `icons.test.ts` (one more "Cut out"); the pinned event list in `soundRender.swift.test.ts` (`onCutoutEvent`); two mock lines in `useExport.test.ts`; in `cutout.test.ts` and `cutoutRenders.test.ts` the numbers of the 1-second pad (the rule's own tests). No PROOF, frozen or guard test was edited to pass.
+- Files outside the plan: `src/editor/model/timeline.ts` (`transitionHandles`, `TRANSITION_HANDLE_MAX`; new test `timeline.handles.test.ts`) in the fix wave, and `BeatsSheet.tsx` / `CutoutSheet.tsx` for the minor findings.
+- Not done: `assets/music/beats.json` was not regenerated (no decoder on the machine; the detector's results are pinned by the PROOF instead).
+
+**What no test checks (section 10, item by item).**
+1. Transparency in the preview: whether `VideoView` draws the copy's alpha (a layer over the video beneath, a main follower over the background). Fallback: `CUTOUT_PREVIEW`.
+2. Transparency in the export: whether the compositor receives the alpha, and whether it is premultiplied (a dark rim). Fallback: a second build.
+3. Time: how long 5, 20 and 60 seconds take in a development build, heat, whether the phone stays usable; the 120 s listening deadline for a long song.
+4. Edges: hair, fast movement, a second person, a person entering late; HEVC alpha edge quality (`alphaQuality`).
+5. The main clip's follower: sync with the sound (up to 0.25 s off), the blink when the copy first appears or the playhead enters the clip, stutter with several players.
+6. Colours: HDR sources are read as 8-bit and tagged BT.709.
+7. Sound of a cut-out clip: packets copied from a range that starts mid-file (a click, or a refusal `cutout sound:`); picture and sound in step with the empty stretch before the first frame.
+8. Storage: the strip's size against the real folder.
+9. Find beats: the time for a three-minute song, markers on the beat by ear, the spinner staying alive, the first buffer's position for a range that starts mid-file.
+10. No steady beat: said for speech and ambient music, not for ordinary pop.
+
+Also unverified: that both Swift files compiled (the EAS build answered), that HEVC with alpha is accepted from 32BGRA buffers through the adaptor, that a one-channel Vision mask works with the red blend, and that a pool buffer is fully rewritten on each frame.
 
 ## 4. Data model: schema v20
 
