@@ -1,19 +1,25 @@
 import type { NativeStackNavigationOptions } from "expo-router";
 import type { ExportState } from "@/src/export/useExport";
-import { theme } from "@/src/theme/theme";
+import type { SystemScope } from "@/src/theme/appearance";
+import { theme, type AppAppearance } from "@/src/theme/theme";
 
 /**
  * How screens come and go. Expo Router's Stack is the native stack (react-native-screens), and these are its own options — the
  * transitions are iOS's, not ours: nothing here is animated from JavaScript, and nothing re-renders or remounts a screen (the
  * editor's video keeps playing under the Export sheet). This file is pure, so the choices can be tested without mounting the app.
  */
-export const STACK_OPTIONS = {
+const stack = (appearance: AppAppearance) => ({
   headerShown: false,
-  /** What shows under a screen while it comes or goes: the navy page of every screen that is not the editor. */
-  contentStyle: { backgroundColor: theme.screen.page },
+  /** What shows under a screen while it comes or goes: the page of every screen that is not the editor — navy, or cream when the phone is light. */
+  contentStyle: { backgroundColor: theme.screens[appearance].page },
   /** The standard iOS push: in from the right, back with the swipe. (It was "fade".) */
   animation: "default",
-} satisfies NativeStackNavigationOptions;
+} satisfies NativeStackNavigationOptions);
+/**
+ * Every screen's options, per appearance: two constant objects, so the Stack is handed a new one only when the phone's setting changes.
+ * The editor's entry below overrides the background with its own slate, in both.
+ */
+export const STACK_OPTIONS = { dark: stack("dark"), light: stack("light") } as const;
 
 /** One entry per screen file in app/ (the test checks both ways). */
 export const ROUTE_OPTIONS = {
@@ -42,6 +48,29 @@ export const ROUTE_OPTIONS = {
 
 export type RouteName = keyof typeof ROUTE_OPTIONS;
 export const ROUTE_NAMES = Object.keys(ROUTE_OPTIONS) as RouteName[];
+
+/**
+ * What iOS draws for each route while it is the focused one (`SystemScope` in src/theme/appearance.ts). The editor is dark whatever
+ * the phone says, so there iOS is told dark — its keyboard, alerts and menus match — and gets its say back on leaving. Export is a
+ * sheet of the app's own appearance over the editor: iOS follows the phone again, but the status bar sits over the dimmed editor, so
+ * its glyphs stay light. The sign-in sheet rises over a screen of the same appearance: nothing special.
+ */
+export const SYSTEM_SCOPE = {
+  "index": "screen",
+  "editor/[id]/index": "editor",
+  "editor/[id]/export": "overDark",
+  "post": "screen",
+  "accounts": "screen",
+  "oauth": "screen",
+  "welcome": "screen",
+} satisfies Record<RouteName, SystemScope>;
+
+/** The scope of the focused route, from Expo Router's segments (`[]` is Home; a folder's index has no segment of its own). An unknown route is a screen. */
+export function scopeOf(segments: readonly string[]): SystemScope {
+  const path = segments.join("/");
+  const scopes: Record<string, SystemScope> = SYSTEM_SCOPE;
+  return scopes[path] ?? scopes[path === "" ? "index" : `${path}/index`] ?? "screen";
+}
 
 /**
  * The Export sheet's swipe-down, per export state. While the video renders, closing the sheet would drop the screen's listener:

@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, use, useContext } from "react";
 import { shownAppearance, theme, type AppAppearance, type Surfaces, type Tone } from "@/src/theme/theme";
 
 /**
@@ -13,22 +13,29 @@ export const useTone = (): Tone => useContext(ToneContext);
 /**
  * The appearance the screens below are drawn in. The root layout provides the one the app wears (app/_layout.tsx, from
  * `useShownAppearance` in appearance.ts): when the phone's setting changes, exactly the parts that read `useSurfaces()` under it
- * are drawn again — no screen is remounted, no route is reset. The editor's `Screen` provides its own constant, so nothing under
- * it hears of a change. Null (no provider: a bare part in a test) means the appearance shown now.
+ * are drawn again — no screen is remounted, no route is reset. Null (no provider: a bare part in a test) means the appearance
+ * shown now. The only other provider is the layout's own, around the navy loading screen.
  */
 export const ShownContext = createContext<AppAppearance | null>(null);
 
 /**
  * The surfaces of the family this part is drawn in: one of three constant objects (the editor's, the dark screens', the light
  * screens'). THE way a colour that differs between appearances reaches the screen — never `theme.screen` (palette.guard.test.ts).
+ *
+ * In the editor the appearance is NOT asked: `use` (which, unlike a hook, may sit behind a condition) is reached only on a screen.
+ * That is what keeps the editor still when the phone's setting changes — React draws again every part that has READ a context
+ * whose value changed anywhere above it, even under a nearer provider of the same context (measured: appearance.editor.test.tsx),
+ * so the only part that is safe is one that never read it. The tone itself is a constant for the life of a screen.
  */
 export function useSurfaces(): Surfaces {
-  const tone = useContext(ToneContext);
-  const shown = useContext(ShownContext);
-  return tone === "editor" ? theme.surfaces.editor : theme.screens[shown ?? shownAppearance()];
+  if (useContext(ToneContext) === "editor") return theme.surfaces.editor;
+  return theme.screens[use(ShownContext) ?? shownAppearance()];
 }
 
-/** The appearance this part is drawn in — for the few things that are not a colour (Apple's sign-in button has a style per background). */
+/**
+ * The appearance this part is drawn in — for the few things that are not a colour (Apple's sign-in button has a style per
+ * background). For screens only: it reads the appearance, so in the editor it would be drawn again when the phone's setting changes.
+ */
 export const useShown = (): AppAppearance => useContext(ShownContext) ?? shownAppearance();
 
 const RINGS = new WeakMap<Surfaces, { borderWidth: number; borderColor: string }>();
