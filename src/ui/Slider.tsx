@@ -3,8 +3,8 @@ import { useRef } from "react";
 import { theme } from "@/src/theme/theme";
 import { haptic } from "./haptics";
 
-/** The rest of the track is `sea`: 2.5:1 on a bar / strip / panel (`elevation.tile` was 1.15:1 there — all but invisible) and 2.8:1 next to the gold filled part. */
-const TINT = { minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.sea, thumbTintColor: theme.colors.accent } as const;
+/** The rest of the track is `track`: 2.8:1 on a bar / strip / panel and 3:1 next to the gold filled part (theme.test.ts pins both). */
+const TINT = { minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.track, thumbTintColor: theme.colors.accent } as const;
 
 /** True when going from `prev` to `next` reaches or passes one of `detents` (arriving exactly on one counts; leaving one does not). */
 export function crossed(prev: number, next: number, detents: readonly number[]): boolean {

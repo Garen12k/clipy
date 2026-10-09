@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
-import { Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { withSpring, withTiming } from "react-native-reanimated";
 import { theme } from "@/src/theme/theme";
 import { buttonBox, buttonLabel } from "../buttonStyle";
@@ -83,17 +83,18 @@ test("Chip still: the ring and the colours switch at once, the lift does not spr
 test("the three buttons share one box and one label style; compact is 36", async () => {
   expect(buttonBox()).toMatchObject({ height: theme.size.control, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill });
   expect(buttonBox(true)).toMatchObject({ height: theme.size.controlCompact, paddingHorizontal: theme.space.lg });
-  expect(buttonLabel()).toMatchObject({ fontFamily: theme.fonts.bodyBold, fontSize: theme.type.body, textTransform: "uppercase" });
-  expect(buttonLabel(true)).toMatchObject({ fontSize: theme.type.label });
+  expect(buttonLabel()).toEqual({ fontSize: theme.type.headline, fontWeight: theme.weight.semi });
+  expect(buttonLabel(true)).toEqual({ fontSize: theme.type.body, fontWeight: theme.weight.semi });
   await render(<><PrimaryButton title="Main" onPress={() => {}} /><SecondaryButton title="Second" onPress={() => {}} /><QuietButton title="Quiet" onPress={() => {}} />
     <PrimaryButton compact title="Main small" onPress={() => {}} /><SecondaryButton compact title="Second small" onPress={() => {}} /><QuietButton compact title="Quiet small" onPress={() => {}} /></>);
   for (const name of ["Main", "Second", "Quiet"]) expect(btn(name)).toHaveStyle({ height: theme.size.control, borderRadius: theme.radius.pill });
   for (const name of ["Main small", "Second small", "Quiet small"]) expect(btn(name)).toHaveStyle({ height: theme.size.controlCompact });
   expect(btn("Main")).toHaveStyle({ backgroundColor: theme.colors.accent });
-  expect(btn("Second")).toHaveStyle({ borderWidth: 1.5, borderColor: theme.colors.hairline });
+  expect(btn("Second")).toHaveStyle({ backgroundColor: theme.elevation.lifted });
+  expect(StyleSheet.flatten(btn("Second").props.style)).not.toHaveProperty("borderWidth");
   expect(btn("Second").props.style).not.toEqual(expect.objectContaining({ backgroundColor: theme.colors.accent }));
-  expect(screen.getByText("Quiet")).toHaveStyle({ color: theme.colors.accent, fontFamily: theme.fonts.bodyBold });
-  expect(screen.getByText("Second")).toHaveStyle({ color: theme.colors.text, fontFamily: theme.fonts.bodyBold });
+  expect(screen.getByText("Quiet")).toHaveStyle({ color: theme.colors.accent, fontWeight: theme.weight.semi });
+  expect(screen.getByText("Second")).toHaveStyle({ color: theme.colors.text, fontWeight: theme.weight.semi });
 });
 
 test("compact main / secondary / quiet buttons are 36 pt high and reach 44 with the same vertical slop; regular ones need none", async () => {
@@ -130,9 +131,9 @@ test("IconButton is a 40-pt box that reaches 44 with its slop", async () => {
 test("ToolButton: a 72-pt column with a 44-pt box; active = ring, lifted surface, gold label — not a gold fill", async () => {
   await render(<><ToolButton label="Split" icon="cut-outline" onPress={() => {}} /><ToolButton label="Reverse" icon="play-back-outline" onPress={() => {}} active /></>);
   expect(btn("Split")).toHaveStyle({ width: theme.size.toolColumn });
-  expect(screen.getByText("Split")).toHaveStyle({ color: theme.colors.text, fontSize: theme.type.micro });
+  expect(screen.getByText("Split")).toHaveStyle({ color: theme.colors.text, fontSize: theme.type.small });
   expect(btn("Reverse")).toBeSelected();
-  expect(screen.getByText("Reverse")).toHaveStyle({ color: theme.colors.accent, fontFamily: theme.fonts.bodySemi });
+  expect(screen.getByText("Reverse")).toHaveStyle({ color: theme.colors.accent, fontWeight: theme.weight.semi, fontSize: theme.type.small });
 });
 
 test("Chip: explicit heights; selected = ring + lifted surface + gold label; regular chips reach 44 pt too", async () => {

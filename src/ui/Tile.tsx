@@ -20,7 +20,7 @@ export function Tile({ label, selected, onPress, icon, boxTestID, children }: Pr
         backgroundColor: selected ? theme.elevation.lifted : theme.elevation.tile }, selected ? theme.ring : theme.ringClear]}>
         {icon ? <Ionicons name={icon} size={theme.size.icon.md} color={tint} /> : children}
       </View>
-      <Body numberOfLines={1} weight={selected ? "semi" : "regular"} style={{ color: tint, fontSize: theme.type.micro }}>{label}</Body>
+      <Body numberOfLines={1} weight={selected ? "semi" : "regular"} style={{ color: tint, fontSize: theme.type.small }}>{label}</Body>
     </PressableScale>
   );
 }

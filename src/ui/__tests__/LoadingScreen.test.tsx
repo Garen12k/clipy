@@ -29,8 +29,8 @@ function compassRotation(): string | undefined {
 test("shows the brand and calls onGone after leaving", async () => {
   const onGone = jest.fn();
   const view = await render(<LoadingScreen leaving={false} onGone={onGone} />);
-  expect(screen.getByText("CLIPY")).toBeTruthy();
-  expect(screen.getByText("EDIT · SET SAIL · SHARE")).toBeTruthy();
+  expect(screen.getByText("Clipy")).toBeTruthy();
+  expect(screen.getByText("Edit · Set sail · Share")).toBeTruthy();
   expect(screen.getByLabelText("Clipy compass")).toBeTruthy();
   expect(onGone).not.toHaveBeenCalled();
   await view.rerender(<LoadingScreen leaving onGone={onGone} />);

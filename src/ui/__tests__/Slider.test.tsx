@@ -23,7 +23,7 @@ test("themed by default; the caller's tint wins; every prop and handler passes t
     <Slider testID="b" value={1} thumbTintColor={theme.colors.textMuted} /></>);
   const a = screen.getByTestId("a");
   expect(a.props).toMatchObject({ value: 0.5, minimumValue: 0, maximumValue: 2, step: 0.05,
-    minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.sea, thumbTintColor: theme.colors.accent });
+    minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.track, thumbTintColor: theme.colors.accent });
   expect(screen.getByTestId("b").props.thumbTintColor).toBe(theme.colors.textMuted);
   await fireEvent(a, "slidingStart", 0.5);
   await fireEvent(a, "valueChange", 0.73);
@@ -92,7 +92,7 @@ function contrast(a: string, b: string): number {
 test("the rest of the track shows on a bar / strip / panel (2:1 or more) and stays apart from the gold filled part", async () => {
   await render(<Slider testID="s" value={0.5} />);
   const rest = screen.getByTestId("s").props.maximumTrackTintColor as string;
-  expect(contrast(theme.elevation.tile, theme.elevation.bar)).toBeLessThan(1.2);       // what it was: all but invisible
+  expect(contrast(theme.elevation.tile, theme.elevation.bar)).toBeLessThan(1.3);       // a tile on a bar (1.22 with the neutral greys): still far too faint to be the track
   expect(contrast(rest, theme.elevation.bar)).toBeGreaterThanOrEqual(2);
   expect(contrast(rest, theme.colors.accent)).toBeGreaterThanOrEqual(2);
 });

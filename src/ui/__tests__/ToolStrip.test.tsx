@@ -45,7 +45,7 @@ test("the header is 44 pt: the ringed ✓ and the quiet action both have a 44-pt
 test("StripSlider: the name and the value are one text; the value has tabular digits; an empty name shows the value alone", async () => {
   await render(<><StripSlider label="Opacity" value="40 %"><Text>a</Text></StripSlider><StripSlider label="" value="80%" labelWidth={48}><Text>b</Text></StripSlider></>);
   expect(screen.getByText("Opacity 40 %")).toHaveStyle({ fontSize: theme.type.small });
-  expect(screen.getByText("40 %")).toHaveStyle({ color: theme.colors.text, fontFamily: theme.fonts.bodySemi, fontVariant: ["tabular-nums"] });
+  expect(screen.getByText("40 %")).toHaveStyle({ color: theme.colors.text, fontWeight: theme.weight.semi, fontVariant: ["tabular-nums"] });
   expect(screen.getAllByText("80%").length).toBeGreaterThanOrEqual(1);           // the outer text and, inside it, the value
 });
 

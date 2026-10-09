@@ -9,8 +9,8 @@ import { Spinner } from "../Spinner";
 test("Field: the one text-field look; the caller's style is added and its props pass through", async () => {
   await render(<Field accessibilityLabel="Caption" value="hi" placeholder="Write a caption…" multiline style={{ minHeight: 96 }} />);
   const f = screen.getByLabelText("Caption");
-  expect(f).toHaveStyle({ backgroundColor: theme.elevation.tile, color: theme.colors.text, fontFamily: theme.fonts.body, fontSize: theme.type.input,
-    borderRadius: theme.radius.chip, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md, minHeight: 96 });
+  expect(f).toHaveStyle({ backgroundColor: theme.elevation.tile, color: theme.colors.text, fontSize: theme.type.input,
+    borderRadius: theme.radius.field, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md, minHeight: 96 });
   expect(f).toHaveProp("value", "hi");
   expect(f).toHaveProp("placeholder", "Write a caption…");
   expect(f).toHaveProp("placeholderTextColor", theme.colors.textMuted);
@@ -31,6 +31,6 @@ test("Spinner: says what it waits for when told", async () => {
 
 test("EmptyState: the title is shown as typed (sentence case), centred, in the title font", async () => {
   await render(<EmptyState emoji="🏝️" title="No clips yet" hint="Pick some videos" />);
-  expect(screen.getByText("No clips yet")).toHaveStyle({ fontFamily: theme.fonts.title, fontSize: theme.type.title, textTransform: "none", letterSpacing: 0, textAlign: "center" });
+  expect(screen.getByText("No clips yet")).toHaveStyle({ fontWeight: theme.weight.bold, fontSize: theme.type.title, textAlign: "center" });
   expect(screen.getByText("Pick some videos")).toHaveStyle({ textAlign: "center" });
 });

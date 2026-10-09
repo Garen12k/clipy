@@ -31,8 +31,8 @@ function Layer({ color, duration, bottom, opacity, still }: { color: string; dur
 export function Waves({ still = false }: { still?: boolean }) {
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: H + 12, overflow: "hidden" }}>
-      <Layer color={theme.colors.seaLight} duration={5000} bottom={8} opacity={0.55} still={still} />
-      <Layer color={theme.colors.sea} duration={3000} bottom={0} opacity={1} still={still} />
+      <Layer color={theme.elevation.tile} duration={5000} bottom={8} opacity={0.55} still={still} />
+      <Layer color={theme.elevation.bar} duration={3000} bottom={0} opacity={1} still={still} />
     </View>
   );
 }
