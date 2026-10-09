@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useState } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -64,7 +64,7 @@ export function MultiSelectBar() {
       {stripShown ? null : (
         <BarCapsule testID="multi-row">
           <View testID="multi-count" style={{ height: theme.size.touch, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.sm, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.tile }}>
-            <Ionicons name="checkmark-circle-outline" size={theme.size.icon.sm} color={theme.colors.accent} />
+            <Icon name="checkmark-circle-outline" size={theme.size.icon.sm} color={theme.colors.accent} />
             <Body weight="semi" accessibilityRole="header" numberOfLines={1} style={{ fontSize: theme.type.label, fontVariant: ["tabular-nums"] }}>{`${ids.length} selected`}</Body>
           </View>
           {/* Done stands here, the whole row away from Delete. */}

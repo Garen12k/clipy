@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -63,7 +63,7 @@ export function OverlayPill({ overlay: o, selected, top = 0, onPress }: { overla
       <Pressable testID={`overlay-pill-${o.id}`} onPress={onPress} accessibilityLabel={`${isSticker(o) ? "Sticker" : "Text"} ${label}`}
         style={{ position: "absolute", left: leftPx, top, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: fill,
           borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: HANDLE_W + 2 }}>
-        {parts.glyph && <Ionicons testID={`bar-glyph-${o.id}`} name={BAR_GLYPH[kind]} size={BAR.glyph} color={theme.colors.onKind} />}
+        {parts.glyph && <Icon plain testID={`bar-glyph-${o.id}`} name={BAR_GLYPH[kind]} size={BAR.glyph} color={theme.colors.onKind} />}
         {parts.label && <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{label}</Text>}
         {selected && o.keyframes.length > 0 && (
           <KeyframeDots times={o.keyframes.map((k) => k.t)} width={width} pps={pps} onPress={(t) => store.seek(o.start + t)} />

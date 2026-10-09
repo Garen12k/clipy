@@ -90,3 +90,6 @@ jest.mock("expo-apple-authentication", () => {
     AppleAuthenticationButton: View, AppleAuthenticationButtonType: { SIGN_IN: 0, CONTINUE: 1 }, AppleAuthenticationButtonStyle: { WHITE: 0 } };
 });
 jest.mock("expo-web-browser", () => ({ openAuthSessionAsync: jest.fn() }));
+// Under Jest there are no SF Symbols: jest-expo answers for every native module, so the package is made empty here and the kit
+// `Icon` draws the Ionicon, as on a build without the module. A test that wants the symbol mocks "expo-symbols" itself (Icon.test.tsx).
+jest.mock("expo-symbols", () => ({}));

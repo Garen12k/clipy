@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { memo } from "react";
 import { Pressable, View } from "react-native";
 import { useEditorStore } from "@/src/editor/store";
@@ -43,7 +43,7 @@ export const CutMarker = memo(function CutMarker({ mark, onPress }: Props) {
         backgroundColor: has ? theme.elevation.page : theme.elevation.tile, borderWidth: 1, borderColor: has ? theme.colors.accent : theme.colors.track }}>
         {has
           ? <View testID={`cut-diamond-${index}`} style={{ width: DIAMOND, height: DIAMOND, backgroundColor: theme.colors.accent, transform: [{ rotate: "45deg" }] }} />
-          : <Ionicons testID={`cut-add-${index}`} name="add-outline" size={theme.size.icon.sm} color={theme.colors.text} />}
+          : <Icon plain testID={`cut-add-${index}`} name="add-outline" size={theme.size.icon.sm} color={theme.colors.text} />}
       </View>
     </Pressable>
   );

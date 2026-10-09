@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { theme } from "@/src/theme/theme";
@@ -32,7 +32,7 @@ export function BarBack({ onPress }: { onPress: () => void }) {
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel="Back to main tools" onPress={onPress}
       style={{ width: theme.size.touch, height: theme.size.touch, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.tile, alignItems: "center", justifyContent: "center" }}>
-      <Ionicons name="chevron-back-outline" size={theme.size.icon.md} color={theme.colors.text} />
+      <Icon name="chevron-back-outline" size={theme.size.icon.md} color={theme.colors.text} />
     </PressableScale>
   );
 }

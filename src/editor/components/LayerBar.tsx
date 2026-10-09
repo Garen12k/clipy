@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -130,11 +130,11 @@ export function LayerBar({ layer: l, missing = false, selected, onPress }: Props
       <Pressable testID={`layer-bar-${l.id}`} onPress={onPress} accessibilityLabel={photo ? "Photo layer" : "Video layer"} hitSlop={{ top: ROW_SLOP, bottom: ROW_SLOP, left: HIT_SLOP, right: HIT_SLOP }}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color,
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
-        {parts.glyph && <Ionicons testID={`bar-glyph-${l.id}`} name={BAR_GLYPH["layer"]} size={BAR.glyph} color={theme.colors.onKind} />}
+        {parts.glyph && <Icon plain testID={`bar-glyph-${l.id}`} name={BAR_GLYPH["layer"]} size={BAR.glyph} color={theme.colors.onKind} />}
         {parts.label && <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>Layer</Text>}
         {missing && (
           <View testID={`layer-bar-${l.id}-missing`} style={{ position: "absolute", top: 4, right: roomy ? HANDLE_W + 2 : 0, backgroundColor: theme.colors.danger, borderRadius: theme.radius.pill, padding: 2 }}>
-            <Ionicons name="warning" size={12} color={theme.colors.onAccent} />
+            <Icon plain name="warning" size={12} color={theme.colors.onAccent} />
           </View>
         )}
         {selected && (

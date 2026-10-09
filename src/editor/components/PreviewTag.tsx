@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { View } from "react-native";
 import { isSteadyAvailable } from "@/modules/clipy-video";
 import { shownCutout, useCutoutFiles, type CutoutFile } from "@/src/editor/cutoutFiles";
@@ -162,7 +162,7 @@ export function PreviewTag({ visible }: { visible: boolean }) {
           paddingHorizontal: theme.space.sm, paddingVertical: theme.space.xs,
         }}
       >
-        <Ionicons testID="preview-tag-info" name="information-circle-outline" size={12} color={theme.colors.accent} />
+        <Icon testID="preview-tag-info" name="information-circle-outline" size={12} color={theme.colors.accent} />
         <Body testID="preview-tag-text" weight="semi" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ flexShrink: 1, fontSize: theme.type.micro, color: theme.colors.text }}>
           {reason ? `Preview · ${reason}` : "Preview"}
         </Body>

@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useState } from "react";
 import { Switch, View } from "react-native";
 import { BOX_CORNERS, DEFAULT_GLOW, DEFAULT_SHADOW, TEXT_STYLE_LIMITS, type BoxCorner, type TextStyle } from "@/src/editor/model/types";
@@ -62,7 +62,7 @@ export function TextStyleSection({ style, outline, background, onBegin, onPatch,
       <PressableScale accessibilityRole="button" accessibilityLabel={on === null ? title : `${title} options`} disabled={on === false}
         accessibilityState={{ expanded: shown, disabled: on === false }} onPress={() => set(id, !open[id])} style={NAME}>
         <Body weight="semi">{title}</Body>
-        {on === false ? null : <Ionicons name={shown ? "chevron-up-outline" : "chevron-down-outline"} size={theme.size.icon.md} color={theme.colors.textMuted} />}
+        {on === false ? null : <Icon name={shown ? "chevron-up-outline" : "chevron-down-outline"} size={theme.size.icon.md} color={theme.colors.textMuted} />}
       </PressableScale>
       {on === null ? null : <Switch accessibilityLabel={title} value={on} onValueChange={(to) => { set(id, to); onChange?.(to); }} trackColor={{ true: theme.colors.accent }} />}
     </View>

@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { clipStartTimes, timeToX } from "@/src/editor/model/timeline";
@@ -34,7 +34,7 @@ export function ReorderHandle({ clipId, index }: { clipId: string; index: number
   return (
     <GestureDetector gesture={pan}>
       <Animated.View accessibilityLabel="Move clip" style={[{ position: "absolute", bottom: 4, alignSelf: "center", left: "50%", marginLeft: -HANDLE_W / 2, width: HANDLE_W, height: 20, borderRadius: 10, backgroundColor: theme.colors.accent, alignItems: "center", justifyContent: "center" }, style]}>
-        <Ionicons name="reorder-two-outline" size={16} color={theme.colors.onAccent} />
+        <Icon plain name="reorder-two-outline" size={16} color={theme.colors.onAccent} />
       </Animated.View>
     </GestureDetector>
   );

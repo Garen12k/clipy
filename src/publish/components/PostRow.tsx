@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { PressableScale } from "@/src/ui/PressableScale";
@@ -93,7 +93,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
         {done ? (
           // Posted: a static mark, not a toggle.
           <View accessible accessibilityLabel={`${label}, posted`} style={rowStyle}>
-            <Ionicons name="checkmark-circle-outline" size={ICON} color={theme.colors.accent} />
+            <Icon name="checkmark-circle-outline" size={ICON} color={theme.colors.accent} />
             {identity}
           </View>
         ) : (
@@ -101,7 +101,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
           <PressableScale accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{ checked, disabled: !!reason || active }}
             disabled={!!reason || active} onPress={error && hasOptions(account.id) ? onOptions : onToggle} style={rowStyle}>
             {/* Gold = on (ticked); white = can be ticked; muted = cannot. */}
-            <Ionicons name={checked ? "checkbox-outline" : "square-outline"} size={ICON} color={reason ? theme.screen.muted : checked ? theme.colors.accent : theme.colors.text} />
+            <Icon name={checked ? "checkbox-outline" : "square-outline"} size={ICON} color={reason ? theme.screen.muted : checked ? theme.colors.accent : theme.colors.text} />
             {identity}
           </PressableScale>
         )}

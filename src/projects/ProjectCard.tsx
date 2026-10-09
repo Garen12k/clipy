@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image, Pressable, Text, View } from "react-native";
 import { COVER_FONT } from "@/src/editor/coverFont";
@@ -37,7 +37,7 @@ export function ProjectCard({ summary, onPress, onLongPress, onMore }: Props) {
           borderWidth: summary.broken ? 2 : 0, borderColor: summary.broken ? theme.colors.danger : "transparent" }}>
         {summary.broken ? (
           <View testID="project-damaged" style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: theme.space.xs }}>
-            <Ionicons name="warning-outline" size={theme.size.icon.xl} color={theme.colors.danger} />
+            <Icon plain name="warning-outline" size={theme.size.icon.xl} color={theme.colors.danger} />
             <Body weight="semi" style={{ color: theme.screen.dangerText }}>Damaged</Body>
           </View>
         ) : summary.thumbUri ? <Image source={{ uri: summary.thumbUri }} style={{ position: "absolute", width: "100%", height: "100%" }} resizeMode="cover" />
@@ -64,7 +64,7 @@ export function ProjectCard({ summary, onPress, onLongPress, onMore }: Props) {
         <PressableScale accessibilityRole="button" accessibilityLabel={`More for ${summary.name}`} onPress={onMore}
           style={{ width: theme.size.touch, height: theme.size.touch, alignItems: "flex-end", justifyContent: "center" }}>
           <View testID="project-more-circle" style={{ width: theme.size.more, height: theme.size.more, borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar, alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="ellipsis-horizontal-outline" size={theme.size.icon.md} color={theme.colors.text} />
+            <Icon plain name="ellipsis-horizontal-outline" size={theme.size.icon.md} color={theme.colors.text} />
           </View>
         </PressableScale>
       </View>

@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { ActionSheetIOS, Alert, Pressable, View } from "react-native";
@@ -35,14 +35,14 @@ export function EditorTopBar({ onExport }: { onExport: () => void }) {
     <View testID="editor-top-bar" style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.gutter, paddingBottom: theme.space.sm, gap: theme.space.sm }}>
       <PressableScale accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={SLOP}
         style={{ width: theme.size.iconButton, height: theme.size.iconButton, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar, alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name="chevron-back-outline" size={theme.size.icon.md} color={theme.colors.text} />
+        <Icon name="chevron-back-outline" size={theme.size.icon.md} color={theme.colors.text} />
       </PressableScale>
       <Pressable accessibilityRole="button" accessibilityLabel={`${name}, project`} accessibilityHint="Opens the project menu" onPress={openMenu} hitSlop={{ top: SLOP, bottom: SLOP }}
         style={{ flex: 1, height: theme.size.iconButton, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.space.xs }}>
         <Title size={theme.type.headline} numberOfLines={1} style={{ flexShrink: 1 }}>{name}</Title>
-        <Ionicons testID="project-menu-chevron" name="chevron-down-outline" size={theme.size.icon.sm} color={theme.colors.textMuted} />
+        <Icon testID="project-menu-chevron" name="chevron-down-outline" size={theme.size.icon.sm} color={theme.colors.textMuted} />
       </Pressable>
-      <PrimaryButton compact title="Export" onPress={onExport} icon={<Ionicons testID="export-symbol" name="share-outline" size={theme.size.icon.sm} color={theme.colors.onAccent} />} />
+      <PrimaryButton compact title="Export" onPress={onExport} icon={<Icon testID="export-symbol" name="share-outline" size={theme.size.icon.sm} color={theme.colors.onAccent} />} />
     </View>
   );
 }

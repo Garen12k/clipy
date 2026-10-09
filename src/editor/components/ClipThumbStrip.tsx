@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useEffect, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { clipStartTimes, outputOffsetOf } from "@/src/editor/model/timeline";
@@ -61,7 +61,7 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
       {/* The file is gone: the same warning as before, clear of the trim handle on a selected clip. */}
       {missing && (
         <View testID="clip-missing" accessibilityLabel="File missing" pointerEvents="none" style={{ position: "absolute", top: 4, left: selected ? BADGE.selectedInset : BADGE.inset, width: BADGE_H, height: BADGE_H, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.danger, borderRadius: theme.radius.pill }}>
-          <Ionicons name="warning" size={12} color={theme.colors.text} />
+          <Icon plain name="warning" size={12} color={theme.colors.text} />
         </View>
       )}
       {/* What the clip carries, in words, on a solid dark scrim: only the badges that fit (clipBadges) — never cut off. */}
@@ -71,7 +71,7 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
             <View key={b.id} testID={`clip-badge-${b.id}`} accessibilityLabel={b.id === "photo" ? "Photo" : undefined}
               style={{ height: BADGE_H, backgroundColor: theme.colors.scrimStrong, borderRadius: 4, paddingHorizontal: theme.space.xs, justifyContent: "center" }}>
               {b.id === "photo"
-                ? <Ionicons name="image-outline" size={10} color={theme.colors.text} />
+                ? <Icon plain name="image-outline" size={10} color={theme.colors.text} />
                 : <Text numberOfLines={1} style={{ fontSize: theme.type.micro, color: theme.colors.text, fontWeight: theme.weight.semi, fontVariant: ["tabular-nums"] }}>{b.text}</Text>}
             </View>
           ))}
