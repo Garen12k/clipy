@@ -76,6 +76,93 @@ describe("the time ruler", () => {
   });
 });
 
+describe("the time ruler while the timeline is pinched", () => {
+  const PLAIN = { position: "absolute", left: 0, top: 0, width: 0, height: 0 };
+  type Pinch = { handlers: Record<"onBegin" | "onStart" | "onUpdate" | "onFinalize", (e?: { scale: number }) => void> };
+  const pinch = () => (screen.getByTestId("timeline-root").props.gesture as Pinch).handlers;
+  const ruler = () => StyleSheet.flatten(screen.getByTestId("time-ruler").props.style);
+  const lefts = () => screen.getAllByTestId("ruler-label").map((l) => StyleSheet.flatten(l.props.style).left as number);
+
+  test("the marks are not built again on every frame: they stretch with the content, and are built again a step away and when the pinch ends", async () => {
+    await render(<Timeline />);
+    expect(rulerMarks).toHaveBeenCalledTimes(1);
+    const first = screen.getAllByTestId("ruler-label")[1], tick = screen.getAllByTestId("ruler-tick")[3];
+    await act(() => { pinch().onBegin(); pinch().onStart(); });
+    expect(rulerMarks).toHaveBeenCalledTimes(1);
+    expect(ruler()).toEqual(PLAIN);
+    for (const scale of [1.02, 1.1, 1.2, 1.25, 0.9, 0.8]) {
+      await act(() => { pinch().onUpdate({ scale }); });
+      expect(st().pixelsPerSecond).toBeCloseTo(50 * scale, 9);
+      expect(rulerMarks).toHaveBeenCalledTimes(1);                                         // the same marks …
+      expect(screen.getAllByTestId("ruler-label")[1]).toBe(first);
+      expect(screen.getAllByTestId("ruler-tick")[3]).toBe(tick);
+      expect(lefts()).toEqual([0, 2, 4, 6, 8].map((t) => t * 50 + 3));                     // … where they were built …
+      expect(ruler()).toEqual({ ...PLAIN, transform: [{ scaleX: st().pixelsPerSecond / 50 }] });   // … stretched as one, about the ruler's own start (it has no width)
+    }
+    // More than a step (1.25×) from the zoom they were built at: built again, at the zoom — no stretch left.
+    await act(() => { pinch().onUpdate({ scale: 1.3 }); });
+    expect(rulerMarks).toHaveBeenCalledTimes(2);
+    expect(ruler()).toEqual(PLAIN);
+    expect(lefts()).toEqual([0, 2, 4, 6, 8].map((t) => t * 65 + 3));
+    await act(() => { pinch().onUpdate({ scale: 1.4 }); });
+    expect(rulerMarks).toHaveBeenCalledTimes(2);
+    expect(ruler()).toEqual({ ...PLAIN, transform: [{ scaleX: 70 / 65 }] });
+    // The pinch ends: built once more, exactly at the zoom it ended on.
+    await act(() => { pinch().onFinalize(); });
+    expect(rulerMarks).toHaveBeenCalledTimes(3);
+    expect(ruler()).toEqual(PLAIN);
+    expect(lefts()).toEqual([0, 2, 4, 6, 8].map((t) => t * 70 + 3));
+    // No pinch: every change of zoom builds the ruler, as before.
+    await act(() => { st().setZoom(72); });
+    expect(rulerMarks).toHaveBeenCalledTimes(4);
+    expect(ruler()).toEqual(PLAIN);
+  });
+  test("a touch that never becomes a pinch changes nothing, and a pinch that ends where it began builds nothing", async () => {
+    await render(<Timeline />);
+    const root = screen.getByTestId("timeline-root"), first = screen.getAllByTestId("ruler-label")[1];
+    await act(() => { pinch().onBegin(); pinch().onFinalize(); });
+    await act(() => { pinch().onBegin(); pinch().onStart(); pinch().onUpdate({ scale: 1.1 }); pinch().onUpdate({ scale: 1 }); pinch().onFinalize(); });
+    expect(rulerMarks).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByTestId("ruler-label")[1]).toBe(first);
+    expect(screen.getByTestId("timeline-root")).toBe(root);                                // nothing remounted
+    expect(ruler()).toEqual(PLAIN);
+  });
+  test("after a pinch every label stands on its own second at every zoom — on the clips' scale, behind the leading half-screen padding", async () => {
+    await render(<Timeline />);
+    const pad = Dimensions.get("window").width / 2;
+    let from = 50;
+    for (const to of [20, 23.7, 33, 48, 61, 119, 120, 163.5, 200]) {
+      await act(() => { pinch().onBegin(); pinch().onStart(); });
+      // Many small frames, as a finger does.
+      for (let i = 1; i <= 12; i++) await act(() => { pinch().onUpdate({ scale: (from + ((to - from) * i) / 12) / from }); });
+      await act(() => { pinch().onFinalize(); });
+      const pps = st().pixelsPerSecond;
+      expect(pps).toBeCloseTo(to, 9);
+      expect(ruler()).toEqual(PLAIN);
+      const fresh = jest.requireActual("../timelineMarks").rulerMarks(pps, 9) as ReturnType<typeof rulerMarks>;
+      const labels = screen.getAllByTestId("ruler-label");
+      expect(labels.map((l) => l.props.children)).toEqual(fresh.labels.map((l) => l.text));
+      labels.forEach((l, i) => {
+        const t = fresh.labels[i].t;
+        expect(l.props.children).toBe(`0:0${t}`);                                          // the second it names …
+        expect(StyleSheet.flatten(l.props.style).left).toBeCloseTo(t * pps + 3, 9);        // … is where it stands (3 pt after its tick)
+      });
+      expect(screen.getAllByTestId("ruler-tick").map((t) => StyleSheet.flatten(t.props.style).left)).toEqual(fresh.ticks.map((t) => t.x));
+      // The clips' own scale: clip b starts where second 4 is, clip c where second 6 is.
+      const a = StyleSheet.flatten(screen.getByRole("button", { name: "Clip a" }).props.style).width, b = StyleSheet.flatten(screen.getByRole("button", { name: "Clip b" }).props.style).width;
+      expect(a).toBeCloseTo(4 * pps, 9);
+      expect(a + b).toBeCloseTo(6 * pps, 9);
+      const four = labels.find((l) => l.props.children === "0:04");
+      if (four) expect(StyleSheet.flatten(four.props.style).left - 3).toBeCloseTo(a, 9);
+      // The padding is the content's, the ruler starts with the clips inside it: second 0 is half a screen in, under the playhead.
+      expect(screen.getByTestId("timeline-scroll").props.contentContainerStyle.paddingHorizontal).toBe(pad);
+      expect(within(screen.getByTestId("timeline-clips")).getByTestId("time-ruler")).toBeTruthy();
+      expect(StyleSheet.flatten(screen.getByTestId("timeline-playhead").props.style).left).toBe(pad - 1);
+      from = to;
+    }
+  });
+});
+
 describe("the markers on the cuts", () => {
   const top = (CLIP_AREA_HEIGHT - CUT.targetHeight) / 2;
   test("a diamond in a dark disc on a cut with a transition, a plus in a slate disc with a track outline on a cut without", async () => {
@@ -135,12 +222,25 @@ describe("the markers on the cuts", () => {
     expect(screen.getByTestId("cut-marker-1")).toBe(marker);
     expect(flat("cut-marker-1").left).toBe(300 - CUT.targetWidth / 2);
   });
-  test("no marker on a cut closer than 44 pt to the next one, and none in multi-select", async () => {
+  test("the target is 24 pt wide: a tap 12 pt or more from a cut is the clip's own, and each clip's press still selects that clip", async () => {
     await render(<Timeline />);
-    await act(() => { st().setZoom(21); });                         // b is 42 pt wide
+    expect(flat("cut-marker-0").width).toBe(24);
+    expect(flat("cut-marker-1").width).toBe(24);
+    // b runs 200–300: the markers take 200–212 and 288–300 of it; 76 pt stay b's.
+    expect(flat("cut-marker-0").left + 24).toBe(212);
+    expect(flat("cut-marker-1").left).toBe(288);
+    await fireEvent.press(screen.getByRole("button", { name: "Clip b" }));
+    expect(st().selectedClipId).toBe("b");
+    expect(useToolStrip.getState().open).toBeNull();
+  });
+  test("no marker on a cut beside a clip under 68 pt, and none in multi-select", async () => {
+    await render(<Timeline />);
+    await act(() => { st().setZoom(33); });                         // b is 66 pt wide
     expect(screen.queryAllByTestId(/^cut-marker-/)).toHaveLength(0);
-    await act(() => { st().setZoom(22); });
+    await act(() => { st().setZoom(34); });
     expect(screen.queryAllByTestId(/^cut-marker-/)).toHaveLength(2);
+    // The clip between them keeps 44 pt of its own.
+    expect(flat("cut-marker-1").left - (flat("cut-marker-0").left + flat("cut-marker-0").width)).toBe(44);
     await act(() => { st().enterMultiSelect(); });
     expect(screen.queryAllByTestId(/^cut-marker-/)).toHaveLength(0);
   });

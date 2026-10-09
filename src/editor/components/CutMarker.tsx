@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { memo } from "react";
 import { Pressable, View } from "react-native";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
@@ -28,7 +29,7 @@ const DIAMOND = 8;
  * `cutMarks` (beside the trim handle at a selected clip's cuts, never on it); the target is 44 pt high and has no hit slop, so it is
  * exactly what is laid out. A tap only: it is a Pressable, with no gesture of its own to compete with a trim or a move.
  */
-export function CutMarker({ mark, onPress }: Props) {
+export const CutMarker = memo(function CutMarker({ mark, onPress }: Props) {
   const { index, x, width, has } = mark;
   return (
     <Pressable
@@ -46,4 +47,4 @@ export function CutMarker({ mark, onPress }: Props) {
       </View>
     </Pressable>
   );
-}
+});

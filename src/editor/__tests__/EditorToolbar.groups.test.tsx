@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 jest.mock("@/src/lib/id", () => ({ newId: () => "dup" }));
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-09T10:00:00.000Z" }));
 jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn() }));
 jest.mock("@/src/projects", () => ({ storage: { importMedia: jest.fn(), saveStill: jest.fn() } }));
 jest.mock("expo-video-thumbnails", () => ({ getThumbnailAsync: jest.fn(async () => ({ uri: "file:///thumb.jpg" })) }));
-import { makeAudioTrack, makeClip, makeEffect, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeEffect, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker, type LayerClip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { PALETTES, theme } from "@/src/theme/theme";
 import { TOOLBAR } from "@/src/ui/ToolButton";
@@ -245,11 +246,45 @@ test("the trailing fade shows only while more tools follow: not when they fit, n
   expect(screen.queryByTestId("toolbar-fade")).toBeNull();
 });
 
+test("Delete stands clear of its neighbour: at least 12 pt from the last tool's target to Delete's, on a flat row and a grouped one alike", async () => {
+  await render(<EditorToolbar />);
+  const distance = () => {
+    const capsule = StyleSheet.flatten(screen.getByTestId("toolbar-row").props.style), sep = StyleSheet.flatten(screen.getByTestId("toolbar-separator").props.style);
+    // The row's own parts in order: … the scrolling tools, the separator, Delete — nothing else between the last tool and Delete.
+    const parts = (screen.getByTestId("toolbar-row").props.children as unknown[]).flat(Infinity).filter(Boolean);
+    expect(parts).toHaveLength(screen.queryByTestId("toolbar-group") ? 4 : 3);                 // Back, (the group button,) the tools, [the separator + Delete]
+    // The gap after the tools, the separator with its clear side, the gap before Delete.
+    return capsule.gap + (sep.marginLeft ?? 0) + sep.width + (sep.marginRight ?? 0) + capsule.gap;
+  };
+  for (const pick of [() => st().selectOverlay("t1"), () => st().selectOverlay("c1"), () => st().selectOverlay("s1"), () => st().selectEffect("e1"), () => st().selectAudio("m1"), () => st().select("a"), () => st().select("L")]) {
+    await act(() => { pick(); });
+    expect(row()[row().length - 1]).toBe("Delete");
+    expect(distance()).toBe(13);
+    expect(distance()).toBeGreaterThanOrEqual(theme.space.md);
+  }
+  // A text's bar: the tool before Delete is "Add text" — the separator and its clear side are between them.
+  await act(() => { st().selectOverlay("t1"); });
+  expect(row().slice(-2)).toEqual(["Add text", "Delete"]);
+  expect(screen.getByTestId("toolbar-separator")).toHaveStyle({ marginLeft: theme.space.xs, width: 1 });
+});
+
+test("a collage cell: Collage is the first tool on the bar, with no tap on the group button", async () => {
+  const cell = (id: string, n: number): LayerClip => ({ ...makePhotoClip({ id }), start: 0, collage: { group: "g", layout: "sideBySide", cell: n, border: 0, corner: 0, aspect: 0.5625 } });
+  st().setProject({ ...st().project!, layers: [cell("c0", 0), cell("c1", 1)] });
+  await render(<EditorToolbar />);
+  await act(() => { st().select("c1"); });
+  expect(currentGroup()).toBe("Basics");
+  expect(scrolled()[0]).toBe("Collage");
+  expect(row().slice(0, 3)).toEqual([BACK, "Tool groups, Basics", "Collage"]);
+  await fireEvent.press(btn("Collage"));
+  expect(useToolStrip.getState().open).toEqual({ id: "collage", key: "clip:c1" });
+});
+
 test("on a 375-pt screen four tools show beside Back, the group button and Delete", () => {
   // The capsule: the screen less its two margins and its two paddings; five parts beside the row, so five gaps.
   const inside = 375 - 2 * theme.space.xs - 2 * theme.space.xs;
-  const fixed = theme.size.touch + TOOLBAR.group + 1 + theme.size.control;     // Back, the group button, the separator, Delete
+  const fixed = theme.size.touch + TOOLBAR.group + theme.space.xs + 1 + theme.size.control;     // Back, the group button, the separator and its clear side, Delete
   const forTools = inside - fixed - 4 * theme.space.xs;
-  expect(forTools).toBe(198);
+  expect(forTools).toBe(194);
   expect(Math.floor(forTools / theme.size.control)).toBe(4);                 // Split, Trim, Select, Speed — a short label's tool is 48 wide
 });

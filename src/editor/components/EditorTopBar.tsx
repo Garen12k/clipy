@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useEffect, useRef } from "react";
 import { ActionSheetIOS, Alert, Pressable, View } from "react-native";
 import { renameProject } from "@/src/editor/model/ops";
 import { useEditorStore } from "@/src/editor/store";
+import { AFTER_SHEET_MS } from "@/src/projects/ProjectActionsSheet";
 import { theme } from "@/src/theme/theme";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
@@ -17,9 +19,18 @@ const MENU = ["Rename", "Cancel"];
 export function EditorTopBar({ onExport }: { onExport: () => void }) {
   const name = useEditorStore((s) => s.project?.name ?? "");
   const { apply } = useEditorStore.getState();
-  // One undoable step; an empty answer changes nothing.
-  const rename = () => Alert.prompt("Rename project", undefined, (n) => n && apply((p) => renameProject(p, n)), "plain-text", name);
-  const openMenu = () => ActionSheetIOS.showActionSheetWithOptions({ options: MENU, cancelButtonIndex: MENU.length - 1 }, (index) => { if (index === 0) rename(); });
+  // One undoable step; an empty answer changes nothing. It starts from the name as it is when the prompt opens.
+  const rename = () => Alert.prompt("Rename project", undefined, (n) => n && apply((p) => renameProject(p, n)), "plain-text", useEditorStore.getState().project?.name ?? "");
+  // iOS can drop a prompt presented while the menu is still closing, so Rename waits as the Home screen's sheet does (`AFTER_SHEET_MS`).
+  // One wait at a time, and none is left behind when the editor is left in between.
+  const waiting = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const forget = () => { if (waiting.current !== null) clearTimeout(waiting.current); waiting.current = null; };
+  useEffect(() => forget, []);
+  const openMenu = () => ActionSheetIOS.showActionSheetWithOptions({ options: MENU, cancelButtonIndex: MENU.length - 1 }, (index) => {
+    if (index !== 0) return;
+    forget();
+    waiting.current = setTimeout(() => { waiting.current = null; rename(); }, AFTER_SHEET_MS);
+  });
   return (
     <View testID="editor-top-bar" style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.gutter, paddingBottom: theme.space.sm, gap: theme.space.sm }}>
       <PressableScale accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={SLOP}

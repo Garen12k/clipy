@@ -48,8 +48,8 @@ test("nothing selected: the clip actions are disabled; Select all and Done are e
   expect(header("0 selected")).toBeTruthy();
   for (const l of ["Delete", "Duplicate", "Filter", "Speed", "Volume"]) expect(btn(l)).toBeDisabled();
   for (const l of ["Select all", "Done"]) expect(btn(l)).toBeEnabled();
-  // The actions scroll; Delete and Done are pinned after them.
-  expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Speed", "Volume", "Filter", "Duplicate", "Select all", "Delete", "Done"]);
+  // Done at the leading end, right after the count; the actions scroll; Delete is pinned alone at the trailing end.
+  expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Done", "Speed", "Volume", "Filter", "Duplicate", "Select all", "Delete"]);
 });
 
 test("Select all chooses every clip", async () => {
@@ -207,7 +207,23 @@ test("the same capsule as the toolbar: the count is a small capsule with a check
   expect(count.props.children[0].props.name).toBe("checkmark-circle-outline");
 });
 
-test("Delete and Done are pinned after the scrolling actions, so both are in view on a 375-pt screen", async () => {
+test("Done and Delete are never neighbours: Done right after the count at the leading end, Delete alone after the separator at the trailing end", async () => {
+  await renderWith("a", "b");
+  const kids = (screen.getByTestId("multi-row").props.children as { props: { testID?: string; label?: string } }[]).map((k) => k.props.testID ?? k.props.label ?? "separator");
+  expect(kids).toEqual(["multi-count", "Done", "multi-scroll", "separator", "Delete"]);
+  expect(screen.getAllByTestId("toolbar-separator")).toHaveLength(1);
+  const order = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
+  expect(order[0]).toBe("Done");
+  expect(order[order.length - 1]).toBe("Delete");
+  expect(Math.abs(order.indexOf("Done") - order.indexOf("Delete"))).toBe(order.length - 1);   // the whole row between them
+  // What they do is what they did.
+  await press("Done");
+  expect(st().multiSelect).toBeNull();
+  expect(clips().map((c) => c.id)).toEqual(["a", "b", "c"]);
+  expect(past()).toBe(0);
+});
+
+test("Done and Delete are pinned outside the scrolling actions, so both are in view on a 375-pt screen", async () => {
   await renderWith("a");
   const inScroll = within(screen.getByTestId("multi-scroll")).getAllByRole("button").map((b) => b.props.accessibilityLabel);
   expect(inScroll).toEqual(["Speed", "Volume", "Filter", "Duplicate", "Select all"]);
@@ -216,15 +232,17 @@ test("Delete and Done are pinned after the scrolling actions, so both are in vie
     expect(capsule.getByRole("button", { name: l })).toBeTruthy();
     expect(within(screen.getByTestId("multi-scroll")).queryByRole("button", { name: l })).toBeNull();
   }
-  expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel).slice(-2)).toEqual(["Delete", "Done"]);
+  expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel).slice(-2)).toEqual(["Select all", "Delete"]);
   expect(screen.getByTestId("toolbar-separator")).toBeTruthy();
   expect(screen.getByText("Delete")).toHaveStyle({ color: theme.colors.dangerText });
   expect(screen.getByText("Done")).toHaveStyle({ color: theme.colors.text });
   // The pinned parts are a tool's smallest width each; the scrolling part takes what is left (`flex: 1`), so however wide the count
-  // grows, it is the actions that scroll — never Delete or Done that leave the screen. At 375 pt: three actions beside "3 selected".
+  // grows, it is the actions that scroll — never Delete or Done that leave the screen. At 375 pt beside "3 selected": 140 pt, two
+  // actions whole and 44 of the third's 48 (the separator's clear side took 4 pt; the third already ended under the 16-pt fade).
   expect(btn("Done")).toHaveStyle({ minWidth: theme.size.control });
   expect(btn("Delete")).toHaveStyle({ minWidth: theme.size.control });
   expect(screen.getByTestId("multi-scroll").parent).toHaveStyle({ flex: 1 });
-  const inside = 375 - 4 * theme.space.xs, pinned = 2 * theme.size.control + 1, gaps = 4 * theme.space.xs, count = 102;
-  expect(Math.floor((inside - count - pinned - gaps) / theme.size.control)).toBe(3);
+  const inside = 375 - 4 * theme.space.xs, pinned = 2 * theme.size.control + 1 + theme.space.xs, gaps = 4 * theme.space.xs, count = 102;
+  expect(inside - count - pinned - gaps).toBe(140);
+  expect(140 - 2 * theme.size.control).toBe(44);
 });

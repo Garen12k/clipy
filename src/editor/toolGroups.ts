@@ -83,10 +83,13 @@ export const GROUPS = [
 export type GroupId = (typeof GROUPS)[number]["id"];
 export type ToolGroup<T extends string = ToolId> = { id: GroupId; label: string; icon: IoniconName; tools: T[] };
 
-/** Which group a tool is shown in. A tool that is not named here is in the FIRST group, so a new tool can never be hidden. */
+/**
+ * Which group a tool is shown in. A tool that is not named here is in the FIRST group, so a new tool can never be hidden.
+ * Collage is in the first group: `contextFor` lists it first on a collage cell, so it is the first tool a selected cell shows.
+ */
 const GROUP_OF: Partial<Record<ToolId, GroupId>> = {
-  split: "basics", trim: "basics", speed: "basics", volume: "basics", filter: "basics", cutout: "basics", stabilize: "basics", select: "basics",
-  transition: "edit", keyframe: "edit", duplicate: "edit", replace: "edit", reverse: "edit", freeze: "edit", layerForward: "edit", layerBack: "edit", collage: "edit",
+  collage: "basics", split: "basics", trim: "basics", speed: "basics", volume: "basics", filter: "basics", cutout: "basics", stabilize: "basics", select: "basics",
+  transition: "edit", keyframe: "edit", duplicate: "edit", replace: "edit", reverse: "edit", freeze: "edit", layerForward: "edit", layerBack: "edit",
   extractAudio: "audio", voice: "audio", soundQuality: "audio",
   adjust: "look", templates: "look", animate: "look", motion: "look",
   crop: "frame", transform: "frame", opacity: "frame", mask: "frame", blend: "frame", background: "frame", chroma: "frame",
@@ -110,7 +113,7 @@ export function groupTools<T extends string>(tools: readonly T[]): ToolGroup<T>[
 
 /**
  * How a bar is laid out — presentation only: WHICH tools there are, and in which order, is `contextFor`'s list, passed in.
- * `groups` is null for a flat row: the main bar (as it always was), a sound's bar (its own order, Volume and Fade first) and every
+ * `groups` is null for a flat row: the main bar (as it always was), a sound's bar (its own order: Split, Volume, Fade first) and every
  * bar of `FLAT_LIMIT` tools or fewer beside its Delete.
  */
 export function barLayout<T extends string>(bar: BarId, tools: readonly T[]): { pinned: T | null; rest: T[]; groups: ToolGroup<T>[] | null } {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { clipStartTimes, timeToX, totalDuration } from "@/src/editor/model/timeline";
@@ -95,14 +95,23 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosen, barsKey, viewport, content]);
 
+  // True from the moment a pinch is recognised (not from a first finger: a tap or a scroll never sets it) until it is over, however
+  // it ends. Only the ruler reads it: it keeps its marks and stretches them instead of building them again on every frame.
+  const [pinching, setPinching] = useState(false);
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
         .onBegin(() => { basePps.current = useEditorStore.getState().pixelsPerSecond; })
+        .onStart(() => { setPinching(true); })
         .onUpdate((e) => { setZoom(basePps.current * e.scale); })
+        .onFinalize(() => { setPinching(false); })
         .runOnJS(true),
     [],
   );
+  const clips = project?.clips;
+  // The same marks (and so the same markers) while the cuts, the zoom and the selection are the same: the playhead draws none again.
+  const inMulti = multi !== null;
+  const marks = useMemo(() => (clips ? cutMarks({ clips }, pps, selectedId, inMulti) : []), [clips, pps, selectedId, inMulti]);
 
   if (!project) return null;
   const starts = clipStartTimes(project);
@@ -119,8 +128,8 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           onScroll={(e) => scrub.onScroll(offsetX(e), pps)}
           contentContainerStyle={{ paddingHorizontal: pad, height, flexDirection: "column" }}>
           <View testID="timeline-clips" style={{ height: CLIP_AREA_HEIGHT, flexDirection: "row", alignItems: "center" }}>
-            {/* The time marks along the top: out of the flow, drawn only when the zoom or the length changes. */}
-            <TimeRuler />
+            {/* The time marks along the top: out of the flow, drawn only when the zoom or the length changes — and during a pinch only stretched. */}
+            <TimeRuler hold={pinching} />
             {project.clips.map((clip, i) => (
               <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={multi ? multi.includes(clip.id) : clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
                 onPress={multi ? () => useEditorStore.getState().toggleMultiSelect(clip.id) : () => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
@@ -128,7 +137,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
               </ClipThumbStrip>
             ))}
             {/* On the cuts, after the clips (so above them): a diamond where there is a transition, "+" where there is none (cutMarks). */}
-            {cutMarks(project, pps, selectedId, multi !== null).map((mark) => <CutMarker key={`cut-${project.clips[mark.index].id}`} mark={mark} onPress={onCutPress} />)}
+            {marks.map((mark) => <CutMarker key={`cut-${project.clips[mark.index].id}`} mark={mark} onPress={onCutPress} />)}
             {/* Out of the flow, inside the trailing padding: the scrubbable width still ends at the last clip. */}
             <AddClipTile left={timeToX(totalDuration(project), pps) + theme.space.sm} />
             <BeatTicks />

@@ -108,9 +108,22 @@ test("a photo and a reversed clip have no Audio group; a clip with a copy has no
     Basics: ["Trim", "Speed", "Volume", "Filter", "Cut out", "Stabilize"], Edit: ["Keyframe", "Forward", "Back", "Replace", "Reverse", "Duplicate"],
     Audio: ["Extract audio", "Voice", "Sound"], Look: ["Animate", "Adjust"], Frame: ["Crop", "Transform", "Opacity", "Mask", "Blend", "Green screen"],
   });
-  expect(grouped({ clipId: "c0" }).Edit).toEqual(["Collage", "Keyframe", "Forward", "Back", "Replace", "Duplicate"]);
+  expect(grouped({ clipId: "c0" }).Basics).toEqual(["Collage", "Trim", "Filter", "Cut out"]);
+  expect(grouped({ clipId: "c0" }).Edit).toEqual(["Keyframe", "Forward", "Back", "Replace", "Duplicate"]);
   expect(grouped({ clipId: "c0" }).Look).toEqual(["Animate", "Adjust"]);                 // no Motion on a cell
   expect(grouped({ clipId: "P" }).Look).toEqual(["Animate", "Motion", "Adjust"]);
+});
+
+test("a collage cell: Collage is the FIRST tool of the row a new selection shows — no group button needed to reach it", () => {
+  for (const id of ["c0", "c1"]) {
+    const { groups } = layoutOf({ clipId: id });
+    expect(groups![0].id).toBe(GROUPS[0].id);                                             // the group every new selection starts in
+    expect(groups![0].tools[0]).toBe("collage");
+    expect(groups!.flatMap((g) => g.tools).filter((t) => t === "collage")).toHaveLength(1);
+  }
+  expect(groupOf("collage")).toBe("basics");
+  // A layer that is not a cell has no Collage at all, as before.
+  expect(layoutOf({ clipId: "L" }).rest).not.toContain("collage");
 });
 
 test("an id nobody named falls into the FIRST group, in its place — a new tool can never be hidden", () => {

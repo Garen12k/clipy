@@ -24,8 +24,9 @@ export const MULTI_BAR_HEIGHT = BAR_HEIGHT;
 
 /**
  * Multi-select mode's action bar: it takes the toolbar's place while `multiSelect` is not null — the same capsule, one row: the count
- * ("3 selected", a small capsule) at the leading end, the actions in a sideways scroll, and Delete and Done pinned at the trailing end,
- * outside the scroll, so both are in view on the narrowest phone. Every action is one undo step for all
+ * ("3 selected", a small capsule) and Done at the leading end, the actions in a sideways scroll, and Delete pinned alone after the
+ * separator at the trailing end. Done and Delete are both outside the scroll, so both are in view on the narrowest phone — and at
+ * opposite ends, so a slip from Done never lands on Delete. Every action is one undo step for all
  * the chosen main clips. Delete ends the mode (the store does, once none of the chosen clips exists); Duplicate keeps the originals chosen.
  * Its height is explicit; while a tool strip shows, the line and the buttons give their place to it and the bar grows upwards
  * (a negative top margin, over the timeline's lowest lanes) instead of pushing the preview. It never rises over the clips: with too
@@ -66,6 +67,8 @@ export function MultiSelectBar() {
             <Ionicons name="checkmark-circle-outline" size={theme.size.icon.sm} color={theme.colors.accent} />
             <Body weight="semi" accessibilityRole="header" numberOfLines={1} style={{ fontSize: theme.type.label, fontVariant: ["tabular-nums"] }}>{`${ids.length} selected`}</Body>
           </View>
+          {/* Done stands here, the whole row away from Delete. */}
+          <ToolButton variant="bar" label="Done" icon="checkmark-outline" onPress={exitMultiSelect} />
           <ToolScroll testID="multi-scroll">
             <ToolButton variant="bar" label="Speed" icon="speedometer-outline" disabled={!firstVideo} onPress={() => setSheet("speed")} />
             <ToolButton variant="bar" label="Volume" icon="volume-high-outline" disabled={!firstSounding} onPress={() => setSheet("volume")} />
@@ -75,7 +78,6 @@ export function MultiSelectBar() {
           </ToolScroll>
           <BarSeparator />
           <ToolButton variant="bar" danger label="Delete" icon="trash-outline" disabled={none} onPress={() => { haptic("medium"); apply((p) => deleteClips(p, ids)); }} />
-          <ToolButton variant="bar" label="Done" icon="checkmark-outline" onPress={exitMultiSelect} />
         </BarCapsule>
       )}
       <FilterSheet clipId={ids[0] ?? null} clipIds={ids} visible={sheet === "filter"} onClose={() => setSheet(null)} />

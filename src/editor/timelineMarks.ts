@@ -23,8 +23,10 @@ export const RULER = {
   tickGap: 6,
   /** At this zoom and tighter a second is wide enough for a label of its own. */
   everySecond: 120,
-  /** The most labels and ticks a ruler is drawn with: a very long project gets a coarser ruler, not thousands of views. */
-  maxLabels: 300, maxTicks: 720,
+  /** The most labels and ticks a ruler is drawn with: a long project gets a coarser STEP (never marks left out here and there), not hundreds of views. */
+  maxLabels: 120, maxTicks: 240,
+  /** During a pinch the marks are kept and stretched with the content until the zoom is this many times (or one over it) the zoom they were built at. */
+  stretch: 1.25,
   tick: 4, major: 7,
 } as const;
 /** Where the beat ticks start: right under the ruler. They end where the clips begin. */
@@ -61,6 +63,18 @@ export function rulerMarks(pps: number, duration: number): RulerMarks {
     if (major) marks.labels.push({ t, x, text: formatDuration(t) });
   }
   return marks;
+}
+
+/**
+ * The zoom the ruler's marks are built at. Outside a pinch (`hold` false): the zoom itself. During one: the zoom they were last built
+ * at, until the zoom has moved more than `RULER.stretch` away from it — in between the same marks are only stretched (x × pps / built
+ * is the time × pps, so a stretched mark stands where a fresh one would).
+ */
+export function rulerZoom(built: number, pps: number, hold: boolean): number {
+  if (!hold || !(Number.isFinite(built) && built > 0) || !(Number.isFinite(pps) && pps > 0)) return pps;
+  const r = pps / built;
+  // A hair of slack: 60 → 75 is 1.25 exactly and must still be "within the step".
+  return Math.max(r, 1 / r) > RULER.stretch + 1e-9 ? pps : built;
 }
 
 /** A mark on a clip. `photo` is drawn as a symbol (it has no words today either); `more` counts the marks that did not fit. */
@@ -117,18 +131,24 @@ export function clipBadges(clip: Clip, width: number, selected: boolean): ClipBa
 }
 
 export const CUT = {
-  /** The round marker, and its touch target (centred on it): at least 44 high, narrow so the clips beside it stay tappable. */
-  disc: 22, targetHeight: 44, targetWidth: 32,
+  /**
+   * The round marker, and its touch target (centred on it): 44 high and only the disc's own 24-pt column wide — 12 pt into each
+   * neighbour — so the tap that selects a clip stays the clip's.
+   */
+  disc: 22, targetHeight: 44, targetWidth: 24,
   /** At a selected clip's cut the marker stands this far OUT of that clip, and its target is only this wide — it starts 2 pt past the cut, so it never lies on the trim handle. */
   shift: 14, shiftedWidth: 24,
-  /** A cut whose clip on either side is narrower than this has no marker. */
-  minClip: 44,
+  /** A cut whose clip on either side is narrower than this has no marker: with a marker on both its cuts a clip keeps 68 − 12 − 12 = 44 pt of its own. */
+  minClip: 68,
+  /** The neighbour an outward marker stands in (2–26 pt into it) must be this wide, to keep 44 pt beside it and the 12 pt of its other cut's marker: 26 + 12 + 44. */
+  besideSelected: 82,
 } as const;
 /** A marker on the cut after clip `index`. `x`: its centre; `width`: its target's; `has`: the cut carries a transition (a diamond), else "+". */
 export type CutMark = { index: number; x: number; width: number; has: boolean };
 /**
  * The markers on the cuts between neighbouring main clips. None in multi-select; none on a cut with a clip narrower than
- * `CUT.minClip` beside it. At the selected clip's two cuts the marker moves out of that clip, beside the trim handle.
+ * `CUT.minClip` beside it. At the selected clip's two cuts the marker moves out of that clip, beside the trim handle — and is left
+ * out where the neighbour it would stand in is narrower than `CUT.besideSelected`.
  */
 export function cutMarks(project: Pick<Project, "clips">, pps: number, selectedId: string | null, multi: boolean): CutMark[] {
   if (multi) return [];
@@ -139,6 +159,7 @@ export function cutMarks(project: Pick<Project, "clips">, pps: number, selectedI
     if (widths[i] < CUT.minClip || widths[i + 1] < CUT.minClip) continue;
     const cut = timeToX(starts[i] + clipDuration(project.clips[i]), pps);
     const way = project.clips[i].id === selectedId ? 1 : project.clips[i + 1].id === selectedId ? -1 : 0;
+    if (way && widths[way > 0 ? i + 1 : i] < CUT.besideSelected) continue;
     out.push({ index: i, x: cut + way * CUT.shift, width: way ? CUT.shiftedWidth : CUT.targetWidth, has: project.clips[i].transitionOut.type !== "none" });
   }
   return out;

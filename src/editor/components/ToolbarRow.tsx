@@ -37,9 +37,12 @@ export function BarBack({ onPress }: { onPress: () => void }) {
   );
 }
 
-/** The thin line before what is pinned at the trailing end (Delete; Done in multi-select). */
+/**
+ * The thin line before the Delete pinned at the trailing end. It keeps a clear side towards the tools, so the last tool's target and
+ * Delete's are 13 pt apart (the row's gap, this margin, the line, the gap) — a slip off "Add text" does not land on Delete.
+ */
 export function BarSeparator() {
-  return <View testID="toolbar-separator" style={{ ...SEPARATOR, backgroundColor: theme.colors.hairline }} />;
+  return <View testID="toolbar-separator" style={{ ...SEPARATOR, marginLeft: theme.space.xs, backgroundColor: theme.colors.hairline }} />;
 }
 
 /**

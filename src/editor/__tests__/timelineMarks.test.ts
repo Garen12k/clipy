@@ -5,7 +5,7 @@ import { makeClip, makePhotoClip, makeProject, type Clip } from "@/src/editor/mo
 import { MAX_PPS, MIN_PPS } from "@/src/editor/store";
 import { formatDuration } from "@/src/lib/format";
 import { CLIP_AREA_HEIGHT, STRIP_HEIGHT } from "../timelineLayout";
-import { BADGE, BAR, BAR_GLYPH, BEAT_BAND, CLIP_TOP, CUT, RULER, badgeRoom, barParts, clipBadges, clipMarks, cutMarks, rulerMarks, rulerSteps } from "../timelineMarks";
+import { BADGE, BAR, BAR_GLYPH, BEAT_BAND, CLIP_TOP, CUT, RULER, badgeRoom, barParts, clipBadges, clipMarks, cutMarks, rulerMarks, rulerSteps, rulerZoom } from "../timelineMarks";
 
 const GLYPHS: Record<string, number> = require("@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json");
 
@@ -48,9 +48,38 @@ describe("the ruler: its steps", () => {
     }
   });
   test("a very long project gets a coarser ruler rather than thousands of marks", () => {
-    expect(rulerSteps(200, 600)).toEqual({ label: 2, tick: 1 });
-    expect(rulerSteps(200, 3600)).toEqual({ label: 15, tick: 5 });
-    expect(rulerMarks(200, 3600).ticks).toHaveLength(721);
+    expect(RULER).toMatchObject({ maxLabels: 120, maxTicks: 240 });
+    expect(rulerSteps(60, 60)).toEqual({ label: 2, tick: 0.5 });       // a minute: as fine as ever
+    expect(rulerSteps(60, 120)).toEqual({ label: 2, tick: 0.5 });      // two minutes: 240 half-second ticks, the cap exactly
+    expect(rulerSteps(60, 121)).toEqual({ label: 2, tick: 1 });
+    expect(rulerSteps(200, 600)).toEqual({ label: 5, tick: 5 });
+    expect(rulerSteps(200, 3600)).toEqual({ label: 30, tick: 15 });
+    expect(rulerMarks(200, 3600).ticks).toHaveLength(241);
+    expect(rulerMarks(200, 3600).labels).toHaveLength(121);
+  });
+  test("a coarser ruler is a coarser STEP: the marks stay evenly spaced from zero to the end, none dropped here and there", () => {
+    for (const pps of [MIN_PPS, 33, 60, 120, MAX_PPS]) for (const duration of [7, 61, 121, 600, 3600, 20000]) {
+      const { label, tick } = rulerSteps(pps, duration);
+      const m = rulerMarks(pps, duration);
+      m.ticks.forEach((t, i) => expect(t.t).toBeCloseTo(i * tick, 6));
+      m.labels.forEach((l, i) => expect(l.t).toBeCloseTo(i * label, 6));
+      expect(m.ticks[m.ticks.length - 1].t).toBeGreaterThan(duration - tick - 1e-6);
+      expect(m.labels[m.labels.length - 1].t).toBeGreaterThan(duration - label - 1e-6);
+    }
+  });
+  test("during a pinch the ruler keeps the zoom it was built at until the zoom has moved a step away; with no pinch it is always the zoom", () => {
+    expect(RULER.stretch).toBe(1.25);
+    expect(rulerZoom(60, 61, false)).toBe(61);
+    expect(rulerZoom(60, 200, false)).toBe(200);
+    expect(rulerZoom(60, 61, true)).toBe(60);
+    expect(rulerZoom(60, 75, true)).toBe(60);                          // 1.25 times: still stretched
+    expect(rulerZoom(60, 75.1, true)).toBe(75.1);                      // past the step: built again
+    expect(rulerZoom(60, 48, true)).toBe(60);
+    expect(rulerZoom(60, 47.9, true)).toBe(47.9);
+    expect(rulerZoom(NaN, 60, true)).toBe(60);
+    expect(rulerZoom(0, 60, true)).toBe(60);
+    // A stretched mark is where a fresh one would be: x(built) × zoom / built = the time × the zoom.
+    for (const [built, pps] of [[60, 70], [60, 50], [120, 149], [20, 16.5]]) for (const t of [0, 2, 6.5, 59]) expect((t * built) * (pps / built)).toBeCloseTo(t * pps, 9);
   });
   test("numbers that are not numbers give a harmless ruler", () => {
     expect(rulerMarks(60, NaN)).toEqual({ labels: [{ t: 0, x: 0, text: "0:00" }], ticks: [{ t: 0, x: 0, major: true }] });
@@ -139,12 +168,58 @@ describe("the markers on the cuts", () => {
     expect(after.x - after.width / 2).toBeGreaterThanOrEqual(300 + 2);  // wholly in the clip after it
     expect(cutMarks(three(), 50, "a", false).map((m) => m.x)).toEqual([200 + CUT.shift, 300]);
   });
-  test("no marker on a cut with a clip narrower than 44 pt beside it, so never within 44 pt of the other handle of the selected clip", () => {
-    expect(cutMarks(three(), 21, null, false).map((m) => m.index)).toEqual([]);       // b is 42 pt: both its cuts lose the marker
-    expect(cutMarks(three(), 22, null, false).map((m) => m.index)).toEqual([0, 1]);   // 44 pt: back
-    expect(cutMarks(three(), 21, "a", false)).toEqual([]);
-    expect(CUT.minClip).toBe(44);
-    expect(CUT.targetHeight).toBeGreaterThanOrEqual(44);
+  test("the target is the 24-pt column of the disc, 44 high: 12 pt into each neighbour, no more", () => {
+    expect(CUT).toMatchObject({ disc: 22, targetWidth: 24, targetHeight: 44, shift: 14, shiftedWidth: 24 });
+    expect(CUT.targetWidth).toBeGreaterThanOrEqual(CUT.disc);
+  });
+  test("no marker on a cut with a clip narrower than 68 pt beside it", () => {
+    expect(cutMarks(three(), 33, null, false).map((m) => m.index)).toEqual([]);       // b is 66 pt: both its cuts lose the marker
+    expect(cutMarks(three(), 34, null, false).map((m) => m.index)).toEqual([0, 1]);   // 68 pt: back
+    expect(cutMarks(three(), 33, "a", false)).toEqual([]);
+    expect(CUT.minClip).toBe(68);
+  });
+  /** The widest stretch of clip `i` (full height) that no marker's target covers. */
+  const free = (p: ReturnType<typeof three>, pps: number, selected: string | null, i: number) => {
+    const widths = p.clips.map((c) => (c.trimEnd - c.trimStart) * pps);
+    const from = widths.slice(0, i).reduce((a, b) => a + b, 0), to = from + widths[i];
+    const taken = cutMarks(p, pps, selected, false).map((m) => [Math.max(from, m.x - m.width / 2), Math.min(to, m.x + m.width / 2)]).filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+    let at = from, best = 0;
+    for (const [a, b] of taken) { best = Math.max(best, a - at); at = Math.max(at, b); }
+    return Math.max(best, to - at);
+  };
+  test("a clip with a marker on both its cuts keeps a 44-pt column of its own to be selected by — exactly 44 at 68 pt", () => {
+    expect(free(three(), 34, null, 1)).toBe(68 - 2 * 12);
+    expect(68 - 2 * 12).toBe(44);
+    for (let pps = 20; pps <= 200; pps += 1) for (const i of [0, 1, 2]) {
+      const width = (three().clips[i].trimEnd - three().clips[i].trimStart) * pps;
+      expect(free(three(), pps, null, i)).toBeGreaterThanOrEqual(Math.min(width, 44));
+    }
+  });
+  test("beside the selected clip: the outward marker stands only in a neighbour wide enough to keep its 44 pt (82), else that cut has none", () => {
+    expect(CUT.besideSelected).toBe(CUT.shift + CUT.shiftedWidth / 2 + CUT.targetWidth / 2 + 44);
+    expect(CUT.besideSelected).toBe(82);
+    // a selected, b is 68 pt: the marker would stand 2–26 pt into b and leave it 30 — so it is not shown; b's other cut keeps its own.
+    expect(cutMarks(three(), 34, "a", false)).toEqual([{ index: 1, x: 204, width: CUT.targetWidth, has: false }]);
+    expect(free(three(), 34, "a", 1)).toBe(68 - 12);
+    // b is 82 pt: the marker is back, and b keeps exactly 44.
+    expect(cutMarks(three(), 41, "a", false).map((m) => m.index)).toEqual([0, 1]);
+    expect(free(three(), 41, "a", 1)).toBe(44);
+    // b selected at the smallest marker zoom: a (136) and c (102) are wide enough for both outward markers.
+    expect(cutMarks(three(), 34, "b", false).map((m) => m.x)).toEqual([136 - CUT.shift, 204 + CUT.shift]);
+    // Whatever is selected, at any zoom, a neighbour that is not selected keeps 44 pt (or all of itself, with no marker on it).
+    for (let pps = 20; pps <= 200; pps += 1) for (const sel of ["a", "b", "c"]) for (const i of [0, 1, 2]) {
+      const p = three();
+      if (p.clips[i].id === sel) continue;
+      const width = (p.clips[i].trimEnd - p.clips[i].trimStart) * pps;
+      expect(`${pps} ${sel} ${i}: ${free(p, pps, sel, i) >= Math.min(width, 44) - 1e-9}`).toBe(`${pps} ${sel} ${i}: true`);
+    }
+  });
+  test("the outward marker still starts 2 pt past the cut — past the trim handle as laid out (it ends 2 pt outside its clip)", () => {
+    for (const pps of [34, 50, 120, 200]) for (const m of cutMarks(three(), pps, "b", false)) {
+      const cut = m.index === 0 ? 4 * pps : 6 * pps, way = m.index === 0 ? -1 : 1;
+      const near = m.x - way * (m.width / 2);                       // the target's edge nearest the selected clip
+      expect((near - cut) * way).toBe(2);
+    }
   });
   test("none in multi-select, none for one clip or an empty project", () => {
     expect(cutMarks(three(), 50, null, true)).toEqual([]);

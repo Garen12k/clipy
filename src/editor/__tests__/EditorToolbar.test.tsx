@@ -1142,9 +1142,9 @@ describe("Motion and Collage on the bar", () => {
     st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [cell] }));
     await renderBar();
     await act(() => { st().select("c"); });
-    // Collage is the first tool of the cell's Edit group (`contextFor` lists it first; a group keeps that order).
-    expect(row().slice(0, 3)).toEqual([BACK, GROUP, "Trim"]);
-    expect((await toolsByGroup()).Edit[0]).toBe("Collage");
+    // Collage is the first tool the cell's bar shows (`contextFor` lists it first; it is in the first group, which keeps that order).
+    expect(row().slice(0, 3)).toEqual([BACK, GROUP, "Collage"]);
+    expect((await toolsByGroup()).Basics[0]).toBe("Collage");
     expect(await everyTool()).not.toContain("Motion");
     await fireEvent.press((await tool("Collage")));
     expect(useToolStrip.getState().open).toEqual({ id: "collage", key: "clip:c" });
@@ -1169,7 +1169,7 @@ describe("Motion and Collage on the bar", () => {
     expect(screen.queryByRole("button", { name: "Grid of four" })).toBeNull();   // edit mode: only the layouts with as many cells
     expect(st().past).toHaveLength(1);
     await closeTool();
-    expect(row().slice(0, 3)).toEqual([BACK, GROUP, "Trim"]);                 // a new selection: its first group
-    expect((await toolsByGroup()).Edit[0]).toBe("Collage");
+    expect(row().slice(0, 3)).toEqual([BACK, GROUP, "Collage"]);              // a new selection: its first group, Collage first
+    expect((await toolsByGroup()).Basics[0]).toBe("Collage");
   });
 });
