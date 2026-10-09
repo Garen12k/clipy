@@ -31,13 +31,13 @@ test("every screen: no header, its own page behind it — navy, or cream when th
 });
 
 test("what iOS draws, per focused route: dark in the editor, the phone's own elsewhere; light glyphs over the dimmed editor behind Export", () => {
-  expect(SYSTEM_SCOPE).toEqual({ "index": "screen", "editor/[id]/index": "editor", "editor/[id]/export": "overDark", "post": "screen", "accounts": "screen", "oauth": "screen", "welcome": "screen" });
+  expect(SYSTEM_SCOPE).toEqual({ "index": "screen", "editor/[id]/index": "editor", "editor/[id]/export": "overDark", "post": "screen", "accounts": "screen", "oauth": "screen", "welcome": "screen", "tour": "screen" });
   expect(Object.keys(SYSTEM_SCOPE).sort()).toEqual([...ROUTE_NAMES].sort());
   // From Expo Router's segments (dynamic parts keep their brackets; Home has none).
   expect(scopeOf([])).toBe("screen");
   expect(scopeOf(["editor", "[id]"])).toBe("editor");
   expect(scopeOf(["editor", "[id]", "export"])).toBe("overDark");
-  for (const s of [["post"], ["accounts"], ["oauth"], ["welcome"], ["+not-found"], ["somewhere", "else"]]) expect(scopeOf(s)).toBe("screen");
+  for (const s of [["post"], ["accounts"], ["oauth"], ["welcome"], ["tour"], ["+not-found"], ["somewhere", "else"]]) expect(scopeOf(s)).toBe("screen");
 });
 
 test("per screen: the editor is pushed and swipes back from the edge only; Export is the standard modal; home is 'gone back to' when replaced; the redirect does not slide", () => {
@@ -49,6 +49,7 @@ test("per screen: the editor is pushed and swipes back from the edge only; Expor
     "accounts": {},
     "oauth": { animation: "none" },
     "welcome": { presentation: "modal" },
+    "tour": { presentation: "fullScreenModal" },   // the wizard again, covering the screen as on first launch
   });
   // Nothing switches the back swipe off for good, and no screen is given a custom transition or a duration.
   for (const o of Object.values(ROUTE_OPTIONS)) { expect(o).not.toHaveProperty("gestureEnabled"); expect(o).not.toHaveProperty("animationDuration"); }

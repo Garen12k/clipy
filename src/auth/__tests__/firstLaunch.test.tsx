@@ -13,6 +13,7 @@ jest.mock("@/src/publish/supabase", () => ({
 }));
 import { router } from "expo-router";
 import Home from "@/app/index";
+import Tour from "@/app/tour";
 import Welcome from "@/app/welcome";
 import { storage } from "@/src/projects";
 import { isBackendConfigured } from "@/src/publish/supabase";
@@ -135,5 +136,37 @@ describe("the /welcome route (opened from Accounts or Post)", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Send Code" }));
     await fireEvent.changeText(await screen.findByLabelText("6-digit code"), "123456");
     await waitFor(() => expect(router.back).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("the /tour route (Show welcome again, on Accounts)", () => {
+  test("the wizard from page 1 with a close button — for someone who has seen it and is signed in; closing goes back once, the flag as it was", async () => {
+    markWelcomeSeen();
+    (isBackendConfigured as jest.Mock).mockReturnValue(true);
+    (useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: "me@icloud.com" });
+    await render(<Tour />);
+    expect(screen.getByRole("header", { name: WIZARD_TITLE })).toBeTruthy();
+    expect(screen.getByTestId("wizard-dots").props.accessibilityLabel).toBe("Page 1 of 4");
+    expect(router.back).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", { name: "Close" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Close" }));
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(hasSeenWelcome()).toBe(true);
+  });
+
+  test("finishing ('Continue Without an Account') goes back too; the flag is not set by a replay", async () => {
+    await render(<Tour />);
+    await toSignIn();
+    await fireEvent.press(screen.getByRole("button", { name: "Continue Without an Account" }));
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(hasSeenWelcome()).toBe(false);
+  });
+
+  test("opened by a link with nothing behind it: leaving goes home", async () => {
+    (router.canGoBack as jest.Mock).mockReturnValue(false);
+    await render(<Tour />);
+    await fireEvent.press(screen.getByRole("button", { name: "Close" }));
+    expect(router.replace).toHaveBeenCalledWith("/");
   });
 });
