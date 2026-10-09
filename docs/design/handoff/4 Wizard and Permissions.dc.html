@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&display=swap">
+<style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style>
+</helmet>
+<section id="wizard" data-screen-label="Wizard" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:1200px">
+<div style="font:600 13px/18px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CLIPY · iOS 27 · PART 4 · SECTION 15 (C)</div>
+<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="font-size:44px;line-height:52px;font-weight:700;letter-spacing:-.02em">First-launch wizard and permissions</div><div style="font-size:14px;font-weight:600;color:#1A1408;background:#F3E3BF;padding:6px 12px;border-radius:999px">New feature</div></div>
+<div style="font-size:19px;line-height:28px;color:#3A3A3C;text-wrap:pretty">Four pages, shown once on first launch. They are swiped, with the system page control above the primary button. Illustrations are built from Clipy’s own interface pieces, play once, and rest on the final frame shown here. Apple’s system alerts are never drawn: dashed boxes mark where the kit’s real alert appears.</div>
+</div>
+
+<sc-for list="{{ variants }}" as="v" hint-placeholder-count="4">
+<div id="{{ v.id }}" style="display:flex;flex-direction:column;gap:20px;background:#FBFBFA;border-radius:28px;padding:40px 48px">
+<div style="display:flex;align-items:center;gap:14px"><div style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px">{{ v.id }}</div><div style="font-size:26px;font-weight:700">{{ v.vlabel }}</div></div>
+<div style="display:flex;gap:36px;align-items:flex-start;flex-wrap:wrap">
+
+<div data-screen-label="Wizard 1" style="position:relative;width:{{ v.w }};height:{{ v.h }};border-radius:{{ v.r }};outline:10px solid #1A1A1A;overflow:hidden;background:{{ v.page }};color:{{ v.label }};display:flex;flex-direction:column;padding:{{ v.pad }};box-sizing:border-box;flex-shrink:0">
+<div style="height:44px;display:flex;justify-content:flex-end;align-items:center;font-size:17px;color:{{ v.ink }}">Skip</div>
+<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:8px 8px 0">
+<div style="flex:1;max-height:62%;border-radius:22px;background:#000;display:flex;flex-direction:column;gap:6px;padding:12px;box-sizing:border-box">
+<div style="flex:1;display:flex;justify-content:center"><div style="aspect-ratio:9/16;height:100%;background:repeating-linear-gradient(160deg,#4A4A4C 0 10px,#444446 10px 20px);position:relative;border-radius:4px"><div style="position:absolute;top:16%;left:0;right:0;text-align:center;font-family:'Bangers',Impact,sans-serif;font-size:22px;color:#F4F4F5;-webkit-text-stroke:1px #000">LISBON</div></div></div>
+<div style="height:52px;background:#0E0E0F;border-radius:10px;position:relative;overflow:hidden"><div style="position:absolute;top:6px;left:8px;right:8px;height:24px;display:flex;gap:3px"><div style="flex:1;border-radius:5px;background:#5A5A5E"></div><div style="flex:1.4;border-radius:5px;background:#4A4A4C"></div><div style="flex:1;border-radius:5px;background:#3E3E40"></div></div><div style="position:absolute;top:34px;left:8px;right:30px;height:12px;border-radius:4px;background:#47C5D2"></div><div style="position:absolute;top:0;bottom:0;right:22%;width:2px;background:#fff"></div></div>
+</div>
+<div style="font-size:{{ v.t1 }};line-height:1.2;font-weight:700;letter-spacing:-.01em;margin-top:14px">Make clips worth sharing</div>
+<div style="font-size:17px;line-height:22px;color:{{ v.label2 }}">Edit, caption and post your clips.</div>
+</div>
+<div style="display:flex;justify-content:center;gap:8px;padding:16px 0 14px"><span style="width:8px;height:8px;border-radius:9px;background:{{ v.label }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span></div>
+<div style="height:52px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600">Get Started</div>
+</div>
+
+<div data-screen-label="Wizard 2" style="position:relative;width:{{ v.w }};height:{{ v.h }};border-radius:{{ v.r }};outline:10px solid #1A1A1A;overflow:hidden;background:{{ v.page }};color:{{ v.label }};display:flex;flex-direction:column;padding:{{ v.pad }};box-sizing:border-box;flex-shrink:0">
+<div style="height:44px;display:flex;justify-content:space-between;align-items:center;font-size:17px;color:{{ v.ink }}"><div style="width:44px;height:44px;border-radius:999px;background:{{ v.fill }};display:flex;align-items:center;justify-content:center;color:{{ v.label }}"><span style="font-family:'Material Symbols Rounded';font-size:22px">arrow_back_ios_new</span></div>Skip</div>
+<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:8px 8px 0">
+<div style="flex:1;max-height:62%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:8px">
+<sc-for list="{{ scenes }}" as="s" hint-placeholder-count="4"><div style="border-radius:16px;background:#000;color:#fff;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:10px"><div style="position:absolute;inset:6px 6px 30px;border-radius:8px;overflow:hidden"><dc-import name="WizardArt" scene="{{ s.k }}" small="{{ true }}" hint-size="100%,100%" style="position:absolute;inset:0"></dc-import></div><div style="position:relative;font-size:13px;font-weight:600">{{ s.n }}</div></div></sc-for>
+</div>
+<div style="display:flex;gap:4px;height:20px;align-items:center"><div style="flex:1;height:4px;border-radius:2px;background:{{ v.label }}"></div><div style="flex:1;height:4px;border-radius:2px;background:{{ v.label }}"></div><div style="flex:1;height:4px;border-radius:2px;background:{{ v.label }}"></div><div style="flex:1;height:4px;border-radius:2px;background:{{ v.label }}"></div></div>
+<div style="font-size:{{ v.t1 }};line-height:1.2;font-weight:700;letter-spacing:-.01em">Big edits, one tap</div>
+<div style="font-size:17px;line-height:22px;color:{{ v.label2 }}">Cut to the beat, remove a background, add captions and steady a shaky shot.</div>
+</div>
+<div style="display:flex;justify-content:center;gap:8px;padding:16px 0 14px"><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.label }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span></div>
+<div style="height:52px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600">Continue</div>
+</div>
+
+<div data-screen-label="Wizard 3" style="position:relative;width:{{ v.w }};height:{{ v.h }};border-radius:{{ v.r }};outline:10px solid #1A1A1A;overflow:hidden;background:{{ v.page }};color:{{ v.label }};display:flex;flex-direction:column;padding:{{ v.pad }};box-sizing:border-box;flex-shrink:0">
+<div style="height:44px;display:flex;justify-content:space-between;align-items:center;font-size:17px;color:{{ v.ink }}"><div style="width:44px;height:44px;border-radius:999px;background:{{ v.fill }};display:flex;align-items:center;justify-content:center;color:{{ v.label }}"><span style="font-family:'Material Symbols Rounded';font-size:22px">arrow_back_ios_new</span></div>Skip for Now</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:8px;padding:12px 4px 0;min-height:0;overflow:hidden">
+<div style="font-size:{{ v.t1 }};line-height:1.2;font-weight:700;letter-spacing:-.01em;padding:0 4px">You decide what Clipy can use</div>
+<div style="font-size:17px;line-height:22px;color:{{ v.label2 }};padding:0 4px 6px">Allow these now or later. Editing works either way.</div>
+<div style="background:{{ v.cell }};border-radius:20px;overflow:hidden">
+<sc-for list="{{ v.perms }}" as="p" hint-placeholder-count="7"><div style="padding:{{ v.rowPad }};display:flex;align-items:center;gap:12px;border-bottom:0.5px solid {{ v.sep }}"><span style="font-family:'Material Symbols Rounded';font-size:24px;width:26px;flex-shrink:0">{{ p.g }}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:{{ v.rowFont }};line-height:1.25">{{ p.n }}</span><span style="font-size:13px;line-height:17px;color:{{ v.label2 }};display:flex;gap:3px;align-items:center"><sc-if value="{{ p.sg }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Material Symbols Rounded';font-size:15px;color:{{ p.sc }};font-variation-settings:'FILL' 1">{{ p.sg }}</span></sc-if>{{ p.d }}</span><sc-if value="{{ p.btn2 }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><div style="height:30px;padding:0 10px;border-radius:999px;background:{{ v.fill }};display:flex;align-items:center;font-size:13px;font-weight:600">{{ p.btn2 }}</div><div style="height:30px;padding:0 10px;border-radius:999px;background:{{ v.fill }};display:flex;align-items:center;font-size:13px;font-weight:600">{{ p.btn }}</div></div></sc-if></div><sc-if value="{{ p.btnTrail }}" hint-placeholder-val="{{ true }}"><div style="height:32px;padding:0 12px;border-radius:999px;background:{{ v.fill }};display:flex;align-items:center;font-size:15px;font-weight:600;flex-shrink:0;white-space:nowrap">{{ p.btnTrail }}</div></sc-if><sc-if value="{{ p.st }}" hint-placeholder-val="{{ false }}"><span style="display:flex;align-items:center;gap:4px;font-size:15px;color:{{ v.label2 }};flex-shrink:0;white-space:nowrap"><span style="font-family:'Material Symbols Rounded';font-size:18px;color:{{ p.sc }};font-variation-settings:'FILL' 1">{{ p.sg }}</span>{{ p.st }}</span></sc-if></div></sc-for>
+</div>
+</div>
+<div style="display:flex;justify-content:center;gap:8px;padding:14px 0 14px"><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.label }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span></div>
+<div style="height:52px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;flex-shrink:0">Continue</div>
+</div>
+
+<div data-screen-label="Wizard 4" style="position:relative;width:{{ v.w }};height:{{ v.h }};border-radius:{{ v.r }};outline:10px solid #1A1A1A;overflow:hidden;background:{{ v.page }};color:{{ v.label }};display:flex;flex-direction:column;padding:{{ v.pad }};box-sizing:border-box;flex-shrink:0">
+<div style="height:44px;display:flex;align-items:center"><div style="width:44px;height:44px;border-radius:999px;background:{{ v.fill }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:22px">arrow_back_ios_new</span></div></div>
+<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:0 8px;min-height:0">
+<div style="height:{{ v.illo4 }};position:relative;display:flex;align-items:flex-end;justify-content:center">
+<div style="width:86px;aspect-ratio:9/16;border-radius:10px;background:repeating-linear-gradient(160deg,#4A4A4C 0 10px,#444446 10px 20px)"></div>
+<sc-for list="{{ logos }}" as="l" hint-placeholder-count="5"><div style="position:absolute;left:{{ l.x }};top:{{ l.y }};width:40px;height:40px;border-radius:12px;background:{{ v.cell }};box-shadow:0 0 0 1px {{ v.sep }};display:flex;align-items:center;justify-content:center;font:600 10px ui-monospace,Menlo,monospace;color:{{ v.label2 }}">{{ l.t }}</div></sc-for>
+</div>
+<div style="font-size:{{ v.t1 }};line-height:1.2;font-weight:700;letter-spacing:-.01em;margin-top:6px">Sign in to post</div>
+<div style="font-size:17px;line-height:22px;color:{{ v.label2 }}">You only need an account to post. Editing works without one.</div>
+<div style="height:20px"></div>
+</div>
+<div style="display:flex;justify-content:center;gap:8px;padding:16px 0 14px"><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.dot }}"></span><span style="width:8px;height:8px;border-radius:9px;background:{{ v.label }}"></span></div>
+<div style="display:flex;flex-direction:column;gap:10px;flex-shrink:0">
+<div style="height:50px;border-radius:999px;background:{{ v.apple }};color:{{ v.appleFg }};display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:600;border:{{ v.appleBorder }}"><span style="font-size:19px"></span>Continue with Apple</div>
+<div style="height:50px;border-radius:999px;background:{{ v.fill }};display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:600"><span style="width:20px;height:20px;border-radius:999px;background:#fff;color:#4285F4;font:700 13px/20px Arial,sans-serif;text-align:center">G</span>Continue with Google</div>
+<div style="height:50px;border-radius:999px;background:{{ v.fill }};display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:20px">mail</span>Continue with Email</div>
+<div style="height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:{{ v.ink }}">Continue Without an Account</div>
+</div>
+
+</div>
+
+<div data-screen-label="Wizard 4 done" style="position:relative;width:{{ v.w }};height:{{ v.h }};border-radius:{{ v.r }};outline:10px solid #1A1A1A;overflow:hidden;background:{{ v.page }};color:{{ v.label }};display:flex;flex-direction:column;padding:{{ v.pad }};box-sizing:border-box;flex-shrink:0">
+<div style="height:44px"></div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:0 12px">
+<div style="width:96px;height:96px;border-radius:999px;background:{{ v.ink }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:56px;color:{{ v.page }};font-weight:700">check</span></div>
+<div style="font-size:{{ v.t1 }};line-height:1.2;font-weight:700">Sign in to post</div>
+<div style="font-size:17px;line-height:22px;color:{{ v.label2 }}">Signed in as mia@example.com</div>
+</div>
+<div style="height:52px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;flex-shrink:0">Start Editing</div>
+</div>
+
+</div>
+</div>
+</sc-for>
+
+<div id="5e" style="display:flex;flex-direction:column;gap:20px;background:#FBFBFA;border-radius:28px;padding:40px 48px;max-width:1700px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#5e" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">5e</a><div style="font-size:26px;font-weight:700">Storyboards · key frames, timing, easing, Reduce Motion</div></div>
+<sc-for list="{{ boards }}" as="b" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:10px;border-top:1px solid #E2E2DF;padding-top:16px">
+<div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap"><div style="font-size:18px;font-weight:700">{{ b.n }}</div><div style="font-size:14px;color:#6C6C70">{{ b.total }}</div></div>
+<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px">
+<sc-for list="{{ b.frames }}" as="f" hint-placeholder-count="5"><div style="display:flex;flex-direction:column;gap:6px"><div style="height:150px;border-radius:12px;overflow:hidden;position:relative;box-shadow:{{ f.ring }}"><dc-import name="WizardArt" scene="{{ f.s }}" hint-size="100%,150px" style="position:absolute;inset:0"></dc-import></div><div style="font-size:13px;font-weight:600;color:#111">{{ f.k }}</div><div style="font:12px/16px ui-monospace,Menlo,monospace;color:#6C6C70">{{ f.t }}</div><div style="font-size:13px;line-height:18px;color:#3A3A3C">{{ f.d }}</div></div></sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#3A3A3C"><b>Reduce Motion:</b> {{ b.rm }}</div>
+</div>
+</sc-for>
+<div style="font-size:14px;line-height:20px;color:#6C6C70">Every sequence is 5 seconds or less and plays once when its page becomes current, then rests on its last frame; it replays if the page is revisited. The green-outlined frame in each row is the Reduce Motion still. Easing: the system’s standard spring (no bounce) for moves, ease-out for fades. Page changes use system paging. VoiceOver: one description per illustration, plus “Page 2 of 4”. At large text sizes the illustration shrinks first, then the page scrolls.</div>
+</div>
+</section>
+
+<section id="permissions" data-screen-label="Permissions" style="padding:0 72px 72px;display:flex;flex-direction:column;gap:40px">
+<div id="6a" style="display:flex;flex-direction:column;gap:20px;background:#FBFBFA;border-radius:28px;padding:40px 48px;max-width:1700px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#6a" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">6a</a><div style="font-size:26px;font-weight:700">Permission flows · in context</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div><b style="color:#111">1 · Ask once, in context.</b> The wizard only offers. Anything skipped is asked at first use. Never two system alerts in a row, and never again right after a refusal.</div>
+<div><b style="color:#111">2 · Explanation first, unless obvious.</b> An inline card with a headline, one sentence and “Continue” (never “Allow”, no reward, no second Cancel). The record button goes straight to the system alert.</div>
+<div><b style="color:#111">3 · After a refusal.</b> The feature shows its inline state with “Open Settings”, not a toast. Returning from Settings updates the row and the feature at once, with no restart message.</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px">
+<sc-for list="{{ explain }}" as="e" hint-placeholder-count="6"><div style="background:#fff;border:1px solid #E6E6E3;border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Material Symbols Rounded';font-size:28px;color:#8B5F00">{{ e.g }}</span><sc-if value="{{ e.isNew }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;color:#1A1408;background:#F3E3BF;padding:3px 8px;border-radius:999px">New feature</span></sc-if></div><div style="font-size:17px;font-weight:600">{{ e.h }}</div><div style="font-size:15px;line-height:20px;color:#3A3A3C">{{ e.s }}</div><div style="height:40px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;margin-top:4px">{{ e.btn }}</div><div style="border:1.5px dashed #C7C7CC;border-radius:14px;padding:10px;font-size:12px;line-height:16px;color:#6C6C70"><span style="font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.04em">THEN · SYSTEM ALERT FROM KIT</span><br>Purpose sentence: “{{ e.p }}”</div><div style="font-size:12px;line-height:16px;color:#6C6C70">Asked when: {{ e.when }}</div></div></sc-for>
+</div>
+</div>
+
+<div id="6b" style="display:flex;flex-direction:column;gap:20px;background:#FBFBFA;border-radius:28px;padding:40px 48px;max-width:1700px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#6b" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">6b</a><div style="font-size:26px;font-weight:700">Inline states inside each feature · denied, limited, restricted</div></div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px">
+<sc-for list="{{ inline }}" as="i" hint-placeholder-count="8"><div style="background:{{ i.bg }};color:{{ i.fg }};border-radius:20px;padding:20px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center"><div style="font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.05em;opacity:.6;align-self:flex-start">{{ i.where }}</div><span style="font-family:'Material Symbols Rounded';font-size:34px;opacity:.7">{{ i.g }}</span><div style="font-size:17px;font-weight:600">{{ i.h }}</div><div style="font-size:15px;line-height:20px;opacity:.75">{{ i.s }}</div><sc-if value="{{ i.btn }}" hint-placeholder-val="{{ true }}"><div style="height:40px;padding:0 16px;border-radius:999px;background:{{ i.fill }};display:flex;align-items:center;font-size:15px;font-weight:600">{{ i.btn }}</div></sc-if><sc-if value="{{ i.btn2 }}" hint-placeholder-val="{{ false }}"><div style="font-size:15px;color:{{ i.ink }}">{{ i.btn2 }}</div></sc-if></div></sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#6C6C70">Photos: importing never stops. When access is refused or limited, the system picker still works, one selection at a time. <b>Developers to confirm.</b> The “Limited” line shows once per import and can be dismissed. System choice names (“Full Access”, “Limited Access”, “Don’t Allow”) come from the kit; the app’s rows use the same words.</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const V = (id, label, size, dark) => {
+      const big = size === 'large';
+      const base = big ? { w: '440px', h: '956px', r: '62px', pad: '62px 24px 42px', t1: '34px', rowPad: '11px 14px', rowFont: '17px', illo4: '240px' } : { w: '375px', h: '667px', r: '0px', pad: '24px 16px 16px', t1: '28px', rowPad: '6px 12px', rowFont: '15px', illo4: '130px' };
+      const th = dark ? { page: '#000000', cell: '#1C1C1E', label: '#FFFFFF', label2: 'rgba(235,235,245,.6)', fill: 'rgba(120,120,128,.28)', sep: 'rgba(84,84,88,.65)', dot: 'rgba(235,235,245,.3)', ink: '#D9B36A', apple: '#FFFFFF', appleFg: '#000000', appleBorder: 'none' }
+        : { page: '#F2F2F7', cell: '#FFFFFF', label: '#000000', label2: 'rgba(60,60,67,.75)', fill: 'rgba(120,120,128,.14)', sep: 'rgba(60,60,67,.29)', dot: 'rgba(60,60,67,.3)', ink: '#8B5F00', apple: '#000000', appleFg: '#FFFFFF', appleBorder: 'none' };
+      return { id, vlabel: label, ...base, ...th };
+    };
+    const variants = [V('5a', 'Largest iPhone · dark', 'large', true), V('5b', 'Largest iPhone · light', 'large', false), V('5c', 'Smallest iPhone · dark', 'small', true), V('5d', 'Smallest iPhone · light', 'small', false)];
+    const scenes = [{ n: 'Cut to beats', k: 'beats' }, { n: 'Remove background', k: 'cutout' }, { n: 'Captions', k: 'captions' }, { n: 'Stabilize', k: 'stabilize' }];
+    const ok = '#34C759';
+    const perms = [
+      { g: 'photo_library', n: 'Photos and videos', d: 'Limited · only the photos you chose', st: '', btn: 'Allow Full Access', btn2: 'Choose More Photos', sg: 'contrast', sc: 'INK' },
+      { g: 'add_photo_alternate', n: 'Save to Photos', d: 'Allowed', st: '', sg: 'check_circle', sc: ok },
+      { g: 'photo_camera', n: 'Camera', d: 'Take a photo or video', btn: 'Continue' },
+      { g: 'mic', n: 'Microphone', d: 'Off', btn: 'Open Settings' },
+      { g: 'closed_caption', n: 'Speech recognition', d: 'Managed on this iPhone', st: '', sg: 'lock', sc: '#8E8E93' },
+      { g: 'notifications', n: 'Notifications', d: 'Know when it’s done', btn: 'Continue' },
+      { g: 'folder', n: 'Import from Files', d: 'No permission needed', st: '' }
+    ];
+    const logos = [['8%', '46%'], ['24%', '12%'], ['calc(50% - 20px)', '0%'], ['calc(76% - 40px)', '12%'], ['calc(92% - 40px)', '46%']].map(([x, y], i) => ({ x, y, t: ['YT', 'TT', 'IG', 'FB', 'X'][i] }));
+    const F = (s, k, t, d, rm) => ({ s, k, t, d, ring: rm ? '0 0 0 3px #34C759' : 'none' });
+    const boards = [
+      { n: 'Page 1 · Welcome', total: '3.5 s in total, plays once', rm: 'the final still (right) appears with a 200 ms fade.', frames: [F('p1-empty', 'Empty frame and timeline', '0 ms', 'Starts empty.'), F('p1-clips', 'Clips drop in', '0–460 ms · spring', 'Three thumbnails, 300 ms each, 80 ms apart.'), F('p1-sweep', 'Playhead sweeps', '500–1700 ms · linear', '1.2 s across the three clips.'), F('p1-title', 'Title pops on', '900–1200 ms · ease-out', 'Scale 0.9 → 1 with a fade, as the playhead passes.'), F('p1-final', 'Music bar, then rest', '1300–3500 ms', 'The music bar slides in; the picture rests.'), F('p1-final', 'Reduce Motion still', '—', 'Shown alone, no movement.', true)] },
+      { n: 'Page 2 · What you can do', total: '4.4 s in total: four 1-second scenes, then the summary', rm: 'the 2 × 2 summary (right), with no auto-advance.', frames: [F('beats-a', 'Cut to beats · start', '0 s', 'Three clips and the beat ticks.'), F('beats', 'Cut to beats · end', '0–1.0 s', 'The first clip’s end snaps to a tick (250 ms) with the snap line.'), F('cutout-a', 'Remove background · start', '1.0 s', 'A person in front of a background.'), F('cutout', 'Remove background · end', '1.0–2.0 s', 'The background cross-fades to the checkerboard; “Ready.”'), F('captions-a', 'Captions · start', '2.0 s', 'The caption bar appears.'), F('captions', 'Captions · end', '2.0–3.0 s', 'The spoken word turns yellow, word by word.'), F('stab-a', 'Stabilize · start', '3.0 s', 'A shaky outline.'), F('stabilize', 'Stabilize · end', '3.0–4.0 s', 'It settles into the steady frame and its corner marks.'), F('summary', '2 × 2 summary', '4.0–4.4 s · ease-out', 'The four pictures, labelled. Rest.'), F('summary', 'Reduce Motion still', '—', 'The same summary, shown at once.', true)] },
+      { n: 'Page 3 · Permissions', total: '0.6 s', rm: 'the rows simply appear; a changed row updates without animation (right).', frames: [F('p3-rows-a', 'Rows fade and rise 8 pt', '0–600 ms · ease-out', '60 ms apart.'), F('p3-rows', 'Tap “Continue” on a row', '—', 'Apple’s alert for that one permission appears (kit; not drawn).'), F('p3-changed', 'Row changes state', '200 ms', 'Symbol replace; status text cross-fades; selection haptic.'), F('p3-rows', 'Rest', '—', 'Primary “Continue” is always enabled.'), F('p3-changed', 'After returning from Settings', '—', 'The row updates at once.'), F('p3-changed', 'Reduce Motion still', '—', 'No rise, no fade.', true)] },
+      { n: 'Page 4 · Sign in', total: '2.0 s', rm: 'the arc still; the tick appears without drawing on (right).', frames: [F('p4-thumb', 'Finished clip', '0 ms', 'Starts alone.'), F('p4-arc', 'Platform marks rise in an arc', '0–720 ms · spring', 'Five marks, 80 ms apart.'), F('p4-busy', 'While signing in', '—', 'Indicator in a fixed slot under the body; every button inert.'), F('p4-done', 'Success', '400 ms · ease-out', 'The tick draws on with a success haptic; “Signed in as {email}”.'), F('p4-arc', '“Start Editing”', '—', 'Goes to Home, empty state.'), F('p4-done', 'Reduce Motion still', '—', 'The tick, shown at once.', true)] }
+    ];
+    const explain = [
+      { g: 'photo_library', h: 'Use your photos and videos', s: 'Clipy needs your library to bring photos and videos into a project. Full access makes picking faster; you can also choose just some.', p: 'Clipy uses the photos and videos you choose to make your clips.', when: 'first New Project, Quick Edit, Post a Video or add-clip tap' },
+      { g: 'add_photo_alternate', h: 'Save finished videos', s: 'Clipy saves the videos and covers you export to your Photos.', p: 'Clipy saves your exported videos and covers to Photos.', when: 'first “Save to Photos”' },
+      { g: 'photo_camera', h: 'Record with the camera', s: 'Clipy uses the camera only while you record a photo or video for a project.', p: 'Clipy uses the camera to record photos and videos for your clips.', when: 'first “Take Photo or Video” (opens the system camera)', isNew: true },
+      { g: 'mic', h: 'Record your voice', btn: 'Start Recording', s: 'No explanation card. Tapping the record button makes the reason clear, so Apple’s alert comes straight away.', p: 'Clipy uses the microphone to record voice-overs.', when: 'first record tap in Add audio → Record' },
+      { g: 'closed_caption', h: 'Turn speech into captions', s: 'Clipy listens to the speech in your clips on this iPhone and writes it as captions.', p: 'Clipy turns speech in your clips into captions.', when: 'first “Transcribe”' },
+      { g: 'notifications', h: 'Know when it’s done', s: 'Clipy can tell you when an export or an upload finishes.', p: 'none: the system alert carries no app sentence (confirm in kit)', when: 'after the first export starts', isNew: true }
+    ];
+    const D = { bg: '#1C1C1E', fg: '#FFFFFF', fill: 'rgba(120,120,128,.28)', ink: '#D9B36A' };
+    const L = { bg: '#FFFFFF', fg: '#000000', fill: 'rgba(120,120,128,.14)', ink: '#8B5F00' };
+    const inline = [
+      { ...L, where: 'IMPORT · LIMITED', g: 'contrast', h: 'Clipy can see only the photos you chose.', s: 'Shown once per import. Dismissible.', btn: 'Choose More Photos', btn2: 'Allow Full Access' },
+      { ...D, where: 'EXPORT · SAVE DENIED', g: 'hide_image', h: 'Saving to Photos is off', s: 'Share still works: save to Files, AirDrop or any app.', btn: 'Open Settings', btn2: 'Share' },
+      { ...L, where: 'ADD AUDIO · RECORD · DENIED', g: 'mic_off', h: 'Microphone is off', s: 'You can still add music, sound effects, audio from Files and Read Aloud.', btn: 'Open Settings' },
+      { ...D, where: 'CAPTIONS · DENIED', g: 'voice_over_off', h: 'Speech recognition is off', s: 'Captions can still be typed as text and styled.', btn: 'Open Settings' },
+      { ...L, where: 'CAMERA · RESTRICTED · NEW', g: 'lock', h: 'Camera isn’t available', s: 'This setting is managed on this iPhone. You can still import from Photos and Files.', btn: '' },
+      { ...D, where: 'EXPORT PROGRESS · NOT ASKED · NEW', g: 'notifications', h: 'Know when it’s done', s: 'Clipy can tell you when an export or an upload finishes.', btn: 'Continue' },
+      { ...L, where: 'RETURN FROM SETTINGS', g: 'check_circle', h: 'Microphone allowed', s: 'The record button is back at once. No restart message.', btn: '' }
+    ];
+    variants.forEach(v => { v.perms = perms.map(p => ({ btn: '', btn2: '', st: '', sg: '', sc: '', ...p, sc: p.sc === 'INK' ? v.ink : (p.sc || ''), btnTrail: p.btn2 ? '' : (p.btn || '') })); });
+    explain.forEach(e => { e.btn = e.btn || 'Continue'; });
+    return { variants, scenes, perms, logos, boards, explain, inline };
+  }
+}
+</script>
+</body>
+</html>

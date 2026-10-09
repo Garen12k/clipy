@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style>
+</helmet>
+<section id="tokens" data-screen-label="Tokens" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:1200px">
+<div style="font:600 13px/18px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CLIPY · iOS 27 · REVIEW 3 · E (COMPONENTS) AND F5, F6, F11</div>
+<div style="font-size:44px;line-height:52px;font-weight:700;letter-spacing:-.02em">Tokens, the gold rule, custom symbols and accessibility</div>
+</div>
+
+<div id="T1" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div style="grid-column:1/-1;display:flex;align-items:center;gap:14px"><a href="#T1" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">T1</a><div style="font-size:26px;font-weight:700;color:#111">The gold rule</div></div>
+<div><b style="color:#111">Gold fill marks the one action that completes the current screen or sheet and moves on.</b> One per screen at most: Export (editor header), Create (Aspect ratio), Choose Photos and Videos (Quick edit), Get Started / Continue (wizard), Send Code and Sign In (sign-in), Post (Post), Post to… (Export done), Start Editing.</div>
+<div><b style="color:#111">Nothing inside a strip or a panel is gold.</b> Each panel’s main action (Transcribe, Replace, Try Again, Open Settings, Tap, Choose a File, Read Aloud, Save to Photos, Trim’s Apply) is filled in the label colour; the rest are grey. Done is a grey circle. Gold appears there only as an accent ink: selection rings, slider fills, progress, text actions.</div>
+<div><b style="color:#111">Never gold:</b> Apple’s sign-in button (Apple’s own black or white), destructive actions (red label on grey), and Accounts, which has no primary action. Light appearance: gold fill keeps #D9B36A with #1A1408 text (8.9 : 1). Every gold line, ring, value and status symbol uses the ink #8B5F00 (5.9 : 1 on white).</div>
+</div>
+
+<div id="T2" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#T2" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">T2</a><div style="font-size:26px;font-weight:700">Tokens · every radius and size has a name</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+<sc-for list="{{ tokenGroups }}" as="g" hint-placeholder-count="6"><div style="display:flex;flex-direction:column;gap:4px"><div style="font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.05em;color:#6C6C70;margin-bottom:4px">{{ g.h }}</div><sc-for list="{{ g.items }}" as="t" hint-placeholder-count="6"><div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px;font-size:13px;line-height:18px;padding:4px 0;border-top:1px solid #EDEDEA"><span style="font-family:ui-monospace,Menlo,monospace;color:#111;display:flex;align-items:center;gap:6px"><sc-if value="{{ t.sw }}" hint-placeholder-val="{{ false }}"><span style="width:12px;height:12px;border-radius:3px;background:{{ t.sw }};box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);flex-shrink:0"></span></sc-if>{{ t.n }}</span><span style="color:#3A3A3C;font-variant-numeric:tabular-nums">{{ t.v }}</span></div></sc-for></div></sc-for>
+</div>
+</div>
+
+<div id="T3" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#T3" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">T3</a><div style="font-size:26px;font-weight:700">Custom symbols · Stabilize and Fade</div></div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:1100px">Drawn to be traced onto Apple’s custom-symbol template (Regular weight, medium scale; the template derives the other weights). <b>clipy.stabilize</b>: a frame with four corner marks and a level line through the middle, meaning a steady picture. <b>clipy.fade</b>: a ramp rising from a baseline, meaning volume going up over time; mirrored for fade out.</div>
+<div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-end">
+<sc-for list="{{ symSizes }}" as="s" hint-placeholder-count="3"><div style="display:flex;gap:28px;align-items:flex-end">
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:{{ s.box }};height:{{ s.box }};background:{{ s.bg }};border-radius:12px;display:flex;align-items:center;justify-content:center"><div style="width:{{ s.px }};height:{{ s.px }};position:relative;color:{{ s.fg }}"><div style="position:absolute;left:0;top:0;width:30%;height:30%;border-left:{{ s.sw }} solid currentColor;border-top:{{ s.sw }} solid currentColor;border-top-left-radius:20%"></div><div style="position:absolute;right:0;top:0;width:30%;height:30%;border-right:{{ s.sw }} solid currentColor;border-top:{{ s.sw }} solid currentColor;border-top-right-radius:20%"></div><div style="position:absolute;left:0;bottom:0;width:30%;height:30%;border-left:{{ s.sw }} solid currentColor;border-bottom:{{ s.sw }} solid currentColor;border-bottom-left-radius:20%"></div><div style="position:absolute;right:0;bottom:0;width:30%;height:30%;border-right:{{ s.sw }} solid currentColor;border-bottom:{{ s.sw }} solid currentColor;border-bottom-right-radius:20%"></div><div style="position:absolute;left:22%;right:22%;top:calc(50% - {{ s.half }});height:{{ s.sw }};border-radius:9px;background:currentColor"></div></div></div><span style="font:11px ui-monospace,Menlo,monospace;color:#6C6C70">stabilize · {{ s.l }}</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:{{ s.box }};height:{{ s.box }};background:{{ s.bg }};border-radius:12px;display:flex;align-items:center;justify-content:center"><div style="width:{{ s.px }};height:{{ s.px }};position:relative;color:{{ s.fg }}"><div style="position:absolute;left:4%;right:4%;bottom:14%;top:18%;background:currentColor;clip-path:polygon(0 100%,100% 0,100% 100%);opacity:.9"></div><div style="position:absolute;left:0;right:0;bottom:6%;height:{{ s.sw }};border-radius:9px;background:currentColor"></div></div></div><span style="font:11px ui-monospace,Menlo,monospace;color:#6C6C70">fade · {{ s.l }}</span></div>
+</div></sc-for>
+</div>
+</div>
+
+<div id="T4" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#T4" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">T4</a><div style="font-size:26px;font-weight:700">Accessibility · the same component set under each setting</div></div>
+<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+<sc-for list="{{ a11y }}" as="a" hint-placeholder-count="5">
+<div style="width:375px;display:flex;flex-direction:column;gap:8px"><div style="font:600 12px ui-monospace,Menlo,monospace;color:#6C6C70">{{ a.n }}</div>
+<div style="background:#000;color:#fff;border-radius:24px;padding:16px;display:flex;flex-direction:column;gap:12px">
+<div style="min-height:{{ a.btnH }};border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-size:{{ a.fsBtn }};font-weight:{{ a.wBtn }};padding:6px 12px;box-sizing:border-box;text-align:center;box-shadow:{{ a.btnEdge }}">New Project</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap"><div style="flex:1;min-height:{{ a.btnH }};border-radius:999px;background:{{ a.fill }};border:{{ a.border }};display:flex;align-items:center;justify-content:center;font-size:{{ a.fsBtn }};font-weight:{{ a.wBtn }};padding:6px 12px;box-sizing:border-box">Share</div><div style="flex:1;min-height:{{ a.btnH }};border-radius:999px;background:{{ a.fill }};border:{{ a.border }};color:#FF453A;display:flex;align-items:center;justify-content:center;font-size:{{ a.fsBtn }};font-weight:{{ a.wBtn }};padding:6px 12px;box-sizing:border-box">Delete</div></div>
+<div style="height:64px;border-radius:32px;background:{{ a.bar }};border:{{ a.barBorder }};backdrop-filter:{{ a.blur }};display:flex;align-items:center;gap:4px;padding:0 6px;box-sizing:border-box"><div style="width:44px;height:44px;border-radius:999px;background:{{ a.fill }};border:{{ a.border }};display:flex;align-items:center;justify-content:center;box-sizing:border-box"><span style="font-family:'Material Symbols Rounded';font-size:18px">arrow_back_ios_new</span></div><div style="height:44px;padding:0 10px;border-radius:999px;background:{{ a.fill }};border:{{ a.border }};display:flex;align-items:center;font-size:{{ a.fsPill }};font-weight:{{ a.wPill }};box-sizing:border-box;white-space:nowrap">{{ a.pill }}</div><sc-for list="{{ a.tools }}" as="x" hint-placeholder-count="3"><div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-family:'Material Symbols Rounded';font-size:{{ a.ic }}">{{ x.g }}</span><sc-if value="{{ a.labels }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;font-weight:{{ a.wLabel }}">{{ x.l }}</span></sc-if></div></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;font-size:{{ a.fsBody }};font-weight:{{ a.wBody }}"><span>Strength</span><span style="font-variant-numeric:tabular-nums">70</span></div><div style="position:relative;height:28px;display:flex;align-items:center"><div style="height:4px;flex:1;border-radius:2px;background:{{ a.track }}"></div><div style="position:absolute;left:0;width:70%;height:4px;border-radius:2px;background:{{ a.ink }}"></div><div style="position:absolute;left:calc(70% - 14px);width:28px;height:28px;border-radius:999px;background:#fff;box-shadow:{{ a.thumb }}"></div></div></div>
+<div style="background:{{ a.cell }};border:{{ a.border }};border-radius:16px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:{{ a.fsBody }};font-weight:{{ a.wBody }}"><span>Highlight spoken word</span><div style="width:51px;height:31px;border-radius:999px;background:#34C759;position:relative;flex-shrink:0;box-shadow:{{ a.swEdge }}"><div style="position:absolute;right:2px;top:2px;width:27px;height:27px;border-radius:999px;background:#fff"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:{{ a.fsSmall }};color:{{ a.label2 }};font-weight:{{ a.wBody }}">Email</span><div style="min-height:48px;border-radius:12px;background:{{ a.cell }};border:{{ a.border }};box-shadow:inset 0 0 0 2px {{ a.ink }};display:flex;align-items:center;padding:0 12px;font-size:{{ a.fsBody }};font-weight:{{ a.wBody }}">mia@example.com</div></div>
+<div style="min-height:44px;border-radius:22px;background:#3A3A3C;border:{{ a.border }};display:flex;align-items:center;gap:8px;padding:6px 6px 6px 14px;font-size:{{ a.fsSmall }};font-weight:{{ a.wBody }};box-sizing:border-box"><span style="flex:1">Clips cut to the beat</span><span style="height:32px;padding:0 12px;border-radius:999px;background:rgba(255,255,255,.18);display:flex;align-items:center;font-weight:600">Undo</span></div>
+</div>
+<div style="font-size:13px;line-height:18px;color:#3A3A3C">{{ a.note }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div id="T5" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#T5" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">T5</a><div style="font-size:26px;font-weight:700">All 36 components · system or custom · states · where drawn</div></div>
+<div style="display:grid;grid-template-columns:200px 90px 1fr 260px;border-top:1px solid #E2E2DF;font-size:13px;line-height:18px">
+<sc-for list="{{ comps }}" as="c" hint-placeholder-count="20"><div style="padding:7px 10px 7px 0;border-bottom:1px solid #EDEDEA;font-weight:600">{{ c.n }}</div><div style="padding:7px 10px;border-bottom:1px solid #EDEDEA;color:{{ c.kc }};font-weight:600">{{ c.k }}</div><div style="padding:7px 10px;border-bottom:1px solid #EDEDEA">{{ c.s }}</div><div style="padding:7px 0 7px 10px;border-bottom:1px solid #EDEDEA;color:#6C6C70">{{ c.w }}</div></sc-for>
+</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const G = (h, items) => ({ h, items: items.map(([n, v, sw]) => ({ n, v, sw: sw || '' })) });
+    const tokenGroups = [
+      G('RADIUS', [['radius.capsule', '999 (buttons, toolbar, chips, pills)'], ['radius.toolbar', '32'], ['radius.strip', '28'], ['radius.alert', '28'], ['radius.card', '20 (inset grouped)'], ['radius.status', '14'], ['radius.tile', '12 (concentric: strip 28 − padding)'], ['radius.field', '12'], ['radius.clip', '8'], ['radius.bar', '8'], ['radius.badge', '5'], ['radius.sheet', 'system (large detent)'], ['radius.cover', '16']]),
+      G('EDITOR SIZES', [['size.target', '44 × 44 minimum'], ['size.header', '44'], ['size.transport', '44'], ['size.toolbar', '64'], ['size.toolButton', 'max(44, label + 8) × 56'], ['size.groupButton', '52 × 56 (symbol + label ⌄)'], ['size.ruler', '14'], ['size.clipRow', '52 (band 12, copy line 3 at top)'], ['size.lane', '40 (bar 30, touch 44)'], ['size.handle.clip', '16 visual / 44 target'], ['size.handle.bar', '14 visual / 44 target'], ['size.move', '32 × 16 visual / 44 × 40 target'], ['size.cutMarker', '24 disc, wins inside its disc'], ['size.typingBar', '40']]),
+      G('STRIPS AND PANELS', [['strip.S', '96 = 44 + 48 + 4'], ['strip.M', '120 = 44 + 72 + 4'], ['strip.L', '168 = 44 + 120 + 4'], ['strip.largeText', '× 1.16 → 111 / 139 / 195'], ['row.header', '44'], ['row.tiles', '72 (box 56 × 48)'], ['row.slider', '48'], ['row.switch', '48'], ['row.chips', '44'], ['row.note', '24 / 40 / 48'], ['row.status', '76 (3 lines) or 96'], ['panel.height', 'cap + 68 → 240 / 280 / 320'], ['panel.compactRow', '44']]),
+      G('DEVICE LAYOUT', [['cap.small', '172 · 375 × 667 (2.5 rows)'], ['cap.medium', '212 · 402 × 874 (3.5 rows)'], ['cap.large', '252 · 440 × 956 (4.5 rows)'], ['preview.small', '301 (64–365)'], ['preview.medium', '394 (102–496)'], ['preview.large', '444 (110–554)'], ['inset.bottom', '8 / 34 / 34'], ['toolbar.side', '4 (375) / 8']]),
+      G('COLOUR', [['accent.fill', '#D9B36A', '#D9B36A'], ['accent.onFill', '#1A1408', '#1A1408'], ['ink.dark', '#D9B36A', '#D9B36A'], ['ink.light', '#8B5F00', '#8B5F00'], ['timeline.bg', '#0E0E0F', '#0E0E0F'], ['kind.text', '#79B6F4', '#79B6F4'], ['kind.caption', '#AFB965', '#AFB965'], ['kind.sticker', '#E095C7', '#E095C7'], ['kind.music', '#47C5D2', '#47C5D2'], ['kind.voice', '#6DC799', '#6DC799'], ['kind.soundEffect', '#ED997B', '#ED997B'], ['kind.layer', '#A8B2BE', '#A8B2BE'], ['kind.effect', '#B6A3F0', '#B6A3F0'], ['handle', '#1C1C1E', '#1C1C1E'], ['banner', '#3A3A3C dark / #1C1C1E light', '#3A3A3C'], ['main.inPanel', 'label colour fill: #FFF / #000', '#FFFFFF']]),
+      G('MOTION', [['motion.editor', '≤ 250 ms, opacity/position only, no loops'], ['motion.strip', 'appears without rise under Reduce Motion'], ['motion.panel', 'instant open and close'], ['motion.snap', 'snap line 1 pt, 120 ms fade'], ['motion.wizard', '≤ 5 s per page, plays once'], ['haptic.selection', 'slider rest tick, snap'], ['haptic.light', 'tile pick, tap marker'], ['haptic.success', 'export done, post done, signed in']])
+    ];
+    const symSizes = [['17 pt', 17, 1.6, '#fff', '#111'], ['24 pt', 24, 2, '#000', '#fff'], ['44 pt', 44, 3, '#fff', '#111']].map(([l, s, w, bg, fg]) => ({ l, px: s + 'px', box: (s + 28) + 'px', sw: w + 'px', half: (w / 2) + 'px', bg, fg }));
+    const tools = [{ g: 'content_cut', l: 'Split' }, { g: 'speed', l: 'Speed' }, { g: 'photo_filter', l: 'Filter' }];
+    const base = { fill: 'rgba(120,120,128,.28)', border: 'none', bar: 'rgba(44,44,48,.62)', barBorder: '0.5px solid rgba(255,255,255,.14)', blur: 'blur(24px)', cell: '#1C1C1E', track: 'rgba(120,120,128,.36)', ink: '#D9B36A', label2: 'rgba(235,235,245,.6)', thumb: '0 1px 4px rgba(0,0,0,.3)', swEdge: 'none', btnEdge: 'none', btnH: '50px', fsBtn: '17px', fsPill: '15px', fsBody: '17px', fsSmall: '15px', wBtn: 600, wPill: 600, wBody: 400, wLabel: 400, ic: '24px', labels: true, pill: 'Basics ⌄', tools };
+    const a11y = [
+      { ...base, n: 'DEFAULT', note: 'Regular glass toolbar; system fills.' },
+      { ...base, n: 'REDUCE TRANSPARENCY', bar: '#1C1C1E', barBorder: '0.5px solid rgba(255,255,255,.06)', blur: 'none', note: 'Glass becomes the solid version (#1C1C1E / #FFFFFF). Layout unchanged.' },
+      { ...base, n: 'INCREASE CONTRAST', bar: '#000', barBorder: '1.5px solid #fff', blur: 'none', border: '1.5px solid #fff', fill: '#1C1C1E', label2: '#fff', ink: '#F0CE8A', btnEdge: 'inset 0 0 0 1.5px #000', thumb: '0 0 0 1.5px #000', swEdge: '0 0 0 1.5px #fff', note: 'Every surface gets a 1.5-pt border in label colour; secondary labels go to full label colour; accent ink brightens to #F0CE8A (light: #6E4A00). Timeline bars get a 1-pt black outline.' },
+      { ...base, n: 'BOLD TEXT', wBtn: 800, wPill: 800, wBody: 600, wLabel: 600, note: 'System Bold Text: every label one weight up. Symbols switch to the semibold weight.' },
+      { ...base, n: 'LARGEST ACCESSIBILITY SIZE (AX5)', btnH: '76px', fsBtn: '28px', fsPill: '20px', fsBody: '28px', fsSmall: '24px', ic: '28px', labels: false, pill: 'Basics ⌄', note: 'Buttons grow and wrap. The toolbar keeps 64 pt and shows symbols only; touch and hold shows the large-content viewer. Strips use their large-text heights; panels reflow to one column.' }
+    ];
+    const S = (n, k, s, w) => ({ n, k, s, w, kc: k === 'system' ? '#2E7D32' : '#8B5F00' });
+    const comps = [
+      S('Screen', 'system', 'navigation stack, large title, scroll edge effect', '2 Home, 12 States'),
+      S('Text styles / ValueLabel', 'system', 'Large Title → Caption 2; name + value, tabular digits', '1 Foundations 1b'),
+      S('Primary button', 'custom', 'default, pressed, disabled, busy (indicator replaces label)', '3 Components 4a/4b'),
+      S('Secondary button', 'system', 'default, pressed, disabled, busy', '3 Components 4a/4b'),
+      S('Destructive button', 'system', 'panel form (red on grey); menu/alert role', '3 Components, 12 States E4'),
+      S('Text action', 'system', 'default, pressed, disabled', '3 Components'),
+      S('Icon button (glass circle)', 'system', 'default, pressed, disabled', '3 Components, 12 States'),
+      S('Done (strip/panel)', 'custom', '36-pt grey circle; pressed', '11 Strips v2'),
+      S('Tool tile (toolbar form)', 'custom', 'default, pressed, on, disabled, busy', '3 Components; Toolbar'),
+      S('Tool tile (boxed form)', 'custom', 'default, pressed, selected, disabled, loading', '11 Strips v2'),
+      S('Group button', 'custom + system menu', 'closed, menu open (checkmark on current)', '10 Editor v2 C1'),
+      S('Chip', 'custom', 'default, selected, disabled', '11 Strips v2 (Speed, Adjust)'),
+      S('Segmented control', 'system', 'text, symbols, tab-holds-setting dot', '3 Components; strips headers'),
+      S('Slider row', 'system', 'default, rest tick, disabled + reason, trailing Reset', '11 Strips v2'),
+      S('Switch row', 'system', 'on, off, disabled; with subtitle; with inline slider', '11b Panels v2'),
+      S('Text field', 'system', 'empty, focused, filled + Clear, error, message line', '12 States E1'),
+      S('Number field', 'system', 'default, focused, unit suffix', '11 Strips v2 (Trim), 11b (Fine-tune)'),
+      S('Pop-up row', 'system', 'closed (value + chevron)', '11b Read aloud'),
+      S('Inset grouped list / card', 'system', 'header, rows, footer', '12 States E2/E3'),
+      S('Sheet', 'system', 'medium and large detent, grabber, Close/Back', '5 Screens, 12 States'),
+      S('Strip', 'custom', 'S/M/L, glass and solid, large text', '11 Strips v2'),
+      S('Panel', 'custom', 'regular (scroll), compact (no scroll), typing', '11b Panels v2'),
+      S('Status block (background copy)', 'custom', 'off, waiting, working + Cancel, ready, failed, not possible, newest build needed', '11 Strips v2 D2'),
+      S('Confirmation banner', 'custom', 'Undo, Try Again, Open Settings, Show; in the transport row', '14 Review 4 R2, 12 States E4'),
+      S('Alert / confirmation dialog', 'system', 'two buttons, destructive, text prompt', '12 States E4'),
+      S('Activity indicator with words', 'system', 'inline slot, in button, in row', '12 States'),
+      S('Progress ring', 'custom', 'preparing, exporting %, done tick', '5 Screens 7c'),
+      S('Empty state', 'custom', 'Home first run, broken Post link', '2 Home, 12 States'),
+      S('Ratio shape', 'custom', 'nine shapes, Auto dashed, selected', '11 Strips v2, 5 Screens'),
+      S('Colour row', 'custom', '44-pt swatches, selected ring, custom #RRGGBB pill (new)', '11b Panels v2'),
+      S('Timeline clip', 'custom', 'default, selected, multi, badges, missing, copying, ready', '10 Editor v2 B1, 3 Components 4c'),
+      S('Timeline bar', 'custom', '8 kinds, waveform / plain, selected with handles', '10 Editor v2 B1'),
+      S('Permission row', 'custom', 'not asked, allowed, limited, off, managed', '12 States E6/E7'),
+      S('Permission inline state', 'custom', 'denied, limited, restricted', '4 Wizard 6b, 12 States E6'),
+      S('Wizard page frame', 'custom', 'illustration, title, body, dots, primary; Reduce Motion still', '4 Wizard'),
+      S('Launch screen', 'system', 'plain, matches Home, no logo', '5 Screens 7a/8a'), S('Crop screen', 'custom', 'loading, free + readout, shape refused + reason, light', '14 Review 4 R1')
+    ];
+    return { tokenGroups, symSizes, a11y, comps };
+  }
+}
+</script>
+</body>
+</html>

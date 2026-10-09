@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&display=swap">
+<style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style>
+</helmet>
+<section id="home" data-screen-label="Home" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div id="3a" style="display:flex;flex-direction:column;gap:24px;background:#FBFBFA;border-radius:28px;padding:48px">
+<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><a href="#3a" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">3a</a><div style="font-size:30px;font-weight:700">Home · states</div><div style="font-size:13px;font-weight:600;color:#1A1408;background:#F3E3BF;padding:5px 10px;border-radius:999px">New feature: More button on cards, “Posted · …” status, one-time callout</div></div>
+<div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start">
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:600 13px ui-monospace,Menlo,monospace;color:#6C6C70">PROJECTS + DAMAGED CARD + CALLOUT · DARK</div><dc-import name="HomePhone" size="large" theme="dark" state="projects" callout="{{ true }}" hint-size="440px,956px"></dc-import></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:600 13px ui-monospace,Menlo,monospace;color:#6C6C70">PROJECTS · LIGHT</div><dc-import name="HomePhone" size="large" theme="light" state="projects" hint-size="440px,956px"></dc-import></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:600 13px ui-monospace,Menlo,monospace;color:#6C6C70">EMPTY · DARK (NAUTICAL MOMENT)</div><dc-import name="HomePhone" size="large" theme="dark" state="empty" hint-size="440px,956px"></dc-import></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:600 13px ui-monospace,Menlo,monospace;color:#6C6C70">EMPTY · LIGHT</div><dc-import name="HomePhone" size="large" theme="light" state="empty" hint-size="440px,956px"></dc-import></div>
+</div>
+<div style="display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start">
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:600 13px ui-monospace,Menlo,monospace;color:#6C6C70">BUSY · NEW PROJECT · SMALL DARK</div><dc-import name="HomePhone" size="small" theme="dark" state="busyNew" hint-size="375px,667px"></dc-import></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:600 13px ui-monospace,Menlo,monospace;color:#6C6C70">BUSY · QUICK EDIT · SMALL LIGHT</div><dc-import name="HomePhone" size="small" theme="light" state="busyQuick" hint-size="375px,667px"></dc-import></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:600 13px ui-monospace,Menlo,monospace;color:#6C6C70">LOADING · SMALL DARK</div><dc-import name="HomePhone" size="small" theme="dark" state="loading" hint-size="375px,667px"></dc-import></div>
+<div style="display:flex;flex-direction:column;gap:12px"><div style="font:600 13px ui-monospace,Menlo,monospace;color:#6C6C70">PROJECTS · SMALL LIGHT</div><dc-import name="HomePhone" size="small" theme="light" state="projects" hint-size="375px,667px"></dc-import></div>
+<div style="width:300px;display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">NOTES</div>
+<div><b style="color:#111">Busy:</b> while a project is created, the grid and top buttons are inert and dimmed, and the bottom bar becomes one status capsule with words and the count copied (constraint 16).</div>
+<div><b style="color:#111">Damaged:</b> red border, warning symbol and “Damaged” on the picture; the name in red. Its More menu offers only Delete.</div>
+<div><b style="color:#111">Callout:</b> shown once, under the Post button; one line and a close control. Not TipKit.</div>
+<div><b style="color:#111">Empty state:</b> uses the nautical moment (a sailing symbol in accent ink) and points at the two actions in the bottom bar.</div>
+</div>
+</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const c = (n, a, b, cc, d, e) => ({ n, a, b, c: cc, d, e });
+    const contexts = [
+      c('Main bar (nothing selected)', 'Edit, Text, Stickers, Overlay, Collage', 'Audio', 'Effects, Filter, Adjust, Templates', 'Ratio, Background, Cover', '—'),
+      c('Audio section', 'Add audio', 'Ducking, Beats', '—', '—', '—'),
+      c('Text section', 'Add text, Captions', '—', '—', '—', '—'),
+      c('Main clip', 'Split, Trim, Speed, Transition, Keyframe, Duplicate, Replace, Reverse, Freeze, Select', 'Volume, Extract audio, Voice, Sound', 'Filter, Adjust, Templates, Animate, Motion', 'Crop, Transform, Opacity, Mask, Background', 'Green screen, Cut out, Stabilize'),
+      c('Layer', 'Collage, Trim, Speed, Keyframe, Forward, Back, Duplicate, Replace, Reverse', 'Volume, Extract audio, Voice, Sound', 'Filter, Adjust, Animate, Motion', 'Crop, Transform, Opacity, Mask, Blend', 'Green screen, Cut out, Stabilize'),
+      c('Text', 'Edit, Keyframe, Duplicate, Add text', '—', 'Animate', '—', '—'),
+      c('Caption', 'Edit, Captions, Duplicate, Add text', '—', '—', '—', '—'),
+      c('Sticker', 'Edit, Keyframe, Duplicate', '—', 'Animate', '—', '—'),
+      c('Sound bar', 'Split, Duplicate', 'Volume, Fade, Voice, Sound, Add audio, Ducking, Beats', '—', '—', '—'),
+      c('Timeline effect', 'Strength, Duplicate', '—', '—', '—', '—'),
+      c('Multi-select', 'Duplicate, Speed, Select all, Done', 'Volume', 'Filter', '—', '—')
+    ];
+    return { contexts };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style>
+</helmet>
+<section id="review4" data-screen-label="Review 4" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:1200px">
+<div style="font:600 13px/18px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CLIPY · iOS 27 · REVIEW 4 · NEW AND REDRAWN BOARDS</div>
+<div style="font-size:44px;line-height:52px;font-weight:700;letter-spacing:-.02em">Crop, banner, keyboard, accessibility, permissions, camera, notifications</div>
+</div>
+
+<div id="R1" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#R1" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">R1</a><div style="font-size:26px;font-weight:700">Crop · full screen</div></div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:1200px">System bar with Cancel leading and Done (primary) trailing. Box with an accent border, thirds lines and four corner handles (44-pt targets; VoiceOver “Top-left corner” …). Drag inside to move, drag a corner to resize. Shapes: Free, 9:16, 1:1, 4:5, 16:9. Reset goes back to the whole picture and Free. Always opens on Free with the clip’s current crop. Done applies as one undo step.</div>
+<div style="display:flex;gap:36px;flex-wrap:wrap;align-items:flex-start">
+<sc-for list="{{ crops }}" as="c" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;gap:8px;align-items:center;font:600 12px ui-monospace,Menlo,monospace;color:#6C6C70"><span>{{ c.cap }}</span><sc-if value="{{ c.isNew }}" hint-placeholder-val="{{ false }}"><span style="font:600 11px -apple-system,sans-serif;color:#1A1408;background:#F3E3BF;padding:2px 7px;border-radius:999px">New feature</span></sc-if></div>
+<div style="width:{{ c.w }};height:{{ c.h }};border-radius:{{ c.r }};outline:10px solid #1A1A1A;background:{{ c.page }};color:{{ c.label }};position:relative;overflow:hidden;display:flex;flex-direction:column;padding:{{ c.pad }};box-sizing:border-box;gap:12px">
+<div style="height:44px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0"><div style="height:44px;padding:0 16px;border-radius:999px;background:{{ c.fill }};display:flex;align-items:center;font-size:17px">Cancel</div><span style="font-size:17px;font-weight:600">Crop</span><div style="height:44px;padding:0 18px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;font-size:17px;font-weight:600">Done</div></div>
+<div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0">
+<div style="width:100%;aspect-ratio:16/9;background:{{ c.pic }};position:relative">
+<sc-if value="{{ c.loading }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;color:{{ c.label2 }}"><div style="width:18px;height:18px;border-radius:999px;border:2.5px solid {{ c.sep }};border-top-color:{{ c.label2 }}"></div>Loading the picture</div></sc-if>
+<sc-if value="{{ c.box }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;inset:0;background:rgba(0,0,0,.55)"></div><div style="position:absolute;top:0;bottom:0;left:{{ c.bx }};width:{{ c.bw }};border:2px solid {{ c.ink }};box-sizing:border-box;background:repeating-linear-gradient(160deg,#4A4A4C 0 14px,#444446 14px 28px)"><div style="position:absolute;inset:0;background-image:linear-gradient(90deg,transparent 33%,rgba(255,255,255,.45) 33% calc(33% + 1px),transparent 0 66%,rgba(255,255,255,.45) 66% calc(66% + 1px),transparent 0),linear-gradient(transparent 33%,rgba(255,255,255,.45) 33% calc(33% + 1px),transparent 0 66%,rgba(255,255,255,.45) 66% calc(66% + 1px),transparent 0)"></div><div style="position:absolute;top:-4px;left:-4px;width:20px;height:20px;border-top:4px solid #fff;border-left:4px solid #fff"></div><div style="position:absolute;top:-4px;right:-4px;width:20px;height:20px;border-top:4px solid #fff;border-right:4px solid #fff"></div><div style="position:absolute;bottom:-4px;left:-4px;width:20px;height:20px;border-bottom:4px solid #fff;border-left:4px solid #fff"></div><div style="position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-bottom:4px solid #fff;border-right:4px solid #fff"></div></div></sc-if>
+</div>
+<sc-if value="{{ c.readout }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:13px;color:{{ c.label2 }};font-variant-numeric:tabular-nums">{{ c.readout }}</div></sc-if>
+</div>
+<div style="display:flex;gap:8px;justify-content:center;flex-shrink:0"><sc-for list="{{ c.shapes }}" as="s" hint-placeholder-count="5"><div style="height:36px;padding:0 14px;border-radius:999px;background:{{ s.bg }};color:{{ s.fg }};display:flex;align-items:center;font-size:15px;font-weight:{{ s.w }}">{{ s.l }}</div></sc-for></div>
+<div style="min-height:36px;display:flex;gap:6px;justify-content:center;align-items:flex-start;font-size:13px;line-height:18px;color:{{ c.label2 }};text-align:center;flex-shrink:0">{{ c.reason }}</div>
+<div style="height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:{{ c.ink }};flex-shrink:0">Reset</div>
+</div></div>
+</sc-for>
+</div>
+</div>
+
+<div id="R2" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#R2" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">R2</a><div style="font-size:26px;font-weight:700">Confirmation banner · in the transport row, never on the video</div><span style="font-size:11px;font-weight:600;color:#1A1408;background:#F3E3BF;padding:3px 8px;border-radius:999px">New feature</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div><b style="color:#111">Place.</b> The banner takes the 44-pt transport row, which sits between the preview and the timeline, so it covers no video and no control the person is using. No shadow. Two lines of 13 pt, then one action. It works the same with the toolbar, a strip or a panel open.</div>
+<div><b style="color:#111">How long.</b> Until the next edit, or until Play. Tapping Play (the person’s next likely action) dismisses it and brings the transport back at once. Undo stays in the transport row as before. VoiceOver announces the sentence.</div>
+<div><b style="color:#111">Actions:</b> Undo (success), Try Again (failed action), Open Settings (permission), Show (a background copy failed: opens its strip). “Show” <span style="font-size:11px;font-weight:600;color:#1A1408;background:#F3E3BF;padding:2px 7px;border-radius:999px">New feature</span></div>
+</div>
+<div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+<dc-import name="EditorPhone2" size="small" mode="toolbar" context="main" banner="Clips cut to the beat. Undo brings them back." banner-kind="undo" caption="375 · toolbar · Undo" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="filter" banner="Couldn’t add those items." banner-kind="retry" caption="375 · strip open · Try Again" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="panel" panel="audioMusic" context="sound" banner="Clipy needs Photos access to import photos and videos." banner-kind="settings" caption="375 · panel open · Open Settings" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="medium" theme="light" mode="toolbar" context="clip" project="full" banner="Could not stabilize the clip. It shows as it was." banner-kind="show" caption="402 · light · Show" hint-size="402px,910px"></dc-import>
+</div>
+</div>
+
+<div id="R3" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#R3" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">R3</a><div style="font-size:26px;font-weight:700">Keyboard states at 375 × 667 · preview stays 301 pt</div></div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:1200px">With the keyboard up, the only room left is the 40-pt typing bar above it. Each tool puts its field there. Emoji results scroll sideways in the bar; Return or dragging the panel shows the full grid. Fine-tune moves field to field with the arrows.</div>
+<div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+<sc-for list="{{ kbs }}" as="k" hint-placeholder-count="6"><dc-import name="EditorPhone2" size="small" mode="keyboard" kb="{{ k }}" hint-size="375px,700px"></dc-import></sc-for>
+</div>
+</div>
+
+<div id="R4" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#R4" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">R4</a><div style="font-size:26px;font-weight:700">Editor under accessibility settings, and glass vs solid</div></div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:1200px">Timeline, toolbar, one strip and one panel in each case. Increase Contrast: 1.5-pt borders in label colour, bars and clips outlined in black, accent ink #F0CE8A (light #6E4A00), secondary labels at full contrast. Bold Text: every label one weight up. Reduce Transparency equals the solid version. Text inside strips grows with Dynamic Type up to × 1.16 (the largest standard size); above that it stops, and the large-content viewer shows a tool or tile’s name and symbol on touch and hold.</div>
+<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start">
+<sc-for list="{{ a11y }}" as="a" hint-placeholder-count="9"><dc-import name="EditorPhone2" size="small" mode="{{ a.mode }}" strip="{{ a.strip }}" panel="{{ a.panel }}" context="{{ a.ctx }}" project="full" material="{{ a.mat }}" theme="{{ a.theme }}" a11y="{{ a.a }}" hint-size="375px,700px"></dc-import></sc-for>
+</div>
+</div>
+
+<div id="R5" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#R5" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">R5</a><div style="font-size:26px;font-weight:700">Blur box and Mosaic box on the preview</div></div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:1100px">Selecting a Blur box or Mosaic box effect puts its rectangle on the preview: white border with a black edge, four corner handles (44-pt targets), drag to move. It disappears when the effect is deselected.</div>
+<div style="display:flex;gap:32px;flex-wrap:wrap"><dc-import name="EditorPhone2" size="small" mode="strip" strip="strength" context="effect" preview-box="Blur box" hint-size="375px,700px"></dc-import><dc-import name="EditorPhone2" size="medium" theme="light" mode="strip" strip="strength" context="effect" preview-box="Mosaic box" hint-size="402px,910px"></dc-import></div>
+</div>
+
+<div id="R6" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#R6" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">R6</a><div style="font-size:26px;font-weight:700">Permission rows · every permission × every state</div></div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:1200px">One row component, used on wizard page 3 and in Accounts → Permissions, in dark and light. The restricted state always reads “Managed on this iPhone”. Limited carries both actions.</div>
+<sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+<div style="background:{{ th.page }};color:{{ th.label }};border-radius:24px;padding:20px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px">
+<sc-for list="{{ th.heads }}" as="h" hint-placeholder-count="5"><div style="font:600 11px ui-monospace,Menlo,monospace;letter-spacing:.05em;color:{{ th.label2 }}">{{ h }}</div></sc-for>
+<sc-for list="{{ th.cells }}" as="c" hint-placeholder-count="30"><div style="background:{{ th.cell }};border-radius:16px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;opacity:{{ c.op }};min-height:76px;box-sizing:border-box"><div style="display:flex;gap:10px;align-items:center"><span style="font-family:'Material Symbols Rounded';font-size:22px">{{ c.g }}</span><div style="flex:1;display:flex;flex-direction:column;min-width:0"><span style="font-size:15px">{{ c.n }}</span><span style="font-size:12px;line-height:16px;color:{{ th.label2 }};display:flex;gap:3px;align-items:center"><sc-if value="{{ c.sg }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Material Symbols Rounded';font-size:14px;color:{{ c.sc }};font-variation-settings:'FILL' 1">{{ c.sg }}</span></sc-if>{{ c.d }}</span></div></div><sc-if value="{{ c.btns }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:32px"><sc-for list="{{ c.btns }}" as="b" hint-placeholder-count="1"><div style="height:30px;padding:0 10px;border-radius:999px;background:{{ th.fill }};display:flex;align-items:center;font-size:13px;font-weight:600;white-space:nowrap">{{ b }}</div></sc-for></div></sc-if></div></sc-for>
+</div>
+</sc-for>
+</div>
+
+<div id="R7" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#R7" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">R7</a><div style="font-size:26px;font-weight:700">Camera · Take Photo or Video</div><span style="font-size:11px;font-weight:600;color:#1A1408;background:#F3E3BF;padding:3px 8px;border-radius:999px">New feature</span></div>
+<div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+<sc-for list="{{ menus }}" as="m" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font:600 12px ui-monospace,Menlo,monospace;color:#6C6C70">{{ m.cap }}</div>
+<div style="position:relative;width:375px;height:667px;outline:10px solid #1A1A1A;background:#000;color:#fff;overflow:hidden">
+<div style="position:absolute;inset:0;background:{{ m.under }}"></div>
+<div style="position:absolute;left:{{ m.x }};top:{{ m.y }};width:250px;border-radius:16px;background:#2C2C2E;box-shadow:0 10px 40px rgba(0,0,0,.5);overflow:hidden;font-size:17px">
+<sc-for list="{{ m.items }}" as="i" hint-placeholder-count="3"><div style="padding:11px 16px;display:flex;align-items:center;gap:10px;border-bottom:0.5px solid rgba(84,84,88,.65);opacity:{{ i.op }}"><div style="flex:1;display:flex;flex-direction:column"><span>{{ i.l }}</span><sc-if value="{{ i.d }}" hint-placeholder-val="{{ false }}"><span style="font-size:13px;color:rgba(235,235,245,.6)">{{ i.d }}</span></sc-if></div><span style="font-family:'Material Symbols Rounded';font-size:20px">{{ i.g }}</span></div></sc-for>
+</div>
+<div style="position:absolute;left:{{ m.ax }};top:{{ m.ay }};width:44px;height:44px;border-radius:999px;background:{{ m.anchorBg }};display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px #D9B36A"><span style="font-family:'Material Symbols Rounded';font-size:24px;color:{{ m.anchorC }}">add</span></div>
+</div></div>
+</sc-for>
+</div>
+<div style="font-size:18px;font-weight:700;margin-top:6px">Camera, then Microphone, never back to back</div>
+<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px">
+<sc-for list="{{ seq }}" as="s" hint-placeholder-count="6"><div style="display:flex;flex-direction:column;gap:6px"><div style="height:200px;border-radius:16px;background:#000;color:#fff;border:{{ s.border }};box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;text-align:center"><span style="font-family:'Material Symbols Rounded';font-size:34px;color:#D9B36A">{{ s.g }}</span><span style="font-size:13px;line-height:17px">{{ s.k }}</span><sc-if value="{{ s.sys }}" hint-placeholder-val="{{ false }}"><span style="font:10px ui-monospace,Menlo,monospace;color:rgba(235,235,245,.6)">system · from the kit</span></sc-if></div><div style="font-size:13px;line-height:18px;color:#3A3A3C">{{ s.d }}</div></div></sc-for>
+</div>
+</div>
+
+<div id="R8" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#R8" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">R8</a><div style="font-size:26px;font-weight:700">Notifications · one card, and what Export shows after</div><span style="font-size:11px;font-weight:600;color:#1A1408;background:#F3E3BF;padding:3px 8px;border-radius:999px">New feature</span></div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:1200px">The card appears on the export progress, only while notifications have never been asked. Grey “Continue” opens Apple’s alert. No “Not Now”: the card simply stays until the export ends. It promises nothing about leaving the app.</div>
+<div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+<sc-for list="{{ notif }}" as="n" hint-placeholder-count="4"><dc-import name="ScreenPhone" size="{{ n.size }}" theme="{{ n.theme }}" sheet="{{ true }}" rows="{{ n.rows }}" caption="{{ n.cap }}" hint-size="{{ n.hint }}"></dc-import></sc-for>
+</div>
+</div>
+
+<div id="R9" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:grid;grid-template-columns:1fr 1fr;gap:28px">
+<div style="grid-column:1/-1;display:flex;align-items:center;gap:14px"><a href="#R9" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">R9</a><div style="font-size:26px;font-weight:700">Build line, decisions and the panel main action</div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:17px;font-weight:700">Accounts → About → Build</div><div style="font-size:14px;line-height:20px;color:#3A3A3C">One short line naming the newest ability, so the owner can tell which build is on the phone.</div>
+<div style="background:#1C1C1E;color:#fff;border-radius:20px;overflow:hidden"><sc-for list="{{ builds }}" as="b" hint-placeholder-count="7"><div style="min-height:46px;padding:6px 16px;display:flex;align-items:center;gap:12px;border-bottom:0.5px solid rgba(84,84,88,.65)"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:rgba(235,235,245,.6)">memory</span><span style="flex:1;font-size:16px">Build</span><span style="font-size:15px;color:rgba(235,235,245,.6)">{{ b.n }}</span></div></sc-for></div>
+<div style="font-size:12px;line-height:17px;color:#6C6C70">was: “App build: …” and “Expo Go (no video engine)”</div></div>
+<div style="display:flex;flex-direction:column;gap:14px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div><b style="color:#111">Main action inside a panel</b> (no gold): a full-width button filled in the label colour — white with black text in dark, black with white text in light. Every other button is grey; Cancel is a text action. Used for Transcribe, Replace, Try Again, Open Settings, Tap, Choose a File, Read Aloud, Save to Photos and Trim’s Apply. Drawn in <a href="11b Panels and Messages v2.dc.html">11b</a>.</div>
+<div><b style="color:#111">Photos access refused on Home:</b> one design. A banner above the bottom bar, “Clipy needs Photos access to import photos and videos.”, with Open Settings (board E4). The inline card version is removed.</div>
+<div><b style="color:#111">Captions with no captions yet:</b> Caption style shows “Preview only — this project has no captions yet.” The update case keeps its own sentence: “Captions needs the newest Clipy build. Everything else in Clipy still works.”</div>
+<div><b style="color:#111">Speed · Slow motion tab</b> appears only while exactly one clip is shown and it is slowed below 1×. If it stops being slowed while the tab is open, the strip falls back to Normal.</div>
+</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const D = { page: '#000', label: '#fff', label2: 'rgba(235,235,245,.65)', sep: 'rgba(84,84,88,.65)', fill: 'rgba(120,120,128,.28)', ink: '#D9B36A', pic: 'repeating-linear-gradient(160deg,#4A4A4C 0 14px,#444446 14px 28px)' };
+    const Lt = { page: '#F2F2F7', label: '#000', label2: 'rgba(60,60,67,.75)', sep: 'rgba(60,60,67,.29)', fill: 'rgba(120,120,128,.14)', ink: '#8B5F00', pic: 'repeating-linear-gradient(160deg,#4A4A4C 0 14px,#444446 14px 28px)' };
+    const shapes = (sel, off, th) => ['Free', '9:16', '1:1', '4:5', '16:9'].map((l, i) => ({ l, bg: i === sel ? (th === D ? 'rgba(255,255,255,.92)' : '#000') : th.fill, fg: i === sel ? (th === D ? '#000' : '#fff') : off.includes(i) ? (th === D ? 'rgba(235,235,245,.35)' : 'rgba(60,60,67,.35)') : th.label, w: i === sel ? 600 : 400 }));
+    const small = { w: '375px', h: '667px', r: '0px', pad: '28px 16px 16px' }, large = { w: '440px', h: '956px', r: '62px', pad: '66px 20px 40px' };
+    const crops = [
+      { cap: '375 · LOADING · PLACEHOLDER', ...small, ...D, loading: true, box: false, pic: '#1C1C1E', shapes: shapes(0, [], D), reason: '', readout: '' },
+      { cap: '375 · FREE · SIZE READOUT', isNew: true, ...small, ...D, box: true, bx: '18%', bw: '58%', shapes: shapes(0, [], D), reason: '', readout: '1114 × 1080' },
+      { cap: '375 · 9:16 · 16:9 REFUSED WITH REASON', isNew: true, ...small, ...D, box: true, bx: '34%', bw: '31.6%', shapes: shapes(1, [4], D), reason: 'This picture is too short to hold 16:9 once it is cropped this tall. Make the box wider first.', readout: '608 × 1080' },
+      { cap: '440 · LIGHT · 1:1', ...large, ...Lt, box: true, bx: '21.9%', bw: '56.2%', shapes: shapes(2, [], Lt), reason: '', readout: '1080 × 1080' }
+    ];
+    const kbs = ['trim', 'emoji', 'fine', 'hex', 'cover', 'text'];
+    const A = (a, mode, o = {}) => ({ a, mode, strip: o.strip || '', panel: o.panel || '', ctx: o.ctx || 'clip', mat: o.mat || 'glass', theme: o.theme || 'dark' });
+    const a11y = [A('', 'toolbar'), A('', 'toolbar', { mat: 'solid' }), A('', 'strip', { strip: 'filter', mat: 'solid' }), A('', 'panel', { panel: 'voice', ctx: 'sound', mat: 'solid' }), A('transparency', 'strip', { strip: 'cutout' }), A('contrast', 'toolbar'), A('contrast', 'strip', { strip: 'speedNormal' }), A('contrast', 'panel', { panel: 'sound', ctx: 'sound', theme: 'light' }), A('bold', 'toolbar'), A('bold', 'strip', { strip: 'stabilize' }), A('bold', 'panel', { panel: 'captionsReady', ctx: 'caption' })];
+    const P = [['photo_library', 'Photos and videos', 'Bring clips into a project'], ['add_photo_alternate', 'Save to Photos', 'Save finished videos'], ['photo_camera', 'Camera', 'Take a photo or video'], ['mic', 'Microphone', 'Record a voice-over'], ['closed_caption', 'Speech recognition', 'Turn speech into captions'], ['notifications', 'Notifications', 'Know when it’s done']];
+    const ST = ['NOT ASKED', 'ALLOWED', 'LIMITED', 'OFF', 'MANAGED'];
+    const mk = (th) => {
+      const cells = [];
+      P.forEach(([g, n, purpose]) => ST.forEach((s, si) => {
+        const isPhotos = n === 'Photos and videos';
+        if (si === 2 && !isPhotos) { cells.push({ g, n, d: 'Not used for this permission', sg: '', sc: '', btns: null, op: 0.35 }); return; }
+        const m = [{ d: purpose, sg: '', btns: ['Continue'] }, { d: 'Allowed', sg: 'check_circle', sc: '#34C759', btns: null }, { d: 'Clipy can see only the photos you chose.', sg: 'contrast', sc: th.ink, btns: ['Choose More Photos', 'Allow Full Access'] }, { d: 'Off', sg: 'block', sc: th.red, btns: ['Open Settings'] }, { d: 'Managed on this iPhone', sg: 'lock', sc: th.label2, btns: null }][si];
+        cells.push({ g, n, ...m, op: 1 });
+      }));
+      return { ...th, heads: ST, cells };
+    };
+    const themes = [mk({ page: '#000', label: '#fff', label2: 'rgba(235,235,245,.6)', cell: '#1C1C1E', fill: 'rgba(120,120,128,.28)', ink: '#D9B36A', red: '#FF453A' }), mk({ page: '#F2F2F7', label: '#000', label2: 'rgba(60,60,67,.75)', cell: '#fff', fill: 'rgba(120,120,128,.14)', ink: '#8B5F00', red: '#D70015' })];
+    const I = (l, g, d, op = 1) => ({ l, g, d: d || '', op });
+    const editorUnder = 'linear-gradient(#000 0 56%,#0E0E0F 56% 78%,rgba(44,44,48,1) 78%)';
+    const menus = [
+      { cap: 'EDITOR · “+” AT THE END OF THE CLIP ROW', under: editorUnder, x: '110px', y: '268px', ax: '315px', ay: '440px', anchorBg: '#2C2C2E', anchorC: '#fff', items: [I('Photos', 'photo_library'), I('Files', 'folder'), I('Take Photo or Video', 'photo_camera')] },
+      { cap: 'HOME · NEW PROJECT MENU', under: 'linear-gradient(#000 0 82%,#000 82%)', x: '109px', y: '470px', ax: '315px', ay: '600px', anchorBg: '#D9B36A', anchorC: '#1A1408', items: [I('Choose Photos and Videos', 'photo_library'), I('Take Photo or Video', 'photo_camera')] },
+      { cap: 'CAMERA IS OFF', under: editorUnder, x: '110px', y: '258px', ax: '315px', ay: '440px', anchorBg: '#2C2C2E', anchorC: '#fff', items: [I('Photos', 'photo_library'), I('Files', 'folder'), I('Take Photo or Video', 'no_photography', 'Camera is off · tap to open Settings', 0.6)] }
+    ];
+    const S = (g, k, d, sys) => ({ g, k, d, sys: !!sys, border: sys ? '1.5px dashed rgba(235,235,245,.5)' : 'none' });
+    const seq = [S('add', 'Tap “+” → Take Photo or Video', 'The first time only, Camera is asked.'), S('photo_camera', 'Camera alert', 'Purpose: “Clipy uses the camera to record photos and videos for your clips.”', true), S('photo_camera', 'System camera · Photo', 'Opens in Photo mode. Taking a photo needs no microphone.', true), S('videocam', 'Switch to Video, press record', 'Only now is Microphone needed.'), S('mic', 'Microphone alert', 'Skipped if Microphone was already allowed for a voice-over. Never right after the Camera alert.', true), S('check', 'Clip added at the playhead', 'Without the microphone, the video records without sound.')];
+    const exportBase = (extra) => [['nav', { lead: 'close', leadOff: true, title: 'Export' }], ['spacer'], ['text', { t: 'Exporting · 37 %', fs: '22px', fw: 700, c: 'label', align: 'center' }], ['text', { t: 'Preparing changed sounds first, then the video.', align: 'center' }], ['spacer'], ...extra, ['btn', { k: 'secondary', l: 'Cancel' }]];
+    const N = (cap, rows, size = 'small', theme = 'dark') => ({ cap, rows, size, theme, hint: size === 'small' ? '375px,690px' : '440px,980px' });
+    const notif = [
+      N('NOT ASKED · CARD', exportBase([['card', { g: 'notifications', title: 'Know when it’s done', body: 'Clipy can tell you when an export or an upload finishes.', btn: 'Continue' }]])),
+      N('ALLOWED', exportBase([['msg', { t: 'You’ll get a notification when it’s done.', ok: true, g: 'notifications_active', center: true }]]), 'large', 'light'),
+      N('REFUSED · NOTHING SHOWN', exportBase([])),
+      N('IGNORED · CARD STAYS UNTIL THE EXPORT ENDS', exportBase([['card', { g: 'notifications', title: 'Know when it’s done', body: 'Clipy can tell you when an export or an upload finishes.', btn: 'Continue' }]]), 'large', 'light')
+    ];
+    const builds = ['Blur and cuts', 'Stabilize and smooth', 'Beats and background', 'Noise, ramps and speech', 'Sound tools', 'Export only (older)', 'Test version (no video engine)'].map(n => ({ n }));
+    return { crops, kbs, a11y, themes, menus, seq, notif, builds };
+  }
+}
+</script>
+</body>
+</html>

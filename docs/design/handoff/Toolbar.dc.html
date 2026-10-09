@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block"></helmet>
+<div style="position:relative;width:{{ w }};height:64px;border-radius:32px;background:{{ t.bar }};border:{{ t.barBorder }};backdrop-filter:{{ t.blur }};-webkit-backdrop-filter:{{ t.blur }};box-shadow:{{ t.shadow }};display:flex;align-items:center;padding:0 4px;box-sizing:border-box;gap:2px;color:{{ t.label }};font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-text-stroke:{{ t.bold }}">
+<sc-if value="{{ hasBack }}" hint-placeholder-val="{{ true }}"><div style="width:44px;height:44px;border-radius:999px;background:{{ t.fill }};border:{{ t.edge }};box-sizing:border-box;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-family:'Material Symbols Rounded';font-size:18px">arrow_back_ios_new</span></div></sc-if>
+<sc-if value="{{ count }}" hint-placeholder-val="{{ false }}"><div style="height:44px;padding:0 10px 0 8px;border-radius:999px;background:{{ t.fill }};border:{{ t.edge }};box-sizing:border-box;display:flex;align-items:center;gap:3px;font-size:13px;font-weight:600;flex-shrink:0;font-variant-numeric:tabular-nums;white-space:nowrap"><span style="font-family:'Material Symbols Rounded';font-size:17px;color:{{ t.ink }};font-variation-settings:'FILL' 1">check_circle</span>{{ count }}</div></sc-if>
+<sc-if value="{{ group }}" hint-placeholder-val="{{ false }}"><div style="width:52px;height:56px;flex-shrink:0;border-radius:14px;background:{{ t.fill }};border:{{ t.edge }};box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px"><span style="font-family:'Material Symbols Rounded';font-size:22px">{{ groupG }}</span><span style="font-size:11px;line-height:14px;font-weight:600;white-space:nowrap;display:flex;align-items:center">{{ group }}<span style="font-family:'Material Symbols Rounded';font-size:12px">expand_more</span></span></div></sc-if>
+<div style="flex:1;min-width:0;display:flex;overflow:hidden;-webkit-mask-image:{{ fade }};mask-image:{{ fade }}">
+<sc-for list="{{ tools }}" as="x" hint-placeholder-count="5"><div style="width:{{ x.w }};flex-shrink:0;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;opacity:{{ x.op }};border-radius:14px;background:{{ x.bg }}"><span style="font-family:'Material Symbols Rounded';font-size:24px;font-variation-settings:'FILL' {{ x.fill }}">{{ x.g }}</span><sc-if value="{{ labels }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;line-height:16px;white-space:nowrap">{{ x.l }}</span></sc-if></div></sc-for>
+</div>
+<sc-for list="{{ pinned }}" as="x" hint-placeholder-count="1"><div style="width:1px;height:36px;background:{{ t.sep }};margin:0 1px;flex-shrink:0"></div><div style="width:{{ x.w }};height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ x.c }};opacity:{{ x.op }};flex-shrink:0"><span style="font-family:'Material Symbols Rounded';font-size:24px">{{ x.g }}</span><sc-if value="{{ labels }}" hint-placeholder-val="{{ true }}"><span style="font-size:12px;line-height:16px;white-space:nowrap">{{ x.l }}</span></sc-if></div></sc-for>
+<sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:{{ menuLeft }};bottom:70px;width:230px;border-radius:18px;background:{{ t.menu }};box-shadow:0 8px 30px rgba(0,0,0,.35);overflow:hidden;z-index:5"><sc-for list="{{ menu }}" as="m" hint-placeholder-count="5"><div style="height:44px;padding:0 14px;display:flex;align-items:center;gap:10px;border-bottom:0.5px solid {{ t.sep }};font-size:17px"><span style="width:18px;font-family:'Material Symbols Rounded';font-size:18px">{{ m.check }}</span><span style="flex:1">{{ m.n }}</span><span style="font-family:'Material Symbols Rounded';font-size:18px;color:{{ t.label2 }}">{{ m.g }}</span></div></sc-for></div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:440,&quot;height&quot;:360},&quot;context&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;main&quot;,&quot;empty&quot;,&quot;audio&quot;,&quot;text&quot;,&quot;clip&quot;,&quot;clipReversed&quot;,&quot;clipCopy&quot;,&quot;photo&quot;,&quot;layer&quot;,&quot;collage&quot;,&quot;textSel&quot;,&quot;caption&quot;,&quot;sticker&quot;,&quot;sound&quot;,&quot;effect&quot;,&quot;multi&quot;,&quot;multi0&quot;],&quot;default&quot;:&quot;clip&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;group&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Basics&quot;,&quot;Edit&quot;,&quot;Audio&quot;,&quot;Look&quot;,&quot;Frame&quot;],&quot;default&quot;:&quot;Basics&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;material&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;glass&quot;,&quot;solid&quot;],&quot;default&quot;:&quot;glass&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;a11y&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;transparency&quot;,&quot;contrast&quot;,&quot;bold&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;width&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:367,&quot;tsType&quot;:&quot;number&quot;},&quot;menuOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const ctx = p.context ?? 'clip', dark = (p.theme ?? 'dark') === 'dark', glass = (p.material ?? 'glass') === 'glass', a11y = p.a11y ?? '';
+    const W = p.width ?? 367;
+    const t = dark ? { label: '#FFFFFF', label2: 'rgba(235,235,245,.6)', fill: 'rgba(120,120,128,.28)', sep: 'rgba(235,235,245,.22)', danger: '#FF453A', ink: '#D9B36A', menu: '#2C2C2E', bar: glass ? 'rgba(44,44,48,.62)' : '#1C1C1E', barBorder: glass ? '0.5px solid rgba(255,255,255,.14)' : '0.5px solid rgba(255,255,255,.06)', shadow: 'none' }
+      : { label: '#000000', label2: 'rgba(60,60,67,.6)', fill: 'rgba(120,120,128,.14)', sep: 'rgba(60,60,67,.22)', danger: '#D70015', ink: '#8B5F00', menu: '#FFFFFF', bar: glass ? 'rgba(255,255,255,.74)' : '#FFFFFF', barBorder: '0.5px solid rgba(0,0,0,.08)', shadow: glass ? '0 4px 18px rgba(0,0,0,.08)' : 'none' };
+    t.blur = glass ? 'blur(24px) saturate(180%)' : 'none'; t.edge = 'none'; t.bold = '0';
+    if (a11y === 'contrast') { t.bar = dark ? '#000' : '#fff'; t.blur = 'none'; t.barBorder = `1.5px solid ${t.label}`; t.edge = `1.5px solid ${t.label}`; t.label2 = t.label; t.ink = dark ? '#F0CE8A' : '#6E4A00'; }
+    if (a11y === 'transparency') { t.bar = dark ? '#1C1C1E' : '#FFFFFF'; t.blur = 'none'; }
+    if (a11y === 'bold') t.bold = '0.45px';
+    const G = { Split: 'content_cut', Trim: 'width_normal', Speed: 'speed', Volume: 'volume_up', Filter: 'photo_filter', Adjust: 'tune', 'Cut out': 'background_replace', Stabilize: 'center_focus_strong', Transition: 'swap_horiz', Keyframe: 'diamond', Duplicate: 'library_add', Replace: 'sync', Reverse: 'fast_rewind', Freeze: 'ac_unit', Select: 'check_circle', 'Extract audio': 'graphic_eq', Voice: 'mic', Sound: 'equalizer', Templates: 'auto_fix_high', Animate: 'auto_awesome', Motion: 'open_with', Crop: 'crop', Transform: 'crop_rotate', Opacity: 'contrast', Mask: 'motion_photos_on', Background: 'palette', 'Green screen': 'colorize', Blend: 'layers', Forward: 'flip_to_front', Back: 'flip_to_back', Collage: 'grid_view', Edit: 'movie', Audio: 'music_note', Text: 'title', Stickers: 'mood', Overlay: 'filter_none', Effects: 'bolt', Ratio: 'aspect_ratio', Cover: 'image', 'Add audio': 'add_circle', Ducking: 'volume_down', Beats: 'timer', 'Add text': 'add_circle', Captions: 'closed_caption', Fade: 'trending_up', Strength: 'speed', 'Select all': 'checklist', Done: 'check', Delete: 'delete' };
+    const GROUPG = { Basics: 'grid_view', Edit: 'edit', Audio: 'music_note', Look: 'palette', Frame: 'crop' };
+    const CLIP = { Basics: ['Split', 'Trim', 'Speed', 'Volume', 'Filter', 'Cut out', 'Stabilize', 'Select'], Edit: ['Transition', 'Keyframe', 'Duplicate', 'Replace', 'Reverse', 'Freeze'], Audio: ['Extract audio', 'Voice', 'Sound'], Look: ['Adjust', 'Templates', 'Animate'], Frame: ['Crop', 'Transform', 'Opacity', 'Mask', 'Background', 'Green screen'] };
+    const without = (g, out) => { const r = {}; Object.keys(g).forEach(k => { r[k] = g[k].filter(l => !out.includes(l)); }); return r; };
+    const withAdd = (g, k, items, at) => { const r = JSON.parse(JSON.stringify(g)); r[k] = at === 0 ? [...items, ...r[k]] : [...r[k], ...items]; return r; };
+    const LAYER = without(withAdd(withAdd(CLIP, 'Edit', ['Forward', 'Back']), 'Frame', ['Blend']), ['Templates', 'Background']);
+    const C = {
+      main: { flat: ['Edit', 'Audio', 'Text', 'Stickers', 'Overlay', 'Collage', 'Effects', 'Filter', 'Adjust', 'Ratio', 'Background', 'Cover', 'Templates'], back: false },
+      empty: { flat: ['Audio', 'Effects', 'Ratio'], back: false },
+      audio: { flat: ['Add audio', 'Ducking', 'Beats'], back: true, on: ['Ducking'] },
+      text: { flat: ['Add text', 'Captions'], back: true },
+      clip: { groups: CLIP, back: true, del: true },
+      clipReversed: { groups: without(CLIP, ['Volume', 'Extract audio', 'Voice', 'Sound', 'Cut out', 'Stabilize']), back: true, del: true, on: ['Reverse'] },
+      clipCopy: { groups: without(CLIP, ['Reverse']), back: true, del: true, on: ['Stabilize'] },
+      photo: { groups: withAdd(without(CLIP, ['Speed', 'Volume', 'Stabilize', 'Reverse', 'Freeze', 'Extract audio', 'Voice', 'Sound']), 'Look', ['Motion']), back: true, del: true },
+      layer: { groups: LAYER, back: true, del: true },
+      collage: { groups: withAdd(LAYER, 'Basics', ['Collage'], 0), back: true, del: true },
+      textSel: { flat: ['Edit', 'Animate', 'Keyframe', 'Duplicate', 'Add text'], back: true, del: true },
+      caption: { flat: ['Edit', 'Captions', 'Duplicate', 'Add text'], back: true, del: true },
+      sticker: { flat: ['Edit', 'Animate', 'Keyframe', 'Duplicate'], back: true, del: true },
+      sound: { flat: ['Volume', 'Fade', 'Split', 'Voice', 'Sound', 'Duplicate', 'Add audio', 'Ducking', 'Beats'], back: true, del: true },
+      effect: { flat: ['Strength', 'Duplicate'], back: true, del: true },
+      multi: { flat: ['Speed', 'Volume', 'Filter', 'Duplicate', 'Select all'], count: '3 selected', del: true, done: true },
+      multi0: { flat: ['Speed', 'Volume', 'Filter', 'Duplicate', 'Select all'], count: '0 selected', del: true, done: true, dis: ['Speed', 'Volume', 'Filter', 'Duplicate'] }
+    };
+    const c = C[ctx] || C.clip;
+    let grp = '', list = c.flat || [];
+    if (c.groups) { const names = Object.keys(c.groups).filter(k => c.groups[k].length); grp = names.includes(p.group) ? p.group : 'Basics'; list = c.groups[grp]; }
+    const tw = l => Math.max(44, Math.round(l.length * 6.3 + 10));
+    const tools = list.map(l => { const on = (c.on || []).includes(l), dis = (c.dis || []).includes(l); return { l, g: G[l] || 'circle', w: tw(l) + 'px', op: dis ? 0.35 : 1, fill: on ? 1 : 0, bg: on ? (dark ? 'rgba(217,179,106,.22)' : 'rgba(139,95,0,.14)') : 'transparent' }; });
+    const pinned = [];
+    if (c.del) pinned.push({ l: 'Delete', g: 'delete', w: '46px', c: t.danger, op: (c.dis || []).length ? 0.35 : 1 });
+    if (c.done) pinned.push({ l: 'Done', g: 'check', w: '44px', c: t.label, op: 1 });
+    const menu = c.groups ? Object.keys(c.groups).filter(k => c.groups[k].length).map(n => ({ n, check: n === grp ? 'check' : '', g: GROUPG[n] })) : [];
+    return { t, w: W + 'px', tools, pinned, hasBack: !!c.back, group: grp, groupG: GROUPG[grp] || '', count: c.count || '', labels: p.labels ?? true, fade: tools.length > 3 ? 'linear-gradient(90deg,#000 88%,transparent)' : 'none', menuOpen: !!p.menuOpen && !!c.groups, menuLeft: c.back ? '50px' : '4px', menu };
+  }
+}
+</script>
+</body>
+</html>
