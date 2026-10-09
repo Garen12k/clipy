@@ -3,7 +3,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import { useEffect, useRef, useState } from "react";
 import { Keyboard, ScrollView, View } from "react-native";
 import { isBackendConfigured, sendEmailCode, SIGN_IN_NOT_SET_UP, signInWithApple, signInWithGoogle, verifyEmailCode } from "@/src/publish/supabase";
-import { useSession } from "@/src/publish/useSession";
+import { useSession, type SessionState } from "@/src/publish/useSession";
 import { theme } from "@/src/theme/theme";
 import { useShown, useSurfaces } from "@/src/ui/tone";
 import { EnterView } from "@/src/ui/Enter";
@@ -31,7 +31,8 @@ const sentence = (e: unknown) => (e instanceof Error && e.message ? e.message : 
 const toast = (message: string) => useToast.getState().show(message);
 const hidden = { accessibilityElementsHidden: true, importantForAccessibility: "no-hide-descendants" } as const;
 
-type Step = "choose" | "email" | "code";
+export type SignInStep = "choose" | "email" | "code";
+type Step = SignInStep;
 type Props = {
   /** First launch: this is the root (drawn by app/index.tsx) — no close button, and the quiet link is "Continue without an account". */
   first?: boolean;
@@ -39,17 +40,44 @@ type Props = {
   onDone: () => void;
 };
 
+type BodyProps = Props & {
+  /** The session, read once by whoever draws the body (one reader, so the body and its host never disagree for a tick). */
+  session: SessionState;
+  /**
+   * The first-launch wizard's last page: its own title and line stand where the wordmark and its line are, and there is no bar above
+   * the first step (the wizard has its own). Everything else — the choices, the steps, every message — is the page's own.
+   */
+  heading?: { title: string; body: string };
+  /** The wizard shown AGAIN (a replay) leaves the "seen" flag as it is: `false` there. Everywhere else leaving sets it. */
+  mark?: boolean;
+  /** Told the step whenever it changes (the wizard holds its pages still while the email or the code is typed). */
+  onStep?: (step: SignInStep) => void;
+};
+
 /**
  * The app's one sign-in page: choose → email → code, three steps of ONE screen (local state, no routes; a step change is instant).
  * Without a backend it is a preview that can be walked through: every sign-in says "Sign-in isn't set up yet." and asks nothing.
  */
 export function WelcomeScreen({ first = false, onDone }: Props) {
+  const session = useSession();
+  // First launch is drawn in place, full screen: the status bar's inset applies. From Accounts / Post it is a modal sheet, which
+  // already sits below the status bar (as Export's does): only the bottom inset, and a little room above the close button.
+  const edges = first ? (["top", "bottom"] as const) : (["bottom"] as const);
+  const top = first ? undefined : { paddingTop: theme.space.md };
+  return <Screen edges={edges} style={top}><SignInBody first={first} onDone={onDone} session={session} /></Screen>;
+}
+
+/**
+ * Everything of the sign-in page inside its `Screen`: the choices, the email and code steps, every handler and every message. Drawn
+ * by `WelcomeScreen` (the page) and by the first-launch wizard's last page (`heading`) — the ONE copy of the sign-in logic.
+ */
+export function SignInBody({ first = false, onDone, session, heading, onStep, mark = true }: BodyProps) {
   const s = useSurfaces();
   const light = useShown() === "light";
-  const session = useSession();
   /** Keyed on the backend alone: when it IS configured, a failed request never moves on. */
   const preview = !isBackendConfigured();
   const [step, setStep] = useState<Step>("choose");
+  useEffect(() => { onStep?.(step); }, [step]);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [emailNote, setEmailNote] = useState<string | null>(null);
@@ -68,7 +96,7 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
   function leave() {
     if (left.current || !alive.current) return;
     left.current = true;
-    markWelcomeSeen();
+    if (mark) markWelcomeSeen();
     useToast.getState().clear(); // the store is app-wide: a toast still up would show again on the screen that follows
     onDone();
   }
@@ -155,30 +183,28 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
     if (digits.length === CODE_LENGTH && code.length < CODE_LENGTH) verify(digits);
   }
 
-  // First launch is drawn in place, full screen: the status bar's inset applies. From Accounts / Post it is a modal sheet, which
-  // already sits below the status bar (as Export's does): only the bottom inset, and a little room above the close button.
-  const edges = first ? (["top", "bottom"] as const) : (["bottom"] as const);
-  const top = first ? undefined : { paddingTop: theme.space.md };
-
   // First launch with a backend: nothing is drawn until the stored session is read, so a signed-in user never sees this screen.
-  if (signedIn || (first && session.status === "loading")) return <Screen edges={edges} style={top}>{null}</Screen>;
+  if (signedIn || (first && session.status === "loading")) return null;
 
   const iconColor = s.text;
   return (
-    <Screen edges={edges} style={top}>
-      <View style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.sm }}>
-        {step === "email" ? <IconButton name="chevron-back-outline" accessibilityLabel="Back" disabled={busy} onPress={() => setStep("choose")} />
-          : step === "code" ? <IconButton name="chevron-back-outline" accessibilityLabel="Back" disabled={busy} onPress={() => setStep("email")} />
-          : first ? null : <IconButton name="close-outline" accessibilityLabel="Close" disabled={busy} onPress={leave} />}
-      </View>
+    <>
+      {heading && step === "choose" ? null : (
+        <View style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.sm }}>
+          {step === "email" ? <IconButton name="chevron-back-outline" accessibilityLabel="Back" disabled={busy} onPress={() => setStep("choose")} />
+            : step === "code" ? <IconButton name="chevron-back-outline" accessibilityLabel="Back" disabled={busy} onPress={() => setStep("email")} />
+            : first ? null : <IconButton name="close-outline" accessibilityLabel="Close" disabled={busy} onPress={leave} />}
+        </View>
+      )}
       {/* The scroll view makes room for the keyboard itself (iOS): the field and its buttons stay reachable on a small phone. */}
       <ScrollView automaticallyAdjustKeyboardInsets keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive"
         contentContainerStyle={{ flexGrow: 1, paddingHorizontal: theme.space.gutter, paddingBottom: theme.space.lg }}>
         {step === "choose" ? (
           <EnterView style={{ flexGrow: 1, gap: theme.space.xl }}>
             <View style={{ flexGrow: 1, alignItems: "center", justifyContent: "center", gap: theme.space.sm, paddingVertical: theme.space.xxl }}>
-              <Title size={WORDMARK.size} accessibilityRole="header">Clipy</Title>
-              <Body muted style={{ fontSize: theme.type.input, textAlign: "center" }}>{TAGLINE}</Body>
+              {heading ? <Title size={theme.text.title1.size} accessibilityRole="header" style={{ textAlign: "center" }}>{heading.title}</Title>
+                : <Title size={WORDMARK.size} accessibilityRole="header">Clipy</Title>}
+              <Body muted style={{ fontSize: theme.type.input, textAlign: "center" }}>{heading ? heading.body : TAGLINE}</Body>
               {/* Google's session is completed after its browser has closed: this is what shows that something is happening. */}
               <View testID="welcome-working" style={{ height: WORKING_SLOT, justifyContent: "center" }}>
                 {working !== null ? <Spinner label={working} /> : null}
@@ -214,6 +240,6 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
         )}
       </ScrollView>
       <ToastHost />
-    </Screen>
+    </>
   );
 }

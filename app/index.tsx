@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { Alert, FlatList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { hasSeenWelcome } from "@/src/auth/welcomeSeen";
-import { WelcomeScreen } from "@/src/auth/WelcomeScreen";
+import { WelcomeWizard } from "@/src/auth/WelcomeWizard";
 import type { AspectRatio } from "@/src/editor/model/types";
 import { AFTER_PICKER_MS, AspectRatioSheet } from "@/src/projects/AspectRatioSheet";
 import { pickMedia } from "@/src/projects/pickMedia";
@@ -31,14 +31,14 @@ import { Body, Title } from "@/src/ui/Text";
 import { ToastHost } from "@/src/ui/Toast";
 
 /**
- * Home. On first launch — the "seen" flag is not set — this same route draws the welcome screen in place of the projects: the flag is
+ * Home. On first launch — the "seen" flag is not set — this same route draws the welcome wizard in place of the projects: the flag is
  * read synchronously, so the very first frame is already the right one and the projects never flash. Nothing is navigated (no
  * redirect, no guard in the layout), so links from outside to /post, /accounts or /oauth are untouched, and "Continue without an
- * account" or a sign-in simply swaps the welcome screen for the projects.
+ * account" or a sign-in on the wizard's last page simply swaps the wizard for the projects.
  */
 export default function Home() {
   const [seen, setSeen] = useState(hasSeenWelcome);
-  return seen ? <ProjectsScreen /> : <WelcomeScreen first onDone={() => setSeen(true)} />;
+  return seen ? <ProjectsScreen /> : <WelcomeWizard onDone={() => setSeen(true)} />;
 }
 
 /** What the one capsule says while a project is being made. Only what the app knows: it has no count of items copied and no step to report. */

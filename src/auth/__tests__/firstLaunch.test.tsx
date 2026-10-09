@@ -18,6 +18,9 @@ import { useSession } from "@/src/publish/useSession";
 import { hasSeenWelcome, markWelcomeSeen, WELCOME_SEEN_KEY } from "../welcomeSeen";
 
 const TAGLINE = "Edit, caption and post your clips.";
+/** The first-launch wizard's first page, and the way to its last one (the sign-in choices). */
+const WIZARD_TITLE = "Make clips worth sharing";
+const toSignIn = () => fireEvent.press(screen.getByRole("button", { name: "Skip to sign in" }));
 const store = (globalThis as unknown as { localStorage: { removeItem: (k: string) => void } }).localStorage;
 beforeEach(() => {
   jest.clearAllMocks(); store.removeItem(WELCOME_SEEN_KEY);
@@ -27,9 +30,12 @@ beforeEach(() => {
 });
 
 describe("the home route", () => {
-  test("first launch (no flag): the welcome screen, and the projects are neither drawn nor loaded", async () => {
+  test("first launch (no flag): the welcome wizard, and the projects are neither drawn nor loaded", async () => {
     await render(<Home />);
-    expect(screen.getByText(TAGLINE)).toBeTruthy();
+    expect(screen.getByRole("header", { name: WIZARD_TITLE })).toBeTruthy();
+    expect(screen.getByTestId("wizard-dots").props.accessibilityLabel).toBe("Page 1 of 4");
+    expect(screen.queryByText(TAGLINE, { includeHiddenElements: true })).toBeNull();   // the standalone sign-in page is not what is drawn
+    await toSignIn();
     expect(screen.getByRole("button", { name: "Continue Without an Account" })).toBeTruthy();
     expect(screen.queryByText("Projects")).toBeNull();
     expect(storage.listProjects).not.toHaveBeenCalled();
@@ -40,16 +46,18 @@ describe("the home route", () => {
     markWelcomeSeen();
     await render(<Home />);
     expect(screen.getByText("Projects")).toBeTruthy();
-    expect(screen.queryByText(TAGLINE)).toBeNull();
+    expect(screen.queryByText(WIZARD_TITLE, { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByTestId("wizard-pager")).toBeNull();
     expect(await screen.findByText("No clips yet")).toBeTruthy();
   });
 
   test("'Continue without an account' sets the flag and lands on the projects — and the next launch opens on them", async () => {
     const first = await render(<Home />);
+    await toSignIn();
     await fireEvent.press(screen.getByRole("button", { name: "Continue Without an Account" }));
     expect(hasSeenWelcome()).toBe(true);
     expect(await screen.findByText("Projects")).toBeTruthy();
-    expect(screen.queryByText(TAGLINE)).toBeNull();
+    expect(screen.queryByTestId("wizard-pager")).toBeNull();
     // The swap mounts the real projects screen: the projects are loaded now, and the (empty) list is shown.
     expect(storage.listProjects).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("No clips yet")).toBeTruthy();
@@ -62,28 +70,30 @@ describe("the home route", () => {
     (storage.listProjects as jest.Mock).mockResolvedValueOnce([{ id: "p1", name: "Beach day", durationSec: 12, updatedAt: "2026-10-01T10:00:00.000Z", thumbUri: null, broken: false, postedTo: [], coverTitle: "" }]);
     await render(<Home />);
     expect(storage.listProjects).not.toHaveBeenCalled();
+    await toSignIn();
     await fireEvent.press(screen.getByRole("button", { name: "Continue Without an Account" }));
     expect(await screen.findByText("Beach day")).toBeTruthy();
     expect(storage.listProjects).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("No clips yet")).toBeNull();
   });
 
-  test("signed in but no flag (a reinstall that kept its session): never the welcome screen — the projects, and the flag is set", async () => {
+  test("signed in but no flag (a reinstall that kept its session): never the welcome wizard — the projects, and the flag is set", async () => {
     (isBackendConfigured as jest.Mock).mockReturnValue(true);
     (useSession as jest.Mock).mockReturnValue({ status: "loading" });
     const v = await render(<Home />);
-    expect(screen.queryByText(TAGLINE)).toBeNull(); expect(screen.queryByText("Projects")).toBeNull();
+    expect(screen.queryByTestId("wizard-pager")).toBeNull(); expect(screen.queryByText("Projects")).toBeNull();
     (useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: null });
     await v.rerender(<Home />);
     expect(await screen.findByText("Projects")).toBeTruthy();
-    expect(screen.queryByText(TAGLINE)).toBeNull();
+    expect(screen.queryByTestId("wizard-pager")).toBeNull();
     expect(hasSeenWelcome()).toBe(true);
   });
 
-  test("signed out and no flag, with a backend: the welcome screen once the session is read; a code signs in and lands on the projects", async () => {
+  test("signed out and no flag, with a backend: the welcome wizard once the session is read; a code signs in and lands on the projects", async () => {
     (isBackendConfigured as jest.Mock).mockReturnValue(true);
     (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
     await render(<Home />);
+    await toSignIn();
     await fireEvent.press(screen.getByRole("button", { name: "Continue with Email" }));
     await fireEvent.changeText(screen.getByLabelText("Email"), "me@icloud.com");
     await fireEvent.press(screen.getByRole("button", { name: "Send Code" }));

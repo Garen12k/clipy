@@ -146,8 +146,11 @@ export const theme = {
    * `fast` / `base` / `slow`: the editor's three durations (nothing there runs longer than 250 ms). `curve`: the one easing, as cubic-bezier
    * control points. `spring`: the one spring (mass is explicit — Reanimated 4's default is 4); settles in about 200 ms.
    * `sheet`: a pop-up sheet coming to rest — critically damped (damping = 2·√(stiffness·mass)), so it never overshoots; within a point of rest after about 0.4 s.
+   * `wizard`: the first-launch wizard's own, longer numbers (it has no video beside it; motion.ts, the `wizard…To` builders): the mark is drawn in `draw`,
+   * its spark pops `popDelay` later on the `pop` spring; a page-2 tile lights up and plays its picture in `step`, each `stagger` after the one before
+   * (4 tiles: 3 × 650 + 900 = 2.85 s); a page-3 row comes in in `row`, each `rowStagger` after the one before.
    */
-  motion: { press: 120, sheet: { mass: 1, damping: 40, stiffness: 400 }, fade: 200, stagger: 40, minLoading: 1200, fontTimeout: 5000,
+  motion: { wizard: { draw: 500, popDelay: 350, pop: { mass: 1, damping: 14, stiffness: 220 }, step: 900, stagger: 650, row: 300, rowStagger: 120 }, press: 120, sheet: { mass: 1, damping: 40, stiffness: 400 }, fade: 200, stagger: 40, minLoading: 1200, fontTimeout: 5000,
     fast: 120, base: 180, slow: 240, enterShift: 8, pressScale: 0.96, selectedScale: 1.03, curve: [0.2, 0, 0, 1], spring: { mass: 1, damping: 40, stiffness: 700 } },
   /**
    * A tool's ONE main action inside a strip or a panel (`PrimaryButton tone="plain"`): filled in the label colour with the page's slate as its
