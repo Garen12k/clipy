@@ -192,7 +192,7 @@ function Dim({ pic, box }: { pic: Rect; box: Rect }) {
 
 /** Rule-of-thirds lines inside the box. */
 function Grid() {
-  const line = { position: "absolute" as const, backgroundColor: theme.colors.hairline };
+  const line = { position: "absolute" as const, backgroundColor: theme.colors.textMuted };
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {THIRDS.map((at) => <View key={`v${at}`} style={{ ...line, left: at, top: 0, bottom: 0, width: StyleSheet.hairlineWidth }} />)}

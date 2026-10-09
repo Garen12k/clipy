@@ -63,7 +63,7 @@ function StabilizeStatus({ clip }: { clip: Clip }) {
 function Bars({ filled, color }: { filled: number; color: string }) {
   return (
     <View style={{ height: BAR_HEIGHTS[2], flexDirection: "row", alignItems: "flex-end", gap: theme.space.xs }}>
-      {BAR_HEIGHTS.map((height, i) => <View key={height} style={{ width: BAR_WIDTH, height, borderRadius: theme.radius.tile, backgroundColor: i < filled ? color : theme.colors.hairline }} />)}
+      {BAR_HEIGHTS.map((height, i) => <View key={height} style={{ width: BAR_WIDTH, height, borderRadius: theme.radius.tile, backgroundColor: i < filled ? color : theme.colors.track }} />)}
     </View>
   );
 }
