@@ -6,6 +6,7 @@ import { TRANSITIONS } from "@/src/editor/effects";
 import { TRANSITION_TYPES, makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { toolWidth } from "@/src/ui/ToolStrip";
 import { TransitionSheet } from "../components/TransitionSheet";
 
 beforeEach(() => { useEditorStore.getState().reset(); useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })] })); });
@@ -51,7 +52,7 @@ describe("the row opens with the selected chip in view (chips have different wid
   /** Every chip reports a place: chip i at 16 + 100·i, 92 wide → the row ends at 16 + 100·20 + 92 + 16 = 2124. */
   const measure = async () => { for (const [i, type] of TRANSITION_TYPES.entries()) await fireEvent(screen.getByTestId(`transition-chip-${type}`), "layout", { nativeEvent: { layout: { x: 16 + 100 * i, y: 0, width: 92, height: 72 } } }); };
   const set = (type: (typeof TRANSITION_TYPES)[number]) => useEditorStore.getState().apply((p) => ({ ...p, clips: p.clips.map((c, i) => (i === 0 ? { ...c, transitionOut: { type, duration: 0.5 } } : c)) }));
-  const rowEnd = () => 2124 - Dimensions.get("window").width;
+  const rowEnd = () => 2124 - toolWidth(Dimensions.get("window").width);     // the row is as wide as the strip's card
 
   test("it starts at 0 and moves once, when the chips have been measured: the selected chip, one tile from the left", async () => {
     set("cover");                                                       // chip 11 → x = 1116

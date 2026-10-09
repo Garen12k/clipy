@@ -22,10 +22,37 @@ export const STRIP = { header: HEADER, tiles: TILES, slider: SLIDER, height: HEI
 /** How many strips are showing. A bar hides its buttons while this is above zero. */
 export const useStripPresence = create<{ count: number }>(() => ({ count: 0 }));
 
+/**
+ * The card a strip or a panel is drawn as: the `bar` step with a large radius on all four corners, a small margin from the screen's
+ * sides — the toolbar capsule's family, which it replaces while open. It lives INSIDE the tool's unchanged box: the margin comes out
+ * of the WIDTH only, never out of a row's height. `bleed`: how far the page colour is painted below the box (over the host's bottom
+ * padding — the safe area, or the keyboard's height), so the gap under the card is the page, not a slab of the bar's colour.
+ */
+export const TOOL_CARD = { margin: theme.space.sm, radius: theme.radius.sheet, bleed: 600 } as const;
+/** The card's inner width in a window `windowWidth` wide: what a strip's rows (and a panel's header, lead and pinned rows) really have. */
+export const toolWidth = (windowWidth: number): number => windowWidth - 2 * TOOL_CARD.margin;
+
+/**
+ * The card itself, `height` high (the tool's own box, to the point). Around it the box is the editor's PAGE colour and opaque — margins
+ * and corners let nothing of the timeline through, and the box takes its touches as it always did. The host's top hairline and its
+ * bottom padding are painted over in the page colour too (a view that takes no touches), so the card floats on the page like the capsule.
+ * The card clips its content to its corners; nothing here is animated.
+ */
+export function ToolCard({ testID, height, children }: { testID: string; height: number; children: React.ReactNode }) {
+  return (
+    <View testID={testID} style={{ height, backgroundColor: theme.elevation.page }}>
+      <View testID="tool-card-page" pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: -1, bottom: -TOOL_CARD.bleed, backgroundColor: theme.elevation.page }} />
+      <View testID="tool-card" style={{ height, marginHorizontal: TOOL_CARD.margin, borderRadius: TOOL_CARD.radius, backgroundColor: theme.elevation.bar, overflow: "hidden" }}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
 const LABEL_WIDTH = 124;
 /** Where a row of uniform tiles starts so the selected one shows: its index times the pitch (tile + gap), minus one tile. */
 export const tilesStartX = (index: number, tileWidth: number): number => Math.max(0, index * (tileWidth + theme.space.sm) - tileWidth);
-/** `tilesStartX`, never past the row's end: `count` tiles of `tileWidth` (the row's gaps and its two gutters included) in a row as wide as `viewportWidth` — a strip is as wide as the window. React Native does not clamp a ScrollView's contentOffset. */
+/** `tilesStartX`, never past the row's end: `count` tiles of `tileWidth` (the row's gaps and its two gutters included) in a row as wide as `viewportWidth` — a strip's row is as wide as its card: pass `toolWidth(windowWidth)`, never the window's own width. React Native does not clamp a ScrollView's contentOffset. */
 export const tilesStartXIn = (index: number, tileWidth: number, count: number, viewportWidth: number): number =>
   Math.min(tilesStartX(index, tileWidth), Math.max(0, count * tileWidth + (count - 1) * theme.space.sm + 2 * theme.space.gutter - viewportWidth));
 
@@ -34,8 +61,9 @@ type Props = { visible: boolean; onClose: () => void; title: string; note?: Reac
 /**
  * An inline tool panel that takes the toolbar's place — NOT a Modal: no scrim, the preview and the timeline stay usable.
  * Every row has an explicit height; `flex: 1` only ever shares width inside such a row (never height).
- * The bar that hosts it owns the top hairline and the bottom safe-area padding; the strip is opaque, so what it rises over
- * neither shows through nor gets its touches. Its content eases in on opening (EnterView); the box itself never moves, and closing is instant.
+ * It is drawn as a rounded card (`ToolCard`) inside its box, whose height is what it always was. The bar that hosts it owns the bottom
+ * safe-area padding (the gap under the card); the strip's box is opaque edge to edge, so what it rises over neither shows through nor
+ * gets its touches. Its content eases in on opening (EnterView); the box itself never moves, and closing is instant.
  */
 export function ToolStrip({ visible, onClose, title, note, action, children }: Props) {
   // Counted before paint, so the bar that hosts the strip is hidden in the same frame the strip appears.
@@ -47,8 +75,8 @@ export function ToolStrip({ visible, onClose, title, note, action, children }: P
   if (!visible) return null;
   const height = STRIP.header + STRIP.tiles + STRIP.slider;
   return (
-    <View testID="tool-strip" style={{ height, backgroundColor: theme.elevation.bar }}>
-      {/* Only the content moves: the strip's own box is in place, opaque, from the first frame. */}
+    <ToolCard testID="tool-strip" height={height}>
+      {/* Only the content moves: the strip's own box and its card are in place, opaque, from the first frame. */}
       <EnterView testID="tool-strip-content" style={{ height }}>
         <View testID="tool-strip-header" style={{ height: STRIP.header, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.gutter }}>
           <Title size={theme.type.headline} accessibilityRole="header">{title}</Title>
@@ -58,7 +86,7 @@ export function ToolStrip({ visible, onClose, title, note, action, children }: P
         </View>
         <View style={{ height: STRIP.tiles + STRIP.slider, justifyContent: "center" }}>{children}</View>
       </EnterView>
-    </View>
+    </ToolCard>
   );
 }
 

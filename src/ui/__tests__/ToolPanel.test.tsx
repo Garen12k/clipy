@@ -2,9 +2,9 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react-n
 import { Dimensions, Keyboard, Text, TextInput } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { useKeyboard } from "../keyboard";
-import { PANEL, panelHeight, ToolPanel, usePanelPresence } from "../ToolPanel";
+import { PANEL, panelBodyWidth, panelHeight, ToolPanel, usePanelPresence } from "../ToolPanel";
 
-const H = Dimensions.get("window").height;
+const H = Dimensions.get("window").height, W = Dimensions.get("window").width;
 
 afterEach(() => { useKeyboard.setState({ height: 0 }); });
 
@@ -41,17 +41,19 @@ test("Done closes; the action runs", async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-test("the header: the ringed ✓ and the quiet action both have a 44-pt target inside it; the panel sits on the bar surface", async () => {
+test("the header: the plain ✓ and the quiet action both have a 44-pt target inside it; the panel sits on the bar surface", async () => {
   await render(<ToolPanel visible onClose={() => {}} title="Text" action={{ label: "Apply to all", onPress: () => {} }}><Text>body</Text></ToolPanel>);
   expect(screen.getByTestId("tool-panel-header")).toHaveStyle({ height: PANEL.header, paddingHorizontal: theme.space.gutter });
   const done = screen.getByRole("button", { name: "Done" });
-  expect(done).toHaveStyle({ width: theme.size.done, height: theme.size.done, backgroundColor: theme.elevation.tile, borderColor: theme.colors.accent });
+  expect(done).toHaveStyle({ width: theme.size.done, height: theme.size.done, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.lifted });
   expect(theme.size.done + 2 * (done.props.hitSlop as number)).toBe(PANEL.header);            // reaches 44 and stays inside the header
   const action = screen.getByRole("button", { name: "Apply to all" });
   const slop = action.props.hitSlop as { top: number; bottom: number };
   expect(action).toHaveStyle({ height: theme.size.controlCompact, minWidth: theme.size.touch });
   expect(theme.size.controlCompact + slop.top + slop.bottom).toBe(PANEL.header);
-  expect(screen.getByTestId("tool-panel")).toHaveStyle({ backgroundColor: theme.elevation.bar });
+  // The bar's colour is the card's now; the box around it is the page.
+  expect(screen.getByTestId("tool-card")).toHaveStyle({ backgroundColor: theme.elevation.bar });
+  expect(screen.getByTestId("tool-panel")).toHaveStyle({ backgroundColor: theme.elevation.page });
 });
 
 test("compact is 240; a lead row is 44 and the body gives it up; the body test id can be named", async () => {
@@ -66,7 +68,7 @@ test("scroll={false}: a plain body of explicit height, and a function child is t
   const child = jest.fn((h: number) => <Text>{`h=${h}`}</Text>);
   await render(<ToolPanel visible onClose={() => {}} title="Sticker" scroll={false}>{child}</ToolPanel>);
   const bodyH = panelHeight("regular", H) - 1 - PANEL.header;
-  expect(child).toHaveBeenCalledWith(bodyH);
+  expect(child).toHaveBeenCalledWith(bodyH, panelBodyWidth(W));
   expect(screen.getByText(`h=${bodyH}`)).toBeTruthy();
   const body = screen.getByTestId("tool-panel-body");
   expect(body).toHaveStyle({ height: bodyH });

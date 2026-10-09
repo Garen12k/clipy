@@ -21,6 +21,10 @@ type Tab = "emoji" | "shapes";
 const SEARCH_ROW = 52;
 /** Rows of eight the grid mounts first (the tallest panel shows eight); the rest is virtualised. */
 const FIRST_ROWS = 9;
+/** Emoji in a row of the grid, and a cell's height. */
+const EMOJI_COLUMNS = 8, EMOJI_CELL = 36;
+/** A cell's width: the eight share the body's real width (whole points), so the grid fills the card and never runs past its edge. */
+export const emojiCellWidth = (bodyWidth: number): number => Math.floor(bodyWidth / EMOJI_COLUMNS);
 
 export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; onClose: () => void; onAdded: (id: string) => void }) {
   const [tab, setTab] = useState<Tab>("emoji");
@@ -79,14 +83,14 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
           </ScrollView>
         </>) : null}
       </>}>
-      {(bodyHeight) => tab === "emoji" ? (
+      {(bodyHeight, bodyWidth) => tab === "emoji" ? (
         <View style={{ height: bodyHeight }}>
           <View style={{ height: SEARCH_ROW, justifyContent: "center" }}>
             <TextInput accessibilityLabel="Search emoji" value={query} onChangeText={setQuery}
               placeholder="Search" placeholderTextColor={theme.colors.textMuted}
               style={{ color: theme.colors.text, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.field, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm }} />
           </View>
-          <FlatList key={searching ? "search" : pack} testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={8} initialNumToRender={FIRST_ROWS} windowSize={7} maxToRenderPerBatch={20}
+          <FlatList key={searching ? "search" : pack} testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={EMOJI_COLUMNS} initialNumToRender={FIRST_ROWS} windowSize={7} maxToRenderPerBatch={20}
             keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
             ListHeaderComponent={recent.length > 0 && !query && !typing ? (
               <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap", marginBottom: theme.space.sm }}>
@@ -98,7 +102,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               </View>
             ) : null}
             renderItem={({ item }) => (
-              <Pressable accessibilityLabel={`Emoji ${item.name}`} onPress={() => addEmoji(item)} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}>
+              <Pressable accessibilityLabel={`Emoji ${item.name}`} onPress={() => addEmoji(item)} style={{ width: emojiCellWidth(bodyWidth), height: EMOJI_CELL, alignItems: "center", justifyContent: "center" }}>
                 <Text style={{ fontSize: 24 }}>{item.char}</Text>
               </Pressable>
             )} />
