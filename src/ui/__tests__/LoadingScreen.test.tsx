@@ -62,3 +62,35 @@ test("turning Reduce Motion on cancels the running loops", async () => {
   await view.rerender(<LoadingScreen leaving={false} onGone={() => {}} />);
   expect(cancelAnimation).toHaveBeenCalledTimes(3); // needle + two wave layers
 });
+
+// ───────────────────────────── Light: the phone's light setting (src/ui/testing/appearance.ts) ─────────────────────────────
+import { readFileSync } from "fs";
+import { join } from "path";
+import { LAUNCH_APPEARANCE } from "@/src/theme/appearance";
+import { hasSurface, leftovers, wear } from "@/src/ui/testing/appearance";
+import { ShownContext } from "../tone";
+
+test("the loading screen continues the navy launch screen: the layout draws it navy even when the phone is light — white wordmark, navy waves, the gold ring", async () => {
+  const layout = readFileSync(join(__dirname, "..", "..", "..", "app", "_layout.tsx"), "utf8");
+  expect(layout).toContain("<ShownContext.Provider value={LAUNCH_APPEARANCE}><LoadingScreen leaving={ready} onGone={onGone} /></ShownContext.Provider>");
+  expect(LAUNCH_APPEARANCE).toBe("dark");
+  wear("light");
+  try {
+    await render(<ShownContext.Provider value={LAUNCH_APPEARANCE}><LoadingScreen leaving={false} onGone={() => {}} /></ShownContext.Provider>);
+    expect(hasSurface("#0A1B33")).toBe(true);
+    expect(hasSurface("#F7F1E3")).toBe(false);
+    expect(screen.getByText("Clipy")).toHaveStyle({ color: "#FFFFFF" });
+    expect(leftovers().length).toBeGreaterThan(3);                  // it IS the dark screen
+  } finally { wear("dark"); }
+});
+
+test("its parts follow whoever draws them: the same screen without that word is cream in light (the compass and the waves are the welcome screen's too)", async () => {
+  wear("light");
+  try {
+    await render(<LoadingScreen leaving={false} onGone={() => {}} />);
+    expect(leftovers()).toEqual([]);
+    expect(hasSurface("#F7F1E3")).toBe(true);
+    expect(screen.getByText("Clipy")).toHaveStyle({ color: "#0A1B33" });
+    expect(screen.getByTestId("compass-ring").props.stroke).toBeDefined();
+  } finally { wear("dark"); }
+});

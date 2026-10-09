@@ -864,3 +864,46 @@ describe("the layout: a small bar, logo tiles, text actions, Post and Share side
     expect(screen.queryByTestId("post-actions")).toBeNull();
   });
 });
+
+// ───────────────────────────── Light: the phone's light setting (src/ui/testing/appearance.ts) ─────────────────────────────
+import { hasSurface, leftovers, wear } from "@/src/ui/testing/appearance";
+
+describe("in light", () => {
+  afterEach(() => wear("dark"));
+
+  test("the audit is not blind: the navy Post screen has navy surfaces and white ink", async () => {
+    await render(<PostScreen />);
+    expect(leftovers().length).toBeGreaterThan(10);
+  });
+
+  test("Post is cream: the caption field and its placeholder, the logo tiles, the tick boxes and text actions in deep gold, the bottom row — no navy, no white, no bright-gold ink", async () => {
+    (useAccounts as jest.Mock).mockReturnValue(accounts({}, TT_ON));
+    wear("light");
+    await render(<PostScreen />);
+    expect(leftovers()).toEqual([]);
+    expect(hasSurface("#F7F1E3")).toBe(true);
+    expect(screen.getByTestId("platform-tile-youtube")).toHaveStyle({ backgroundColor: "#EBE2CC" });
+    const caption = screen.getByLabelText("Caption");
+    expect(caption).toHaveStyle({ backgroundColor: "#EBE2CC", color: "#0A1B33" });
+    expect(caption).toHaveProp("placeholderTextColor", "#4B576B");
+    expect(screen.getByTestId("primary-button")).toHaveStyle({ backgroundColor: "#D9B36A" });
+  });
+
+  test("while it uploads, when it fails and when it is done: the bar's rest a cream tile under deep-gold progress, the red lines the deep red, Done in deep gold", async () => {
+    (useAccounts as jest.Mock).mockReturnValue(accounts({}, TT_ON));
+    usePostReturns(post({ busy: true, rows: rows({ phase: "uploading", progress: 0.42 }, { phase: "failed", message: "TikTok said no." }) }));
+    wear("light");
+    const view = await render(<PostScreen />);
+    expect(leftovers()).toEqual([]);
+    const bar = screen.getByRole("progressbar", { name: "Uploading to YouTube" });
+    expect(bar).toHaveStyle({ backgroundColor: "#EBE2CC" });
+    expect(bar.children[0]).toHaveStyle({ backgroundColor: "#7A5200" });
+    expect(screen.getByText("TikTok said no.")).toHaveStyle({ color: "#A3261C" });
+    await view.unmount();
+    usePostReturns(post({ rows: rows({ phase: "done", url: "https://youtu.be/x" }, { phase: "done" }) }));
+    await render(<PostScreen />);
+    expect(leftovers()).toEqual([]);
+    for (const done of screen.getAllByText("Done")) expect(done).toHaveStyle({ color: "#7A5200" });
+    expect(screen.getByText("View")).toHaveStyle({ color: "#7A5200" });
+  });
+});

@@ -422,3 +422,57 @@ describe("preview: no backend (the owner's phone today)", () => {
     expect(screen.getByTestId("welcome-error")).toHaveTextContent(NOT_SET_UP);
   });
 });
+
+// ───────────────────────────── Light: the phone's light setting (src/ui/testing/appearance.ts) ─────────────────────────────
+import { hasSurface, leftovers, wear } from "@/src/ui/testing/appearance";
+
+describe("in light", () => {
+  afterEach(() => wear("dark"));
+
+  test("the audit is not blind: the navy welcome screen has navy surfaces and white ink", async () => {
+    await render(<WelcomeScreen first onDone={jest.fn()} />);
+    await screen.findByLabelText("Continue with Apple");
+    expect(leftovers().length).toBeGreaterThan(5);
+  });
+
+  test("Apple's button wears the style Apple requires for what it stands on: WHITE on the navy page, BLACK on the cream one", async () => {
+    const dark = await render(<WelcomeScreen first onDone={jest.fn()} />);
+    expect((await screen.findByLabelText("Continue with Apple")).props.buttonStyle).toBe(Apple.AppleAuthenticationButtonStyle.WHITE);
+    await dark.unmount();
+    wear("light");
+    await render(<WelcomeScreen first onDone={jest.fn()} />);
+    expect((await screen.findByLabelText("Continue with Apple")).props).toMatchObject({ buttonType: Apple.AppleAuthenticationButtonType.CONTINUE, buttonStyle: Apple.AppleAuthenticationButtonStyle.BLACK });
+    expect(Apple.AppleAuthenticationButtonStyle.BLACK).not.toBe(Apple.AppleAuthenticationButtonStyle.WHITE);
+  });
+
+  test("the welcome screen is cream: the wordmark navy, the tagline muted, Google and Email as deeper-cream buttons with navy words and symbols — as a first screen and as a sheet", async () => {
+    wear("light");
+    for (const first of [true, false]) {
+      const view = await render(<WelcomeScreen first={first} onDone={jest.fn()} />);
+      await screen.findByLabelText("Continue with Apple");
+      expect(leftovers()).toEqual([]);
+      expect(hasSurface("#F7F1E3")).toBe(true);
+      expect(screen.getByRole("header", { name: "Clipy" })).toHaveStyle({ color: "#0A1B33", fontSize: WORDMARK.size });
+      expect(button("Continue with Google")).toHaveStyle({ backgroundColor: "#DDD0B4" });
+      expect(screen.getByText("Continue with Google")).toHaveStyle({ color: "#0A1B33" });
+      await view.unmount();
+    }
+  });
+
+  test("the email and code steps are cream: the field a tile with navy text, its error in the deep red, the text actions in deep gold", async () => {
+    mocked(sendEmailCode).mockRejectedValueOnce(new Error("That address was refused."));
+    wear("light");
+    await render(<WelcomeScreen first onDone={jest.fn()} />);
+    await toEmail();
+    expect(leftovers()).toEqual([]);
+    const field = screen.getByLabelText("Email");
+    expect(field).toHaveStyle({ backgroundColor: "#EBE2CC", color: "#0A1B33" });
+    await fireEvent.changeText(field, "me@icloud.com");
+    await fireEvent.press(button("Send Code"));
+    expect(await screen.findByTestId("welcome-error")).toHaveStyle({ color: "#A3261C" });
+    expect(leftovers()).toEqual([]);
+    await fireEvent.press(button("Send Code"));
+    await screen.findByLabelText("6-digit code");
+    expect(leftovers()).toEqual([]);
+  });
+});

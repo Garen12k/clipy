@@ -208,3 +208,43 @@ test("the Build row names the installed build in every state of the screen", asy
     await b.unmount();
   }
 });
+
+// ───────────────────────────── Light: the phone's light setting (src/ui/testing/appearance.ts) ─────────────────────────────
+import { hasSurface, leftovers, wear } from "@/src/ui/testing/appearance";
+
+describe("in light", () => {
+  afterEach(() => wear("dark"));
+
+  test("the audit is not blind: the navy Accounts screen has navy surfaces and white ink", async () => {
+    (useAccounts as jest.Mock).mockReturnValue(hook());
+    await render(<AccountsScreen />);
+    expect(leftovers().length).toBeGreaterThan(10);
+  });
+
+  test("Accounts is cream: the groups are lighter cards with quiet lines, the names navy, Connect in deep gold, the Sign Out row in the deep red, the Build row muted", async () => {
+    (useAccounts as jest.Mock).mockReturnValue(hook());
+    wear("light");
+    await render(<AccountsScreen />);
+    expect(leftovers()).toEqual([]);
+    expect(hasSurface("#F7F1E3")).toBe(true);
+    expect(hasSurface("#FFFBF1")).toBe(true);
+    expect(screen.getByText("Sign Out")).toHaveStyle({ color: "#A3261C" });
+    expect(screen.getByText("me@icloud.com")).toHaveStyle({ color: "#0A1B33" });
+    expect(screen.getAllByText("Connect")[0]).toHaveStyle({ color: "#7A5200" });
+  });
+
+  test("its other states — loading, failed to load, signed out — are cream too", async () => {
+    wear("light");
+    (useAccounts as jest.Mock).mockReturnValue(hook({ status: "loading", platforms: [] }));
+    const a = await render(<AccountsScreen />);
+    expect(leftovers()).toEqual([]);
+    await a.unmount();
+    (useAccounts as jest.Mock).mockReturnValue(hook({ status: "error", platforms: [], error: "Couldn't load your accounts." }));
+    const b = await render(<AccountsScreen />);
+    expect(leftovers()).toEqual([]);
+    await b.unmount();
+    (useSession as jest.Mock).mockReturnValue({ status: "signedOut", email: null });
+    await render(<AccountsScreen />);
+    expect(leftovers()).toEqual([]);
+  });
+});
