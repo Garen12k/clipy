@@ -16,6 +16,7 @@ import { Timeline } from "../components/Timeline";
 import { TransportRow } from "../components/TransportRow";
 import { CLIP_AREA_HEIGHT, LANE_GAP, LANE_HEIGHT } from "../timelineLayout";
 import { closeStrip } from "../toolStrip";
+import { tool } from "../testing/toolbar";
 
 const st = () => useEditorStore.getState();
 const btn = (name: string) => screen.getByRole("button", { name });
@@ -63,7 +64,7 @@ test("a strip rises over the capped timeline by its usual two rows; a panel coll
   await render(ui());
   const scroll = screen.getByTestId("timeline-scroll"), rows = screen.getByTestId("timeline-rows"), probe = screen.getByTestId("probe");
   await act(() => { st().select("a"); });
-  await fireEvent.press(btn("Opacity"));
+  await fireEvent.press((await tool("Opacity")));
   expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ marginTop: -STRIP.lift });
   expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CAPPED });
   await act(() => { closeStrip(); st().select(null); });

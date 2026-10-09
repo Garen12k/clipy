@@ -139,6 +139,10 @@ test("opening and closing a strip in the toolbar does not remount what is beside
   st().select("a");
   await render(<><Probe /><EditorToolbar /></>);
   const before = screen.getByTestId("probe");
+  // Opacity is in the clip's Frame group: the group button, then the group — neither remounts what is beside the bar.
+  await fireEvent.press(screen.getByRole("button", { name: "Tool groups, Basics" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Frame" }));
+  expect(screen.getByTestId("probe")).toBe(before);
   await fireEvent.press(screen.getByRole("button", { name: "Opacity" }));
   expect(screen.getByTestId("tool-strip")).toBeTruthy();
   expect(screen.getByTestId("probe")).toBe(before);

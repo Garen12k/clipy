@@ -19,6 +19,7 @@ import { Timeline } from "../components/Timeline";
 import { TransportRow } from "../components/TransportRow";
 import { CLIP_AREA_HEIGHT, LANE_GAP, LANE_HEIGHT, laneModel } from "../timelineLayout";
 import { closeStrip } from "../toolStrip";
+import { tool } from "../testing/toolbar";
 
 const st = () => useEditorStore.getState();
 const H = Dimensions.get("window").height;
@@ -58,7 +59,7 @@ describe("a strip only ever covers lanes", () => {
     const probe = screen.getByTestId("probe"), slot = screen.getByTestId("slot-preview"), scroll = screen.getByTestId("timeline-scroll");
     expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT });
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Opacity"));
+    await fireEvent.press((await tool("Opacity")));
     expect(screen.getByTestId("tool-strip")).toBeTruthy();
     expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
     expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT });
@@ -100,7 +101,7 @@ describe("a strip only ever covers lanes", () => {
     st().setProject({ ...TWO_LANES, audioTracks: [...TWO_LANES.audioTracks, makeAudioTrack({ id: "v", kind: "voice", sourceDuration: 5 })] });
     await render(ui());
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Opacity"));
+    await fireEvent.press((await tool("Opacity")));
     expect(screen.getByTestId("timeline-root")).toHaveStyle({ height: CLIP_AREA_HEIGHT + 3 * LANE });
     expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -STRIP.lift });
   });
@@ -204,7 +205,7 @@ test("a strip does not hide the timeline: it lifts over it as in round 1 — and
   const probe = screen.getByTestId("probe");
   const slot = screen.getByTestId("slot-preview");
   await act(() => { st().select("a"); });
-  await fireEvent.press(btn("Opacity"));
+  await fireEvent.press((await tool("Opacity")));
   expect(screen.getByTestId("tool-strip")).toBeTruthy();
   expect(screen.getByTestId("timeline-root")).toBeTruthy();
   expect(screen.getByTestId("slot-timeline")).not.toHaveStyle({ height: 0 });
@@ -267,7 +268,7 @@ test("a strip with the keyboard sits on the keyboard, is not lifted, and the tim
   const probe = screen.getByTestId("probe");
   const scroll = screen.getByTestId("timeline-scroll");
   await act(() => { st().select("a"); });
-  await fireEvent.press(btn("Opacity"));
+  await fireEvent.press((await tool("Opacity")));
   await act(() => { useKeyboard.setState({ height: 260 }); });
   expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 260, paddingBottom: 260, marginTop: 0 });
   expect(screen.getByTestId("slot-timeline", hidden)).toHaveStyle({ height: 0, overflow: "hidden" });
@@ -301,7 +302,7 @@ test("a keyboard lower than the safe area (a hardware keyboard's bar) never shri
   await act(() => { useKeyboard.setState({ height: 5 }); });
   expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: panelHeight("regular", H, true) + 8, paddingBottom: 8 });
   await act(() => { useKeyboard.setState({ height: 0 }); closeStrip(); st().select("a"); });
-  await fireEvent.press(btn("Opacity"));
+  await fireEvent.press((await tool("Opacity")));
   await act(() => { useKeyboard.setState({ height: 5 }); });
   expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, paddingBottom: 8, marginTop: 0 });
 });

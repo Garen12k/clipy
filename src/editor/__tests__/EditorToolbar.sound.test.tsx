@@ -16,10 +16,12 @@ import { closeStrip, useToolStrip } from "@/src/editor/toolStrip";
 import { EXTRACT_MESSAGES } from "@/src/editor/useExtractAudio";
 import { useToast } from "@/src/ui/Toast";
 import { EditorToolbar } from "../components/EditorToolbar";
+import { tool } from "../testing/toolbar";
 
 const st = () => useEditorStore.getState();
 const btn = (name: string) => screen.getByRole("button", { name });
-const tap = async (name: string) => { await fireEvent.press(btn(name)); for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); }); };
+/** A tap on a tool, wherever it is on the bar (Extract audio, Voice and Sound are in a clip's Audio group; a sound's bar is flat). */
+const tap = async (name: string) => { await fireEvent.press(await tool(name)); for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); }); };
 const toast = () => useToast.getState().message;
 const openTool = () => useToolStrip.getState().open?.id ?? null;
 /** Every sentence said from now on, in order (the store is not spied on: zustand copies its functions into each new state). */
@@ -154,7 +156,7 @@ test("the three buttons are off while the file is asked whether it has sound", a
   jest.mocked(soundInfo).mockImplementationOnce((() => new Promise((r) => { answer = r; })) as unknown as typeof soundInfo);
   st().select("a");
   await render(<EditorToolbar />);
-  await fireEvent.press(btn("Voice"));
+  await fireEvent.press((await tool("Voice")));
   for (const name of ["Extract audio", "Voice", "Sound"]) expect(btn(name).props.accessibilityState?.disabled).toBe(true);
   await act(async () => { answer({ hasSound: true, seconds: 4 }); await Promise.resolve(); });
   for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); });
@@ -167,7 +169,7 @@ test("an answer that comes after the editor was left opens nothing", async () =>
   jest.mocked(soundInfo).mockImplementationOnce((() => new Promise((r) => { answer = r; })) as unknown as typeof soundInfo);
   st().select("a");
   const view = await render(<EditorToolbar />);
-  await fireEvent.press(btn("Voice"));
+  await fireEvent.press((await tool("Voice")));
   await view.unmount();
   await act(async () => { answer({ hasSound: true, seconds: 4 }); await Promise.resolve(); });
   for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); });
@@ -233,7 +235,7 @@ test("Voice on a clip, and another clip is selected before the file has answered
   jest.mocked(soundInfo).mockImplementationOnce((() => new Promise((r) => { answer = r; })) as unknown as typeof soundInfo);
   st().select("a");
   await render(<EditorToolbar />);
-  await fireEvent.press(btn("Voice"));
+  await fireEvent.press((await tool("Voice")));
   await act(async () => { st().select("b"); });
   await act(async () => { answer({ hasSound: true, seconds: 4 }); await Promise.resolve(); });
   for (let i = 0; i < 6; i++) await act(async () => { await Promise.resolve(); });

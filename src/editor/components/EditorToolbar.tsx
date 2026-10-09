@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, useWindowDimensions, View } from "react-native";
+import { useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
 import { isSoundAvailable } from "@/modules/clipy-video";
@@ -12,7 +12,7 @@ import { useClipMedia } from "@/src/editor/useClipMedia";
 import { useItemClip } from "@/src/editor/useItem";
 import { useFreezeFrame } from "@/src/editor/useFreezeFrame";
 import { EXTRACT_MESSAGES, useExtractAudio } from "@/src/editor/useExtractAudio";
-import { TOOL_META, type IoniconName } from "@/src/editor/toolGroups";
+import { barLayout, TOOL_META, type GroupId, type IoniconName } from "@/src/editor/toolGroups";
 import { contextFor, selectionKey, type Section, type SelectionState, type ToolbarSelection, type ToolId } from "@/src/editor/toolbarContext";
 import { laneLift, laneModel } from "@/src/editor/timelineLayout";
 import { closeStrip, openStrip, rekeyStrip, useStripCloser, useToolStrip } from "@/src/editor/toolStrip";
@@ -20,10 +20,9 @@ import { newId } from "@/src/lib/id";
 import { theme } from "@/src/theme/theme";
 import { EnterView } from "@/src/ui/Enter";
 import { haptic } from "@/src/ui/haptics";
-import { IconButton } from "@/src/ui/IconButton";
 import { useKeyboard } from "@/src/ui/keyboard";
 import { useToast } from "@/src/ui/Toast";
-import { ToolButton } from "@/src/ui/ToolButton";
+import { TOOLBAR, ToolButton } from "@/src/ui/ToolButton";
 import { panelHeight, usePanelPresence } from "@/src/ui/ToolPanel";
 import { BAR_HEIGHT, STRIP, useStripPresence } from "@/src/ui/ToolStrip";
 import { AddAudioSheet } from "./AddAudioSheet";
@@ -56,6 +55,7 @@ import { StickerPanel } from "./StickerPanel";
 import { StickerSheet } from "./StickerSheet";
 import { TemplateSheet } from "./TemplateSheet";
 import { TextPanel } from "./TextPanel";
+import { BarBack, BarCapsule, BarSeparator, ToolScroll } from "./ToolbarRow";
 import { TransformSheet } from "./TransformSheet";
 import { TransitionSheet } from "./TransitionSheet";
 import { TrimSheet } from "./TrimSheet";
@@ -72,6 +72,10 @@ const selOf = (s: SelectionState, section: Section): ToolbarSelection => ({ clip
 /**
  * The editor's bottom area: ONE bar whose tools follow the selection (`contextFor` decides which bar and which tools; this component
  * only gives each tool its action), a back arrow on every bar but the main one, and — in the bar's place — the open tool strip.
+ * The bar is one capsule, one row: Back, then — on a long bar (a clip's, a layer's) — the group button, then the current group's tools
+ * in a sideways scroll, then the bar's Delete, pinned and always in view. The group button swaps the row, in place and at once, for
+ * the chooser (one button per group that has a tool); a group swaps it back. How a bar is split is `barLayout` (toolGroups.ts) —
+ * presentation only. The group starts again at the first one with every NEW selection, not when the same selection's tools change.
  * A tool that does not apply is not on the bar; the only disabled buttons are momentary (Keyframe off its item, a sound's Split where
  * the white line cannot cut it, Replace / Overlay / Collage
  * during a pick, Freeze during a capture, Extract audio / Voice / Sound while a clip's file is asked whether it has sound). The height is explicit; while a strip shows the area grows upwards over the timeline's
@@ -98,6 +102,11 @@ export function EditorToolbar() {
   const hasClips = useEditorStore((s) => (s.project?.clips.length ?? 0) > 0);
   useEffect(() => { setSection(null); }, [key]);
   useEffect(() => { if (!hasClips) setSection(null); }, [hasClips]);
+  // Which group the row shows, and whether it shows the chooser instead. Remembered WITH the selection it was chosen for: for any
+  // other selection it does not count, so a new selection starts at the first group without an effect (and without a frame of the old one).
+  const [pick, setPick] = useState<{ key: string; group: GroupId | null; choosing: boolean }>({ key: "", group: null, choosing: false });
+  // Forgotten as soon as the selection is another one, so coming BACK to an item is a new selection too.
+  if (pick.key !== key && (pick.group !== null || pick.choosing)) setPick({ key, group: null, choosing: false });
   const bar = useEditorStore((s) => (s.project ? contextFor(selOf(s, section), s.project).bar : "main"));
   const tools = useEditorStore(useShallow((s) => (s.project ? contextFor(selOf(s, section), s.project).tools : [])));
   // Tool strips: the closer lives here, the bottom area; the bar gives its place to a strip while one shows.
@@ -285,6 +294,12 @@ export function EditorToolbar() {
     });
   };
 
+  const { pinned, rest, groups } = barLayout(bar, tools);
+  const mine = pick.key === key ? pick : null;
+  // A group that has lost its last tool (Reverse empties Audio) gives way to the first one.
+  const current = groups ? groups.find((g) => g.id === mine?.group) ?? groups[0] : null;
+  const choosing = groups !== null && current !== null && !!mine?.choosing;
+
   // What each tool does. Labels and icons come from TOOL_META (`icon` here overrides); `disabled` is only ever momentary.
   const ACTIONS: Record<ToolId, { onPress: () => void; disabled?: boolean; active?: boolean; icon?: IoniconName }> = {
     edit: { onPress: () => onPlayheadClip(() => {}) },
@@ -347,6 +362,8 @@ export function EditorToolbar() {
     effectDelete: { onPress: () => { if (selectedEffectId) { haptic("medium"); apply((p) => deleteEffect(p, selectedEffectId)); } } },
   };
 
+  const tool = (id: ToolId, danger = false) => <ToolButton key={id} variant="bar" danger={danger} label={TOOL_META[id].label} icon={ACTIONS[id].icon ?? TOOL_META[id].icon} disabled={ACTIONS[id].disabled} active={ACTIONS[id].active} onPress={ACTIONS[id].onPress} />;
+
   // Multi-select: the action bar takes the toolbar's place. This component stays mounted (its strip closer too).
   if (multi) return <MultiSelectBar />;
 
@@ -358,20 +375,25 @@ export function EditorToolbar() {
   const area = panelSize ? panelHeight(panelSize, windowH, typing) : stripShown ? STRIP.height : BAR_HEIGHT;
 
   return (
-    <View testID="editor-toolbar" style={{ backgroundColor: theme.elevation.bar, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: pad,
+    // While the bar shows, the area is the page and the capsule floats on it; a strip or a panel is the bar's colour edge to edge, under its hairline.
+    <View testID="editor-toolbar" style={{ backgroundColor: toolShown ? theme.elevation.bar : theme.elevation.page, borderTopWidth: 1, borderTopColor: toolShown ? theme.colors.hairline : theme.elevation.page, paddingBottom: pad,
       height: area + pad, marginTop: stripShown && !typing && lift > 0 ? -lift : 0 }}>
       {toolShown ? null : (
-        <View testID="toolbar-row" style={{ height: BAR_HEIGHT - 1, flexDirection: "row", alignItems: "center", paddingLeft: bar === "main" ? 0 : theme.space.sm }}>
-          {bar === "main" ? null : <IconButton name="chevron-back-outline" accessibilityLabel="Back to main tools" onPress={back} />}
+        <BarCapsule testID="toolbar-row">
+          {bar === "main" ? null : <BarBack onPress={back} />}
+          {current && !choosing ? <ToolButton variant="group" testID="toolbar-group" label={current.label} icon={current.icon} accessibilityLabel={`Tool groups, ${current.label}`} onPress={() => setPick({ key, group: current.id, choosing: true })} /> : null}
           {/* Keyed by the bar: another bar is a new mount — it starts again from the left and its tools fade in from the right; the same
-              bar keeps its scroll position through re-renders and does not replay. The back arrow is outside, so it stays put. */}
-          <EnterView key={bar} axis="x" testID="toolbar-tools" style={{ flex: 1, height: BAR_HEIGHT - 1 }}>
-            <ScrollView testID="toolbar-scroll" horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ height: BAR_HEIGHT - 1 }}
-              contentContainerStyle={{ flexGrow: 1, justifyContent: "center", alignItems: "center" }}>
-              {tools.map((id) => <ToolButton key={id} label={TOOL_META[id].label} icon={ACTIONS[id].icon ?? TOOL_META[id].icon} disabled={ACTIONS[id].disabled} active={ACTIONS[id].active} onPress={ACTIONS[id].onPress} />)}
-            </ScrollView>
+              bar does not replay. Back, the group button and Delete are outside, so they stay put. The scroll is keyed by what it holds:
+              another group (or the chooser) is a new row that starts from the left, at once — nothing is animated for it. */}
+          <EnterView key={bar} axis="x" testID="toolbar-tools" style={{ flex: 1, height: TOOLBAR.tool }}>
+            <ToolScroll key={choosing ? "chooser" : current?.id ?? "flat"} testID="toolbar-scroll" centred={!groups}>
+              {choosing
+                ? groups.map((g) => <ToolButton key={g.id} variant="bar" label={g.label} icon={g.icon} active={g.id === current.id} onPress={() => setPick({ key, group: g.id, choosing: false })} />)
+                : (current ? current.tools : rest).map((id) => tool(id))}
+            </ToolScroll>
           </EnterView>
-        </View>
+          {pinned ? <><BarSeparator />{tool(pinned, true)}</> : null}
+        </BarCapsule>
       )}
       <CropScreen clipId={selectedId} visible={sheet === "crop"} onClose={() => setSheet(null)} />
       {/* Opened and closed through the tool store, like the strips. */}
