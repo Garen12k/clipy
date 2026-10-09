@@ -1,5 +1,6 @@
 import { makeAudioTrack, makeClip, makeEffect, makeKeyframe, makeLayer, makeOverlay, makePhotoClip, makeProject, makeSticker, type LayerClip, type Project } from "@/src/editor/model/types";
 import { contextFor, TOOL_IDS, type Section, type ToolbarSelection } from "../toolbarContext";
+import { SF_SYMBOLS } from "@/src/ui/sfSymbols";
 import { barLayout, FLAT_LIMIT, groupOf, GROUPS, groupTools, pinTools, TOOL_META } from "../toolGroups";
 
 const GLYPHS: Record<string, number> = require("@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json");
@@ -144,4 +145,40 @@ test("the group symbols: outline glyphs that exist, each its own, and none the g
   expect(new Set(GROUPS.map((g) => g.icon)).size).toBe(GROUPS.length);
   const beside = new Set(contexts().flatMap((c) => { const x = contextFor(c.sel, c.p); return barLayout(x.bar, x.tools).groups ? x.tools.map((t) => TOOL_META[t].icon) : []; }));
   for (const g of GROUPS) expect(beside.has(g.icon)).toBe(false);
+});
+
+test("SF Symbols: in every context no two different tools show the same symbol, and no group shows a tool's", () => {
+  const symbolOf = (icon: string) => (SF_SYMBOLS as Record<string, string | undefined>)[icon];
+  let checked = 0;
+  for (const { name, sel, p } of contexts()) {
+    const { bar, tools } = contextFor(sel, p);
+    // What the bar can draw: each tool's symbol by its label (Keyframe has two — off a pin and on one), and the groups' when it has groups.
+    const shown: [label: string, icon: string][] = tools.map((t) => [TOOL_META[t].label, TOOL_META[t].icon]);
+    if (tools.includes("keyframe")) shown.push([TOOL_META.keyframe.label, "diamond"]);
+    if (barLayout(bar, tools).groups) for (const g of GROUPS) shown.push([`group ${g.label}`, g.icon]);
+    const owner = new Map<string, string>();
+    for (const [label, icon] of shown) {
+      const symbol = symbolOf(icon);
+      expect(`${name} / ${label}: ${symbol}`).not.toMatch(/undefined$/);          // every tool and group has a symbol
+      const first = owner.get(symbol!);
+      if (first !== undefined && first !== label) throw new Error(`${name}: "${first}" and "${label}" both show ${symbol}`);
+      owner.set(symbol!, label);
+      checked++;
+    }
+  }
+  expect(checked).toBeGreaterThan(400);
+  // The collisions the design review found, as symbols: Audio / Volume, Look / Filter, Frame / Crop — and the pairs that look alike.
+  const s = (id: keyof typeof TOOL_META) => symbolOf(TOOL_META[id].icon);
+  const g = (id: string) => symbolOf(GROUPS.find((x) => x.id === id)!.icon);
+  expect(new Set([s("audioMenu"), s("volume"), s("ducking")]).size).toBe(3);
+  expect(g("audio")).not.toBe(s("volume"));
+  expect(g("look")).not.toBe(s("filter"));
+  expect(g("frame")).not.toBe(s("crop"));
+  expect(new Set([s("crop"), s("transform"), s("stabilize"), g("frame")]).size).toBe(4);
+  expect(new Set([s("overlay"), s("blend"), s("duplicate"), s("collage"), g("basics")]).size).toBe(5);
+  expect(new Set([s("beats"), s("soundQuality"), s("extractAudio"), s("voice")]).size).toBe(4);
+  // The multi-select bar is written out in MultiSelectBar.tsx, not in `contextFor`: its count, Done and six tools.
+  const multi = ["checkmark-circle-outline", "checkmark-outline", "speedometer-outline", "volume-high-outline", "color-filter-outline", "copy-outline", "albums-outline", "trash-outline"].map(symbolOf);
+  expect(multi).not.toContain(undefined);
+  expect(new Set(multi).size).toBe(multi.length);
 });
