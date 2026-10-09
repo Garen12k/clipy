@@ -1,7 +1,7 @@
 import { readdirSync } from "fs";
 import { join } from "path";
 import { coverFontAssets, COVER_FONT } from "@/src/editor/coverFont";
-import { FIXED, PALETTES, resolvePalette, theme, type Palette } from "../theme";
+import { EDITOR_APPEARANCE, FIXED, PALETTES, resolvePalette, SCREEN_KEYS, theme, type Palette } from "../theme";
 
 const D = PALETTES.dark;
 const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -37,10 +37,11 @@ test("the dark palette, the editor's family: soft slate (the three values the ow
 test("the screen family: the navy of every screen that is not the editor — four steps, each lighter than the last, with its own muted, separator and red", () => {
   expect(D).toMatchObject({ screenBg: "#0A1B33", screenBar: "#112C4D", screenTile: "#17365C", screenLifted: "#1F4572",
     screenMuted: "rgba(235,235,245,0.7)", screenHairline: "#2B5080", screenDangerText: "#FF9A93" });
-  expect(theme.screen).toEqual({ page: D.screenBg, bar: D.screenBar, tile: D.screenTile, lifted: D.screenLifted, picked: D.screenPicked, muted: D.screenMuted, separator: D.screenHairline, dangerText: D.screenDangerText });
+  expect(theme.screen).toEqual({ page: D.screenBg, bar: D.screenBar, tile: D.screenTile, lifted: D.screenLifted, picked: D.screenPicked, text: D.screenText, muted: D.screenMuted, separator: D.screenHairline,
+    accentInk: D.accentInk, danger: D.screenDanger, dangerText: D.screenDangerText });
   // Two roles inside ONE palette: the same eight names in each family, the editor's being the neutrals `elevation` already names.
   expect(theme.surfaces.screen).toBe(theme.screen);
-  expect(theme.surfaces.editor).toEqual({ ...theme.elevation, muted: D.textMuted, separator: D.hairline, dangerText: D.dangerText });
+  expect(theme.surfaces.editor).toEqual({ ...theme.elevation, text: D.text, muted: D.textMuted, separator: D.hairline, accentInk: D.accent, danger: D.danger, dangerText: D.dangerText });
   expect(Object.keys(theme.surfaces.editor).sort()).toEqual(Object.keys(theme.surfaces.screen).sort());
   for (const k of ["page", "bar", "tile", "lifted", "picked", "separator"] as const) expect(theme.surfaces.screen[k]).not.toBe(theme.surfaces.editor[k]);
   // Navy, not grey: blue leads red by at least 40 in each step, and each step is lighter than the one under it.
@@ -138,10 +139,12 @@ test("contrast: ink on gold, labels on every surface, reds as text, the slider's
 test("one chooser, one shape per appearance: a second palette slots in without a rename", () => {
   const keys = Object.keys(D).sort();
   for (const p of Object.values(PALETTES) as Palette[]) expect(Object.keys(p).sort()).toEqual(keys);
-  expect(resolvePalette(PALETTES)).toBe(PALETTES.dark);                       // stage 1: dark is the only appearance
+  expect(resolvePalette(PALETTES, "dark")).toBe(PALETTES.dark);
+  expect(resolvePalette(PALETTES, "light")).toBe(PALETTES.light);
+  expect(Object.keys(PALETTES)).toEqual(["dark", "light"]);
   for (const k of keys as (keyof Palette)[]) expect(theme.colors[k]).toBe(D[k]);
   for (const k of FIXED) expect(keys).toContain(k);
-  expect([...FIXED].sort()).toEqual(["kindCaption", "kindEffect", "kindLayer", "kindMusic", "kindSfx", "kindSticker", "kindText", "kindVoice", "onKind", "scrim", "scrimStrong", "surface", "timeline"]);
+  expect([...FIXED].sort()).toEqual(["kindCaption", "kindEffect", "kindLayer", "kindMusic", "kindSfx", "kindSticker", "kindText", "kindVoice", "onKind", "onScrim", "scrim", "scrimStrong", "surface", "timeline"]);
 });
 
 test("type: the Apple text styles, the roles that read them, three weights, no family", () => {
@@ -176,4 +179,117 @@ test("the old names are gone", () => {
   for (const k of ["sea", "seaLight", "bgDeep", "bgEnd", "laneText", "laneSticker", "laneMusic", "laneEffect", "laneVoice", "laneSfx", "laneLayer", "highlight", "straw", "accentPressed"]) expect(k in theme.colors).toBe(false);
   expect("fonts" in theme).toBe(false);
   expect(Object.keys(theme.colors).sort()).toEqual(Object.keys(PALETTES.dark).sort());
+});
+
+// ───────────────────────────────────────────── Light: the phone's light setting ─────────────────────────────────────────────
+
+const L = PALETTES.light;
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const c = (a: string, b: string) => r2(ratio(rgb(a), rgb(b)));
+
+test("PROOF — dark did not move: every colour the dark palette had before the light one was built, value for value", () => {
+  // Copied from theme.ts as it stood before this change (commit 0dfcb35). Never edited to make a change pass.
+  const BEFORE = {
+    bg: "#10151F", timeline: "#171E2B", surface: "#000000", surfaceBar: "#212A3A", surfaceAlt: "#2C384D", surfaceHigh: "#374661", surfacePicked: "#484C52",
+    accent: "#D9B36A", onAccent: "#1A1408",
+    text: "#FFFFFF", textMuted: "rgba(235,235,245,0.7)", hairline: "#35435D", track: "#52688F",
+    danger: "#FF453A", dangerText: "#FF9A93",
+    kindText: "#79B6F4", kindCaption: "#AFB965", kindSticker: "#E095C7", kindMusic: "#47C5D2", kindVoice: "#6DC799", kindSfx: "#ED997B", kindLayer: "#A8B2BE", kindEffect: "#B6A3F0",
+    onKind: "#000000",
+    scrim: "rgba(0,0,0,0.55)", scrimStrong: "rgba(0,0,0,0.72)",
+    screenBg: "#0A1B33", screenBar: "#112C4D", screenTile: "#17365C", screenLifted: "#1F4572", screenPicked: "#364A5E",
+    screenMuted: "rgba(235,235,245,0.7)", screenHairline: "#2B5080", screenDangerText: "#FF9A93",
+  };
+  // The four roles added with light are, in dark, the colours the screens already drew those things in: white text, the one gold, the fill red.
+  const ADDED = { accentInk: BEFORE.accent, screenText: BEFORE.text, screenDanger: BEFORE.danger, onScrim: BEFORE.text };
+  expect(D).toEqual({ ...BEFORE, ...ADDED });
+  // And what the dark screens are handed is those values: the eight roles they had, and the three new ones.
+  expect(theme.screens.dark).toEqual({ page: "#0A1B33", bar: "#112C4D", tile: "#17365C", lifted: "#1F4572", picked: "#364A5E", muted: "rgba(235,235,245,0.7)", separator: "#2B5080", dangerText: "#FF9A93",
+    text: "#FFFFFF", accentInk: "#D9B36A", danger: "#FF453A" });
+});
+
+test("two palettes, the same keys; light differs ONLY in the screen family — the editor's family, the gold fill and everything fixed are the dark values, key by key", () => {
+  expect(Object.keys(L).sort()).toEqual(Object.keys(D).sort());
+  const keys = Object.keys(D) as (keyof Palette)[];
+  const differs = keys.filter((k) => L[k] !== D[k]);
+  expect(differs.sort()).toEqual([...SCREEN_KEYS].sort());                       // each screen key really is its own colour in light, and nothing else moved
+  for (const k of keys) if (!SCREEN_KEYS.includes(k)) expect(`${k} ${L[k]}`).toBe(`${k} ${D[k]}`);
+  for (const k of FIXED) { expect(SCREEN_KEYS).not.toContain(k); expect(L[k]).toBe(D[k]); }
+  // So what the editor reads is one constant object whatever the phone says.
+  expect(EDITOR_APPEARANCE).toBe("dark");
+  expect(theme.colors).toBe(D);
+  for (const k of keys) if (!SCREEN_KEYS.includes(k)) expect(theme.colors[k]).toBe(L[k]);
+  expect(theme.surfaces.editor).toEqual({ page: "#10151F", bar: "#212A3A", tile: "#2C384D", lifted: "#374661", picked: "#484C52", text: "#FFFFFF", muted: "rgba(235,235,245,0.7)", separator: "#35435D",
+    accentInk: "#D9B36A", danger: "#FF453A", dangerText: "#FF9A93" });
+});
+
+test("the cream family: the owner's page and card, navy text, and the steps derived in the same warm hue — on a light page a step is darker", () => {
+  expect(L).toMatchObject({ screenBg: "#F7F1E3", screenBar: "#FFFBF1", screenText: "#0A1B33", accent: "#D9B36A", onAccent: "#1A1408" });   // the owner's, verbatim
+  expect(L).toMatchObject({ screenTile: "#EBE2CC", screenLifted: "#DDD0B4", screenPicked: "#E8DABC", screenMuted: "#4B576B", screenHairline: "#D2C5A9",
+    accentInk: "#7A5200", screenDangerText: "#A3261C", screenDanger: "#C92A1A" });
+  expect(L.screenText).toBe(D.screenBg);                                         // the text IS the dark page's navy
+  expect(theme.screens.light).toEqual({ page: L.screenBg, bar: L.screenBar, tile: L.screenTile, lifted: L.screenLifted, picked: L.screenPicked, text: L.screenText, muted: L.screenMuted,
+    separator: L.screenHairline, accentInk: L.accentInk, danger: L.screenDanger, dangerText: L.screenDangerText });
+  expect(Object.keys(theme.screens.light).sort()).toEqual(Object.keys(theme.surfaces.editor).sort());
+  // One ramp: card (lightest) → page → tile → lifted, each darker; and warm in every step (red leads green leads blue).
+  const ramp = [L.screenBar, L.screenBg, L.screenTile, L.screenLifted];
+  for (let i = 1; i < ramp.length; i++) expect(lum(rgb(ramp[i]))).toBeLessThan(lum(rgb(ramp[i - 1])));
+  for (const n of [...ramp, L.screenPicked, L.screenHairline]) { const [r, g, b] = rgb(n); expect(r).toBeGreaterThan(g); expect(g).toBeGreaterThan(b); }
+  // The picked tint is computed as the dark families compute theirs: the one gold at 16 % over the tile step.
+  const mix = (top: string, under: string, a: number) => "#" + rgb(top).map((v, i) => Math.round(v * a + rgb(under)[i] * (1 - a)).toString(16).padStart(2, "0")).join("").toUpperCase();
+  expect(mix(L.accent, L.screenTile, 0.16)).toBe(L.screenPicked);
+});
+
+test("contrast on cream, measured: text, muted, gold ink, red text, red symbol, separator — on page, card, tile, lifted and the picked tint", () => {
+  const steps = [L.screenBg, L.screenBar, L.screenTile, L.screenLifted, L.screenPicked];
+  const table = steps.map((s) => [L.screenText, L.screenMuted, L.accentInk, L.screenDangerText, L.screenDanger, L.screenHairline].map((ink) => c(ink, s)));
+  // (page, card, tile, lifted, picked) × (text, muted, gold ink, red text, red symbol, separator)
+  expect(table).toEqual([
+    [15.32, 6.49, 6.14, 6.54, 4.87, 1.52],
+    [16.69, 7.07, 6.7, 7.13, 5.31, 1.65],
+    [13.37, 5.66, 5.37, 5.71, 4.25, 1.32],
+    [11.3, 4.79, 4.53, 4.82, 3.59, 1.12],
+    [12.47, 5.28, 5, 5.33, 3.97, 1.23],
+  ]);
+  for (const row of table) {
+    expect(row[0]).toBeGreaterThanOrEqual(7);                                    // navy text
+    expect(row[1]).toBeGreaterThanOrEqual(4.5);                                  // muted — also a Field's placeholder, which is `muted` on `tile` (5.66)
+    expect(row[2]).toBeGreaterThanOrEqual(4.5);                                  // gold as ink: text actions, rings, progress, ticks
+    expect(row[3]).toBeGreaterThanOrEqual(4.5);                                  // red words
+    expect(row[4]).toBeGreaterThanOrEqual(3);                                    // red as a symbol or a border
+  }
+  // The bright gold is NOT ink on cream — which is why `accentInk` exists.
+  expect(steps.map((s) => c(L.accent, s))).toEqual([1.76, 1.92, 1.54, 1.3, 1.43]);
+  // The owner's example of a deep gold would miss on the tile step; the one chosen is the next shade down.
+  expect(c("#8B5F00", L.screenTile)).toBe(4.36);
+  // The primary button: its ink on the gold fill is untouched.
+  expect(c(L.onAccent, L.accent)).toBe(9.24);
+});
+
+test("layering on cream: each step is seen on the one it sits on; a secondary button is never the step under it; the separator is quiet but there", () => {
+  // card on page (plus its separator edge), tile on page / on card, lifted on tile / page / card.
+  expect([c(L.screenBar, L.screenBg), c(L.screenTile, L.screenBg), c(L.screenTile, L.screenBar), c(L.screenLifted, L.screenTile), c(L.screenLifted, L.screenBg), c(L.screenLifted, L.screenBar)])
+    .toEqual([1.09, 1.15, 1.25, 1.18, 1.36, 1.48]);
+  // The secondary button's fill (`lifted`): "Quick Edit" on Home's page, "Share…" and "Post Another Video" on Post's page, the sheets' buttons on a card, a Segmented's picked segment on its tile track.
+  for (const under of [L.screenBg, L.screenBar, L.screenTile]) { expect(L.screenLifted).not.toBe(under); expect(c(L.screenLifted, under)).toBeGreaterThanOrEqual(1.15); }
+  // A field, a logo tile, the rest of a progress ring (`tile`) on a card and on the page.
+  for (const under of [L.screenBg, L.screenBar]) expect(c(L.screenTile, under)).toBeGreaterThanOrEqual(1.15);
+  // The separator: a card's edge on the page, a row line on the card, a toast's edge (a tile on the page).
+  expect(c(L.screenHairline, L.screenBg)).toBeGreaterThanOrEqual(1.5);
+  expect(c(L.screenHairline, L.screenBar)).toBeGreaterThanOrEqual(1.6);
+  expect(c(L.screenHairline, L.screenTile)).toBeGreaterThanOrEqual(1.3);
+  // The picked tile is apart from the unpicked one by its gold-ink ring (5.0 on the tint), not by the tint alone.
+  expect(c(L.screenPicked, L.screenTile)).toBe(1.07);
+});
+
+test("disabled on cream (the whole button at 40 %): still a button on its page, its label still found — measured, not a pass mark", () => {
+  const A = 0.4;                                                                 // DISABLED_OPACITY (src/ui/buttonStyle.ts)
+  const lay = (top: string, under: number[], a: number) => rgb(top).map((v, i) => v * a + under[i] * (1 - a));
+  const dim = (fill: string, ink: string, under: string) => { const f = lay(fill, rgb(under), A); return [r2(ratio(lay(ink, f, A), f)), r2(ratio(f, rgb(under)))]; };
+  // [label on its fill, fill on what is under it]
+  expect(dim(L.screenLifted, L.screenText, L.screenBg)).toEqual([2.42, 1.12]);   // a secondary button on the page
+  expect(dim(L.screenLifted, L.screenText, L.screenBar)).toEqual([2.45, 1.16]);  // … on a card
+  expect(dim(L.accent, L.onAccent, L.screenBg)).toEqual([2.44, 1.24]);           // the gold button on the page
+  // For comparison, the same secondary button on navy: its dimmed label is stronger there (white on dark dims less than navy on cream).
+  expect(dim(D.screenLifted, D.screenText, D.screenBg)).toEqual([3.51, 1.22]);
 });

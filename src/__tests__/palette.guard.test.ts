@@ -18,7 +18,10 @@ const OLD_HEX = ["081527", "0C2542", "0E2440", "F6E7C1", "9FB3CC", "1C6E9E", "2E
  */
 const THEME_ONLY = ["0A1B33", "112C4D", "17365C", "1F4572",
   // The editor's soft slate: surround, timeline, bar (the owner's three), tile, selected, separator, track; and the screens' separator.
-  "10151F", "171E2B", "212A3A", "2C384D", "374661", "35435D", "52688F", "2B5080"];
+  "10151F", "171E2B", "212A3A", "2C384D", "374661", "35435D", "52688F", "2B5080",
+  // Light: the cream family of the screens (page and card are the owner's, 9 October 2026; tile, selected, picked tint, muted text, separator), the gold
+  // as ink on cream, and its two deep reds. The navy TEXT on cream is not a new value: it is the dark page's navy, named there once.
+  "F7F1E3", "FFFBF1", "EBE2CC", "DDD0B4", "E8DABC", "4B576B", "D2C5A9", "7A5200", "A3261C", "C92A1A"];
 const THEME = "src/theme/theme.ts";
 /** The bases of its translucent colours (the gold hairline, the navy scrims), with or without spaces. */
 const OLD_RGBA = [/217\s*,\s*179\s*,\s*106/, /\(\s*3\s*,\s*10\s*,\s*20\b/];
