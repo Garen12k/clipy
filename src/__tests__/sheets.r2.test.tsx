@@ -5,11 +5,11 @@ import { theme } from "@/src/theme/theme";
 
 const project = { id: "a", name: "Beach", durationSec: 65, updatedAt: "", thumbUri: null, broken: false, postedTo: [], coverTitle: "" };
 
-test("project actions: Rename and Duplicate are outlined, Delete is text only and red; no gold button", async () => {
+test("project actions: Rename and Duplicate are the grey secondary buttons, Delete is text only and red; no gold button", async () => {
   await render(<ProjectActionsSheet project={project} onClose={jest.fn()} onRename={jest.fn()} onDuplicate={jest.fn()} onDelete={jest.fn()} />);
-  for (const n of ["Rename", "Duplicate"]) expect(screen.getByRole("button", { name: n })).toHaveStyle({ borderWidth: 1.5 });
+  for (const n of ["Rename", "Duplicate"]) expect(screen.getByRole("button", { name: n })).toHaveStyle({ backgroundColor: theme.elevation.lifted });
   const del = screen.getByRole("button", { name: "Delete" });
-  expect(del).not.toHaveStyle({ borderWidth: 1.5 });
+  expect(del).not.toHaveStyle({ backgroundColor: theme.elevation.lifted });
   expect(within(del).getByText("Delete")).toHaveStyle({ color: theme.colors.dangerText });
   expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
 });
