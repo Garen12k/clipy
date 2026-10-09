@@ -28,7 +28,7 @@ test("tabs In · Out · Loop, no Apply to all; In opens with None selected and a
   expect(screen.getByText("Animation")).toBeTruthy();
   for (const l of ["In", "Out", "Loop"]) expect(tile(l)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Combo" })).toBeNull();
-  expect(screen.queryByRole("button", { name: /Apply to all/ })).toBeNull();
+  expect(screen.queryByRole("button", { name: /Apply to All/ })).toBeNull();
   expect(tile("In")).toBeSelected();
   expect(tile("None")).toBeSelected();
   expect(slider().props).toMatchObject({ disabled: true, minimumValue: 0.1, maximumValue: 2, step: 0.05 });

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&display=swap">
+<style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style>
+</helmet>
+<div data-screen-label="Prototype" style="min-height:100vh;display:flex;gap:40px;padding:40px;box-sizing:border-box;align-items:flex-start;justify-content:center;flex-wrap:wrap">
+<div style="position:relative;width:402px;height:874px;flex-shrink:0;border-radius:56px;outline:10px solid #1A1A1A;overflow:hidden;background:#000;color:#fff">
+
+<sc-if value="{{ is.wizard }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;inset:0;background:#000;display:flex;flex-direction:column;padding:58px 24px 42px;box-sizing:border-box">
+<div style="height:44px;display:flex;justify-content:space-between;align-items:center"><div style="width:44px;height:44px;border-radius:999px;background:rgba(120,120,128,.28);display:flex;align-items:center;justify-content:center;opacity:{{ w.backOp }}" onClick="{{ back }}"><span style="font-family:'Material Symbols Rounded';font-size:22px">arrow_back_ios_new</span></div><span style="font-size:17px;color:#D9B36A;cursor:pointer" onClick="{{ skip }}">{{ w.skip }}</span></div>
+<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding-bottom:20px">
+<sc-if value="{{ w.art }}" hint-placeholder-val="{{ true }}"><div style="flex:1;margin:12px 0;border-radius:22px;overflow:hidden;position:relative"><dc-import name="WizardArt" scene="{{ w.art }}" hint-size="100%,100%" style="position:absolute;inset:0"></dc-import></div></sc-if>
+<div style="font-size:34px;line-height:41px;font-weight:700">{{ w.h }}</div>
+<div style="font-size:17px;line-height:22px;color:rgba(235,235,245,.6)">{{ w.b }}</div>
+<sc-if value="{{ w.perms }}" hint-placeholder-val="{{ false }}"><div style="background:#1C1C1E;border-radius:20px;overflow:hidden;margin-top:6px"><sc-for list="{{ perms }}" as="r" hint-placeholder-count="7"><div style="padding:8px 14px;display:flex;align-items:center;gap:12px;border-bottom:0.5px solid rgba(84,84,88,.65)"><span style="font-family:'Material Symbols Rounded';font-size:22px;width:26px">{{ r.g }}</span><div style="flex:1;display:flex;flex-direction:column"><span style="font-size:16px">{{ r.n }}</span><span style="font-size:12px;color:rgba(235,235,245,.6)">{{ r.d }}</span></div><div style="height:32px;padding:0 12px;border-radius:999px;background:{{ r.bg }};display:flex;align-items:center;font-size:14px;font-weight:600;cursor:pointer;color:{{ r.c }}" onClick="{{ r.tap }}">{{ r.btn }}</div></div></sc-for></div></sc-if>
+</div>
+<div style="display:flex;justify-content:center;gap:8px;padding-bottom:14px"><sc-for list="{{ w.dots }}" as="d" hint-placeholder-count="4"><span style="width:8px;height:8px;border-radius:9px;background:{{ d }}"></span></sc-for></div>
+<sc-if value="{{ w.notLast }}" hint-placeholder-val="{{ true }}"><div style="height:52px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;cursor:pointer" onClick="{{ next }}">{{ w.cta }}</div></sc-if>
+<sc-if value="{{ w.last }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:10px"><div style="height:50px;border-radius:999px;background:#fff;color:#000;display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:600;cursor:pointer" onClick="{{ signIn }}"><span style="font-size:19px"></span>Continue with Apple</div><div style="height:50px;border-radius:999px;background:rgba(120,120,128,.28);display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:600;cursor:pointer" onClick="{{ signIn }}"><span style="width:20px;height:20px;border-radius:999px;background:#fff;color:#4285F4;font:700 13px/20px Arial,sans-serif;text-align:center">G</span>Continue with Google</div><div style="height:50px;border-radius:999px;background:rgba(120,120,128,.28);display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:600;cursor:pointer" onClick="{{ signIn }}"><span style="font-family:'Material Symbols Rounded';font-size:20px">mail</span>Continue with Email</div><div style="height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#D9B36A;cursor:pointer" onClick="{{ next }}">Continue Without an Account</div></div></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.home }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0"><dc-import name="HomePhone" size="medium" theme="dark" state="empty" hint-size="402px,874px" style="position:absolute;inset:0"></dc-import></div>
+<div style="position:absolute;right:16px;bottom:42px;width:180px;height:52px;border-radius:999px;cursor:pointer;box-shadow:0 0 0 3px rgba(217,179,106,.6)" onClick="{{ next }}"></div>
+</sc-if>
+
+<sc-if value="{{ is.picker }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:#1C1C1E;display:flex;flex-direction:column;padding:58px 16px 34px;box-sizing:border-box;gap:12px">
+<div style="display:flex;justify-content:space-between;font-size:17px"><span style="color:#D9B36A">Cancel</span><b>Photos</b><span style="color:#D9B36A;cursor:pointer" onClick="{{ next }}">Add (8)</span></div>
+<div style="font:11px ui-monospace,Menlo,monospace;color:rgba(235,235,245,.5);text-align:center">SYSTEM PHOTO PICKER · STAND-IN</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px"><sc-for list="{{ grid }}" as="g" hint-placeholder-count="20"><div style="aspect-ratio:1;background:{{ g.bg }};position:relative"><sc-if value="{{ g.sel }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:4px;bottom:4px;width:20px;height:20px;border-radius:999px;background:#0A84FF;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:14px">check</span></sc-if></div></sc-for></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.ratio }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:#0B0B0C"></div>
+<div style="position:absolute;left:8px;right:8px;bottom:8px;height:560px;border-radius:36px;background:#1C1C1E;display:flex;flex-direction:column;padding:8px 20px 24px;box-sizing:border-box;gap:14px">
+<div style="width:36px;height:5px;border-radius:3px;background:rgba(235,235,245,.3);align-self:center"></div>
+<div style="text-align:center;font-size:17px;font-weight:600;padding:10px 0">Aspect Ratio</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><sc-for list="{{ ratios }}" as="r" hint-placeholder-count="9"><div style="height:86px;border-radius:16px;background:{{ r.bg }};box-shadow:{{ r.ring }};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer" onClick="{{ r.pick }}"><div style="width:{{ r.w }};height:{{ r.h }};border:2px {{ r.st }} #fff;border-radius:3px;box-sizing:border-box"></div><span style="font-size:13px;font-weight:{{ r.fw }}">{{ r.l }}</span></div></sc-for></div>
+<div style="font-size:13px;color:rgba(235,235,245,.6)">Auto fits your first photo or video. You can change it later.</div>
+<div style="flex:1"></div>
+<div style="height:50px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;cursor:pointer" onClick="{{ next }}">Create</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.editor }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0"><dc-import name="EditorPhone2" size="medium" mode="{{ ed.mode }}" strip="{{ ed.strip }}" panel="{{ ed.panel }}" context="{{ ed.ctx }}" measure="{{ false }}" caption=" " hint-size="402px,874px"></dc-import></div>
+<div style="position:absolute;top:58px;right:12px;width:110px;height:44px;border-radius:999px;cursor:pointer" onClick="{{ toExport }}"></div>
+<div style="position:absolute;left:8px;right:8px;bottom:34px;height:{{ ed.hot }};border-radius:28px;cursor:pointer;box-shadow:0 0 0 3px rgba(217,179,106,.6)" onClick="{{ next }}"></div>
+</sc-if>
+
+<sc-if value="{{ is.export }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:#000"></div>
+<div style="position:absolute;left:8px;right:8px;bottom:8px;top:70px;border-radius:36px;background:#1C1C1E;display:flex;flex-direction:column;align-items:center;padding:20px 20px 24px;box-sizing:border-box;gap:14px;text-align:center">
+<div style="font-size:17px;font-weight:600">Export</div>
+<sc-if value="{{ ex.options }}" hint-placeholder-val="{{ false }}"><div style="width:100%;display:flex;flex-direction:column;gap:14px;text-align:left;margin-top:8px"><div style="display:flex;gap:12px;align-items:center"><div style="width:44px;height:78px;border-radius:8px;background:repeating-linear-gradient(160deg,#4A4A4C 0 8px,#444446 8px 16px)"></div><div style="display:flex;flex-direction:column"><b style="font-size:17px">Lisbon weekend</b><span style="font-size:15px;color:rgba(235,235,245,.6)">0:42 · 9:16</span></div></div><sc-for list="{{ exOpts }}" as="o" hint-placeholder-count="3"><div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:15px">{{ o.n }}</span><div style="height:34px;border-radius:999px;background:rgba(120,120,128,.28);display:flex;padding:2px;box-sizing:border-box;font-size:14px"><sc-for list="{{ o.items }}" as="x" hint-placeholder-count="3"><div style="flex:1;border-radius:999px;background:{{ x.bg }};display:flex;align-items:center;justify-content:center;font-weight:{{ x.w }};color:{{ x.c }};cursor:pointer" onClick="{{ x.tap }}">{{ x.l }}</div></sc-for></div></div></sc-for><div style="display:flex;justify-content:space-between;font-size:15px"><span>Estimated size</span><span style="color:rgba(235,235,245,.6);font-variant-numeric:tabular-nums">{{ exSize }}</span></div><span style="font-size:13px;color:rgba(235,235,245,.6)">4K needs a 4K source clip.</span></div></sc-if>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;opacity:{{ ex.ringOp }}">
+<div style="width:120px;height:120px;border-radius:999px;background:{{ ex.ring }};display:flex;align-items:center;justify-content:center"><div style="width:104px;height:104px;border-radius:999px;background:#1C1C1E;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;font-variant-numeric:tabular-nums"><span style="font-family:{{ ex.font }};font-size:{{ ex.fs }};color:#D9B36A">{{ ex.mid }}</span></div></div>
+<div style="font-size:22px;font-weight:700">{{ ex.title }}</div><div style="font-size:15px;color:rgba(235,235,245,.6)">{{ ex.sub }}</div>
+</div>
+<div style="width:100%;height:50px;border-radius:999px;background:{{ ex.btnBg }};color:{{ ex.btnFg }};display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;cursor:pointer" onClick="{{ exportBtn }}">{{ ex.btn }}</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ confirm }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:5"><div style="width:290px;border-radius:28px;background:rgba(44,44,46,.97);padding:20px 16px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;text-align:center"><div style="font-size:17px;font-weight:600">Stop exporting?</div><div style="font-size:14px;color:rgba(235,235,245,.6)">The export so far will be lost.</div><div style="display:flex;gap:8px;margin-top:10px"><div style="flex:1;height:44px;border-radius:999px;background:rgba(120,120,128,.28);display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer" onClick="{{ keepExport }}">Keep Exporting</div><div style="flex:1;height:44px;border-radius:999px;background:rgba(120,120,128,.28);color:#FF453A;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;cursor:pointer" onClick="{{ stopExport }}">Stop</div></div></div></div></sc-if>
+<sc-if value="{{ is.post }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:#000;display:flex;flex-direction:column;padding:58px 16px 42px;box-sizing:border-box;gap:14px">
+<div style="height:44px;display:grid;grid-template-columns:44px 1fr 44px;align-items:center"><div style="width:44px;height:44px;border-radius:999px;background:rgba(120,120,128,.28);display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:22px">arrow_back_ios_new</span></div><div style="text-align:center;font-size:17px;font-weight:600">Post</div></div>
+<div style="min-height:72px;border-radius:12px;background:#1C1C1E;padding:10px 12px;font-size:17px">Three days of trams, tiles and sunsets</div>
+<div style="background:#1C1C1E;border-radius:20px;overflow:hidden"><sc-for list="{{ postRows }}" as="r" hint-placeholder-count="5"><div style="min-height:52px;padding:0 14px;display:flex;align-items:center;gap:10px;border-bottom:0.5px solid rgba(84,84,88,.65)"><span style="font-family:'Material Symbols Rounded';font-size:24px;color:#D9B36A;font-variation-settings:'FILL' 1">{{ r.box }}</span><span style="flex:1;font-size:17px">{{ r.n }}</span><span style="font-size:15px;color:{{ r.c }};font-variant-numeric:tabular-nums">{{ r.s }}</span></div></sc-for></div>
+<div style="flex:1"></div>
+<div style="height:50px;border-radius:999px;background:{{ postBg }};color:{{ postC }};display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600;cursor:pointer" onClick="{{ postGo }}">{{ postBtn }}</div>
+</div>
+</sc-if>
+
+</div>
+<div style="width:320px;display:flex;flex-direction:column;gap:12px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">PROTOTYPE · MAIN JOURNEY</div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C">Tap the highlighted control on the phone, or use Next. Strips, panels and the toolbar are the same components as boards A2 and 11; the preview never moves. Hotspots are outlined in gold.</div>
+<div style="display:flex;gap:8px"><div style="flex:1;height:44px;border-radius:999px;background:#111;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;cursor:pointer" onClick="{{ next }}">Next</div><div style="height:44px;padding:0 18px;border-radius:999px;background:#E2E2DF;display:flex;align-items:center;font-weight:600;cursor:pointer" onClick="{{ restart }}">Restart</div></div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ stepList }}" as="s" hint-placeholder-count="20"><div style="padding:6px 10px;border-radius:10px;background:{{ s.bg }};font-size:14px;color:{{ s.c }};cursor:pointer" onClick="{{ s.go }}">{{ s.n }}. {{ s.l }}</div></sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { step: 0, ratio: 0, pct: 0 };
+  steps = ['Wizard · Welcome', 'Wizard · What you can do', 'Wizard · Permissions', 'Wizard · Sign in', 'Home · empty', 'Photo picker', 'Aspect ratio', 'Editor · clip selected', 'Filter strip', 'Speed · Slow motion', 'Stabilize', 'Add text', 'Add music', 'Export · options', 'Export · progress', 'Export · done', 'Post', 'Post · posting'];
+  go(n) { clearInterval(this.timer); this.setState({ step: Math.max(0, Math.min(this.steps.length - 1, n)), pct: 0 }); if (n === 14 || n === 10 || n === 17) this.run(n); }
+  run(n) { this.timer = setInterval(() => { this.setState(s => { const p = Math.min(100, s.pct + 4); if (p >= 100) { clearInterval(this.timer); if (n === 14) setTimeout(() => this.go(15), 300); } return { pct: p }; }); }, 120); }
+  componentWillUnmount() { clearInterval(this.timer); }
+  renderVals() {
+    const s = this.state.step, next = () => this.go(s + 1);
+    const EDM = { 7: ['toolbar', '', '', 'clip', '64px'], 8: ['strip', 'filter', '', 'clip', '168px'], 9: ['strip', 'speedSlow', '', 'clip', '168px'], 10: ['strip', 'stabilizeWork', '', 'clip', '168px'], 11: ['panel', '', 'text', 'textSel', '268px'], 12: ['panel', '', 'audioMusic', 'sound', '268px'] }[s] || ['toolbar', '', '', 'clip', '64px'];
+    const W = [['movie', 'Make clips worth sharing', 'Edit, caption and post your clips.', 'Get Started', 'Skip'], ['bolt', 'Big edits, one tap', 'Cut to the beat, remove a background, add captions and steady a shaky shot.', 'Continue', 'Skip'], ['verified_user', 'You decide what Clipy can use', 'Allow these now or later. Editing works either way.', 'Continue', 'Skip for Now'], ['send', 'Sign in to post', 'You only need an account to post. Editing works without one.', 'Continue with Apple', '']][Math.min(s, 3)];
+    const signed = s === 3 && !!this.state.signed;
+    const w = { g: W[0], h: signed ? 'Signed in' : W[1], b: signed ? 'Signed in as mia@example.com' : W[2], cta: signed ? 'Start Editing' : W[3], skip: signed ? '' : W[4], last: s === 3 && !signed, notLast: s !== 3 || signed, art: signed ? 'p4-done' : ['p1-final', 'summary', '', 'p4-arc'][Math.min(s, 3)], perms: s === 2, backOp: s === 0 ? 0 : 1, dots: [0, 1, 2, 3].map(i => i === s ? '#fff' : 'rgba(235,235,245,.3)') };
+    const R = [['Auto', 9, 16, 'dashed'], ['1:1', 1, 1], ['3:2', 3, 2], ['2:3', 2, 3], ['16:9', 16, 9], ['9:16', 9, 16], ['4:3', 4, 3], ['3:4', 3, 4], ['21:9', 21, 9]];
+    const ratios = R.map(([l, a, b, st], i) => { const k = Math.min(30 / a, 30 / b), sel = i === this.state.ratio; return { l, w: Math.round(a * k) + 'px', h: Math.round(b * k) + 'px', st: st || 'solid', bg: sel ? 'rgba(217,179,106,.26)' : 'rgba(120,120,128,.18)', ring: sel ? '0 0 0 2px #D9B36A' : 'none', fw: sel ? 700 : 400, pick: () => this.setState({ ratio: i }) }; });
+    const grid = Array.from({ length: 20 }, (_, i) => ({ bg: ['#4A4A4C', '#5A5A5E', '#3E3E40', '#545458'][i % 4], sel: i < 8 }));
+    const tool = (l, g, tap, o = {}) => ({ l, g, tap: tap || (() => {}), bg: o.sel ? 'rgba(217,179,106,.26)' : 'transparent', ring: o.sel ? '0 0 0 2px #D9B36A' : 'none' });
+    const seg = (ls, sel) => ls.map((l, i) => ({ l, bg: i === sel ? 'rgba(255,255,255,.22)' : 'transparent', w: i === sel ? 600 : 400 }));
+    const look = l => tool(l, 'photo_filter', null, { sel: l === 'Warm' });
+    const ed = { mode: EDM[0], strip: EDM[1], panel: EDM[2], ctx: EDM[3], hot: EDM[4] };
+    const p = this.state.pct;
+    const ex0 = s === 13 ? { ring: 'rgba(120,120,128,.28)', mid: '1080p', font: 'inherit', fs: '22px', title: 'Lisbon weekend', sub: '1080p · 30 fps · High · about 48 MB', btn: 'Export', btnBg: '#D9B36A', btnFg: '#1A1408' }
+      : s === 14 ? { ring: `conic-gradient(#D9B36A 0 ${p}%,rgba(120,120,128,.28) ${p}% 100%)`, mid: p + '%', font: 'inherit', fs: '28px', title: p < 20 ? 'Preparing' : 'Exporting', sub: 'Preparing changed sounds first, then the video.', btn: 'Cancel', btnBg: 'rgba(120,120,128,.28)', btnFg: '#fff' }
+      : { ring: '#D9B36A', mid: 'check', font: "'Material Symbols Rounded'", fs: '56px', title: 'Ready to sail', sub: '1080p · 0:42 · 48 MB', btn: 'Post to…', btnBg: '#D9B36A', btnFg: '#1A1408' };
+    const ex = { ...ex0, options: s === 13, ringOp: s === 13 ? 0 : 1 };
+    const posting = s === 17;
+    const opt = this.state.opt || { r: 1, f: 1, q: 0 };
+    const O = (n, k, ls, dis = []) => ({ n, items: ls.map((l, i) => ({ l, bg: i === opt[k] ? 'rgba(255,255,255,.22)' : 'transparent', w: i === opt[k] ? 600 : 400, c: dis.includes(i) ? 'rgba(235,235,245,.3)' : '#fff', tap: () => !dis.includes(i) && this.setState({ opt: { ...opt, [k]: i } }) })) });
+    const exOpts = [O('Resolution', 'r', ['720p', '1080p', '4K'], [2]), O('Frame rate', 'f', ['24 fps', '30 fps', '60 fps']), O('Quality', 'q', ['High', 'Smaller file'])];
+    const exSize = Math.round([22, 48, 0][opt.r] * [0.8, 1, 1.9][opt.f] * [1, 0.6][opt.q]) + ' MB';
+    const postRows = [['YouTube', posting ? (p >= 100 ? 'Done' : p + '%') : 'Options'], ['TikTok', posting ? (p >= 60 ? 'Done' : 'Preparing…') : ''], ['Instagram', posting ? (p >= 100 ? 'Done' : 'Publishing…') : ''], ['Facebook', 'Connect'], ['X', 'Reconnect']].map(([n, st], i) => ({ n, s: st, box: i < 3 ? (st === 'Done' ? 'check_circle' : 'check_box') : 'check_box_outline_blank', c: st === 'Done' ? '#34C759' : st === 'Reconnect' ? '#FF453A' : '#D9B36A' }));
+    return {
+      is: { wizard: s <= 3, home: s === 4, picker: s === 5, ratio: s === 6, editor: s >= 7 && s <= 12, export: s >= 13 && s <= 15, post: s >= 16 },
+      w, grid, ratios, ed, ex, exOpts, exSize, postRows, pct: p + '%',
+      next, back: () => this.go(s - 1), skip: () => this.go(3), restart: () => this.go(0),
+      toExport: () => this.go(13), exportBtn: () => (s === 14 ? (clearInterval(this.timer), this.setState({ confirm: true })) : this.go(s === 15 ? 16 : 14)),
+      confirm: !!this.state.confirm, keepExport: () => { this.setState({ confirm: false }); this.run(14); }, stopExport: () => { this.setState({ confirm: false }); this.go(13); },
+      perms: [['photo_library', 'Photos and videos', 'Bring clips into a project'], ['add_photo_alternate', 'Save to Photos', 'Save finished videos'], ['photo_camera', 'Camera', 'Record a clip'], ['mic', 'Microphone', 'Record a voice-over'], ['closed_caption', 'Speech recognition', 'Turn speech into captions'], ['notifications', 'Notifications', 'Know when it’s done'], ['folder', 'Import from Files', 'No permission needed']].map(([g, n, d], i) => { const on = (this.state.allowed || []).includes(i); return { g, n, d, btn: i === 6 ? 'Always on' : on ? 'Allowed' : 'Continue', bg: on || i === 6 ? 'transparent' : 'rgba(120,120,128,.28)', c: on || i === 6 ? 'rgba(235,235,245,.6)' : '#fff', tap: () => this.setState(st => ({ allowed: [...(st.allowed || []), i] })) }; }),
+      signIn: () => this.setState({ signed: true }), postGo: () => this.go(17), postBtn: posting ? (p >= 100 ? 'Posted' : 'Posting…') : 'Post', postBg: posting ? 'rgba(120,120,128,.28)' : '#D9B36A', postC: posting ? 'rgba(235,235,245,.6)' : '#1A1408',
+      stepList: this.steps.map((l, i) => ({ n: i + 1, l, bg: i === s ? '#111' : 'transparent', c: i === s ? '#fff' : '#3A3A3C', go: () => this.go(i) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&display=swap">
+<style>
+body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#8B5F00}a:hover{color:#5E4000}
+</style>
+</helmet>
+<section id="turn-1" data-screen-label="Checkpoint 1" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:1100px">
+<div style="font:600 13px/18px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CLIPY · iOS 27 REDESIGN · CHECKPOINT 1 OF 8</div>
+<div style="font-size:44px;line-height:52px;font-weight:700;letter-spacing:-.02em">Foundations, plus Home and the editor</div>
+<div style="font-size:19px;line-height:28px;color:#3A3A3C;text-wrap:pretty">Step (a) of section 15 and the two approval screens, in dark and light. Values marked “kit” come from Apple’s iOS 27 UI kit and are not invented here. Icons in this file are stand-ins drawn with a web icon font; the build uses the SF Symbol named beside each one.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start">
+
+<!-- 1a COLOUR -->
+<div id="1a" style="width:1180px;background:#FBFBFA;border-radius:28px;padding:48px;display:flex;flex-direction:column;gap:36px;box-sizing:border-box">
+<div style="display:flex;align-items:center;gap:14px"><a href="#1a" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">1a</a><div style="font-size:30px;font-weight:700;letter-spacing:-.01em">Colour</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:15px;font-weight:600">Brand direction: plain UI</div><div style="font-size:15px;line-height:22px;color:#3A3A3C">Controls are plain iOS. The nautical voice survives only in three content moments: the Home empty state, the finished export, and the app icon.</div></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:15px;font-weight:600">Accent: keep the gold, retune per appearance</div><div style="font-size:15px;line-height:22px;color:#3A3A3C">#D9B36A stays as the fill of the one primary action (dark ink on it, 9.2:1). It fails as a line or text on white (2.0:1), so light appearance uses a deeper “accent ink” for selection and progress.</div></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:15px;font-weight:600">Neutral around the video</div><div style="font-size:15px;line-height:22px;color:#3A3A3C">Navy is gone from the editor. The preview surround and timeline are hue-free black in both appearances, so Filter and Adjust can be judged by eye.</div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CUSTOM TOKENS · DARK / LIGHT / INCREASED CONTRAST</div>
+<div style="display:grid;grid-template-columns:200px 1fr 1fr 1fr 1.4fr;border-top:1px solid #E2E2DF;font-size:14px;line-height:20px">
+<div style="padding:10px 0;color:#6C6C70">Token</div><div style="padding:10px 0;color:#6C6C70">Dark</div><div style="padding:10px 0;color:#6C6C70">Light</div><div style="padding:10px 0;color:#6C6C70">Increase Contrast (D / L)</div><div style="padding:10px 0;color:#6C6C70">Use · contrast</div>
+<sc-for list="{{ tokens }}" as="t" hint-placeholder-count="7">
+<div style="padding:12px 0;border-top:1px solid #EDEDEA;font:500 13px/20px ui-monospace,Menlo,monospace">{{ t.name }}</div>
+<div style="padding:12px 0;border-top:1px solid #EDEDEA;display:flex;gap:10px;align-items:center"><div style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(0,0,0,.12);background:{{ t.d }}"></div><span style="font:13px ui-monospace,Menlo,monospace">{{ t.d }}</span></div>
+<div style="padding:12px 0;border-top:1px solid #EDEDEA;display:flex;gap:10px;align-items:center"><div style="width:28px;height:28px;border-radius:8px;border:1px solid rgba(0,0,0,.12);background:{{ t.l }}"></div><span style="font:13px ui-monospace,Menlo,monospace">{{ t.l }}</span></div>
+<div style="padding:12px 0;border-top:1px solid #EDEDEA;font:13px/28px ui-monospace,Menlo,monospace;color:#3A3A3C">{{ t.ic }}</div>
+<div style="padding:12px 0;border-top:1px solid #EDEDEA;color:#3A3A3C">{{ t.use }}</div>
+</sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#6C6C70">Backgrounds, labels, separators and fills use the kit’s semantic colours (systemBackground, secondarySystemBackground, label, secondaryLabel, separator, systemFill…) with their base/elevated levels. Danger uses systemRed.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">EIGHT TIMELINE KINDS · COLOUR + GLYPH + TEXTURE</div>
+<div style="background:#0E0E0F;border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:8px">
+<sc-for list="{{ kinds }}" as="k" hint-placeholder-count="7">
+<div style="display:grid;grid-template-columns:120px 360px 1fr 90px;gap:16px;align-items:center">
+<div style="color:#fff;font-size:15px;font-weight:600">{{ k.name }}</div>
+<div style="height:32px;border-radius:8px;background:{{ k.c }};background-image:{{ k.tex }};display:flex;align-items:center;gap:6px;padding:0 10px;color:#000;overflow:hidden"><span style="font-family:'Material Symbols Rounded';font-size:18px;font-variation-settings:'FILL' 1">{{ k.g }}</span><span style="font-size:13px;font-weight:600;white-space:nowrap">{{ k.sample }}</span></div>
+<div style="color:rgba(235,235,245,.72);font-size:14px;line-height:19px">{{ k.cue }}</div>
+<div style="color:rgba(235,235,245,.72);font:13px ui-monospace,Menlo,monospace">{{ k.c }}</div>
+</div>
+</sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#3A3A3C;text-wrap:pretty">All eight share lightness and chroma (oklch 0.76 / 0.11) and vary only in hue, spaced about 45° apart (Layer is the neutral one). Black label text on every bar is 9.3–10.3:1. Text moves off the accent hue (it was gold) to blue; Caption gets its own lime hue. The timeline is dark in both appearances, so these values do not change with the system setting. One selection rule for clips and bars: a 2-pt accent border plus visible handles.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">NEVER COLOUR ALONE</div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px">
+<div style="background:#fff;border:1px solid #E6E6E3;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:10px"><div style="width:56px;height:56px;border-radius:14px;background:#F2F2F7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px"><span style="font-family:'Material Symbols Rounded';font-size:22px">diamond</span></div><div style="width:56px;height:56px;border-radius:14px;background:#1A1408;color:#D9B36A;display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:22px;font-variation-settings:'FILL' 1">diamond</span></div></div><div style="font-size:14px;line-height:19px;color:#3A3A3C">On = filled symbol and filled background, not gold alone.</div></div>
+<div style="background:#fff;border:1px solid #E6E6E3;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:8px;align-items:center;color:#D70015;font-size:15px"><span style="font-family:'Material Symbols Rounded';font-size:20px;font-variation-settings:'FILL' 1">error</span>Sign-in expired</div><div style="font-size:14px;line-height:19px;color:#3A3A3C">Problems carry a symbol and words as well as red.</div></div>
+<div style="background:#fff;border:1px solid #E6E6E3;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:8px;align-items:center;font-size:15px"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:#8B5F00;font-variation-settings:'FILL' 1">check_circle</span>Ready</div><div style="font-size:14px;line-height:19px;color:#3A3A3C">Status: symbol + word, accent ink as a third cue.</div></div>
+<div style="background:#fff;border:1px solid #E6E6E3;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:8px;align-items:center;font-size:15px"><span style="font-family:'Material Symbols Rounded';font-size:20px">music_note</span><span style="font-family:'Material Symbols Rounded';font-size:20px">mic</span><span style="font-family:'Material Symbols Rounded';font-size:20px">title</span></div><div style="font-size:14px;line-height:19px;color:#3A3A3C">Timeline kinds: glyph and texture on every bar.</div></div>
+</div>
+</div>
+</div>
+
+<!-- 1b TYPE -->
+<div id="1b" style="width:1180px;background:#FBFBFA;border-radius:28px;padding:48px;display:flex;flex-direction:column;gap:32px;box-sizing:border-box">
+<div style="display:flex;align-items:center;gap:14px"><a href="#1b" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">1b</a><div style="font-size:30px;font-weight:700;letter-spacing:-.01em">Type</div></div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:900px;text-wrap:pretty">SF Pro through Apple text styles with Dynamic Type replaces Oswald and Montserrat. No forced upper case: title-style capitals on buttons, menu items, segments and alert buttons; sentence style everywhere else. Changing numbers (time readout, slider values, percentages) use tabular digits. Tracking: kit. The 16 on-video fonts are content and stay.</div>
+<div style="display:grid;grid-template-columns:150px 110px 1fr 1.1fr;border-top:1px solid #E2E2DF">
+<div style="padding:10px 0;font-size:13px;color:#6C6C70">Style</div><div style="padding:10px 0;font-size:13px;color:#6C6C70">Size / leading</div><div style="padding:10px 0;font-size:13px;color:#6C6C70">Sample</div><div style="padding:10px 0;font-size:13px;color:#6C6C70">Clipy roles</div>
+<sc-for list="{{ ramp }}" as="r" hint-placeholder-count="11">
+<div style="padding:14px 0;border-top:1px solid #EDEDEA;font-size:14px;font-weight:600">{{ r.name }}</div>
+<div style="padding:14px 0;border-top:1px solid #EDEDEA;font:13px/20px ui-monospace,Menlo,monospace;color:#3A3A3C">{{ r.spec }}</div>
+<div style="padding:14px 16px 14px 0;border-top:1px solid #EDEDEA;font-size:{{ r.px }};line-height:{{ r.lh }};font-weight:{{ r.w }}">{{ r.sample }}</div>
+<div style="padding:14px 0;border-top:1px solid #EDEDEA;font-size:14px;line-height:20px;color:#3A3A3C">{{ r.roles }}</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">ONE LIST ROW AT THREE SIZES</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:16px;align-items:start">
+<div style="background:#fff;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;border:1px solid #E6E6E3"><div style="font:12px ui-monospace,Menlo,monospace;color:#6C6C70">Default · Body 17</div><div style="display:flex;justify-content:space-between;align-items:center;font-size:17px;line-height:22px"><span>Microphone</span><span style="color:#6C6C70">Allowed</span></div></div>
+<div style="background:#fff;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;border:1px solid #E6E6E3"><div style="font:12px ui-monospace,Menlo,monospace;color:#6C6C70">Largest standard · Body 23</div><div style="display:flex;justify-content:space-between;align-items:center;font-size:23px;line-height:29px"><span>Microphone</span><span style="color:#6C6C70">Allowed</span></div></div>
+<div style="background:#fff;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;border:1px solid #E6E6E3"><div style="font:12px ui-monospace,Menlo,monospace;color:#6C6C70">Largest accessibility · Body 53 — stacks</div><div style="font-size:53px;line-height:62px">Micro&shy;phone</div><div style="font-size:53px;line-height:62px;color:#6C6C70">Allowed</div></div>
+</div>
+<div style="font-size:14px;line-height:20px;color:#3A3A3C;max-width:900px;text-wrap:pretty">Editor strips keep fixed heights: S 96 / M 120 / L 168 pt, and S 111 / M 139 / L 195 at the largest standard size (board S2 in 11 Strips v2). Above that, toolbar and tile labels use the system large-content viewer on touch and hold. Regular panels scroll; compact panels fit 240 pt without scrolling.</div>
+</div>
+</div>
+
+<!-- 1c LAYOUT + MATERIALS -->
+<div id="1c" style="width:1180px;background:#FBFBFA;border-radius:28px;padding:48px;display:flex;flex-direction:column;gap:36px;box-sizing:border-box">
+<div style="display:flex;align-items:center;gap:14px"><a href="#1c" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">1c</a><div style="font-size:30px;font-weight:700;letter-spacing:-.01em">Spacing, shapes, materials, elevation</div></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:40px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">SPACING (CUSTOM PARTS ONLY)</div>
+<div style="display:flex;align-items:flex-end;gap:18px">
+<sc-for list="{{ spacing }}" as="s" hint-placeholder-count="7"><div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:{{ s.px }};height:{{ s.px }};background:#D9B36A;border-radius:3px"></div><div style="font:13px ui-monospace,Menlo,monospace">{{ s.v }}</div></div></sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#3A3A3C">Margins, bar heights, row heights, grabber and page-control sizes: kit. Touch targets 44 × 44 pt minimum everywhere; visible shapes may be smaller, hit areas may not.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">THREE SHAPES</div>
+<div style="display:flex;gap:28px;align-items:center">
+<div style="display:flex;flex-direction:column;gap:8px;align-items:center"><div style="height:44px;padding:0 22px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;font-weight:600">Export</div><div style="font-size:13px;color:#6C6C70">Capsule</div></div>
+<div style="display:flex;flex-direction:column;gap:8px;align-items:center"><div style="width:72px;height:72px;border-radius:14px;background:#E6E6E3"></div><div style="font-size:13px;color:#6C6C70">Fixed radius</div></div>
+<div style="display:flex;flex-direction:column;gap:8px;align-items:center"><div style="width:150px;height:96px;border-radius:30px;background:#DCDCD8;padding:10px;box-sizing:border-box"><div style="width:100%;height:100%;border-radius:20px;background:#fff;display:flex;align-items:center;justify-content:center;font:12px ui-monospace,Menlo,monospace;color:#6C6C70">r = 30 − 10</div></div><div style="font-size:13px;color:#6C6C70">Concentric</div></div>
+</div>
+<div style="font-size:14px;line-height:20px;color:#3A3A3C">Buttons, sliders, switches, the ratio pill and the toolbar are capsules. Tiles inside a strip or panel are concentric with it.</div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:1.15fr 1fr;gap:40px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">EDITOR LAYERS · GLASS CHROME, NEVER OVER THE FRAME</div>
+<div style="background:#000;border-radius:28px;padding:16px;display:flex;flex-direction:column;gap:8px;color:#fff;font-size:13px">
+<div style="display:flex;justify-content:space-between;gap:8px"><div style="height:40px;flex:1;border-radius:999px;background:rgba(120,120,128,.32);border:1px dashed rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center">Header groups · regular glass</div><div style="height:40px;width:100px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-weight:600">Tinted (1)</div></div>
+<div style="height:170px;border-radius:12px;background:#000;border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center"><div style="width:96px;height:150px;background:repeating-linear-gradient(135deg,#3A3A3C 0 8px,#323234 8px 16px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;font-size:12px;line-height:15px;padding:6px;box-sizing:border-box"><span>Frame</span><span style="color:rgba(235,235,245,.7)">solid fills and plain scrims only</span></div></div>
+<div style="height:36px;border-radius:12px;border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;color:rgba(235,235,245,.8)">Transport · no surface</div>
+<div style="height:64px;border-radius:12px;background:#0E0E0F;border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;color:rgba(235,235,245,.8)">Timeline · solid neutral, content layer</div>
+<div style="height:64px;border-radius:24px;background:rgba(120,120,128,.32);border:1px dashed rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center">Toolbar, strips, panels · regular glass (solid fallback ships if glass over moving bars fails)</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">TOOLBAR CAPSULE UNDER EACH SETTING</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<sc-for list="{{ materials }}" as="m" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="height:84px;border-radius:16px;background:repeating-linear-gradient(90deg,#47C5D2 0 60px,#79B6F4 60px 120px,#E095C7 120px 160px);display:flex;align-items:center;justify-content:center;padding:0 14px"><div style="height:52px;width:100%;border-radius:999px;background:{{ m.bg }};border:{{ m.border }};backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:center;gap:22px;color:{{ m.fg }};font-size:12px"><span style="font-family:'Material Symbols Rounded';font-size:22px">content_cut</span><span style="font-family:'Material Symbols Rounded';font-size:22px">speed</span><span style="font-family:'Material Symbols Rounded';font-size:22px">photo_filter</span></div></div><div style="font-size:13px;line-height:18px;color:#3A3A3C">{{ m.label }}</div></div>
+</sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#3A3A3C">Clear glass is not used in Clipy: nothing sits directly over the video.</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:#6C6C70">ELEVATION BESIDE THE VIDEO · STEPS OF NEUTRAL, NO SHADOWS</div>
+<div style="display:flex;gap:0;border-radius:18px;overflow:hidden">
+<div style="flex:1;height:80px;background:#000;color:#fff;padding:12px;box-sizing:border-box;font-size:13px">Surround<br><span style="font-family:ui-monospace,Menlo,monospace;color:rgba(235,235,245,.6)">#000000</span></div>
+<div style="flex:1;height:80px;background:#0E0E0F;color:#fff;padding:12px;box-sizing:border-box;font-size:13px">Timeline<br><span style="font-family:ui-monospace,Menlo,monospace;color:rgba(235,235,245,.6)">#0E0E0F</span></div>
+<div style="flex:1;height:80px;background:#1C1C1E;color:#fff;padding:12px;box-sizing:border-box;font-size:13px">Tile / bar track<br><span style="font-family:ui-monospace,Menlo,monospace;color:rgba(235,235,245,.6)">kit · secondarySystemBackground</span></div>
+<div style="flex:1;height:80px;background:#2C2C2E;color:#fff;padding:12px;box-sizing:border-box;font-size:13px">Selected tile<br><span style="font-family:ui-monospace,Menlo,monospace;color:rgba(235,235,245,.6)">kit · tertiary</span></div>
+</div>
+<div style="font-size:14px;line-height:20px;color:#3A3A3C">Away from the video (Home, sheets, Post, Accounts) elevation is the system’s own: grouped backgrounds and the kit’s glass and sheet treatments.</div>
+</div>
+</div>
+
+<!-- 1d ICONS -->
+<div id="1d" style="width:1180px;background:#FBFBFA;border-radius:28px;padding:48px;display:flex;flex-direction:column;gap:28px;box-sizing:border-box">
+<div style="display:flex;align-items:center;gap:14px"><a href="#1d" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">1d</a><div style="font-size:30px;font-weight:700;letter-spacing:-.01em">Iconography · SF Symbols</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div><b style="color:#111">One weight and scale.</b> Regular weight, medium scale, matched to the adjacent text style (Caption 1 labels under toolbar icons; Body in lists).</div>
+<div><b style="color:#111">Outline by default.</b> Fill means on, selected or emphasis (keyframe on, play, a ticked platform). Slash means unavailable.</div>
+<div><b style="color:#111">Names to confirm</b> in the current SF Symbols app. Stabilize and Fade need a custom symbol drawn on Apple’s template. Brand logos are the platforms’ own artwork.</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));column-gap:24px;border-top:1px solid #E2E2DF">
+<sc-for list="{{ icons }}" as="i" hint-placeholder-count="40">
+<div style="display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #EDEDEA"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1">{{ i.g }}</span><div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:14px;line-height:18px">{{ i.m }}</span><span style="font:12px/16px ui-monospace,Menlo,monospace;color:#6C6C70;overflow-wrap:anywhere">{{ i.sf }}</span></div></div>
+</sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#6C6C70">Empty states and Templates’ dice drop emoji for symbols. Strip and panel tiles (effects, animations, presets) show a live thumbnail or drawing of the result where that helps the choice.</div>
+</div>
+
+<!-- 1e MOTION -->
+<div id="1e" style="width:1180px;background:#FBFBFA;border-radius:28px;padding:48px;display:flex;flex-direction:column;gap:28px;box-sizing:border-box">
+<div style="display:flex;align-items:center;gap:14px"><a href="#1e" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">1e</a><div style="font-size:30px;font-weight:700;letter-spacing:-.01em">Motion and haptics</div></div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:940px;text-wrap:pretty">Beside the video: opacity and position/scale only, 250 ms at most, nothing loops, containers never animate. Screen transitions, sheets, menus and alerts are the system’s own. Durations marked “system” are not specified by Apple and are left to the framework.</div>
+<div style="display:grid;grid-template-columns:1.3fr 1.6fr 0.8fr 1.3fr 1fr;border-top:1px solid #E2E2DF;font-size:14px;line-height:20px">
+<div style="padding:10px 12px 10px 0;color:#6C6C70">Interaction</div><div style="padding:10px 12px 10px 0;color:#6C6C70">Animation</div><div style="padding:10px 12px 10px 0;color:#6C6C70">Duration · easing</div><div style="padding:10px 12px 10px 0;color:#6C6C70">Reduce Motion</div><div style="padding:10px 0;color:#6C6C70">Haptic</div>
+<sc-for list="{{ motion }}" as="r" hint-placeholder-count="14">
+<div style="padding:11px 12px 11px 0;border-top:1px solid #EDEDEA;font-weight:600">{{ r.a }}</div>
+<div style="padding:11px 12px 11px 0;border-top:1px solid #EDEDEA;color:#3A3A3C">{{ r.b }}</div>
+<div style="padding:11px 12px 11px 0;border-top:1px solid #EDEDEA;font:13px/20px ui-monospace,Menlo,monospace;color:#3A3A3C">{{ r.c }}</div>
+<div style="padding:11px 12px 11px 0;border-top:1px solid #EDEDEA;color:#3A3A3C">{{ r.d }}</div>
+<div style="padding:11px 0;border-top:1px solid #EDEDEA;color:#3A3A3C">{{ r.e }}</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const tokens = [
+      { name: 'accent.fill', d: '#D9B36A', l: '#D9B36A', ic: '#E8C886 / #C9A04F', use: 'The one primary action per screen. Ink on it 9.2:1.' },
+      { name: 'accent.onFill', d: '#1A1408', l: '#1A1408', ic: '#000000 / #000000', use: 'Label and symbol on the gold fill.' },
+      { name: 'accent.ink', d: '#D9B36A', l: '#8B5F00', ic: '#F0CE8A / #6E4A00', use: 'Selection borders, progress, on-state symbols. 8.6:1 on #1C1C1E; 5.6:1 on white.' },
+      { name: 'editor.surround', d: '#000000', l: '#000000', ic: '#000000 / #000000', use: 'Around the preview frame, both appearances. No hue.' },
+      { name: 'editor.timeline', d: '#0E0E0F', l: '#0E0E0F', ic: '#000000 / #000000', use: 'Timeline background, both appearances.' },
+      { name: 'danger', d: '#FF453A', l: '#D70015', ic: '#FF6961 / #D70015', use: 'systemRed; light uses the darker variant for text (5.4:1). Always with a symbol.' },
+      { name: 'scrim.badge', d: '#000000B8', l: '#000000B8', ic: '#000000 / #000000', use: 'Solid scrim under badges and tags on pictures. No blur.' }
+    ];
+    const tx = 'repeating-linear-gradient(135deg,rgba(0,0,0,.12) 0 4px,transparent 4px 9px)';
+    const kinds = [
+      { name: 'Text', c: '#79B6F4', g: 'title', sample: 'Day one', cue: 'Text glyph, solid fill', tex: 'none' },
+      { name: 'Caption', c: '#AFB965', g: 'closed_caption', sample: 'so we walked up the hill', cue: 'Own hue (lime) + caption glyph', tex: 'none' },
+      { name: 'Sticker', c: '#E095C7', g: 'mood', sample: '🌊  Star', cue: 'Smiley glyph, then the emoji or shape name', tex: 'none' },
+      { name: 'Music', c: '#47C5D2', g: 'music_note', sample: 'The Field of Dreams · 100%', cue: 'Note glyph + waveform', tex: 'none' },
+      { name: 'Voice', c: '#6DC799', g: 'mic', sample: 'Voice-over · 100%', cue: 'Mic glyph + waveform', tex: 'none' },
+      { name: 'Sound effect', c: '#ED997B', g: 'volume_up', sample: 'Whoosh · 100%', cue: 'Speaker glyph + waveform', tex: 'none' },
+      { name: 'Layer', c: '#A8B2BE', g: 'filter_none', sample: 'Video layer 1', cue: 'Layer glyph, numbered name (not just “Layer”)', tex: 'none' },
+      { name: 'Effect', c: '#B6A3F0', g: 'bolt', sample: 'Light leak', cue: 'Bolt glyph + diagonal hatching', tex: tx }
+    ];
+    const ramp = [
+      ['Large Title', '34 / 41', '34px', '41px', 700, 'Projects', 'Home title'],
+      ['Title 1', '28 / 34', '28px', '34px', 700, 'Make clips worth sharing', 'Wizard headlines'],
+      ['Title 2', '22 / 28', '22px', '28px', 700, 'Your video is ready', 'Export done, empty states'],
+      ['Title 3', '20 / 25', '20px', '25px', 600, 'Sign in to Clipy', 'Card titles on Post, Accounts, Export'],
+      ['Headline', '17 / 22', '17px', '22px', 600, 'Remove background', 'Nav titles, strip and panel titles, buttons'],
+      ['Body', '17 / 22', '17px', '22px', 400, 'Allow these now or later.', 'List rows, fields, messages, wizard body'],
+      ['Callout', '16 / 21', '16px', '21px', 400, 'Edges are not perfect', 'Strip notes, inline status text'],
+      ['Subhead', '15 / 20', '15px', '20px', 400, 'Strength  70', 'Slider name + value, card project name'],
+      ['Footnote', '13 / 18', '13px', '18px', 400, 'Edited today', 'Card status, platform notes, hints'],
+      ['Caption 1', '12 / 16', '12px', '16px', 400, 'Split  Trim  Speed', 'Toolbar and tile labels (up from 11 pt), badges'],
+      ['Caption 2', '11 / 13', '11px', '13px', 400, '0:04   0:06   0:08', 'Timeline ruler (bar labels use Caption 1) — the floor']
+    ].map(([name, spec, px, lh, w, sample, roles]) => ({ name, spec, px, lh, w, sample, roles }));
+    const spacing = [4, 8, 12, 16, 20, 24, 32].map(v => ({ v, px: v + 'px' }));
+    const materials = [
+      { label: 'Regular glass (default)', bg: 'rgba(40,40,44,.55)', border: '0.5px solid rgba(255,255,255,.18)', fg: '#fff' },
+      { label: 'User setting: fully tinted', bg: 'rgba(28,28,30,.88)', border: '0.5px solid rgba(255,255,255,.14)', fg: '#fff' },
+      { label: 'Reduce Transparency = the solid version', bg: '#1C1C1E', border: '0.5px solid #1C1C1E', fg: '#fff' },
+      { label: 'Increase Contrast', bg: '#000', border: '1.5px solid #fff', fg: '#fff' }
+    ];
+    const icons = [
+      ['Back', 'chevron.backward', 'arrow_back_ios_new'], ['Close', 'xmark ★', 'close'], ['Done', 'checkmark ★', 'check'], ['Add', 'plus ★', 'add'],
+      ['More', 'ellipsis ★', 'more_horiz'], ['Share', 'square.and.arrow.up ★', 'ios_share'], ['Undo', 'arrow.uturn.backward ★', 'undo'], ['Redo', 'arrow.uturn.forward ★', 'redo'],
+      ['Play / Pause', 'play.fill / pause.fill', 'play_arrow'], ['Post a video', 'paperplane', 'send'], ['Accounts', 'person.crop.circle', 'account_circle'], ['Email', 'envelope', 'mail'],
+      ['Error', 'exclamationmark.circle', 'error'], ['Missing file', 'exclamationmark.triangle.fill', 'warning'], ['Move clip', 'line.3.horizontal', 'drag_handle'], ['Rename', 'pencil ★', 'edit'],
+      ['Search', 'magnifyingglass ★', 'search'], ['Edit (main)', 'film', 'movie'], ['Audio', 'music.note', 'music_note'], ['Text', 'textformat', 'title'],
+      ['Stickers', 'face.smiling', 'mood'], ['Overlay', 'square.on.square', 'filter_none'], ['Collage', 'rectangle.split.2x2', 'grid_view'], ['Effects', 'bolt', 'bolt'],
+      ['Filter', 'camera.filters', 'photo_filter'], ['Adjust', 'slider.horizontal.3', 'tune'], ['Ratio', 'aspectratio', 'aspect_ratio'], ['Background', 'paintpalette', 'palette'],
+      ['Cover', 'photo', 'image'], ['Templates', 'wand.and.stars', 'auto_fix_high'], ['Add audio / text', 'plus.circle', 'add_circle'], ['Ducking', 'speaker.wave.1', 'volume_down'],
+      ['Beats', 'metronome', 'timer'], ['Captions', 'captions.bubble', 'closed_caption'], ['Split', 'scissors ★', 'content_cut'], ['Trim', 'timeline.selection', 'width_normal'],
+      ['Select', 'checkmark.circle ★', 'check_circle'], ['Select all', 'checklist', 'checklist'], ['Speed', 'speedometer', 'speed'], ['Volume', 'speaker.wave.2', 'volume_up'],
+      ['Extract audio', 'waveform.badge.plus', 'graphic_eq'], ['Voice', 'mic', 'mic'], ['Sound', 'waveform', 'equalizer'], ['Fade', 'custom “fade ramp”', 'trending_up'],
+      ['Animate', 'sparkles', 'auto_awesome'], ['Motion', 'arrow.up.and.down.and.arrow.left.and.right', 'open_with'], ['Crop', 'crop', 'crop'], ['Transform', 'crop.rotate', 'crop_rotate'],
+      ['Opacity', 'circle.lefthalf.filled', 'contrast'], ['Mask', 'circle.dashed', 'motion_photos_on'], ['Blend', 'square.2.layers.3d', 'layers'], ['Green screen', 'eyedropper.halffull', 'colorize'],
+      ['Cut out', 'person.and.background.dotted', 'background_replace'], ['Stabilize', 'custom (or camera.viewfinder)', 'center_focus_strong'], ['Keyframe', 'diamond / diamond.fill', 'diamond'], ['Transition', 'arrow.left.arrow.right', 'swap_horiz'],
+      ['Replace', 'arrow.triangle.2.circlepath', 'sync'], ['Reverse', 'backward', 'fast_rewind'], ['Freeze', 'snowflake', 'ac_unit'], ['Forward (layer)', 'square.2.layers.3d.top.filled', 'flip_to_front'],
+      ['Back (layer)', 'square.2.layers.3d.bottom.filled', 'flip_to_back'], ['Duplicate', 'plus.square.on.square ★', 'library_add'], ['Delete', 'trash ★', 'delete'], ['Strength', 'dial.medium', 'tune']
+    ].map(([m, sf, g]) => ({ m, sf, g }));
+    const motion = [
+      ['Tool opens', 'Content fades in and rises 8 pt; container is in place on frame 1', '180 ms · ease-out', 'Content appears', '—'],
+      ['Tool closes', 'Instant, no animation', '0', 'Same', '—'],
+      ['Button press', 'System highlight', 'system', 'System', '—'],
+      ['Select clip or bar', 'Border and handles appear', '0', 'Same', '—'],
+      ['Slider crosses rest value', 'None', '—', '—', 'Selection'],
+      ['Snap engages', 'Guide line fades in', '100 ms · linear', 'Line appears', 'Selection'],
+      ['Split, apply, choose preset', 'SF bounce on the tool symbol', 'system', 'No bounce', 'Impact light'],
+      ['Delete', 'Item removed, no list animation', '0', 'Same', 'Impact medium'],
+      ['Play ↔ Pause', 'SF replace', 'system', 'Instant swap', '—'],
+      ['Background copy working', 'SF variable colour on the status symbol + percent', 'system', 'Percent only', '—'],
+      ['Recording', 'SF pulse on the record symbol', 'system', 'Static filled symbol', 'None while mic is live'],
+      ['Export finished, platform posted', 'Tick draws on', '400 ms · ease-out', 'Tick appears', 'Notification success'],
+      ['Any failure', 'Inline error appears (no shake)', '150 ms · opacity', 'Appears', 'Notification error'],
+      ['Wizard illustrations', 'Pieces of the UI assemble, play once, rest', '250–400 ms each, 80 ms stagger, 3–5 s total · system spring', 'Final still, or 200 ms cross-fades', 'Success on sign-in'],
+      ['Screens, sheets, menus, alerts', 'System push / sheet / morph from control', 'system', 'System (fades)', '—']
+    ].map(([a, b, c, d, e]) => ({ a, b, c, d, e }));
+    const projects = [
+      { name: 'Lisbon weekend', len: '0:42', status: 'Edited today', cover: 'Day one', ph: 'cover · street', t1: '#5B5B5F', t2: '#535357' },
+      { name: "Mia's birthday", len: '1:18', status: 'Posted · YouTube, TikTok', cover: '', ph: 'cover · party', t1: '#6A625A', t2: '#625A52' },
+      { name: 'Morning run', len: '0:27', status: 'Yesterday', cover: '', ph: 'cover · park', t1: '#4F5A55', t2: '#47524D' },
+      { name: 'Kitchen reno', len: '2:04', status: '4 days ago', cover: 'Week 3', ph: 'cover · room', t1: '#5E5A64', t2: '#56525C' },
+      { name: 'Snow day', len: '0:35', status: '6 days ago', cover: '', ph: 'cover · snow', t1: '#8A8D92', t2: '#82858A' },
+      { name: 'Band practice', len: '3:10', status: '9 days ago', cover: '', ph: 'cover · stage', t1: '#3E3E42', t2: '#36363A' }
+    ];
+    const ruler = [['0:04', '12px'], ['0:06', '132px'], ['0:08', '252px'], ['0:10', '372px']].map(([t, x]) => ({ t, x }));
+    const beats = [40, 100, 160, 220, 280, 340, 400].map(x => (x - 14) + 'px');
+    let s = 7; const wave = Array.from({ length: 60 }, () => { s = (s * 9301 + 49297) % 233280; return Math.round(25 + (s / 233280) * 75) + '%'; });
+    const names = ['Basics', 'Audio', 'Look', 'Frame', 'Smart'];
+    const groups = names.map((n, i) => ({ n, bg: i === 0 ? 'rgba(255,255,255,.92)' : 'transparent', fg: i === 0 ? '#000' : 'rgba(235,235,245,.75)', w: i === 0 ? 600 : 500 }));
+    const groupsL = names.map((n, i) => ({ n, bg: i === 0 ? '#000' : 'transparent', fg: i === 0 ? '#fff' : 'rgba(60,60,67,.8)', w: i === 0 ? 600 : 500 }));
+    const basics = [['Split', 'content_cut'], ['Trim', 'width_normal'], ['Speed', 'speed'], ['Transition', 'swap_horiz'], ['Keyframe', 'diamond'], ['Duplicate', 'library_add'], ['Replace', 'sync'], ['Reverse', 'fast_rewind'], ['Freeze', 'ac_unit'], ['Select', 'check_circle']].map(([l, g]) => ({ l, g }));
+    const groupList = [
+      { n: 'Basics', t: 'Split, Trim, Speed, Transition, Keyframe, Duplicate, Replace, Reverse, Freeze, Select' },
+      { n: 'Audio', t: 'Volume, Extract audio, Voice, Sound' },
+      { n: 'Look', t: 'Filter, Adjust, Templates, Animate, Motion' },
+      { n: 'Frame', t: 'Crop, Transform, Opacity, Mask, Background' },
+      { n: 'Smart', t: 'Green screen, Cut out, Stabilize' }
+    ];
+    return { tokens, kinds, ramp, spacing, materials, icons, motion, projects, ruler, beats, wave, groups, groupsL, basics, groupList };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style></helmet>
+<section id="icon" data-screen-label="App icon" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:1100px">
+<div style="font:600 13px/18px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CLIPY · iOS 27 · REVIEW 3 · F10 · SUPERSEDES THE PLAY-BUTTON ICON</div>
+<div style="font-size:44px;line-height:52px;font-weight:700;letter-spacing:-.02em">App icon · a compass</div>
+<div style="font-size:19px;line-height:28px;color:#3A3A3C;text-wrap:pretty">A compass rose inside a ring. The north point is gold and the south point cream, so it reads as a compass at every size, and nothing in it looks like a play button. It is made of four flat layers for Icon Composer, with no highlights, shadows or blur of our own.</div>
+</div>
+<div id="12a" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><div style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px">12a</div><div style="font-size:26px;font-weight:700">Layers on Apple’s 1024 template · unmasked</div></div>
+<div style="display:flex;gap:28px;align-items:flex-end;flex-wrap:wrap">
+<sc-for list="{{ layers }}" as="l" hint-placeholder-count="5"><div style="display:flex;flex-direction:column;gap:8px;width:220px">
+<div style="width:220px;height:220px;position:relative;background:{{ l.bg }};overflow:hidden">
+<div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,95,210,.18) 0 1px,transparent 1px 27.5px),repeating-linear-gradient(0deg,rgba(255,95,210,.18) 0 1px,transparent 1px 27.5px)"></div>
+<div style="position:absolute;inset:22px;border-radius:999px;border:1px dashed rgba(255,95,210,.7)"></div><div style="position:absolute;inset:55px;border-radius:999px;border:1px dashed rgba(255,95,210,.7)"></div>
+<sc-if value="{{ l.ring }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:30px;border-radius:999px;border:15px solid #D9B36A;box-sizing:border-box"></div></sc-if>
+<sc-if value="{{ l.ew }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;background:#B9C7D6;clip-path:polygon(28% 50%,50% 45.5%,72% 50%,50% 54.5%)"></div></sc-if>
+<sc-if value="{{ l.north }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;background:#D9B36A;clip-path:polygon(50% 25%,57% 50%,43% 50%)"></div></sc-if>
+<sc-if value="{{ l.south }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;background:#F6E7C1;clip-path:polygon(43% 50%,57% 50%,50% 75%)"></div></sc-if>
+</div>
+<div style="font-size:14px;line-height:20px"><b>{{ l.n }}</b> · {{ l.d }}</div></div></sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#6C6C70;max-width:1000px">Grid and keyline circles shown in pink are Apple’s template guides; they are not part of the art. The ring sits on the outer keyline. All four points stop 46 px (at 1024) short of the ring, so the gold north point never touches the gold ring. The layer files are in <code>icon-layers/</code>: background.png, ring.png, east-west.png, north.png, south.png (1024 × 1024, transparent), and composite.png for reference.</div>
+</div>
+<div id="12b" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><div style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px">12b</div><div style="font-size:26px;font-weight:700">Six appearances at 60, 40 and 29 pt</div></div>
+<div style="display:grid;grid-template-columns:150px repeat(3,110px);gap:14px 20px;align-items:center">
+<div></div><div style="font:600 12px ui-monospace,Menlo,monospace;color:#6C6C70">60 pt</div><div style="font:600 12px ui-monospace,Menlo,monospace;color:#6C6C70">40 pt</div><div style="font:600 12px ui-monospace,Menlo,monospace;color:#6C6C70">29 pt</div>
+<sc-for list="{{ rows }}" as="r" hint-placeholder-count="6">
+<div style="font-size:14px;line-height:19px"><b>{{ r.n }}</b><br><span style="font:11px ui-monospace,Menlo,monospace;color:#6C6C70">{{ r.d }}</span></div>
+<sc-for list="{{ r.sizes }}" as="s" hint-placeholder-count="3"><div style="width:110px;height:90px;border-radius:18px;background:{{ r.wall }};display:flex;align-items:center;justify-content:center">
+<div style="width:{{ s.px }};height:{{ s.px }};border-radius:{{ s.rad }};background:{{ r.bg }};box-shadow:{{ r.edge }};position:relative;overflow:hidden">
+<div style="position:absolute;inset:{{ s.ri }};border-radius:999px;border:{{ s.rw }} solid {{ r.ring }};box-sizing:border-box"></div>
+<div style="position:absolute;inset:0;background:{{ r.ew }};clip-path:polygon(28% 50%,50% 45.5%,72% 50%,50% 54.5%)"></div>
+<div style="position:absolute;inset:0;background:{{ r.north }};clip-path:polygon(50% 25%,57% 50%,43% 50%)"></div>
+<div style="position:absolute;inset:0;background:{{ r.south }};clip-path:polygon(43% 50%,57% 50%,50% 75%)"></div>
+</div></div></sc-for>
+</sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#6C6C70;max-width:1000px">At 29 pt the east–west points drop below 1 pt and merge into the ring’s centre, but the gold north point still marks the compass. Clear and tinted versions come from Icon Composer; the values shown are the targets for the layer fills.</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const layers = [
+      { n: 'Background', d: '#0C2542 solid', bg: '#0C2542' },
+      { n: 'Ring', d: '#D9B36A, stroke 7% of canvas', bg: '#fff', ring: true },
+      { n: 'East–west', d: '#B9C7D6', bg: '#fff', ew: true },
+      { n: 'North point', d: '#D9B36A', bg: '#fff', north: true },
+      { n: 'South point', d: '#F6E7C1', bg: '#fff', south: true },
+      { n: 'Composite', d: 'mask shown for reference', bg: '#0C2542', ring: true, ew: true, north: true, south: true }
+    ];
+    const R = (n, d, wall, bg, ring, ew, north, south, edge = 'none') => ({ n, d, wall, bg, ring, ew, north, south, edge, sizes: [60, 40, 29].map(s => ({ px: s + 'px', rad: Math.round(s * 0.225) + 'px', ri: Math.round(s * 0.136) + 'px', rw: Math.max(1.5, s * 0.068).toFixed(1) + 'px' })) });
+    const rows = [
+      R('Default', 'navy · gold · cream', '#C9D6E3', '#0C2542', '#D9B36A', '#B9C7D6', '#D9B36A', '#F6E7C1'),
+      R('Dark', 'black · gold', '#1C1C1E', '#000000', '#D9B36A', '#7F8B98', '#D9B36A', '#F6E7C1'),
+      R('Clear light', 'frosted · white 92%', 'linear-gradient(135deg,#9fb8d0,#e2c9a8)', 'rgba(255,255,255,.35)', 'rgba(255,255,255,.92)', 'rgba(255,255,255,.6)', 'rgba(255,255,255,.95)', 'rgba(255,255,255,.7)', 'inset 0 0 0 1px rgba(255,255,255,.6)'),
+      R('Clear dark', 'frosted dark · white 85%', 'linear-gradient(135deg,#1d2a3a,#3a2e22)', 'rgba(0,0,0,.35)', 'rgba(255,255,255,.85)', 'rgba(255,255,255,.5)', 'rgba(255,255,255,.9)', 'rgba(255,255,255,.6)', 'inset 0 0 0 1px rgba(255,255,255,.18)'),
+      R('Tinted light', 'system tint · 100 / 60%', '#D8D2C8', '#E9E4DC', '#7A6A55', 'rgba(122,106,85,.45)', '#7A6A55', 'rgba(122,106,85,.6)'),
+      R('Tinted dark', 'system tint · 100 / 60%', '#111', '#1E1B17', '#C8B08A', 'rgba(200,176,138,.45)', '#C8B08A', 'rgba(200,176,138,.6)')
+    ];
+    return { layers, rows };
+  }
+}
+</script>
+</body>
+</html>

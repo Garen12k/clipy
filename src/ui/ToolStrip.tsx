@@ -51,7 +51,7 @@ export function ToolStrip({ visible, onClose, title, note, action, children }: P
       {/* Only the content moves: the strip's own box is in place, opaque, from the first frame. */}
       <EnterView testID="tool-strip-content" style={{ height }}>
         <View testID="tool-strip-header" style={{ height: STRIP.header, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.gutter }}>
-          <Title size={15} accessibilityRole="header">{title}</Title>
+          <Title size={theme.type.headline} accessibilityRole="header">{title}</Title>
           <View style={{ flex: 1, height: STRIP.header, justifyContent: "center" }}>{note}</View>
           {action ? <QuietButton compact title={action.label} onPress={action.onPress} /> : null}
           <DoneButton onPress={onClose} />

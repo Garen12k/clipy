@@ -28,7 +28,7 @@ test("Filter: one row of tiles over the strength row; Apply to all clips is the 
   await render(<FilterSheet clipId="a" visible onClose={onClose} />);
   expect(screen.getAllByTestId("strip-slider")).toHaveLength(1);
   await fireEvent.press(btn("Warm"));
-  await fireEvent.press(btn("Apply to all clips"));
+  await fireEvent.press(btn("Apply to All Clips"));
   expect(st().project!.clips.map((c) => c.filter)).toEqual(["warm", "warm"]);
   expect(st().past).toHaveLength(2);
   await expectStrip("Filter", onClose);
@@ -37,9 +37,9 @@ test("Filter: one row of tiles over the strength row; Apply to all clips is the 
 test("Filter in clipIds mode and on a layer has no action", async () => {
   const view = await render(<FilterSheet clipId="a" clipIds={["a", "b"]} visible onClose={() => {}} />);
   expect(screen.getByRole("header", { name: "Filter · 2 clips" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Apply to all clips" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Apply to All Clips" })).toBeNull();
   await view.rerender(<FilterSheet clipId="L" visible onClose={() => {}} />);
-  expect(screen.queryByRole("button", { name: "Apply to all clips" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Apply to All Clips" })).toBeNull();
 });
 
 test("Speed: tabs at the left of the row; Normal has the slider row, Curve has none; the length and the note sit in the header", async () => {
@@ -80,7 +80,7 @@ test("clip Animation: In / Out / Combo tabs, tiles in one row, the length row on
   expect(screen.getByText("Length 0.50 s")).toBeTruthy();
   await fireEvent.press(btn("Combo"));
   expect(screen.queryByTestId("strip-slider")).toBeNull();
-  expect(btn("Apply to all clips")).toBeTruthy();
+  expect(btn("Apply to All Clips")).toBeTruthy();
   await expectStrip("Animation", onClose);
 });
 
@@ -90,6 +90,6 @@ test("overlay Animation: In / Out / Loop tabs; no action", async () => {
   for (const t of ["In", "Out", "Loop"]) expect(btn(t)).toBeTruthy();
   await fireEvent.press(btn("Loop"));
   expect(screen.queryByTestId("strip-slider")).toBeNull();
-  expect(screen.queryByRole("button", { name: "Apply to all clips" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Apply to All Clips" })).toBeNull();
   await expectStrip("Animation", onClose);
 });

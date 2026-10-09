@@ -38,7 +38,7 @@ export function QuickEditSheet({ visible, onClose, onChoose }: Props) {
         ))}
       </View>
       <Body muted style={{ fontSize: theme.type.small, textAlign: "center" }}>{`Music: ${songOf(id)}. Pick a style, then your photos and videos. You get a finished draft that you can change afterwards.`}</Body>
-      <PrimaryButton title="Choose photos and videos" onPress={() => onChoose(id)} />
+      <PrimaryButton title="Choose Photos and Videos" onPress={() => onChoose(id)} />
     </Sheet>
   );
 }

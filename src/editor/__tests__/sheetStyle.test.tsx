@@ -22,5 +22,5 @@ test("sliders use the accent track and thumb", async () => {
   const s = screen.getByTestId("speed-slider");
   expect(s.props.minimumTrackTintColor).toBe(theme.colors.accent);
   expect(s.props.thumbTintColor).toBe(theme.colors.accent);
-  expect(s.props.maximumTrackTintColor).toBe(theme.colors.sea);
+  expect(s.props.maximumTrackTintColor).toBe(theme.colors.track);
 });

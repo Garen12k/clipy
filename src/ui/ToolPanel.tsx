@@ -68,7 +68,7 @@ export function ToolPanel({ visible, onClose, title, size = "regular", action, l
       {/* Only the content moves: the panel's own box is in place, opaque, from the first frame. The keyboard changing the height re-renders it and replays nothing. */}
       <EnterView testID="tool-panel-content" style={{ height }}>
         <View testID="tool-panel-header" style={{ height: PANEL.header, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.gutter }}>
-          <Title size={16} accessibilityRole="header">{title}</Title>
+          <Title size={theme.type.headline} accessibilityRole="header">{title}</Title>
           <View style={{ flex: 1, height: PANEL.header }} />
           {action ? <QuietButton compact title={action.label} onPress={action.onPress} /> : null}
           <DoneButton onPress={onClose} />

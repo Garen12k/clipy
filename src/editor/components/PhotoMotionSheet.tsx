@@ -40,7 +40,7 @@ export function PhotoMotionSheet({ clipId, visible, onClose }: { clipId: string 
   return (
     <ToolStrip visible={visible} onClose={onClose} title="Motion"
       // "Apply to all photos" writes the photos on the main track: it is not offered for a layer.
-      action={layer ? undefined : { label: "Apply to all photos", onPress: () => { haptic("light"); apply((p) => setMotionForAllPhotos(p, shown)); } }}>
+      action={layer ? undefined : { label: "Apply to All Photos", onPress: () => { haptic("light"); apply((p) => setMotionForAllPhotos(p, shown)); } }}>
       <StripTiles initialX={startX}>
         <Tile label="None" icon="ban-outline" selected={shown === null} onPress={() => pick(null)} />
         {PHOTO_MOTION_IDS.map((id) => <Tile key={id} label={PHOTO_MOTIONS[id].label} icon={PHOTO_MOTIONS[id].icon} selected={shown?.id === id} onPress={() => pick(id)} />)}

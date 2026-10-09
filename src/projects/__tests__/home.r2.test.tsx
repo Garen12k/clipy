@@ -56,9 +56,9 @@ test("one gold button, with and without projects; the header is a 48-pt row on t
   const empty = await render(<ProjectsScreen />);
   await screen.findByText("No clips yet");
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
-  expect(screen.getByTestId("primary-button")).toHaveAccessibleName("New project");
+  expect(screen.getByTestId("primary-button")).toHaveAccessibleName("New Project");
   expect(screen.getByTestId("home-header")).toHaveStyle({ height: theme.size.row, paddingLeft: theme.space.gutter, paddingRight: theme.space.sm, alignItems: "center" });
-  expect(screen.getByRole("header", { name: "Your voyages" })).toHaveStyle({ fontSize: theme.type.screen });
+  expect(screen.getByRole("header", { name: "Projects" })).toHaveStyle({ fontSize: theme.type.screen });
   await empty.unmount();
   list.mockResolvedValue([p("a", "Beach")]);
   await render(<ProjectsScreen />);

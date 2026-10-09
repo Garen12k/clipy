@@ -5,6 +5,7 @@ import { makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { TILE_WIDTH } from "@/src/ui/Tile";
+import { ToneContext } from "@/src/ui/tone";
 import { AdjustSheet } from "../components/AdjustSheet";
 import { MaskSheet } from "../components/MaskSheet";
 import { OpacitySheet } from "../components/OpacitySheet";
@@ -20,7 +21,7 @@ beforeEach(() => {
 
 test("a strip's slider is the kit's: themed, and its name and value are one text with the value picked out", async () => {
   await render(<OpacitySheet clipId="a" visible onClose={() => {}} />);
-  expect(screen.getByTestId("opacity-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.sea, thumbTintColor: theme.colors.accent });
+  expect(screen.getByTestId("opacity-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.track, thumbTintColor: theme.colors.accent });
   expect(screen.getByText("Opacity 100 %")).toBeTruthy();
   expect(screen.getByText("100 %")).toHaveStyle({ color: theme.colors.text, fontVariant: ["tabular-nums"] });
 });
@@ -41,7 +42,7 @@ test("Volume ticks at 100 %; the drag is still one undo step and the value is no
 test("Adjust ticks at 0 for a two-sided control; Reset is a quiet button, disabled while nothing is adjusted", async () => {
   await render(<AdjustSheet clipId="a" visible onClose={() => {}} />);
   expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
-  expect(screen.getByText("Reset")).toHaveStyle({ color: theme.colors.accent, textTransform: "uppercase" });
+  expect(screen.getByText("Reset")).toHaveStyle({ color: theme.colors.accent, fontWeight: theme.weight.semi });
   const s = screen.getByTestId("adjust-slider");
   await fireEvent(s, "slidingStart", 0);
   await fireEvent(s, "valueChange", 0.35);
@@ -52,8 +53,11 @@ test("Adjust ticks at 0 for a two-sided control; Reset is a quiet button, disabl
   expect(screen.getByRole("button", { name: "Reset" })).not.toBeDisabled();
 });
 
+/** As in the app: the editor says its family once, on its Screen (src/ui/tone.ts); a part rendered bare would be on a navy screen. */
+const inEditor = { wrapper: ({ children }: { children: React.ReactNode }) => <ToneContext.Provider value="editor">{children}</ToneContext.Provider> };
+
 test("Mask uses the kit tile: the ring and the lighter box on the selected one, one undo step per pick", async () => {
-  await render(<MaskSheet clipId="a" visible onClose={() => {}} />);
+  await render(<MaskSheet clipId="a" visible onClose={() => {}} />, inEditor);
   expect(screen.getByRole("button", { name: "None" })).toBeSelected();
   expect(screen.getByRole("button", { name: "None" })).toHaveStyle({ width: TILE_WIDTH });
   expect(screen.getByTestId("mask-tile-none")).toHaveStyle({ backgroundColor: theme.elevation.lifted, ...theme.ring });

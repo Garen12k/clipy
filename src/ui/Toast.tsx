@@ -3,6 +3,7 @@ import { View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { create } from "zustand";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "./tone";
 import { enterTo, fadeOutTo } from "./motion";
 import { Body } from "./Text";
 import { isReducedMotion } from "./useReducedMotion";
@@ -20,6 +21,7 @@ const SHIFT = theme.motion.enterShift;
 /** Mount once near the root of a screen. Shows the latest message for 2.5 s: it eases in, and out over its last moments (timers, not animation callbacks). */
 export function ToastHost() {
   const { message, stamp, clear } = useToast();
+  const s = useSurfaces();
   const o = useSharedValue(0);
   useEffect(() => {
     if (!message) return;
@@ -34,7 +36,7 @@ export function ToastHost() {
   if (!message) return null;
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: theme.space.gutter, right: theme.space.gutter, bottom: 100, alignItems: "center" }}>
-      <Animated.View testID="toast" style={[{ backgroundColor: theme.elevation.tile, borderColor: theme.colors.hairline, borderWidth: 1, borderRadius: theme.radius.pill, paddingVertical: theme.space.md, paddingHorizontal: theme.space.lg }, anim]}>
+      <Animated.View testID="toast" style={[{ backgroundColor: s.tile, borderColor: s.separator, borderWidth: 1, borderRadius: theme.radius.pill, paddingVertical: theme.space.md, paddingHorizontal: theme.space.lg }, anim]}>
         <Body>{message}</Body>
       </Animated.View>
     </View>

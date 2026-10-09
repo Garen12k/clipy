@@ -52,7 +52,7 @@ describe("drawing", () => {
   test("each region effect covering the playhead is a frosted rectangle at its pixels; others are not drawn", async () => {
     store().seek(1.5);
     await render(<RegionBoxes frameW={W} frameH={H} />);
-    expect(screen.getByTestId("region-box-blur")).toHaveStyle({ position: "absolute", ...px(BLUR), backgroundColor: theme.colors.scrim, borderColor: theme.colors.hairline, borderWidth: StyleSheet.hairlineWidth });
+    expect(screen.getByTestId("region-box-blur")).toHaveStyle({ position: "absolute", ...px(BLUR), backgroundColor: theme.colors.scrim, borderColor: theme.colors.textMuted, borderWidth: StyleSheet.hairlineWidth });
     expect(screen.queryByTestId("region-box-mosaic")).toBeNull();
     expect(screen.queryByTestId("region-box-shake")).toBeNull();
     await act(() => { store().seek(2.5); });
@@ -120,7 +120,7 @@ describe("the selected box", () => {
     expect(screen.getByLabelText("Top-left corner")).toBeTruthy();
     expect(screen.getByLabelText("Bottom-right corner")).toBeTruthy();
     // The other box stays a plain picture.
-    expect(screen.getByTestId("region-box-mosaic")).toHaveStyle({ borderColor: theme.colors.hairline });
+    expect(screen.getByTestId("region-box-mosaic")).toHaveStyle({ borderColor: theme.colors.textMuted });
     expect(screen.getByTestId("region-box-mosaic").props.pointerEvents).toBe("none");
   });
 

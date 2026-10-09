@@ -17,6 +17,7 @@ import { makeClip, makeOverlay, makeProject, type TextOverlay } from "@/src/edit
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { NumField } from "@/src/ui/NumField";
+import { ToneContext } from "@/src/ui/tone";
 import { AddAudioSheet } from "../components/AddAudioSheet";
 import { FontStrip } from "../components/FontStrip";
 import { TextPanel } from "../components/TextPanel";
@@ -29,18 +30,21 @@ beforeEach(() => {
 
 test("the text panel's sliders are the kit's and its Size line is one text with the value picked out", async () => {
   await render(<TextPanel overlayId="t" visible onClose={() => {}} />);
-  expect(screen.getByTestId("size-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.sea });
+  expect(screen.getByTestId("size-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.track });
   const overlay = st().project!.overlays[0] as TextOverlay;
   const pct = `${Math.round(overlay.fontScale * 100)}%`;
   expect(screen.getByText(`Size ${pct}`)).toBeTruthy();
   expect(screen.getByText(pct)).toHaveStyle({ color: theme.colors.text, fontVariant: ["tabular-nums"] });
-  // Duplicate is outlined, Delete is outlined in red — no gold fill in the panel's body.
+  // Duplicate is the grey button, Delete is the grey button in red — no gold fill in the panel's body.
   expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
 });
 
+/** As in the app: the editor says its family once, on its Screen (src/ui/tone.ts); a part rendered bare would be on a navy screen. */
+const inEditor = { wrapper: ({ children }: { children: React.ReactNode }) => <ToneContext.Provider value="editor">{children}</ToneContext.Provider> };
+
 test("fields and font chips sit on the tile surface, on the scale; the chosen font has the ring", async () => {
   const overlay = st().project!.overlays[0] as TextOverlay;
-  await render(<><NumField label="X %" value={50} onCommit={() => {}} /><FontStrip value={overlay.fontId} onChange={() => {}} /></>);
+  await render(<><NumField label="X %" value={50} onCommit={() => {}} /><FontStrip value={overlay.fontId} onChange={() => {}} /></>, inEditor);
   expect(screen.getByLabelText("X %")).toHaveStyle({ padding: theme.space.md, backgroundColor: theme.elevation.tile });
   const chips = screen.getAllByRole("button");
   const chosen = chips.filter((c) => c.props.accessibilityState?.selected);
@@ -50,9 +54,9 @@ test("fields and font chips sit on the tile surface, on the scale; the chosen fo
   expect(other).toHaveStyle({ backgroundColor: theme.elevation.tile, ...theme.ringClear });
 });
 
-test("Add audio: a row's button is outlined, not a chip, and the list has no gold button", async () => {
-  await render(<AddAudioSheet visible onClose={() => {}} />);
+test("Add audio: a row's button is the grey secondary button, not a chip, and the list has no gold button", async () => {
+  await render(<AddAudioSheet visible onClose={() => {}} />, inEditor);
   const use = screen.getAllByRole("button", { name: /^Use / })[0];
-  expect(use).toHaveStyle({ height: theme.size.controlCompact, borderWidth: 1.5 });
+  expect(use).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });
   expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
 });

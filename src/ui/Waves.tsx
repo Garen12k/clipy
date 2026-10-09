@@ -27,12 +27,12 @@ function Layer({ color, duration, bottom, opacity, still }: { color: string; dur
   );
 }
 
-/** Two rolling wave layers pinned to the bottom of their parent. */
+/** Two rolling wave layers pinned to the bottom of their parent: two navy swells on the navy page, the nearer one the colour of a card (only the loading and welcome screens draw them). */
 export function Waves({ still = false }: { still?: boolean }) {
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: H + 12, overflow: "hidden" }}>
-      <Layer color={theme.colors.seaLight} duration={5000} bottom={8} opacity={0.55} still={still} />
-      <Layer color={theme.colors.sea} duration={3000} bottom={0} opacity={1} still={still} />
+      <Layer color={theme.screen.lifted} duration={5000} bottom={8} opacity={0.55} still={still} />
+      <Layer color={theme.screen.bar} duration={3000} bottom={0} opacity={1} still={still} />
     </View>
   );
 }

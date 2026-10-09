@@ -53,13 +53,13 @@ test("the sentences", () => {
 
 test("own music: the button is on and the hint says it will listen; a tap listens, shows the spinner, then places the markers in one undo step", async () => {
   await open();
-  expect(btn("Find beats")).toBeEnabled();
+  expect(btn("Find Beats")).toBeEnabled();
   expect(screen.getByText("Find beats listens to my song.m4a for a few seconds.")).toBeTruthy();
   const run = pending();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   expect(listen).toHaveBeenCalledWith(expect.objectContaining({ id: "own", sourceUri: song.sourceUri }));
   expect(screen.getByLabelText("Listening to the music")).toBeTruthy();
-  expect(btn("Find beats")).toBeDisabled();
+  expect(btn("Find Beats")).toBeDisabled();
   expect(markers()).toEqual([]);
   await run.finish("ok", BEATS);
   expect(screen.queryByLabelText("Listening to the music")).toBeNull();
@@ -72,7 +72,7 @@ test("once listened to, Find beats is instant and the slider is on", async () =>
   useOwnBeats.setState({ found: { [beatKey(song)]: BEATS } });
   await open();
   expect(screen.getByTestId("beats-density").props.accessibilityState.disabled).toBe(false);
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   expect(listen).not.toHaveBeenCalled();
   expect(markers()).toEqual([0.5, 1.5, 2.5, 3.5]);
 });
@@ -80,17 +80,17 @@ test("once listened to, Find beats is instant and the slider is on", async () =>
 test("no steady beat: nothing is placed and the hint says so; too short says so in a toast", async () => {
   await open();
   const first = pending();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   await first.finish("unsteady", null);
   expect(markers()).toEqual([]);
   expect(st().past).toHaveLength(0);
   expect(screen.getByText("my song.m4a has no steady beat. Tap the beat with Tap instead.")).toBeTruthy();
   // The row is 36 pt and the sentence carries the owner's file name: two lines at most, so a long name never runs over the row below.
   expect(screen.getByText("my song.m4a has no steady beat. Tap the beat with Tap instead.").props.numberOfLines).toBe(2);
-  expect(btn("Find beats")).toBeDisabled();
+  expect(btn("Find Beats")).toBeDisabled();
   await act(async () => { useOwnBeats.setState({ found: {} }); });
   const second = pending();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   await second.finish("short", null);
   expect(useToast.getState().message).toBe(BEAT_MESSAGES.tooShort);
 });
@@ -100,11 +100,11 @@ test("a file that cannot be listened to: one plain toast, nothing placed, the bu
   listen.mockRejectedValueOnce(new Error("beats source: this file has no sound"));
   const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
   try {
-    await fireEvent.press(btn("Find beats"));
+    await fireEvent.press(btn("Find Beats"));
     await act(async () => { await Promise.resolve(); });
     expect(useToast.getState().message).toBe(BEAT_MESSAGES.failed);
     expect(markers()).toEqual([]);
-    expect(btn("Find beats")).toBeEnabled();
+    expect(btn("Find Beats")).toBeEnabled();
   } finally { warn.mockRestore(); }
 });
 
@@ -112,7 +112,7 @@ test("on a build without it: the hint says so, a tap says the sentence, and noth
   jest.mocked(isBeatEnvelopeAvailable).mockReturnValue(false);
   await open();
   expect(screen.getByText(BEAT_MESSAGES.ownNeedsBuild)).toBeTruthy();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   expect(useToast.getState().message).toBe(BEATS_BACKGROUND_TOOLS);
   expect(listen).not.toHaveBeenCalled();
   expect(markers()).toEqual([]);
@@ -122,7 +122,7 @@ test("closing the panel while it listens stops the listening, and an answer that
   st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], audioTracks: [song] }));
   const view = await render(<BeatsSheet visible onClose={() => {}} />);
   const run = pending();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   await view.rerender(<BeatsSheet visible={false} onClose={() => {}} />);
   expect(stopListening).toHaveBeenCalled();
   await run.finish("ok", BEATS);
@@ -132,7 +132,7 @@ test("closing the panel while it listens stops the listening, and an answer that
 test("the track deleted while it listens: the answer is dropped", async () => {
   await open();
   const run = pending();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   await act(() => { st().apply((p) => ({ ...p, audioTracks: [] })); });
   await run.finish("ok", BEATS);
   expect(markers()).toEqual([]);
@@ -143,16 +143,16 @@ test("the track deleted while it listens: the answer is dropped", async () => {
 test("the listening ended on its own (the deadline) with the panel still open: one sentence in the hint's place, nothing placed, the button is back; the next tap listens again", async () => {
   await open();
   const run = pending();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   await run.finish("stopped");
   expect(screen.queryByLabelText("Listening to the music")).toBeNull();
   expect(screen.getByText(BEAT_MESSAGES.gaveUp)).toBeTruthy();
   expect(useToast.getState().message).toBeNull();
   expect(markers()).toEqual([]);
   expect(st().past).toHaveLength(0);
-  expect(btn("Find beats")).toBeEnabled();
+  expect(btn("Find Beats")).toBeEnabled();
   const again = pending();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   expect(screen.queryByText(BEAT_MESSAGES.gaveUp)).toBeNull();
   await again.finish("ok", BEATS);
   expect(markers()).toEqual([0.5, 1.5, 2.5, 3.5]);
@@ -163,21 +163,21 @@ test("a stopped listening says nothing once the panel has been closed and opened
   st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], audioTracks: [song] }));
   const view = await render(<BeatsSheet visible onClose={() => {}} />);
   const run = pending();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   await view.rerender(<BeatsSheet visible={false} onClose={() => {}} />);
   await run.finish("stopped");
   await view.rerender(<BeatsSheet visible onClose={() => {}} />);
   expect(screen.queryByText(BEAT_MESSAGES.gaveUp)).toBeNull();
   expect(screen.getByText("Find beats listens to my song.m4a for a few seconds.")).toBeTruthy();
-  expect(btn("Find beats")).toBeEnabled();
+  expect(btn("Find Beats")).toBeEnabled();
 });
 
 test("the listener answers that this app has none: the build sentence, nothing placed", async () => {
   await open();
   listen.mockResolvedValueOnce("unavailable");
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   await act(async () => { await Promise.resolve(); });
   expect(useToast.getState().message).toBe(BEATS_BACKGROUND_TOOLS);
   expect(markers()).toEqual([]);
-  expect(btn("Find beats")).toBeEnabled();
+  expect(btn("Find Beats")).toBeEnabled();
 });

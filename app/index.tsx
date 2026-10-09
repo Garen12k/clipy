@@ -132,7 +132,7 @@ function ProjectsScreen() {
   return (
     <Screen>
       <View testID="home-header" style={{ height: theme.size.row, paddingLeft: theme.space.gutter, paddingRight: theme.space.sm, marginBottom: theme.space.sm, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Title size={theme.type.screen} accessibilityRole="header">Your voyages</Title>
+        <Title size={theme.type.screen} accessibilityRole="header">Projects</Title>
         <View testID="home-header-actions" pointerEvents={touch} style={{ flexDirection: "row", alignItems: "center" }}>
           <IconButton name="paper-plane-outline" accessibilityLabel="Post a video" onPress={onPostVideo} />
           <IconButton name="person-circle-outline" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
@@ -156,17 +156,17 @@ function ProjectsScreen() {
         {making ? (
           // The pill gives the spinner and its words a surface: the cards scroll underneath.
           // One accessible element: VoiceOver reads the words once, not once for the spinner and once for the text.
-          <View testID="home-making" accessible accessibilityLabel="Making your quick edit" style={{ height: theme.size.control, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
+          <View testID="home-making" accessible accessibilityLabel="Making your quick edit" style={{ height: theme.size.control, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar }}>
             <Spinner />
             <Body>Making your quick edit</Body>
           </View>
         ) : (
           <>
-            {/* An outlined button has no fill of its own: the pill behind it keeps it readable over the cards. */}
-            <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
-              <SecondaryButton title="Quick edit" onPress={onQuick} />
+            {/* The grey button has its own fill; the pill behind it only keeps it readable over the cards. */}
+            <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar }}>
+              <SecondaryButton title="Quick Edit" onPress={onQuick} />
             </View>
-            <PrimaryButton title="New project" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
+            <PrimaryButton title="New Project" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
           </>
         )}
       </View>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style>
+</helmet>
+<section id="components" data-screen-label="Components" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:1200px">
+<div style="font:600 13px/18px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CLIPY · iOS 27 · PART 3 · SECTION 15 (B)</div>
+<div style="font-size:44px;line-height:52px;font-weight:700;letter-spacing:-.02em">Component library</div>
+<div style="font-size:19px;line-height:28px;color:#3A3A3C;text-wrap:pretty">Every component from brief 5.4 plus the new ones, in dark (4a) and light (4b). States are left to right: default, pressed, selected/on, disabled, busy, error, wherever the component has them. Components marked <b>system</b> are the real iOS control; the drawing only shows how Clipy tints and labels it.</div>
+</div>
+
+<div id="4z" style="max-width:1500px;background:#FBFBFA;border-radius:28px;padding:40px 48px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div style="grid-column:1/-1;display:flex;align-items:center;gap:14px"><a href="#4z" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">4z</a><div style="font-size:26px;font-weight:700;color:#111">Inconsistencies resolved</div></div>
+<div><b style="color:#111">Tool button and Tile become one “Tool tile”.</b> The toolbar uses its bare form (symbol over label). Strips use its boxed form (picture, symbol or shape in a concentric box, with the label under it).</div>
+<div><b style="color:#111">One text field.</b> A visible label above, 12-pt inner padding, a Clear button, and the message line under it. Number fields are the same field at compact width with a unit suffix.</div>
+<div><b style="color:#111">One destructive form.</b> In menus, lists and alerts: the system destructive role (red text). In panels: a grey-filled capsule with a red label and symbol. “Sign out” is destructive too.</div>
+<div><b style="color:#111">One home for the primary action.</b> The bottom of the screen, sheet or panel, full width or trailing. In the editor it is Export in the navigation bar. In strips and panels there is none; Done is a plain circle.</div>
+<div><b style="color:#111">One pick-one system.</b> Boxed tool tiles that show the result (thumbnails, drawn shapes, speed charts). Segmented controls for tabs and two to five text options. Colour swatches stay round because the colour is the content, now at 44 pt.</div>
+<div><b style="color:#111">One format per unit.</b> Percent “100%” · seconds with decimals matching the step (“0.5 s”, “0.50 s”, “2 s”) · speed “1.5×” · signed values “+25”, “−10”, “0” · plain numbers “70” · time “0:07”. Always tabular digits.</div>
+</div>
+
+<div style="display:flex;gap:48px;align-items:flex-start;flex-wrap:wrap">
+<sc-for list="{{ themes }}" as="t" hint-placeholder-count="2">
+<div id="{{ t.id }}" style="width:1180px;background:{{ t.page }};color:{{ t.label }};border-radius:28px;padding:48px;display:flex;flex-direction:column;gap:40px;box-sizing:border-box">
+<div style="display:flex;align-items:center;gap:14px"><div style="background:{{ t.label }};color:{{ t.page }};font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px">{{ t.id }}</div><div style="font-size:30px;font-weight:700">{{ t.title }}</div></div>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">BUTTONS · DEFAULT · PRESSED · DISABLED · BUSY</div>
+<div style="display:grid;grid-template-columns:150px repeat(4,1fr);gap:14px;align-items:center">
+<div style="font-size:14px;color:{{ t.label2 }}">Primary (one per screen)</div>
+<div style="height:50px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:22px">add</span>New Project</div>
+<div style="height:50px;border-radius:999px;background:#C29C55;color:#1A1408;display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:22px">add</span>New Project</div>
+<div style="height:50px;border-radius:999px;background:{{ t.fill }};color:{{ t.label3 }};display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600">Send Code</div>
+<div style="height:50px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;gap:10px;font-size:17px;font-weight:600"><div style="width:18px;height:18px;border-radius:999px;border:2.5px solid rgba(26,20,8,.25);border-top-color:#1A1408"></div>Sending</div>
+<div style="font-size:14px;color:{{ t.label2 }}">Secondary</div>
+<div style="height:50px;border-radius:999px;background:{{ t.fill }};display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:22px">ios_share</span>Share</div>
+<div style="height:50px;border-radius:999px;background:{{ t.fillPressed }};display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:22px">ios_share</span>Share</div>
+<div style="height:50px;border-radius:999px;background:{{ t.fill }};color:{{ t.label3 }};display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:600">Share</div>
+<div style="height:50px;border-radius:999px;background:{{ t.fill }};display:flex;align-items:center;justify-content:center;gap:10px;font-size:17px;font-weight:600"><div style="width:18px;height:18px;border-radius:999px;border:2.5px solid {{ t.sep }};border-top-color:{{ t.label }}"></div>Saving</div>
+<div style="font-size:14px;color:{{ t.label2 }}">Destructive</div>
+<div style="height:50px;border-radius:999px;background:{{ t.fill }};color:{{ t.danger }};display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:22px">delete</span>Delete</div>
+<div style="height:50px;border-radius:999px;background:{{ t.fillPressed }};color:{{ t.danger }};display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:22px">delete</span>Delete</div>
+<div style="height:50px;border-radius:999px;background:{{ t.fill }};color:{{ t.label3 }};display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;font-weight:600"><span style="font-family:'Material Symbols Rounded';font-size:22px">delete</span>Delete</div>
+<div style="font-size:14px;line-height:19px;color:{{ t.label2 }}">In menus, lists and alerts: system destructive role</div>
+<div style="font-size:14px;color:{{ t.label2 }}">Text action</div>
+<div style="height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:{{ t.ink }}">Apply to All</div>
+<div style="height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:{{ t.ink }};opacity:.55">Apply to All</div>
+<div style="height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:{{ t.label3 }}">Reset</div>
+<div style="font-size:14px;line-height:19px;color:{{ t.label2 }}">One wording: “Apply to All” (was three)</div>
+<div style="font-size:14px;color:{{ t.label2 }}">Icon · Done</div>
+<div style="display:flex;gap:10px;justify-content:center"><div style="width:44px;height:44px;border-radius:999px;background:{{ t.glass }};border:0.5px solid {{ t.glassBorder }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:22px">arrow_back_ios_new</span></div><div style="width:44px;height:44px;border-radius:999px;background:{{ t.fill }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:24px">check</span></div></div>
+<div style="display:flex;gap:10px;justify-content:center"><div style="width:44px;height:44px;border-radius:999px;background:{{ t.fillPressed }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:22px">arrow_back_ios_new</span></div><div style="width:44px;height:44px;border-radius:999px;background:{{ t.fillPressed }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:24px">check</span></div></div>
+<div style="display:flex;gap:10px;justify-content:center;color:{{ t.label3 }}"><div style="width:44px;height:44px;border-radius:999px;background:{{ t.fill }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:22px">undo</span></div></div>
+<div style="font-size:14px;line-height:19px;color:{{ t.label2 }}">Done closes a strip or panel (was a 32-pt gold ring)</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">TOOL TILE · TOOLBAR FORM AND BOXED FORM</div>
+<div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap">
+<sc-for list="{{ t.toolStates }}" as="s" hint-placeholder-count="5"><div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:72px"><div style="width:60px;height:56px;border-radius:16px;background:{{ s.bg }};color:{{ s.fg }};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px"><span style="font-family:'Material Symbols Rounded';font-size:24px;font-variation-settings:'FILL' {{ s.fill }}">{{ s.g }}</span><span style="font-size:12px;line-height:16px">{{ s.l }}</span></div><div style="font-size:12px;color:{{ t.label2 }};text-align:center">{{ s.cap }}</div></div></sc-for>
+<div style="width:1px;align-self:stretch;background:{{ t.sep }}"></div>
+<sc-for list="{{ t.tileStates }}" as="s" hint-placeholder-count="5"><div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:76px"><div style="width:68px;height:68px;border-radius:16px;background:{{ s.bg }};box-shadow:{{ s.ring }};opacity:{{ s.op }};display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden"><span style="font-family:'Material Symbols Rounded';font-size:28px;color:{{ t.label }}">{{ s.g }}</span><sc-if value="{{ s.busy }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center"><div style="width:18px;height:18px;border-radius:999px;border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff"></div></div></sc-if></div><div style="font-size:12px;line-height:16px;font-weight:{{ s.w }};text-align:center">{{ s.l }}</div><div style="font-size:11px;color:{{ t.label2 }}">{{ s.cap }}</div></div></sc-for>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+<sc-for list="{{ t.ratios }}" as="r" hint-placeholder-count="9"><div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:60px"><div style="width:56px;height:56px;border-radius:14px;background:{{ r.bg }};box-shadow:{{ r.ring }};display:flex;align-items:center;justify-content:center"><div style="width:{{ r.w }};height:{{ r.h }};border:2px {{ r.style }} {{ t.label }};border-radius:3px;box-sizing:border-box"></div></div><div style="font-size:12px;font-weight:{{ r.fw }};font-variant-numeric:tabular-nums">{{ r.l }}</div></div></sc-for>
+<div style="font-size:13px;line-height:18px;color:{{ t.label2 }};max-width:220px">Ratio shapes: boxed tiles, Auto dashed. Selected = 2-pt accent-ink ring + filled box + semibold label.</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">SEGMENTED CONTROL · SYSTEM</div>
+<div style="height:36px;border-radius:999px;background:{{ t.fill }};display:flex;padding:2px;box-sizing:border-box"><div style="flex:1;border-radius:999px;background:{{ t.segSel }};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;gap:4px">In<span style="width:5px;height:5px;border-radius:9px;background:{{ t.ink }}"></span></div><div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:14px;gap:4px">Out<span style="width:5px;height:5px;border-radius:9px;background:{{ t.ink }}"></span></div><div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:14px">Combo</div></div>
+<div style="font-size:13px;line-height:18px;color:{{ t.label2 }}">A dot after a tab label means that tab holds a setting (fixes the hidden Animation state). Max five segments, text or symbols, never both.</div>
+<div style="height:36px;border-radius:999px;background:{{ t.fill }};display:flex;padding:2px;box-sizing:border-box;width:180px"><div style="flex:1;border-radius:999px;background:{{ t.segSel }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:20px">format_align_left</span></div><div style="flex:1;display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:20px">format_align_center</span></div><div style="flex:1;display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:20px">format_align_right</span></div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">SLIDER ROW · SYSTEM SLIDER, TINTED</div>
+<div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between;font-size:15px"><span>Strength</span><span style="font-variant-numeric:tabular-nums;font-weight:600">70</span></div><div style="position:relative;height:28px;display:flex;align-items:center"><div style="height:4px;flex:1;border-radius:2px;background:{{ t.fill }}"></div><div style="position:absolute;left:0;width:70%;height:4px;border-radius:2px;background:{{ t.ink }}"></div><div style="position:absolute;left:50%;top:6px;width:2px;height:16px;border-radius:1px;background:{{ t.label3 }}"></div><div style="position:absolute;left:calc(70% - 14px);width:28px;height:28px;border-radius:999px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25)"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:4px;opacity:.45"><div style="display:flex;justify-content:space-between;font-size:15px"><span>Strength</span><span style="font-variant-numeric:tabular-nums;font-weight:600">—</span></div><div style="position:relative;height:28px;display:flex;align-items:center"><div style="height:4px;flex:1;border-radius:2px;background:{{ t.fill }}"></div><div style="position:absolute;left:0;width:28px;height:28px;border-radius:999px;background:#fff"></div></div></div>
+<div style="font-size:13px;line-height:18px;color:{{ t.label2 }};margin-top:-6px">Disabled: the reason goes under it, e.g. “Pick a filter to set its strength.” Rest tick = a mark on the track + a selection haptic.</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">LIST ROWS · SWITCH · CARD = INSET GROUPED SECTION</div>
+<div style="background:{{ t.cell }};border-radius:20px;overflow:hidden">
+<div style="min-height:52px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid {{ t.sep }}"><span style="font-size:17px">Smooth</span><div style="width:51px;height:31px;border-radius:999px;background:#34C759;position:relative"><div style="position:absolute;right:2px;top:2px;width:27px;height:27px;border-radius:999px;background:#fff"></div></div></div>
+<div style="min-height:52px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid {{ t.sep }}"><span style="font-size:17px">Mute</span><div style="width:51px;height:31px;border-radius:999px;background:{{ t.fill }};position:relative"><div style="position:absolute;left:2px;top:2px;width:27px;height:27px;border-radius:999px;background:#fff"></div></div></div>
+<div style="min-height:52px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;opacity:.4"><span style="font-size:17px">Reduce noise</span><div style="width:51px;height:31px;border-radius:999px;background:{{ t.fill }};position:relative"><div style="position:absolute;left:2px;top:2px;width:27px;height:27px;border-radius:999px;background:#fff"></div></div></div>
+</div>
+<div style="font-size:13px;line-height:18px;color:{{ t.label2 }}">One on/off rule: a system switch inside a labelled row. Outside a row, a tool tile whose on state is filled (Ducking, Reverse). Switch colour: system green, kit.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">TEXT FIELD · DEFAULT · FOCUSED · ERROR · NUMBER</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:13px;color:{{ t.label2 }}">Email</div><div style="height:48px;border-radius:12px;background:{{ t.cell }};padding:0 12px;display:flex;align-items:center;font-size:17px;color:{{ t.label3 }}">you@example.com</div></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:13px;color:{{ t.label2 }}">Email</div><div style="height:48px;border-radius:12px;background:{{ t.cell }};box-shadow:inset 0 0 0 2px {{ t.ink }};padding:0 8px 0 12px;display:flex;align-items:center;justify-content:space-between;font-size:17px">mia@exam<span style="font-family:'Material Symbols Rounded';font-size:20px;color:{{ t.label3 }};font-variation-settings:'FILL' 1">cancel</span></div></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:13px;color:{{ t.label2 }}">Code</div><div style="height:48px;border-radius:12px;background:{{ t.cell }};box-shadow:inset 0 0 0 2px {{ t.danger }};padding:0 12px;display:flex;align-items:center;font-size:20px;letter-spacing:.3em;font-variant-numeric:tabular-nums">482913</div><div style="display:flex;gap:4px;font-size:13px;line-height:18px;color:{{ t.danger }}"><span style="font-family:'Material Symbols Rounded';font-size:16px;font-variation-settings:'FILL' 1">error</span>That code didn't work. Check it or send a new one.</div></div>
+<div style="display:flex;gap:8px"><div style="display:flex;flex-direction:column;gap:6px;flex:1"><div style="font-size:13px;color:{{ t.label2 }}">Start</div><div style="height:44px;border-radius:12px;background:{{ t.cell }};padding:0 10px;display:flex;align-items:center;justify-content:space-between;font-size:17px;font-variant-numeric:tabular-nums">1.5<span style="color:{{ t.label2 }};font-size:15px">s</span></div></div><div style="display:flex;flex-direction:column;gap:6px;flex:1"><div style="font-size:13px;color:{{ t.label2 }}">End</div><div style="height:44px;border-radius:12px;background:{{ t.cell }};padding:0 10px;display:flex;align-items:center;justify-content:space-between;font-size:17px;font-variant-numeric:tabular-nums">9.8<span style="color:{{ t.label2 }};font-size:15px">s</span></div></div></div>
+</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">COLOUR ROW · 44-PT SWATCHES</div>
+<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+<sc-for list="{{ t.swatches }}" as="s" hint-placeholder-count="8"><div style="width:44px;height:44px;border-radius:999px;display:flex;align-items:center;justify-content:center;box-shadow:{{ s.ring }}"><div style="width:34px;height:34px;border-radius:999px;background:{{ s.c }};box-shadow:inset 0 0 0 1px {{ t.sep }};display:flex;align-items:center;justify-content:center"><sc-if value="{{ s.sel }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Material Symbols Rounded';font-size:18px;color:#000;font-weight:700">check</span></sc-if></div></div></sc-for>
+<div style="width:44px;height:44px;border-radius:999px;background:conic-gradient(#f44,#fd4,#4d6,#4cf,#64f,#f4c,#f44);display:flex;align-items:center;justify-content:center"><div style="width:30px;height:30px;border-radius:999px;background:{{ t.page }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:18px">add</span></div></div>
+</div>
+<div style="display:flex;gap:10px;align-items:center"><div style="height:40px;width:130px;border-radius:12px;background:{{ t.cell }};padding:0 12px;display:flex;align-items:center;font:15px ui-monospace,Menlo,monospace;color:{{ t.label3 }}">#RRGGBB</div><div style="font-size:13px;line-height:18px;color:{{ t.label2 }}">The last swatch opens the system colour picker. Marked suggestion: a new ability.</div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">PROGRESS · ACTIVITY WITH WORDS · RING (EXPORT ONLY)</div>
+<div style="display:flex;gap:24px;align-items:center">
+<div style="width:120px;height:120px;border-radius:999px;background:conic-gradient({{ t.ink }} 0 37%,{{ t.fill }} 37% 100%);display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:104px;height:104px;border-radius:999px;background:{{ t.page }};display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="font-size:28px;font-weight:700;font-variant-numeric:tabular-nums">37%</span><span style="font-size:12px;color:{{ t.label2 }}">Exporting</span></div></div>
+<div style="width:120px;height:120px;border-radius:999px;background:{{ t.ink }};display:flex;align-items:center;justify-content:center;flex-shrink:0"><div style="width:104px;height:104px;border-radius:999px;background:{{ t.page }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:52px;color:{{ t.ink }};font-weight:600">check</span></div></div>
+<div style="display:flex;flex-direction:column;gap:12px;flex:1">
+<div style="display:flex;align-items:center;gap:8px;font-size:15px;color:{{ t.label2 }}"><div style="width:18px;height:18px;border-radius:999px;border:2.5px solid {{ t.sep }};border-top-color:{{ t.label2 }}"></div>Loading voices</div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:15px"><span>Transcribing clip 2 of 5</span><span style="color:{{ t.ink }}">Cancel</span></div><div style="height:4px;border-radius:2px;background:{{ t.fill }}"><div style="width:40%;height:4px;border-radius:2px;background:{{ t.ink }}"></div></div></div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">FOUR KINDS OF MESSAGE · REPLACE THE TOAST</div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">1 · Inline status / refusal</div><div style="background:{{ t.cell }};border-radius:16px;padding:12px 14px;display:flex;gap:8px;font-size:15px;line-height:20px"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:{{ t.label2 }}">info</span><span>Move the playhead away from the clip's edge.</span></div><div style="font-size:12px;line-height:16px;color:{{ t.label2 }}">Sits next to the control that caused it. Clears on the next action.</div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">2 · Brief confirmation</div><div style="height:44px;border-radius:999px;background:{{ t.banner }};color:#fff;padding:0 6px 0 16px;display:flex;align-items:center;justify-content:space-between;font-size:15px"><span style="display:flex;gap:6px;align-items:center"><span style="font-family:'Material Symbols Rounded';font-size:18px;font-variation-settings:'FILL' 1">check_circle</span>Clips cut to the beat</span><span style="height:32px;padding:0 12px;border-radius:999px;background:rgba(255,255,255,.18);display:flex;align-items:center;font-weight:600">Undo</span></div><div style="font-size:12px;line-height:16px;color:{{ t.label2 }}">Directly above the toolbar or bottom bar, never over controls. Stays until the next edit (Undo also stays in the transport row).</div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">3 · Inline error with action</div><div style="background:{{ t.cell }};border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:8px;font-size:15px;line-height:20px"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:{{ t.danger }};font-variation-settings:'FILL' 1">error</span><span>Couldn't reach Clipy. Check your connection.</span></div><div style="height:40px;border-radius:999px;background:{{ t.fill }};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600">Try Again</div></div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;font-weight:600">4 · System alert / dialog</div><div style="border:1.5px dashed {{ t.sep }};border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:18px;color:{{ t.label2 }}"><b style="color:{{ t.label }};font-size:15px">Delete project?</b>This can't be undone.<span style="font:11px ui-monospace,Menlo,monospace">system component — use the kit's alert / confirmation dialog, not this drawing</span></div></div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">BACKGROUND-COPY STATUS · NEW · ONE PATTERN FOR ALL COPIES</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+<sc-for list="{{ t.copyStates }}" as="c" hint-placeholder-count="6"><div style="background:{{ t.cell }};border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:8px;min-height:112px;box-sizing:border-box"><div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Material Symbols Rounded';font-size:20px;color:{{ c.c }};font-variation-settings:'FILL' {{ c.fill }}">{{ c.g }}</span><span style="font-size:15px;font-weight:600">{{ c.title }}</span><span style="margin-left:auto;font-size:13px;color:{{ t.label2 }};font-variant-numeric:tabular-nums">{{ c.right }}</span></div><sc-if value="{{ c.bar }}" hint-placeholder-val="{{ false }}"><div style="height:4px;border-radius:2px;background:{{ t.fill }}"><div style="width:37%;height:4px;border-radius:2px;background:{{ t.ink }}"></div></div></sc-if><div style="font-size:13px;line-height:18px;color:{{ t.label2 }}">{{ c.body }}</div><sc-if value="{{ c.action }}" hint-placeholder-val="{{ false }}"><div style="font-size:15px;color:{{ t.ink }}">{{ c.action }}</div></sc-if></div></sc-for>
+</div>
+<div style="font-size:13px;line-height:18px;color:{{ t.label2 }}">Shown in three places: this status in the tool; a badge with percent and a progress line on the clip or bar (see the timeline row below); the tappable “Preview · Stabilize” tag in the preview.</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">“UPDATE NEEDED” · NEW · ONE COMPONENT</div>
+<div style="background:{{ t.cell }};border-radius:20px;padding:18px;display:flex;gap:14px"><div style="width:44px;height:44px;border-radius:12px;background:{{ t.fill }};display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-family:'Material Symbols Rounded';font-size:24px">system_update</span></div><div style="display:flex;flex-direction:column;gap:6px;flex:1"><div style="font-size:17px;font-weight:600">Stabilize needs the newest Clipy build</div><div style="font-size:15px;line-height:20px;color:{{ t.label2 }}">Everything else in Clipy still works.</div></div></div>
+<div style="font-size:13px;line-height:18px;color:{{ t.label2 }}">Replaces the “latest Clipy build”, “native build” and “full app build” texts. Shown in place, inside the tool. No action: there is no store to update from yet. In strips it is the status block (board D2 of 11 Strips v2).</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">EMPTY STATE</div>
+<div style="background:{{ t.cell }};border-radius:20px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center"><div style="width:64px;height:64px;border-radius:20px;background:{{ t.fill }};display:flex;align-items:center;justify-content:center"><span style="font-family:'Material Symbols Rounded';font-size:34px">movie_off</span></div><div style="font-size:20px;font-weight:600">This video can't be posted.</div><div style="font-size:15px;line-height:20px;color:{{ t.label2 }}">Clipy couldn't read this video file. Go back and pick it again.</div></div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">PERMISSION ROW · NEW · ALL STATES</div>
+<div style="background:{{ t.cell }};border-radius:20px;overflow:hidden">
+<sc-for list="{{ permRows }}" as="r" hint-placeholder-count="5"><div style="padding:12px 16px;display:flex;align-items:center;gap:12px;border-bottom:0.5px solid {{ t.sep }}"><span style="font-family:'Material Symbols Rounded';font-size:24px;width:28px;flex-shrink:0;font-variation-settings:'FILL' {{ r.fill }}">{{ r.g }}</span><div style="flex:1;display:flex;flex-direction:column;min-width:0"><span style="font-size:17px">{{ r.n }}</span><span style="font-size:13px;line-height:18px;color:{{ t.label2 }}">{{ r.d }}</span></div><sc-if value="{{ r.btn }}" hint-placeholder-val="{{ true }}"><div style="height:32px;padding:0 14px;border-radius:999px;background:{{ t.fill }};display:flex;align-items:center;font-size:15px;font-weight:600;white-space:nowrap;flex-shrink:0">{{ r.btn }}</div></sc-if><sc-if value="{{ r.status }}" hint-placeholder-val="{{ false }}"><span style="font-size:15px;color:{{ t.label2 }};display:flex;align-items:center;gap:4px;flex-shrink:0;white-space:nowrap"><span style="font-family:'Material Symbols Rounded';font-size:18px;color:{{ r.sc }};font-variation-settings:'FILL' 1">{{ r.sg }}</span>{{ r.status }}</span></sc-if></div></sc-for>
+<div style="padding:10px 16px 12px 56px;display:flex;gap:16px;font-size:15px;color:{{ t.ink }}">Choose More Photos<span>Allow Full Access</span></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">PERMISSION INLINE STATE · NEW</div>
+<div style="background:{{ t.cell }};border-radius:20px;padding:22px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center"><span style="font-family:'Material Symbols Rounded';font-size:36px;color:{{ t.label2 }}">mic_off</span><div style="font-size:17px;font-weight:600">Microphone is off</div><div style="font-size:15px;line-height:20px;color:{{ t.label2 }}">You can still add music, sound effects and audio from Files.</div><div style="height:40px;padding:0 18px;border-radius:999px;background:{{ t.fill }};display:flex;align-items:center;font-size:15px;font-weight:600;margin-top:4px">Open Settings</div></div>
+<div style="background:{{ t.cell }};border-radius:20px;padding:22px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center"><span style="font-family:'Material Symbols Rounded';font-size:36px;color:{{ t.label2 }}">lock</span><div style="font-size:17px;font-weight:600">Camera isn't available</div><div style="font-size:15px;line-height:20px;color:{{ t.label2 }}">This setting is managed on this iPhone. You can still import from Photos and Files.</div></div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:{{ t.label2 }}">WIZARD PAGE FRAME · NEW</div>
+<div style="width:220px;height:440px;border-radius:32px;outline:6px solid #1A1A1A;background:{{ t.page2 }};position:relative;overflow:hidden;font-size:9px">
+<div style="position:absolute;top:30px;left:14px;width:20px;height:20px;border-radius:999px;background:{{ t.fill }}"></div><div style="position:absolute;top:32px;right:14px;font-size:10px;color:{{ t.ink }}">Skip</div>
+<div style="position:absolute;top:62px;left:14px;right:14px;height:200px;border-radius:16px;background:repeating-linear-gradient(135deg,{{ t.fill }} 0 6px,transparent 6px 12px);display:flex;align-items:center;justify-content:center;font:9px ui-monospace,Menlo,monospace;color:{{ t.label2 }};text-align:center">illustration · UI pieces<br>upper two thirds</div>
+<div style="position:absolute;top:276px;left:14px;right:14px;font-size:15px;line-height:18px;font-weight:700">Headline, Title 1</div>
+<div style="position:absolute;top:316px;left:14px;right:14px;font-size:10px;line-height:13px;color:{{ t.label2 }}">One line of body copy, secondary colour.</div>
+<div style="position:absolute;bottom:62px;left:0;right:0;display:flex;justify-content:center;gap:5px"><span style="width:6px;height:6px;border-radius:9px;background:{{ t.label }}"></span><span style="width:6px;height:6px;border-radius:9px;background:{{ t.label3 }}"></span><span style="width:6px;height:6px;border-radius:9px;background:{{ t.label3 }}"></span><span style="width:6px;height:6px;border-radius:9px;background:{{ t.label3 }}"></span></div>
+<div style="position:absolute;bottom:22px;left:14px;right:14px;height:30px;border-radius:999px;background:#D9B36A;color:#1A1408;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">Get Started</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:20px;color:{{ t.label2 }}"><div style="font:600 12px/16px ui-monospace,Menlo,monospace;letter-spacing:.06em">STRIPS AND PANELS</div><div>Strip S 96 / M 120 / L 168 pt; panels 240 / 280 / 320 pt. Drawn with every row in <a href="11 Strips v2.dc.html">11 Strips v2</a> and <a href="11b Panels and Messages v2.dc.html">11b Panels and Messages v2</a>, which are the authority.</div></div>
+</div>
+
+</div>
+</sc-for>
+</div>
+
+<div id="4c" style="background:#FBFBFA;border-radius:28px;padding:32px 48px;font-size:15px;line-height:22px;color:#3A3A3C;max-width:1500px"><b style="color:#111">4c · Timeline parts</b> — clips, 30-pt bars in 40-pt lanes, dark handles, cut markers, keyframes and the copy line are drawn at their real sizes in <a href="10 Editor v2.dc.html">10 Editor v2</a> (board B1). That board is the authority.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const mk = (dark) => dark ? {
+      id: '4a', title: 'Dark appearance', page: '#000000', page2: '#000000', cell: '#1C1C1E', label: '#FFFFFF', label2: 'rgba(235,235,245,.6)', label3: 'rgba(235,235,245,.3)',
+      fill: 'rgba(120,120,128,.28)', fillPressed: 'rgba(120,120,128,.44)', sep: 'rgba(84,84,88,.65)', ink: '#D9B36A', danger: '#FF453A', segSel: '#636366',
+      glass: 'rgba(44,44,48,.62)', glassBorder: 'rgba(255,255,255,.14)', banner: '#3A3A3C'
+    } : {
+      id: '4b', title: 'Light appearance', page: '#F2F2F7', page2: '#FFFFFF', cell: '#FFFFFF', label: '#000000', label2: 'rgba(60,60,67,.75)', label3: 'rgba(60,60,67,.3)',
+      fill: 'rgba(120,120,128,.14)', fillPressed: 'rgba(120,120,128,.26)', sep: 'rgba(60,60,67,.29)', ink: '#8B5F00', danger: '#D70015', segSel: '#FFFFFF',
+      glass: 'rgba(255,255,255,.74)', glassBorder: 'rgba(0,0,0,.08)', banner: '#1C1C1E'
+    };
+    const themes = [mk(true), mk(false)];
+    const th = themes[0];
+    const toolStates = [
+      { g: 'content_cut', l: 'Split', cap: 'Default', bg: 'transparent', fg: 'inherit', fill: 0 },
+      { g: 'content_cut', l: 'Split', cap: 'Pressed', bg: 'rgba(120,120,128,.3)', fg: 'inherit', fill: 0 },
+      { g: 'diamond', l: 'Keyframe', cap: 'On', bg: 'rgba(217,179,106,.22)', fg: 'inherit', fill: 1 },
+      { g: 'sync', l: 'Replace', cap: 'Busy', bg: 'transparent', fg: 'rgba(128,128,128,.7)', fill: 0 },
+      { g: 'volume_down', l: 'Ducking', cap: 'Toggle on', bg: 'rgba(217,179,106,.22)', fg: 'inherit', fill: 1 }
+    ];
+    const tileStates = [
+      { g: 'blur_on', l: 'Glitch', cap: 'Default', bg: 'rgba(120,120,128,.24)', ring: 'none', op: 1, w: 400, busy: false },
+      { g: 'blur_on', l: 'Glitch', cap: 'Pressed', bg: 'rgba(120,120,128,.4)', ring: 'none', op: 1, w: 400, busy: false },
+      { g: 'flip', l: 'Flip Horizontal', cap: 'Selected / on', bg: 'rgba(217,179,106,.26)', ring: '0 0 0 2px #D9B36A', op: 1, w: 600, busy: false },
+      { g: 'speed', l: 'Strength', cap: 'Disabled', bg: 'rgba(120,120,128,.24)', ring: 'none', op: 0.4, w: 400, busy: false },
+      { g: 'photo_filter', l: 'Vintage', cap: 'Loading', bg: 'rgba(120,120,128,.24)', ring: 'none', op: 1, w: 400, busy: true }
+    ];
+    const R = [['Auto', 9, 16, 'dashed'], ['1:1', 1, 1], ['3:2', 3, 2], ['2:3', 2, 3], ['16:9', 16, 9], ['9:16', 9, 16], ['4:3', 4, 3], ['3:4', 3, 4], ['21:9', 21, 9]];
+    const ratios = R.map(([l, a, b, st], i) => { const m = 30, s = Math.min(m / a, m / b); return { l, w: Math.round(a * s) + 'px', h: Math.round(b * s) + 'px', style: st || 'solid', bg: i === 5 ? 'rgba(217,179,106,.26)' : 'rgba(120,120,128,.24)', ring: i === 5 ? '0 0 0 2px #D9B36A' : 'none', fw: i === 5 ? 700 : 400 }; });
+    const swatches = ['#F4F4F5', '#F5C542', '#C8102E', '#2E86AB', '#D9B36A', '#000000', '#FFFFFF', '#00E5A0'].map((c, i) => ({ c, sel: i === 1, ring: i === 1 ? '0 0 0 2px #D9B36A' : 'none' }));
+    const ok = '#34C759';
+    const copyStates = [
+      { g: 'center_focus_strong', title: 'Stabilize · Off', right: '', body: 'Takes out the shake. The copy takes about 12 MB.', c: th.label2, fill: 0 },
+      { g: 'schedule', title: 'Waiting to start', right: '', body: 'Keep editing. The clip shows as it was until the copy is ready.', c: th.label2, fill: 0 },
+      { g: 'autorenew', title: 'Steadying the clip', right: '37%', body: 'About 1 min left.', c: '#D9B36A', fill: 0, bar: true, action: 'Cancel' },
+      { g: 'check_circle', title: 'Ready', right: '', body: 'The preview now shows the steadied clip.', c: ok, fill: 1 },
+      { g: 'error', title: "Couldn't stabilize this clip", right: '', body: 'The clip shows as it was.', c: '#FF453A', fill: 1, action: 'Try Again' },
+      { g: 'block', title: 'Not possible here', right: '', body: 'Stabilize works on clips up to 60 seconds. Trim or split this clip first.', c: th.label2, fill: 0, action: 'Trim' }
+    ];
+    const permRows = [
+      { g: 'photo_library', n: 'Photos and videos', d: 'Bring clips into a project', btn: 'Continue', fill: 0 },
+      { g: 'mic', n: 'Microphone', d: 'Record a voice-over', status: 'Allowed', sg: 'check_circle', sc: ok, fill: 0 },
+      { g: 'photo_library', n: 'Photos and videos', d: 'Clipy can see only the photos you chose.', status: 'Limited', sg: 'contrast', sc: '#D9B36A', fill: 0 },
+      { g: 'hearing_disabled', n: 'Speech recognition', d: 'Turn speech into captions', btn: 'Open Settings', fill: 0 },
+      { g: 'no_photography', n: 'Camera', d: 'Not available on this iPhone', status: 'Managed', sg: 'lock', sc: th.label2, fill: 0 }
+    ];
+    const strips = [
+      { n: 'Strip S · one row (Opacity, Mask, Blend, Strength)', h: '96px', title: 'Opacity', rows: [{ h: '48px', l: 'slider row 48' }] },
+      { n: 'Strip M · tiles (Effects, Ratio, Transform)', h: '132px', title: 'Effects', rows: [{ h: '84px', l: 'tile row 84' }] },
+      { n: 'Strip L · tiles + slider (Filter, Speed)', h: '184px', title: 'Filter', rows: [{ h: '84px', l: 'tile row 84' }, { h: '48px', l: 'slider row 48' }] },
+      { n: 'Strip L + status line (Stabilize)', h: '208px', title: 'Stabilize', rows: [{ h: '84px', l: 'tile row 84' }, { h: '24px', l: 'note / status 24' }, { h: '48px', l: 'status block 48' }] }
+    ];
+    const WAVE = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='16'%3E%3Cg fill='rgba(0,0,0,0.32)'%3E%3Crect x='0' y='5' width='2' height='6'/%3E%3Crect x='4' y='2' width='2' height='12'/%3E%3Crect x='8' y='6' width='2' height='4'/%3E%3Crect x='12' y='1' width='2' height='14'/%3E%3Crect x='16' y='4' width='2' height='8'/%3E%3Crect x='20' y='6' width='2' height='4'/%3E%3Crect x='24' y='3' width='2' height='10'/%3E%3Crect x='28' y='0' width='2' height='16'/%3E%3Crect x='32' y='5' width='2' height='6'/%3E%3Crect x='36' y='3' width='2' height='10'/%3E%3C/g%3E%3C/svg%3E\")";
+    const H = 'repeating-linear-gradient(135deg,rgba(0,0,0,.14) 0 4px,transparent 4px 9px)';
+    const bars = [
+      ['Text', '#79B6F4', 'title', 'Day one', 'none'], ['Caption', '#AFB965', 'closed_caption', 'so we walked up the hill', 'none'], ['Sticker', '#E095C7', 'mood', '🌊', 'none'],
+      ['Music', '#47C5D2', 'music_note', 'Party Sector · 100%', WAVE], ['Voice', '#6DC799', 'mic', 'Voice-over · 100%', WAVE], ['Sound effect', '#ED997B', 'volume_up', 'Whoosh · 100%', WAVE],
+      ['Layer', '#A8B2BE', 'filter_none', 'Video layer 1', 'none'], ['Effect', '#B6A3F0', 'bolt', 'Light leak', H]
+    ].map(([n, c, g, l, tex]) => ({ n, c, g, l, tex }));
+    const lightify = o => JSON.parse(JSON.stringify(o).split('#D9B36A').join('#8B5F00').split('rgba(217,179,106,').join('rgba(139,95,0,'));
+    themes.forEach((th, i) => { const L = i === 1 ? lightify : (o => o); th.toolStates = L(toolStates); th.tileStates = L(tileStates); th.ratios = L(ratios); th.swatches = L(swatches); th.copyStates = L(copyStates); });
+    return { themes, toolStates, tileStates, ratios, swatches, copyStates, permRows, strips, bars };
+  }
+}
+</script>
+</body>
+</html>

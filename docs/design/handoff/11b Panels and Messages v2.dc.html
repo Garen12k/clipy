@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style>
+</helmet>
+<section id="panels-v2" data-screen-label="Panels v2" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:1200px">
+<div style="font:600 13px/18px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CLIPY · iOS 27 · REVIEW 3 · SECTIONS A AND D · SUPERSEDES 7 PANELS · STRIPS: <a href="11 Strips v2.dc.html">11</a></div>
+<div style="font-size:44px;line-height:52px;font-weight:700;letter-spacing:-.02em">Panels v2 and every editor message</div>
+<div style="font-size:19px;line-height:28px;color:#3A3A3C;text-wrap:pretty">Panels take the timeline, the gap and the toolbar: 240 / 280 / 320 pt. The preview keeps its place and size. Under each panel its rows are printed with their heights. Everything here is drawn at 375 pt wide.</div>
+</div>
+
+<sc-for list="{{ groups }}" as="g" hint-placeholder-count="4">
+<div id="{{ g.id }}" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><div style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px">{{ g.id }}</div><div style="font-size:26px;font-weight:700">{{ g.title }}</div></div>
+<sc-if value="{{ g.note }}" hint-placeholder-val="{{ false }}"><div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:1200px">{{ g.note }}</div></sc-if>
+<div style="display:flex;flex-wrap:wrap;gap:28px 32px;align-items:flex-start">
+<sc-for list="{{ g.items }}" as="s" hint-placeholder-count="8">
+<div style="display:flex;flex-direction:column;gap:6px;width:375px">
+<div style="display:flex;gap:8px;align-items:center;font:600 12px ui-monospace,Menlo,monospace;color:#6C6C70"><span>{{ s.label }}</span><sc-if value="{{ s.isNew }}" hint-placeholder-val="{{ false }}"><span style="font:600 11px -apple-system,sans-serif;color:#1A1408;background:#F3E3BF;padding:2px 7px;border-radius:999px">New feature</span></sc-if></div>
+<div style="background:{{ g.behind }};border-radius:30px;padding:0"><dc-import name="EditorPhone2" only="{{ true }}" mode="{{ s.mode }}" strip="{{ s.strip }}" panel="{{ s.panel }}" theme="{{ g.theme }}" material="{{ g.material }}" large-text="{{ g.large }}" guides="{{ true }}" hint-size="375px,200px"></dc-import></div>
+<sc-if value="{{ s.foot }}" hint-placeholder-val="{{ false }}"><div style="font-size:13px;line-height:18px;color:#3A3A3C">{{ s.foot }}</div></sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+
+<div id="D3" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#D3" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">D3</a><div style="font-size:26px;font-weight:700">Every editor message, sorted into the four kinds</div></div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;font-size:14px;line-height:20px;color:#3A3A3C">
+<div><b style="color:#111">1 · Inline status / refusal.</b> Shown in the strip’s or panel’s own note line, status block or reason line, next to the control that was refused. The strip stays open. It clears on the next action.</div>
+<div><b style="color:#111">2 · Confirmation banner.</b> In the transport row, between the preview and the timeline (board R2 of 14 Review 4). It covers no video and no control. Two lines; stays until the next edit or Play. VoiceOver announces it. <span style="font-size:11px;font-weight:600;color:#1A1408;background:#F3E3BF;padding:2px 7px;border-radius:999px">New feature</span> (today: an unlabelled toast).</div>
+<div><b style="color:#111">3 · Inline error with action.</b> In the tool’s status area, or, when no tool is open, as a banner with the action in place of Undo (“Open Settings”, “Try Again”).</div>
+<div><b style="color:#111">4 · System alert / dialog.</b> Only for destructive, blocking or essential questions. Drawn in board E4 of <a href="12 States v2.dc.html">12 States v2</a>.</div>
+</div>
+<div style="display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start">
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="speedNormal" banner="Clips cut to the beat" caption="Banner while a strip is open · transport row" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="panel" panel="beats" context="sound" banner="Clips cut to the beat" caption="Banner while a panel is open · same place" hint-size="375px,700px"></dc-import>
+<div style="flex:1;min-width:520px;display:grid;grid-template-columns:44px 1fr 210px;border-top:1px solid #E2E2DF;font-size:13px;line-height:18px">
+<sc-for list="{{ messages }}" as="m" hint-placeholder-count="20"><div style="padding:6px 8px 6px 0;border-bottom:1px solid #EDEDEA;font-weight:600;color:{{ m.c }}">{{ m.k }}</div><div style="padding:6px 8px;border-bottom:1px solid #EDEDEA">{{ m.t }}</div><div style="padding:6px 0 6px 8px;border-bottom:1px solid #EDEDEA;color:#6C6C70">{{ m.w }}</div></sc-for>
+</div>
+</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const S = (strip, label, foot, isNew) => ({ mode: 'strip', strip, panel: '', label, foot: foot || '', isNew: !!isNew });
+    const P = (panel, label, foot, isNew) => ({ mode: 'panel', strip: '', panel, label, foot: foot || '', isNew: !!isNew });
+    const strips = [
+      S('trimVideo', 'TRIM · VIDEO · L', 'Keyboard state: board R3. The red line is where both layer refusals appear (two lines), with the strip still open; the other reads “That trim is too short or outside the clip.”'),
+      S('trimPhoto', 'TRIM · PHOTO · L'),
+      S('volumeClip', 'VOLUME · CLIP · VOLUME TAB · L', 'The Volume / Fades tabs are new: one height for both.', true),
+      S('volumeFades', 'VOLUME · CLIP · FADES TAB · L', 'Tab dots show which tab holds a change.', true),
+      S('volumeMulti', 'VOLUME · MULTI-SELECT · L', 'No Fades tab in multi-select.'),
+      S('filter', 'FILTER · L'),
+      S('filterNone', 'FILTER · NONE · L'),
+      S('filterMulti', 'FILTER · MULTI-SELECT · L', 'No Apply to All in multi-select.'),
+      S('adjust', 'ADJUST · L', 'Twelve value tiles, each with a symbol; a dot after a changed name. Reset sits after the slider and is dimmed when nothing has changed.'),
+      S('effects', 'EFFECTS · L', 'The red line holds “Add a clip first.” / “No room for an effect here.” with the strip open.'),
+      S('strength', 'STRENGTH · EFFECT · S'),
+      S('transition', 'TRANSITION · L'),
+      S('transitionNone', 'TRANSITION · NONE · L'),
+      S('transitionShort', 'TRANSITION · CLIPS TOO SHORT · L', 'On the last clip the note reads “No clip after this one”.'),
+      S('animClipIn', 'ANIMATION · CLIP · IN · L', 'Tabs sit in the lead of the tile row, so the title and “Apply to All” keep their place. Tab dots are new.', true),
+      S('animClipOut', 'ANIMATION · CLIP · OUT · L'),
+      S('animClipCombo', 'ANIMATION · CLIP · COMBO · L'),
+      S('animPhotoCombo', 'ANIMATION · PHOTO · COMBO · L'),
+      S('animTextIn', 'ANIMATION · TEXT · IN · L'),
+      S('animTextLoop', 'ANIMATION · TEXT · LOOP · L'),
+      S('motion', 'MOTION · PHOTO · L'),
+      S('motionNone', 'MOTION · NONE · L'),
+      S('mask', 'MASK · M'),
+      S('blend', 'BLEND · LAYER · M'),
+      S('opacity', 'OPACITY · S'),
+      S('transform', 'TRANSFORM · M', 'Flip horizontal shows its on state.'),
+      S('greenscreen', 'GREEN SCREEN · L'),
+      S('greenscreenGrey', 'GREEN SCREEN · TOO GREY · L', 'The header note takes two lines in red.'),
+      S('greenscreenOff', 'GREEN SCREEN · OFF · L'),
+      S('ratio', 'ASPECT RATIO · L'),
+      S('background', 'BACKGROUND · M', 'The last tile opens an inline #RRGGBB field (board R3).', true),
+      S('volumeSound', 'VOLUME · SOUND BAR · S'),
+      S('fade', 'FADE · SOUND BAR · L'),
+      S('fadeShort', 'FADE · TOO SHORT · L'),
+      S('speedNormal', 'SPEED · NORMAL · L'),
+      S('speedMulti', 'SPEED · 3 CLIPS · L', 'Slow motion is never offered in multi-select.'),
+      S('speedNormalCurve', 'SPEED · NORMAL · CURVE ACTIVE · L'),
+      S('speedCurve', 'SPEED · CURVE · SMOOTH ON (32 BARS) · L'),
+      S('speedCurveStepped', 'SPEED · CURVE · SMOOTH OFF (8 BARS) · L'),
+      S('speedSlow', 'SPEED · SLOW MOTION · LONGEST SENTENCE · L', 'Only while exactly one clip is shown and it is slowed below 1×; otherwise the strip falls back to Normal.'),
+      S('speedSlowWork', 'SPEED · SLOW MOTION · WORKING · L', 'Cancel is new.', true),
+      S('cutout', 'REMOVE BACKGROUND · LONGEST SENTENCE · L', 'Three lines fit: the status block is 76 pt.'),
+      S('cutoutWork', 'REMOVE BACKGROUND · WORKING · L', 'Cancel is new.', true),
+      S('stabilize', 'STABILIZE · LONGEST SENTENCE · L'),
+      S('stabilizeWork', 'STABILIZE · WORKING · L', 'Cancel is new.', true),
+      S('stabilizeUpdate', 'STABILIZE · NEWEST BUILD NEEDED · L')
+    ];
+    const panels = [
+      P('text', 'TEXT · LOOKS', 'The text field stays at the top on every tab. The current-look mark is new.', true),
+      P('textNew', 'TEXT · NEW TEXT · PLACEHOLDER'),
+      P('textFont', 'TEXT · FONT', 'The custom-colour pill is new: it opens the #RRGGBB field in the typing bar.', true),
+      P('textStyle', 'TEXT · STYLE · ALL FIVE ROWS OPEN'),
+      P('textPosition', 'TEXT · POSITION · FINE-TUNE OPEN'),
+      P('textPositionEmpty', 'TEXT · EMPTY TEXT · DUPLICATE DISABLED'),
+      P('textCaption', 'TEXT PANEL FOR A CAPTION'),
+      P('readAloud', 'READ ALOUD · READY'),
+      P('readAloudBusy', 'READ ALOUD · PREPARING'),
+      P('readAloudUpdate', 'READ ALOUD · NEWEST BUILD NEEDED · ROW STAYS CLOSED'),
+      P('stickerEmoji', 'STICKER PICKER · EMOJI · TWO ROWS ABOVE THE FOLD'),
+      P('stickerNoMatch', 'STICKER PICKER · NO MATCH'),
+      P('stickerShapes', 'STICKER PICKER · SHAPES · ALL 20'),
+      P('stickerEditor', 'STICKER EDITOR · SHAPE · COMPACT'),
+      P('stickerEditorEmoji', 'STICKER EDITOR · EMOJI · NO COLOUR ROW'),
+      P('captionsReady', 'CAPTIONS · READY'),
+      P('captionsReplace', 'CAPTIONS · REPLACE · MAIN ACTION MARKED'),
+      P('captionsWorking', 'CAPTIONS · WORKING'),
+      P('captionsDone', 'CAPTIONS · DONE'),
+      P('captionsError', 'CAPTIONS · PERMISSION ERROR'),
+      P('captionsTryAgain', 'CAPTIONS · OTHER ERROR · TRY AGAIN'),
+      P('captionsUpdate', 'CAPTIONS · NEWEST BUILD NEEDED'),
+      P('captionStyle', 'CAPTION STYLE · PRESETS WITH “AA” SAMPLES'),
+      P('audioMusic', 'ADD AUDIO · MUSIC · ALL 8'),
+      P('audioFiles', 'ADD AUDIO · FILES · ADDING'),
+      P('audioEffects', 'ADD AUDIO · EFFECTS · ALL 10'),
+      P('recordIdle', 'RECORD · IDLE · FITS 240'),
+      P('recordLive', 'RECORD · RECORDING'),
+      P('recordSaving', 'RECORD · SAVING'),
+      P('voice', 'VOICE · NO VOICE PICKED'),
+      P('voiceWork', 'VOICE · PREPARING', 'Percent and Cancel are new.', true),
+      P('sound', 'SOUND QUALITY', 'Strength inside the Reduce noise row is new (name and value kept).', true),
+      P('beats', 'BEAT MARKERS · LISTENING ABOVE THE FOLD', 'Cancel while listening is new. No percent: the app reports none.', true),
+      P('beatsDisabled', 'BEAT MARKERS · DISABLED'),
+      P('collageMake', 'COLLAGE · BEING MADE · 236 PT'),
+      P('collageEdit', 'COLLAGE · EDITING · TWO-LINE MESSAGE'),
+      P('cover', 'COVER · KEYBOARD UP · SAVE DISABLED'),
+      P('coverSaving', 'COVER · SAVING · SAVE DISABLED'),
+      P('templates', 'TEMPLATES · “APPLIED” ABOVE THE FOLD'),
+      P('templatesNoClip', 'TEMPLATES · NO CLIP · “THIS CLIP” DISABLED')
+    ];
+    const dark = { theme: 'dark', material: 'glass', behind: '#0E0E0F', large: false };
+    const light = { theme: 'light', material: 'solid', behind: '#E5E5EA', large: false };
+    const groups = [
+                        { id: 'P1', title: 'Panels · dark glass · every panel and state', note: 'Drawn at full length. The dashed line marks what is visible at 240 pt on the 375 × 667 iPhone; regular panels scroll below it. Compact panels (Sticker editor, Captions, Voice, Sound quality, Collage) fit in 240 pt without scrolling.', items: panels, ...dark }
+    ];
+    const lists = [
+      ['Filters · 32', 'None, Warm, Cool, Vivid, Faded, Mono, Noir, Vintage, Sunset, Golden, Teal, Pastel, Film, Chrome, Instant, Process, Tonal, Sepia, Crisp, Dream, Amber, Jade, Matte, Bleach, Dusk, Moody, Cinema, Blush, Grit, Silver, Indigo, Drama'],
+      ['Adjust values · 12', 'Brightness, Contrast, Saturation, Exposure, Warmth, Tint, Highlights, Shadows (−100 to +100) · Sharpen, Vignette, Fade, Grain (0 to 100)'],
+      ['Effects · 20', 'Glitch, Shake, Zoom pulse, Blur, VHS, Light leak, Flash, RGB split, Old film, Glow, Blur box, Mosaic box, Film burn, Lens flare, Dust, Heartbeat, Hue shift, Mirror, Soft edges, Strobe'],
+      ['Transitions · 21', 'None, Fade, Dissolve, Slide left, Zoom, Slide right, Slide up, Slide down, Wipe, Spin, Blur, Cover left, Reveal left, Cover up, Reveal down, Circle open, Circle close, Diagonal wipe, Clock wipe, Pixelate, White flash'],
+      ['Text looks · 24', 'Clean title, Bold pop, Neon, Subtitle bar, Comic, Retro, Handwritten, Elegant, Shadowed, Outline only, Sticker label, Soft glow, Headline, Neon outline, Soft shadow, Sticky note, Title bar, Stamp, Bubblegum, Cinema, Gold, Chalkboard, 3D pop, Watermark'],
+      ['Fonts · 16', 'Bangers, Anton, Oswald, Montserrat, Pacifico, Marker, Lobster, Roboto, Bebas Neue, Poppins, Playfair, Fredoka, Caveat, Press Start, Righteous, Dancing Script (each name in its own font)'],
+      ['Shapes · 20', 'Circle, Square, Box, Arrow, Star, Bubble, Heart, Curved arrow, Two-way arrow, Round bubble, Sharp bubble, Thought bubble, Seal badge, Award ribbon, Banner, Sparkle, Burst, Frame, Ring, Corner marks'],
+      ['Music tracks · 8', 'Party Sector 1:36, Funked Up 1:06, Happy Adventure 0:46, Bossa Nova 0:59, The Frigid Seas 1:09, Piano 0:32, The Field of Dreams 1:24, Mandatory Overtime 0:40'],
+      ['Sound effects · 10', 'Whoosh 0.6 s, Swoosh 0.3 s, Pop 0.1 s, Click 0.1 s, Ding 0.9 s, Beep 0.2 s, Riser 1.5 s, Drop 0.7 s, Tick 0.1 s, Chime 1.2 s'],
+      ['Animations · 11 / 7 / 7', 'In and Out: None, Fade, Slide left, Slide right, Slide up, Slide down, Zoom in, Zoom out, Spin, Pop, Rise · Combo: None, Slow zoom in, Slow zoom out, Pan left, Pan right, Sway, Pulse · Loop: None, Wiggle, Pulse, Spin, Float, Blink, Shake'],
+      ['Speed curves · 7', 'None, Montage, Hero, Bullet, Jump cut, Flash in, Flash out'],
+      ['Motion · 8', 'None, Zoom in, Zoom out, Pan left, Pan right, Pan up, Pan down, Corner zoom'],
+      ['Emoji · 1,914', 'Faces 131, Hands 44, Hearts 26, Food 131, Travel 219, Symbols 238, More 1,125 · Recent: up to 24 · search: up to 60 results'],
+      ['Caption presets · 6', 'Classic bar, Bold outline, Yellow pop, Clean white, Neon glow, Karaoke'],
+      ['Collage layouts · 6', 'Side by side (2), Stacked (2), Big and two (3), Row of three (3), Grid of four (4), Inset (2)']
+    ].map(([n, v]) => ({ n, v }));
+    const R = (k, a, b, c, fw = 400) => ({ k, a, b, c, fw });
+    const statuses = [
+      R('', 'Remove background', 'Stabilize', 'Smooth slow motion', 600),
+      R('Off', 'People only. The copy takes about 12 MB. (photo: about 5 MB)', 'Takes out the shake. The copy takes about 12 MB.', 'Fills the gaps between frames with blended ones. The copy takes about 12 MB.'),
+      R('Waiting', 'Waiting to start.', 'Waiting to start.', 'Waiting to start.'),
+      R('Working', 'Preparing the cut-out: 37 % · photo: Preparing the cut-out.', 'Steadying the clip: 37 %', 'Smoothing the slow motion: 37 %'),
+      R('Ready', 'Ready.', 'Ready.', 'Ready.'),
+      R('Failed', 'Could not remove the background. Switch it off and on to try again.', 'Could not stabilize this clip. Tap the strength again to try again.', 'Could not smooth the slow motion. Switch it off and on to try again.'),
+      R('No person', 'No person was found in this clip.', '—', '—'),
+      R('Too long', 'Remove background works on clips up to 60 seconds. Trim or split this clip first.', 'Stabilize works on clips up to 60 seconds. Trim or split this clip first.', 'Smooth slow motion works on clips up to 60 seconds. Trim or split this clip first.'),
+      R('Conflict', 'Remove background does not work together with Stabilize or Smooth slow motion. Switch those off for this clip first.', 'Stabilize does not work together with Remove background. Switch Remove background off for this clip first.', 'Smooth slow motion does not work together with Remove background. Switch Remove background off for this clip first.'),
+      R('Newest build — new', 'Remove background needs the newest Clipy build. Everything else in Clipy still works.', 'Stabilize needs the newest Clipy build. Everything else in Clipy still works.', 'Smooth slow motion needs the newest Clipy build. Everything else in Clipy still works.'),
+      R('— original', 'Beats in your own music and Remove background need the latest Clipy build. Install it from the newest build link.', 'Stabilize and Smooth slow motion need the latest Clipy build. Install it from the newest build link.', 'Stabilize and Smooth slow motion need the latest Clipy build. Install it from the newest build link.'),
+      R('File missing', 'The file of this clip is missing.', 'The file of this clip is missing.', 'The file of this clip is missing.'),
+      R('Late failure → banner', 'Could not remove the background. The clip shows as it was. · No person was found in that clip. It shows as it was.', 'Could not stabilize the clip. It shows as it was.', 'Could not smooth the slow motion. The clip shows as it was.')
+    ];
+    const K = { 1: '#6C6C70', 2: '#2E7D32', 3: '#B3261E', 4: '#111' };
+    const M = (k, t, w) => ({ k: String(k), t, w, c: K[k] });
+    const messages = [
+      M(1, 'That trim is too short or outside the clip. · That trim doesn’t fit — only two video layers can play at the same time.', 'Trim · red line'),
+      M(1, 'Add a clip first. · No room for an effect here.', 'Effects · red line'),
+      M(1, 'Clips are too short for a transition here · No clip after this one', 'Transition · reason / note'),
+      M(1, 'This clip is too short for a smooth curve. Switch Smooth off. · These clips are too short for a smooth curve. Switch Smooth off.', 'Speed · Curve · switch subtitle'),
+      M(1, 'This clip is too short for a smooth curve. · These clips are too short for a smooth curve.', 'Speed · Curve · switch refused'),
+      M(1, 'This clip is too short for a speed curve. · These clips are too short for a speed curve. · That speed doesn’t fit this layer.', 'Speed · note line (strip stays open)'),
+      M(1, 'This colour is too grey to remove. Pick a stronger colour.', 'Green screen · header note'),
+      M(1, 'Only a text can be read aloud. · There is nothing to read in this text. · This text is too long to read aloud. · Pick a voice first.', 'Read aloud · hint slot'),
+      M(1, 'Cut to beats needs beat markers. · Cut to beats needs at least two clips.', 'Beat markers · reason line'),
+      M(1, 'Find beats marks the beats of Party Sector. · The Frigid Seas has no steady beat. Tap the beat with Tap instead. · Find beats listens to {title} for a few seconds. · Add music to find its beats. · Couldn’t finish listening to this song. Try a shorter piece.', 'Beat markers · hint slot (5 of the 6 hints)'),
+      M(1, 'For your own music, Find beats needs the newest Clipy build. Until then, tap the beat with Tap.', 'Beat markers · hint 6 (wording: “latest” → “newest”)'),
+      M(1, 'The beat markers are already in place. · No beats in this part of the music. · Only 300 markers fit. The last beats were left out. · This sound is too short to find a beat in. · Could not listen to this sound. · Nothing more to cut.', 'Beat markers · hint slot'),
+      M(1, 'This layout needs 3 photos or videos — you picked 2. · Not enough room: this layout adds 3 layers and there is room for 1. · A collage can hold 2 videos at most. Pick photos for the other cells. · That video is too short. · Only two video layers can play at the same time.', 'Collage · red line'),
+      M(1, 'Add a clip before recording. · You’ve reached the audio track limit. · That recording was too short.', 'Record · status line'),
+      M(1, 'Move the playhead back to add audio here. · You’ve reached the audio track limit.', 'Add audio · under the tabs'),
+      M(1, 'This iPhone cannot reduce noise.', 'Sound quality · Reduce noise subtitle'),
+      M(1, 'Close the keyboard to save. · Allow Photos access in Settings to save.', 'Cover · message line'),
+      M(2, 'Clips cut to the beat. Undo brings them back.', 'Banner + Undo'),
+      M(2, 'The voice is on the audio row, under the text. · The voice was replaced on the audio row.', 'Banner + Undo'),
+      M(2, 'The sound of this clip is now its own bar.', 'Banner + Undo'),
+      M(2, 'Saved to Photos · Applied Retro · tap Undo to revert', 'Cover line · Templates line'),
+      M(2, '3 of 5 added', 'Banner'),
+      M(3, 'Could not remove the background. The clip shows as it was. · Could not stabilize the clip. It shows as it was. · Could not smooth the slow motion. The clip shows as it was. · No person was found in that clip. It shows as it was.', 'Banner + Show (new) · opens the strip; badge on the clip'),
+      M(3, 'Could not prepare that sound. It plays as recorded.', 'Banner + “Try Again”; badge on the bar'),
+      M(3, 'Could not read this text aloud. · The text changed, so nothing was read. Tap Read aloud again.', 'Read aloud · hint slot + Read Aloud button'),
+      M(3, 'Couldn’t start recording. · Couldn’t save that recording. · Microphone access is needed to record.', 'Record · status + Try Again / Open Settings'),
+      M(3, 'Couldn’t add that audio file. · Couldn’t add those items. · Couldn’t add that item. · Couldn’t save the cover.', 'Banner / panel line + Try Again'),
+      M(3, 'Clipy needs Photos access to import photos and videos. Open Settings to allow it.', 'Banner + Open Settings (was a toast)'),
+      M(3, 'Voice and sound effects need … · Reduce noise and Read aloud need … → “{Tool} needs the newest Clipy build. Everything else in Clipy still works.”', 'In the tool; from the toolbar: banner'),
+      M(4, 'Large file · This file is over 50 MB. Add it anyway? · Cancel / Add', 'System alert'),
+      M(4, 'Replace existing captions? (kept inline in the Captions panel)', 'Panel state, not an alert')
+    ];
+    return { groups, lists, statuses, messages };
+  }
+}
+</script>
+</body>
+</html>

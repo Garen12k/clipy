@@ -62,7 +62,7 @@ export function CaptionStyleSheet({ visible, onClose }: Props) {
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Caption style" bodyTestID="caption-style-scroll" pinned={{ height: SAMPLE_HEIGHT, content: (
       <TextSample testID="caption-sample" overlay={sample} time={SAMPLE_TIME} width={SAMPLE_WIDTH} height={SAMPLE_HEIGHT}
-        frameHeight={Math.max(SAMPLE_MIN_FRAME_HEIGHT, SAMPLE_WIDTH / ratio)} backgroundColor={theme.colors.sea} />
+        frameHeight={Math.max(SAMPLE_MIN_FRAME_HEIGHT, SAMPLE_WIDTH / ratio)} backgroundColor={theme.elevation.lifted} />
     ) }}>
         <TemplateStrip tiles={CAPTION_PRESET_TILES} onPick={(presetId) => write((x) => applyCaptionPreset(x, presetId), apply)} />
         {!caption && <Body muted>{NO_CAPTIONS_NOTE}</Body>}

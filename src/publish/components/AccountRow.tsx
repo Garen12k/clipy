@@ -32,12 +32,12 @@ export function AccountRow({ status, busy, onConnect, onDisconnect }: Props) {
   return (
     <View testID={`account-row-${status.id}`} style={{ minHeight: theme.size.listRow, flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
       <View accessible accessibilityLabel={summary} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
-        <Ionicons name={icon} size={theme.size.icon.lg} color={available ? theme.colors.text : theme.colors.textMuted} />
+        <Ionicons name={icon} size={theme.size.icon.lg} color={available ? theme.colors.text : theme.screen.muted} />
         {connected && avatarUrl ? <Image source={{ uri: avatarUrl }} style={{ width: AVATAR, height: AVATAR, borderRadius: theme.radius.pill }} /> : null}
         <View style={{ flex: 1, gap: theme.space.xs }}>
           <Body weight="semi" muted={!available}>{label}</Body>
           {connected && name ? <Body muted numberOfLines={1} style={{ fontSize: theme.type.small }}>{name}</Body> : null}
-          {detail ? <Body muted style={[{ fontSize: theme.type.label }, needsReconnect ? { color: theme.colors.dangerText } : null]}>{detail}</Body> : null}
+          {detail ? <Body muted style={[{ fontSize: theme.type.label }, needsReconnect ? { color: theme.screen.dangerText } : null]}>{detail}</Body> : null}
         </View>
       </View>
       {action}

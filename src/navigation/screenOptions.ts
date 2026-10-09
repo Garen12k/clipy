@@ -9,7 +9,8 @@ import { theme } from "@/src/theme/theme";
  */
 export const STACK_OPTIONS = {
   headerShown: false,
-  contentStyle: { backgroundColor: theme.colors.bg },
+  /** What shows under a screen while it comes or goes: the navy page of every screen that is not the editor. */
+  contentStyle: { backgroundColor: theme.screen.page },
   /** The standard iOS push: in from the right, back with the swipe. (It was "fade".) */
   animation: "default",
 } satisfies NativeStackNavigationOptions;
@@ -21,8 +22,9 @@ export const ROUTE_OPTIONS = {
   /**
    * The editor: pushed. The back swipe starts at the left edge only — from iOS 26 the whole-screen swipe is on by default, and it
    * would compete with the timeline, the preview's gestures and the sliders. Swiping back is safe: leaving saves (useLoadProject).
+   * Its own background is the editor's slate page, so no navy and no black shows behind it while it slides in or is swiped away.
    */
-  "editor/[id]/index": { fullScreenGestureEnabled: false },
+  "editor/[id]/index": { fullScreenGestureEnabled: false, contentStyle: { backgroundColor: theme.surfaces.editor.page } },
   /** Export: the standard sheet rising from the bottom, closed by swiping down — except while exporting (exportGesture). */
   "editor/[id]/export": { presentation: "modal" },
   /** Post: pushed. Its own leave guard (PostScreenBody) switches the swipe off while uploading. */

@@ -19,9 +19,9 @@ const HIT_SLOP = 8;
 const LABEL_MIN_WIDTH = HANDLE_W * 2 + 4;
 const OVERLAP_OPACITY = 0.85;
 const KIND: Record<AudioKind, { label: string; color: string }> = {
-  music: { label: "Music", color: theme.colors.laneMusic },
-  voice: { label: "Voice", color: theme.colors.laneVoice },
-  sfx: { label: "Sound effect", color: theme.colors.laneSfx },
+  music: { label: "Music", color: theme.colors.kindMusic },
+  voice: { label: "Voice", color: theme.colors.kindVoice },
+  sfx: { label: "Sound effect", color: theme.colors.kindSfx },
 };
 
 type Props = { track: AudioTrack; missing: boolean; selected: boolean; overlapping?: boolean; onPress: () => void };
@@ -87,9 +87,9 @@ export function AudioBar({ track: t, missing, selected, overlapping = false, onP
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
         {roomy && (
           <>
-            <Ionicons name="volume-medium" size={14} color={theme.colors.onAccent} />
-            <Text style={{ color: theme.colors.onAccent, fontSize: 12 }}>{Math.round(t.volume * 100)}%</Text>
-            <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12, flex: 1 }}>{t.title}</Text>
+            <Ionicons name="volume-medium" size={14} color={theme.colors.onKind} />
+            <Text style={{ color: theme.colors.onKind, fontSize: 12, fontVariant: ["tabular-nums"] }}>{Math.round(t.volume * 100)}%</Text>
+            <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: 12, flex: 1 }}>{t.title}</Text>
           </>
         )}
         {missing && (

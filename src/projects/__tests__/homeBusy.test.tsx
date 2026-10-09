@@ -68,8 +68,8 @@ const startMaking = async () => {
   pick.mockResolvedValueOnce(PICKED);
   make.mockImplementationOnce(() => new Promise((r) => { finish = r; }));
   await home();
-  await fireEvent.press(btn("Quick edit"));
-  const pressed = fireEvent.press(await screen.findByRole("button", { name: "Choose photos and videos" }));
+  await fireEvent.press(btn("Quick Edit"));
+  const pressed = fireEvent.press(await screen.findByRole("button", { name: "Choose Photos and Videos" }));
   await screen.findByTestId("home-making");
   return { pressed, finish: (v: unknown) => act(async () => { finish(v); await pressed; }) };
 };
@@ -79,7 +79,7 @@ const startCreating = async () => {
   pick.mockResolvedValueOnce(PICKED);
   createProject.mockImplementationOnce(() => new Promise((r) => { finish = r; }));
   await home();
-  await fireEvent.press(btn("New project"));
+  await fireEvent.press(btn("New Project"));
   const pressed = fireEvent.press(await screen.findByRole("button", { name: "Create" }));
   await waitFor(() => expect(createProject).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(screen.getByTestId("home-list").props.pointerEvents).toBe("none"));
@@ -125,8 +125,8 @@ describe("the home screen takes no touches while a project is being made", () =>
     pick.mockResolvedValueOnce(PICKED);
     make.mockRejectedValueOnce(new Error("disk full"));
     await home();
-    await fireEvent.press(btn("Quick edit"));
-    await fireEvent.press(await screen.findByRole("button", { name: "Choose photos and videos" }));
+    await fireEvent.press(btn("Quick Edit"));
+    await fireEvent.press(await screen.findByRole("button", { name: "Choose Photos and Videos" }));
     await settle();
     await waitFor(() => expect(useToast.getState().message).toBe("Couldn't make the quick edit"));
     expect(screen.getByTestId("home-list").props.pointerEvents).toBe("auto");
@@ -142,7 +142,7 @@ describe("the editor opens only if the home screen is still in front", () => {
     await finish({ id: "q1", failed: 0 });
     await waitFor(() => expect(screen.queryByTestId("home-making")).toBeNull());
     expect(push).not.toHaveBeenCalled();
-    expect(btn("Quick edit")).toBeTruthy();
+    expect(btn("Quick Edit")).toBeTruthy();
   });
 
   test("New project: the screen lost focus while the project was made — no navigation", async () => {
@@ -157,10 +157,10 @@ describe("the editor opens only if the home screen is still in front", () => {
 describe("the Quick edit button cannot stick", () => {
   test("a sheet iOS never presented cannot block Quick edit: the next press closes it first and opens it afresh", async () => {
     await home();
-    await fireEvent.press(btn("Quick edit")); // on the phone the sheet may never have appeared; `quickOpen` is set all the same
+    await fireEvent.press(btn("Quick Edit")); // on the phone the sheet may never have appeared; `quickOpen` is set all the same
     await waitFor(() => expect(quickHeader()).toBeTruthy());
     G.__quickSeen.length = 0;
-    await fireEvent.press(btn("Quick edit"));
+    await fireEvent.press(btn("Quick Edit"));
     await waitFor(() => expect(quickHeader()).toBeTruthy());
     const closedAt = G.__quickSeen.indexOf(false);
     expect(closedAt).toBeGreaterThanOrEqual(0);                         // it was closed …
@@ -171,9 +171,9 @@ describe("the Quick edit button cannot stick", () => {
   test("New project clears a Quick edit sheet that is (or is thought to be) open", async () => {
     pick.mockResolvedValueOnce(null);
     await home();
-    await fireEvent.press(btn("Quick edit"));
+    await fireEvent.press(btn("Quick Edit"));
     await waitFor(() => expect(quickHeader()).toBeTruthy());
-    await fireEvent.press(btn("New project"));
+    await fireEvent.press(btn("New Project"));
     await waitFor(() => expect(pick).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(quickHeader()).toBeNull());
   });
@@ -181,9 +181,9 @@ describe("the Quick edit button cannot stick", () => {
   test("Quick edit clears media that is waiting for its aspect ratio", async () => {
     pick.mockResolvedValueOnce(PICKED);
     await home();
-    await fireEvent.press(btn("New project"));
+    await fireEvent.press(btn("New Project"));
     await screen.findByRole("header", { name: "Aspect ratio" });
-    await fireEvent.press(btn("Quick edit"));
+    await fireEvent.press(btn("Quick Edit"));
     await waitFor(() => expect(quickHeader()).toBeTruthy());
     expect(screen.queryByRole("header", { name: "Aspect ratio" })).toBeNull();
     expect(createProject).not.toHaveBeenCalled();
@@ -195,8 +195,8 @@ describe("one thing at a time", () => {
     let answer: (v: unknown) => void = () => {};
     pick.mockImplementation(() => new Promise((r) => { answer = r; }));
     await home();
-    await fireEvent.press(btn("Quick edit"));
-    await screen.findByRole("button", { name: "Choose photos and videos" });
+    await fireEvent.press(btn("Quick Edit"));
+    await screen.findByRole("button", { name: "Choose Photos and Videos" });
     // Both presses arrive before the sheet has re-rendered: the same handler, twice.
     let both: Promise<unknown> = Promise.resolve();
     await act(async () => {
@@ -214,18 +214,18 @@ describe("one thing at a time", () => {
     let answer: (v: unknown) => void = () => {};
     pick.mockImplementation(() => new Promise((r) => { answer = r; }));
     await home();
-    await fireEvent.press(btn("Quick edit"));
-    const pressed = fireEvent.press(await screen.findByRole("button", { name: "Choose photos and videos" }));
+    await fireEvent.press(btn("Quick Edit"));
+    const pressed = fireEvent.press(await screen.findByRole("button", { name: "Choose Photos and Videos" }));
     await waitFor(() => expect(quickHeader()).toBeNull());
     // The sheet is fading out: the library is not up yet.
-    await fireEvent.press(btn("New project"));
-    await fireEvent.press(btn("Quick edit"));
+    await fireEvent.press(btn("New Project"));
+    await fireEvent.press(btn("Quick Edit"));
     await settle();
     expect(pick).toHaveBeenCalledTimes(1);   // the Quick edit one
     expect(pick).toHaveBeenCalledWith({ limit: 30 });
     // The library is up.
-    await fireEvent.press(btn("New project"));
-    await fireEvent.press(btn("Quick edit"));
+    await fireEvent.press(btn("New Project"));
+    await fireEvent.press(btn("Quick Edit"));
     await settle();
     expect(pick).toHaveBeenCalledTimes(1);
     expect(quickHeader()).toBeNull();
@@ -233,7 +233,7 @@ describe("one thing at a time", () => {
     answer(null);
     await pressed;
     // Afterwards both work again.
-    await fireEvent.press(btn("Quick edit"));
+    await fireEvent.press(btn("Quick Edit"));
     await waitFor(() => expect(quickHeader()).toBeTruthy());
   });
 });
@@ -244,8 +244,8 @@ test("the draft was made but the list could not be re-read: the owner still land
   pick.mockResolvedValueOnce(PICKED);
   make.mockResolvedValueOnce({ id: "q7", failed: 0 });
   await home();
-  await fireEvent.press(btn("Quick edit"));
-  await fireEvent.press(await screen.findByRole("button", { name: "Choose photos and videos" })).catch(() => {});
+  await fireEvent.press(btn("Quick Edit"));
+  await fireEvent.press(await screen.findByRole("button", { name: "Choose Photos and Videos" })).catch(() => {});
   await settle();
   await waitFor(() => expect(push).toHaveBeenCalledWith("/editor/q7"));
   expect(push).toHaveBeenCalledTimes(1);

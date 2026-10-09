@@ -18,7 +18,7 @@ test("eases in when shown, eases out just before it goes, and is gone after 2.5 
   await render(<ToastHost />);
   await act(() => useToast.getState().show("Saved"));
   expect(screen.getByText("Saved")).toBeTruthy();
-  expect(screen.getByTestId("toast")).toHaveStyle({ backgroundColor: theme.elevation.tile, paddingVertical: theme.space.md, paddingHorizontal: theme.space.lg });
+  expect(screen.getByTestId("toast")).toHaveStyle({ backgroundColor: theme.screen.tile, paddingVertical: theme.space.md, paddingHorizontal: theme.space.lg });
   expect(T).toHaveBeenLastCalledWith(1, { duration: theme.motion.base, easing: EASE });
   await act(() => { jest.advanceTimersByTime(TOAST_MS - theme.motion.fast - 1); });
   expect(T).toHaveBeenCalledTimes(1);

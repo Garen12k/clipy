@@ -84,7 +84,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
           <View style={{ height: SEARCH_ROW, justifyContent: "center" }}>
             <TextInput accessibilityLabel="Search emoji" value={query} onChangeText={setQuery}
               placeholder="Search" placeholderTextColor={theme.colors.textMuted}
-              style={{ color: theme.colors.text, fontFamily: theme.fonts.body, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.chip, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm }} />
+              style={{ color: theme.colors.text, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.field, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm }} />
           </View>
           <FlatList key={searching ? "search" : pack} testID="emoji-grid" style={{ height: bodyHeight - SEARCH_ROW }} data={results} keyExtractor={(e) => e.char} numColumns={8} initialNumToRender={FIRST_ROWS} windowSize={7} maxToRenderPerBatch={20}
             keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"

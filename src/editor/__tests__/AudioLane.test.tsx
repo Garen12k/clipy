@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { makeAudioTrack, makeClip, makeEffect, makeLayer, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
@@ -23,10 +23,11 @@ const gestureOf = (node: { props: { gesture?: unknown } }) => node.props.gesture
 test("a lane holds one bar per track of its kind, placed by start and trimmed length, labelled and coloured by kind", async () => {
   await render(<><AudioLane kind="music" /><AudioLane kind="voice" /><AudioLane kind="sfx" /></>);
   for (const id of ["music-lane", "voice-lane", "sfx-lane"]) expect(screen.getByTestId(id)).toHaveStyle({ position: "relative", height: 28, marginTop: 4 });
-  expect(screen.getByTestId("audio-bar-m1")).toHaveStyle({ position: "absolute", left: 50, width: 200, backgroundColor: theme.colors.laneMusic });
-  expect(screen.getByTestId("audio-bar-m2")).toHaveStyle({ position: "absolute", left: 400, width: 150, backgroundColor: theme.colors.laneMusic });
-  expect(screen.getByTestId("audio-bar-v1")).toHaveStyle({ position: "absolute", left: 100, width: 100, backgroundColor: theme.colors.laneVoice });
-  expect(screen.getByTestId("audio-bar-s1")).toHaveStyle({ position: "absolute", left: 200, width: 50, backgroundColor: theme.colors.laneSfx });
+  expect(screen.getByTestId("audio-bar-m1")).toHaveStyle({ position: "absolute", left: 50, width: 200, backgroundColor: theme.colors.kindMusic });
+  expect(screen.getByTestId("audio-bar-m2")).toHaveStyle({ position: "absolute", left: 400, width: 150, backgroundColor: theme.colors.kindMusic });
+  expect(screen.getByTestId("audio-bar-v1")).toHaveStyle({ position: "absolute", left: 100, width: 100, backgroundColor: theme.colors.kindVoice });
+  expect(screen.getByTestId("audio-bar-s1")).toHaveStyle({ position: "absolute", left: 200, width: 50, backgroundColor: theme.colors.kindSfx });
+  expect(within(screen.getByTestId("audio-bar-m1")).getByText("100%")).toHaveStyle({ color: theme.colors.onKind, fontVariant: ["tabular-nums"] });
   for (const title of ["Song", "Second", "Voice-over 1", "Whoosh"]) expect(screen.getByText(title)).toBeTruthy();
 });
 
@@ -41,7 +42,7 @@ test("tapping a bar selects it (exclusively); tapping the selected bar deselects
   await fireEvent.press(screen.getByTestId("audio-bar-m1"));
   expect(useEditorStore.getState()).toMatchObject({ selectedAudioId: "m1", selectedEffectId: null, selectedClipId: null, selectedOverlayId: null });
   expect(screen.getByTestId("audio-bar-m1")).toHaveStyle({ borderColor: theme.colors.text });
-  expect(screen.getByTestId("audio-bar-m2")).toHaveStyle({ borderColor: theme.colors.laneMusic });
+  expect(screen.getByTestId("audio-bar-m2")).toHaveStyle({ borderColor: theme.colors.kindMusic });
   await fireEvent.press(screen.getByTestId("audio-bar-m2"));
   expect(useEditorStore.getState().selectedAudioId).toBe("m2");
   await fireEvent.press(screen.getByTestId("audio-bar-m2"));

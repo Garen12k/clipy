@@ -42,8 +42,8 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
 
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Templates" lead={<>
-      <Chip label="This clip" selected={effective === "clip"} disabled={!hasClip} onPress={() => setScope("clip")} />
-      <Chip label="Whole project" selected={effective === "project"} onPress={() => setScope("project")} />
+      <Chip label="This Clip" selected={effective === "clip"} disabled={!hasClip} onPress={() => setScope("clip")} />
+      <Chip label="Whole Project" selected={effective === "project"} onPress={() => setScope("project")} />
     </>}>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.md }}>
         <PressableScale accessibilityRole="button" accessibilityLabel="Random template" onPress={() => use(pickRandomTemplate(current))}

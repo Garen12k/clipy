@@ -30,8 +30,8 @@ describe("the home route", () => {
   test("first launch (no flag): the welcome screen, and the projects are neither drawn nor loaded", async () => {
     await render(<Home />);
     expect(screen.getByText(TAGLINE)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Continue without an account" })).toBeTruthy();
-    expect(screen.queryByText("Your voyages")).toBeNull();
+    expect(screen.getByRole("button", { name: "Continue Without an Account" })).toBeTruthy();
+    expect(screen.queryByText("Projects")).toBeNull();
     expect(storage.listProjects).not.toHaveBeenCalled();
     expect(router.replace).not.toHaveBeenCalled(); expect(router.push).not.toHaveBeenCalled();
   });
@@ -39,30 +39,30 @@ describe("the home route", () => {
   test("with the flag: the projects, at once", async () => {
     markWelcomeSeen();
     await render(<Home />);
-    expect(screen.getByText("Your voyages")).toBeTruthy();
+    expect(screen.getByText("Projects")).toBeTruthy();
     expect(screen.queryByText(TAGLINE)).toBeNull();
     expect(await screen.findByText("No clips yet")).toBeTruthy();
   });
 
   test("'Continue without an account' sets the flag and lands on the projects — and the next launch opens on them", async () => {
     const first = await render(<Home />);
-    await fireEvent.press(screen.getByRole("button", { name: "Continue without an account" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Continue Without an Account" }));
     expect(hasSeenWelcome()).toBe(true);
-    expect(await screen.findByText("Your voyages")).toBeTruthy();
+    expect(await screen.findByText("Projects")).toBeTruthy();
     expect(screen.queryByText(TAGLINE)).toBeNull();
     // The swap mounts the real projects screen: the projects are loaded now, and the (empty) list is shown.
     expect(storage.listProjects).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("No clips yet")).toBeTruthy();
     await first.unmount();
     await render(<Home />);
-    expect(screen.getByText("Your voyages")).toBeTruthy();
+    expect(screen.getByText("Projects")).toBeTruthy();
   });
 
   test("the swap with projects on the phone: they are loaded then, and listed", async () => {
     (storage.listProjects as jest.Mock).mockResolvedValueOnce([{ id: "p1", name: "Beach day", durationSec: 12, updatedAt: "2026-10-01T10:00:00.000Z", thumbUri: null, broken: false, postedTo: [], coverTitle: "" }]);
     await render(<Home />);
     expect(storage.listProjects).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByRole("button", { name: "Continue without an account" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Continue Without an Account" }));
     expect(await screen.findByText("Beach day")).toBeTruthy();
     expect(storage.listProjects).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("No clips yet")).toBeNull();
@@ -72,10 +72,10 @@ describe("the home route", () => {
     (isBackendConfigured as jest.Mock).mockReturnValue(true);
     (useSession as jest.Mock).mockReturnValue({ status: "loading" });
     const v = await render(<Home />);
-    expect(screen.queryByText(TAGLINE)).toBeNull(); expect(screen.queryByText("Your voyages")).toBeNull();
+    expect(screen.queryByText(TAGLINE)).toBeNull(); expect(screen.queryByText("Projects")).toBeNull();
     (useSession as jest.Mock).mockReturnValue({ status: "signedIn", email: null });
     await v.rerender(<Home />);
-    expect(await screen.findByText("Your voyages")).toBeTruthy();
+    expect(await screen.findByText("Projects")).toBeTruthy();
     expect(screen.queryByText(TAGLINE)).toBeNull();
     expect(hasSeenWelcome()).toBe(true);
   });
@@ -84,11 +84,11 @@ describe("the home route", () => {
     (isBackendConfigured as jest.Mock).mockReturnValue(true);
     (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
     await render(<Home />);
-    await fireEvent.press(screen.getByRole("button", { name: "Continue with email" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Continue with Email" }));
     await fireEvent.changeText(screen.getByLabelText("Email"), "me@icloud.com");
-    await fireEvent.press(screen.getByRole("button", { name: "Send code" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Send Code" }));
     await fireEvent.changeText(await screen.findByLabelText("6-digit code"), "123456");
-    expect(await screen.findByText("Your voyages")).toBeTruthy();
+    expect(await screen.findByText("Projects")).toBeTruthy();
     expect(hasSeenWelcome()).toBe(true);
     expect(router.replace).not.toHaveBeenCalled();
   });
@@ -99,8 +99,8 @@ describe("the /welcome route (opened from Accounts or Post)", () => {
     await render(<Welcome />);
     expect(screen.getByText(TAGLINE)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
-    await fireEvent.press(screen.getByRole("button", { name: "Not now" }));
-    await fireEvent.press(screen.getByRole("button", { name: "Not now" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Not Now" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Not Now" }));
     expect(router.back).toHaveBeenCalledTimes(1);
     expect(router.replace).not.toHaveBeenCalled();
     expect(hasSeenWelcome()).toBe(true);
@@ -118,9 +118,9 @@ describe("the /welcome route (opened from Accounts or Post)", () => {
     (isBackendConfigured as jest.Mock).mockReturnValue(true);
     (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
     await render(<Welcome />);
-    await fireEvent.press(screen.getByRole("button", { name: "Continue with email" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Continue with Email" }));
     await fireEvent.changeText(screen.getByLabelText("Email"), "me@icloud.com");
-    await fireEvent.press(screen.getByRole("button", { name: "Send code" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Send Code" }));
     await fireEvent.changeText(await screen.findByLabelText("6-digit code"), "123456");
     await waitFor(() => expect(router.back).toHaveBeenCalledTimes(1));
   });

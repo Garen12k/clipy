@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "../Chip";
@@ -7,7 +8,7 @@ import { haptic } from "../haptics";
 import { PrimaryButton } from "../PrimaryButton";
 import { ProgressRing } from "../ProgressRing";
 import { SecondaryButton } from "../SecondaryButton";
-import { Title } from "../Text";
+import { Body, Title } from "../Text";
 import { ToolButton } from "../ToolButton";
 
 test("haptic maps kinds and never throws", () => {
@@ -22,7 +23,7 @@ test("haptic maps kinds and never throws", () => {
 test("PrimaryButton is a gold pill with on-accent text", async () => {
   await render(<PrimaryButton title="New clip" onPress={() => {}} />);
   expect(screen.getByTestId("primary-button")).toHaveStyle({ backgroundColor: theme.colors.accent, borderRadius: theme.radius.pill });
-  expect(screen.getByText("New clip")).toHaveStyle({ color: theme.colors.onAccent, fontFamily: theme.fonts.bodyBold });
+  expect(screen.getByText("New clip")).toHaveStyle({ color: theme.colors.onAccent, fontWeight: theme.weight.semi, fontSize: theme.type.headline });
 });
 
 test("SecondaryButton presses and can be disabled", async () => {
@@ -39,11 +40,11 @@ test("SecondaryButton draws its icon before the title; without one it is the tit
   expect(withIcon.children).toHaveLength(2);
   expect(withIcon.children[0]).toBe(screen.getByTestId("mail-icon"));
   expect(withIcon.children[1]).toBe(screen.getByText("Continue with email"));
-  expect(withIcon).toHaveStyle({ borderWidth: 1.5, height: theme.size.control });
+  expect(withIcon).toHaveStyle({ backgroundColor: theme.screen.lifted, height: theme.size.control });
   await v.rerender(<SecondaryButton title="Share" onPress={() => {}} />);
   const plain = screen.getByRole("button", { name: "Share" });
   expect(plain.children).toHaveLength(1);
-  expect(plain).toHaveStyle({ borderWidth: 1.5, height: theme.size.control });
+  expect(plain).toHaveStyle({ backgroundColor: theme.screen.lifted, height: theme.size.control });
 });
 
 test("ToolButton is a button and shows the selected state when active", async () => {
@@ -70,8 +71,9 @@ test("ProgressRing when done reports 100 and labels the accessible root", async 
 });
 
 test("EmptyState and Title render", async () => {
-  await render(<><Title>Your voyages</Title><EmptyState emoji="🏝️" title="No clips yet" hint="Pick some videos" /></>);
-  expect(screen.getByText("Your voyages")).toHaveStyle({ fontFamily: theme.fonts.title });
+  await render(<><Title>Projects</Title><EmptyState emoji="🏝️" title="No clips yet" hint="Pick some videos" /></>);
+  expect(screen.getByText("Projects")).toHaveStyle({ fontWeight: theme.weight.bold, fontSize: theme.type.title });
+  expect(StyleSheet.flatten(screen.getByText("Projects").props.style)).not.toHaveProperty("textTransform");
   expect(screen.getByText("No clips yet")).toBeTruthy();
   expect(screen.getByText("Pick some videos")).toBeTruthy();
 });
@@ -87,4 +89,21 @@ test("Chip compact widens its touch target sideways too; the regular chip only u
   await render(<><Chip compact label="Tab" selected={false} onPress={() => {}} /><Chip label="Big" selected={false} onPress={() => {}} /></>);
   expect(screen.getByRole("button", { name: "Tab" })).toHaveProp("hitSlop", { top: 10, bottom: 10, left: 4, right: 4 });
   expect(screen.getByRole("button", { name: "Big" })).toHaveProp("hitSlop", { top: 4, bottom: 4 });
+});
+
+test("text is the system font: Title, Body and a button's label set no family, no upper case, no letter spacing", async () => {
+  await render(<><Title size={theme.type.headline}>Remove background</Title><Body weight="bold">Bold</Body><Body>Plain</Body><PrimaryButton title="New Project" onPress={() => {}} /></>);
+  for (const t of ["Remove background", "Bold", "Plain", "New Project"]) {
+    const s = StyleSheet.flatten(screen.getByText(t).props.style);
+    for (const k of ["fontFamily", "textTransform", "letterSpacing"]) expect(s).not.toHaveProperty(k);
+  }
+  expect(screen.getByText("Remove background")).toHaveStyle({ fontSize: theme.type.headline, fontWeight: theme.weight.semi });   // below Title 2: semibold
+  expect(screen.getByText("Bold")).toHaveStyle({ fontSize: theme.type.body, fontWeight: theme.weight.bold });
+  expect(screen.getByText("Plain")).toHaveStyle({ fontSize: theme.type.body, fontWeight: theme.weight.regular });
+  expect(screen.getByText("New Project")).toBeTruthy();                                                                    // shown as typed
+});
+
+test("the export ring's percent has tabular digits", async () => {
+  await render(<ProgressRing progress={0.4} />);
+  expect(screen.getByText("40%")).toHaveStyle({ fontVariant: ["tabular-nums"] });
 });

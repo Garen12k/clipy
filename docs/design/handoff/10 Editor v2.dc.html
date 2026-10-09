@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style>
+</helmet>
+<section id="editor-v2" data-screen-label="Editor v2" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:1200px">
+<div style="font:600 13px/18px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CLIPY · iOS 27 · REVIEW 3 · SECTIONS A–C · SUPERSEDES BOARDS 2a–2d, 9, 10 GEOMETRY</div>
+<div style="font-size:44px;line-height:52px;font-weight:700;letter-spacing:-.02em">Editor v2: fixed preview, timeline, toolbar</div>
+<div style="font-size:19px;line-height:28px;color:#3A3A3C;text-wrap:pretty">The preview has one place and one size per device, and no tool changes it. Strips cover only the toolbar and the timeline rows under the clip row. Panels cover only the timeline and the toolbar. On the smallest iPhone the preview’s height is set by the keyboard, so typing doesn’t cover it either.</div>
+</div>
+
+<div id="A1" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#A1" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">A1</a><div style="font-size:26px;font-weight:700">Layout math · preview height in every state</div></div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div><b style="color:#111">Top to bottom.</b> Status bar → 44-pt header → preview → 44-pt transport → timeline (fixed cap) → 4 → 64-pt toolbar → bottom inset.</div>
+<div><b style="color:#111">Preview bottom</b> = the lower of (transport top − 4) and (keyboard-with-suggestions top − 40-pt typing bar − 2). The remaining gap above the transport is left empty on purpose.</div>
+<div><b style="color:#111">Strips</b> are bottom-aligned with the toolbar, and their top never goes above clip row + 4. Largest strip: 168 pt, which is exactly that space on the smallest iPhone.</div>
+<div><b style="color:#111">Panels</b> take timeline + gap + toolbar: 240 / 280 / 320 pt. A panel opens and closes without animation. Swipe-down on the header closes it at once; this is off while a voice-over is being recorded.</div>
+</div>
+<div style="display:grid;grid-template-columns:200px repeat(6,minmax(0,1fr));border-top:1px solid #E2E2DF;font-size:14px;font-variant-numeric:tabular-nums">
+<sc-for list="{{ table }}" as="r" hint-placeholder-count="4"><div style="padding:9px 8px 9px 0;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.a }}</div><div style="padding:9px 8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.b }}</div><div style="padding:9px 8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.c }}</div><div style="padding:9px 8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.d }}</div><div style="padding:9px 8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.e }}</div><div style="padding:9px 8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.f }}</div><div style="padding:9px 8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.g }}</div></sc-for>
+</div>
+<div style="display:grid;grid-template-columns:200px 1fr;gap:6px 16px;font-size:14px;line-height:20px;color:#3A3A3C;font-variant-numeric:tabular-nums">
+<b style="color:#111">Strip S · 96</b><span>header 44 + slider 48 + 4 · Opacity, Strength, Volume (sound bar)</span>
+<b style="color:#111">Strip M · 120</b><span>header 44 + tile row 72 + 4 · Effects, Mask, Blend, Transform, Background</span>
+<b style="color:#111">Strip L · 168</b><span>header 44 + 120 of rows + 4. Rows: tile 72, slider 48, switch 48, chips 44, note 24/40/48, status 72/96. Every L strip below prints its rows. Tabs live in the header, in place of the title.</span>
+<b style="color:#111">Panel regular</b><span>240 / 280 / 320; the body scrolls with a scroll indicator. <b>Panel compact</b>: same height, never scrolls; rows are 44 pt each.</span>
+</div>
+</div>
+
+<div id="A2" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#A2" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">A2</a><div style="font-size:26px;font-weight:700">Smallest iPhone · every editor state · preview printed on each</div></div>
+<div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+<dc-import name="EditorPhone2" size="small" mode="toolbar" context="clip" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="opacity" guides="{{ true }}" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="speedNormal" guides="{{ true }}" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="speedCurve" guides="{{ true }}" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="speedSlow" guides="{{ true }}" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="cutout" guides="{{ true }}" caption="375 × 667 · Remove background · longest status at 375 pt · 168 pt · preview 301 pt" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="stabilize" guides="{{ true }}" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="animClipIn" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="animClipCombo" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="ratio" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="strip" strip="greenscreen" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="panel" panel="text" context="textSel" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="panel" panel="voice" context="sound" guides="{{ true }}" caption="375 × 667 · Voice · compact, no scroll · 44+44+44+44+52+4 = 232 of 240 · preview 301 pt" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="panel" panel="sound" context="sound" guides="{{ true }}" caption="375 × 667 · Sound quality · compact, no scroll · 232 of 240 · preview 301 pt" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="keyboard" hint-size="375px,700px"></dc-import>
+</div>
+<div style="font-size:14px;line-height:20px;color:#6C6C70;max-width:1300px">The status block always takes its full height, so the strip doesn’t change size when the sentence changes. The Remove background strip is drawn with its longest sentence (three lines at 375 pt). Stabilize’s longest sentence fits in 96 pt. Sound quality: Strength sits inside the Reduce noise row, and the working status replaces the note line in the same 52 pt (“Preparing the sound: 40% · Cancel”).</div>
+</div>
+
+<div id="B1" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#B1" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">B1</a><div style="font-size:26px;font-weight:700">Timeline · the app’s order, pinned clip row, scrolling rows, 44-pt targets</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div><b style="color:#111">Order kept from the app:</b> ruler 14 → clip row 52 (pinned) → 4 → Music, Voice, Sound effects → one row per Layer → Text, Stickers, Captions → Effects. The rows scroll vertically inside the cap and show a 3-pt scroll indicator. Summary rows and the gutter are removed.</div>
+<div><b style="color:#111">Lanes are 40 pt with 30-pt bars; each bar’s touch area is 44 pt, reaching 2 pt into the next lane, and the nearest bar centre wins. Each kind keeps its glyph and name on the bar; sound bars add a waveform only when the data exists. Ship-first look: no waveform (left phone).</div>
+<div><b style="color:#111">Handles:</b> dark #1C1C1E tabs with a gold (clip) or white (bar) grip line, 14–16 pt visual, 44 × 44 target (pink). Move: a 32 × 16 dark pill with a gold ring at the top centre of the selected clip; target 44 × 40 (blue).</div>
+<div><b style="color:#111">Cut markers stay visible.</b> At the selected clip’s cuts the “+” or ◆ moves 10 pt outward, beside the trim handle, onto the neighbour clip. Its 24-pt disc wins over the handle’s target (yellow). Markers are hidden only where two cuts are closer than 44 pt; there, Transition is in the Edit group.</div>
+<div><b style="color:#111">Nothing covers anything:</b> top edge 3 pt = copy progress · top-left = badge · top centre = Move · bottom 12-pt band = beat ticks and keyframe diamonds (8 pt, 44-pt target, green). Touch order: trim handle → marker disc → keyframe → Move → clip. On clips under 100 pt the badge hides; under 88 pt Move is a touch-and-hold on the clip.</div>
+<div><b style="color:#111">Multi-select:</b> gold border + gold check on chosen clips, an empty ring on the others. There are no handles or markers.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+<dc-import name="EditorPhone2" size="small" mode="toolbar" context="clip" project="full" targets="{{ true }}" caption="375 · full project · no waveform (ships first) · targets shown" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="small" mode="toolbar" context="clip" project="full" short-clip="{{ true }}" targets="{{ true }}" caption="375 · selected clip 86 pt wide: Move by touch-and-hold, badge hidden; 40-pt clip: no markers on its cuts" hint-size="375px,700px"></dc-import>
+<dc-import name="EditorPhone2" size="medium" mode="toolbar" context="sound" project="full" waveform="{{ true }}" targets="{{ true }}" caption="402 · sound bar selected · waveforms · bar handles 44 pt" hint-size="402px,910px"></dc-import>
+<dc-import name="EditorPhone2" size="large" mode="toolbar" context="multi" project="full" rows-scroll="{{ 132 }}" caption="440 · multi-select · rows scrolled to Text / Sticker / Caption" hint-size="440px,990px"></dc-import>
+<dc-import name="EditorPhone2" size="small" theme="light" material="solid" mode="toolbar" context="photo" project="full" caption="375 · light, solid · photo clip" hint-size="375px,700px"></dc-import>
+</div>
+</div>
+
+<div id="C1" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#C1" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">C1</a><div style="font-size:26px;font-weight:700">Toolbar · all contexts at 375 pt</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div><b style="color:#111">Group button:</b> a 52-pt tool-sized button with the group’s symbol over “Basics ⌄”. It opens a system menu (Basics, Edit, Audio, Look, Frame) with a checkmark on the current group. VoiceOver: “Tool group, Basics, pop-up button.” At 375 pt four tools are visible beside it, as in the app today.</div>
+<div><b style="color:#111">Basics holds eight tools, no tool appears twice.</b> Basics: Split, Trim, Speed, Volume, Filter, Cut out, Stabilize, Select. Edit: Transition, Keyframe, Duplicate, Replace, Reverse, Freeze. Audio: Extract audio, Voice, Sound. Look: Adjust, Templates, Animate (+ Motion on photos). Frame: Crop, Transform, Opacity, Mask, Background, Green screen (layers: Blend instead of Background).</div>
+<div><b style="color:#111">One rule:</b> the group resets to Basics on every new selection. Flat rows: main bar, empty project, audio, text, text / caption / sticker, sound bar (opens on Volume, Fade), effect, multi-select (“✓ 3 selected” in 13 pt, then Speed, Volume, Filter visible, Delete and Done pinned).</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,367px);gap:28px 36px">
+<sc-for list="{{ contexts }}" as="c" hint-placeholder-count="16"><div style="display:flex;flex-direction:column;gap:6px"><div style="font:600 12px ui-monospace,Menlo,monospace;color:#6C6C70">{{ c.n }}</div><div style="background:#0E0E0F;border-radius:20px;padding:10px 0;display:flex;justify-content:center;height:{{ c.h }};align-items:flex-end;box-sizing:border-box"><dc-import name="Toolbar" context="{{ c.ctx }}" group="{{ c.g }}" width="{{ 359 }}" menu-open="{{ c.menu }}" hint-size="359px,64px"></dc-import></div></div></sc-for>
+</div>
+<div style="font-size:15px;font-weight:600;margin-top:8px">Taps from a fresh clip selection</div>
+<div style="display:grid;grid-template-columns:160px repeat(6,minmax(0,1fr));border-top:1px solid #E2E2DF;font-size:14px">
+<sc-for list="{{ taps }}" as="r" hint-placeholder-count="4"><div style="padding:8px 8px 8px 0;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.a }}</div><div style="padding:8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.b }}</div><div style="padding:8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.c }}</div><div style="padding:8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.d }}</div><div style="padding:8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.e }}</div><div style="padding:8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.f }}</div><div style="padding:8px;border-bottom:1px solid #EDEDEA;font-weight:{{ r.fw }}">{{ r.g }}</div></sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;color:#6C6C70">“Visible” means on screen without swiping the row. At 375 pt Split, Trim, Speed and Volume are fully visible and Filter is partly visible, as in the app today. Select is one short swipe, as today.</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const S = { small: { W: 375, H: 667, st: 20, hd: 0, cap: 172, inset: 8, kb: 260 }, medium: { W: 402, H: 874, st: 54, hd: 4, cap: 212, inset: 34, kb: 336 }, large: { W: 440, H: 956, st: 62, hd: 4, cap: 252, inset: 34, kb: 346 } };
+    const row = (a, b, c, d, e, f, g, fw = 400) => ({ a, b, c, d, e, f, g, fw });
+    const table = [row('Device', 'Toolbar only', 'Strip S / M / L', 'Panel regular', 'Panel compact', 'Keyboard up', 'Panel height', 600)];
+    Object.entries(S).forEach(([k, s]) => {
+      const tb = s.H - s.inset - 64, tl = tb - 4 - s.cap, tr = tl - 44, top = s.st + s.hd + 44, kbf = s.H - s.kb - 40;
+      const pb = Math.min(tr - 4, kbf - 2), h = pb - top + ' pt';
+      table.push(row(`${s.W} × ${s.H}`, h, h, h, h, h, `${s.cap + 68} pt`));
+    });
+    table.push(row('Review 3', '301 / 394 / 458', '', '', '', '', '240 / 280 / 320'));
+    const C = (n, ctx, o = {}) => ({ n, ctx, g: o.g || 'Basics', menu: !!o.menu, h: o.menu ? '360px' : '84px' });
+    const contexts = [C('MAIN BAR · flat', 'main'), C('EMPTY PROJECT', 'empty'), C('AUDIO SECTION', 'audio'), C('TEXT SECTION', 'text'), C('VIDEO CLIP · Basics', 'clip'), C('VIDEO CLIP · Edit', 'clip', { g: 'Edit' }), C('VIDEO CLIP · group menu open', 'clip', { menu: true }), C('CLIP WITH REMOVE BACKGROUND OR STABILIZE ON · no Reverse', 'clipCopy', { g: 'Edit' }), C('REVERSED CLIP · no Volume, Cut out, Stabilize · Edit', 'clipReversed', { g: 'Edit' }), C('REVERSED CLIP · Basics', 'clipReversed'), C('PHOTO · Basics', 'photo'), C('PHOTO · Look (Motion)', 'photo', { g: 'Look' }), C('LAYER · Basics', 'layer'), C('LAYER · Frame (Blend)', 'layer', { g: 'Frame' }), C('COLLAGE CELL · Collage first', 'collage'), C('COLLAGE CELL · Edit', 'collage', { g: 'Edit' }), C('TEXT', 'textSel'), C('CAPTION', 'caption'), C('STICKER', 'sticker'), C('SOUND BAR · opens on Volume, Fade', 'sound'), C('TIMELINE EFFECT', 'effect'), C('MULTI-SELECT · 3', 'multi'), C('MULTI-SELECT · 0', 'multi0')];
+    const taps = [row('Tool', 'Split', 'Trim', 'Speed', 'Volume', 'Filter', 'Select', 600), row('Today (app)', '1', '1', '1', '1', '1 + swipe', '1 + swipe'), row('Review 3', '1', '1 + swipe', '1', '1', '1', '1 + 2 swipes'), row('Now · 375 pt', '1 · visible', '1 · visible', '1 · visible', '1 · visible', '1 · partly visible', '1 + swipe'), row('Now · 402 / 440 pt', '1', '1', '1', '1', '1 · visible', '1 + short swipe')];
+    return { table, contexts, taps };
+  }
+}
+</script>
+</body>
+</html>

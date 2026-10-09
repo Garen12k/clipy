@@ -14,7 +14,7 @@ test("tiles apply a filter to the clip; Apply to all applies to every clip", asy
   await render(<FilterSheet clipId="a" visible onClose={() => {}} />);
   await fireEvent.press(screen.getByRole("button", { name: "Warm" }));
   expect(useEditorStore.getState().project!.clips.map((c) => c.filter)).toEqual(["warm", null]);
-  await fireEvent.press(screen.getByRole("button", { name: "Apply to all clips" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Apply to All Clips" }));
   expect(useEditorStore.getState().project!.clips.map((c) => c.filter)).toEqual(["warm", "warm"]);
   await fireEvent.press(screen.getByRole("button", { name: "None" }));
   expect(useEditorStore.getState().project!.clips[0].filter).toBeNull();
@@ -57,21 +57,21 @@ test("Apply to all clips copies the filter and its strength", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "Warm" }));
   const slider = screen.getByTestId("filter-strength");
   await fireEvent(slider, "touchStart"); await fireEvent(slider, "touchMove");
-  await fireEvent.press(screen.getByRole("button", { name: "Apply to all clips" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Apply to All Clips" }));
   expect(useEditorStore.getState().project!.clips.map((c) => [c.filter, c.filterIntensity])).toEqual([["warm", 0.8], ["warm", 0.8]]);
 });
 
 test("without clipIds the title is Filter and Apply to all clips is offered", async () => {
   await render(<FilterSheet clipId="a" visible onClose={() => {}} />);
   expect(screen.getByRole("header", { name: "Filter" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Apply to all clips" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Apply to All Clips" })).toBeTruthy();
 });
 
 test("clipIds: a tile and the slider write every listed main clip, one undo step each; a layer id is skipped; no Apply to all", async () => {
   useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 }), makePhotoClip({ id: "c" })], layers: [makeLayer({ id: "l", sourceDuration: 2 })] }));
   await render(<FilterSheet clipId="a" clipIds={["a", "c", "l"]} visible onClose={() => {}} />);
   expect(screen.getByRole("header", { name: "Filter · 2 clips" })).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Apply to all clips" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Apply to All Clips" })).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "Warm" }));
   const st = () => useEditorStore.getState();
   expect(st().project!.clips.map((c) => c.filter)).toEqual(["warm", null, "warm"]);
@@ -96,7 +96,7 @@ test("32 tiles: the twenty old filters first, in their order, then the twelve ne
   const { getThumb } = jest.requireMock("@/src/editor/components/thumbnails") as { getThumb: jest.Mock };
   getThumb.mockClear();
   await render(<FilterSheet clipId="a" visible onClose={() => {}} />);
-  const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel).filter((l) => l !== "Done" && l !== "Apply to all clips");
+  const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel).filter((l) => l !== "Done" && l !== "Apply to All Clips");
   expect(labels).toEqual(FILTER_IDS.map((id) => FILTERS[id].label));
   expect(labels).toHaveLength(32);
   expect(labels.slice(0, 20)).toEqual(["None", "Warm", "Cool", "Vivid", "Faded", "Mono", "Noir", "Vintage", "Sunset", "Golden", "Teal", "Pastel", "Film", "Chrome", "Instant", "Process", "Tonal", "Sepia", "Crisp", "Dream"]);

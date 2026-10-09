@@ -52,9 +52,9 @@ export function EffectPill({ effect: fx, selected, onPress }: { effect: EffectIt
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`effect-pill-${fx.id}`} onPress={onPress} accessibilityLabel={`Effect ${label}`}
-        style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: theme.radius.chip, backgroundColor: theme.colors.laneEffect,
+        style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: theme.radius.chip, backgroundColor: theme.colors.kindEffect,
           borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
-        <Body numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12 }}>{label}</Body>
+        <Body numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: 12 }}>{label}</Body>
         {selected && (
           <>
             <GestureDetector gesture={gestures.left}><View accessibilityLabel="Effect start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>

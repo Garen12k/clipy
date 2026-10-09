@@ -46,7 +46,7 @@ test("a short drag springs back with the same spring; a long one closes", async 
 
 test("the sheet sits on the bar colour; the header action is a text-only button", async () => {
   await render(<Sheet visible onClose={() => {}} title="Filter" action={{ label: "Apply to all", onPress: () => {} }}><Text>body</Text></Sheet>);
-  expect(screen.getByTestId("sheet-panel")).toHaveStyle({ backgroundColor: theme.elevation.bar, borderTopLeftRadius: theme.radius.sheet });
+  expect(screen.getByTestId("sheet-panel")).toHaveStyle({ backgroundColor: theme.screen.bar, borderTopLeftRadius: theme.radius.sheet });
   expect(screen.getByRole("header", { name: "Filter" })).toHaveStyle({ fontSize: theme.type.heading });
   expect(screen.getByRole("button", { name: "Apply to all" })).toHaveStyle({ height: theme.size.controlCompact });
 });

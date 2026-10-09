@@ -18,7 +18,7 @@ const st = () => useEditorStore.getState();
 const layers = () => st().project!.layers;
 const past = () => st().past.length;
 const tile = (name: string) => screen.getByRole("button", { name });
-const tiles = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string).filter((l) => l !== "Done" && l !== "Fit to frame");
+const tiles = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string).filter((l) => l !== "Done" && l !== "Fit to Frame");
 const border = () => screen.getByTestId("collage-border");
 const corner = () => screen.getByTestId("collage-corner");
 const base = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })] });
@@ -38,7 +38,7 @@ test("nothing made yet: the six layouts, none ringed, both sliders off at 0 % an
   expect(corner().props).toMatchObject({ disabled: true, minimumValue: 0, maximumValue: 2, step: 1, value: 0 });
   expect(screen.getByText("Border 0 %")).toBeTruthy();
   expect(screen.getByText("Corner Square")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Fit to frame" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Fit to Frame" })).toBeNull();
   for (const id of ["sideBySide", "stacked", "bigTwo", "row3", "grid4", "inset"]) expect(screen.getByTestId(`collage-diagram-${id}`)).toBeTruthy();
 });
 
@@ -101,10 +101,10 @@ test("Corner: three stops that write the masks", async () => {
 test("Fit to frame shows only after the frame's shape changed, and one tap re-lays the cells for it", async () => {
   st().setProject({ ...two, aspectRatio: "1:1" });
   await open("x1");
-  await fireEvent.press(screen.getByRole("button", { name: "Fit to frame" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Fit to Frame" }));
   expect(layers().map((l) => l.collage!.aspect)).toEqual([1, 1]);
   expect(layers()[0].crop).toEqual({ x: 0.055556, y: 0, w: 0.888889, h: 1 });
-  expect(screen.queryByRole("button", { name: "Fit to frame" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Fit to Frame" })).toBeNull();
   expect(past()).toBe(1);
 });
 
@@ -117,10 +117,10 @@ test("a cell moved by hand: the panel shows its own tag, the others follow the s
   const moved: Project = { ...two, aspectRatio: "1:1", layers: two.layers.map((l) => (l.id === "x1" ? { ...l, transform: { ...l.transform, x: 0.1 } } : l)) };
   st().setProject(moved);
   await open("x1");
-  await fireEvent.press(screen.getByRole("button", { name: "Fit to frame" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Fit to Frame" }));
   expect(layers().map((l) => l.collage!.aspect)).toEqual([two.layers[0].collage!.aspect, 1]);
   expect(layers()[0]).toBe(moved.layers[0]);
-  expect(screen.queryByRole("button", { name: "Fit to frame" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Fit to Frame" })).toBeNull();
   expect(past()).toBe(1);
   await fireEvent.press(tile("Stacked"));
   expect(layers().map((l) => l.collage!.layout)).toEqual(["sideBySide", "stacked"]);

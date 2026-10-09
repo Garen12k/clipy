@@ -139,7 +139,7 @@ export function ReadAloudSection({ overlayId }: { overlayId: string }) {
                     <QuietButton compact title="Stop" onPress={giveUp} />
                   </>
                 ) : (
-                  <SecondaryButton title="Read aloud" onPress={() => { void start(); }} />
+                  <SecondaryButton title="Read Aloud" onPress={() => { void start(); }} />
                 )}
               </View>
               <Body muted style={{ fontSize: theme.type.micro }}>{VOICES_HINT}</Body>

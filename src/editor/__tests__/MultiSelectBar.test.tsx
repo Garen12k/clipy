@@ -91,7 +91,7 @@ test("Filter: a tile and the strength slider write every chosen clip, one undo s
   expect(screen.queryByRole("header", { name: "Filter · 2 clips" })).toBeNull();
   await press("Filter");
   expect(header("Filter · 2 clips")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Apply to all clips" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Apply to All Clips" })).toBeNull();
   await press("Warm");
   expect(clips().map((c) => c.filter)).toEqual(["warm", null, "warm"]);
   expect(past()).toBe(1);

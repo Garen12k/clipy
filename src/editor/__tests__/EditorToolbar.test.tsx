@@ -224,12 +224,12 @@ describe("main bar entries", () => {
   test("Templates on the clip bar offers This clip; on the main bar it cannot", async () => {
     await renderBar();
     await fireEvent.press(btn("Templates"));
-    expect(btn("This clip")).toBeDisabled();
+    expect(btn("This Clip")).toBeDisabled();
     await closeTool();
     await act(() => { st().select("b"); });
     await fireEvent.press(btn("Templates"));
     expect(btn("Random template")).toBeTruthy();
-    expect(btn("This clip")).toBeEnabled();
+    expect(btn("This Clip")).toBeEnabled();
   });
 
   test("Captions on the text bar opens the Captions panel", async () => {
@@ -1096,7 +1096,7 @@ describe("Motion and Collage on the bar", () => {
     await act(() => { st().select("p"); });
     await fireEvent.press(btn("Motion"));
     expect(useToolStrip.getState().open).toEqual({ id: "photoMotion", key: "clip:p" });
-    expect(screen.getByText("Apply to all photos")).toBeTruthy();
+    expect(screen.getByText("Apply to All Photos")).toBeTruthy();
     await fireEvent.press(btn("Zoom in"));
     expect(st().project!.clips[0].motion).toEqual({ id: "zoomIn", strength: 0.5 });
     expect(st().past).toHaveLength(1);

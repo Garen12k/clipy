@@ -47,7 +47,7 @@ test("the sentence carries the stored limit", () => {
 
 test("a Find whose beats all fit says nothing, as before", async () => {
   await open();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   expect(markers()).toHaveLength(300);                           // 250 tapped + 50 beats: exactly the limit, none left out
   expect(st().past).toHaveLength(1);
   expect(toast()).toBeNull();
@@ -58,7 +58,7 @@ test("a Find whose beats do not all fit says so, once", async () => {
   await drag(2);                                                 // every beat, before any Find: sets the next Find only
   expect(toast()).toBeNull();
   const shown = shows();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   expect(markers()).toHaveLength(300);
   expect(markers().slice(0, 250)).toEqual(tapped);               // every tapped marker stayed
   expect(st().past).toHaveLength(1);
@@ -69,23 +69,23 @@ test("a Find whose beats do not all fit says so, once", async () => {
 test("a second press at the limit does not claim the markers are all in place", async () => {
   await open();
   await drag(2);
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   useToast.getState().clear();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   expect(st().past).toHaveLength(1);                             // nothing changed: no undo step
   expect(toast()).toBe(LEFT_OUT);
 });
 
 test("a full project: nothing can be placed, and the reason is the limit", async () => {
   await open({ beatMarkers: Array.from({ length: 300 }, (_, k) => Math.round((k + 1) * 100) / 1000) });
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   expect(st().past).toHaveLength(0);
   expect(toast()).toBe(LEFT_OUT);
 });
 
 test("a Fewer / More drag after a Find says it once, when the slider is let go — not while it is dragged", async () => {
   await open();
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   const shown = shows();
   await drag(2);
   await fireEvent(slider(), "touchMove", { v: 1 });
@@ -104,7 +104,7 @@ test("a drag let go where everything fits says nothing; nor does a drag before a
   await fireEvent(slider(), "touchEnd", { v: 2 });               // no Find yet: the slider placed nothing
   expect(toast()).toBeNull();
   await fireEvent(slider(), "touchMove", { v: 1 });
-  await fireEvent.press(btn("Find beats"));
+  await fireEvent.press(btn("Find Beats"));
   await drag(0);
   await fireEvent(slider(), "touchEnd", { v: 0 });
   expect(toast()).toBeNull();
@@ -113,5 +113,5 @@ test("a drag let go where everything fits says nothing; nor does a drag before a
 test("whether Cut to beats can run is asked of the model's one rule", async () => {
   await open();
   expect(beatCutState).toHaveBeenCalledWith(st().project);
-  expect(btn("Cut to beats")).toBeEnabled();
+  expect(btn("Cut to Beats")).toBeEnabled();
 });

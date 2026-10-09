@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-01T10:00:00.000Z" }));
 import { makeAudioTrack, makeClip, makeEffect, makeLayer, makeOverlay, makeProject, makeSticker } from "@/src/editor/model/types";
@@ -18,9 +18,9 @@ const gestureOf = (node: { props: { gesture?: unknown } }) => node.props.gesture
 test("one pill per effect, placed by time, labelled and coloured from the theme", async () => {
   await render(<EffectLane />);
   expect(screen.getByTestId("effect-lane")).toBeTruthy();
-  expect(screen.getByTestId("effect-pill-e1")).toHaveStyle({ left: 100, width: 150, backgroundColor: theme.colors.laneEffect });
+  expect(screen.getByTestId("effect-pill-e1")).toHaveStyle({ left: 100, width: 150, backgroundColor: theme.colors.kindEffect });
   expect(screen.getByTestId("effect-pill-e2")).toHaveStyle({ left: 300, width: 50 });
-  expect(screen.getByText("Glitch")).toBeTruthy();
+  expect(screen.getByText("Glitch")).toHaveStyle({ color: theme.colors.onKind });
   expect(screen.getByText("Old film")).toBeTruthy();
 });
 

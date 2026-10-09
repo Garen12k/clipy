@@ -13,7 +13,7 @@ export function ToolButton({ label, icon, onPress, disabled, active }: Props) {
         backgroundColor: active ? theme.elevation.lifted : theme.elevation.tile }, active ? theme.ring : theme.ringClear]}>
         <Ionicons name={icon} size={theme.size.icon.md} color={active ? theme.colors.accent : theme.colors.text} />
       </View>
-      <Text numberOfLines={1} style={{ fontFamily: active ? theme.fonts.bodySemi : theme.fonts.body, color: active ? theme.colors.accent : theme.colors.text, fontSize: theme.type.micro }}>{label}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ fontWeight: active ? theme.weight.semi : theme.weight.regular, color: active ? theme.colors.accent : theme.colors.text, fontSize: theme.type.small }}>{label}</Text>
     </PressableScale>
   );
 }

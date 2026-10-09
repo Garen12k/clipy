@@ -36,13 +36,13 @@ test("Adjust: twelve parameters in one row, ONE slider for the selected one, Res
   await fireEvent.press(btn("Reset"));
   expect(st().project!.clips[0].adjust.brightness).toBe(0);
   expect(st().past).toHaveLength(2);
-  expect(btn("Apply to all")).toBeTruthy();
+  expect(btn("Apply to All")).toBeTruthy();
   await expectStrip("Adjust", onClose);
 });
 
 test("Adjust on a layer has no action", async () => {
   await render(<AdjustSheet clipId="L" visible onClose={() => {}} />);
-  expect(screen.queryByRole("button", { name: "Apply to all" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Apply to All" })).toBeNull();
 });
 
 test("Green screen: the switch, the colours in one row and the strength row; the note is in the header", async () => {

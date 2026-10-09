@@ -159,7 +159,7 @@ export function RegionBoxes({ frameW, frameH }: { frameW: number; frameH: number
     <View testID="region-boxes" pointerEvents="box-none" style={fill}>
       {boxes.filter((e) => e !== selected || !gestures).map((e) => (
         <View key={e.id} testID={`region-box-${e.id}`} pointerEvents="none"
-          style={{ ...frost, ...place(e.rect), borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.hairline }}>
+          style={{ ...frost, ...place(e.rect), borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.textMuted }}>
           {inner(e)}
         </View>
       ))}

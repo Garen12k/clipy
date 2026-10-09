@@ -199,7 +199,7 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
       </>}>
       <StripTiles key={shown} initialX={startX} lead={<>
         {TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={shown === t.id} onPress={() => setTab(t.id)} />)}
-        {slowTab ? <Chip compact key="slow" label="Slow motion" selected={shown === "slow"} onPress={() => setTab("slow")} /> : null}
+        {slowTab ? <Chip compact key="slow" label="Slow Motion" selected={shown === "slow"} onPress={() => setTab("slow")} /> : null}
       </>}>
         {shown === "normal" ? (
           PRESETS.map((s) => <Chip key={s} still={dragging} label={formatSpeed(s)} selected={!curveId && clip.speed === s} onPress={() => pickSpeed(s)} />)

@@ -65,7 +65,7 @@ test("Files: picks a document, measures it and adds a music track at the playhea
   await render(<AddAudioSheet visible onClose={onClose} />);
   await act(() => { useEditorStore.getState().seek(3.5); });
   await fireEvent.press(btn("Files"));
-  await fireEvent.press(btn("Choose a file"));
+  await fireEvent.press(btn("Choose a File"));
   await waitFor(() => expect(tracks()).toHaveLength(1));
   expect(tracks()[0]).toMatchObject({ title: "a.m4a", sourceDuration: 12, kind: "music", start: 3.5 });
   expect(useEditorStore.getState().past).toHaveLength(1);
@@ -215,7 +215,7 @@ describe("the playhead at the project's end", () => {
     await render(<AddAudioSheet visible onClose={onClose} />);
     await act(() => { useEditorStore.getState().seek(10); });
     await fireEvent.press(btn("Files"));
-    await fireEvent.press(btn("Choose a file"));
+    await fireEvent.press(btn("Choose a File"));
     expect(useToast.getState().message).toBe(MESSAGE);
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(DocumentPicker.getDocumentAsync).not.toHaveBeenCalled();
@@ -249,13 +249,13 @@ test("Choose a file is disabled while the picked file's duration is being measur
   let disabledWhileMeasuring: boolean | undefined;
   (audioDuration as jest.Mock).mockImplementationOnce(async () => {
     await new Promise((r) => setImmediate(r));
-    disabledWhileMeasuring = btn("Choose a file").props.accessibilityState?.disabled;
+    disabledWhileMeasuring = btn("Choose a File").props.accessibilityState?.disabled;
     return 7;
   });
   (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValueOnce({ canceled: false, assets: [{ uri: "file:///picked/b.m4a", name: "b.m4a", size: 1000 }] });
   await render(<AddAudioSheet visible onClose={() => {}} />);
   await fireEvent.press(btn("Files"));
-  await fireEvent.press(btn("Choose a file"));
+  await fireEvent.press(btn("Choose a File"));
   await waitFor(() => expect(tracks()[0]).toMatchObject({ title: "b.m4a", sourceDuration: 7 }));
   expect(disabledWhileMeasuring).toBe(true);
 });
@@ -280,7 +280,7 @@ test("Files: the track starts where the playhead was when Choose a file was pres
   await render(<AddAudioSheet visible onClose={() => {}} />);
   await act(() => { useEditorStore.getState().seek(1.5); });
   await fireEvent.press(btn("Files"));
-  await fireEvent.press(btn("Choose a file"));
+  await fireEvent.press(btn("Choose a File"));
   await waitFor(() => expect(tracks()).toHaveLength(1));
   expect(tracks()[0].start).toBe(1.5);
 });
@@ -326,11 +326,11 @@ test("Files: busy from the press on, and a picker that fails is a toast", async 
   (DocumentPicker.getDocumentAsync as jest.Mock).mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
   await render(<AddAudioSheet visible onClose={() => {}} />);
   await fireEvent.press(btn("Files"));
-  await fireEvent.press(btn("Choose a file"));
-  expect(btn("Choose a file")).toBeDisabled();
+  await fireEvent.press(btn("Choose a File"));
+  expect(btn("Choose a File")).toBeDisabled();
   await act(async () => { fail(new Error("picker broke")); });
   await waitFor(() => expect(useToast.getState().message).toBe("Couldn't add that audio file."));
-  await waitFor(() => expect(btn("Choose a file")).toBeEnabled());
+  await waitFor(() => expect(btn("Choose a File")).toBeEnabled());
   expect(tracks()).toEqual([]);
   expect(DocumentPicker.getDocumentAsync).toHaveBeenCalledTimes(1);
   warn.mockRestore();
@@ -340,8 +340,8 @@ test("Files: a cancelled picker frees the button again without a toast", async (
   (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValueOnce({ canceled: true });
   await render(<AddAudioSheet visible onClose={() => {}} />);
   await fireEvent.press(btn("Files"));
-  await fireEvent.press(btn("Choose a file"));
-  await waitFor(() => expect(btn("Choose a file")).toBeEnabled());
+  await fireEvent.press(btn("Choose a File"));
+  await waitFor(() => expect(btn("Choose a File")).toBeEnabled());
   expect(useToast.getState().message).toBeNull();
 });
 

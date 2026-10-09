@@ -179,8 +179,8 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
       <View style={{ gap: theme.space.sm }}>
         {/* Compact pairs in rows 44 tall: the 36-pt buttons' hit slop has room, and each pair fits a 375-pt phone between its gutters. */}
         <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", height: theme.size.touch, gap: theme.space.md }}>
-          <SecondaryButton compact title="Find beats" disabled={busy || (status !== "ok" && status !== "own")} onPress={status === "own" ? () => { void listen(); } : find} />
-          <SecondaryButton compact title="Cut to beats" disabled={cutHint !== null} onPress={cut} />
+          <SecondaryButton compact title="Find Beats" disabled={busy || (status !== "ok" && status !== "own")} onPress={status === "own" ? () => { void listen(); } : find} />
+          <SecondaryButton compact title="Cut to Beats" disabled={cutHint !== null} onPress={cut} />
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", height: theme.size.touch, gap: theme.space.md }}>
           <Body muted style={small}>Fewer</Body>
@@ -210,8 +210,8 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
         {cutHint ? <Body muted style={[small, { textAlign: "center" }]}>{cutHint}</Body> : null}
       </View>
       <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", height: theme.size.touch, gap: theme.space.md }}>
-        <SecondaryButton compact title="Remove nearest" disabled={count === 0} onPress={() => run(removeBeatMarkerNear, "light")} />
-        <SecondaryButton compact title="Clear all" disabled={count === 0} onPress={() => run((p) => clearBeatMarkers(p), "medium")} />
+        <SecondaryButton compact title="Remove Nearest" disabled={count === 0} onPress={() => run(removeBeatMarkerNear, "light")} />
+        <SecondaryButton compact title="Clear All" disabled={count === 0} onPress={() => run((p) => clearBeatMarkers(p), "medium")} />
       </View>
     </ToolPanel>
   );

@@ -31,7 +31,7 @@ beforeEach(() => {
 test("titled Motion: None is ringed, the seven motions follow in order, Strength is off at 50 %", async () => {
   await open("p");
   expect(screen.getByText("Motion")).toBeTruthy();
-  const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string).filter((l) => l !== "Done" && l !== "Apply to all photos");
+  const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string).filter((l) => l !== "Done" && l !== "Apply to All Photos");
   expect(labels).toEqual(["None", "Zoom in", "Zoom out", "Pan left", "Pan right", "Pan up", "Pan down", "Corner zoom"]);
   expect(tile("None")).toBeSelected();
   for (const id of PHOTO_MOTION_IDS) expect(tile(PHOTO_MOTIONS[id].label)).not.toBeSelected();
@@ -94,7 +94,7 @@ test("None clears an older zoom / pan Combo too", async () => {
 test("Apply to all photos: every main-track photo gets the motion shown, in one undo step; videos and layers do not", async () => {
   await open("p");
   await press("Corner zoom");
-  await press("Apply to all photos");
+  await press("Apply to All Photos");
   for (const id of ["p", "q", "old"]) expect(clip(id).motion).toEqual({ id: "zoomCorner", strength: 0.5 });
   expect("motion" in clip("v")).toBe(false);
   expect("motion" in clip("L")).toBe(false);
@@ -103,7 +103,7 @@ test("Apply to all photos: every main-track photo gets the motion shown, in one 
 
 test("a photo layer: the same tiles, no Apply to all photos", async () => {
   await open("L");
-  expect(screen.queryByRole("button", { name: "Apply to all photos" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Apply to All Photos" })).toBeNull();
   await press("Pan down");
   expect(clip("L").motion).toEqual({ id: "panDown", strength: 0.5 });
 });

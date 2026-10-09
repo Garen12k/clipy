@@ -1,5 +1,6 @@
 import { Text } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "./tone";
 import { PressableScale } from "./PressableScale";
 
 type Props = { label: string; selected: boolean; onPress: () => void; disabled?: boolean; accessibilityLabel?: string;
@@ -10,14 +11,15 @@ type Props = { label: string; selected: boolean; onPress: () => void; disabled?:
 };
 
 export function Chip({ label, selected, onPress, disabled, accessibilityLabel, compact, still }: Props) {
+  const s = useSurfaces();
   return (
     <PressableScale lifted={selected} still={still}
       accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected, disabled: !!disabled }}
       disabled={disabled} onPress={onPress} hitSlop={compact ? { top: 10, bottom: 10, left: 4, right: 4 } : { top: 4, bottom: 4 }}
       style={[{ height: compact ? theme.size.chipCompact : theme.size.chip, justifyContent: "center", paddingHorizontal: compact ? theme.space.md : theme.space.lg, borderRadius: theme.radius.pill,
-        backgroundColor: selected ? theme.elevation.lifted : theme.elevation.tile, opacity: disabled ? 0.4 : 1 }, selected ? theme.ring : theme.ringClear]}>
-      <Text style={{ fontFamily: theme.fonts.bodySemi, color: selected ? theme.colors.accent : theme.colors.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</Text>
+        backgroundColor: selected ? s.lifted : s.tile, opacity: disabled ? 0.4 : 1 }, selected ? theme.ring : theme.ringClear]}>
+      <Text style={{ fontWeight: theme.weight.semi, color: selected ? theme.colors.accent : theme.colors.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</Text>
     </PressableScale>
   );
 }

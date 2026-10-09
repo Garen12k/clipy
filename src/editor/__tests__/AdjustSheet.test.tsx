@@ -57,7 +57,7 @@ test("Reset zeroes every key in one step and is disabled when neutral", async ()
 test("Apply to all copies the adjust to every clip", async () => {
   await render(<AdjustSheet clipId="a" visible onClose={() => {}} />);
   await drag();
-  await fireEvent.press(screen.getByRole("button", { name: "Apply to all" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Apply to All" }));
   expect(clips().map((c) => c.adjust.brightness)).toEqual([0.35, 0.35]);
 });
 
@@ -67,6 +67,6 @@ test("Reset is a compact quiet button (text only, gold), not a chip: 36 pt high 
   const reset = screen.getByRole("button", { name: "Reset" });
   expect(reset).toHaveStyle({ height: theme.size.controlCompact, minWidth: theme.size.touch });
   expect(reset).not.toHaveStyle({ backgroundColor: theme.elevation.tile });
-  expect(screen.getByText("Reset")).toHaveStyle({ color: theme.colors.accent, fontFamily: theme.fonts.bodyBold });
+  expect(screen.getByText("Reset")).toHaveStyle({ color: theme.colors.accent, fontWeight: theme.weight.semi });
   expect(screen.getByTestId("strip-slider")).toHaveStyle({ height: theme.size.controlCompact });   // the row is the button's height: its slop has no room here
 });

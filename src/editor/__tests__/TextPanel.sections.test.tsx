@@ -138,6 +138,6 @@ test("the order: text field, looks, fonts, the five style rows, then Size, colou
   await show();
   const tree = JSON.stringify(screen.toJSON());
   const at = (needle: string) => { const i = tree.indexOf(needle); expect(i).toBeGreaterThan(-1); return i; };
-  const order = ["Overlay text", '"template-strip"', '"font-strip"', '"style-sections"', '"size-slider"', "Align left"].map(at);
+  const order = ["Overlay text", '"template-strip"', '"font-strip"', '"style-sections"', '"size-slider"', "Align Left"].map(at);
   expect([...order].sort((a, b) => a - b)).toEqual(order);
 });

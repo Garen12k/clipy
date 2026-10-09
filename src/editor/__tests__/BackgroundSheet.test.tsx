@@ -36,7 +36,7 @@ test("Blur and a palette colour set the clip background", async () => {
 test("Apply to all copies the current clip's background to every clip", async () => {
   await render(<BackgroundSheet clipId="a" visible onClose={() => {}} />);
   await fireEvent.press(screen.getByRole("button", { name: "Blur" }));
-  await fireEvent.press(screen.getByRole("button", { name: "Apply to all" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Apply to All" }));
   expect(bg(0)).toEqual({ type: "blur" });
   expect(bg(1)).toEqual({ type: "blur" });
 });
@@ -45,7 +45,7 @@ test("Apply to all is one undo step and one undo restores every clip", async () 
   await render(<BackgroundSheet clipId="a" visible onClose={() => {}} />);
   await fireEvent.press(screen.getByRole("button", { name: "Blur" }));
   const past = useEditorStore.getState().past.length;
-  await fireEvent.press(screen.getByRole("button", { name: "Apply to all" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Apply to All" }));
   expect(useEditorStore.getState().past.length).toBe(past + 1);
   useEditorStore.getState().undo();
   expect(bg(0)).toEqual({ type: "blur" });

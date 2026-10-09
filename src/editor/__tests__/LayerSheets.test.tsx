@@ -50,9 +50,9 @@ beforeEach(() => {
 
 test('"Apply to all" is a main-clip action: hidden when the sheet\'s item is a layer', async () => {
   const sheets: [string, (id: string) => React.JSX.Element][] = [
-    ["Apply to all clips", (id) => <FilterSheet clipId={id} visible onClose={() => {}} />],
-    ["Apply to all", (id) => <AdjustSheet clipId={id} visible onClose={() => {}} />],
-    ["Apply to all clips", (id) => <ClipAnimationSheet clipId={id} visible onClose={() => {}} />],
+    ["Apply to All Clips", (id) => <FilterSheet clipId={id} visible onClose={() => {}} />],
+    ["Apply to All", (id) => <AdjustSheet clipId={id} visible onClose={() => {}} />],
+    ["Apply to All Clips", (id) => <ClipAnimationSheet clipId={id} visible onClose={() => {}} />],
   ];
   for (const [name, sheet] of sheets) {
     const onLayer = await render(sheet("L"));

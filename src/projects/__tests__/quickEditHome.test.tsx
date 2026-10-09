@@ -36,17 +36,17 @@ afterEach(() => warn.mockRestore());
 const openSheet = async () => {
   await render(<ProjectsScreen />);
   await screen.findByText("No clips yet");
-  await fireEvent.press(btn("Quick edit"));
+  await fireEvent.press(btn("Quick Edit"));
   return screen.findByRole("header", { name: "Quick edit" });
 };
 
-test("Quick edit sits beside New project: an outlined button on a pill of its own; New project stays the one gold button", async () => {
+test("Quick edit sits beside New project: a grey button on a pill of its own; New project stays the one gold button", async () => {
   await render(<ProjectsScreen />);
   await screen.findByText("No clips yet");
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
-  expect(screen.getByTestId("primary-button")).toHaveAccessibleName("New project");
+  expect(screen.getByTestId("primary-button")).toHaveAccessibleName("New Project");
   expect(screen.getByTestId("home-actions")).toHaveStyle({ flexDirection: "row", justifyContent: "center", gap: theme.space.md });
-  expect(btn("Quick edit").parent).toHaveStyle({ borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar });
+  expect(btn("Quick Edit").parent).toHaveStyle({ borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar });
   expect(screen.queryByRole("header", { name: "Quick edit" })).toBeNull();
 });
 
@@ -76,53 +76,53 @@ test("style, then media, then the draft: up to 30 items in the order tapped, a s
   await openSheet();
   await fireEvent.press(btn("Retro"));
   // RNTL awaits an async press handler to its end, so the press is awaited only after the spinner has been seen.
-  const pressed = fireEvent.press(btn("Choose photos and videos"));
+  const pressed = fireEvent.press(btn("Choose Photos and Videos"));
   expect(await screen.findByTestId("home-making")).toBeTruthy();
   expect(pick).toHaveBeenCalledWith({ limit: 30 });
   expect(make).toHaveBeenCalledTimes(1);
   expect(make.mock.calls[0].slice(1)).toEqual(["Project 1", PICKED, "retro"]);
   expect(screen.getByText("Making your quick edit")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "New project" })).toBeNull();   // nothing else can be started meanwhile
-  expect(screen.queryByRole("button", { name: "Quick edit" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "New Project" })).toBeNull();   // nothing else can be started meanwhile
+  expect(screen.queryByRole("button", { name: "Quick Edit" })).toBeNull();
   await pressed;
   await waitFor(() => expect(push).toHaveBeenCalledWith("/editor/q1"));
   expect(screen.queryByTestId("home-making")).toBeNull();
-  expect(btn("New project")).toBeTruthy();
+  expect(btn("New Project")).toBeTruthy();
 });
 
 test("the library is cancelled: no draft, no spinner, the buttons are back", async () => {
   pick.mockResolvedValueOnce(null);
   await openSheet();
-  await fireEvent.press(btn("Choose photos and videos"));
+  await fireEvent.press(btn("Choose Photos and Videos"));
   await settle();
   expect(pick).toHaveBeenCalledTimes(1);
   expect(make).not.toHaveBeenCalled();
   expect(push).not.toHaveBeenCalled();
-  expect(btn("Quick edit")).toBeTruthy();
+  expect(btn("Quick Edit")).toBeTruthy();
 });
 
 test("the draft cannot be made: a toast, no editor, the buttons are back", async () => {
   pick.mockResolvedValueOnce(PICKED);
   make.mockRejectedValueOnce(new Error("disk full"));
   await openSheet();
-  await fireEvent.press(btn("Choose photos and videos"));
+  await fireEvent.press(btn("Choose Photos and Videos"));
   await settle();
   await waitFor(() => expect(useToast.getState().message).toBe("Couldn't make the quick edit"));
   expect(push).not.toHaveBeenCalled();
-  expect(btn("Quick edit")).toBeTruthy();
+  expect(btn("Quick Edit")).toBeTruthy();
 });
 
 test("nothing could be imported: the toast says so; some could not: the draft opens and the toast counts them", async () => {
   pick.mockResolvedValueOnce(PICKED);
   make.mockRejectedValueOnce(new Error("Couldn't import any of the selected items."));
   await openSheet();
-  await fireEvent.press(btn("Choose photos and videos"));
+  await fireEvent.press(btn("Choose Photos and Videos"));
   await settle();
   await waitFor(() => expect(useToast.getState().message).toBe("Couldn't import any of the selected items."));
   pick.mockResolvedValueOnce(PICKED);
   make.mockResolvedValueOnce({ id: "q2", failed: 1 });
-  await fireEvent.press(btn("Quick edit"));
-  await fireEvent.press(await screen.findByRole("button", { name: "Choose photos and videos" }));
+  await fireEvent.press(btn("Quick Edit"));
+  await fireEvent.press(await screen.findByRole("button", { name: "Choose Photos and Videos" }));
   await settle();
   await waitFor(() => expect(push).toHaveBeenCalledWith("/editor/q2"));
   expect(useToast.getState().message).toBe("1 of 2 clips added; 1 couldn't be read");

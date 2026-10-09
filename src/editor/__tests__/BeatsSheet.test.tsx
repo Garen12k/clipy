@@ -25,15 +25,15 @@ test("title, Tap, a count, and Remove nearest / Clear all disabled while there a
   expect(screen.getByRole("header", { name: "Beat markers" })).toBeTruthy();
   expect(btn("Tap")).toBeEnabled();
   expect(screen.getByText("0 markers")).toBeTruthy();
-  expect(btn("Remove nearest")).toBeDisabled();
-  expect(btn("Clear all")).toBeDisabled();
+  expect(btn("Remove Nearest")).toBeDisabled();
+  expect(btn("Clear All")).toBeDisabled();
 });
 
 test("Remove nearest and Clear all are compact, so the pair fits between the gutters of a 375-pt phone; Tap stays the regular main button", async () => {
   await render(<BeatsSheet visible onClose={() => {}} />);
-  for (const name of ["Remove nearest", "Clear all"]) {
+  for (const name of ["Remove Nearest", "Clear All"]) {
     expect(btn(name)).toHaveStyle({ height: theme.size.controlCompact, paddingHorizontal: theme.space.lg });
-    expect(screen.getByText(name)).toHaveStyle({ fontSize: theme.type.label });
+    expect(screen.getByText(name)).toHaveStyle({ fontSize: theme.type.body });
   }
   expect(btn("Tap")).toHaveStyle({ height: theme.size.control });
 });
@@ -50,8 +50,8 @@ test("Tap adds a marker at the playhead as it is at press time (also while playi
   expect(impact).toHaveBeenLastCalledWith("light");
   expect(st().isPlaying).toBe(true);
   expect(screen.getByText("2 markers")).toBeTruthy();
-  expect(btn("Remove nearest")).toBeEnabled();
-  expect(btn("Clear all")).toBeEnabled();
+  expect(btn("Remove Nearest")).toBeEnabled();
+  expect(btn("Clear All")).toBeEnabled();
 });
 
 test("one marker reads “1 marker”", async () => {
@@ -75,11 +75,11 @@ test("Remove nearest removes the marker closest to the playhead in one undo step
   st().apply((p) => ({ ...p, beatMarkers: [1, 2, 6] }));
   await render(<BeatsSheet visible onClose={() => {}} />);
   await act(() => { st().seek(2.1); });
-  await fireEvent.press(btn("Remove nearest"));
+  await fireEvent.press(btn("Remove Nearest"));
   expect(markers()).toEqual([1, 6]);
   expect(st().past).toHaveLength(2);
   await act(() => { st().seek(4); });
-  await fireEvent.press(btn("Remove nearest"));
+  await fireEvent.press(btn("Remove Nearest"));
   expect(markers()).toEqual([1, 6]);
   expect(st().past).toHaveLength(2);
 });
@@ -87,7 +87,7 @@ test("Remove nearest removes the marker closest to the playhead in one undo step
 test("Clear all removes every marker in one undo step", async () => {
   st().apply((p) => ({ ...p, beatMarkers: [1, 2, 6] }));
   await render(<BeatsSheet visible onClose={() => {}} />);
-  await fireEvent.press(btn("Clear all"));
+  await fireEvent.press(btn("Clear All"));
   expect(markers()).toEqual([]);
   expect(st().past).toHaveLength(2);
   expect(screen.getByText("0 markers")).toBeTruthy();
@@ -106,6 +106,6 @@ test("it is a panel: inline, no scrim, regular height (it holds Find beats and C
 
 test("the compact pair sits in a row as tall as a touch target, so the buttons' hit slop has room", async () => {
   await render(<BeatsSheet visible onClose={() => {}} />);
-  const row = StyleSheet.flatten(btn("Clear all").parent?.props.style);
+  const row = StyleSheet.flatten(btn("Clear All").parent?.props.style);
   expect(row).toMatchObject({ height: theme.size.touch, alignItems: "center" });
 });

@@ -144,8 +144,8 @@ describe("round 2 look: one gold button per state, values that read", () => {
     expect(gold()).toHaveLength(1);
     expect(gold()[0]).toHaveAccessibleName("Export");
     expect(screen.getByText("Estimated size: 38 MB")).toBeTruthy();                         // still one text
-    expect(screen.getByText("38 MB")).toHaveStyle({ fontFamily: theme.fonts.bodySemi, color: theme.colors.text, fontVariant: ["tabular-nums"] });
-    for (const l of ["Resolution", "Frame rate", "Quality"]) expect(screen.getByText(l)).toHaveStyle({ fontSize: theme.type.label, color: theme.colors.textMuted });
+    expect(screen.getByText("38 MB")).toHaveStyle({ fontWeight: theme.weight.semi, color: theme.colors.text, fontVariant: ["tabular-nums"] });
+    for (const l of ["Resolution", "Frame rate", "Quality"]) expect(screen.getByText(l)).toHaveStyle({ fontSize: theme.type.label, color: theme.screen.muted });
     expect(screen.getByTestId("export-options")).toHaveStyle({ gap: theme.space.lg });
     expect(screen.getByText("4K needs a 4K source clip.")).toHaveStyle({ fontSize: theme.type.small });
   });
@@ -157,35 +157,35 @@ describe("round 2 look: one gold button per state, values that read", () => {
     expect(gold()).toHaveLength(0);
   });
 
-  test("exporting: the ring at its token size, a line that says so, Cancel outlined, no gold button", async () => {
+  test("exporting: the ring at its token size, a line that says so, Cancel grey, no gold button", async () => {
     await renderBody({ status: "exporting", progress: 0.42 });
     expect(screen.getByRole("progressbar")).toHaveStyle({ width: theme.size.ring, height: theme.size.ring });
     expect(screen.getByText("Exporting…")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Cancel" })).toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveStyle({ backgroundColor: theme.screen.lifted });
     expect(gold()).toHaveLength(0);
   });
 
-  test("done: the ring keeps its size, one gold button, Share outlined, Done text only, the summary stands out", async () => {
+  test("done: the ring keeps its size, one gold button, Share grey, Done text only, the summary stands out", async () => {
     mockSize = 0;
     await renderBody({ status: "done", progress: 1, fileUri: "file:///out.mp4" });
     expect(screen.getByRole("progressbar")).toHaveStyle({ width: theme.size.ring, height: theme.size.ring });
     expect(gold()).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Share" })).toHaveStyle({ borderWidth: 1.5 });
-    expect(screen.getByRole("button", { name: "Done" })).not.toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Share" })).toHaveStyle({ backgroundColor: theme.screen.lifted });
+    expect(screen.getByRole("button", { name: "Done" })).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
     expect(screen.getByText("Ready to sail")).toHaveStyle({ fontSize: theme.type.title });
-    expect(screen.getByText("1080p · 0:30")).toHaveStyle({ fontFamily: theme.fonts.bodySemi, color: theme.colors.text });
+    expect(screen.getByText("1080p · 0:30")).toHaveStyle({ fontWeight: theme.weight.semi, color: theme.colors.text });
   });
 
   test("failed: the message is readable (cream, in a card) and Try again is the one gold button", async () => {
     const reset = jest.fn();
     await render(<ExportScreenBody project={project} state={{ status: "error", progress: 0, message: "Not enough free space on this iPhone for the export." }} start={jest.fn()} cancel={jest.fn()} reset={reset} onSave={jest.fn()} onShare={jest.fn()} onDone={jest.fn()} />);
     expect(screen.getByText("Not enough free space on this iPhone for the export.")).toHaveStyle({ color: theme.colors.text, fontSize: theme.type.body });
-    expect(screen.getByTestId("export-error")).toHaveStyle({ backgroundColor: theme.elevation.bar });
+    expect(screen.getByTestId("export-error")).toHaveStyle({ backgroundColor: theme.screen.bar });
     // The red icon is decoration: the message beside it says it all.
     expect(screen.getByTestId("export-error-icon", { includeHiddenElements: true })).toHaveProp("accessibilityElementsHidden", true);
     expect(screen.getByTestId("export-error-icon", { includeHiddenElements: true })).toHaveProp("importantForAccessibility", "no-hide-descendants");
     expect(gold()).toHaveLength(1);
-    await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Try Again" }));
     expect(reset).toHaveBeenCalledTimes(1);
   });
 });

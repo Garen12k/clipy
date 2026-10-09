@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..500,0..1,0&display=block">
+<style>body{margin:0;background:#E9E9E6;color:#111;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}a{color:#8B5F00}a:hover{color:#5E4000}</style>
+</helmet>
+<section id="states-v2" data-screen-label="States v2" style="padding:72px;display:flex;flex-direction:column;gap:40px">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:1200px">
+<div style="font:600 13px/18px ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:#6C6C70">CLIPY · iOS 27 · REVIEW 3 · SECTION E AND F7</div>
+<div style="font-size:44px;line-height:52px;font-weight:700;letter-spacing:-.02em">Every state outside the editor, drawn</div>
+<div style="font-size:19px;line-height:28px;color:#3A3A3C;text-wrap:pretty">Base states are drawn in the two combinations that were missing: smallest iPhone dark, and largest iPhone light. <a href="5 Screens.dc.html">5 Screens</a> now also has all four combinations of its boards. Message variants are drawn once each, alternating sizes. Messages sit next to the field or button they concern; nothing is a toast.</div>
+</div>
+<sc-for list="{{ boards }}" as="b" hint-placeholder-count="4">
+<div id="{{ b.id }}" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><div style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px">{{ b.id }}</div><div style="font-size:26px;font-weight:700">{{ b.title }}</div></div>
+<sc-if value="{{ b.note }}" hint-placeholder-val="{{ false }}"><div style="font-size:15px;line-height:22px;color:#3A3A3C;max-width:1300px">{{ b.note }}</div></sc-if>
+<div style="display:flex;flex-wrap:wrap;gap:32px 36px;align-items:flex-start">
+<sc-for list="{{ b.phones }}" as="s" hint-placeholder-count="6">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;gap:8px;align-items:center;font:600 12px ui-monospace,Menlo,monospace;color:#6C6C70;max-width:{{ s.w }}"><span>{{ s.label }}</span><sc-if value="{{ s.isNew }}" hint-placeholder-val="{{ false }}"><span style="font:600 11px -apple-system,sans-serif;color:#1A1408;background:#F3E3BF;padding:2px 7px;border-radius:999px">New feature</span></sc-if></div>
+<dc-import name="ScreenPhone" size="{{ s.size }}" theme="{{ s.theme }}" sheet="{{ s.sheet }}" rows="{{ s.rows }}" alert="{{ s.alert }}" caption="{{ s.caption }}" hint-size="{{ s.hint }}"></dc-import></div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+
+<div id="E6" style="background:#FBFBFA;border-radius:28px;padding:40px 48px;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:center;gap:14px"><a href="#E6" style="background:#111;color:#fff;font:600 14px/1 ui-monospace,Menlo,monospace;padding:8px 12px;border-radius:999px;text-decoration:none">E6</a><div style="font-size:26px;font-weight:700">Permissions matrix · every permission × every state</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;font-size:15px;line-height:22px;color:#3A3A3C">
+<div><b style="color:#111">Same row everywhere.</b> Wizard page 3 and the Accounts Permissions section use the same row: symbol, name, purpose, then one trailing control. Not asked → “Continue”. Off → “Open Settings”. Limited → “Choose More Photos” and “Allow Full Access”. Allowed / Managed → status only.</div>
+<div><b style="color:#111">Take Photo or Video</b> <span style="font-size:11px;font-weight:600;color:#1A1408;background:#F3E3BF;padding:2px 7px;border-radius:999px">New feature</span> is offered in two places: the editor’s add-clip “+” menu (Photos · Files · Take Photo or Video) and Home’s New Project menu (Choose Photos and Videos · Take Photo or Video).</div>
+<div><b style="color:#111">Camera, then microphone, never back to back.</b> “Take Photo or Video” asks for Camera first and opens the system camera in photo mode. Microphone is asked only when the person switches to Video and presses record, and not at all if it was already allowed for a voice-over. The notification offer has one design: title “Know when it’s done”, one grey “Continue”, no “Not Now”.</div>
+</div>
+<div style="font-size:15px;line-height:22px;color:#3A3A3C">Every permission in every state is drawn as rows in board <a href="14 Review 4.dc.html">R6 of 14 Review 4</a>; the camera menus and the Camera-then-Microphone sequence are in R7; the notification card in R8.</div>
+</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const SD = ['small', 'dark'], LL = ['large', 'light'], SL = ['small', 'light'], LD = ['large', 'dark'];
+    const all4 = [SD, LL, SL, LD];
+    const both = [SD, LL];
+    let alt = 0;
+    const ph4 = (label, rows, o = {}) => ph(label, rows, o.one ? o : { ...o, combos: all4 });
+    const ph = (label, rows, o = {}) => {
+      const combos = o.one ? [(alt++ % 2) ? LL : SD] : (o.combos || both);
+      return combos.map(([size, theme]) => ({ label: label + (combos.length > 1 ? ` · ${size === 'small' ? 375 : 440} ${theme}` : ''), rows, size, theme, sheet: !!o.sheet, alert: o.alert || null, isNew: !!o.isNew, caption: o.caption || '', w: size === 'small' ? '375px' : '440px', hint: size === 'small' ? '375px,690px' : '440px,980px' }));
+    };
+    const step1 = (o = {}) => [['nav', { lead: 'close', leadOff: o.busy }], ['spacer'], ['text', { t: 'Clipy', fs: '34px', fw: 800, c: 'label', align: 'center' }], ['text', { t: 'Edit, caption and post your clips.', align: 'center', fs: '17px' }], ['slot', { spin: !!o.busy, t: o.busy ? 'Signing in with Apple' : '' }], ['spacer'],
+      ...(o.noApple ? [] : [['btn', { k: 'apple', l: 'Continue with Apple', dis: o.busy }]]), ['btn', { k: 'google', l: 'Continue with Google', dis: o.busy }], ['btn', { k: 'email', l: 'Continue with Email', g: 'mail', dis: o.busy }], ['btn', { k: 'text', l: o.wizard ? 'Continue Without an Account' : 'Not Now', dis: o.busy }],
+      ...(o.msg ? [['msg', { t: o.msg, err: !!o.err, center: true, g: o.g }]] : []), ['text', { t: 'You only need an account to post. Editing works without one.', fs: '13px', align: 'center' }]];
+    const step2 = (o = {}) => [['nav', { lead: 'arrow_back_ios_new', leadOff: o.busy, title: 'Sign in with email' }], ['field', { label: 'Email', v: o.v || '', ph: 'you@example.com', focus: true, clear: !!o.v, msg: o.msg || '', err: !!o.err }], o.busy ? ['slot', { spin: true, t: 'Sending' }] : ['btn', { k: o.v ? 'primary' : 'off', l: 'Send Code' }], ...(o.wizard ? [['spacer'], ['dots']] : [['spacer']]), ['kb', { t: 'system keyboard · email · return “send”' }]];
+    const step3 = (o = {}) => [['nav', { lead: 'arrow_back_ios_new', leadOff: o.busy, title: 'Enter code' }], ['text', { t: o.noServer ? 'Enter the 6-digit code from the email.' : 'Enter the 6-digit code we sent to mia@example.com' }], ['field', { label: 'Code', v: o.v ?? '482913', ph: '000000', code: true, focus: !o.err, err: !!o.err, msg: o.msg || '' }], o.busy ? ['slot', { spin: true, t: 'Signing in' }] : ['btn', { k: (o.v ?? '482913').length === 6 ? 'primary' : 'off', l: 'Sign In' }], ['rowbtns', { l: o.resend || 'Resend Code in 59 s', lOff: !o.resend, r: 'Use a Different Email', rOff: !!o.busy }], ...(o.wizard ? [['spacer'], ['dots']] : [['spacer']]), ['kb', { t: 'system number pad · one-time-code autofill' }]];
+    const E1 = [
+      ...ph('STEP 1 · CHOOSE', step1(), { sheet: true }),
+      ...ph('STEP 1 · BUSY · ALL INERT', step1({ busy: true }), { sheet: true }),
+      ...ph('STEP 1 · APPLE UNAVAILABLE', step1({ noApple: true }), { sheet: true, one: true, caption: 'Apple hidden; while checking, its slot keeps its 50 pt' }),
+      ...ph('MSG · NOT SET UP', step1({ msg: 'Sign-in isn’t set up yet.' }), { sheet: true, one: true }),
+      ...ph('MSG · COULDN’T SIGN IN', step1({ msg: 'Couldn’t sign in.', err: true }), { sheet: true, one: true }),
+      ...ph('MSG · NO CONNECTION', step1({ msg: 'Couldn’t reach Clipy. Check your connection.', err: true }), { sheet: true, one: true }),
+      ...ph('MSG · SERVER PROBLEM', step1({ msg: 'Clipy’s server had a problem. Try again in a minute.', err: true }), { sheet: true, one: true }),
+      ...ph('MSG · NO APPLE TOKEN', step1({ msg: 'Apple didn’t return a sign-in token.', err: true }), { sheet: true, one: true }),
+      ...ph('MSG · APPLE NEEDS NEWEST BUILD', step1({ noApple: true, msg: 'Sign in with Apple needs the newest Clipy build. Everything else in Clipy still works.', g: 'system_update' }), { sheet: true, one: true, caption: 'was: “Apple sign-in works in the installed app, not in Expo Go.”' }),
+      ...ph('STEP 2 · EMPTY', step2(), { sheet: true }),
+      ...ph('STEP 2 · SENDING', step2({ v: 'mia@example.com', busy: true }), { sheet: true }),
+      ...ph('STEP 2 · NOT SET UP', step2({ v: 'mia@example.com', msg: 'Sign-in isn’t set up yet, so no code was sent.' }), { sheet: true, one: true }),
+      ...ph('STEP 3 · COUNTDOWN', step3(), { sheet: true }),
+      ...ph('STEP 3 · NEW CODE SENT', step3({ v: '', resend: 'Resend Code', msg: 'We sent a new code.' }), { sheet: true, one: true }),
+      ...ph('STEP 3 · WRONG CODE', step3({ err: true, msg: 'That code didn’t work. Check it or send a new one.' }), { sheet: true, one: true }),
+      ...ph('STEP 3 · TOO MANY TRIES', step3({ err: true, msg: 'Too many tries. Wait a minute, then try again.' }), { sheet: true, one: true }),
+      ...ph('STEP 3 · SIGNING IN', step3({ busy: true }), { sheet: true, one: true }),
+      ...ph('STEP 3 · NOT SET UP WALK-THROUGH', step3({ noServer: true, v: '', msg: 'Sign-in isn’t set up yet.' }), { sheet: true, one: true }),
+      ...ph('WIZARD PAGE 4 · STEP 2', step2({ wizard: true, v: 'mia@example.com' }), { combos: [SD] }),
+      ...ph('WIZARD PAGE 4 · STEP 3', step3({ wizard: true }), { combos: [LL] })
+    ];
+    const cap = (o = {}) => ['field', { label: 'Caption', v: o.v ?? 'Three days of trams, tiles and sunsets 🌇 and a few more words to go over the limit for X here', ph: 'Write a caption…', h: '84px', err: !!o.over, msg: o.msg || (o.over ? '297 / 280 · X posts can be up to 280 characters (emoji and links count extra).' : '') }];
+    const YT = (o = {}) => ({ box: 'on', logo: 'YT', avatar: true, n: 'YouTube', d: '@miatravels', act: 'Options', ...o });
+    const postBase = (rows, o = {}) => [['nav', { lead: 'arrow_back_ios_new', title: 'Post' }], ['thumb'], ...(o.caption || [cap()]), ...(o.tiktok ? [['text', { t: 'TikTok doesn’t receive this caption — you’ll write it in TikTok.', fs: '13px' }]] : []), ['group', { rows }], ['spacer'], ['pinned', { p: o.p || 'Post', off: !!o.off }]];
+    const E2 = [
+      ...ph4('LOADING SESSION', [['nav', { lead: 'arrow_back_ios_new', title: 'Post' }], ['thumb'], ['slot', { spin: true, t: 'Loading' }], ['spacer'], ['pinned', { off: true }]], { one: true }),
+      ...ph4('SIGNED OUT', [['nav', { lead: 'arrow_back_ios_new', title: 'Post' }], ['thumb'], ['card', { title: 'Sign in to Clipy', body: 'Clipy keeps your connected accounts safe on its server.', btn: 'Sign In', primary: true }], ['spacer'], ['pinned', { off: true }]], { one: true }),
+      ...ph4('NOT SET UP · SIGN IN STAYS', [['nav', { lead: 'arrow_back_ios_new', title: 'Post' }], ['thumb'], ['card', { title: 'Sign-in isn’t set up yet', body: 'Posting doesn’t work in this version yet. You can still share with the Share button.', btn: 'Sign In' }], ['text', { t: 'was: “Clipy’s server hasn’t been connected, so signing in and posting don’t work yet. You can still share with the Share button.” Sign In opens the walk-through.', fs: '12px' }], ['spacer'], ['pinned', { off: true }]], { one: true }),
+      ...ph4('LIST LOADING', postBase([{ n: 'Loading platforms', spin: true }], { off: true }), { one: true }),
+      ...ph4('LIST FAILED', [['nav', { lead: 'arrow_back_ios_new', title: 'Post' }], ['thumb'], cap({ v: '' }), ['card', { g: 'error', err: true, title: 'Something went wrong.', body: '', btn: 'Try Again' }], ['spacer'], ['pinned', { off: true }]], { one: true }),
+      ...ph4('READY · OVER THE LIMIT · TIKTOK LINE', postBase([YT({ note: 'Private until Google reviews Clipy.', info: true }), { box: 'on', logo: 'TT', avatar: true, n: 'TikTok', d: '@mia.k', note: 'Goes to your TikTok inbox to finish.', info: true }, { box: 'on', logo: 'IG', avatar: true, n: 'Instagram', d: 'mia.k', note: 'Instagram Reels must be at least 3 seconds.', noteErr: true }, { box: 'off', logo: 'FB', n: 'Facebook', d: 'Not connected', act: 'Connect' }, { box: 'on', logo: 'X', avatar: true, n: 'X', d: '@mia_k', note: 'About 1.5¢ per post.', info: true }], { caption: [cap({ over: true })], tiktok: true })),
+      ...ph4('CAPTION EMPTY', postBase([YT({ note: 'Add a caption or a title for YouTube.', noteErr: true }), { box: 'off', logo: 'X', n: 'X', d: 'Sign-in expired', dErr: true, act: 'Reconnect' }], { caption: [cap({ v: '', msg: '0 / 5000' })] }), { one: true }),
+      ...ph4('NO CAPTION LIMIT · ONLY TIKTOK', postBase([{ box: 'off', logo: 'YT', n: 'YouTube', d: '@miatravels' }, { box: 'on', logo: 'TT', avatar: true, n: 'TikTok', d: '@mia.k' }, { box: 'na', logo: 'X', off: true, n: 'X', d: 'Not available yet', act: '' }], { caption: [cap({ v: 'Three days of trams', msg: '19' })], tiktok: true }), { one: true }),
+      ...ph4('POSTING · BACK STAYS LIVE', postBase([YT({ act: '42%', aw: 600, bar: '42%' }), { box: 'on', logo: 'TT', avatar: true, n: 'TikTok', d: '@mia.k', act: 'Preparing…', aGrey: true }, { box: 'on', logo: 'IG', avatar: true, n: 'Instagram', d: 'mia.k', act: 'Publishing…', aGrey: true }, { box: 'done', logo: 'FB', avatar: true, n: 'Facebook', d: 'Clipy Travel Page', act: 'View' }, { box: 'na', logo: 'X', off: true, n: 'X', d: 'Not available yet' }], { p: 'Posting…', off: true })),
+      ...ph4('DONE · RETRY · RESUME · RECONNECT', postBase([YT({ box: 'on', act: 'Retry', note: 'Something went wrong.', noteErr: true }), { box: 'done', logo: 'TT', avatar: true, n: 'TikTok', d: '@mia.k', act: 'Done', aOk: true, note: 'Sent to TikTok — open TikTok to finish posting.' }, { box: 'on', logo: 'IG', avatar: true, n: 'Instagram', d: 'mia.k', act: 'Resume', note: 'The connection dropped. Check your internet, then resume.', noteErr: true }, { box: 'on', logo: 'X', n: 'X', d: 'Sign-in expired', dErr: true, act: 'Reconnect', note: 'Reconnect X in Accounts.', noteErr: true }]), { one: true }),
+      ...ph4('LEAVING WHILE POSTING', postBase([YT({ act: '42%', aw: 600, bar: '42%' })], { p: 'Posting…', off: true }), { one: true, alert: { title: 'Stop posting?', msg: 'Uploads in progress will be cancelled.', buttons: [['Keep Posting', 'cancel'], ['Stop', 'd']] } }),
+      ...ph4('BROKEN LINK', [['nav', { lead: 'arrow_back_ios_new', title: 'Post' }], ['empty', { g: 'movie_off', title: 'This video can’t be posted.', body: 'Clipy couldn’t read this video file. Go back and pick it again.' }]], { one: true })
+    ];
+    const accHead = [['nav', { lead: 'arrow_back_ios_new', title: 'Accounts' }]];
+    const perms = ['group', { header: 'Permissions', rows: [{ g: 'photo_library', n: 'Photos and videos', d: 'Limited', act: 'Allow Full Access' }, { g: 'mic', n: 'Microphone', d: 'Off', act: 'Open Settings' }, { g: 'photo_camera', n: 'Camera', d: 'Not asked', act: 'Continue' }] }];
+    const about = ['group', { header: 'About', rows: [{ g: 'memory', n: 'Build', d: 'Stabilize and smooth' }, { g: 'help', n: 'Help', d: 'Link to be supplied' }, { g: 'shield', n: 'Privacy', d: 'Link to be supplied' }] }];
+    const platforms = (rows) => ['group', { header: 'Platforms', rows }];
+    const E3 = [
+      ...ph4('LOADING SESSION', [...accHead, ['slot', { spin: true, t: 'Loading' }], ['spacer']], { one: true }),
+      ...ph4('NOT SET UP', [...accHead, ['card', { title: 'Sign-in isn’t set up yet', body: 'Posting doesn’t work in this version yet. You can still share with the Share button.', btn: 'Sign In' }], perms, about]),
+      ...ph4('SIGNED IN · NOTHING CONNECTED', [...accHead, ['group', { header: 'Clipy account', rows: [{ g: 'account_circle', n: 'Signed in as mia@example.com' }, { g: 'logout', gErr: true, nErr: true, n: 'Sign Out' }] }], ['text', { t: 'Connect a platform to post to it straight from Clipy. You stay signed in to it until you disconnect.', fs: '13px' }], platforms(['YouTube', 'TikTok', 'Instagram', 'Facebook'].map((n, i) => ({ logo: ['YT', 'TT', 'IG', 'FB'][i], n, act: 'Connect' })).concat([{ logo: 'X', off: true, n: 'X', d: 'Not available yet' }])), perms]),
+      ...ph4('PLATFORMS LOADING', [...accHead, ['group', { header: 'Clipy account', rows: [{ g: 'account_circle', n: 'Signed in as mia@example.com' }] }], platforms([{ n: 'Loading platforms', spin: true }]), perms], { one: true }),
+      ...ph4('PLATFORMS FAILED', [...accHead, ['group', { header: 'Clipy account', rows: [{ g: 'account_circle', n: 'Signed in as mia@example.com' }] }], ['card', { g: 'error', err: true, title: 'Something went wrong.', body: '', btn: 'Try Again' }], perms], { one: true }),
+      ...ph4('CONNECTED · CONNECT FAILED', [...accHead, ['group', { header: 'Clipy account', rows: [{ g: 'account_circle', n: 'Signed in as mia@example.com' }, { g: 'logout', gErr: true, nErr: true, n: 'Sign Out' }] }], platforms([{ logo: 'YT', avatar: true, n: 'YouTube', d: '@miatravels', act: 'Disconnect', aErr: true }, { logo: 'TT', avatar: true, n: 'TikTok', d: 'Sign-in expired', dErr: true, act: 'Reconnect' }, { logo: 'IG', n: 'Instagram', spin: true, d: 'Connecting…' }, { logo: 'FB', n: 'Facebook', act: 'Connect' }]), ['spacer'], ['banner', { t: 'Couldn’t connect.', err: true, act: 'Try Again' }]], { one: true }),
+      ...ph4('DISCONNECT', [...accHead, platforms([{ logo: 'TT', avatar: true, n: 'TikTok', d: '@mia.k', act: 'Disconnect', aErr: true }])], { one: true, alert: { title: 'Disconnect TikTok?', msg: 'Clipy will stop posting to this account.', buttons: [['Cancel', 'cancel'], ['Disconnect', 'd']] } }),
+      ...ph4('SIGN OUT', [...accHead, ['group', { header: 'Clipy account', rows: [{ g: 'logout', gErr: true, nErr: true, n: 'Sign Out' }] }]], { one: true, alert: { title: 'Sign out of Clipy?', msg: 'Your connected accounts stay connected.', buttons: [['Cancel', 'cancel'], ['Sign Out', 'd']] } }),
+      ...ph4('SIGNED OUT · BANNER', [...accHead, ['card', { title: 'Sign in to Clipy', body: 'Clipy keeps your connected accounts safe on its server.', btn: 'Sign In', primary: true }], perms, ['spacer'], ['banner', { t: 'Signed out.' }]], { one: true })
+    ];
+    const home = [['large', { t: 'Projects' }], ['spacer']];
+    const E4 = [
+      ...ph('DELETE PROJECT', home, { one: true, alert: { title: 'Delete project?', msg: 'This can’t be undone.', buttons: [['Cancel', 'cancel'], ['Delete', 'd']] } }),
+      ...ph('RENAME PROJECT', home, { one: true, alert: { title: 'Rename Project', field: 'Lisbon weekend', buttons: [['Cancel', 'cancel'], ['Rename', 'p']] } }),
+      ...ph('STOP EXPORTING', [['nav', { lead: 'close', leadOff: true, title: 'Export' }], ['spacer']], { one: true, sheet: true, alert: { title: 'Stop exporting?', msg: 'The export so far will be lost.', buttons: [['Keep Exporting', 'cancel'], ['Stop', 'd']] } }),
+      ...ph('LARGE FILE', [['spacer']], { one: true, alert: { title: 'Large file', msg: 'This file is over 50 MB. Add it anyway?', buttons: [['Cancel', 'cancel'], ['Add', 'p']] } }),
+      ...ph('HOME · ERROR BANNER (WAS A TOAST)', [...home, ['banner', { t: 'Couldn’t create project', err: true, act: 'Try Again' }]], { one: true }),
+      ...ph('HOME · PARTIAL IMPORT', [...home, ['banner', { t: '8 of 10 clips added; 2 couldn’t be read' }]], { one: true }),
+      ...ph('HOME · PHOTOS OFF', [...home, ['banner', { t: 'Clipy needs Photos access to import photos and videos.', err: true, act: 'Open Settings' }]], { one: true }),
+      ...ph('EXPORT · SAVED', [['nav', { lead: 'close', title: 'Export' }], ['spacer'], ['banner', { t: 'Saved to Photos' }], ['btn', { k: 'primary', l: 'Post to…' }]], { one: true, sheet: true })
+    ];
+    const prow = (g, n, d, act, o = {}) => ({ g, n, d, act, ...o });
+    const E7 = [
+      ...ph('WIZARD PAGE 3 · EVERY ROW IN A DIFFERENT STATE', [['nav', { lead: 'arrow_back_ios_new', trail: 'Skip for Now' }], ['text', { t: 'You decide what Clipy can use', fs: '28px', fw: 700, c: 'label' }], ['text', { t: 'Allow these now or later. Editing works either way.', fs: '16px' }], ['group', { rows: [prow('photo_library', 'Photos and videos', 'Limited · Choose More Photos', 'Allow Full Access'), prow('add_photo_alternate', 'Save to Photos', 'Allowed', '✓', { aOk: true }), prow('photo_camera', 'Camera', 'Not asked', 'Continue'), prow('mic', 'Microphone', 'Off', 'Open Settings'), prow('closed_caption', 'Speech recognition', 'Managed on this iPhone', ''), prow('notifications', 'Notifications', 'Not asked', 'Continue')] }], ['spacer'], ['dots'], ['btn', { k: 'primary', l: 'Continue' }]], { isNew: true }),
+      ...ph('ACCOUNTS · PERMISSIONS · AFTER MORE PHOTOS ADDED', [...accHead, ['group', { header: 'Permissions', rows: [prow('photo_library', 'Photos and videos', 'Limited · 24 photos chosen', 'Allow Full Access'), prow('add_photo_alternate', 'Save to Photos', 'Allowed', ''), prow('photo_camera', 'Camera', 'Allowed', ''), prow('mic', 'Microphone', 'Allowed — just now', '', { aOk: true }), prow('closed_caption', 'Speech recognition', 'Not asked', 'Continue'), prow('notifications', 'Notifications', 'Off', 'Open Settings'), prow('folder', 'Import from Files', 'No permission needed', '')] }]], { isNew: true }),
+      ...ph('EDITOR · ADD-CLIP MENU', [['nav', { lead: 'arrow_back_ios_new', title: 'Lisbon weekend' }], ['spacer'], ['group', { rows: [prow('photo_library', 'Photos', '', ''), prow('folder', 'Files', '', ''), prow('photo_camera', 'Take Photo or Video', '', '')] }], ['text', { t: 'System menu from the “+” at the end of the clip row.', fs: '12px', align: 'center' }]], { one: true, isNew: true }),
+      ...ph('EXPORT · NOTIFICATION OFFER', [['nav', { lead: 'close', leadOff: true, title: 'Export' }], ['spacer'], ['text', { t: 'Exporting · 37%', fs: '22px', fw: 700, c: 'label', align: 'center' }], ['spacer'], ['card', { g: 'notifications', title: 'Know when it’s done', body: 'Clipy can tell you when an export or an upload finishes.', btn: 'Continue' }], ['btn', { k: 'secondary', l: 'Cancel' }]], { one: true, sheet: true, isNew: true })
+    ];
+    const boards = [
+      { id: 'E1', title: 'Sign-in · sheet and wizard frame · every state and message', note: 'Messages sit under the buttons on step 1 and under the field on steps 2 and 3. The Close and Back buttons are inert while a request runs. Apple’s button is Apple’s own (black on light, white on dark); this step has no gold button.', phones: E1 },
+      { id: 'E2', title: 'Post · every state', note: 'The account’s round picture sits on the platform logo. Each ticked row shows one summary line; its info button opens the full original note. Back stays live while posting and asks “Stop posting?” first.', phones: E2 },
+      { id: 'E3', title: 'Accounts · every state', note: 'No primary button on purpose. Sign Out and Disconnect use the destructive form.', phones: E3 },
+      { id: 'E4', title: 'Dialogs and banners · drawn as the system components', note: 'Dialogs follow the kit’s alert: title, one sentence, Cancel first, destructive action in red. Banners replace every toast, above the bottom bar or the pinned buttons, and stay until the next action.', phones: E4 },
+      { id: 'E7', title: 'Permission rows and where they are asked', note: '', phones: E7 }
+    ];
+    const M = (p, a, b, c, d, e, fw = 400) => ({ p, a, b, c, d, e, fw });
+    const matrix = [
+      M('', 'Not asked', 'Allowed', 'Limited (photos)', 'Off', 'Managed', 600),
+      M('Photos and videos', 'Continue · picker still works one pick at a time', 'status ✓', 'Choose More Photos + Allow Full Access · “Clipy can see only the photos you chose.”', 'Open Settings · “Photos access is off” + Pick Items', 'status · “This setting is managed on this iPhone.”'),
+      M('Save to Photos', 'Continue', 'status ✓', '—', 'Open Settings · “Saving to Photos is off” + Share', 'status · managed'),
+      M('Camera · new', 'Continue', 'status ✓', '—', 'Open Settings · “Camera is off” in the add-clip menu', 'status · “Camera isn’t available”'),
+      M('Microphone', 'Continue (record button asks directly)', 'status ✓', '—', 'Open Settings · “Microphone is off” in Record', 'status · managed'),
+      M('Speech recognition', 'Continue', 'status ✓', '—', 'Open Settings · Captions error state', 'status · managed'),
+      M('Notifications · new', 'Continue (offer on export progress)', 'status ✓', '—', 'Open Settings', 'status · managed'),
+      M('Import from Files', 'No permission needed', '—', '—', '—', '—')
+    ];
+    return { boards, matrix };
+  }
+}
+</script>
+</body>
+</html>

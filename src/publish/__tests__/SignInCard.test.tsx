@@ -17,7 +17,7 @@ test("unconfigured backend explains itself, keeps the Share hint, and its button
   expect(screen.getByText(/You can still share with the Share button\./)).toBeTruthy();
   expect(screen.queryByText(/Posting isn't set up yet/)).toBeNull();
   expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
-  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Sign In" }));
   expect(router.push).toHaveBeenCalledWith("/welcome");
 });
 
@@ -29,7 +29,7 @@ test("signed out: the short text and ONE button, 'Sign in', which opens the welc
   expect(screen.getAllByRole("button")).toHaveLength(1);
   expect(screen.queryByLabelText("Sign in with Apple")).toBeNull();
   expect(Apple.isAvailableAsync).not.toHaveBeenCalled();
-  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Sign In" }));
   expect(router.push).toHaveBeenCalledTimes(1);
   expect(router.push).toHaveBeenCalledWith("/welcome");
 });
@@ -37,11 +37,11 @@ test("signed out: the short text and ONE button, 'Sign in', which opens the welc
 test.each(["signedOut", "unconfigured"])("two fast taps open ONE sign-in page (%s); back on the screen the button works again", async (status) => {
   (useSession as jest.Mock).mockReturnValue({ status });
   await render(<SignInCard />);
-  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
-  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Sign In" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Sign In" }));
   expect(router.push).toHaveBeenCalledTimes(1);
   mockFocus!();
-  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Sign In" }));
   expect(router.push).toHaveBeenCalledTimes(2);
 });
 

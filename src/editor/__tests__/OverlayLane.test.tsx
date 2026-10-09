@@ -114,6 +114,16 @@ test("a bar dragged over another, frame by frame, changes rows under the finger 
   expect(pill("s")).toBe(bar);
 });
 
+test("a caption bar has its own colour, a text bar and a sticker bar theirs; every label is black", async () => {
+  setOverlays([makeOverlay({ id: "t1", text: "Hi", start: 0, end: 3 }), makeOverlay({ id: "c1", kind: "caption", text: "Cap", start: 4, end: 6 }), makeSticker({ id: "s1", start: 7, end: 9 })]);
+  await render(<OverlayLane />);
+  expect(pill("t1")).toHaveStyle({ backgroundColor: theme.colors.kindText });
+  expect(pill("c1")).toHaveStyle({ backgroundColor: theme.colors.kindCaption });
+  expect(pill("s1")).toHaveStyle({ backgroundColor: theme.colors.kindSticker });
+  expect(theme.colors.kindCaption).not.toBe(theme.colors.kindText);
+  for (const id of ["t1", "c1", "s1"]) expect(within(pill(id)).getAllByText(/./)[0]).toHaveStyle({ color: theme.colors.onKind });
+});
+
 test("the selected bar keeps its emphasis in any row; no bar is see-through or lifted above the others", async () => {
   setOverlays([hi, emoji]);
   await render(<OverlayLane />);
