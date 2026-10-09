@@ -50,7 +50,7 @@ test("fields and font chips sit on the tile surface, on the scale; the chosen fo
   expect(other).toHaveStyle({ backgroundColor: theme.elevation.tile, ...theme.ringClear });
 });
 
-test("Add audio: a row's button is outlined, not a chip, and the list has no gold button", async () => {
+test("Add audio: a row's button is the grey secondary button, not a chip, and the list has no gold button", async () => {
   await render(<AddAudioSheet visible onClose={() => {}} />);
   const use = screen.getAllByRole("button", { name: /^Use / })[0];
   expect(use).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });

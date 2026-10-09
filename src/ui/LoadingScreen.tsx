@@ -8,8 +8,8 @@ import { useReducedMotion } from "./useReducedMotion";
 import { Waves } from "./Waves";
 
 const EXIT_MS = 300;
-/** The wordmark's size. The welcome screen, which can follow this one, draws the name with the same number. (`letterSpacing` is a bridge for src/auth; Task 6 of the stage-1 plan deletes it.) */
-export const WORDMARK = { size: 48, letterSpacing: 0 } as const;
+/** The wordmark's size. The welcome screen, which can follow this one, draws the name with the same number. */
+export const WORDMARK = { size: 48 } as const;
 
 /** Animated brand screen shown over the app until it is ready; fades out when `leaving` turns true. */
 export function LoadingScreen({ leaving, onGone }: { leaving: boolean; onGone: () => void }) {

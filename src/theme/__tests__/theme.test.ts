@@ -83,3 +83,9 @@ test("no interface font is bundled: the one file left is the cover title's (cont
   expect(Object.keys(coverFontAssets)).toEqual([COVER_FONT]);
   expect(readdirSync(join(__dirname, "..", "..", "..", "assets", "fonts", "ui")).sort()).toEqual(["OFL.txt", "Oswald_700Bold.ttf"]);
 });
+
+test("the old names are gone", () => {
+  for (const k of ["sea", "seaLight", "bgDeep", "bgEnd", "laneText", "laneSticker", "laneMusic", "laneEffect", "laneVoice", "laneSfx", "laneLayer", "highlight", "straw", "accentPressed"]) expect(k in theme.colors).toBe(false);
+  expect("fonts" in theme).toBe(false);
+  expect(Object.keys(theme.colors).sort()).toEqual(Object.keys(PALETTES.dark).sort());
+});

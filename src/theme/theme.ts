@@ -50,12 +50,7 @@ const TEXT = {
 } as const;
 
 export const theme = {
-  colors: {
-    ...C,
-    // BRIDGE — old names, new values, so the four re-skin tasks can run side by side. Deleted in Task 6; read nowhere after it.
-    sea: C.track, seaLight: C.surfaceAlt, bgDeep: C.timeline, bgEnd: C.bg,
-    laneText: C.kindText, laneSticker: C.kindSticker, laneMusic: C.kindMusic, laneEffect: C.kindEffect, laneVoice: C.kindVoice, laneSfx: C.kindSfx, laneLayer: C.kindLayer,
-  },
+  colors: C,
   /** The one spacing scale. `gutter` is the screen's left / right edge (a row that starts with an IconButton pads by `sm`: the button's own inset completes it). */
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, gutter: 16 },
   /** `pill`: a capsule (buttons, chips). `card`: a card. `box`: a tool tile's box. `field`: a text field. `chip`: a bar, a clip, a small box. `sheet`: a sheet's top corners. */
@@ -75,8 +70,6 @@ export const theme = {
   weight: { regular: "400", semi: "600", bold: "700" },
   /** Layering by colour (no shadows over the video): the page, a bar / strip / panel, a tile or field inside it, the selected tile. */
   elevation: { page: C.bg, bar: C.surfaceBar, tile: C.surfaceAlt, lifted: C.surfaceHigh },
-  // BRIDGE — see above. An unknown family falls back to the system font, so text is already SF Pro until each file moves to `theme.weight`.
-  fonts: { title: "System", body: "System", bodySemi: "System", bodyBold: "System" },
   /**
    * `fast` / `base` / `slow`: the editor's three durations (nothing there runs longer than 250 ms). `curve`: the one easing, as cubic-bezier
    * control points. `spring`: the one spring (mass is explicit — Reanimated 4's default is 4); settles in about 200 ms.
