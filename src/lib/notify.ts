@@ -26,6 +26,20 @@ export function notifyAvailable(): boolean {
   return notifications() !== null;
 }
 
+/** What iOS says about notifications now. `unavailable`: the installed app has none. Never asks, never throws. */
+export type NotifyState = "notAsked" | "granted" | "denied" | "unavailable";
+export async function notifyState(): Promise<NotifyState> {
+  const n = notifications();
+  if (!n) return "unavailable";
+  try {
+    const now = await n.getPermissionsAsync();
+    if (now.granted) return "granted";
+    return now.status === "undetermined" && now.canAskAgain ? "notAsked" : "denied";
+  } catch {
+    return "unavailable";
+  }
+}
+
 /**
  * Asks the owner to allow notifications — only when called, and iOS shows its question only the first time. True when they are
  * allowed (already, or just now). Never throws.

@@ -123,6 +123,23 @@ test("each new native package is loaded in ONE file, lazily and guarded — neve
   }
 });
 
-test("no screen notifies yet: only the wrapper's own file names its functions", () => {
-  expect(sources().filter((f) => /notifyDone\(|askToNotify\(|lib\/notify"/.test(f.src)).map((f) => f.rel)).toEqual(["src/lib/notify.ts"]);
+test("notifyState reads what iOS says and never asks: not asked, allowed, refused — and unavailable when the read fails", async () => {
+  const n = fresh(true);
+  mockApi.getPermissionsAsync.mockResolvedValue(perm(false, true));
+  expect(await n.notifyState()).toBe("notAsked");
+  mockApi.getPermissionsAsync.mockResolvedValue(perm(true));
+  expect(await n.notifyState()).toBe("granted");
+  mockApi.getPermissionsAsync.mockResolvedValue({ granted: false, canAskAgain: false, status: "denied", expires: "never" });
+  expect(await n.notifyState()).toBe("denied");
+  mockApi.getPermissionsAsync.mockResolvedValue(perm(false, false));   // not decided, yet not askable: only Settings
+  expect(await n.notifyState()).toBe("denied");
+  mockApi.getPermissionsAsync.mockRejectedValue(new Error("boom"));
+  expect(await n.notifyState()).toBe("unavailable");
+  expect(mockApi.requestPermissionsAsync).not.toHaveBeenCalled();
+  expect(await fresh(false).notifyState()).toBe("unavailable");
+});
+
+test("no screen notifies yet: besides the wrapper's own file, only the wizard's permission row asks (src/auth/permissions.ts) — and nothing shows a notification", () => {
+  expect(sources().filter((f) => /notifyDone\(|askToNotify\(|lib\/notify"/.test(f.src)).map((f) => f.rel).sort()).toEqual(["src/auth/permissions.ts", "src/lib/notify.ts"]);
+  expect(sources().filter((f) => /notifyDone\(/.test(f.src)).map((f) => f.rel)).toEqual(["src/lib/notify.ts"]);
 });

@@ -13,6 +13,7 @@ import { isReducedMotion } from "@/src/ui/useReducedMotion";
 import { markWelcomeSeen } from "./welcomeSeen";
 import { SignInBody } from "./WelcomeScreen";
 import { FeatureTile, FEATURES, WizardMark } from "./WizardArt";
+import { PermissionRows } from "./WizardPermissions";
 
 /** The four pages' words, as the owner approved them. */
 export const WIZARD = {
@@ -115,7 +116,9 @@ export function WelcomeWizard({ replay = false, onDone }: Props) {
             ))}
           </View>
         </Page>
-        <Page width={width} current={page === 2} title={WIZARD.permissions.title} button={WIZARD.permissions.button} onButton={() => go(LAST)} />
+        <Page width={width} current={page === 2} title={WIZARD.permissions.title} button={WIZARD.permissions.button} onButton={() => go(LAST)}>
+          <PermissionRows play={reached[2]} />
+        </Page>
         <View testID="wizard-page-4" style={{ width }} {...(page === LAST ? null : hidden)}>
           {replay && signedIn && !wasSignedOut.current ? (
             <View style={{ flex: 1, paddingHorizontal: theme.space.gutter, paddingBottom: theme.space.lg, gap: theme.space.xl }}>

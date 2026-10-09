@@ -53,7 +53,7 @@ test("closing the camera, a refusal and a camera that cannot open are told apart
   expect(await takeMedia()).toEqual({ status: "unavailable" });
 });
 
-test("no screen opens the camera yet: only this wrapper names it", () => {
+test("no screen opens the camera yet: only this wrapper opens it; the wizard's permission row (src/auth/permissions.ts) asks canUseCamera() and nothing more", () => {
   const root = join(__dirname, "..", "..", "..");
   const found: string[] = [];
   const walk = (dir: string) => {
@@ -64,5 +64,7 @@ test("no screen opens the camera yet: only this wrapper names it", () => {
     }
   };
   walk(join(root, "src")); walk(join(root, "app"));
-  expect(found).toEqual(["src/projects/camera.ts"]);
+  expect(found.sort()).toEqual(["src/auth/permissions.ts", "src/projects/camera.ts"]);
+  const wizard = readFileSync(join(root, "src", "auth", "permissions.ts"), "utf8");
+  expect(/launchCameraAsync|takeMedia\(/.test(wizard)).toBe(false);
 });

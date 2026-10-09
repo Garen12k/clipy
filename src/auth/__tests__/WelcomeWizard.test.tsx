@@ -4,6 +4,8 @@ jest.mock("@/src/publish/supabase", () => ({
   isBackendConfigured: jest.fn(), signInWithApple: jest.fn(), signInWithGoogle: jest.fn(), sendEmailCode: jest.fn(), verifyEmailCode: jest.fn(), signOut: jest.fn(),
   SIGN_IN_NOT_SET_UP: "Sign-in isn't set up yet.",
 }));
+// The rows of page 3 have their own suite (WizardPermissions.test.tsx): here the phone has simply not been asked anything.
+jest.mock("../permissions", () => ({ ...jest.requireActual("../permissions"), readPermission: jest.fn(async () => "notAsked"), askPermission: jest.fn(async () => "granted") }));
 jest.mock("@/src/ui/motion", () => {
   const m = jest.requireActual("@/src/ui/motion");
   return { ...m, wizardDrawTo: jest.fn(m.wizardDrawTo), wizardPopTo: jest.fn(m.wizardPopTo), wizardStepTo: jest.fn(m.wizardStepTo), wizardRowTo: jest.fn(m.wizardRowTo) };
@@ -13,10 +15,11 @@ import { AccessibilityInfo, Dimensions } from "react-native";
 import { isBackendConfigured, sendEmailCode, signInWithApple, signInWithGoogle, signOut, verifyEmailCode } from "@/src/publish/supabase";
 import { useSession } from "@/src/publish/useSession";
 import { theme } from "@/src/theme/theme";
-import { wizardDrawTo, wizardPopTo, wizardStepTo } from "@/src/ui/motion";
+import { wizardDrawTo, wizardPopTo, wizardRowTo, wizardStepTo } from "@/src/ui/motion";
 import { leftovers, wear } from "@/src/ui/testing/appearance";
 import { useToast } from "@/src/ui/Toast";
 import { setReducedMotionForTests } from "@/src/ui/useReducedMotion";
+import { askPermission } from "../permissions";
 import { hasSeenWelcome, markWelcomeSeen, WELCOME_SEEN_KEY } from "../welcomeSeen";
 import { WelcomeWizard } from "../WelcomeWizard";
 import { FEATURES } from "../WizardArt";
@@ -83,7 +86,7 @@ describe("the four pages", () => {
     expect(button("Skip to sign in")).toBeTruthy();
   });
 
-  test("page 3: the title and 'Continue'", async () => {
+  test("page 3: the title, 'Continue' — which works with nothing allowed and asks nothing", async () => {
     await render(<WelcomeWizard onDone={jest.fn()} />);
     await fireEvent.press(button("Get Started"));
     await fireEvent.press(button("Continue"));
@@ -92,6 +95,7 @@ describe("the four pages", () => {
     expect(button("Skip to sign in")).toBeTruthy();
     await fireEvent.press(button("Continue"));
     expect(pageNow()).toBe("Page 4 of 4");
+    expect(askPermission).not.toHaveBeenCalled();
   });
 
   test("page 4: 'Sign in to post', its line, the sign-in page's own choices — no Skip, no gold button", async () => {
@@ -302,13 +306,15 @@ describe("the pictures play once, when their page first becomes the current one"
     expect(wizardDrawTo).toHaveBeenCalledTimes(1); expect(wizardDrawTo).toHaveBeenCalledWith(false);
     expect(wizardPopTo).toHaveBeenCalledTimes(1); expect(wizardPopTo).toHaveBeenCalledWith(false);
     expect(wizardStepTo).not.toHaveBeenCalled();
+    expect(wizardRowTo).not.toHaveBeenCalled();
     await fireEvent.press(button("Get Started"));
     expect(mocked(wizardStepTo).mock.calls).toEqual([[false, 0], [false, 1], [false, 2], [false, 3]]);
     await swipeTo(2);                                   // the button's scroll arrives
     await swipeTo(3);
+    expect(mocked(wizardRowTo).mock.calls).toEqual([[false, 0], [false, 1], [false, 2], [false, 3]]);
     await swipeTo(2); await swipeTo(1); await swipeTo(2); await swipeTo(3);
     expect(wizardDrawTo).toHaveBeenCalledTimes(1); expect(wizardPopTo).toHaveBeenCalledTimes(1);
-    expect(wizardStepTo).toHaveBeenCalledTimes(4);
+    expect(wizardStepTo).toHaveBeenCalledTimes(4); expect(wizardRowTo).toHaveBeenCalledTimes(4);
   });
 
   test("Reduce Motion: every picture is asked for its finished state — nothing tweens — and a button's scroll is not animated", async () => {
@@ -317,7 +323,8 @@ describe("the pictures play once, when their page first becomes the current one"
     expect(wizardDrawTo).toHaveBeenCalledWith(true); expect(wizardPopTo).toHaveBeenCalledWith(true);
     await swipeTo(2); await swipeTo(3);
     expect(mocked(wizardStepTo).mock.calls).toEqual([[true, 0], [true, 1], [true, 2], [true, 3]]);
-    for (const f of [wizardDrawTo, wizardPopTo, wizardStepTo]) for (const r of mocked(f).mock.results) expect(r.value).toBe(1);
+    expect(mocked(wizardRowTo).mock.calls).toEqual([[true, 0], [true, 1], [true, 2], [true, 3]]);
+    for (const f of [wizardDrawTo, wizardPopTo, wizardStepTo, wizardRowTo]) for (const r of mocked(f).mock.results) expect(r.value).toBe(1);
   });
 });
 

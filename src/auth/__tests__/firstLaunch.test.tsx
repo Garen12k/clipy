@@ -5,6 +5,8 @@ jest.mock("@/src/projects/pickMedia", () => ({ pickMedia: jest.fn() }));
 jest.mock("@/src/publish/pickVideo", () => ({ pickVideoForPost: jest.fn() }));
 jest.mock("@/src/projects", () => ({ storage: { listProjects: jest.fn(async () => []), createProject: jest.fn(), renameProject: jest.fn(), duplicateProject: jest.fn(), deleteProject: jest.fn() } }));
 jest.mock("@/src/publish/useSession", () => ({ useSession: jest.fn() }));
+// The wizard's third page reads the phone's permissions (WizardPermissions.test.tsx): here the app simply has no notifications.
+jest.mock("@/src/lib/notify", () => ({ notifyAvailable: () => false, notifyState: jest.fn(), askToNotify: jest.fn() }));
 jest.mock("@/src/publish/supabase", () => ({
   isBackendConfigured: jest.fn(() => false), signInWithApple: jest.fn(), signInWithGoogle: jest.fn(), sendEmailCode: jest.fn(), verifyEmailCode: jest.fn(async () => {}),
   SIGN_IN_NOT_SET_UP: "Sign-in isn't set up yet.",
