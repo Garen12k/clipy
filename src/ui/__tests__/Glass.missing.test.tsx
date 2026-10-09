@@ -12,18 +12,22 @@ jest.mock("expo-glass-effect", () => {
 import { render, screen } from "@testing-library/react-native";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import { Text } from "react-native";
-import { GLASS, theme } from "@/src/theme/theme";
+import { GLASS, GLASS_TINT, theme } from "@/src/theme/theme";
 import { Glass } from "../Glass";
 import { isGlassAvailable } from "../systemGlass";
 
-afterEach(() => { GLASS.home = false; GLASS.editor = false; });
+// When the app loaded (the imports above), with the trial's two switches on: the native module was looked for, the package was not.
+const atLoad = { looked: jest.mocked(requireOptionalNativeModule).mock.calls.map((c) => c[0]), switches: { ...GLASS }, loads: mockLoads.count };
+beforeEach(() => { GLASS.home = false; GLASS.editor = false; jest.mocked(requireOptionalNativeModule).mockClear(); });
 
-test("glass is off on both sides, so no surface of the app changes", () => {
-  expect(GLASS).toEqual({ home: false, editor: false });
+test("the trial has both sides switched on — and loading the app looked for the native module without ever loading the package", () => {
+  expect(atLoad.switches).toEqual({ home: true, editor: true });
+  expect(atLoad.looked).toEqual(["ExpoGlassEffect"]);
+  expect(atLoad.loads).toBe(0);
 });
 
 test("switched off: the solid colour in the given box, and nothing native is even looked for", async () => {
-  await render(<Glass side="home" color={theme.screen.bar} style={{ height: 48, borderRadius: 12 }} testID="bar"><Text>Inside</Text></Glass>);
+  await render(<Glass side="home" color={theme.screen.bar} tint={GLASS_TINT.dark} style={{ height: 48, borderRadius: 12 }} testID="bar"><Text>Inside</Text></Glass>);
   expect(screen.getByTestId("bar")).toHaveStyle({ height: 48, borderRadius: 12, backgroundColor: theme.screen.bar });
   expect(screen.getByText("Inside")).toBeTruthy();
   expect(requireOptionalNativeModule).not.toHaveBeenCalled();
@@ -32,9 +36,9 @@ test("switched off: the solid colour in the given box, and nothing native is eve
 
 test("switched ON in an app without the module: still the solid colour, the same box, never a crash", async () => {
   GLASS.editor = true;
-  await render(<Glass side="editor" color={theme.elevation.bar} style={{ height: 48 }} testID="bar" />);
+  await render(<Glass side="editor" color={theme.elevation.bar} tint={GLASS_TINT.editor} style={{ height: 48 }} testID="bar" />);
   expect(screen.getByTestId("bar")).toHaveStyle({ height: 48, backgroundColor: theme.elevation.bar });
-  expect(requireOptionalNativeModule).toHaveBeenCalledWith("ExpoGlassEffect");
+  expect(requireOptionalNativeModule).not.toHaveBeenCalled();   // asked once, when the app loaded
   expect(isGlassAvailable()).toBe(false);
   expect(mockLoads.count).toBe(0);                 // the package was never even asked for
 });

@@ -1,7 +1,8 @@
 import { Icon } from "@/src/ui/Icon";
 import { useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
-import { theme } from "@/src/theme/theme";
+import { GLASS_TINT, theme } from "@/src/theme/theme";
+import { Glass, useGlass } from "@/src/ui/Glass";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { TOOLBAR } from "@/src/ui/ToolButton";
 import { BAR_HEIGHT } from "@/src/ui/ToolStrip";
@@ -19,10 +20,10 @@ const SEPARATOR = { width: 1, height: 36 } as const;
 export function BarCapsule({ testID, children }: { testID?: string; children: React.ReactNode }) {
   return (
     <View testID="toolbar-slot" style={{ height: BAR_HEIGHT - 1, justifyContent: "flex-end" }}>
-      <View testID={testID} style={{ height: TOOLBAR.height, marginHorizontal: theme.space.xs, paddingHorizontal: theme.space.xs, gap: theme.space.xs, borderRadius: theme.radius.pill,
-        backgroundColor: theme.elevation.bar, flexDirection: "row", alignItems: "center" }}>
+      <Glass side="editor" color={theme.elevation.bar} tint={GLASS_TINT.editor} testID={testID} style={{ height: TOOLBAR.height, marginHorizontal: theme.space.xs, paddingHorizontal: theme.space.xs, gap: theme.space.xs, borderRadius: theme.radius.pill,
+        flexDirection: "row", alignItems: "center" }}>
         {children}
-      </View>
+      </Glass>
     </View>
   );
 }
@@ -54,6 +55,8 @@ export function BarSeparator() {
 export function ToolScroll({ testID, centred, children }: { testID?: string; centred?: boolean; children: React.ReactNode }) {
   const m = useRef({ box: 0, content: 0, x: 0 });
   const [more, setMore] = useState(false);
+  // The fade is slices of the bar's SOLID colour: on a glass capsule (GLASS.editor, on a phone that draws it) they would be a patch, so there is none — the cut-off tool says the row scrolls.
+  const solid = useGlass("editor") === null;
   // A boolean, so a scroll re-renders the row only when the fade appears or goes.
   const check = () => setMore(m.current.content - m.current.x - m.current.box > 1);
   return (
@@ -65,7 +68,7 @@ export function ToolScroll({ testID, centred, children }: { testID?: string; cen
         onScroll={(e) => { m.current.x = e.nativeEvent.contentOffset.x; check(); }}>
         {children}
       </ScrollView>
-      {more ? (
+      {more && solid ? (
         <View testID="toolbar-fade" pointerEvents="none" style={{ position: "absolute", top: 0, bottom: 0, right: 0, flexDirection: "row" }}>
           {FADE.map((opacity) => <View key={opacity} style={{ width: theme.space.xs, backgroundColor: theme.elevation.bar, opacity }} />)}
         </View>

@@ -2,7 +2,7 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 import type { GlassViewProps } from "expo-glass-effect";
 import type { ComponentType } from "react";
 
-type GlassViewType = ComponentType<GlassViewProps>;
+export type GlassViewType = ComponentType<GlassViewProps>;
 type GlassPackage = { GlassView?: GlassViewType; isLiquidGlassAvailable?: () => boolean; isGlassEffectAPIAvailable?: () => boolean };
 let found: GlassViewType | null | undefined;   // undefined = not asked yet
 

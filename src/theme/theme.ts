@@ -179,8 +179,18 @@ export type Theme = typeof theme;
 /** The two sides of the app a glass surface can be on: the screens (Home and the rest) and the editor. */
 export type GlassSide = "home" | "editor";
 /**
- * Whether surfaces drawn with the kit's `Glass` (src/ui/Glass.tsx) are the system's glass, per side. OFF everywhere: the installed
- * app only makes glass POSSIBLE; where it is used is decided with the owner. With a switch on, a phone or a build that cannot draw
- * glass still gets the solid colour.
+ * Whether surfaces drawn with the kit's `Glass` (src/ui/Glass.tsx) are the system's glass, per side. A TRIAL (9 October 2026): both on,
+ * for the owner to judge on a phone. Each side is ONE word: `false` restores that side's solid pixels exactly, and the two are independent.
+ * With a switch on, a phone or a build that cannot draw glass — or one with Reduce Transparency on — still gets the solid colour.
+ * Home: the header pill and Quick Edit. The editor: the bottom toolbar's capsule (the multi-select bar is the same capsule).
  */
-export const GLASS: Record<GlassSide, boolean> = { home: false, editor: false };
+export const GLASS: Record<GlassSide, boolean> = { home: true, editor: true };
+/**
+ * The tint a glass surface is given: its own solid colour (the family's `bar`) at 60 %, so what scrolls behind it never takes the
+ * contrast from the words on it — white on slate / navy, navy on cream. Written out by hand, one per family: a colour is never built in code.
+ */
+export const GLASS_TINT = { editor: "rgba(33,42,58,0.6)", dark: "rgba(17,44,77,0.6)", light: "rgba(255,251,241,0.6)" } as const;
+/** The glass tint of the family a part is drawn in (`useSurfaces()`): it follows the phone's appearance on a screen and is the slate in the editor. */
+export function glassTint(s: Surfaces): string {
+  return s === EDITOR ? GLASS_TINT.editor : s === SCREENS.light ? GLASS_TINT.light : GLASS_TINT.dark;
+}
