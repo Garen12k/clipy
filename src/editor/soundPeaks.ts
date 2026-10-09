@@ -1,17 +1,19 @@
 import { useEffect } from "react";
-import { create } from "zustand";
 import { cancelSoundPeaks, isPeaksAvailable, PEAKS_CANCELLED, soundPeaks, type SoundPeaksResult } from "@/modules/clipy-video";
 import { newId } from "@/src/lib/id";
 import { storage } from "@/src/projects";
 import { expoFs } from "@/src/projects/expoFs";
 import { assemblePeaks, decodePeaks, encodePeaks, peaksFileName, peaksPlan, type Peaks, type PeaksCall } from "./model/peaks";
 import type { Project } from "./model/types";
+import { usePeaksFiles, type PeaksFile } from "./peaksFiles";
 import { useEditorStore } from "./store";
 
 /**
  * The outlines ("waveforms") the timeline's sound bars draw: fetched ONCE per source file for its whole length (`peaksPlan`), kept
  * here for the session by the file's uri, and saved beside the project (`<project>/peaks/<peaksFileName>`) so an editor that opens
  * again reads a small file instead of decoding a song. Never in the project document, never part of undo.
+ *
+ * What is known lives in `usePeaksFiles` (peaksFiles.ts), written only here.
  *
  * It is the track's ORIGINAL file (`sourceUri`) — never its Voice / Sound / Reduce-noise copy (`playUri`): a copy changes how the
  * sound sounds, not where its peaks are, and waiting for a render would leave the bar blank.
@@ -20,19 +22,6 @@ import { useEditorStore } from "./store";
  * the editor stands still (`idle`). Without the function (Expo Go, an older build) nothing here does anything: no call, no file
  * read, no message — the bars are as they were.
  */
-export type PeaksFile = { status: "ready"; peaks: Peaks } | { status: "failed" };
-/**
- * What is known of a file's outline, by its uri. Nothing known = no entry (also while it is being fetched: nothing draws a wait).
- * A failed file stays failed for the session — it is not asked again — and simply has no outline. Written only by this file; read
- * with `readyPeaks`, which returns a stored object (never `s.files` itself).
- */
-export const usePeaksFiles = create<{ files: Record<string, PeaksFile> }>(() => ({ files: {} }));
-/** The outline a bar draws: the file's, once it is there; null at every other time (and for a missing file: pass null). */
-export function readyPeaks(files: Record<string, PeaksFile>, uri: string | null): Peaks | null {
-  const entry = uri === null ? undefined : files[uri];
-  return entry !== undefined && entry.status === "ready" ? entry.peaks : null;
-}
-
 /** Where a project's outlines are cached. Deleted with the project; swept when it is opened (`sweepPeaks`). */
 export const peaksDir = (projectId: string): string => `${storage.projectDir(projectId)}/peaks`;
 /**

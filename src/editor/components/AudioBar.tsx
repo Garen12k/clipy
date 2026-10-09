@@ -9,9 +9,11 @@ import type { AudioKind, AudioTrack, Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
+import { readyPeaks, usePeaksFiles } from "../peaksFiles";
 import { LANE_HEIGHT } from "../timelineLayout";
 import { BAR, BAR_GLYPH, barParts } from "../timelineMarks";
 import { BarGrip, GRIP_BOX } from "./BarGrip";
+import { BAR_BORDER, BarWave } from "./BarWave";
 
 
 const HANDLE_W = 12;
@@ -27,14 +29,23 @@ const KIND: Record<AudioKind, { label: string; color: string }> = {
   sfx: { label: "Sound effect", color: theme.colors.kindSfx },
 };
 
-type Props = { track: AudioTrack; missing: boolean; selected: boolean; overlapping?: boolean; onPress: () => void };
+type Props = {
+  track: AudioTrack; missing: boolean; selected: boolean; overlapping?: boolean; onPress: () => void;
+  /** A pinch is going on (Timeline): the outline is stretched with the bar instead of being built again on every frame. */
+  hold?: boolean;
+};
 
 /**
  * One audio track on its kind's lane: tap selects, long-press drag moves it, the two handles (shown when selected) trim it.
  * The selected bar is drawn above its neighbours, so a bar overlapping it never covers its handles.
+ *
+ * Once the outline of its file is known (soundPeaks.ts — the ORIGINAL file's, never a Voice / Sound copy's; never for a missing
+ * file) the bar draws it under everything else (`BarWave`), with no animation, and its glyph and words get a solid backing in the
+ * kind's own colour so they read as before. Without an outline the bar is exactly what it was.
  */
-export function AudioBar({ track: t, missing, selected, overlapping = false, onPress }: Props) {
+export function AudioBar({ track: t, missing, selected, overlapping = false, onPress, hold = false }: Props) {
   const pps = useEditorStore((s) => s.pixelsPerSecond);
+  const peaks = usePeaksFiles((s) => readyPeaks(s.files, missing ? null : t.sourceUri));
   const store = useEditorStore.getState();
   // Drag start lives in a ref object: gesture callbacks each get their own copy of captured variables.
   const startRef = useRef({ start: t.start, trimStart: t.trimStart, trimEnd: t.trimEnd });
@@ -84,19 +95,28 @@ export function AudioBar({ track: t, missing, selected, overlapping = false, onP
   const roomy = width >= LABEL_MIN_WIDTH;
   const parts = barParts(width);   // a narrow bar leaves its label out first, then its glyph
   const handleW = Math.min(HANDLE_W, width / 2);
+  const glyph = parts.glyph && <Icon plain testID={`bar-glyph-${t.id}`} name={BAR_GLYPH[t.kind]} size={BAR.glyph} color={theme.colors.onKind} />;
+  // The title takes the rest of the bar — or, on its backing over an outline, only its own width (shrinking with the bar).
+  const words = parts.label && (
+    <>
+      <Text style={{ color: theme.colors.onKind, fontSize: theme.type.small, fontVariant: ["tabular-nums"] }}>{Math.round(t.volume * 100)}%</Text>
+      <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, ...(peaks ? { flexShrink: 1 } : { flex: 1 }) }}>{t.title}</Text>
+    </>
+  );
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`audio-bar-${t.id}`} onPress={onPress} accessibilityLabel={`${label} ${t.title}`} hitSlop={HIT_SLOP}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color, opacity: overlapping ? OVERLAP_OPACITY : 1,
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
+        {/* The file's outline, under the glyph, the words, the missing mark and the handles. */}
+        {peaks && <BarWave trackId={t.id} peaks={peaks} trimStart={t.trimStart} hold={hold} />}
         {/* The kind's own glyph (a note, a microphone, a speaker), then today's words: the volume and the title. */}
-        {parts.glyph && <Icon plain testID={`bar-glyph-${t.id}`} name={BAR_GLYPH[t.kind]} size={BAR.glyph} color={theme.colors.onKind} />}
-        {parts.label && (
-          <>
-            <Text style={{ color: theme.colors.onKind, fontSize: theme.type.small, fontVariant: ["tabular-nums"] }}>{Math.round(t.volume * 100)}%</Text>
-            <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{t.title}</Text>
-          </>
-        )}
+        {peaks ? (glyph && (
+          // Over an outline: the same glyph and words on a small solid backing of the kind's colour, as wide as they are (not the rest of the bar).
+          <View testID={`bar-label-${t.id}`} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs, flexShrink: 1, backgroundColor: color, borderRadius: theme.radius.chip - BAR_BORDER, paddingHorizontal: theme.space.xs }}>
+            {glyph}{words}
+          </View>
+        )) : <>{glyph}{words}</>}
         {missing && (
           <View testID={`audio-bar-${t.id}-missing`} style={{ position: "absolute", top: 4, right: roomy ? HANDLE_W + 2 : 0, backgroundColor: theme.colors.danger, borderRadius: theme.radius.pill, padding: 2 }}>
             <Icon plain name="warning" size={12} color={theme.colors.onAccent} />

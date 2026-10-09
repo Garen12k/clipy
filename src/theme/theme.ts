@@ -154,6 +154,11 @@ export const theme = {
    * ink — white with dark text here, and the other way round in a light appearance. Gold stays a screen's one action (Export, Crop's Done).
    */
   plain: { fill: C.text, ink: C.bg },
+  /**
+   * The outline ("waveform") drawn on a sound bar: the bar's own ink (`onKind`), this see-through, over the kind's colour — as stroke and
+   * stroke opacity, never a colour built from the two. Words on such a bar keep a solid backing in the kind's colour.
+   */
+  wave: { ink: C.onKind, opacity: 0.32 },
   /** 2 px gold ring for the selected item in any grid (filters, templates, fonts, ratios, transitions). A picked tile or chip wears it over the `picked` tint, with its label white and semibold. */
   ring: { borderWidth: 2, borderColor: C.accent },
   /** The unselected twin of `ring`: the same width, so selecting moves nothing. */

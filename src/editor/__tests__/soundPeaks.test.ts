@@ -23,7 +23,8 @@ import { decodePeaks, encodePeaks, peaksFileName, peaksPlan } from "@/src/editor
 import { makeAudioTrack, makeClip, makeProject, NO_SOUND } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { expoFs } from "@/src/projects/expoFs";
-import { PEAKS_CANCEL_GRACE_MS, PEAKS_DEADLINE_MS, PEAKS_SETTLE_MS, peaksDir, peaksSources, readyPeaks, resetPeaks, sweepPeaks, syncPeaks, usePeaksFiles, useWaveforms } from "../soundPeaks";
+import { readyPeaks, usePeaksFiles } from "../peaksFiles";
+import { PEAKS_CANCEL_GRACE_MS, PEAKS_DEADLINE_MS, PEAKS_SETTLE_MS, peaksDir, peaksSources, resetPeaks, sweepPeaks, syncPeaks, useWaveforms } from "../soundPeaks";
 
 const disk = (jest.requireMock("@/src/projects/expoFs") as { __files: Map<string, string> }).__files;
 const SONG = "file:///doc/projects/p1/media/song.m4a", VOICE = "file:///doc/projects/p1/media/voice.m4a", SFX = "file:///bundle/whoosh.wav";
