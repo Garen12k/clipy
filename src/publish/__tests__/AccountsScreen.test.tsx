@@ -104,7 +104,7 @@ test("a failed sign-out says so and does not claim to have signed out", async ()
 });
 
 describe("round 2 look (no behaviour)", () => {
-  test("a row is 56 pt and Connect is a compact outlined button", async () => {
+  test("a row is 56 pt and Connect is a compact grey button", async () => {
     (useAccounts as jest.Mock).mockReturnValue(hook());
     await render(<AccountsScreen />);
     expect(screen.getByTestId("account-row-youtube")).toHaveStyle({ minHeight: theme.size.listRow });
@@ -112,7 +112,7 @@ describe("round 2 look (no behaviour)", () => {
     expect(screen.getByRole("header", { name: "Accounts" })).toHaveStyle({ fontSize: theme.type.screen });
   });
 
-  test("no gold button: Reconnect is outlined, Disconnect and Sign out are text only", async () => {
+  test("no gold button: Reconnect is grey, Disconnect and Sign out are text only", async () => {
     (useAccounts as jest.Mock).mockReturnValue(hook({ platforms: [
       p("youtube", { available: true, connected: true, name: "My Channel", needsReconnect: true }),
       p("tiktok", { available: true, connected: true, name: "@sunny" }),

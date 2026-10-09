@@ -44,7 +44,7 @@ test("offers Style captions next to Replace when captions already exist", async 
     const parentStyle = StyleSheet.flatten(screen.getByRole("button", { name }).parent?.props.style) ?? {};
     expect(parentStyle.flexDirection).not.toBe("row");
   }
-  // One main button on the card: Replace. Style captions is outlined, Cancel is text only.
+  // One main button on the card: Replace. Style captions is the grey button, Cancel is text only.
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
   expect(screen.getByText("Cancel")).toHaveStyle({ color: theme.colors.accent });
   // All three are the same height (compact), and the card fits the compact panel's body without scrolling:

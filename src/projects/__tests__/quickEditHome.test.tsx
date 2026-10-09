@@ -40,7 +40,7 @@ const openSheet = async () => {
   return screen.findByRole("header", { name: "Quick edit" });
 };
 
-test("Quick edit sits beside New project: an outlined button on a pill of its own; New project stays the one gold button", async () => {
+test("Quick edit sits beside New project: a grey button on a pill of its own; New project stays the one gold button", async () => {
   await render(<ProjectsScreen />);
   await screen.findByText("No clips yet");
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);

@@ -109,7 +109,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
           // A row held back by a validation message opens its options (when it has any) instead of unticking.
           <PressableScale accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{ checked, disabled: !!reason || active }}
             disabled={!!reason || active} onPress={error && hasOptions(account.id) ? onOptions : onToggle} style={rowStyle}>
-            {/* Gold = on (ticked); cream = can be ticked; muted = cannot. */}
+            {/* Gold = on (ticked); white = can be ticked; muted = cannot. */}
             <Ionicons name={checked ? "checkbox-outline" : "square-outline"} size={ICON} color={reason ? theme.colors.textMuted : checked ? theme.colors.accent : theme.colors.text} />
             {identity}
           </PressableScale>

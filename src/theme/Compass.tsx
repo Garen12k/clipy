@@ -1,7 +1,7 @@
 import Svg, { Circle, G, Polygon } from "react-native-svg";
 import { theme } from "./theme";
 
-/** Clipy's mark: a gold ring with a red/cream needle. `needleRotation` in degrees. */
+/** Clipy's mark: a gold ring with a red/white needle. `needleRotation` in degrees. */
 export function Compass({ size = 24, needleRotation = 0 }: { size?: number; needleRotation?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100" accessibilityLabel="Clipy compass">

@@ -157,7 +157,7 @@ describe("round 2 look: one gold button per state, values that read", () => {
     expect(gold()).toHaveLength(0);
   });
 
-  test("exporting: the ring at its token size, a line that says so, Cancel outlined, no gold button", async () => {
+  test("exporting: the ring at its token size, a line that says so, Cancel grey, no gold button", async () => {
     await renderBody({ status: "exporting", progress: 0.42 });
     expect(screen.getByRole("progressbar")).toHaveStyle({ width: theme.size.ring, height: theme.size.ring });
     expect(screen.getByText("Exporting…")).toBeTruthy();
@@ -165,7 +165,7 @@ describe("round 2 look: one gold button per state, values that read", () => {
     expect(gold()).toHaveLength(0);
   });
 
-  test("done: the ring keeps its size, one gold button, Share outlined, Done text only, the summary stands out", async () => {
+  test("done: the ring keeps its size, one gold button, Share grey, Done text only, the summary stands out", async () => {
     mockSize = 0;
     await renderBody({ status: "done", progress: 1, fileUri: "file:///out.mp4" });
     expect(screen.getByRole("progressbar")).toHaveStyle({ width: theme.size.ring, height: theme.size.ring });

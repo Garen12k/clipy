@@ -34,7 +34,7 @@ test("the text panel's sliders are the kit's and its Size line is one text with 
   const pct = `${Math.round(overlay.fontScale * 100)}%`;
   expect(screen.getByText(`Size ${pct}`)).toBeTruthy();
   expect(screen.getByText(pct)).toHaveStyle({ color: theme.colors.text, fontVariant: ["tabular-nums"] });
-  // Duplicate is outlined, Delete is outlined in red — no gold fill in the panel's body.
+  // Duplicate is the grey button, Delete is the grey button in red — no gold fill in the panel's body.
   expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
 });
 

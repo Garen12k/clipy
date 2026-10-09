@@ -1,7 +1,7 @@
 import { View, type StyleProp, type ViewStyle } from "react-native";
 import { theme } from "@/src/theme/theme";
 
-/** The one card surface outside the editor: a step lighter than the page, the gold hairline, no shadow. */
+/** The one card surface outside the editor: a step lighter than the page, the quiet hairline edge, no shadow. */
 export const cardStyle: ViewStyle = {
   backgroundColor: theme.elevation.bar, borderWidth: 1, borderColor: theme.colors.hairline, borderRadius: theme.radius.card, padding: theme.space.lg,
 };

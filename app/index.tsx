@@ -162,7 +162,7 @@ function ProjectsScreen() {
           </View>
         ) : (
           <>
-            {/* An outlined button has no fill of its own: the pill behind it keeps it readable over the cards. */}
+            {/* The grey button has its own fill; the pill behind it only keeps it readable over the cards. */}
             <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
               <SecondaryButton title="Quick Edit" onPress={onQuick} />
             </View>

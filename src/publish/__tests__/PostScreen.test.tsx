@@ -721,7 +721,7 @@ describe("cover frame", () => {
 });
 
 describe("round 2 look (no behaviour)", () => {
-  test("the caption is the kit field; Post is the one gold button; Share… is outlined", async () => {
+  test("the caption is the kit field; Post is the one gold button; Share… is grey", async () => {
     await render(<PostScreen />);
     expect(screen.getByLabelText("Caption")).toHaveStyle({ backgroundColor: theme.elevation.tile, fontSize: theme.type.input, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md, minHeight: 96 });
     expect(screen.getByLabelText("Caption")).toHaveProp("placeholder", "Write a caption…");
@@ -749,7 +749,7 @@ describe("round 2 look (no behaviour)", () => {
     expect(column).toHaveStyle({ alignItems: "flex-end", gap: theme.space.xs, paddingBottom: theme.space.xs });
   });
 
-  test("a row's action is a compact outlined button; its error is red and a size larger than a note", async () => {
+  test("a row's action is a compact grey button; its error is red and a size larger than a note", async () => {
     usePostReturns(post({ rows: rows({ phase: "failed", message: "The video has been rejected.", resumable: false }) }));
     await render(<PostScreen />);
     expect(screen.getByRole("button", { name: "Retry YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });
