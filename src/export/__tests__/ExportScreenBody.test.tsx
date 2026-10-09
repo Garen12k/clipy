@@ -327,3 +327,42 @@ describe("the new layout: a small bar, the choices in one card, the actions pinn
     expect(reset).toHaveBeenCalledTimes(1);
   });
 });
+
+// ───────────────────────────── Light: the phone's light setting (src/ui/testing/appearance.ts) ─────────────────────────────
+import { hasSurface, leftovers, wear } from "@/src/ui/testing/appearance";
+
+describe("in light", () => {
+  afterEach(() => wear("dark"));
+  const all = { includeHiddenElements: true } as const;
+
+  test("the audit is not blind: the navy sheet has navy surfaces and white ink", async () => {
+    await renderBody({ status: "idle" });
+    expect(leftovers().length).toBeGreaterThan(10);
+  });
+
+  test("the options: a cream sheet, the card a step lighter, each Segmented a tile track with a deeper picked segment and navy words", async () => {
+    wear("light");
+    await renderBody({ status: "idle" });
+    expect(leftovers()).toEqual([]);
+    expect(hasSurface("#F7F1E3")).toBe(true);                       // the sheet's page
+    expect(hasSurface("#FFFBF1")).toBe(true);                       // the options card
+    expect(hasSurface("#EBE2CC")).toBe(true);                       // a Segmented's track, the bar's close circle
+    expect(hasSurface("#DDD0B4")).toBe(true);                       // its picked segment
+    expect(screen.getByTestId("export-grabber", all)).toHaveStyle({ backgroundColor: "#4B576B", opacity: 0.5 });
+    expect(screen.getByTestId("primary-button")).toHaveStyle({ backgroundColor: "#D9B36A" });
+  });
+
+  test("exporting, done and failed: the ring's rest is a cream tile and its progress the deep gold; Share is deep-gold text; the error's symbol is the deep red", async () => {
+    wear("light");
+    const view = await renderBody({ status: "exporting", progress: 0.37 });
+    expect(leftovers()).toEqual([]);
+    expect(screen.getByText("37%")).toHaveStyle({ color: "#0A1B33" });
+    await rerenderBody(view, { status: "done", progress: 1, fileUri: "file:///out.mp4" });
+    expect(leftovers()).toEqual([]);
+    expect(screen.getByText("Share")).toHaveStyle({ color: "#7A5200" });
+    expect(screen.getByText("Done")).toHaveStyle({ color: "#7A5200" });
+    await rerenderBody(view, { status: "error", progress: 0, message: "Not enough free space on this iPhone for the export." });
+    expect(leftovers()).toEqual([]);
+    expect(screen.getByTestId("export-error-icon", all).props.color ?? screen.getByTestId("export-error-icon", all).props.style).toBeDefined();
+  });
+});

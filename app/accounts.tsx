@@ -8,6 +8,7 @@ import { signOut } from "@/src/publish/supabase";
 import { useAccounts } from "@/src/publish/useAccounts";
 import { useSession } from "@/src/publish/useSession";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "@/src/ui/tone";
 import { Card } from "@/src/ui/Card";
 import { Group } from "@/src/ui/Group";
 import { PressableScale } from "@/src/ui/PressableScale";
@@ -22,6 +23,7 @@ import { ToastHost, useToast } from "@/src/ui/Toast";
 const row = { minHeight: theme.size.row, flexDirection: "row", alignItems: "center", gap: theme.space.md } as const;
 
 export default function AccountsScreen() {
+  const s = useSurfaces();
   const session = useSession();
   const signedIn = session.status === "signedIn";
   const { status, platforms, error, busy, refresh, connect, disconnect } = useAccounts(signedIn);
@@ -45,12 +47,12 @@ export default function AccountsScreen() {
           <Group label="Clipy account" testID="clipy-account">
             {/* The row shows the address alone; VoiceOver hears the whole sentence. */}
             <View testID="signed-in-row" accessible accessibilityLabel={session.email ? `Signed in as ${session.email}` : "Signed in"} style={row}>
-              <Icon name="person-circle-outline" size={theme.size.icon.lg} color={theme.colors.text} />
+              <Icon name="person-circle-outline" size={theme.size.icon.lg} color={s.text} />
               <Body numberOfLines={1} style={{ flex: 1 }}>{session.email ?? "Signed in"}</Body>
             </View>
             <PressableScale accessibilityRole="button" accessibilityLabel="Sign Out" onPress={confirmSignOut} style={row}>
-              <Icon name="log-out-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
-              <Body style={{ flex: 1, color: theme.screen.dangerText }}>Sign Out</Body>
+              <Icon name="log-out-outline" size={theme.size.icon.lg} color={s.danger} />
+              <Body style={{ flex: 1, color: s.dangerText }}>Sign Out</Body>
             </PressableScale>
           </Group>
         ) : null}

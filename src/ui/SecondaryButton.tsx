@@ -8,7 +8,7 @@ type Props = { title: string; onPress: () => void; disabled?: boolean; danger?: 
 
 export function SecondaryButton({ title, onPress, disabled, danger, icon, compact, accessibilityLabel }: Props) {
   const s = useSurfaces();
-  const color = danger ? s.dangerText : theme.colors.text;
+  const color = danger ? s.dangerText : s.text;
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} hitSlop={buttonSlop(compact)}
       style={[buttonBox(compact), { backgroundColor: s.lifted, opacity: disabled ? DISABLED_OPACITY : 1 }]}>

@@ -105,8 +105,9 @@ function sources(): { rel: string; src: string }[] {
 }
 
 test("each new native package is loaded in ONE file, lazily and guarded — never by a top-level import", () => {
-  const HOME: Record<string, string> = { "expo-symbols": "src/ui/sfSymbols.ts", "expo-glass-effect": "src/ui/systemGlass.ts", "expo-notifications": "src/lib/notify.ts" };
-  const GUARD: Record<string, string> = { "expo-symbols": "SymbolModule", "expo-glass-effect": "ExpoGlassEffect", "expo-notifications": "ExpoNotificationScheduler" };
+  const HOME: Record<string, string> = { "expo-symbols": "src/ui/sfSymbols.ts", "expo-glass-effect": "src/ui/systemGlass.ts", "expo-notifications": "src/lib/notify.ts",
+    "expo-system-ui": "src/theme/appearance.ts" };                    // the colour behind every screen, which follows the appearance since light mode
+  const GUARD: Record<string, string> = { "expo-symbols": "SymbolModule", "expo-glass-effect": "ExpoGlassEffect", "expo-notifications": "ExpoNotificationScheduler", "expo-system-ui": "ExpoSystemUI" };
   const all = sources();
   for (const [pkg, home] of Object.entries(HOME)) {
     expect(all.filter((f) => f.src.includes(`"${pkg}"`)).map((f) => f.rel)).toEqual([home]);
@@ -120,8 +121,6 @@ test("each new native package is loaded in ONE file, lazily and guarded — neve
     expect(guard).toBeLessThan(src.indexOf(`require("${pkg}")`));
     expect(src.slice(src.lastIndexOf("try {", guard), src.indexOf(`require("${pkg}")`))).toContain("try {");
   }
-  // expo-system-ui is a build-time setting only (app.json's root background): no JavaScript loads it.
-  expect(all.filter((f) => f.src.includes("expo-system-ui")).map((f) => f.rel)).toEqual([]);
 });
 
 test("no screen notifies yet: only the wrapper's own file names its functions", () => {

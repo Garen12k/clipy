@@ -25,7 +25,7 @@ export function Segmented<T extends string | number>({ options, value, onChange,
           <Pressable key={o.value} accessibilityRole="button" accessibilityLabel={o.label} accessibilityState={{ selected, disabled: !!o.disabled }}
             disabled={o.disabled} onPress={() => onChange(o.value)} hitSlop={SLOP}
             style={{ flex: 1, alignItems: "center", justifyContent: "center", borderRadius: theme.radius.chip, opacity: o.disabled ? DISABLED_OPACITY : 1, ...(selected ? { backgroundColor: s.lifted } : null) }}>
-            <Text numberOfLines={1} style={{ fontSize: theme.type.body, fontWeight: selected ? theme.weight.semi : theme.weight.regular, color: theme.colors.text }}>{o.label}</Text>
+            <Text numberOfLines={1} style={{ fontSize: theme.type.body, fontWeight: selected ? theme.weight.semi : theme.weight.regular, color: s.text }}>{o.label}</Text>
           </Pressable>
         );
       })}

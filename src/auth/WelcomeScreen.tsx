@@ -5,6 +5,7 @@ import { Keyboard, ScrollView, View } from "react-native";
 import { isBackendConfigured, sendEmailCode, SIGN_IN_NOT_SET_UP, signInWithApple, signInWithGoogle, verifyEmailCode } from "@/src/publish/supabase";
 import { useSession } from "@/src/publish/useSession";
 import { theme } from "@/src/theme/theme";
+import { useShown, useSurfaces } from "@/src/ui/tone";
 import { EnterView } from "@/src/ui/Enter";
 import { IconButton } from "@/src/ui/IconButton";
 import { WORDMARK } from "@/src/ui/LoadingScreen";
@@ -43,6 +44,8 @@ type Props = {
  * Without a backend it is a preview that can be walked through: every sign-in says "Sign-in isn't set up yet." and asks nothing.
  */
 export function WelcomeScreen({ first = false, onDone }: Props) {
+  const s = useSurfaces();
+  const light = useShown() === "light";
   const session = useSession();
   /** Keyed on the backend alone: when it IS configured, a failed request never moves on. */
   const preview = !isBackendConfigured();
@@ -160,7 +163,7 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
   // First launch with a backend: nothing is drawn until the stored session is read, so a signed-in user never sees this screen.
   if (signedIn || (first && session.status === "loading")) return <Screen edges={edges} style={top}>{null}</Screen>;
 
-  const iconColor = theme.colors.text;
+  const iconColor = s.text;
   return (
     <Screen edges={edges} style={top}>
       <View style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.sm }}>
@@ -182,14 +185,14 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
               </View>
             </View>
             <View style={{ gap: theme.space.md }}>
-              {/* Apple's own button (white, as Apple requires): it is the visual primary, so this step has no gold button. */}
+              {/* Apple's own button, in the style Apple requires for what it stands on — white on the navy page, black on the cream one: it is the visual primary, so this step has no gold button. */}
               {apple === null ? <View testID="welcome-apple-slot" style={{ height: BUTTON_HEIGHT }} /> : apple ? (
                 // Apple's control cannot be dimmed or disabled: while busy its wrapper takes no touch and is what VoiceOver meets, as a disabled button.
                 <View testID="welcome-apple" pointerEvents={busy ? "none" : "auto"}
                   {...(busy ? { accessible: true, accessibilityRole: "button" as const, accessibilityLabel: "Continue with Apple", accessibilityState: { disabled: true } } : null)}>
                   <AppleAuthentication.AppleAuthenticationButton
                     buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                    buttonStyle={light ? AppleAuthentication.AppleAuthenticationButtonStyle.BLACK : AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
                     cornerRadius={BUTTON_HEIGHT / 2} style={{ height: BUTTON_HEIGHT, width: "100%" }}
                     accessibilityRole="button" accessibilityLabel="Continue with Apple" onPress={() => provider("Signing in", signInWithApple)} />
                 </View>

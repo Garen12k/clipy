@@ -14,7 +14,7 @@ export function QuietButton({ title, onPress, disabled, danger, icon, compact, a
       hitSlop={buttonSlop(compact)}
       style={[buttonBox(compact), { paddingHorizontal: theme.space.sm, minWidth: theme.size.touch, opacity: disabled ? DISABLED_OPACITY : 1 }]}>
       {icon ?? null}
-      <Text style={[buttonLabel(compact), { color: danger ? s.dangerText : theme.colors.accent }]}>{title}</Text>
+      <Text style={[buttonLabel(compact), { color: danger ? s.dangerText : s.accentInk }]}>{title}</Text>
     </PressableScale>
   );
 }

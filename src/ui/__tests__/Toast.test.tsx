@@ -39,3 +39,22 @@ test("with Reduce Motion: shown and removed without animating", async () => {
   expect(screen.queryByText("Saved")).toBeNull();
   expect(T).not.toHaveBeenCalled();
 });
+
+// ───────────────────────────── Light: the phone's light setting (src/ui/testing/appearance.ts) ─────────────────────────────
+import { leftovers, wear } from "@/src/ui/testing/appearance";
+
+test("in light the toast is a cream tile with a quiet edge and navy words (in dark the audit sees its navy)", async () => {
+  const dark = await render(<ToastHost />);
+  await act(() => useToast.getState().show("Saved"));
+  expect(leftovers().length).toBeGreaterThan(1);
+  await dark.unmount();
+  useToast.getState().clear();
+  wear("light");
+  try {
+    await render(<ToastHost />);
+    await act(() => useToast.getState().show("Saved"));
+    expect(leftovers()).toEqual([]);
+    expect(screen.getByTestId("toast")).toHaveStyle({ backgroundColor: "#EBE2CC", borderColor: "#D2C5A9" });
+    expect(screen.getByText("Saved")).toHaveStyle({ color: "#0A1B33" });
+  } finally { wear("dark"); }
+});

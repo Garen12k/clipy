@@ -245,3 +245,63 @@ describe("the states", () => {
     expect(screen.getByText("Beach")).toBeTruthy();
   });
 });
+
+// ───────────────────────────── Light: the phone's light setting (src/ui/testing/appearance.ts) ─────────────────────────────
+import { hasSurface, leftovers, wear } from "@/src/ui/testing/appearance";
+
+describe("in light", () => {
+  afterEach(() => wear("dark"));
+  /** Words on a photo or a scrim: light in both appearances. */
+  const ON_PICTURE = ["project-length", "project-cover-title"];
+
+  test("the audit is not blind: on the navy Home it finds navy surfaces and white ink", async () => {
+    await home();
+    expect(leftovers().length).toBeGreaterThan(10);
+    expect(hasSurface("#0A1B33")).toBe(true);
+  });
+
+  test("Home is cream: page, header pill, cards (name navy, status muted, the More circle), the damaged card, the two actions — and no navy anywhere", async () => {
+    list.mockResolvedValue([p("a", "Beach", { coverTitle: "Trip" }), HILLS, BROKEN]);
+    wear("light");
+    await home();
+    expect(leftovers({ onPicture: ON_PICTURE })).toEqual([]);
+    expect(hasSurface("#F7F1E3")).toBe(true);
+    expect(screen.getByTestId("home-header-actions")).toHaveStyle({ backgroundColor: "#FFFBF1" });
+    expect(screen.getByText("Beach")).toHaveStyle({ color: "#0A1B33" });
+    expect(screen.getByText("Lost")).toHaveStyle({ color: "#A3261C" });
+    expect(screen.getByText("Damaged")).toHaveStyle({ color: "#A3261C" });
+    expect(screen.getAllByTestId("project-more-circle")[0]).toHaveStyle({ backgroundColor: "#FFFBF1" });
+    // On the picture nothing changes: the title and the length are light on their scrim.
+    expect(screen.getByTestId("project-cover-title")).toHaveStyle({ color: "#FFFFFF" });
+    expect(within(screen.getAllByTestId("project-length")[0]).getByText(/\d:\d\d/)).toHaveStyle({ color: "#FFFFFF" });
+    expect(screen.getAllByTestId("project-length")[0]).toHaveStyle({ backgroundColor: theme.colors.scrimStrong });
+    // The one gold button keeps its gold and its dark ink; the secondary one is a cream step deeper than the page, with navy words.
+    expect(screen.getByTestId("primary-button")).toHaveStyle({ backgroundColor: "#D9B36A" });
+    expect(screen.getByText("New Project")).toHaveStyle({ color: "#1A1408" });
+    expect(btn("Quick Edit")).toHaveStyle({ backgroundColor: "#DDD0B4" });
+    expect(screen.getByText("Quick Edit")).toHaveStyle({ color: "#0A1B33" });
+  });
+
+  test("its empty and loading states and the Quick Edit sheet are cream too", async () => {
+    wear("light");
+    list.mockResolvedValue([]);
+    const empty = await render(<ProjectsScreen />);
+    await screen.findByText("No clips yet");
+    expect(leftovers()).toEqual([]);
+    expect(screen.getByTestId("empty-emblem", { includeHiddenElements: true })).toHaveStyle({ backgroundColor: "#EBE2CC" });
+    await empty.unmount();
+
+    list.mockReturnValue(new Promise(() => {}));                    // still loading
+    const loading = await render(<ProjectsScreen />);
+    expect(leftovers()).toEqual([]);
+    await loading.unmount();
+
+    list.mockResolvedValue([BEACH]);
+    await home();
+    await fireEvent.press(btn("Quick Edit"));
+    await waitFor(() => expect(sheetTitle("Quick edit")).toBeTruthy());
+    expect(leftovers({ onPicture: ON_PICTURE })).toEqual([]);
+    expect(hasSurface("#FFFBF1")).toBe(true);                       // the sheet is a card
+    expect(hasSurface(theme.colors.scrim)).toBe(true);              // … over the same black scrim as in dark
+  });
+});

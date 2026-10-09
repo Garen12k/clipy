@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { AccessibilityInfo, View } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "@/src/ui/tone";
 import { EnterView } from "@/src/ui/Enter";
 import { Field } from "@/src/ui/Field";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
@@ -20,9 +21,10 @@ export const digitsOnly = (text: string) => text.replace(/\D/g, "").slice(0, COD
 function Message({ text, error }: { text: string; error?: boolean }) {
   // iOS reads a new line of text only when asked to (the live region is Android's way).
   useEffect(() => { AccessibilityInfo.announceForAccessibility(text); }, [text]);
+  const s = useSurfaces();
   return (
     <Body testID={error ? "welcome-error" : "welcome-note"} muted={!error} accessibilityRole="alert" accessibilityLiveRegion="polite"
-      style={error ? { color: theme.screen.dangerText } : undefined}>{text}</Body>
+      style={error ? { color: s.dangerText } : undefined}>{text}</Body>
   );
 }
 
