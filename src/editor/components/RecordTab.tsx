@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useEffect } from "react";
 import { View } from "react-native";
 import { useVoiceRecorder } from "@/src/editor/useVoiceRecorder";
@@ -38,7 +38,7 @@ export function RecordTab({ onDone, closeGuard }: { onDone: () => void; closeGua
         disabled={disabled} onPress={() => { void (active ? stop() : start()); }}
         style={{ width: BUTTON, height: BUTTON, borderRadius: theme.radius.pill, backgroundColor: theme.colors.danger, borderWidth: 3, borderColor: theme.colors.text,
           alignItems: "center", justifyContent: "center", opacity: disabled ? 0.4 : 1 }}>
-        <Ionicons name={active ? "stop" : "mic"} size={36} color={theme.colors.text} />
+        <Icon name={active ? "stop" : "mic"} size={36} color={theme.colors.text} />
       </PressableScale>
       <Body>{state === "recording" ? "Recording…" : state === "saving" ? "Saving…" : " "}</Body>
       <Body muted style={{ textAlign: "center" }}>Plays your video while you talk. Other sound is muted while recording.</Body>

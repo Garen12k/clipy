@@ -13,7 +13,7 @@ import { usePhotoPlayback } from "@/src/editor/usePhotoPlayback";
 import { canHandOver, earlyStartDelay, HANDOFF_LEAD, HANDOFF_REARM, hasMoved, keepRolling, nextPreloadTarget, shouldStartEarly, type Playback, type PreloadTarget, type StandbyState } from "@/src/editor/previewHandoff";
 import { nextPlayheadFromPlayer, nextPresentClipIndex } from "@/src/editor/usePreviewSync";
 import { theme } from "@/src/theme/theme";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { AdjustLayer } from "./AdjustLayer";
 import { ClipFrame, clipFrameMotion } from "./ClipFrame";
 import { ClipGestures } from "./ClipGestures";
@@ -460,7 +460,7 @@ export function PreviewPlayer({ onOpenPanel }: { onOpenPanel?: (overlayId: strin
         <PreviewTag visible={needsPreviewTag(project, playhead)} />
         {!isPlaying && !empty && (
           <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="play" size={48} color={theme.colors.text} />
+            <Icon name="play" size={48} color={theme.colors.text} />
           </View>
         )}
       </Pressable>

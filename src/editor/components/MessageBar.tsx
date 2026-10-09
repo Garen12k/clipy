@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon, type IconName } from "@/src/ui/Icon";
 import { useEffect } from "react";
 import { AccessibilityInfo, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
@@ -18,7 +18,7 @@ import { isReducedMotion } from "@/src/ui/useReducedMotion";
 
 const SHIFT = theme.motion.enterShift;
 /** The leading symbol says the kind — never the colour alone. */
-const SYMBOL: Record<MessageKind | "plain", keyof typeof Ionicons.glyphMap> = { done: "checkmark-circle-outline", problem: "alert-circle-outline", plain: "information-circle-outline" };
+const SYMBOL: Record<MessageKind | "plain", IconName> = { done: "checkmark-circle-outline", problem: "alert-circle-outline", plain: "information-circle-outline" };
 const gone = () => { if (useToast.getState().message !== null) useToast.getState().clear(); };
 
 /**
@@ -75,7 +75,7 @@ export function MessageBar() {
         style={[{ minHeight: MESSAGE.minHeight, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingVertical: MESSAGE.pad, paddingLeft: theme.space.md, paddingRight: undo ? theme.space.xs : theme.space.md,
           borderRadius: theme.radius.card, backgroundColor: theme.elevation.lifted }, anim]}>
         <View testID="message-words" pointerEvents="none" style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: theme.space.sm }}>
-          <Ionicons testID={`message-symbol-${kind ?? "plain"}`} name={SYMBOL[kind ?? "plain"]} size={theme.size.icon.md} color={theme.colors.text} />
+          <Icon testID={`message-symbol-${kind ?? "plain"}`} name={SYMBOL[kind ?? "plain"]} size={theme.size.icon.md} color={theme.colors.text} />
           <Body numberOfLines={2} style={{ flex: 1 }}>{message}</Body>
         </View>
         {undo ? <QuietButton compact title="Undo" onPress={onUndo} /> : null}

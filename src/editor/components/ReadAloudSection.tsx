@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { isSpeechAvailable, listVoices, type SpeechVoices } from "@/modules/clipy-video";
@@ -109,7 +109,7 @@ export function ReadAloudSection({ overlayId }: { overlayId: string }) {
       <View testID="read-aloud-row" style={ROW}>
         <PressableScale accessibilityRole="button" accessibilityLabel="Read aloud options" accessibilityState={{ expanded: open }} onPress={toggle} style={NAME}>
           <Body weight="semi">Read aloud</Body>
-          <Ionicons name={open ? "chevron-up-outline" : "chevron-down-outline"} size={theme.size.icon.md} color={theme.colors.textMuted} />
+          <Icon name={open ? "chevron-up-outline" : "chevron-down-outline"} size={theme.size.icon.md} color={theme.colors.textMuted} />
         </PressableScale>
       </View>
       {open ? (

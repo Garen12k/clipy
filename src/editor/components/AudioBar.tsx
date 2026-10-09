@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -90,7 +90,7 @@ export function AudioBar({ track: t, missing, selected, overlapping = false, onP
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color, opacity: overlapping ? OVERLAP_OPACITY : 1,
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
         {/* The kind's own glyph (a note, a microphone, a speaker), then today's words: the volume and the title. */}
-        {parts.glyph && <Ionicons testID={`bar-glyph-${t.id}`} name={BAR_GLYPH[t.kind]} size={BAR.glyph} color={theme.colors.onKind} />}
+        {parts.glyph && <Icon plain testID={`bar-glyph-${t.id}`} name={BAR_GLYPH[t.kind]} size={BAR.glyph} color={theme.colors.onKind} />}
         {parts.label && (
           <>
             <Text style={{ color: theme.colors.onKind, fontSize: theme.type.small, fontVariant: ["tabular-nums"] }}>{Math.round(t.volume * 100)}%</Text>
@@ -99,7 +99,7 @@ export function AudioBar({ track: t, missing, selected, overlapping = false, onP
         )}
         {missing && (
           <View testID={`audio-bar-${t.id}-missing`} style={{ position: "absolute", top: 4, right: roomy ? HANDLE_W + 2 : 0, backgroundColor: theme.colors.danger, borderRadius: theme.radius.pill, padding: 2 }}>
-            <Ionicons name="warning" size={12} color={theme.colors.onAccent} />
+            <Icon plain name="warning" size={12} color={theme.colors.onAccent} />
           </View>
         )}
         {selected && (

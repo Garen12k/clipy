@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon, type IconName } from "@/src/ui/Icon";
 import { Text, View } from "react-native";
 import { totalDuration } from "@/src/editor/model/timeline";
 import { aspectLabel } from "@/src/editor/model/types";
@@ -13,11 +13,11 @@ import { Body } from "@/src/ui/Text";
 const SLOP = (theme.size.touch - theme.size.iconButton) / 2;
 
 /** Undo or Redo inside their capsule: 44 pt wide, so the two targets touch and never overlap. */
-function HistoryButton({ name, label, enabled, onPress }: { name: keyof typeof Ionicons.glyphMap; label: string; enabled: boolean; onPress: () => void }) {
+function HistoryButton({ name, label, enabled, onPress }: { name: IconName; label: string; enabled: boolean; onPress: () => void }) {
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !enabled }} disabled={!enabled} onPress={onPress} hitSlop={{ top: SLOP, bottom: SLOP }}
       style={{ width: theme.size.touch, height: theme.size.iconButton, alignItems: "center", justifyContent: "center", opacity: enabled ? 1 : 0.35 }}>
-      <Ionicons name={name} size={theme.size.icon.md} color={theme.colors.text} />
+      <Icon name={name} size={theme.size.icon.md} color={theme.colors.text} />
     </PressableScale>
   );
 }
@@ -46,7 +46,7 @@ export function TransportRow() {
       {/* A filled glyph on a filled disc, on purpose: an outline glyph would read as a hole. */}
       <PressableScale accessibilityRole="button" accessibilityLabel={isPlaying ? "Pause" : "Play"} accessibilityState={{ disabled: empty }} disabled={empty} onPress={toggle} hitSlop={SLOP}
         style={{ width: theme.size.iconButton, height: theme.size.iconButton, borderRadius: theme.radius.pill, backgroundColor: theme.colors.text, alignItems: "center", justifyContent: "center", opacity: empty ? 0.35 : 1 }}>
-        <Ionicons name={isPlaying ? "pause" : "play"} size={theme.size.icon.md} color={theme.colors.onAccent} />
+        <Icon name={isPlaying ? "pause" : "play"} size={theme.size.icon.md} color={theme.colors.onAccent} />
       </PressableScale>
       <View testID="transport-trailing" style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: theme.space.sm }}>
         <Body testID="transport-time" muted numberOfLines={1} style={{ flexShrink: 1, fontVariant: ["tabular-nums"], fontSize: theme.type.small }}>

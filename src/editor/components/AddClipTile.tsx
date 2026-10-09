@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { ActivityIndicator, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { PressableScale } from "@/src/ui/PressableScale";
@@ -19,7 +19,7 @@ export function AddClipTile({ left }: { left: number }) {
         onPress={() => { void addMedia(); }}
         style={{ flex: 1, borderRadius: theme.radius.chip, backgroundColor: theme.elevation.tile, borderWidth: 1, borderColor: theme.colors.hairline,
           alignItems: "center", justifyContent: "center" }}>
-        {busy ? <ActivityIndicator testID="add-clips-busy" color={theme.colors.accent} /> : <Ionicons name="add-outline" size={28} color={theme.colors.text} />}
+        {busy ? <ActivityIndicator testID="add-clips-busy" color={theme.colors.accent} /> : <Icon plain name="add-outline" size={28} color={theme.colors.text} />}
       </PressableScale>
     </View>
   );

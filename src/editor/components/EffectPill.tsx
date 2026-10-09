@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { useEffect, useMemo, useRef } from "react";
 import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -59,7 +59,7 @@ export function EffectPill({ effect: fx, selected, onPress }: { effect: EffectIt
       <Pressable testID={`effect-pill-${fx.id}`} onPress={onPress} accessibilityLabel={`Effect ${label}`}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: theme.radius.chip, backgroundColor: theme.colors.kindEffect,
           borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: HANDLE_W + 2 }}>
-        {parts.glyph && <Ionicons testID={`bar-glyph-${fx.id}`} name={BAR_GLYPH["effect"]} size={BAR.glyph} color={theme.colors.onKind} />}
+        {parts.glyph && <Icon plain testID={`bar-glyph-${fx.id}`} name={BAR_GLYPH["effect"]} size={BAR.glyph} color={theme.colors.onKind} />}
         {parts.label && <Body numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{label}</Body>}
         {selected && (
           <>
