@@ -22,7 +22,7 @@ export const ROUTE_OPTIONS = {
   /**
    * The editor: pushed. The back swipe starts at the left edge only — from iOS 26 the whole-screen swipe is on by default, and it
    * would compete with the timeline, the preview's gestures and the sliders. Swiping back is safe: leaving saves (useLoadProject).
-   * Its own background is the editor's neutral page, so no navy shows behind it while it slides in or is swiped away.
+   * Its own background is the editor's slate page, so no navy and no black shows behind it while it slides in or is swiped away.
    */
   "editor/[id]/index": { fullScreenGestureEnabled: false, contentStyle: { backgroundColor: theme.surfaces.editor.page } },
   /** Export: the standard sheet rising from the bottom, closed by swiping down — except while exporting (exportGesture). */

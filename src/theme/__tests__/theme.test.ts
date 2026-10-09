@@ -9,17 +9,26 @@ const lum = (c: number[]) => { const [r, g, b] = c.map((v) => v / 255).map((v) =
 const ratio = (a: number[], b: number[]) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
 /** `rgba(r,g,b,a)` laid over an opaque hex. */
 const over = (rgba: string, bg: string) => { const [r, g, b, a] = rgba.match(/[\d.]+/g)!.map(Number); return [r, g, b].map((v, i) => v * a + rgb(bg)[i] * (1 - a)); };
-const NEUTRALS = [D.bg, D.timeline, D.surface, D.surfaceBar, D.surfaceAlt, D.surfaceHigh, D.hairline, D.track];
+/** The editor's ramp, darkest first: the surround of the video, the timeline, a bar, a tile, the selected tile. */
+const SLATE = [D.bg, D.timeline, D.surfaceBar, D.surfaceAlt, D.surfaceHigh];
 const KINDS = [D.kindText, D.kindCaption, D.kindSticker, D.kindMusic, D.kindVoice, D.kindSfx, D.kindLayer, D.kindEffect];
 
-test("the dark palette, the editor's family: the design's hue-free neutrals, one gold with dark ink, system reds", () => {
+test("the dark palette, the editor's family: soft slate (the three values the owner approved, and the steps derived from them), one gold with dark ink, system reds", () => {
   expect(D).toMatchObject({
-    bg: "#000000", timeline: "#0E0E0F", surface: "#0E0E0F", surfaceBar: "#1C1C1E", surfaceAlt: "#2C2C2E", surfaceHigh: "#3A3A3C",
-    accent: "#D9B36A", onAccent: "#1A1408", text: "#FFFFFF", textMuted: "rgba(235,235,245,0.6)", hairline: "#38383A", track: "#636366",
-    danger: "#FF453A", dangerText: "#FF8078", onKind: "#000000", scrim: "rgba(0,0,0,0.55)", scrimStrong: "rgba(0,0,0,0.72)",
+    bg: "#10151F", timeline: "#171E2B", surfaceBar: "#212A3A",                       // the owner's three, verbatim
+    surfaceAlt: "#2C384D", surfaceHigh: "#374661", hairline: "#35435D", track: "#52688F", textMuted: "rgba(235,235,245,0.7)",
+    surface: "#000000",                                                              // the video's own frame: content, what the export draws where no picture is
+    accent: "#D9B36A", onAccent: "#1A1408", text: "#FFFFFF",
+    danger: "#FF453A", dangerText: "#FF9A93", onKind: "#000000", scrim: "rgba(0,0,0,0.55)", scrimStrong: "rgba(0,0,0,0.72)",
   });
-  // No hue: the three channels of every neutral are within 3 of each other (navy was 41 apart).
-  for (const n of NEUTRALS) { const c = rgb(n); expect(Math.max(...c) - Math.min(...c)).toBeLessThanOrEqual(3); }
+  // One hue, one ramp: in every editor grey blue leads green leads red (nothing hue-free is left), softer than black and far calmer than navy
+  // (blue leads red by 15–61 here; navy's page alone is 41 apart at a third of the lightness), and each step is lighter than the one under it.
+  for (const n of [...SLATE, D.hairline, D.track]) { const [r, g, b] = rgb(n); expect(b).toBeGreaterThan(g); expect(g).toBeGreaterThan(r); expect((b - r) / b).toBeGreaterThan(0.35); expect((b - r) / b).toBeLessThan(0.5); }
+  for (let i = 1; i < SLATE.length; i++) expect(lum(rgb(SLATE[i]))).toBeGreaterThan(lum(rgb(SLATE[i - 1])));
+  // The steps the neutral family had: a tile on a bar 1.22, the selected tile on a tile 1.23.
+  const step = (a: string, b: string) => Math.round(ratio(rgb(a), rgb(b)) * 100) / 100;
+  expect([step(D.timeline, D.bg), step(D.surfaceBar, D.timeline), step(D.surfaceBar, D.bg), step(D.surfaceAlt, D.surfaceBar), step(D.surfaceHigh, D.surfaceAlt), step(D.surfaceHigh, D.surfaceBar)])
+    .toEqual([1.09, 1.16, 1.27, 1.22, 1.24, 1.52]);
   expect(theme.elevation).toEqual({ page: D.bg, bar: D.surfaceBar, tile: D.surfaceAlt, lifted: D.surfaceHigh });
   expect(theme.ring).toEqual({ borderWidth: 2, borderColor: D.accent });
   expect(theme.ringClear).toEqual({ borderWidth: 2, borderColor: "transparent" });
@@ -38,9 +47,9 @@ test("the screen family: the navy of every screen that is not the editor — fou
   const steps = [D.screenBg, D.screenBar, D.screenTile, D.screenLifted].map(rgb);
   for (const c of steps) expect(c[2] - c[0]).toBeGreaterThanOrEqual(40);
   for (let i = 1; i < steps.length; i++) expect(lum(steps[i])).toBeGreaterThan(lum(steps[i - 1]));
-  // The editor's side did not move with it.
-  expect(theme.elevation.page).toBe("#000000");
-  expect(theme.colors.timeline).toBe("#0E0E0F");
+  // The editor's side is its own family.
+  expect(theme.elevation.page).toBe("#10151F");
+  expect(theme.colors.timeline).toBe("#171E2B");
 });
 
 test("contrast on navy: white, the muted label, gold and the red text on all four steps; the layering steps; the red fill", () => {
@@ -61,6 +70,29 @@ test("contrast on navy: white, the muted label, gold and the red text on all fou
   expect(ratio(rgb(D.accent), rgb(D.screenTile))).toBeGreaterThanOrEqual(3);
   // Ink on gold is untouched.
   expect(Math.round(ratio(rgb(D.onAccent), rgb(D.accent)) * 100) / 100).toBe(9.24);
+});
+
+test("contrast on slate: white, the muted label, the red text and gold on all five steps; the separator; the track; selection on the timeline", () => {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const table = SLATE.map((s) => [ratio(rgb(D.text), rgb(s)), ratio(over(D.textMuted, s), rgb(s)), ratio(rgb(D.dangerText), rgb(s)), ratio(rgb(D.accent), rgb(s)), ratio(rgb(D.hairline), rgb(s)), ratio(rgb(D.track), rgb(s))].map(r2));
+  // (page, timeline, bar, tile, lifted) × (text, muted, red text, gold, separator, track) — recorded in the spec.
+  expect(table).toEqual([
+    [18.28, 7.98, 8.96, 9.23, 1.84, 3.25],
+    [16.71, 7.52, 8.19, 8.44, 1.68, 2.97],
+    [14.41, 6.75, 7.07, 7.28, 1.45, 2.56],
+    [11.8, 5.79, 5.78, 5.96, 1.19, 2.1],
+    [9.5, 4.88, 4.66, 4.8, 1.05, 1.69],
+  ]);
+  for (const row of table) { expect(row[0]).toBeGreaterThanOrEqual(7); for (const r of row.slice(1, 4)) expect(r).toBeGreaterThanOrEqual(4.5); }
+  // The slider's rest track: seen on a bar and on a tile, and apart from the gold part. The Stabilize meter's empty bars are this colour on a tile (2.10) and on the selected tile (1.69).
+  expect(r2(ratio(rgb(D.accent), rgb(D.track)))).toBe(2.84);
+  // On the timeline: a clip's gold selection, and a bar's white border against the bar colours (gold there would be 1.1).
+  expect(r2(ratio(rgb(D.accent), rgb(D.timeline)))).toBe(8.44);
+  for (const k of KINDS) { expect(ratio(rgb(D.text), rgb(k))).toBeGreaterThanOrEqual(2); expect(ratio(rgb(k), rgb(D.timeline))).toBeGreaterThanOrEqual(7); }
+  // The red fill (an icon, a border) on the page and on a bar.
+  expect([D.bg, D.surfaceBar].map((s) => r2(ratio(rgb(D.danger), rgb(s))))).toEqual([5.36, 4.23]);
+  // The video's own frame is true black, darker than its slate surround: the picture's edge is where the export's is.
+  expect(r2(ratio(rgb(D.bg), rgb(D.surface)))).toBe(1.15);
 });
 
 test("the eight timeline kinds: the design's values, all different, none the accent, black reads on each (9:1)", () => {

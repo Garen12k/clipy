@@ -10,7 +10,7 @@ export type Edge = "top" | "bottom";
  * `theme.space.sm`, so content clears the status bar / Dynamic Island and the home indicator.
  * Pass `edges={[]}` for a full-bleed screen. A `paddingTop`/`paddingBottom` in `style` overrides the edge padding.
  *
- * It is also where a route says which family of colours it wears: `tone="editor"` (the editor and Crop — hue-free neutrals around
+ * It is also where a route says which family of colours it wears: `tone="editor"` (the editor and Crop — soft slate around
  * the video) or, by default, a screen's navy. The page takes that family's colour and the kit inside reads it (tone.ts). The
  * provider draws no view, so the tree under the page is what it was.
  */

@@ -6,7 +6,7 @@ import { useSurfaces } from "./tone";
 export function Title({ style, size = theme.type.title, ...rest }: TextProps & { size?: number }) {
   return <Text {...rest} style={[{ fontSize: size, fontWeight: size >= theme.type.title ? theme.weight.bold : theme.weight.semi, color: theme.colors.text }, style]} />;
 }
-/** Body text. `muted` is the secondary label of the family it is drawn in (tone.ts): system grey in the editor, a stronger one on navy. */
+/** Body text. `muted` is the secondary label of the family it is drawn in (tone.ts): the system's secondary label, strong enough for the lightest step of either family. */
 export function Body({ muted, weight = "regular", style, ...rest }: TextProps & { muted?: boolean; weight?: keyof typeof theme.weight }) {
   const s = useSurfaces();
   return <Text {...rest} style={[{ fontSize: theme.type.body, fontWeight: theme.weight[weight], color: muted ? s.muted : theme.colors.text }, style]} />;

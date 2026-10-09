@@ -2,14 +2,14 @@
  * Every colour of one appearance. Stage 1 has one appearance (dark); a later one is a second object with exactly these keys.
  * A colour is only ever used as a style value or a colour prop — never concatenated, sliced or parsed (palette.guard.test.ts).
  *
- * One palette holds TWO families of surfaces (the owner's choice, 9 October 2026): the EDITOR's hue-free neutrals (`bg`, `surface*`,
- * `textMuted`, `hairline`, `dangerText`), so a filter is judged against no colour, and the navy of every OTHER screen (`screen*`).
+ * One palette holds TWO families of surfaces (the owner's choice, 9 October 2026): the EDITOR's soft slate (`bg`, `timeline`, `surface*`,
+ * `textMuted`, `hairline`, `dangerText`), a blue-grey charcoal quiet enough to judge a filter against, and the navy of every OTHER screen (`screen*`).
  * They are two roles inside one appearance, not two appearances: a light palette brings its own pair.
  */
 export type Palette = {
   /** The editor's page, and the surround of the preview. */ bg: string;
   /** The timeline's background. */ timeline: string;
-  /** The empty preview frame (PreviewPlayer). */ surface: string;
+  /** The video's own frame behind the picture (PreviewPlayer): true black, as in the export. */ surface: string;
   /** A bar, a strip, a panel, a card, a sheet. */ surfaceBar: string;
   /** A tile or a field on one of those. */ surfaceAlt: string;
   /** The selected tile; a secondary button. */ surfaceHigh: string;
@@ -19,7 +19,7 @@ export type Palette = {
   /** A separator line. */ hairline: string;
   /** The rest of a slider's track. */ track: string;
   /** Red for fills, borders and icons. */ danger: string;
-  /** Red for TEXT in the editor: 4.5:1 on every neutral surface. */ dangerText: string;
+  /** Red for TEXT in the editor: 4.5:1 on every slate step. */ dangerText: string;
   kindText: string; kindCaption: string; kindSticker: string; kindMusic: string; kindVoice: string; kindSfx: string; kindLayer: string; kindEffect: string;
   /** Labels and glyphs on a timeline bar. */ onKind: string;
   scrim: string; scrimStrong: string;
@@ -33,10 +33,13 @@ export type Palette = {
 };
 
 const DARK: Palette = {
-  bg: "#000000", timeline: "#0E0E0F", surface: "#0E0E0F", surfaceBar: "#1C1C1E", surfaceAlt: "#2C2C2E", surfaceHigh: "#3A3A3C",
+  // Soft slate — a blue-grey charcoal, softer than black and calmer than navy. The surround, the timeline and the bar are the three values the owner
+  // approved; tile and selected continue the ramp in the same hue with the steps the neutral greys had (1.22 each); `surface` is the video's own
+  // frame and stays true black — it is content: what the export draws where no picture is.
+  bg: "#10151F", timeline: "#171E2B", surface: "#000000", surfaceBar: "#212A3A", surfaceAlt: "#2C384D", surfaceHigh: "#374661",
   accent: "#D9B36A", onAccent: "#1A1408",
-  text: "#FFFFFF", textMuted: "rgba(235,235,245,0.6)", hairline: "#38383A", track: "#636366",
-  danger: "#FF453A", dangerText: "#FF8078",
+  text: "#FFFFFF", textMuted: "rgba(235,235,245,0.7)", hairline: "#35435D", track: "#52688F",
+  danger: "#FF453A", dangerText: "#FF9A93",
   kindText: "#79B6F4", kindCaption: "#AFB965", kindSticker: "#E095C7", kindMusic: "#47C5D2", kindVoice: "#6DC799", kindSfx: "#ED997B", kindLayer: "#A8B2BE", kindEffect: "#B6A3F0",
   onKind: "#000000",
   scrim: "rgba(0,0,0,0.55)", scrimStrong: "rgba(0,0,0,0.72)",

@@ -7,12 +7,18 @@ const ROOT = join(__dirname, "..", "..");
  * back (the deep one, the gradient's end, the old preview surface), the cream and blue-grey text, the sea blues, the old reds and
  * the old lane colours.
  */
-const OLD_HEX = ["081527", "0C2542", "0E2440", "F6E7C1", "9FB3CC", "1C6E9E", "2E86AB", "E5484D", "F47A7E", "E86A7A", "3BA7C9", "9A86D6", "4FA89B", "E0916A", "7F93B8"];
+const OLD_HEX = ["081527", "0C2542", "0E2440", "F6E7C1", "9FB3CC", "1C6E9E", "2E86AB", "E5484D", "F47A7E", "E86A7A", "3BA7C9", "9A86D6", "4FA89B", "E0916A", "7F93B8",
+  // The hue-free greys of the design hand-off, which the editor wore for a few days and no part of the app wears now (the owner chose soft
+  // slate, 9 October 2026): timeline, bar, tile, selected, separator, track — and the old red text. True black is NOT here: it is content
+  // (the video's frame, a text's box, a curtain) and the ink on a timeline bar.
+  "0E0E0F", "1C1C1E", "2C2C2E", "3A3A3C", "38383A", "636366", "FF8078"];
 /**
  * The four navy steps the owner asked back for every screen that is not the editor (9 October 2026). They are the theme's again —
  * and ONLY the theme's: anywhere else they are still a hard-coded old colour. (They were in OLD_HEX until that day.)
  */
-const THEME_ONLY = ["0A1B33", "112C4D", "17365C", "1F4572"];
+const THEME_ONLY = ["0A1B33", "112C4D", "17365C", "1F4572",
+  // The editor's soft slate: surround, timeline, bar (the owner's three), tile, selected, separator, track; and the screens' separator.
+  "10151F", "171E2B", "212A3A", "2C384D", "374661", "35435D", "52688F", "2B5080"];
 const THEME = "src/theme/theme.ts";
 /** The bases of its translucent colours (the gold hairline, the navy scrims), with or without spaces. */
 const OLD_RGBA = [/217\s*,\s*179\s*,\s*106/, /\(\s*3\s*,\s*10\s*,\s*20\b/];
@@ -44,7 +50,7 @@ test("no colour of the old palette is left in src/ or app/", () => {
   expect(found).toEqual([]);
 });
 
-test("the navy is the theme's: each of its four steps is there exactly once", () => {
+test("the navy and the slate are the theme's: each step is there exactly once", () => {
   const src = readFileSync(join(ROOT, THEME), "utf8");
   for (const hex of THEME_ONLY) expect(src.match(new RegExp(`#${hex}\\b`, "gi")) ?? []).toHaveLength(1);
 });
@@ -83,7 +89,7 @@ const isScreenFile = (rel: string) => /^src\/(auth|projects|export|publish)\//.t
 const EDITOR_KIT = ["ToolStrip", "ToolPanel", "ToolButton", "DoneButton"];
 const isEditorFile = (rel: string) => rel.startsWith("src/editor/") || rel === "app/editor/[id]/index.tsx" || EDITOR_KIT.some((k) => rel === `src/ui/${k}.tsx`);
 
-test("two families, one reader each: a screen never reads the editor's neutrals, the editor never reads the navy", () => {
+test("two families, one reader each: a screen never reads the editor's slate, the editor never reads the navy", () => {
   const all = files();
   expect(all.filter(({ rel, src }) => isScreenFile(rel) && EDITOR_KEYS.test(src)).map((f) => f.rel)).toEqual([]);
   expect(all.filter(({ rel, src }) => isEditorFile(rel) && SCREEN_KEYS.test(src)).map((f) => f.rel)).toEqual([]);

@@ -55,10 +55,10 @@ test("a screen is navy: the page and everything of the kit on it take the screen
   expect(NAVY.page).toBe("#0A1B33");
 });
 
-test("the editor says \"editor\" once, on its Screen, and the SAME kit parts are the hue-free neutrals", async () => {
+test("the editor says \"editor\" once, on its Screen, and the SAME kit parts are the soft slate", async () => {
   await render(<SafeAreaProvider initialMetrics={metrics}><Screen tone="editor"><Text testID="probe" /><Kit /></Screen></SafeAreaProvider>);
   expectFamily(NEUTRAL);
-  expect(NEUTRAL.page).toBe("#000000");
+  expect(NEUTRAL.page).toBe("#10151F");
   expect(NEUTRAL).toMatchObject(theme.elevation);
 });
 
