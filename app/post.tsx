@@ -1,12 +1,10 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo } from "react";
-import { View } from "react-native";
 import { PostScreenBody } from "@/src/publish/components/PostScreenBody";
 import { videoFromParams } from "@/src/publish/postParams";
-import { theme } from "@/src/theme/theme";
 import { EmptyState } from "@/src/ui/EmptyState";
-import { IconButton } from "@/src/ui/IconButton";
 import { Screen } from "@/src/ui/Screen";
+import { ScreenBar } from "@/src/ui/ScreenBar";
 
 /**
  * /post?fileUri=…&durationSec=…[&mimeType=…&projectId=…&title=…&coverMs=…]
@@ -19,9 +17,7 @@ export default function PostScreen() {
   if (target) return <PostScreenBody target={target} />;
   return (
     <Screen edges={["top", "bottom"]}>
-      <View style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.sm }}>
-        <IconButton name="chevron-back-outline" accessibilityLabel="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
-      </View>
+      <ScreenBar title="Post" leading="back" onLeading={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
       <EmptyState emoji="🎞️" title="This video can't be posted." hint="Clipy couldn't read this video file. Go back and pick it again." />
     </Screen>
   );

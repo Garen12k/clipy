@@ -138,9 +138,9 @@ test("type: the Apple text styles, the roles that read them, three weights, no f
 });
 
 test("shapes, spacing, sizes and motion: radii from the tokens, everything else as it was", () => {
-  expect(theme.radius).toEqual({ card: 20, chip: 8, tile: 7, field: 12, sheet: 28, pill: 999, box: 12, cover: 16 });
+  expect(theme.radius).toEqual({ card: 20, chip: 8, tile: 7, field: 12, sheet: 28, pill: 999, box: 12, cover: 20, emblem: 28 });
   expect(theme.space).toEqual({ xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, gutter: 16 });
-  expect(theme.size).toEqual({ touch: 44, control: 48, controlCompact: 36, iconButton: 40, toolBox: 44, toolColumn: 72, chip: 36, chipCompact: 28, row: 48, header: 44, done: 32, listRow: 56, avatar: 32, ring: 120, icon: { sm: 16, md: 20, lg: 24 } });
+  expect(theme.size).toEqual({ touch: 44, control: 48, controlCompact: 36, iconButton: 40, toolBox: 44, toolColumn: 72, chip: 36, chipCompact: 28, row: 48, header: 44, done: 32, listRow: 56, avatar: 32, ring: 120, badge: 24, more: 32, emblem: 88, icon: { sm: 16, md: 20, lg: 24, xl: 32, hero: 48 } });
   expect(theme.motion).toMatchObject({ press: 120, fade: 200, stagger: 40, minLoading: 1200, fontTimeout: 5000,
     fast: 120, base: 180, slow: 240, enterShift: 8, pressScale: 0.96, selectedScale: 1.03, curve: [0.2, 0, 0, 1], spring: { mass: 1, damping: 40, stiffness: 700 } });
   for (const ms of [theme.motion.fast, theme.motion.base, theme.motion.slow]) expect(ms).toBeLessThanOrEqual(250);

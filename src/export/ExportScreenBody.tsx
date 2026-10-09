@@ -1,39 +1,51 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { clampExportSettings, EXPORT_FPS, EXPORT_QUALITIES, type ExportSettings, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { fileSize } from "@/src/lib/fileInfo";
 import { formatDuration } from "@/src/lib/format";
-import { Compass } from "@/src/theme/Compass";
 import { theme } from "@/src/theme/theme";
 import { Card } from "@/src/ui/Card";
-import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { ProgressRing } from "@/src/ui/ProgressRing";
 import { QuietButton } from "@/src/ui/QuietButton";
 import { Screen } from "@/src/ui/Screen";
+import { ScreenBar } from "@/src/ui/ScreenBar";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
-import { Body, Title, ValueLabel } from "@/src/ui/Text";
+import { Segmented } from "@/src/ui/Segmented";
+import { Body, Title } from "@/src/ui/Text";
 import { canExport4K, estimateBytes, exportableClips, exportDuration, formatBytes, QUALITY_LABELS, RESOLUTIONS, type Resolution } from "./estimate";
 import type { ExportState } from "./useExport";
 
 type Props = {
   project: Project; missingSourceUris?: string[]; state: ExportState; start: (r: Resolution, s: ExportSettings) => void; cancel: () => void; reset: () => void;
-  onSave: () => void; onShare: () => void; onDone: () => void;
+  onSave: () => void; onShare: () => void;
+  /** Leaves the sheet: the Done button of the finish screen and the bar's Close (which is inert while exporting, as the swipe is). */
+  onDone: () => void;
   /** When given, "Post to…" is the main action on the finish screen and Save to Photos steps down to secondary. */
   onPost?: () => void;
 };
 
-/** A row of choices: its label over its chips — the spacing of an editor strip's rows. */
-const section = { gap: theme.space.sm } as const;
-const chips = { flexDirection: "row", gap: theme.space.sm } as const;
+/** One row of the options card: its small muted label over its segments. */
+const row = { gap: theme.space.sm } as const;
 const rowLabel = { fontSize: theme.type.label } as const;
+/** The ring and its words, in the middle of the room the pinned actions leave. */
+const centre = { flex: 1, paddingHorizontal: theme.space.gutter, alignItems: "center", justifyContent: "center", gap: theme.space.md } as const;
+/** The grabber of a sheet: the modal presentation draws none of its own. The bar below it pads its own edges, so each block pads its own too. */
+const GRABBER = { width: 36, height: 5 } as const;
+const FPS_OPTIONS = EXPORT_FPS.map((f) => ({ value: f, label: `${f} fps` }));
+const QUALITY_OPTIONS = EXPORT_QUALITIES.map((q) => ({ value: q, label: QUALITY_LABELS[q] }));
+
+/** The quiet line between two rows of the card. */
+function Line() {
+  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.screen.separator }} />;
+}
 
 export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone, onPost }: Props) {
   const [res, setRes] = useState<Resolution>(1080);
-  // Read clamped: settings the app does not offer (a damaged file) still show a selected chip — the defaults.
+  // Read clamped: settings the app does not offer (a damaged file) still show a picked segment — the defaults.
   const [settings, setSettings] = useState<ExportSettings>(() => clampExportSettings(project.exportSettings));
   const change = (patch: Partial<ExportSettings>) => { const next = { ...settings, ...patch }; setSettings(next); useEditorStore.getState().setExportSettings(next); };
   const clips = exportableClips(project, missingSourceUris);
@@ -47,75 +59,86 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
     wasDone.current = state.status === "done";
   }, [state.status]);
   const resLabel = RESOLUTIONS.find((r) => r.value === res)?.label ?? "";
+  const estimate = formatBytes(estimateBytes(duration, res, settings));
 
   return (
     // Presented as an iOS page sheet, which already sits below the status bar: only the bottom inset applies.
-    <Screen edges={["bottom"]} style={{ paddingHorizontal: theme.space.gutter, paddingTop: theme.space.xl, gap: theme.space.xl }}>
-      <Title size={theme.type.screen}>Export</Title>
+    <Screen edges={["bottom"]} style={{ paddingTop: theme.space.sm, gap: theme.space.lg }}>
+      <View testID="export-grabber" accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+        style={{ alignSelf: "center", width: GRABBER.width, height: GRABBER.height, borderRadius: theme.radius.pill, backgroundColor: theme.screen.muted, opacity: 0.5 }} />
+      <ScreenBar title="Export" leading="close" onLeading={onDone} leadingDisabled={state.status === "exporting"} />
       {(state.status === "idle" || state.status === "unavailable") && (
-        <View testID="export-options" style={{ gap: theme.space.lg }}>
-          <View style={section}>
-            <Body muted style={rowLabel}>Resolution</Body>
-            <View style={chips}>
-              {RESOLUTIONS.map((r) => <Chip key={r.value} label={r.label} selected={res === r.value} disabled={r.value === 2160 && !has4K} onPress={() => setRes(r.value)} />)}
+        // The choices scroll only if a small phone cannot hold them: the gold button below never leaves the bottom.
+        <ScrollView testID="export-scroll" style={{ flex: 1 }} alwaysBounceVertical={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: theme.space.gutter, gap: theme.space.lg }}>
+          <Card testID="export-options" style={{ gap: theme.space.md }}>
+            <View style={row}>
+              <Body muted style={rowLabel}>Resolution</Body>
+              <Segmented options={RESOLUTIONS.map((r) => ({ value: r.value, label: r.label, disabled: r.value === 2160 && !has4K }))} value={res} onChange={setRes} />
+              {!has4K && <Body muted style={{ fontSize: theme.type.small }}>4K needs a 4K source clip.</Body>}
             </View>
-            {!has4K && <Body muted style={{ fontSize: theme.type.small }}>4K needs a 4K source clip.</Body>}
-          </View>
-          <View style={section}>
-            <Body muted style={rowLabel}>Frame rate</Body>
-            <View style={chips}>
-              {EXPORT_FPS.map((f) => <Chip key={f} label={`${f} fps`} selected={settings.fps === f} onPress={() => change({ fps: f })} />)}
+            <Line />
+            <View style={row}>
+              <Body muted style={rowLabel}>Frame rate</Body>
+              <Segmented options={FPS_OPTIONS} value={settings.fps} onChange={(fps) => change({ fps })} />
             </View>
-          </View>
-          <View style={section}>
-            <Body muted style={rowLabel}>Quality</Body>
-            <View style={chips}>
-              {EXPORT_QUALITIES.map((q) => <Chip key={q} label={QUALITY_LABELS[q]} selected={settings.quality === q} onPress={() => change({ quality: q })} />)}
+            <Line />
+            <View style={row}>
+              <Body muted style={rowLabel}>Quality</Body>
+              <Segmented options={QUALITY_OPTIONS} value={settings.quality} onChange={(quality) => change({ quality })} />
             </View>
-          </View>
-          <ValueLabel label="Estimated size:" value={formatBytes(estimateBytes(duration, res, settings))} />
-        </View>
-      )}
-      {state.status === "unavailable" && (
-        <Card style={{ gap: theme.space.sm }}>
-          <Title size={theme.type.heading}>Export needs the native build</Title>
-          <Body>Rendering the final video uses Clipy's Swift engine, which Expo Go can't load. Install a development build to export.</Body>
-          <Body muted>Everything else in Clipy works in Expo Go.</Body>
-        </Card>
-      )}
-      {state.status === "idle" && (
-        <PrimaryButton title="Export" onPress={() => start(res, settings)}
-          icon={<View accessibilityElementsHidden importantForAccessibility="no-hide-descendants"><Compass size={theme.size.icon.md} /></View>} />
+            <Line />
+            <View testID="export-estimate" accessible accessibilityLabel={`Estimated size, ${estimate}`} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: theme.space.md }}>
+              <Body>Estimated size</Body>
+              <Body muted style={{ fontVariant: ["tabular-nums"] }}>{estimate}</Body>
+            </View>
+          </Card>
+          {state.status === "unavailable" && (
+            <Card style={{ gap: theme.space.sm }}>
+              <Title size={theme.type.heading}>Export needs the native build</Title>
+              <Body>Rendering the final video uses Clipy's Swift engine, which Expo Go can't load. Install a development build to export.</Body>
+              <Body muted>Everything else in Clipy works in Expo Go.</Body>
+            </Card>
+          )}
+        </ScrollView>
       )}
       {state.status === "exporting" && (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: theme.space.lg }}>
+        <View style={centre}>
           <ProgressRing progress={state.progress} size={theme.size.ring} />
           <Body muted>Exporting…</Body>
-          <SecondaryButton title="Cancel" onPress={cancel} />
         </View>
       )}
       {state.status === "done" && (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: theme.space.md }}>
+        <View style={centre}>
           <ProgressRing progress={1} size={theme.size.ring} done />
           <Title size={theme.type.title}>Ready to sail</Title>
           <Body weight="semi" style={{ fontVariant: ["tabular-nums"] }}>{[resLabel, formatDuration(duration), bytes > 0 ? formatBytes(bytes) : null].filter(Boolean).join(" · ")}</Body>
-          <View style={{ alignSelf: "stretch", gap: theme.space.md, marginTop: theme.space.lg }}>
-            {onPost ? (<>
-              <PrimaryButton title="Post to…" onPress={onPost} />
-              <SecondaryButton title="Save to Photos" onPress={onSave} />
-            </>) : <PrimaryButton title="Save to Photos" onPress={onSave} />}
-            <SecondaryButton title="Share" onPress={onShare} />
-            <QuietButton title="Done" onPress={onDone} />
-          </View>
         </View>
       )}
       {state.status === "error" && (
-        <View style={{ gap: theme.space.lg }}>
+        <View style={{ flex: 1, paddingHorizontal: theme.space.gutter }}>
           <Card testID="export-error" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
             <Ionicons testID="export-error-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="alert-circle-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
             <Body style={{ flex: 1, fontSize: theme.type.body }}>{state.message}</Body>
           </Card>
-          <PrimaryButton title="Try Again" onPress={reset} />
+        </View>
+      )}
+      {/* The state's actions, pinned at the bottom of the sheet above the home indicator: what is above takes the room that is left. */}
+      {state.status !== "unavailable" && (
+        <View testID="export-actions" style={{ paddingHorizontal: theme.space.gutter, gap: theme.space.md }}>
+          {state.status === "idle" && <PrimaryButton title="Export" onPress={() => start(res, settings)} />}
+          {state.status === "exporting" && <SecondaryButton title="Cancel" onPress={cancel} />}
+          {state.status === "done" && (<>
+            {onPost ? (<>
+              <PrimaryButton title="Post to…" onPress={onPost} />
+              <SecondaryButton title="Save to Photos" onPress={onSave} />
+            </>) : <PrimaryButton title="Save to Photos" onPress={onSave} />}
+            <View testID="export-quiet-row" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <QuietButton title="Share" onPress={onShare}
+                icon={<Ionicons testID="export-share-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="share-outline" size={theme.size.icon.md} color={theme.colors.accent} />} />
+              <QuietButton title="Done" onPress={onDone} />
+            </View>
+          </>)}
+          {state.status === "error" && <PrimaryButton title="Try Again" onPress={reset} />}
         </View>
       )}
     </Screen>

@@ -45,7 +45,27 @@ const planIsValid = (p: Prepared, uploaded = false) => Number.isInteger(p.chunkS
  * (`platform_unavailable`: 408, 429, 5xx) is not final: Retry asks again without uploading.
  */
 const FINAL_AFTER_UPLOAD = new Set(["platform_error", "not_found"]);
-const messageOf = (e: unknown) => (e instanceof Error && e.message ? e.message : "Something went wrong.");
+/**
+ * The waits before asking again when a call made AFTER the upload could not reach Clipy's server at all (`unreachable`: the request
+ * itself failed — a stale connection or a network change after a long upload). One blip must not become a failed post.
+ */
+export const BLIP_WAITS_MS = [1000, 2000, 4000];
+const isBlip = (e: unknown) => e instanceof ApiFailure && e.code === "unreachable";
+/**
+ * Runs `finalize` or a `status` poll, asking again only for `unreachable` — every other failure is thrown at once. Both are safe to
+ * repeat: the server publishes a session once (a claim) and answers a repeat from what it stored. A cancel during a wait stops the
+ * retries and throws the blip.
+ */
+async function askAgain<T>(ask: () => Promise<T>, sleep: PostDeps["sleep"], signal: AbortSignal): Promise<T> {
+  for (let tries = 0; ; tries++) {
+    try { return await ask(); } catch (e) {
+      if (!isBlip(e) || tries >= BLIP_WAITS_MS.length) throw e;
+      await sleep(BLIP_WAITS_MS[tries], signal);
+      if (signal.aborted) throw e;
+    }
+  }
+}
+const messageOf =(e: unknown) => (e instanceof Error && e.message ? e.message : "Something went wrong.");
 
 /** Runs one platform's post to the end. Never throws: every outcome is reported through `update`. Returns what Resume needs, or null. */
 export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Partial<RowState>) => void, signal: AbortSignal, resumeFrom: ResumeInfo | null = null): Promise<ResumeInfo | null> {
@@ -94,12 +114,18 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
     // The video now exists on the platform: finalize is never cancelled, and cancel while polling ends the row as "still processing"
     // (resumable when the server's wait hint says the post still needs finalizing).
     update({ phase: "publishing", progress: 1, message: null, resumable: false });
-    let result = await deps.api.finalize(p.sessionId, info.clientResult);
+    // A cancel during finalize's retry wait throws the blip: nothing was finalised, so the row ends failed and resumable (below).
+    const clientResult = info.clientResult;
+    let result = await askAgain(() => deps.api.finalize(p.sessionId, clientResult), deps.sleep, signal);
     const limit = pollLimit(p), every = pollMs(p);
     for (let i = 0; result.status === "processing" && i < limit; i++) {
       await deps.sleep(every, signal);
       if (signal.aborted) { stillProcessing(); return info; }
-      result = await deps.api.status(p.sessionId);
+      try { result = await askAgain(() => deps.api.status(p.sessionId), deps.sleep, signal); } catch (e) {
+        // Cancelled while waiting to ask again: the same end as a cancel between polls.
+        if (signal.aborted && isBlip(e)) { stillProcessing(); return info; }
+        throw e;
+      }
     }
     if (result.status === "done") update({ phase: "done", url: result.url, message: null });
     else stillProcessing();

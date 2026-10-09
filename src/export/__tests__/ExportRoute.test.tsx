@@ -97,3 +97,20 @@ test.each(["error", "unavailable"])("after an export that is %s the sheet can be
   await view.rerender(<ExportScreen />);
   expect(mockNav.setOptions).toHaveBeenLastCalledWith({ gestureEnabled: true });
 });
+
+test("Close leaves the sheet, as Done does", async () => {
+  (isBackendConfigured as jest.Mock).mockReturnValue(false);
+  mockState = { status: "idle", progress: 0 };
+  await render(<ExportScreen />);
+  await fireEvent.press(screen.getByRole("button", { name: "Close" }));
+  expect(router.back).toHaveBeenCalledTimes(1);
+});
+
+test("while exporting, Close is as inert as the swipe", async () => {
+  (isBackendConfigured as jest.Mock).mockReturnValue(false);
+  mockState = { status: "exporting", progress: 0.3 };
+  await render(<ExportScreen />);
+  expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+  await fireEvent.press(screen.getByRole("button", { name: "Close" }));
+  expect(router.back).not.toHaveBeenCalled();
+});

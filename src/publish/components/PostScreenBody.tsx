@@ -10,12 +10,13 @@ import { theme } from "@/src/theme/theme";
 import { Card } from "@/src/ui/Card";
 import { Field } from "@/src/ui/Field";
 import { haptic } from "@/src/ui/haptics";
-import { IconButton } from "@/src/ui/IconButton";
+import { Group } from "@/src/ui/Group";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { Screen } from "@/src/ui/Screen";
+import { ScreenBar } from "@/src/ui/ScreenBar";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Spinner } from "@/src/ui/Spinner";
-import { Body, Title } from "@/src/ui/Text";
+import { Body } from "@/src/ui/Text";
 import { ToastHost, useToast } from "@/src/ui/Toast";
 import { PLATFORMS, type PlatformId } from "../platforms";
 import { useAccounts } from "../useAccounts";
@@ -28,6 +29,8 @@ import { PostRow } from "./PostRow";
 import { SignInCard } from "./SignInCard";
 
 const small = { fontSize: theme.type.small } as const;
+/** The small word above the caption box. */
+const label = { fontSize: theme.type.label } as const;
 /** The caption box's smallest height: about four lines. */
 const CAPTION_MIN = 96;
 const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
@@ -57,10 +60,8 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
 
   return (
     <Screen edges={["top", "bottom"]}>
-      <View style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.sm }}>
-        <IconButton name="chevron-back-outline" accessibilityLabel="Back" onPress={goBack} />
-        <Title size={theme.type.screen} accessibilityRole="header">Post</Title>
-      </View>
+      {/* Back is never disabled: while uploads run it asks "Stop posting?" (useLeaveGuard). */}
+      <ScreenBar title="Post" leading="back" onLeading={goBack} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ padding: theme.space.gutter, gap: theme.space.lg }}>
           <Body muted>{`${formatDuration(video.durationSec)} · ${formatBytes(video.fileSize)}`}</Body>
@@ -68,6 +69,8 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
           <SignInCard />
           {!signedIn ? null : (<>
             <View style={{ gap: theme.space.xs }}>
+              {/* The field carries the name for VoiceOver; this is the same word for the eye. */}
+              <Body muted accessibilityElementsHidden importantForAccessibility="no" style={[label, { paddingHorizontal: theme.space.xs }]}>Caption</Body>
               <Field accessibilityLabel="Caption" multiline value={form.caption} onChangeText={form.setCaption} placeholder="Write a caption…"
                 style={{ minHeight: CAPTION_MIN, textAlignVertical: "top" }} />
               {form.captionMax !== null ? (
@@ -87,22 +90,21 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
                 <SecondaryButton title="Try Again" onPress={accounts.refresh} />
               </Card>
             ) : accounts.status !== "ready" ? spinner : (
-              <Card style={{ paddingVertical: theme.space.xs }}>
-                {form.views.map((v, i) => (
-                  <View key={v.status.id} style={i > 0 ? { borderTopWidth: 1, borderTopColor: theme.screen.separator } : undefined}>
-                    <PostRow view={v} row={rows[v.status.id]} onToggle={() => form.toggle(v.status.id)} onOptions={() => setOptionsFor(v.status.id)}
-                      onConnect={() => router.push("/accounts")}
-                      onReconnect={() => { form.markReconnect(v.status.id); router.push("/accounts"); }}
-                      onRetry={() => { const job = form.retryJob(v); if (job) retry(job); }} onView={openUrl} />
-                  </View>
+              <Group testID="post-platforms">
+                {form.views.map((v) => (
+                  <PostRow key={v.status.id} view={v} row={rows[v.status.id]} onToggle={() => form.toggle(v.status.id)} onOptions={() => setOptionsFor(v.status.id)}
+                    onConnect={() => router.push("/accounts")}
+                    onReconnect={() => { form.markReconnect(v.status.id); router.push("/accounts"); }}
+                    onRetry={() => { const job = form.retryJob(v); if (job) retry(job); }} onView={openUrl} />
                 ))}
-              </Card>
+              </Group>
             )}
           </>)}
         </ScrollView>
-        <View style={{ paddingHorizontal: theme.space.gutter, paddingTop: theme.space.md, gap: theme.space.md }}>
-          {signedIn ? <PrimaryButton title="Post" onPress={onPost} disabled={busy || form.jobs.length === 0} /> : null}
-          <SecondaryButton title="Share…" onPress={onShare} />
+        {/* One row: the gold Post takes the width, Share… sits beside it. Without an account there is no Post, and Share… has the row to itself. */}
+        <View testID="post-actions" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.gutter, paddingTop: theme.space.md }}>
+          {signedIn ? <View testID="post-actions-wide" style={{ flex: 1 }}><PrimaryButton title="Post" onPress={onPost} disabled={busy || form.jobs.length === 0} /></View> : null}
+          {signedIn ? <SecondaryButton title="Share…" onPress={onShare} /> : <View testID="post-actions-wide" style={{ flex: 1 }}><SecondaryButton title="Share…" onPress={onShare} /></View>}
         </View>
       </KeyboardAvoidingView>
       <PostOptionsSheet platform={optionsFor} options={form.views.find((v) => v.status.id === optionsFor)?.options ?? {}}

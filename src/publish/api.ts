@@ -15,7 +15,7 @@ export interface Prepared {
 }
 export type PublishResult = { status: "done"; url: string | null } | { status: "processing" };
 
-const UNREACHABLE = "Clipy's server is asleep or unreachable. Open the Supabase dashboard to wake it, then try again.";
+const UNREACHABLE = "Clipy's server is asleep or unreachable. Try again in a few minutes.";
 
 type Init = { method?: "GET" | "POST" | "DELETE"; query?: Record<string, string>; json?: unknown; bytes?: Uint8Array; headers?: Record<string, string>; signal?: AbortSignal };
 

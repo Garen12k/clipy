@@ -550,3 +550,134 @@ describe("meta-rupload and the wait hint", () => {
     expect(t.row()).toMatchObject({ phase: "done", url: "https://www.instagram.com/reel/x/" });
   });
 });
+
+describe("a network blip after the upload is retried, not shown as a failed post", () => {
+  const PLAIN = "Clipy's server is asleep or unreachable. Try again in a few minutes.";
+  const blip = () => new ApiFailure("unreachable", PLAIN);
+  const uploadedInfo = { prepared, uploaded: true, clientResult: '{"id":"abc"}' };
+  const waits = (d: PostDeps) => (d.sleep as jest.Mock).mock.calls.map((c) => c[0] as number);
+
+  test("finalize unreachable once, then fine: done, never failed, one 1 s wait", async () => {
+    const d = deps(), t = track();
+    (d.api.finalize as jest.Mock).mockRejectedValueOnce(blip());
+    expect(await runPost(job, d, t.update, signal())).toEqual(uploadedInfo);
+    expect(t.phases).toEqual(["preparing", "uploading", "publishing", "done"]);
+    expect(t.row()).toMatchObject({ phase: "done", url: "https://youtu.be/abc", message: null });
+    expect(d.api.finalize).toHaveBeenCalledTimes(2);
+    expect(d.api.finalize).toHaveBeenLastCalledWith("s1", '{"id":"abc"}');
+    expect(d.sleep).toHaveBeenCalledWith(1000, expect.any(AbortSignal));
+    expect(waits(d)).toEqual([1000]);
+    expect(d.uploadGoogleResumable).toHaveBeenCalledTimes(1);
+  });
+
+  test("finalize unreachable four times: failed, resumable, the plain message, exactly 4 calls after waits of 1, 2 and 4 s", async () => {
+    const d = deps(), t = track();
+    (d.api.finalize as jest.Mock).mockRejectedValue(blip());
+    expect(await runPost(job, d, t.update, signal())).toEqual(uploadedInfo);
+    expect(d.api.finalize).toHaveBeenCalledTimes(4);
+    expect(waits(d)).toEqual([1000, 2000, 4000]);
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: PLAIN });
+  });
+
+  test("a status poll that is unreachable once is asked again and polling goes on", async () => {
+    const d = deps(), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockRejectedValueOnce(blip()).mockResolvedValueOnce({ status: "processing" }).mockResolvedValueOnce({ status: "done", url: "https://p/1" });
+    await runPost(job, d, t.update, signal());
+    expect(d.api.status).toHaveBeenCalledTimes(3);
+    expect(waits(d)).toEqual([3000, 1000, 3000]);
+    expect(t.phases).not.toContain("failed");
+    expect(t.row()).toMatchObject({ phase: "done", url: "https://p/1" });
+  });
+
+  test("each call has its own three retries: a blip on a later poll starts again at 1 s", async () => {
+    const d = deps(), t = track();
+    (d.api.finalize as jest.Mock).mockRejectedValueOnce(blip()).mockRejectedValueOnce(blip()).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockRejectedValueOnce(blip()).mockResolvedValueOnce({ status: "done", url: null });
+    await runPost(job, d, t.update, signal());
+    expect(waits(d)).toEqual([1000, 2000, 3000, 1000]);
+    expect(t.row()).toMatchObject({ phase: "done" });
+  });
+
+  test("a status poll unreachable four times: failed, resumable, 4 calls", async () => {
+    const d = deps(), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockRejectedValue(blip());
+    expect(await runPost(job, d, t.update, signal())).toEqual(uploadedInfo);
+    expect(d.api.status).toHaveBeenCalledTimes(4);
+    expect(waits(d)).toEqual([3000, 1000, 2000, 4000]);
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: PLAIN });
+  });
+
+  test.each([
+    ["internal", new ApiFailure("internal", "Something went wrong.")],
+    ["platform_unreachable", new ApiFailure("platform_unreachable", "Couldn't reach YouTube. Try again.")],
+    ["platform_unavailable", new ApiFailure("platform_unavailable", "Backend Error")],
+    ["reconnect", new ApiFailure("reconnect", "Reconnect")],
+    ["platform_error", new ApiFailure("platform_error", "Rejected.")],
+    ["a plain exception", new Error("boom")],
+  ])("finalize failing with %s is not retried: one call, no wait", async (_name, err) => {
+    const d = deps(), t = track();
+    (d.api.finalize as jest.Mock).mockRejectedValue(err);
+    await runPost(job, d, t.update, signal());
+    expect(d.api.finalize).toHaveBeenCalledTimes(1);
+    expect(d.sleep).not.toHaveBeenCalled();
+    expect(t.phases).not.toContain("done");
+  });
+
+  test("a status poll failing with another code is not retried", async () => {
+    const d = deps(), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockRejectedValue(new ApiFailure("platform_unavailable", "busy"));
+    await runPost(job, d, t.update, signal());
+    expect(d.api.status).toHaveBeenCalledTimes(1);
+    expect(waits(d)).toEqual([3000]);
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: "busy" });
+  });
+
+  test("cancel during finalize's retry wait: no further call; nothing was finalised, so the row stays failed and resumable", async () => {
+    const ac = new AbortController();
+    const d = deps({ sleep: jest.fn(async () => { ac.abort(); }) }), t = track();
+    (d.api.finalize as jest.Mock).mockRejectedValue(blip());
+    expect(await runPost(job, d, t.update, ac.signal)).toEqual(uploadedInfo);
+    expect(d.api.finalize).toHaveBeenCalledTimes(1);
+    expect(d.sleep).toHaveBeenCalledTimes(1);
+    expect(d.sleep).toHaveBeenCalledWith(1000, ac.signal);
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: PLAIN });
+    expect(t.phases).not.toContain("done");
+  });
+
+  test("cancel during a status poll's retry wait ends as cancel while polling does: still processing", async () => {
+    const ac = new AbortController();
+    const sleep = jest.fn(async (ms: number) => { if (ms === 1000) ac.abort(); });
+    const d = deps({ sleep }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockRejectedValue(blip());
+    expect(await runPost(job, d, t.update, ac.signal)).toEqual(uploadedInfo);
+    expect(d.api.status).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenCalledWith(1000, ac.signal);
+    expect(t.row()).toMatchObject({ phase: "done", url: null, message: "Still processing on YouTube — check the app later." });
+  });
+
+  test("the same cancel where the post still needs finalizing (Instagram, X) stays resumable", async () => {
+    const ac = new AbortController();
+    const plan: Prepared = { ...prepared, wait: { maxSeconds: 600, intervalSeconds: 15, resumeOnTimeout: true } };
+    const sleep = jest.fn(async (ms: number) => { if (ms === 1000) ac.abort(); });
+    const d = deps({ sleep, api: { ...deps().api, prepare: jest.fn(async () => plan) } }), t = track();
+    (d.api.finalize as jest.Mock).mockResolvedValue({ status: "processing" });
+    (d.api.status as jest.Mock).mockRejectedValue(blip());
+    await runPost({ ...job, platform: "instagram" }, d, t.update, ac.signal);
+    expect(d.api.status).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenCalledWith(1000, ac.signal);
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: true, message: "Instagram is still processing the video. Tap Resume in a minute to finish posting." });
+  });
+
+  test("before the upload nothing is retried: prepare unreachable fails at once", async () => {
+    const d = deps(), t = track();
+    (d.api.prepare as jest.Mock).mockRejectedValue(blip());
+    expect(await runPost(job, d, t.update, signal())).toBeNull();
+    expect(d.api.prepare).toHaveBeenCalledTimes(1);
+    expect(d.sleep).not.toHaveBeenCalled();
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: PLAIN });
+  });
+});

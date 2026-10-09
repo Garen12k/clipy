@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { Alert, Linking } from "react-native";
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-02T10:00:00.000Z" }));
 const FILE = "file:///cache/exports/p1-1.mp4";
@@ -720,46 +720,147 @@ describe("cover frame", () => {
   });
 });
 
-describe("round 2 look (no behaviour)", () => {
-  test("the caption is the kit field; Post is the one gold button; Share… is grey", async () => {
+describe("the layout: a small bar, logo tiles, text actions, Post and Share side by side", () => {
+  test("the caption is the kit field under a small label; Post is the one gold button; Share… is grey; the title is a small centred header", async () => {
     await render(<PostScreen />);
     expect(screen.getByLabelText("Caption")).toHaveStyle({ backgroundColor: theme.screen.tile, fontSize: theme.type.input, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md, minHeight: 96 });
     expect(screen.getByLabelText("Caption")).toHaveProp("placeholder", "Write a caption…");
+    // For the eye only: VoiceOver gets the word from the field.
+    expect(screen.queryByText("Caption")).toBeNull();
+    expect(screen.getByText("Caption", { includeHiddenElements: true })).toHaveStyle({ fontSize: theme.type.label, color: theme.screen.muted });
     expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
     expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Post");
     expect(screen.getByRole("button", { name: "Share…" })).toHaveStyle({ backgroundColor: theme.screen.lifted });
-    expect(screen.getByRole("header", { name: "Post" })).toHaveStyle({ fontSize: theme.type.screen });
+    expect(screen.getByRole("header", { name: "Post" })).toHaveStyle({ fontSize: theme.type.headline, textAlign: "center" });
+    // No picture of the video and no project name: the muted line is all there is about it.
+    expect(screen.getByText("0:21 · 14 MB")).toHaveStyle({ color: theme.screen.muted });
+    expect(screen.queryByText("Beach day")).toBeNull();
   });
 
-  test("a platform row is 56 pt; Options is a compact text-only button; a note under it is small", async () => {
+  test("the bottom is ONE row: the gold Post takes the width, Share… sits beside it", async () => {
     await render(<PostScreen />);
+    const actions = screen.getByTestId("post-actions");
+    expect(actions).toHaveStyle({ flexDirection: "row", gap: theme.space.md, paddingHorizontal: theme.space.gutter });
+    expect(within(actions).getAllByRole("button")).toHaveLength(2);
+    expect(within(screen.getByTestId("post-actions-wide")).getByRole("button", { name: "Post" })).toBeTruthy();
+    expect(screen.getByTestId("post-actions-wide")).toHaveStyle({ flex: 1 });
+    expect(within(screen.getByTestId("post-actions-wide")).queryByRole("button", { name: "Share…" })).toBeNull();
+    expect(within(actions).getByRole("button", { name: "Share…" })).toBeTruthy();
+  });
+
+  test.each(["signedOut", "unconfigured", "loading"])("session %s: only Share… at the bottom, full width, and no Post (not even a disabled one)", async (status) => {
+    (useSession as jest.Mock).mockReturnValue({ status });
+    await render(<PostScreen />);
+    const actions = screen.getByTestId("post-actions");
+    expect(within(actions).getAllByRole("button")).toHaveLength(1);
+    expect(within(screen.getByTestId("post-actions-wide")).getByRole("button", { name: "Share…" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Post" })).toBeNull();
+    expect(screen.queryByLabelText("Caption")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Share…" }));
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(FILE, { mimeType: "video/mp4", UTI: "public.mpeg-4" });
+  });
+
+  test("the platforms are ONE rounded card; a row is 56 pt with a logo tile; Options is a plain gold word; a note under it is small", async () => {
+    await render(<PostScreen />);
+    expect(screen.getByTestId("post-platforms")).toHaveStyle({ backgroundColor: theme.screen.bar, borderRadius: theme.radius.card });
+    for (const id of ["youtube", "tiktok", "instagram", "facebook", "x"]) expect(within(screen.getByTestId("post-platforms")).getByTestId(`post-row-${id}`)).toBeTruthy();
     expect(screen.getByTestId("post-row-youtube")).toHaveStyle({ minHeight: theme.size.listRow });
+    expect(screen.getByTestId("platform-tile-youtube")).toHaveStyle({ width: theme.size.chip, height: theme.size.chip, borderRadius: theme.radius.chip, backgroundColor: theme.screen.tile });
     const options = screen.getByRole("button", { name: "YouTube options" });
     expect(options).toHaveStyle({ height: theme.size.controlCompact });
     expect(options).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
+    expect(within(options).getByText("Options")).toHaveStyle({ color: theme.colors.accent });
     // The tick row itself fills the 56-pt row, so a tap above or below the text still lands.
     expect(screen.getByRole("checkbox", { name: "YouTube" })).toHaveStyle({ alignSelf: "stretch", alignItems: "center" });
+    // The standing note is the adapter's whole sentence, as before: not a one-line summary, and no info button.
     expect(screen.getByText(/private until Google reviews/i)).toHaveStyle({ fontSize: theme.type.small, color: theme.screen.muted });
+    expect(screen.getByText(/private until Google reviews/i)).toHaveTextContent("YouTube keeps uploads from new apps private until Google reviews Clipy. Open the video in YouTube to make it public.", { exact: true });
+    expect(screen.queryByRole("button", { name: /info/i })).toBeNull();
   });
 
-  test("Connect under its reason is a 44-pt target: 36 pt, 4 pt of slop each way, and 4 pt of room under the button", async () => {
-    (useAccounts as jest.Mock).mockReturnValue(accounts({ connected: false, name: null }));
+  test("a connected account's picture sits on its logo tile; no picture, or not connected, and there is none", async () => {
+    (useAccounts as jest.Mock).mockReturnValue(accounts({ avatarUrl: "https://example.com/me.png" }, { available: true, avatarUrl: "https://example.com/stale.png" }));
     await render(<PostScreen />);
-    const column = screen.getByText("Not connected").parent!;
-    expect(column).toHaveStyle({ alignItems: "flex-end", gap: theme.space.xs, paddingBottom: theme.space.xs });
+    expect(within(screen.getByTestId("platform-tile-youtube")).getByTestId("platform-picture-youtube")).toHaveProp("source", { uri: "https://example.com/me.png" });
+    expect(screen.queryByTestId("platform-picture-tiktok")).toBeNull();
+    expect(screen.queryByTestId("platform-picture-instagram")).toBeNull();
   });
 
-  test("a row's action is a compact grey button; its error is red and a size larger than a note", async () => {
-    usePostReturns(post({ rows: rows({ phase: "failed", message: "The video has been rejected.", resumable: false }) }));
+  test("the state is under the name and the action is a plain gold word beside it: Connect and Reconnect, 44-pt targets", async () => {
+    (useAccounts as jest.Mock).mockReturnValue(accounts({ connected: false, name: null }, { ...TT_ON, needsReconnect: true }));
     await render(<PostScreen />);
-    expect(screen.getByRole("button", { name: "Retry YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.screen.lifted });
+    const yt = within(screen.getByTestId("post-row-youtube")), tt = within(screen.getByTestId("post-row-tiktok"));
+    // "Not connected" is inside the tick row (under the name), not in a column with the button.
+    expect(within(yt.getByRole("checkbox", { name: "YouTube" })).getByText("Not connected")).toHaveStyle({ fontSize: theme.type.label, color: theme.screen.muted });
+    expect(within(tt.getByRole("checkbox", { name: "TikTok" })).getByText("Sign-in expired")).toHaveStyle({ fontSize: theme.type.label, color: theme.screen.dangerText });
+    expect(tt.getByText("@sunny")).toBeTruthy(); // the account's name stays above its state
+    for (const [name, word] of [["Connect YouTube", "Connect"], ["Reconnect TikTok", "Reconnect"]]) {
+      const b = screen.getByRole("button", { name });
+      expect(b).toHaveStyle({ height: theme.size.controlCompact });
+      expect(b).toHaveProp("hitSlop", { top: 4, bottom: 4 }); // 36 + 4 + 4 inside the 56-pt row
+      expect(b).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
+      expect(within(b).getByText(word)).toHaveStyle({ color: theme.colors.accent });
+    }
+    await fireEvent.press(screen.getByRole("button", { name: "Reconnect TikTok" }));
+    expect(router.push).toHaveBeenCalledWith("/accounts");
+  });
+
+  test("Retry, Resume and View are plain gold words; an error is red and a size larger than a note", async () => {
+    usePostReturns(post({ rows: rows({ phase: "failed", message: "The video has been rejected.", resumable: false }, { phase: "failed", message: "Dropped.", resumable: true }) }));
+    (useAccounts as jest.Mock).mockReturnValue(accounts({}, TT_ON));
+    const a = await render(<PostScreen />);
+    for (const [name, word] of [["Retry YouTube", "Retry"], ["Resume TikTok", "Resume"]]) {
+      const b = screen.getByRole("button", { name });
+      expect(b).toHaveStyle({ height: theme.size.controlCompact });
+      expect(b).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
+      expect(within(b).getByText(word)).toHaveStyle({ color: theme.colors.accent });
+    }
     expect(screen.getByText("The video has been rejected.")).toHaveStyle({ fontSize: theme.type.label, color: theme.screen.dangerText });
+    await a.unmount();
+    usePostReturns(post({ rows: rows({ phase: "done", progress: 1, url: "https://youtu.be/abc" }) }));
+    await render(<PostScreen />);
+    const view = screen.getByRole("button", { name: "View on YouTube" });
+    expect(view).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
+    expect(within(view).getByText("View")).toHaveStyle({ color: theme.colors.accent });
   });
 
-  test("uploading: the percentage does not jitter and the bar is a 4-pt pill", async () => {
-    usePostReturns(post({ rows: rows({ phase: "uploading", progress: 0.42 }), busy: true }));
-    await render(<PostScreen />);
+  test("uploading: the percentage does not jitter and the bar is a 4-pt pill; Preparing… and Publishing… are said as before", async () => {
+    usePostReturns(post({ rows: rows({ phase: "uploading", progress: 0.42 }, { phase: "preparing" }), busy: true }));
+    (useAccounts as jest.Mock).mockReturnValue(accounts({}, TT_ON));
+    const a = await render(<PostScreen />);
     expect(screen.getByText("42%")).toHaveStyle({ fontSize: theme.type.label, fontVariant: ["tabular-nums"] });
     expect(screen.getByRole("progressbar")).toHaveStyle({ height: 4, borderRadius: theme.radius.pill, backgroundColor: theme.screen.tile });
+    expect(screen.getByText("Preparing…")).toBeTruthy();
+    await a.unmount();
+    usePostReturns(post({ rows: rows({ phase: "publishing" }), busy: true }));
+    await render(<PostScreen />);
+    expect(screen.getByText("Publishing…")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Post" })).toHaveTextContent("Post", { exact: true }); // the button keeps its word
+  });
+
+  test("Back stays live while posting: it is not disabled, and leaving asks the question", async () => {
+    const p = post({ rows: rows({ phase: "uploading", progress: 0.1 }), busy: true }); usePostReturns(p);
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    await render(<PostScreen />);
+    const back = screen.getByRole("button", { name: "Back" });
+    expect(back).toBeEnabled();
+    expect(back).toHaveStyle({ opacity: 1 });
+    await fireEvent.press(back);
+    expect(router.back).toHaveBeenCalledTimes(1);
+    // In the app router.back() raises beforeRemove; the guard holds the screen and asks.
+    const listener = (mockNav.addListener.mock.calls as unknown as [string, (e: unknown) => void][]).find(([name]) => name === "beforeRemove")![1];
+    const e = { preventDefault: jest.fn(), data: { action: { type: "GO_BACK" } } };
+    await act(async () => { listener(e); });
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith("Stop posting?", "Uploads in progress will be cancelled.", expect.any(Array));
+    expect(p.cancel).not.toHaveBeenCalled();
+  });
+
+  test("a broken link keeps the bar: the small title, and no actions at the bottom", async () => {
+    mockParams = { ...baseParams, fileUri: undefined };
+    await render(<PostScreen />);
+    expect(screen.getByRole("header", { name: "Post" })).toHaveStyle({ fontSize: theme.type.headline });
+    expect(screen.getByText("Clipy couldn't read this video file. Go back and pick it again.")).toBeTruthy();
+    expect(screen.queryByTestId("post-actions")).toBeNull();
   });
 });

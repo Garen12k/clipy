@@ -74,3 +74,17 @@ test("a 2xx with a non-JSON body is an internal failure", async () => {
   fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => { throw new Error("html"); } });
   await expect(api.accounts()).rejects.toMatchObject({ code: "internal", message: "Something went wrong." });
 });
+
+test("the unreachable message is for the person posting: it names no dashboard, and nothing is logged", async () => {
+  const PLAIN = "Clipy's server is asleep or unreachable. Try again in a few minutes.";
+  const log = jest.spyOn(console, "log").mockImplementation(() => {});
+  try {
+    fetchMock.mockRejectedValue(new TypeError("Network request failed"));
+    await expect(api.status("s1")).rejects.toMatchObject({ code: "unreachable", message: PLAIN });
+    fetchMock.mockResolvedValue(res(200, { status: "done", url: null }));
+    await api.status("s1");
+    (getSupabase as jest.Mock).mockReturnValue({ auth: { getSession: async () => { throw new Error("offline"); } } });
+    await expect(api.accounts()).rejects.toMatchObject({ code: "unreachable", message: PLAIN });
+    expect(log).not.toHaveBeenCalled();
+  } finally { log.mockRestore(); }
+});
