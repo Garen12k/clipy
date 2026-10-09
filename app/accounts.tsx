@@ -1,6 +1,7 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { buildLabel } from "@/src/lib/buildInfo";
 import { Alert, ScrollView, View } from "react-native";
+import { buildLabel, buildName } from "@/src/lib/buildInfo";
 import { AccountRow } from "@/src/publish/components/AccountRow";
 import { SignInCard } from "@/src/publish/components/SignInCard";
 import { signOut } from "@/src/publish/supabase";
@@ -8,13 +9,17 @@ import { useAccounts } from "@/src/publish/useAccounts";
 import { useSession } from "@/src/publish/useSession";
 import { theme } from "@/src/theme/theme";
 import { Card } from "@/src/ui/Card";
-import { IconButton } from "@/src/ui/IconButton";
+import { Group } from "@/src/ui/Group";
+import { PressableScale } from "@/src/ui/PressableScale";
 import { Screen } from "@/src/ui/Screen";
-import { QuietButton } from "@/src/ui/QuietButton";
+import { ScreenBar } from "@/src/ui/ScreenBar";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Spinner } from "@/src/ui/Spinner";
-import { Body, Title } from "@/src/ui/Text";
+import { Body } from "@/src/ui/Text";
 import { ToastHost, useToast } from "@/src/ui/Toast";
+
+/** A one-line row of a group: a symbol and a word, or a name and its value. */
+const row = { minHeight: theme.size.row, flexDirection: "row", alignItems: "center", gap: theme.space.md } as const;
 
 export default function AccountsScreen() {
   const session = useSession();
@@ -32,36 +37,43 @@ export default function AccountsScreen() {
 
   return (
     <Screen edges={["top", "bottom"]}>
-      <View style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.sm, marginBottom: theme.space.sm }}>
-        <IconButton name="chevron-back-outline" accessibilityLabel="Back" onPress={goBack} />
-        <Title size={theme.type.screen} accessibilityRole="header">Accounts</Title>
-      </View>
-      <ScrollView contentContainerStyle={{ padding: theme.space.gutter, gap: theme.space.lg }}>
+      <ScreenBar title="Accounts" leading="back" onLeading={goBack} />
+      <ScrollView contentContainerStyle={{ padding: theme.space.gutter, gap: theme.space.xl }}>
         {session.status === "loading" ? spinner : null}
         <SignInCard />
+        {signedIn ? (
+          <Group label="Clipy account" testID="clipy-account">
+            {/* The row shows the address alone; VoiceOver hears the whole sentence. */}
+            <View testID="signed-in-row" accessible accessibilityLabel={session.email ? `Signed in as ${session.email}` : "Signed in"} style={row}>
+              <Ionicons name="person-circle-outline" size={theme.size.icon.lg} color={theme.colors.text} />
+              <Body numberOfLines={1} style={{ flex: 1 }}>{session.email ?? "Signed in"}</Body>
+            </View>
+            <PressableScale accessibilityRole="button" accessibilityLabel="Sign Out" onPress={confirmSignOut} style={row}>
+              <Ionicons name="log-out-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
+              <Body style={{ flex: 1, color: theme.screen.dangerText }}>Sign Out</Body>
+            </PressableScale>
+          </Group>
+        ) : null}
         {!signedIn ? null : status === "error" ? (
           <Card style={{ gap: theme.space.md, alignItems: "flex-start" }}>
             <Body>{error ?? "Something went wrong."}</Body>
             <SecondaryButton title="Try Again" onPress={refresh} />
           </Card>
         ) : status !== "ready" ? spinner : (
-          <Card style={{ paddingVertical: theme.space.xs }}>
-            {platforms.map((p, i) => (
-              <View key={p.id} style={i > 0 ? { borderTopWidth: 1, borderTopColor: theme.screen.separator } : undefined}>
-                <AccountRow status={p} busy={busy === p.id} onConnect={() => connect(p.id)} onDisconnect={() => disconnect(p.id)} />
-              </View>
+          <Group label="Platforms" testID="platforms">
+            {platforms.map((p) => (
+              <AccountRow key={p.id} status={p} busy={busy === p.id} onConnect={() => connect(p.id)} onDisconnect={() => disconnect(p.id)} />
             ))}
-          </Card>
+          </Group>
         )}
+        {/* Which app is installed: a tool can be on screen in a build too old to run it. In every state of the screen. */}
+        <Group>
+          <View testID="build-row" accessible accessibilityLabel={buildLabel()} style={row}>
+            <Body style={{ flex: 1 }}>Build</Body>
+            <Body testID="build-label" muted numberOfLines={1}>{buildName()}</Body>
+          </View>
+        </Group>
       </ScrollView>
-      {signedIn ? (
-        <View style={{ paddingHorizontal: theme.space.gutter, paddingTop: theme.space.md, gap: theme.space.md, alignItems: "center" }}>
-          <Body muted style={{ textAlign: "center" }}>{session.email ? `Signed in as ${session.email}` : "Signed in"}</Body>
-          <QuietButton title="Sign Out" onPress={confirmSignOut} />
-        </View>
-      ) : null}
-      {/* Which app is installed: a tool can be on screen in a build too old to run it. */}
-      <Body testID="build-label" muted style={{ textAlign: "center", fontSize: theme.type.micro, paddingTop: theme.space.sm }}>{buildLabel()}</Body>
       <ToastHost />
     </Screen>
   );

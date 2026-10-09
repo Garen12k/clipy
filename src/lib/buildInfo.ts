@@ -14,10 +14,18 @@ const LEVELS: { name: string; has: () => boolean }[] = [
   { name: "export only (older)", has: isNativeAvailable },
 ];
 
-/** One line for the Accounts screen (and for anyone asking which app is on the phone). */
+const EXPO_GO = "Expo Go (no video engine)";
+const level = () => LEVELS.find((l) => l.has());
+
+/** One line for anyone asking which app is on the phone (the Accounts screen's Build row says it to VoiceOver). */
 export function buildLabel(): string {
-  const level = LEVELS.find((l) => l.has());
-  return level ? `App build: ${level.name}` : "Expo Go (no video engine)";
+  const l = level();
+  return l ? `App build: ${l.name}` : EXPO_GO;
+}
+
+/** Just the name, as `buildLabel` words it: the value of the Accounts screen's Build row. */
+export function buildName(): string {
+  return level()?.name ?? EXPO_GO;
 }
 
 /** What a tool says when the installed app is too old for it — with what to do about it. `what` is plural ("Voice and sound effects"). */

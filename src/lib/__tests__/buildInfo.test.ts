@@ -1,6 +1,6 @@
 jest.mock("@/modules/clipy-video", () => ({ isNativeAvailable: jest.fn(), isSoundAvailable: jest.fn(), isSpeechAvailable: jest.fn(), isCutoutAvailable: jest.fn(), isSteadyAvailable: jest.fn(), isBlurAndCutsBuild: jest.fn() }));
 import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
-import { BEATS_BACKGROUND_TOOLS, buildLabel, LATEST_TOOLS, NEEDS_LATEST_BUILD, STEADY_TOOLS } from "../buildInfo";
+import { BEATS_BACKGROUND_TOOLS, buildLabel, buildName, LATEST_TOOLS, NEEDS_LATEST_BUILD, STEADY_TOOLS } from "../buildInfo";
 
 const set = (native: boolean, sound: boolean, speech: boolean, cutout: boolean, steady: boolean, blurAndCuts = false) => {
   (isBlurAndCutsBuild as jest.Mock).mockReturnValue(blurAndCuts);
@@ -24,6 +24,19 @@ test("the label names what the installed app can do, newest ability first", () =
   expect(buildLabel()).toBe("App build: export only (older)");
   set(false, false, false, false, false);
   expect(buildLabel()).toBe("Expo Go (no video engine)");
+});
+
+test("the name alone (the Accounts screen's Build row) is the label's name, word for word", () => {
+  set(true, true, true, true, true, true);
+  expect(buildName()).toBe("blur and cuts");
+  set(true, true, true, true, true);
+  expect(buildName()).toBe("stabilize and smooth");
+  set(true, false, false, false, false);
+  expect(buildName()).toBe("export only (older)");
+  expect(buildLabel()).toBe(`App build: ${buildName()}`);
+  set(false, false, false, false, false);
+  expect(buildName()).toBe("Expo Go (no video engine)");
+  expect(buildLabel()).toBe(buildName());
 });
 
 test("a missing ability is said with what to do about it", () => {
