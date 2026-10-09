@@ -92,6 +92,24 @@ public class ClipyVideoModule: Module {
     return beatJobs[id]
   }
 
+  private let peaksLock = NSLock()
+  private var peaksJobs: [String: PeaksJob] = [:]   // guarded by `peaksLock`; one entry per waveform that has not answered yet
+
+  private func storePeaksJob(_ id: String, _ job: PeaksJob) {
+    peaksLock.lock(); defer { peaksLock.unlock() }
+    peaksJobs[id] = job
+  }
+
+  private func dropPeaksJob(_ id: String) {
+    peaksLock.lock(); defer { peaksLock.unlock() }
+    peaksJobs[id] = nil
+  }
+
+  private func lookupPeaksJob(_ id: String) -> PeaksJob? {
+    peaksLock.lock(); defer { peaksLock.unlock() }
+    return peaksJobs[id]
+  }
+
   private let cutoutLock = NSLock()
   private var cutoutJobs: [String: CutoutJob] = [:]   // guarded by `cutoutLock`; one entry per render that has not answered yet
 
@@ -456,6 +474,34 @@ public class ClipyVideoModule: Module {
     // "E_STEADY_CANCELLED"). An unknown or finished job: nothing.
     Function("cancelSteady") { (jobId: String) in
       self.lookupSteadyJob(jobId)?.cancel()
+    }
+
+    // The build of 2026-10-12 ("icons and light"). A waveform for a timeline bar: reads the asked stretch of the
+    // file's sound and resolves `{ peaks, from, to }` — `count` values 0 … 1, the largest |sample| of the mono mix in
+    // each of `count` equal slices (see SoundPeaks). Rejects "E_PEAKS_CANCELLED" after `cancelSoundPeaks(jobId)`,
+    // else "E_PEAKS" with a staged message. The work runs on a Swift concurrency thread, never the main one; the job
+    // is stored before it starts, so a cancel that comes at once finds it, and every way out of the `do` answers
+    // the promise exactly once. The app asks whether this function is THERE to know the build.
+    AsyncFunction("soundPeaks") { (request: SoundPeaksRequest, promise: Promise) in
+      let job = PeaksJob()
+      let jobId = request.jobId
+      self.storePeaksJob(jobId, job)
+      Task { [weak self] in
+        defer { self?.dropPeaksJob(jobId) }
+        do {
+          let answer: [String: Any] = try await SoundPeaks.run(request, job: job)
+          promise.resolve(answer)
+        } catch PeaksError.cancelled {
+          promise.reject("E_PEAKS_CANCELLED", "Peaks cancelled")
+        } catch {
+          promise.reject("E_PEAKS", SoundPeaks.message(error))
+        }
+      }
+    }
+
+    // Stops that waveform at its next buffer (it then rejects "E_PEAKS_CANCELLED"). An unknown or finished job: nothing.
+    Function("cancelSoundPeaks") { (jobId: String) in
+      self.lookupPeaksJob(jobId)?.cancel()
     }
   }
 }

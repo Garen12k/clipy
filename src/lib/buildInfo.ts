@@ -1,4 +1,4 @@
-import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
+import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isPeaksAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
 
 /**
  * What the INSTALLED app can do, newest ability first. Buttons and screens arrive from the dev server at once, but an ability that
@@ -7,6 +7,7 @@ import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isSoundAvaila
  */
 /** `name` is how `buildLabel` words it in its sentence; `title` is the same name standing alone (the Build row's value). */
 const LEVELS: { name: string; title: string; has: () => boolean }[] = [
+  { name: "icons and light", title: "Icons and light", has: isPeaksAvailable },
   { name: "blur and cuts", title: "Blur and cuts", has: isBlurAndCutsBuild },
   { name: "stabilize and smooth", title: "Stabilize and smooth", has: isSteadyAvailable },
   { name: "beats and background", title: "Beats and background", has: isCutoutAvailable },
@@ -40,3 +41,6 @@ export const BEATS_BACKGROUND_TOOLS = NEEDS_LATEST_BUILD("Beats in your own musi
 
 /** Said where Stabilize or Smooth slow motion is tapped in Expo Go or in a build from before them. */
 export const STEADY_TOOLS = NEEDS_LATEST_BUILD("Stabilize and Smooth slow motion");
+
+/** Said where taking a photo or a video is tapped in a build from before the camera's usage text (`canUseCamera` in src/projects/camera.ts). */
+export const CAMERA_NEEDS_BUILD = NEEDS_LATEST_BUILD("Photos and videos from the camera");
