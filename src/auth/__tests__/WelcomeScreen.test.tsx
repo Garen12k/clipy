@@ -26,11 +26,11 @@ function configure(on: boolean) {
   mocked(isBackendConfigured).mockReturnValue(on);
   mocked(useSession).mockReturnValue({ status: on ? "signedOut" : "unconfigured" });
 }
-async function toEmail() { await fireEvent.press(button("Continue with email")); }
+async function toEmail() { await fireEvent.press(button("Continue with Email")); }
 async function toCode(email = "me@icloud.com") {
   await toEmail();
   await fireEvent.changeText(screen.getByLabelText("Email"), email);
-  await fireEvent.press(button("Send code"));
+  await fireEvent.press(button("Send Code"));
 }
 
 beforeEach(() => {
@@ -48,18 +48,18 @@ describe("the first step", () => {
     const onDone = jest.fn();
     await render(<WelcomeScreen first onDone={onDone} />);
     // The wordmark is the loading screen's: the same numbers, shared, not copied.
-    expect(WORDMARK).toEqual({ size: 48, letterSpacing: 8 });
-    expect(screen.getByRole("header", { name: "Clipy" })).toHaveStyle({ fontFamily: theme.fonts.title, fontSize: WORDMARK.size, letterSpacing: WORDMARK.letterSpacing });
+    expect(WORDMARK.size).toBe(48);
+    expect(screen.getByRole("header", { name: "Clipy" })).toHaveStyle({ fontSize: WORDMARK.size });
     expect(screen.getByText("Edit, caption and post your clips.")).toBeTruthy();
     expect(await screen.findByLabelText("Continue with Apple")).toHaveStyle({ height: theme.size.control, width: "100%" });
     expect(screen.getByLabelText("Continue with Apple").props).toMatchObject({ buttonType: Apple.AppleAuthenticationButtonType.CONTINUE, buttonStyle: Apple.AppleAuthenticationButtonStyle.WHITE, cornerRadius: theme.size.control / 2 });
-    expect(button("Continue with Google")).toHaveStyle({ borderWidth: 1.5 });
-    expect(button("Continue with email")).toHaveStyle({ borderWidth: 1.5 });
-    expect(button("Continue without an account")).not.toHaveStyle({ borderWidth: 1.5 });
+    expect(button("Continue with Google")).toHaveStyle({ backgroundColor: theme.elevation.lifted });
+    expect(button("Continue with Email")).toHaveStyle({ backgroundColor: theme.elevation.lifted });
+    expect(button("Continue Without an Account")).not.toHaveStyle({ backgroundColor: theme.elevation.lifted });
     expect(screen.getByText("You only need an account to post. Editing works without one.")).toHaveStyle({ fontSize: theme.type.small });
     expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Not now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Not Now" })).toBeNull();
   });
 
   test("the Apple slot keeps its height while the phone is asked, and is gone when Apple sign-in is not available", async () => {
@@ -78,8 +78,8 @@ describe("the first step", () => {
     const onDone = jest.fn();
     await render(<WelcomeScreen first onDone={onDone} />);
     expect(hasSeenWelcome()).toBe(false);
-    await fireEvent.press(button("Continue without an account"));
-    await fireEvent.press(button("Continue without an account"));
+    await fireEvent.press(button("Continue Without an Account"));
+    await fireEvent.press(button("Continue Without an Account"));
     expect(hasSeenWelcome()).toBe(true);
     expect(onDone).toHaveBeenCalledTimes(1);
   });
@@ -87,8 +87,8 @@ describe("the first step", () => {
   test("opened from Accounts or Post: a close button, and the quiet link says 'Not now' — both simply leave", async () => {
     const onDone = jest.fn();
     const first = await render(<WelcomeScreen onDone={onDone} />);
-    expect(screen.queryByRole("button", { name: "Continue without an account" })).toBeNull();
-    await fireEvent.press(button("Not now"));
+    expect(screen.queryByRole("button", { name: "Continue Without an Account" })).toBeNull();
+    await fireEvent.press(button("Not Now"));
     expect(onDone).toHaveBeenCalledTimes(1);
     await first.unmount();
     await render(<WelcomeScreen onDone={onDone} />);
@@ -140,7 +140,7 @@ describe("the first step", () => {
     await render(<WelcomeScreen first onDone={jest.fn()} />);
     await fireEvent.press(button("Continue with Google"));
     expect(useToast.getState().message).toBe(NOT_SET_UP);
-    await fireEvent.press(button("Continue without an account"));
+    await fireEvent.press(button("Continue Without an Account"));
     expect(useToast.getState().message).toBeNull();
   });
 
@@ -176,17 +176,17 @@ describe("busy", () => {
     expect(screen.getByLabelText("Signing in")).toBeTruthy();
     // VoiceOver: Apple's own button cannot be dimmed, so its wrapper is the (disabled) button while busy.
     expect(screen.getByTestId("welcome-apple").props).toMatchObject({ accessible: true, accessibilityRole: "button", accessibilityLabel: "Continue with Apple", accessibilityState: { disabled: true }, pointerEvents: "none" });
-    for (const name of ["Continue with Google", "Continue with email", "Not now", "Close"]) expect(button(name)).toBeDisabled();
+    for (const name of ["Continue with Google", "Continue with Email", "Not Now", "Close"]) expect(button(name)).toBeDisabled();
     await fireEvent.press(button("Continue with Google"));
     await fireEvent.press(apple);
-    await fireEvent.press(button("Continue with email"));
-    await fireEvent.press(button("Not now"));
+    await fireEvent.press(button("Continue with Email"));
+    await fireEvent.press(button("Not Now"));
     expect(signInWithGoogle).toHaveBeenCalledTimes(1);
     expect(signInWithApple).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Email")).toBeNull();
     expect(onDone).not.toHaveBeenCalled();
     await act(async () => { google.resolve("cancelled"); });
-    for (const name of ["Continue with Google", "Continue with email", "Not now", "Close"]) expect(button(name)).not.toBeDisabled();
+    for (const name of ["Continue with Google", "Continue with Email", "Not Now", "Close"]) expect(button(name)).not.toBeDisabled();
     expect(screen.queryByLabelText("Signing in")).toBeNull();
     expect(screen.getByTestId("welcome-working")).toHaveStyle(slot);
     expect(screen.getByTestId("welcome-apple").props.accessible).not.toBe(true);
@@ -212,18 +212,20 @@ describe("email", () => {
   test("the email step: a back control, the title, an email field, and 'Send code' — the one gold button — off until the text looks like an address", async () => {
     await render(<WelcomeScreen first onDone={jest.fn()} />);
     await toEmail();
-    // A heading like every other: the kit Title's own upper-casing and spacing, nothing switched off.
+    // A heading like every other: the kit Title, as typed.
     const heading = StyleSheet.flatten(screen.getByRole("header", { name: "Sign in with email" }).props.style);
-    expect(heading).toMatchObject({ fontSize: theme.type.title, textTransform: "uppercase", letterSpacing: 1.5 });
+    expect(heading).toMatchObject({ fontSize: theme.type.title });
+    expect(heading).not.toHaveProperty("textTransform");
+    expect(heading).not.toHaveProperty("letterSpacing");
     expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
     expect(screen.getByLabelText("Email").props).toMatchObject({ keyboardType: "email-address", autoCapitalize: "none", autoCorrect: false, textContentType: "emailAddress", autoComplete: "email", returnKeyType: "send" });
     expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
     for (const [text, ok] of [["", false], ["me", false], ["me@icloud", false], ["me@icloud.", false], ["me @icloud.com", false], ["  me@icloud.com ", true], ["a@b.co", true]] as const) {
       await fireEvent.changeText(screen.getByLabelText("Email"), text);
-      if (ok) expect(button("Send code")).not.toBeDisabled(); else expect(button("Send code")).toBeDisabled();
+      if (ok) expect(button("Send Code")).not.toBeDisabled(); else expect(button("Send Code")).toBeDisabled();
     }
     await fireEvent.press(button("Back"));
-    expect(button("Continue with email")).toBeTruthy();
+    expect(button("Continue with Email")).toBeTruthy();
   });
 
   test("a sent code moves to the code step; a failed send stays, with the reason under the field until the text is edited", async () => {
@@ -248,7 +250,7 @@ describe("email", () => {
     mocked(sendEmailCode).mockReturnValueOnce(sending.promise);
     await render(<WelcomeScreen first onDone={jest.fn()} />);
     await toCode();
-    expect(screen.queryByRole("button", { name: "Send code" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send Code" })).toBeNull();
     expect(screen.getByLabelText("Sending code")).toBeTruthy();
     expect(button("Back")).toBeDisabled();
     await fireEvent(screen.getByLabelText("Email"), "submitEditing");
@@ -265,12 +267,12 @@ describe("the code", () => {
     const field = () => screen.getByLabelText("6-digit code");
     expect(field().props).toMatchObject({ keyboardType: "number-pad", textContentType: "oneTimeCode", autoComplete: "one-time-code", maxLength: 6 });
     expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
-    expect(button("Sign in")).toBeDisabled();
+    expect(button("Sign In")).toBeDisabled();
     await fireEvent.changeText(field(), "12a 34");
     expect(field().props.value).toBe("1234");
-    expect(button("Sign in")).toBeDisabled();
+    expect(button("Sign In")).toBeDisabled();
     expect(verifyEmailCode).not.toHaveBeenCalled();
-    await fireEvent.press(button("Use a different email"));
+    await fireEvent.press(button("Use a Different Email"));
     expect(screen.getByLabelText("Email").props.value).toBe("me@icloud.com");
   });
 
@@ -293,7 +295,7 @@ describe("the code", () => {
     await fireEvent.changeText(screen.getByLabelText("6-digit code"), "111111");
     expect(await screen.findByTestId("welcome-error")).toHaveTextContent("That code didn't work. Check it or send a new one.");
     expect(onDone).not.toHaveBeenCalled(); expect(hasSeenWelcome()).toBe(false);
-    await fireEvent.press(button("Sign in"));
+    await fireEvent.press(button("Sign In"));
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
     expect(verifyEmailCode).toHaveBeenCalledTimes(2);
   });
@@ -305,10 +307,10 @@ describe("the code", () => {
     await render(<WelcomeScreen first onDone={onDone} />);
     await toCode();
     await fireEvent.changeText(screen.getByLabelText("6-digit code"), "123456");
-    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sign In" })).toBeNull();
     expect(screen.getByLabelText("Signing in")).toBeTruthy();
-    for (const name of ["Use a different email", "Back"]) expect(button(name)).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^Resend code/ })).toBeDisabled();
+    for (const name of ["Use a Different Email", "Back"]) expect(button(name)).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Resend Code/ })).toBeDisabled();
     await fireEvent.changeText(screen.getByLabelText("6-digit code"), "123456");
     expect(verifyEmailCode).toHaveBeenCalledTimes(1);
     await act(async () => { checking.resolve(); });
@@ -323,34 +325,34 @@ describe("the code", () => {
     const running = () => started.mock.results.map((r) => r.value).filter((id) => !stopped.mock.calls.some(([c]) => c === id)).length;
     const v = await render(<WelcomeScreen first onDone={jest.fn()} />);
     await toCode();
-    expect(button("Resend code in 60 s")).toBeDisabled();
+    expect(button("Resend Code in 60 s")).toBeDisabled();
     await act(async () => { jest.advanceTimersByTime(6000); });
-    expect(button("Resend code in 54 s")).toBeDisabled();
-    await fireEvent.press(button("Resend code in 54 s"));
+    expect(button("Resend Code in 54 s")).toBeDisabled();
+    await fireEvent.press(button("Resend Code in 54 s"));
     expect(sendEmailCode).toHaveBeenCalledTimes(1);
     await act(async () => { jest.advanceTimersByTime(54000); });
-    expect(button("Resend code")).not.toBeDisabled();
+    expect(button("Resend Code")).not.toBeDisabled();
     await act(async () => { jest.advanceTimersByTime(5000); });
-    expect(button("Resend code")).not.toBeDisabled();
-    await fireEvent.press(button("Resend code"));
+    expect(button("Resend Code")).not.toBeDisabled();
+    await fireEvent.press(button("Resend Code"));
     expect(sendEmailCode).toHaveBeenCalledTimes(2);
-    expect(button("Resend code in 60 s")).toBeDisabled();
+    expect(button("Resend Code in 60 s")).toBeDisabled();
     expect(screen.getByTestId("welcome-note")).toHaveTextContent("We sent a new code.");
     // A failed resend says why, and can be tried again at once.
     await act(async () => { jest.advanceTimersByTime(60000); });
     mocked(sendEmailCode).mockRejectedValueOnce(new Error("Couldn't reach Clipy. Check your connection."));
-    await fireEvent.press(button("Resend code"));
+    await fireEvent.press(button("Resend Code"));
     expect(screen.getByTestId("welcome-error")).toHaveTextContent("Couldn't reach Clipy. Check your connection.");
-    expect(button("Resend code")).not.toBeDisabled();
+    expect(button("Resend Code")).not.toBeDisabled();
     // Going back to the address stops the countdown; a new code starts it afresh. Unmounting leaves no timer behind.
-    await fireEvent.press(button("Resend code"));
+    await fireEvent.press(button("Resend Code"));
     await act(async () => { jest.advanceTimersByTime(3000); });
-    expect(button("Resend code in 57 s")).toBeTruthy();
+    expect(button("Resend Code in 57 s")).toBeTruthy();
     expect(running()).toBe(1);
-    await fireEvent.press(button("Use a different email"));
+    await fireEvent.press(button("Use a Different Email"));
     expect(running()).toBe(0);
-    await fireEvent.press(button("Send code"));
-    expect(button("Resend code in 60 s")).toBeTruthy();
+    await fireEvent.press(button("Send Code"));
+    expect(button("Resend Code in 60 s")).toBeTruthy();
     expect(running()).toBe(1);
     await v.unmount();
     expect(running()).toBe(0);
@@ -395,17 +397,17 @@ describe("preview: no backend (the owner's phone today)", () => {
     expect(screen.queryByTestId("welcome-error")).toBeNull();
     expect(screen.getByTestId("welcome-note")).toHaveTextContent("Sign-in isn't set up yet, so no code was sent.");
     await fireEvent.changeText(screen.getByLabelText("6-digit code"), "123456");
-    await fireEvent.press(button("Sign in"));
+    await fireEvent.press(button("Sign In"));
     expect(screen.getByTestId("welcome-error")).toHaveTextContent(NOT_SET_UP);
     expect(dismiss).toHaveBeenCalledTimes(3);
     expect(useToast.getState().message).toBeNull();
-    expect(button("Sign in")).not.toBeDisabled();
+    expect(button("Sign In")).not.toBeDisabled();
     dismiss.mockRestore();
     // Back on the address, the same sentence is the note under the field.
-    await fireEvent.press(button("Use a different email"));
+    await fireEvent.press(button("Use a Different Email"));
     expect(screen.getByTestId("welcome-note")).toHaveTextContent(NOT_SET_UP);
     await fireEvent.press(button("Back"));
-    await fireEvent.press(button("Continue without an account"));
+    await fireEvent.press(button("Continue Without an Account"));
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(hasSeenWelcome()).toBe(true);
     expect(sendEmailCode).not.toHaveBeenCalled(); expect(verifyEmailCode).not.toHaveBeenCalled();

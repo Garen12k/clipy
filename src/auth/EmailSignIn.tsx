@@ -33,7 +33,7 @@ function Working({ label }: { label: string }) {
 
 type EmailProps = { email: string; onChange: (text: string) => void; note: string | null; error: string | null; busy: boolean; onSend: () => void };
 
-/** Step two: the address. The gold button is "Send code". */
+/** Step two: the address. The gold button is "Send Code". */
 export function EmailStep({ email, onChange, note, error, busy, onSend }: EmailProps) {
   const ready = looksLikeEmail(email);
   return (
@@ -43,7 +43,7 @@ export function EmailStep({ email, onChange, note, error, busy, onSend }: EmailP
         keyboardType="email-address" autoCapitalize="none" autoCorrect={false} textContentType="emailAddress" autoComplete="email"
         returnKeyType="send" onSubmitEditing={() => { if (ready) onSend(); }} />
       {error ? <Message text={error} error /> : note ? <Message text={note} /> : null}
-      {busy ? <Working label="Sending code" /> : <PrimaryButton title="Send code" onPress={onSend} disabled={!ready} />}
+      {busy ? <Working label="Sending code" /> : <PrimaryButton title="Send Code" onPress={onSend} disabled={!ready} />}
     </EnterView>
   );
 }
@@ -56,7 +56,7 @@ type CodeProps = {
   onVerify: () => void; onResend: () => void; onChangeEmail: () => void;
 };
 
-/** Step three: the code. The gold button is "Sign in". */
+/** Step three: the code. The gold button is "Sign In". */
 export function CodeStep({ email, code, onChange, note, error, working, resendIn, preview = false, onVerify, onResend, onChangeEmail }: CodeProps) {
   const busy = working !== null;
   return (
@@ -66,10 +66,10 @@ export function CodeStep({ email, code, onChange, note, error, working, resendIn
         keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="one-time-code" maxLength={CODE_LENGTH}
         style={{ fontVariant: ["tabular-nums"], letterSpacing: theme.space.sm }} />
       {error ? <Message text={error} error /> : note ? <Message text={note} /> : null}
-      {working !== null ? <Working label={working} /> : <PrimaryButton title="Sign in" onPress={onVerify} disabled={code.length !== CODE_LENGTH} />}
+      {working !== null ? <Working label={working} /> : <PrimaryButton title="Sign In" onPress={onVerify} disabled={code.length !== CODE_LENGTH} />}
       <View style={{ alignItems: "center" }}>
-        <QuietButton title={resendIn > 0 ? `Resend code in ${resendIn} s` : "Resend code"} onPress={onResend} disabled={busy || resendIn > 0} />
-        <QuietButton title="Use a different email" onPress={onChangeEmail} disabled={busy} />
+        <QuietButton title={resendIn > 0 ? `Resend Code in ${resendIn} s` : "Resend Code"} onPress={onResend} disabled={busy || resendIn > 0} />
+        <QuietButton title="Use a Different Email" onPress={onChangeEmail} disabled={busy} />
       </View>
     </EnterView>
   );

@@ -58,9 +58,9 @@ test("a card starts no animation of its own: not on mount, not on a re-render (t
 test("round 2 look: softer corners with a hairline; the length and the second line are readable sizes", async () => {
   await render(<ProjectCard summary={summary} onPress={jest.fn()} onLongPress={jest.fn()} />);
   expect(screen.getByRole("button", { name: "Beach day" })).toHaveStyle({ borderRadius: theme.radius.cover, borderWidth: 1, borderColor: theme.colors.hairline, backgroundColor: theme.elevation.tile });
-  expect(screen.getByText("0:21")).toHaveStyle({ fontSize: theme.type.small, color: theme.colors.text, fontFamily: theme.fonts.bodySemi, fontVariant: ["tabular-nums"] });
+  expect(screen.getByText("0:21")).toHaveStyle({ fontSize: theme.type.small, color: theme.colors.text, fontWeight: theme.weight.semi, fontVariant: ["tabular-nums"] });
   expect(screen.getByText("Edited today")).toHaveStyle({ fontSize: theme.type.small, color: theme.colors.textMuted });
-  expect(screen.getByText("Beach day")).toHaveStyle({ fontSize: theme.type.body, fontFamily: theme.fonts.bodySemi });
+  expect(screen.getByText("Beach day")).toHaveStyle({ fontSize: theme.type.body, fontWeight: theme.weight.semi });
 });
 
 test("the second line may wrap to two lines, and the fade is strongest right under the text", async () => {

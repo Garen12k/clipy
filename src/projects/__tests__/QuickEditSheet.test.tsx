@@ -31,6 +31,6 @@ test("the style chosen is the one handed on", async () => {
   const onChoose = jest.fn();
   await render(<QuickEditSheet visible onClose={() => {}} onChoose={onChoose} />);
   await fireEvent.press(screen.getByRole("button", { name: "Calm" }));
-  await fireEvent.press(screen.getByRole("button", { name: "Choose photos and videos" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Choose Photos and Videos" }));
   expect(onChoose).toHaveBeenCalledWith("calm");
 });

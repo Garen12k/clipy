@@ -113,9 +113,9 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
         <View style={{ gap: theme.space.lg }}>
           <Card testID="export-error" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
             <Ionicons testID="export-error-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="alert-circle-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
-            <Body style={{ flex: 1 }}>{state.message}</Body>
+            <Body style={{ flex: 1, fontSize: theme.type.body }}>{state.message}</Body>
           </Card>
-          <PrimaryButton title="Try again" onPress={reset} />
+          <PrimaryButton title="Try Again" onPress={reset} />
         </View>
       )}
     </Screen>

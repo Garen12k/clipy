@@ -24,7 +24,7 @@ export default function AccountsScreen() {
   const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
   const confirmSignOut = () => Alert.alert("Sign out of Clipy?", "Your connected accounts stay connected.", [
     { text: "Cancel", style: "cancel" },
-    { text: "Sign out", style: "destructive", onPress: async () => {
+    { text: "Sign Out", style: "destructive", onPress: async () => {
       try { await signOut(); useToast.getState().show("Signed out."); } catch (e) { useToast.getState().show(e instanceof Error && e.message ? e.message : "Couldn't sign out."); }
     } }]);
 
@@ -42,7 +42,7 @@ export default function AccountsScreen() {
         {!signedIn ? null : status === "error" ? (
           <Card style={{ gap: theme.space.md, alignItems: "flex-start" }}>
             <Body>{error ?? "Something went wrong."}</Body>
-            <SecondaryButton title="Try again" onPress={refresh} />
+            <SecondaryButton title="Try Again" onPress={refresh} />
           </Card>
         ) : status !== "ready" ? spinner : (
           <Card style={{ paddingVertical: theme.space.xs }}>
@@ -57,7 +57,7 @@ export default function AccountsScreen() {
       {signedIn ? (
         <View style={{ paddingHorizontal: theme.space.gutter, paddingTop: theme.space.md, gap: theme.space.md, alignItems: "center" }}>
           <Body muted style={{ textAlign: "center" }}>{session.email ? `Signed in as ${session.email}` : "Signed in"}</Body>
-          <QuietButton title="Sign out" onPress={confirmSignOut} />
+          <QuietButton title="Sign Out" onPress={confirmSignOut} />
         </View>
       ) : null}
       {/* Which app is installed: a tool can be on screen in a build too old to run it. */}

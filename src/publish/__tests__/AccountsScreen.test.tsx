@@ -24,8 +24,8 @@ test("signed out: sign-in card only, accounts not requested", async () => {
   await render(<AccountsScreen />);
   expect(useAccounts).toHaveBeenCalledWith(false);
   expect(screen.queryByText("YouTube")).toBeNull();
-  expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
-  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  expect(screen.queryByRole("button", { name: "Sign Out" })).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "Sign In" }));
   expect(router.push).toHaveBeenCalledWith("/welcome");
 });
 
@@ -72,10 +72,10 @@ test("load error offers Try again; footer signs out after confirmation", async (
   const alert = alertSpy().mockImplementation(() => {});
   await render(<AccountsScreen />);
   expect(screen.getByText("Clipy's server is asleep or unreachable.")).toBeTruthy();
-  await fireEvent.press(screen.getByRole("button", { name: "Try again" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Try Again" }));
   expect(h.refresh).toHaveBeenCalled();
   expect(screen.getByText("Signed in as me@icloud.com")).toBeTruthy();
-  await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Sign Out" }));
   expect(alert).toHaveBeenCalledWith("Sign out of Clipy?", expect.any(String), expect.any(Array));
   expect(signOut).not.toHaveBeenCalled();
   const buttons = alert.mock.calls[0][2] as { text: string; style?: string; onPress?: () => void }[];
@@ -89,7 +89,7 @@ test("signed in without an email (Apple can hide it): just 'Signed in'", async (
   (useAccounts as jest.Mock).mockReturnValue(hook());
   await render(<AccountsScreen />);
   expect(screen.getByText("Signed in")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Sign Out" })).toBeTruthy();
 });
 
 test("a failed sign-out says so and does not claim to have signed out", async () => {
@@ -97,7 +97,7 @@ test("a failed sign-out says so and does not claim to have signed out", async ()
   (signOut as jest.Mock).mockRejectedValueOnce(new Error("Couldn't reach Clipy. Check your connection."));
   const alert = alertSpy().mockImplementation(() => {});
   await render(<AccountsScreen />);
-  await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Sign Out" }));
   const buttons = alert.mock.calls[0][2] as { style?: string; onPress?: () => void }[];
   await act(async () => { await buttons.find((b) => b.style === "destructive")!.onPress!(); });
   expect(useToast.getState().message).toBe("Couldn't reach Clipy. Check your connection.");
@@ -108,7 +108,7 @@ describe("round 2 look (no behaviour)", () => {
     (useAccounts as jest.Mock).mockReturnValue(hook());
     await render(<AccountsScreen />);
     expect(screen.getByTestId("account-row-youtube")).toHaveStyle({ minHeight: theme.size.listRow });
-    expect(screen.getByRole("button", { name: "Connect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Connect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });
     expect(screen.getByRole("header", { name: "Accounts" })).toHaveStyle({ fontSize: theme.type.screen });
   });
 
@@ -119,10 +119,10 @@ describe("round 2 look (no behaviour)", () => {
     ] }));
     await render(<AccountsScreen />);
     expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
-    expect(screen.getByRole("button", { name: "Reconnect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Reconnect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });
     expect(screen.getByRole("button", { name: "Disconnect TikTok" })).toHaveStyle({ height: theme.size.controlCompact });
-    expect(screen.getByRole("button", { name: "Disconnect TikTok" })).not.toHaveStyle({ borderWidth: 1.5 });
-    expect(screen.getByRole("button", { name: "Sign out" })).not.toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Disconnect TikTok" })).not.toHaveStyle({ backgroundColor: theme.elevation.lifted });
+    expect(screen.getByRole("button", { name: "Sign Out" })).not.toHaveStyle({ backgroundColor: theme.elevation.lifted });
     expect(screen.getByText("Sign-in expired")).toHaveStyle({ fontSize: theme.type.label, color: theme.colors.dangerText });
   });
 });

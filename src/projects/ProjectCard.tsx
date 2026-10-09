@@ -1,10 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Image, View } from "react-native";
+import { Image, Text, View } from "react-native";
+import { COVER_FONT } from "@/src/editor/coverFont";
 import { PLATFORM_LABELS } from "@/src/editor/model/types";
 import { editedLabel, formatDuration } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { PressableScale } from "@/src/ui/PressableScale";
-import { Body, Title } from "@/src/ui/Text";
+import { Body } from "@/src/ui/Text";
 import type { ProjectSummary } from "./storage";
 
 type Props = { summary: ProjectSummary; onPress: () => void; onLongPress: () => void };
@@ -35,9 +36,9 @@ export function ProjectCard({ summary, onPress, onLongPress }: Props) {
           </View>
         )}
         {summary.coverTitle ? (
-          // Drawn as on the cover itself (CoverFrame): the title font, as typed.
-          <Title testID="project-cover-title" size={COVER_TITLE.size} numberOfLines={2}
-            style={{ position: "absolute", left: theme.space.sm, right: theme.space.sm, bottom: COVER_TITLE.bottom, textAlign: "center", textTransform: "none", letterSpacing: 0 }}>{summary.coverTitle}</Title>
+          // Drawn as on the cover itself (CoverFrame): the cover's own font, as typed. Content, not interface text.
+          <Text testID="project-cover-title" numberOfLines={2}
+            style={{ position: "absolute", left: theme.space.sm, right: theme.space.sm, bottom: COVER_TITLE.bottom, textAlign: "center", fontFamily: COVER_FONT, fontSize: COVER_TITLE.size, color: theme.colors.text }}>{summary.coverTitle}</Text>
         ) : null}
         <LinearGradient testID="project-card-fade" colors={["transparent", theme.colors.scrimStrong, theme.colors.scrimStrong]} locations={[0, 0.3, 1]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.md, paddingTop: theme.space.xxl }}>
           <Body weight="semi" numberOfLines={1} style={{ fontSize: theme.type.body, color: summary.broken ? theme.colors.dangerText : theme.colors.text }}>{summary.name}</Body>

@@ -84,7 +84,7 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
             {accounts.status === "error" ? (
               <Card style={{ gap: theme.space.md, alignItems: "flex-start" }}>
                 <Body>{accounts.error ?? "Something went wrong."}</Body>
-                <SecondaryButton title="Try again" onPress={accounts.refresh} />
+                <SecondaryButton title="Try Again" onPress={accounts.refresh} />
               </Card>
             ) : accounts.status !== "ready" ? spinner : (
               <Card style={{ paddingVertical: theme.space.xs }}>
@@ -127,7 +127,7 @@ function useLeaveGuard(busy: boolean, cancel: () => void) {
     if (!busyRef.current || leaving.current) return;
     e.preventDefault();
     Alert.alert("Stop posting?", "Uploads in progress will be cancelled.", [
-      { text: "Keep posting", style: "cancel" },
+      { text: "Keep Posting", style: "cancel" },
       { text: "Stop", style: "destructive", onPress: () => { leaving.current = true; cancel(); navigation.dispatch(e.data.action); } },
     ]);
   }), [navigation, cancel]);

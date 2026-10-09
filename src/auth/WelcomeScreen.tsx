@@ -174,7 +174,7 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
         {step === "choose" ? (
           <EnterView style={{ flexGrow: 1, gap: theme.space.xl }}>
             <View style={{ flexGrow: 1, alignItems: "center", justifyContent: "center", gap: theme.space.sm, paddingVertical: theme.space.xxl }}>
-              <Title size={WORDMARK.size} accessibilityRole="header" style={{ letterSpacing: WORDMARK.letterSpacing }}>Clipy</Title>
+              <Title size={WORDMARK.size} accessibilityRole="header">Clipy</Title>
               <Body muted style={{ fontSize: theme.type.input, textAlign: "center" }}>{TAGLINE}</Body>
               {/* Google's session is completed after its browser has closed: this is what shows that something is happening. */}
               <View testID="welcome-working" style={{ height: WORKING_SLOT, justifyContent: "center" }}>
@@ -196,9 +196,9 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
               ) : null}
               <SecondaryButton title="Continue with Google" disabled={busy} onPress={() => provider("Signing in", signInWithGoogle)}
                 icon={<Ionicons name="logo-google" size={theme.size.icon.md} color={iconColor} {...hidden} />} />
-              <SecondaryButton title="Continue with email" disabled={busy} onPress={() => setStep("email")}
+              <SecondaryButton title="Continue with Email" disabled={busy} onPress={() => setStep("email")}
                 icon={<Ionicons name="mail-outline" size={theme.size.icon.md} color={iconColor} {...hidden} />} />
-              <QuietButton title={first ? "Continue without an account" : "Not now"} disabled={busy} onPress={leave} />
+              <QuietButton title={first ? "Continue Without an Account" : "Not Now"} disabled={busy} onPress={leave} />
             </View>
             <Body muted style={{ fontSize: theme.type.small, textAlign: "center" }}>{FOOTER}</Body>
           </EnterView>

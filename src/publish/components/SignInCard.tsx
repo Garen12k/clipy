@@ -25,7 +25,7 @@ export function SignInCard() {
         <Title size={theme.type.heading}>Sign-in isn't set up yet</Title>
         <Body muted>Clipy's server hasn't been connected, so signing in and posting don't work yet. You can still share with the Share button.</Body>
         {/* Not gold: until the server exists the page it opens is a preview. */}
-        <SecondaryButton title="Sign in" onPress={openSignIn} />
+        <SecondaryButton title="Sign In" onPress={openSignIn} />
       </Card>
     );
   }
@@ -34,7 +34,7 @@ export function SignInCard() {
     <Card style={{ gap: theme.space.md }}>
       <Title size={theme.type.heading}>Sign in to Clipy</Title>
       <Body muted>Clipy keeps your connected accounts safe on its server.</Body>
-      <PrimaryButton title="Sign in" onPress={openSignIn} />
+      <PrimaryButton title="Sign In" onPress={openSignIn} />
     </Card>
   );
 }

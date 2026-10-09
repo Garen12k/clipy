@@ -68,7 +68,7 @@ afterEach(() => { if (jest.isMockFunction(Alert.alert)) (Alert.alert as jest.Moc
 test("signed out shows only the sign-in card", async () => {
   (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
   await render(<PostScreen />);
-  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Sign In" }));
   expect(router.push).toHaveBeenCalledWith("/welcome");
   expect(screen.queryByRole("button", { name: "Post" })).toBeNull();
   expect(useAccounts).toHaveBeenCalledWith(false);
@@ -277,7 +277,7 @@ test("leaving while uploads run asks first; Stop cancels and then leaves", async
   expect(e.preventDefault).toHaveBeenCalled();
   expect(alert).toHaveBeenCalledWith("Stop posting?", "Uploads in progress will be cancelled.", expect.any(Array));
   const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
-  expect(buttons.map((b) => b.text)).toEqual(["Keep posting", "Stop"]);
+  expect(buttons.map((b) => b.text)).toEqual(["Keep Posting", "Stop"]);
   await act(async () => { buttons.find((b) => b.text === "Stop")!.onPress!(); });
   expect(p.cancel).toHaveBeenCalled();
   expect(mockNav.dispatch).toHaveBeenCalledWith({ type: "GO_BACK" });
@@ -727,7 +727,7 @@ describe("round 2 look (no behaviour)", () => {
     expect(screen.getByLabelText("Caption")).toHaveProp("placeholder", "Write a caption…");
     expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
     expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Post");
-    expect(screen.getByRole("button", { name: "Share…" })).toHaveStyle({ borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Share…" })).toHaveStyle({ backgroundColor: theme.elevation.lifted });
     expect(screen.getByRole("header", { name: "Post" })).toHaveStyle({ fontSize: theme.type.screen });
   });
 
@@ -736,7 +736,7 @@ describe("round 2 look (no behaviour)", () => {
     expect(screen.getByTestId("post-row-youtube")).toHaveStyle({ minHeight: theme.size.listRow });
     const options = screen.getByRole("button", { name: "YouTube options" });
     expect(options).toHaveStyle({ height: theme.size.controlCompact });
-    expect(options).not.toHaveStyle({ borderWidth: 1.5 });
+    expect(options).not.toHaveStyle({ backgroundColor: theme.elevation.lifted });
     // The tick row itself fills the 56-pt row, so a tap above or below the text still lands.
     expect(screen.getByRole("checkbox", { name: "YouTube" })).toHaveStyle({ alignSelf: "stretch", alignItems: "center" });
     expect(screen.getByText(/private until Google reviews/i)).toHaveStyle({ fontSize: theme.type.small, color: theme.colors.textMuted });
@@ -752,7 +752,7 @@ describe("round 2 look (no behaviour)", () => {
   test("a row's action is a compact outlined button; its error is red and a size larger than a note", async () => {
     usePostReturns(post({ rows: rows({ phase: "failed", message: "The video has been rejected.", resumable: false }) }));
     await render(<PostScreen />);
-    expect(screen.getByRole("button", { name: "Retry YouTube" })).toHaveStyle({ height: theme.size.controlCompact, borderWidth: 1.5 });
+    expect(screen.getByRole("button", { name: "Retry YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });
     expect(screen.getByText("The video has been rejected.")).toHaveStyle({ fontSize: theme.type.label, color: theme.colors.dangerText });
   });
 

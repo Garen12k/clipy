@@ -132,7 +132,7 @@ function ProjectsScreen() {
   return (
     <Screen>
       <View testID="home-header" style={{ height: theme.size.row, paddingLeft: theme.space.gutter, paddingRight: theme.space.sm, marginBottom: theme.space.sm, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Title size={theme.type.screen} accessibilityRole="header">Your voyages</Title>
+        <Title size={theme.type.screen} accessibilityRole="header">Projects</Title>
         <View testID="home-header-actions" pointerEvents={touch} style={{ flexDirection: "row", alignItems: "center" }}>
           <IconButton name="paper-plane-outline" accessibilityLabel="Post a video" onPress={onPostVideo} />
           <IconButton name="person-circle-outline" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
@@ -164,9 +164,9 @@ function ProjectsScreen() {
           <>
             {/* An outlined button has no fill of its own: the pill behind it keeps it readable over the cards. */}
             <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
-              <SecondaryButton title="Quick edit" onPress={onQuick} />
+              <SecondaryButton title="Quick Edit" onPress={onQuick} />
             </View>
-            <PrimaryButton title="New project" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
+            <PrimaryButton title="New Project" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
           </>
         )}
       </View>
