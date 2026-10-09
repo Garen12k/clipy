@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useEffect, useRef, useState } from "react";
 import { Keyboard, ScrollView, View } from "react-native";
@@ -195,9 +195,9 @@ export function WelcomeScreen({ first = false, onDone }: Props) {
                 </View>
               ) : null}
               <SecondaryButton title="Continue with Google" disabled={busy} onPress={() => provider("Signing in", signInWithGoogle)}
-                icon={<Ionicons name="logo-google" size={theme.size.icon.md} color={iconColor} {...hidden} />} />
+                icon={<Icon name="logo-google" size={theme.size.icon.md} color={iconColor} {...hidden} />} />
               <SecondaryButton title="Continue with Email" disabled={busy} onPress={() => setStep("email")}
-                icon={<Ionicons name="mail-outline" size={theme.size.icon.md} color={iconColor} {...hidden} />} />
+                icon={<Icon name="mail-outline" size={theme.size.icon.md} color={iconColor} {...hidden} />} />
               <QuietButton title={first ? "Continue Without an Account" : "Not Now"} disabled={busy} onPress={leave} />
             </View>
             <Body muted style={{ fontSize: theme.type.small, textAlign: "center" }}>{FOOTER}</Body>

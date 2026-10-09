@@ -163,3 +163,30 @@ test("the map, as decided", () => {
     "pulse-outline": "waveform.path.ecg", "git-compare-outline": "waveform.path", "flashlight-outline": "light.beacon.max", "fitness-outline": "waveform.path.ecg.rectangle",
   });
 });
+
+test("icons are drawn only through the kit Icon: no other file loads the icon font, and the text-glyph places are exactly these", () => {
+  /** Where an icon stays the text glyph (`plain`), and how many: inside the scrolling timeline and in every row of a long list. */
+  const PLAIN: Record<string, number> = {
+    "src/editor/components/AddAudioSheet.tsx": 1,     // play / stop in every row of the music and sound-effect lists
+    "src/editor/components/AddClipTile.tsx": 1,       // the tile at the timeline's end
+    "src/editor/components/AudioBar.tsx": 2,          // a sound bar's glyph and its missing-file badge
+    "src/editor/components/ClipThumbStrip.tsx": 2,    // a clip's missing-file and photo badges
+    "src/editor/components/CutMarker.tsx": 1,         // the + between two clips
+    "src/editor/components/EffectPill.tsx": 1,        // an effect bar's glyph
+    "src/editor/components/LayerBar.tsx": 2,          // a layer bar's glyph and its missing-file badge
+    "src/editor/components/OverlayPill.tsx": 1,       // a text / caption / sticker bar's glyph
+    "src/editor/components/ReorderHandle.tsx": 1,     // the grip on the selected clip
+    "src/projects/ProjectCard.tsx": 2,                // every card of the projects list: More, and the missing-project mark
+  };
+  const loads: string[] = [];
+  const plain: Record<string, number> = {};
+  for (const dir of ["app", "src"]) for (const file of walk(join(ROOT, dir))) {
+    const rel = relative(ROOT, file).split(sep).join("/");
+    const src = readFileSync(file, "utf8");
+    if (/^import (?!type\b)[^;]*from "@expo\/vector-icons/m.test(src) || /require\("@expo\/vector-icons/.test(src)) loads.push(rel);
+    const n = [...src.matchAll(/<(?:Icon|IconButton) plain\b/g)].length;
+    if (n > 0) plain[rel] = n;
+  }
+  expect(loads).toEqual(["src/ui/Icon.tsx"]);
+  expect(plain).toEqual(PLAIN);
+});

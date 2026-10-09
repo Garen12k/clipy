@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { clampExportSettings, EXPORT_FPS, EXPORT_QUALITIES, type ExportSettings, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -117,7 +117,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
       {state.status === "error" && (
         <View style={{ flex: 1, paddingHorizontal: theme.space.gutter }}>
           <Card testID="export-error" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
-            <Ionicons testID="export-error-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="alert-circle-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
+            <Icon testID="export-error-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="alert-circle-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
             <Body style={{ flex: 1, fontSize: theme.type.body }}>{state.message}</Body>
           </Card>
         </View>
@@ -134,7 +134,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
             </>) : <PrimaryButton title="Save to Photos" onPress={onSave} />}
             <View testID="export-quiet-row" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <QuietButton title="Share" onPress={onShare}
-                icon={<Ionicons testID="export-share-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="share-outline" size={theme.size.icon.md} color={theme.colors.accent} />} />
+                icon={<Icon testID="export-share-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="share-outline" size={theme.size.icon.md} color={theme.colors.accent} />} />
               <QuietButton title="Done" onPress={onDone} />
             </View>
           </>)}

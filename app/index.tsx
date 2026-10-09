@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { Alert, FlatList, View } from "react-native";
@@ -186,9 +186,9 @@ function ProjectsScreen() {
           <>
             {/* The grey button has its own fill; the pill behind it only keeps it readable over the cards. */}
             <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar }}>
-              <SecondaryButton title="Quick Edit" icon={<Ionicons name="color-wand-outline" size={theme.size.icon.md} color={theme.colors.text} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onQuick} />
+              <SecondaryButton title="Quick Edit" icon={<Icon name="color-wand-outline" size={theme.size.icon.md} color={theme.colors.text} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onQuick} />
             </View>
-            <PrimaryButton title="New Project" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
+            <PrimaryButton title="New Project" icon={<Icon name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
           </>
         )}
       </View>

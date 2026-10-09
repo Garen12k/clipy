@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { router } from "expo-router";
 import { Alert, ScrollView, View } from "react-native";
 import { buildLabel, buildName } from "@/src/lib/buildInfo";
@@ -45,11 +45,11 @@ export default function AccountsScreen() {
           <Group label="Clipy account" testID="clipy-account">
             {/* The row shows the address alone; VoiceOver hears the whole sentence. */}
             <View testID="signed-in-row" accessible accessibilityLabel={session.email ? `Signed in as ${session.email}` : "Signed in"} style={row}>
-              <Ionicons name="person-circle-outline" size={theme.size.icon.lg} color={theme.colors.text} />
+              <Icon name="person-circle-outline" size={theme.size.icon.lg} color={theme.colors.text} />
               <Body numberOfLines={1} style={{ flex: 1 }}>{session.email ?? "Signed in"}</Body>
             </View>
             <PressableScale accessibilityRole="button" accessibilityLabel="Sign Out" onPress={confirmSignOut} style={row}>
-              <Ionicons name="log-out-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
+              <Icon name="log-out-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
               <Body style={{ flex: 1, color: theme.screen.dangerText }}>Sign Out</Body>
             </PressableScale>
           </Group>

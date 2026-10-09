@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/src/ui/Icon";
 import { Image, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { Body } from "@/src/ui/Text";
@@ -29,7 +29,7 @@ export function PlatformIdentity({ status, detail, dim }: Props) {
   const { connected, name, avatarUrl } = status;
   return (<>
     <View testID={`platform-tile-${status.id}`} style={{ width: TILE, height: TILE, borderRadius: theme.radius.chip, backgroundColor: theme.screen.tile, alignItems: "center", justifyContent: "center" }}>
-      <Ionicons name={icon} size={theme.size.icon.md} color={dim ? theme.screen.muted : theme.colors.text} />
+      <Icon name={icon} size={theme.size.icon.md} color={dim ? theme.screen.muted : theme.colors.text} />
       {connected && avatarUrl ? (
         <Image testID={`platform-picture-${status.id}`} source={{ uri: avatarUrl }}
           style={{ position: "absolute", right: -PEEK, bottom: -PEEK, width: PICTURE, height: PICTURE, borderRadius: theme.radius.pill, borderWidth: RING, borderColor: theme.screen.bar }} />
