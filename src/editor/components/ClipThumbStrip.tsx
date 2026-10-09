@@ -48,7 +48,7 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Clip ${clip.id}`} accessibilityState={{ selected }}
       style={{ width, height: STRIP_HEIGHT, borderRadius: 8, overflow: "hidden", backgroundColor: theme.colors.surfaceAlt,
         borderWidth: 2, borderColor: selected ? theme.colors.accent : "transparent",
-        borderRightWidth: 2, borderRightColor: theme.colors.bgDeep, flexDirection: "row" }}>
+        borderRightWidth: 2, borderRightColor: theme.colors.timeline, flexDirection: "row" }}>
       {times.map((t, i) => {
         // A photo is its own thumbnail in every slot.
         const src = missing ? undefined : photo ? clip.sourceUri : thumbs[thumbKey(clip.sourceUri, t)];
@@ -75,12 +75,12 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
           </View>
         )}
         {photo && (
-          <View accessibilityLabel="Photo" style={{ backgroundColor: theme.colors.sea, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1, justifyContent: "center" }}>
+          <View accessibilityLabel="Photo" style={{ backgroundColor: theme.colors.scrimStrong, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1, justifyContent: "center" }}>
             <Ionicons name="image" size={10} color={theme.colors.text} />
           </View>
         )}
         {clip.filter && (
-          <View style={{ backgroundColor: theme.colors.sea, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1 }}>
+          <View style={{ backgroundColor: theme.colors.scrimStrong, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1 }}>
             <Text style={{ fontSize: 10, color: theme.colors.text, fontWeight: "700" }}>f</Text>
           </View>
         )}

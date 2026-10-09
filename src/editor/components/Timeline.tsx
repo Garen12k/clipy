@@ -106,7 +106,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
 
   return (
     <GestureDetector gesture={pinch}>
-      <View testID="timeline-root" style={{ height, justifyContent: "center", backgroundColor: theme.colors.bgDeep }}>
+      <View testID="timeline-root" style={{ height, justifyContent: "center", backgroundColor: theme.colors.timeline }}>
         <ScrollView ref={scrollRef} testID="timeline-scroll" horizontal showsHorizontalScrollIndicator={false} scrollEventThrottle={16}
           onScrollBeginDrag={scrub.onBeginDrag}
           onMomentumScrollBegin={scrub.onMomentumBegin}

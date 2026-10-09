@@ -63,10 +63,11 @@ test("rows keep the order of the array: a new layer is the bottom row, and a rem
 
 test("the lane holds one bar per layer, placed by start and output length, titled Layer, in the layer colour", async () => {
   await render(<LayerLane />);
-  expect(screen.getByTestId("layer-bar-v1")).toHaveStyle({ position: "absolute", left: 50, width: 200, height: 28, backgroundColor: theme.colors.laneLayer });
-  expect(screen.getByTestId("layer-bar-ph")).toHaveStyle({ position: "absolute", left: 100, width: 150, backgroundColor: theme.colors.laneLayer });
+  expect(screen.getByTestId("layer-bar-v1")).toHaveStyle({ position: "absolute", left: 50, width: 200, height: 28, backgroundColor: theme.colors.kindLayer });
+  expect(screen.getByTestId("layer-bar-ph")).toHaveStyle({ position: "absolute", left: 100, width: 150, backgroundColor: theme.colors.kindLayer });
   expect(screen.getByTestId("layer-bar-v2")).toHaveStyle({ position: "absolute", left: 400, width: 250 });
   expect(screen.getAllByText("Layer")).toHaveLength(3);
+  expect(within(screen.getByTestId("layer-bar-v1")).getByText("Layer")).toHaveStyle({ color: theme.colors.onKind });
   expect(screen.getAllByLabelText("Video layer")).toHaveLength(2);
   expect(screen.getAllByLabelText("Photo layer")).toHaveLength(1);
 });
@@ -83,14 +84,14 @@ test("tapping a bar selects the layer like a clip (exclusively); tapping the sel
   await fireEvent.press(screen.getByTestId("layer-bar-v1"));
   expect(st()).toMatchObject({ selectedClipId: "v1", selectedOverlayId: null, selectedEffectId: null, selectedAudioId: null });
   expect(screen.getByTestId("layer-bar-v1")).toHaveStyle({ borderColor: theme.colors.text });
-  expect(screen.getByTestId("layer-bar-v2")).toHaveStyle({ borderColor: theme.colors.laneLayer });
+  expect(screen.getByTestId("layer-bar-v2")).toHaveStyle({ borderColor: theme.colors.kindLayer });
   await fireEvent.press(screen.getByTestId("layer-bar-ph"));
   expect(st().selectedClipId).toBe("ph");
   await fireEvent.press(screen.getByTestId("layer-bar-ph"));
   expect(st().selectedClipId).toBeNull();
   // A selected main clip is not a selected bar.
   await act(() => { st().select("a"); });
-  for (const id of ["v1", "ph", "v2"]) expect(screen.getByTestId(`layer-bar-${id}`)).toHaveStyle({ borderColor: theme.colors.laneLayer, zIndex: 0 });
+  for (const id of ["v1", "ph", "v2"]) expect(screen.getByTestId(`layer-bar-${id}`)).toHaveStyle({ borderColor: theme.colors.kindLayer, zIndex: 0 });
 });
 
 test("no bar is drawn see-through, not even one that shares its time with an earlier layer; the selected bar keeps its zIndex", async () => {

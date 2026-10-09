@@ -117,7 +117,7 @@ export function LayerBar({ layer: l, missing = false, selected, onPress }: Props
   }, [l.id, pps]);
 
   const photo = isPhoto(l);
-  const color = theme.colors.laneLayer;
+  const color = theme.colors.kindLayer;
   const leftPx = timeToX(l.start, pps), width = Math.max(MIN_WIDTH, timeToX(clipDuration(l), pps));
   const roomy = width >= LABEL_MIN_WIDTH;
   const handleW = Math.min(HANDLE_W, width / 2);
@@ -128,8 +128,8 @@ export function LayerBar({ layer: l, missing = false, selected, onPress }: Props
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
         {roomy && (
           <>
-            <Ionicons name={photo ? "image" : "videocam"} size={14} color={theme.colors.onAccent} />
-            <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12, flex: 1 }}>Layer</Text>
+            <Ionicons name={photo ? "image" : "videocam"} size={14} color={theme.colors.onKind} />
+            <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: 12, flex: 1 }}>Layer</Text>
           </>
         )}
         {missing && (

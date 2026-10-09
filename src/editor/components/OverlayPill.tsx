@@ -52,12 +52,13 @@ export function OverlayPill({ overlay: o, selected, top = 0, onPress }: { overla
 
   const label = isSticker(o) ? (o.emoji ?? SHAPES[o.shape!].label) : isTextOverlay(o) ? o.text : "";
   const leftPx = timeToX(o.start, pps), width = Math.max(HANDLE_W * 2 + 4, timeToX(o.end - o.start, pps));
+  const fill = isSticker(o) ? theme.colors.kindSticker : o.kind === "caption" ? theme.colors.kindCaption : theme.colors.kindText;
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`overlay-pill-${o.id}`} onPress={onPress} accessibilityLabel={`${isSticker(o) ? "Sticker" : "Text"} ${label}`}
-        style={{ position: "absolute", left: leftPx, top, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: isSticker(o) ? theme.colors.laneSticker : theme.colors.laneText,
+        style={{ position: "absolute", left: leftPx, top, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: fill,
           borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
-        <Text numberOfLines={1} style={{ color: theme.colors.onAccent, fontSize: 12 }}>{label}</Text>
+        <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: 12 }}>{label}</Text>
         {selected && o.keyframes.length > 0 && (
           <KeyframeDots times={o.keyframes.map((k) => k.t)} width={width} pps={pps} onPress={(t) => store.seek(o.start + t)} />
         )}
