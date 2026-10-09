@@ -6,25 +6,37 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "clipy",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0A1B33",
     "ios": {
       "bundleIdentifier": "com.astinos.clipy",
       "supportsTablet": false,
       "usesAppleSignIn": true,
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSpeechRecognitionUsageDescription": "Clipy turns speech in your clips into captions.",
-        "NSMicrophoneUsageDescription": "Clipy uses the microphone to record voice-overs and to make captions from speech."
+        "NSMicrophoneUsageDescription": "Clipy uses the microphone to record voice-overs, the sound of videos you take, and to make captions from speech."
       }
     },
     "plugins": [
+      "./plugins/withoutPushEntitlement",
       "expo-router",
       [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0A1B33"
+          "imageWidth": 180,
+          "backgroundColor": "#0A1B33",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0A1B33"
+          }
         }
       ],
       "expo-video",
@@ -33,7 +45,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Clipy needs access to your videos to import clips.",
-          "cameraPermission": false
+          "cameraPermission": "Clipy uses the camera to take photos and videos for your projects."
         }
       ],
       [
@@ -71,7 +83,8 @@
       "expo-document-picker",
       "expo-asset",
       "expo-sqlite",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-notifications"
     ],
     "extra": {
       "router": {},

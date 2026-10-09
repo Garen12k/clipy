@@ -119,3 +119,12 @@ export type Tone = "screen" | "editor";
 export type Surfaces = { page: string; bar: string; tile: string; lifted: string; picked: string; muted: string; separator: string; dangerText: string };
 
 export type Theme = typeof theme;
+
+/** The two sides of the app a glass surface can be on: the screens (Home and the rest) and the editor. */
+export type GlassSide = "home" | "editor";
+/**
+ * Whether surfaces drawn with the kit's `Glass` (src/ui/Glass.tsx) are the system's glass, per side. OFF everywhere: the installed
+ * app only makes glass POSSIBLE; where it is used is decided with the owner. With a switch on, a phone or a build that cannot draw
+ * glass still gets the solid colour.
+ */
+export const GLASS: Record<GlassSide, boolean> = { home: false, editor: false };

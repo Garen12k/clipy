@@ -242,6 +242,15 @@ export type SteadyEvent = { jobId: string; progress: number };
 export const STEADY_CANCELLED = "E_STEADY_CANCELLED";
 /** The code a cancelled render rejects with. */
 export const SOUND_CANCELLED = "E_SOUND_CANCELLED";
+/**
+ * One waveform for a timeline bar: the seconds of the file to look at (`to` at or before `from` = to the end) and how many values
+ * to answer with (the phone clamps it to 16 … 2000). `jobId` is the caller's, so it can be cancelled before it answers.
+ */
+export interface SoundPeaksRequest { jobId: string; uri: string; from: number; to: number; count: number }
+/** `peaks`: per equal slice of `from` … `to` (the stretch actually read, clamped to the file), the largest |sample| of the mono mix, 0 … 1. */
+export interface SoundPeaksResult { peaks: number[]; from: number; to: number }
+/** The code a cancelled waveform rejects with. */
+export const PEAKS_CANCELLED = "E_PEAKS_CANCELLED";
 
 type ClipyVideoNative = {
   hello(): string;
@@ -269,6 +278,8 @@ type ClipyVideoNative = {
   renderSteady(req: SteadyRequest): Promise<SteadyResult>;
   cancelSteady(jobId: string): void;
   blurAndCuts(): boolean;
+  soundPeaks(req: SoundPeaksRequest): Promise<SoundPeaksResult>;
+  cancelSoundPeaks(jobId: string): void;
 };
 
 const NO_SOUND = "This build of the app has no sound tools yet. Install a newer development build.";
@@ -365,3 +376,19 @@ export function addSteadyListener(cb: (e: SteadyEvent) => void): EventSubscripti
 export function isBlurAndCutsBuild(): boolean { return typeof optional()?.blurAndCuts === "function"; }
 /** True for the rejection of a measuring or a steady render that was cancelled (`cancelSteady`). */
 export function isSteadyCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === STEADY_CANCELLED; }
+
+/** The module for a call that came with the build of 2026-10-12: missing = not linked (Expo Go); present but without the function = an older build. */
+function peaksNative(fn: "soundPeaks" | "cancelSoundPeaks"): ClipyVideoNative {
+  const m = native();
+  if (typeof m[fn] !== "function") throw new Error(NOT_IN_BUILD);
+  return m;
+}
+/**
+ * Whether the linked native module can read a sound's waveform: false in Expo Go and in a build made before it. It is also how the
+ * app knows the build of 2026-10-12 ("icons and light"), the first with the camera's usage text, SF Symbols, glass and notifications.
+ */
+export function isPeaksAvailable(): boolean { return typeof optional()?.soundPeaks === "function"; }
+export function soundPeaks(req: SoundPeaksRequest): Promise<SoundPeaksResult> { return peaksNative("soundPeaks").soundPeaks(req); }
+export function cancelSoundPeaks(jobId: string): void { peaksNative("cancelSoundPeaks").cancelSoundPeaks(jobId); }
+/** True for the rejection of a waveform that was cancelled (`cancelSoundPeaks`). */
+export function isPeaksCancelled(e: unknown): boolean { return typeof e === "object" && e !== null && (e as { code?: unknown }).code === PEAKS_CANCELLED; }

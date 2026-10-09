@@ -1,8 +1,9 @@
-jest.mock("@/modules/clipy-video", () => ({ isNativeAvailable: jest.fn(), isSoundAvailable: jest.fn(), isSpeechAvailable: jest.fn(), isCutoutAvailable: jest.fn(), isSteadyAvailable: jest.fn(), isBlurAndCutsBuild: jest.fn() }));
-import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
+jest.mock("@/modules/clipy-video", () => ({ isNativeAvailable: jest.fn(), isSoundAvailable: jest.fn(), isSpeechAvailable: jest.fn(), isCutoutAvailable: jest.fn(), isSteadyAvailable: jest.fn(), isBlurAndCutsBuild: jest.fn(), isPeaksAvailable: jest.fn() }));
+import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isPeaksAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
 import { BEATS_BACKGROUND_TOOLS, buildLabel, buildName, LATEST_TOOLS, NEEDS_LATEST_BUILD, STEADY_TOOLS } from "../buildInfo";
 
-const set = (native: boolean, sound: boolean, speech: boolean, cutout: boolean, steady: boolean, blurAndCuts = false) => {
+const set = (native: boolean, sound: boolean, speech: boolean, cutout: boolean, steady: boolean, blurAndCuts = false, peaks = false) => {
+  (isPeaksAvailable as jest.Mock).mockReturnValue(peaks);
   (isBlurAndCutsBuild as jest.Mock).mockReturnValue(blurAndCuts);
   (isNativeAvailable as jest.Mock).mockReturnValue(native); (isSoundAvailable as jest.Mock).mockReturnValue(sound);
   (isSpeechAvailable as jest.Mock).mockReturnValue(speech); (isCutoutAvailable as jest.Mock).mockReturnValue(cutout);
@@ -10,6 +11,8 @@ const set = (native: boolean, sound: boolean, speech: boolean, cutout: boolean, 
 };
 
 test("the label names what the installed app can do, newest ability first", () => {
+  set(true, true, true, true, true, true, true);
+  expect(buildLabel()).toBe("App build: icons and light");
   set(true, true, true, true, true, true);
   expect(buildLabel()).toBe("App build: blur and cuts");
   set(true, true, true, true, true);
@@ -27,6 +30,8 @@ test("the label names what the installed app can do, newest ability first", () =
 });
 
 test("the name alone (the Accounts screen's Build row) is the label's name, word for word", () => {
+  set(true, true, true, true, true, true, true);
+  expect(buildName()).toBe("Icons and light");
   set(true, true, true, true, true, true);
   expect(buildName()).toBe("Blur and cuts");
   set(true, true, true, true, true);
