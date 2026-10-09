@@ -5,13 +5,14 @@ import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isSoundAvaila
  * lives in the native engine is only there after a new build is installed — so a tool can be on screen in an app that cannot run it.
  * This names the installed build by what it has; add a row at the top whenever a build adds a native ability.
  */
-const LEVELS: { name: string; has: () => boolean }[] = [
-  { name: "blur and cuts", has: isBlurAndCutsBuild },
-  { name: "stabilize and smooth", has: isSteadyAvailable },
-  { name: "beats and background", has: isCutoutAvailable },
-  { name: "noise, ramps and speech", has: isSpeechAvailable },
-  { name: "sound tools", has: isSoundAvailable },
-  { name: "export only (older)", has: isNativeAvailable },
+/** `name` is how `buildLabel` words it in its sentence; `title` is the same name standing alone (the Build row's value). */
+const LEVELS: { name: string; title: string; has: () => boolean }[] = [
+  { name: "blur and cuts", title: "Blur and cuts", has: isBlurAndCutsBuild },
+  { name: "stabilize and smooth", title: "Stabilize and smooth", has: isSteadyAvailable },
+  { name: "beats and background", title: "Beats and background", has: isCutoutAvailable },
+  { name: "noise, ramps and speech", title: "Noise, ramps and speech", has: isSpeechAvailable },
+  { name: "sound tools", title: "Sound tools", has: isSoundAvailable },
+  { name: "export only (older)", title: "Export only (older)", has: isNativeAvailable },
 ];
 
 const EXPO_GO = "Expo Go (no video engine)";
@@ -23,9 +24,9 @@ export function buildLabel(): string {
   return l ? `App build: ${l.name}` : EXPO_GO;
 }
 
-/** Just the name, as `buildLabel` words it: the value of the Accounts screen's Build row. */
+/** Just the name, standing alone: the value of the Accounts screen's Build row. */
 export function buildName(): string {
-  return level()?.name ?? EXPO_GO;
+  return level()?.title ?? EXPO_GO;
 }
 
 /** What a tool says when the installed app is too old for it — with what to do about it. `what` is plural ("Voice and sound effects"). */

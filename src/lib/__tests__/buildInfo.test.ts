@@ -28,12 +28,12 @@ test("the label names what the installed app can do, newest ability first", () =
 
 test("the name alone (the Accounts screen's Build row) is the label's name, word for word", () => {
   set(true, true, true, true, true, true);
-  expect(buildName()).toBe("blur and cuts");
+  expect(buildName()).toBe("Blur and cuts");
   set(true, true, true, true, true);
-  expect(buildName()).toBe("stabilize and smooth");
+  expect(buildName()).toBe("Stabilize and smooth");
   set(true, false, false, false, false);
-  expect(buildName()).toBe("export only (older)");
-  expect(buildLabel()).toBe(`App build: ${buildName()}`);
+  expect(buildName()).toBe("Export only (older)");
+  expect(buildLabel()).toBe("App build: export only (older)");
   set(false, false, false, false, false);
   expect(buildName()).toBe("Expo Go (no video engine)");
   expect(buildLabel()).toBe(buildName());

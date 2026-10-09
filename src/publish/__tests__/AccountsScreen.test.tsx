@@ -203,7 +203,7 @@ test("the Build row names the installed build in every state of the screen", asy
     (isSteadyAvailable as jest.Mock).mockReturnValue(true);
     const b = await render(<AccountsScreen />);
     // The value is the build's name alone; the whole line of buildLabel() is what VoiceOver reads.
-    expect(screen.getByTestId("build-label")).toHaveTextContent("stabilize and smooth", { exact: true });
+    expect(screen.getByTestId("build-label")).toHaveTextContent("Stabilize and smooth", { exact: true });
     expect(screen.getByLabelText("App build: stabilize and smooth")).toBeTruthy();
     await b.unmount();
   }
