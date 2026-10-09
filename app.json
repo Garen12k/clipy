@@ -20,7 +20,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSpeechRecognitionUsageDescription": "Clipy turns speech in your clips into captions.",
-        "NSMicrophoneUsageDescription": "Clipy uses the microphone to record voice-overs and to make captions from speech."
+        "NSMicrophoneUsageDescription": "Clipy uses the microphone to record voice-overs, the sound of videos you take, and to make captions from speech."
       }
     },
     "plugins": [
@@ -44,7 +44,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Clipy needs access to your videos to import clips.",
-          "cameraPermission": false
+          "cameraPermission": "Clipy uses the camera to take photos and videos for your projects."
         }
       ],
       [
@@ -82,7 +82,8 @@
       "expo-document-picker",
       "expo-asset",
       "expo-sqlite",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-notifications"
     ],
     "extra": {
       "router": {},
