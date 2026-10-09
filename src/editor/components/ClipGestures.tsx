@@ -13,6 +13,10 @@ import { haptic } from "@/src/ui/haptics";
 
 export type ClipGestureKind = "pan" | "pinch" | "rotate";
 const FRAME_BORDER = 1;
+/** The corner squares of the selection frame: 8 pt, white with a gold edge, centred on the frame's corners. */
+const CORNER = 8;
+const CORNER_OUT = -(CORNER + FRAME_BORDER) / 2;
+const CORNERS = [["left", "top"], ["right", "top"], ["left", "bottom"], ["right", "bottom"]] as const;
 const fill = { position: "absolute" as const, left: 0, top: 0, right: 0, bottom: 0 };
 const NONE: GestureValues = { dx: 0, dy: 0, scale: 1, rotation: 0 };
 
@@ -171,7 +175,14 @@ export function ClipGestures({ frameW, frameH }: { frameW: number; frameH: numbe
           borderWidth: FRAME_BORDER, borderColor: theme.colors.accent,
           transform: [{ rotate: `${placed.rotation}deg` }],
         }}
-      />
+      >
+        {/* Four corner squares: a cue that the picture can be moved and resized. Decoration only — they are inside the frame's own
+            view, so they turn with it and take no touches; the gestures above are untouched. (No testID: the preview's tree is pinned by id.) */}
+        {CORNERS.map(([h, v]) => (
+          <View key={`${h}${v}`} pointerEvents="none"
+            style={{ position: "absolute", [h]: CORNER_OUT, [v]: CORNER_OUT, width: CORNER, height: CORNER, backgroundColor: theme.colors.text, borderWidth: 1, borderColor: theme.colors.accent }} />
+        ))}
+      </View>
     </>
   );
 }
