@@ -16,6 +16,7 @@ import { useProjects } from "@/src/projects/useProjects";
 import type { PickedAsset, ProjectSummary } from "@/src/projects";
 import { pickVideoForPost } from "@/src/publish/pickVideo";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "@/src/ui/tone";
 import { DISABLED_OPACITY } from "@/src/ui/buttonStyle";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { EnterView } from "@/src/ui/Enter";
@@ -48,6 +49,7 @@ function ProjectsScreen() {
   /** Media picked for a new project that is waiting for its aspect ratio. */
   const [pending, setPending] = useState<PickedAsset[] | null>(null);
   const insets = useSafeAreaInsets();
+  const s = useSurfaces();
 
   const confirmDelete = (p: ProjectSummary) => Alert.alert("Delete project?", "This can't be undone.", [
     { text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => { haptic("medium"); remove(p.id); } }]);
@@ -145,7 +147,7 @@ function ProjectsScreen() {
       <View testID="home-header" style={{ paddingHorizontal: theme.space.gutter, marginBottom: theme.space.sm, gap: theme.space.xs }}>
         <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
           {/* 44 pt high; each button is 40 with slop that stays inside the pill, so each target is 44 by 44. */}
-          <View testID="home-header-actions" pointerEvents={touch} style={{ height: theme.size.touch, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.xs, borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar, opacity: dim }}>
+          <View testID="home-header-actions" pointerEvents={touch} style={{ height: theme.size.touch, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.xs, borderRadius: theme.radius.pill, backgroundColor: s.bar, opacity: dim }}>
             <IconButton name="paper-plane-outline" accessibilityLabel="Post a video" onPress={onPostVideo} />
             <IconButton name="person-circle-outline" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
           </View>
@@ -178,15 +180,15 @@ function ProjectsScreen() {
         {making ? (
           // While a project is made the two actions give way to ONE capsule across the screen: a spinner and what is being made.
           // One accessible element: VoiceOver reads the words once, not once for the spinner and once for the text.
-          <View testID="home-making" accessible accessibilityLabel={MAKING[making]} style={{ flex: 1, height: theme.size.control, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar }}>
+          <View testID="home-making" accessible accessibilityLabel={MAKING[making]} style={{ flex: 1, height: theme.size.control, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: s.bar }}>
             <Spinner />
             <Body weight="semi">{MAKING[making]}</Body>
           </View>
         ) : (
           <>
             {/* The grey button has its own fill; the pill behind it only keeps it readable over the cards. */}
-            <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar }}>
-              <SecondaryButton title="Quick Edit" icon={<Icon name="color-wand-outline" size={theme.size.icon.md} color={theme.colors.text} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onQuick} />
+            <View style={{ borderRadius: theme.radius.pill, backgroundColor: s.bar }}>
+              <SecondaryButton title="Quick Edit" icon={<Icon name="color-wand-outline" size={theme.size.icon.md} color={s.text} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onQuick} />
             </View>
             <PrimaryButton title="New Project" icon={<Icon name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
           </>

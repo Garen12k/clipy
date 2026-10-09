@@ -6,6 +6,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { fileSize } from "@/src/lib/fileInfo";
 import { formatDuration } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "@/src/ui/tone";
 import { Card } from "@/src/ui/Card";
 import { haptic } from "@/src/ui/haptics";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
@@ -40,10 +41,12 @@ const QUALITY_OPTIONS = EXPORT_QUALITIES.map((q) => ({ value: q, label: QUALITY_
 
 /** The quiet line between two rows of the card. */
 function Line() {
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.screen.separator }} />;
+  const s = useSurfaces();
+  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: s.separator }} />;
 }
 
 export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone, onPost }: Props) {
+  const s = useSurfaces();
   const [res, setRes] = useState<Resolution>(1080);
   // Read clamped: settings the app does not offer (a damaged file) still show a picked segment — the defaults.
   const [settings, setSettings] = useState<ExportSettings>(() => clampExportSettings(project.exportSettings));
@@ -65,7 +68,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
     // Presented as an iOS page sheet, which already sits below the status bar: only the bottom inset applies.
     <Screen edges={["bottom"]} style={{ paddingTop: theme.space.sm, gap: theme.space.lg }}>
       <View testID="export-grabber" accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
-        style={{ alignSelf: "center", width: GRABBER.width, height: GRABBER.height, borderRadius: theme.radius.pill, backgroundColor: theme.screen.muted, opacity: 0.5 }} />
+        style={{ alignSelf: "center", width: GRABBER.width, height: GRABBER.height, borderRadius: theme.radius.pill, backgroundColor: s.muted, opacity: 0.5 }} />
       <ScreenBar title="Export" leading="close" onLeading={onDone} leadingDisabled={state.status === "exporting"} />
       {(state.status === "idle" || state.status === "unavailable") && (
         // The choices scroll only if a small phone cannot hold them: the gold button below never leaves the bottom.
@@ -117,7 +120,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
       {state.status === "error" && (
         <View style={{ flex: 1, paddingHorizontal: theme.space.gutter }}>
           <Card testID="export-error" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
-            <Icon testID="export-error-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="alert-circle-outline" size={theme.size.icon.lg} color={theme.colors.danger} />
+            <Icon testID="export-error-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="alert-circle-outline" size={theme.size.icon.lg} color={s.danger} />
             <Body style={{ flex: 1, fontSize: theme.type.body }}>{state.message}</Body>
           </Card>
         </View>
@@ -134,7 +137,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
             </>) : <PrimaryButton title="Save to Photos" onPress={onSave} />}
             <View testID="export-quiet-row" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <QuietButton title="Share" onPress={onShare}
-                icon={<Icon testID="export-share-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="share-outline" size={theme.size.icon.md} color={theme.colors.accent} />} />
+                icon={<Icon testID="export-share-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="share-outline" size={theme.size.icon.md} color={s.accentInk} />} />
               <QuietButton title="Done" onPress={onDone} />
             </View>
           </>)}

@@ -1,6 +1,7 @@
 import { Icon } from "@/src/ui/Icon";
 import { Image, View } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "@/src/ui/tone";
 import { Body } from "@/src/ui/Text";
 import type { PlatformStatus } from "../api";
 import { PLATFORMS } from "../platforms";
@@ -25,20 +26,21 @@ type Props = {
  * when it has one), then the platform's name with the account's name and / or its state under it. Two siblings for the caller's row.
  */
 export function PlatformIdentity({ status, detail, dim }: Props) {
+  const s = useSurfaces();
   const { label, icon } = PLATFORMS[status.id];
   const { connected, name, avatarUrl } = status;
   return (<>
-    <View testID={`platform-tile-${status.id}`} style={{ width: TILE, height: TILE, borderRadius: theme.radius.chip, backgroundColor: theme.screen.tile, alignItems: "center", justifyContent: "center" }}>
-      <Icon name={icon} size={theme.size.icon.md} color={dim ? theme.screen.muted : theme.colors.text} />
+    <View testID={`platform-tile-${status.id}`} style={{ width: TILE, height: TILE, borderRadius: theme.radius.chip, backgroundColor: s.tile, alignItems: "center", justifyContent: "center" }}>
+      <Icon name={icon} size={theme.size.icon.md} color={dim ? s.muted : s.text} />
       {connected && avatarUrl ? (
         <Image testID={`platform-picture-${status.id}`} source={{ uri: avatarUrl }}
-          style={{ position: "absolute", right: -PEEK, bottom: -PEEK, width: PICTURE, height: PICTURE, borderRadius: theme.radius.pill, borderWidth: RING, borderColor: theme.screen.bar }} />
+          style={{ position: "absolute", right: -PEEK, bottom: -PEEK, width: PICTURE, height: PICTURE, borderRadius: theme.radius.pill, borderWidth: RING, borderColor: s.bar }} />
       ) : null}
     </View>
     <View style={{ flex: 1, gap: theme.space.xs }}>
       <Body weight="semi" muted={dim}>{label}</Body>
       {connected && name ? <Body muted numberOfLines={1} style={{ fontSize: theme.type.small }}>{name}</Body> : null}
-      {detail ? <Body muted style={[{ fontSize: theme.type.label }, detail === "Sign-in expired" ? { color: theme.screen.dangerText } : null]}>{detail}</Body> : null}
+      {detail ? <Body muted style={[{ fontSize: theme.type.label }, detail === "Sign-in expired" ? { color: s.dangerText } : null]}>{detail}</Body> : null}
     </View>
   </>);
 }

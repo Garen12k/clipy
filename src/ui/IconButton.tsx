@@ -6,7 +6,7 @@ type Props = { name: IconName; onPress: () => void; disabled?: boolean; accessib
   /** The text glyph, never a native view: for a button that stands in every row of a long list. */
   plain?: boolean };
 
-export function IconButton({ name, onPress, disabled, accessibilityLabel, color = theme.colors.text, plain }: Props) {
+export function IconButton({ name, onPress, disabled, accessibilityLabel, color, plain }: Props) {
   return (
     <PressableScale accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityState={{ disabled: !!disabled }}
       disabled={disabled} onPress={onPress} hitSlop={8}

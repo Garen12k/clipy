@@ -7,6 +7,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { nowIso } from "@/src/lib/clock";
 import { formatDuration } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "@/src/ui/tone";
 import { Card } from "@/src/ui/Card";
 import { Field } from "@/src/ui/Field";
 import { haptic } from "@/src/ui/haptics";
@@ -36,6 +37,7 @@ const CAPTION_MIN = 96;
 const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
 
 export function PostScreenBody({ target: { video, projectId, title, coverMs } }: { target: PostTarget }) {
+  const s = useSurfaces();
   const session = useSession();
   const signedIn = session.status === "signedIn";
   const accounts = useAccounts(signedIn);
@@ -74,7 +76,7 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
               <Field accessibilityLabel="Caption" multiline value={form.caption} onChangeText={form.setCaption} placeholder="Write a caption…"
                 style={{ minHeight: CAPTION_MIN, textAlignVertical: "top" }} />
               {form.captionMax !== null ? (
-                <Body muted style={[small, { alignSelf: "flex-end" }, form.overLimit ? { color: theme.screen.dangerText } : null]}>{`${form.caption.length} / ${form.captionMax}`}</Body>
+                <Body muted style={[small, { alignSelf: "flex-end" }, form.overLimit ? { color: s.dangerText } : null]}>{`${form.caption.length} / ${form.captionMax}`}</Body>
               ) : form.anyTicked ? (
                 // Only platforms that don't take the caption are ticked: no limit, never red.
                 <Body muted style={[small, { alignSelf: "flex-end" }]}>{String(form.caption.length)}</Body>

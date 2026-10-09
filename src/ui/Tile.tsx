@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { Icon, type IconName } from "./Icon";
-import { useSurfaces } from "./tone";
+import { ringOf, useSurfaces } from "./tone";
 import { PressableScale } from "./PressableScale";
 import { Body } from "./Text";
 
@@ -17,15 +17,15 @@ type Props = { label: string; selected: boolean; onPress: () => void; icon?: Ico
  */
 export function Tile({ label, selected, onPress, icon, boxTestID, children }: Props) {
   const s = useSurfaces();
-  const glyph = selected ? theme.colors.accent : theme.colors.text;
+  const glyph = selected ? s.accentInk : s.text;
   return (
     <PressableScale lifted={selected} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress}
       style={{ alignItems: "center", width: TILE_WIDTH, paddingVertical: theme.space.xs, gap: theme.space.xs }}>
       <View testID={boxTestID} style={[{ width: theme.size.toolBox, height: theme.size.toolBox, borderRadius: theme.radius.box, alignItems: "center", justifyContent: "center",
-        backgroundColor: selected ? s.picked : s.tile }, selected ? theme.ring : theme.ringClear]}>
+        backgroundColor: selected ? s.picked : s.tile }, selected ? ringOf(s) : theme.ringClear]}>
         {icon ? <Icon name={icon} size={theme.size.icon.md} color={glyph} /> : children}
       </View>
-      <Body numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} weight={selected ? "semi" : "regular"} style={{ color: theme.colors.text, fontSize: theme.type.small }}>{label}</Body>
+      <Body numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} weight={selected ? "semi" : "regular"} style={{ color: s.text, fontSize: theme.type.small }}>{label}</Body>
     </PressableScale>
   );
 }

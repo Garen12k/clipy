@@ -1,7 +1,8 @@
 import { ActivityIndicator, type StyleProp, type ViewStyle } from "react-native";
-import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "./tone";
 
-/** The gold iOS spinner (the system's own animation, not one of ours). */
+/** The gold iOS spinner — the gold as ink of the family it is drawn in (the system's own animation, not one of ours). */
 export function Spinner({ label, style }: { /** What is being waited for (accessibility label). */ label?: string; style?: StyleProp<ViewStyle> }) {
-  return <ActivityIndicator color={theme.colors.accent} accessibilityLabel={label} style={style} />;
+  const s = useSurfaces();
+  return <ActivityIndicator color={s.accentInk} accessibilityLabel={label} style={style} />;
 }

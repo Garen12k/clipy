@@ -15,10 +15,10 @@ export function ProgressRing({ progress, size = 120, done }: { progress: number;
     <View accessible accessibilityRole="progressbar" accessibilityLabel={done ? "Done" : undefined} accessibilityValue={{ min: 0, max: 100, now: done ? 100 : pct }} style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
       <Svg width={size} height={size} style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={s.tile} strokeWidth={stroke} fill="none" />
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={theme.colors.accent} strokeWidth={stroke} fill="none" strokeLinecap="round"
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={s.accentInk} strokeWidth={stroke} fill="none" strokeLinecap="round"
           strokeDasharray={`${c} ${c}`} strokeDashoffset={c * (1 - (done ? 1 : p))} />
       </Svg>
-      {done ? <Icon name="checkmark" size={size * 0.4} color={theme.colors.accent} /> : <Title size={size * 0.22} style={{ fontVariant: ["tabular-nums"] }}>{`${pct}%`}</Title>}
+      {done ? <Icon name="checkmark" size={size * 0.4} color={s.accentInk} /> : <Title size={size * 0.22} style={{ fontVariant: ["tabular-nums"] }}>{`${pct}%`}</Title>}
     </View>
   );
 }

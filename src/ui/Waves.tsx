@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useWindowDimensions, View } from "react-native";
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
-import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "./tone";
 
 const PERIOD = 120, H = 54;
 function wavePath(width: number): string {
@@ -27,12 +27,13 @@ function Layer({ color, duration, bottom, opacity, still }: { color: string; dur
   );
 }
 
-/** Two rolling wave layers pinned to the bottom of their parent: two navy swells on the navy page, the nearer one the colour of a card (only the loading and welcome screens draw them). */
+/** Two rolling wave layers pinned to the bottom of their parent: two swells of the screen family on its page — the far one the selected step, the nearer one the colour of a card: navy on navy, cream surf on cream (only the loading and welcome screens draw them). */
 export function Waves({ still = false }: { still?: boolean }) {
+  const s = useSurfaces();
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: H + 12, overflow: "hidden" }}>
-      <Layer color={theme.screen.lifted} duration={5000} bottom={8} opacity={0.55} still={still} />
-      <Layer color={theme.screen.bar} duration={3000} bottom={0} opacity={1} still={still} />
+      <Layer color={s.lifted} duration={5000} bottom={8} opacity={0.55} still={still} />
+      <Layer color={s.bar} duration={3000} bottom={0} opacity={1} still={still} />
     </View>
   );
 }

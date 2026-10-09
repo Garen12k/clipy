@@ -106,7 +106,8 @@ test("two families, one reader each: a screen never reads the editor's slate, th
 test("the kit parts drawn on both sides take their surfaces from the tone, not from one family", () => {
   const shared = files().filter(({ rel }) => rel.startsWith("src/ui/") && !isEditorFile(rel) && !isScreenFile(rel));
   expect(shared.length).toBeGreaterThan(15);
-  expect(shared.filter(({ rel, src }) => rel !== "src/ui/Screen.tsx" && (EDITOR_KEYS.test(src) || SCREEN_KEYS.test(src))).map((f) => f.rel)).toEqual([]);
+  // Screen.tsx says the tone and tone.ts turns it into surfaces: the only two that name a family.
+  expect(shared.filter(({ rel, src }) => rel !== "src/ui/Screen.tsx" && rel !== "src/ui/tone.ts" && (EDITOR_KEYS.test(src) || SCREEN_KEYS.test(src))).map((f) => f.rel)).toEqual([]);
 });
 
 test('a route says its family once, on its Screen: only the editor and Crop say "editor", and nothing else provides a tone', () => {

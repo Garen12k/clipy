@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { ASPECT_RATIOS, aspectLabel, DEFAULT_ASPECT_RATIO, frameAspect, type AspectRatio } from "@/src/editor/model/types";
 import { theme } from "@/src/theme/theme";
+import { ringOf, useSurfaces } from "@/src/ui/tone";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { RatioShape } from "@/src/ui/RatioShape";
@@ -24,6 +25,7 @@ type Props = {
 
 /** Asked once, when a project is created: the frame's shape. Auto (the first picked item's shape) is preselected. */
 export function AspectRatioSheet({ assets, onCancel, onCreate }: Props) {
+  const s = useSurfaces();
   const [ratio, setRatio] = useState<AspectRatio>(DEFAULT_ASPECT_RATIO);
   // Every new pick starts from Auto again.
   useEffect(() => { if (assets) setRatio(DEFAULT_ASPECT_RATIO); }, [assets]);
@@ -38,11 +40,11 @@ export function AspectRatioSheet({ assets, onCancel, onCreate }: Props) {
           <View key={row[0]} style={{ height: OPTION.height, flexDirection: "row", justifyContent: "space-between" }}>
             {row.map((id) => {
               const selected = id === ratio;
-              const tint = selected ? theme.colors.accent : theme.colors.text;
+              const tint = selected ? s.accentInk : s.text;
               return (
                 <PressableScale key={id} lifted={selected} accessibilityRole="button" accessibilityLabel={aspectLabel(id)} accessibilityState={{ selected }} onPress={() => setRatio(id)}
                   style={[{ width: OPTION.width, height: OPTION.height, borderRadius: theme.radius.box, alignItems: "center", justifyContent: "center", gap: theme.space.sm,
-                    backgroundColor: selected ? theme.screen.lifted : theme.screen.tile }, selected ? theme.ring : theme.ringClear]}>
+                    backgroundColor: selected ? s.lifted : s.tile }, selected ? ringOf(s) : theme.ringClear]}>
                   <RatioShape aspect={frameAspect({ aspectRatio: id, clips: shown })} selected={selected} dashed={id === "auto"} />
                   <Body numberOfLines={1} weight={selected ? "semi" : "regular"} style={{ color: tint, fontSize: theme.type.small }}>{aspectLabel(id)}</Body>
                 </PressableScale>

@@ -4,6 +4,7 @@ import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, wi
 import { Compass } from "@/src/theme/Compass";
 import { theme } from "@/src/theme/theme";
 import { Screen } from "./Screen";
+import { useSurfaces } from "./tone";
 import { useReducedMotion } from "./useReducedMotion";
 import { Waves } from "./Waves";
 
@@ -14,6 +15,7 @@ export const WORDMARK = { size: 48 } as const;
 /** Animated brand screen shown over the app until it is ready; fades out when `leaving` turns true. */
 export function LoadingScreen({ leaving, onGone }: { leaving: boolean; onGone: () => void }) {
   const reduced = useReducedMotion();
+  const s = useSurfaces();
   const needle = useSharedValue(reduced ? 0 : -14), rise = useSharedValue(0), opacity = useSharedValue(1);
 
   useEffect(() => {
@@ -42,8 +44,8 @@ export function LoadingScreen({ leaving, onGone }: { leaving: boolean; onGone: (
         <View style={{ alignItems: "center", gap: theme.space.lg }}>
           <Animated.View testID="loading-compass" style={spin}><Compass size={96} /></Animated.View>
           <Animated.View style={[{ alignItems: "center", gap: theme.space.sm }, up]}>
-            <Text style={{ fontSize: WORDMARK.size, fontWeight: theme.weight.bold, color: theme.colors.text }}>Clipy</Text>
-            <Text style={{ fontSize: theme.type.label, fontWeight: theme.weight.semi, color: theme.screen.muted }}>Edit · Set sail · Share</Text>
+            <Text style={{ fontSize: WORDMARK.size, fontWeight: theme.weight.bold, color: s.text }}>Clipy</Text>
+            <Text style={{ fontSize: theme.type.label, fontWeight: theme.weight.semi, color: s.muted }}>Edit · Set sail · Share</Text>
           </Animated.View>
         </View>
         <Waves still={reduced} />

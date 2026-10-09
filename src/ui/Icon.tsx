@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { View, type ViewProps } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { SF_SYMBOLS, symbolView } from "./sfSymbols";
+import { useSurfaces } from "./tone";
 
 export type IconName = keyof typeof Ionicons.glyphMap;
 type Props = { name: IconName; size?: number; color?: string; testID?: string;
@@ -22,7 +23,9 @@ export const SYMBOL_SCALE = 0.8;
  * effect, centred in a square of `size` points; otherwise it is the Ionicon, exactly as before: with `plain`, for a name that is not
  * in the table (the brand marks), in an app without the native module, and when the package cannot be loaded.
  */
-export function Icon({ name, size = theme.size.icon.lg, color = theme.colors.text, testID, plain, ...a11y }: Props) {
+export function Icon({ name, size = theme.size.icon.lg, color: given, testID, plain, ...a11y }: Props) {
+  const family = useSurfaces();
+  const color = given ?? family.text;
   const symbol = plain ? undefined : SF_SYMBOLS[name];
   const SymbolView = symbol ? symbolView() : null;
   if (!symbol || !SymbolView) return <Ionicons name={name} size={size} color={color} testID={testID} {...a11y} />;

@@ -1,7 +1,7 @@
-import { View, type ViewStyle } from "react-native";
+import { View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { theme, type Tone } from "@/src/theme/theme";
-import { ToneContext } from "./tone";
+import { EDITOR_APPEARANCE, theme, type Tone } from "@/src/theme/theme";
+import { ShownContext, ToneContext, useSurfaces } from "./tone";
 
 export type Edge = "top" | "bottom";
 
@@ -19,5 +19,18 @@ export function Screen({ children, style, edges = ["top"], tone = "screen" }: { 
   const pad: ViewStyle = {};
   if (edges.includes("top")) pad.paddingTop = insets.top + theme.space.sm;
   if (edges.includes("bottom")) pad.paddingBottom = insets.bottom + theme.space.sm;
-  return <ToneContext.Provider value={tone}><View style={[{ flex: 1, backgroundColor: theme.surfaces[tone].page }, pad, style]}>{children}</View></ToneContext.Provider>;
+  // The editor wears one appearance whatever the phone says: it says so to everything under it (so nothing there is re-rendered when the
+  // phone's setting changes) and draws its page from a constant. Every other screen draws the page of the appearance shown now.
+  if (tone === "editor") return (
+    <ShownContext.Provider value={EDITOR_APPEARANCE}><ToneContext.Provider value="editor">
+      <View style={[{ flex: 1, backgroundColor: theme.surfaces.editor.page }, pad, style]}>{children}</View>
+    </ToneContext.Provider></ShownContext.Provider>
+  );
+  return <ToneContext.Provider value="screen"><Page style={[pad, style]}>{children}</Page></ToneContext.Provider>;
+}
+
+/** A screen's page. Its own component, so that only IT reads the appearance: the `Screen` of the editor never does. */
+function Page({ children, style }: { children: React.ReactNode; style: StyleProp<ViewStyle> }) {
+  const s = useSurfaces();
+  return <View style={[{ flex: 1, backgroundColor: s.page }, style]}>{children}</View>;
 }

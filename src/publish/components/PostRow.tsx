@@ -1,6 +1,7 @@
 import { Icon } from "@/src/ui/Icon";
 import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "@/src/ui/tone";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { QuietButton } from "@/src/ui/QuietButton";
 import { Body } from "@/src/ui/Text";
@@ -23,20 +24,21 @@ const ACTIVE = ["preparing", "uploading", "publishing"];
 const BAR = 4;
 /** A standing note under a row. */
 const note = { fontSize: theme.type.small } as const;
-/** Something went wrong, or needs checking before posting again: red and a size larger than a note. */
-const alarm = { fontSize: theme.type.label, color: theme.screen.dangerText } as const;
+/** Something went wrong, or needs checking before posting again: a size larger than a note — and red, the red of the appearance, added where it is drawn. */
+const alarm = { fontSize: theme.type.label } as const;
 /** The row's state on the right ("Preparing…", "42%"). */
 const status = { fontSize: theme.type.label } as const;
 const ICON = theme.size.icon.lg;
 
 /** One platform on the Post screen: tick box, logo tile and account (with its state under the name) on the left, its progress or ONE plain text action in gold on the right, messages below. */
 export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect, onRetry, onView }: Props) {
+  const s = useSurfaces();
   const { status: account, reason, checked, error, blocker, canPost, note: standing, captionNote, canResume } = view;
   const { label } = PLATFORMS[account.id];
   const active = ACTIVE.includes(row.phase);
   const done = row.phase === "done";
   const pct = Math.round(Math.min(1, Math.max(0, row.progress)) * 100);
-  const msg = (text: string, red = false) => <Body muted={!red} style={red ? alarm : note}>{text}</Body>;
+  const msg = (text: string, red = false) => <Body muted={!red} style={red ? [alarm, { color: s.dangerText }] : note}>{text}</Body>;
 
   let side: React.ReactNode = null;
   /** The account's state, said under the platform's name — in the same case as before: an idle row that cannot be ticked. */
@@ -47,8 +49,8 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
     side = <Body muted style={[status, { fontVariant: ["tabular-nums"] }]}>{`${pct}%`}</Body>;
     below.push(
       <View key="bar" accessible accessibilityRole="progressbar" accessibilityLabel={`Uploading to ${label}`} accessibilityValue={{ min: 0, max: 100, now: pct }}
-        style={{ height: BAR, borderRadius: theme.radius.pill, backgroundColor: theme.screen.tile, overflow: "hidden" }}>
-        <View style={{ width: `${pct}%` as const, height: "100%", backgroundColor: theme.colors.accent }} />
+        style={{ height: BAR, borderRadius: theme.radius.pill, backgroundColor: s.tile, overflow: "hidden" }}>
+        <View style={{ width: `${pct}%` as const, height: "100%", backgroundColor: s.accentInk }} />
       </View>,
     );
   } else if (row.phase === "publishing") side = <Body muted style={status}>Publishing…</Body>;
@@ -56,10 +58,10 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
     const url = row.url;
     side = url ? (
       <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm }}>
-        <Body weight="semi" style={{ color: theme.colors.accent }}>Done</Body>
+        <Body weight="semi" style={{ color: s.accentInk }}>Done</Body>
         <QuietButton compact title="View" accessibilityLabel={`View on ${label}`} onPress={() => onView(url)} />
       </View>
-    ) : <Body weight="semi" style={{ color: theme.colors.accent }}>Done</Body>;
+    ) : <Body weight="semi" style={{ color: s.accentInk }}>Done</Body>;
     // No link (e.g. a TikTok draft): the row's own message, else the platform's done note.
     const doneText = url ? null : row.message ?? view.adapter?.doneNote ?? null;
     if (doneText) below.push(<View key="m">{msg(doneText)}</View>);
@@ -93,7 +95,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
         {done ? (
           // Posted: a static mark, not a toggle.
           <View accessible accessibilityLabel={`${label}, posted`} style={rowStyle}>
-            <Icon name="checkmark-circle-outline" size={ICON} color={theme.colors.accent} />
+            <Icon name="checkmark-circle-outline" size={ICON} color={s.accentInk} />
             {identity}
           </View>
         ) : (
@@ -101,7 +103,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
           <PressableScale accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{ checked, disabled: !!reason || active }}
             disabled={!!reason || active} onPress={error && hasOptions(account.id) ? onOptions : onToggle} style={rowStyle}>
             {/* Gold = on (ticked); white = can be ticked; muted = cannot. */}
-            <Icon name={checked ? "checkbox-outline" : "square-outline"} size={ICON} color={reason ? theme.screen.muted : checked ? theme.colors.accent : theme.colors.text} />
+            <Icon name={checked ? "checkbox-outline" : "square-outline"} size={ICON} color={reason ? s.muted : checked ? s.accentInk : s.text} />
             {identity}
           </PressableScale>
         )}
