@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef } from "react";
 import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -10,6 +11,9 @@ import { theme } from "@/src/theme/theme";
 import { Body } from "@/src/ui/Text";
 import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { LANE_HEIGHT } from "../timelineLayout";
+import { BAR, BAR_GLYPH, barParts } from "../timelineMarks";
+import { BarGrip, GRIP_BOX } from "./BarGrip";
+
 
 const HANDLE_W = 12;
 
@@ -49,16 +53,18 @@ export function EffectPill({ effect: fx, selected, onPress }: { effect: EffectIt
 
   const label = EFFECTS[fx.type].label;
   const leftPx = timeToX(fx.start, pps), width = Math.max(HANDLE_W * 2 + 4, timeToX(Math.min(fx.end, total) - fx.start, pps));   // drawn only up to the project's end
+  const parts = barParts(width);   // a narrow bar leaves its label out first, then its glyph
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`effect-pill-${fx.id}`} onPress={onPress} accessibilityLabel={`Effect ${label}`}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: theme.radius.chip, backgroundColor: theme.colors.kindEffect,
-          borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
-        <Body numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: 12 }}>{label}</Body>
+          borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: HANDLE_W + 2 }}>
+        {parts.glyph && <Ionicons testID={`bar-glyph-${fx.id}`} name={BAR_GLYPH["effect"]} size={BAR.glyph} color={theme.colors.onKind} />}
+        {parts.label && <Body numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{label}</Body>}
         {selected && (
           <>
-            <GestureDetector gesture={gestures.left}><View accessibilityLabel="Effect start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>
-            <GestureDetector gesture={gestures.right}><View accessibilityLabel="Effect end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} /></GestureDetector>
+            <GestureDetector gesture={gestures.left}><View accessibilityLabel="Effect start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6, ...GRIP_BOX }}><BarGrip /></View></GestureDetector>
+            <GestureDetector gesture={gestures.right}><View accessibilityLabel="Effect end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopRightRadius: 6, borderBottomRightRadius: 6, ...GRIP_BOX }}><BarGrip /></View></GestureDetector>
           </>
         )}
       </Pressable>

@@ -5,6 +5,7 @@ import { clipStartTimes, timeToX, totalDuration } from "@/src/editor/model/timel
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { barIds, barRow, CLIP_AREA_HEIGHT, laneModel, rowScrollTarget, timelineFrame } from "../timelineLayout";
+import { cutMarks } from "../timelineMarks";
 import { createScrubController } from "../timelineScroll";
 import { AddClipTile } from "./AddClipTile";
 import { AudioLane } from "./AudioLane";
@@ -15,6 +16,7 @@ import { EffectLane } from "./EffectLane";
 import { LayerLane } from "./LayerLane";
 import { OverlayLane } from "./OverlayLane";
 import { RowsThumb, useRowsScroll } from "./RowsThumb";
+import { TimeRuler } from "./TimeRuler";
 import { SnapGuide } from "./SnapGuide";
 
 type Props = { renderStripExtras?: (clipId: string, index: number) => React.ReactNode; onCutPress?: (index: number) => void };
@@ -23,6 +25,8 @@ const offsetX = (e: NativeSyntheticEvent<NativeScrollEvent>) => e.nativeEvent.co
 
 /**
  * Horizontal strip of clips. The playhead is fixed at the horizontal centre; scrolling scrubs.
+ * The clip area (`CLIP_AREA_HEIGHT`) holds, top to bottom, the time ruler, the beat ticks and the clips (`timelineMarks.ts` has the
+ * division); the ruler and the cut markers are out of the flow, so they change no height and no scroll width.
  * Its height is `timelineFrame`: the clip area and the rows under it up to a cap. The rows sit in ONE vertical scroll view that is a
  * child of the horizontal one's content, under the clip area — so there is still a single sideways scroll (the scrub controller and
  * every bar's x are untouched), the clips stay where they are while the rows go up and down under them, and the two directions are
@@ -115,17 +119,16 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           onScroll={(e) => scrub.onScroll(offsetX(e), pps)}
           contentContainerStyle={{ paddingHorizontal: pad, height, flexDirection: "column" }}>
           <View testID="timeline-clips" style={{ height: CLIP_AREA_HEIGHT, flexDirection: "row", alignItems: "center" }}>
+            {/* The time marks along the top: out of the flow, drawn only when the zoom or the length changes. */}
+            <TimeRuler />
             {project.clips.map((clip, i) => (
               <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={multi ? multi.includes(clip.id) : clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
                 onPress={multi ? () => useEditorStore.getState().toggleMultiSelect(clip.id) : () => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
                 {renderStripExtras?.(clip.id, i)}
               </ClipThumbStrip>
             ))}
-            {project.clips.map((clip, i) =>
-              i < project.clips.length - 1 && clip.transitionOut.type !== "none" ? (
-                <CutMarker key={`cut-${clip.id}`} index={i} pixelsPerSecond={pps} onPress={onCutPress} />
-              ) : null,
-            )}
+            {/* On the cuts, after the clips (so above them): a diamond where there is a transition, "+" where there is none (cutMarks). */}
+            {cutMarks(project, pps, selectedId, multi !== null).map((mark) => <CutMarker key={`cut-${project.clips[mark.index].id}`} mark={mark} onPress={onCutPress} />)}
             {/* Out of the flow, inside the trailing padding: the scrubbable width still ends at the last clip. */}
             <AddClipTile left={timeToX(totalDuration(project), pps) + theme.space.sm} />
             <BeatTicks />
