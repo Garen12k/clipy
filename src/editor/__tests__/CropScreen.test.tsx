@@ -15,6 +15,7 @@ import { getThumb } from "@/src/editor/components/thumbnails";
 import { applyPreset, dragCorner } from "@/src/editor/model/cropBox";
 import { FULL_CROP, makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { theme } from "@/src/theme/theme";
 import { CropScreen } from "../components/CropScreen";
 import { EditorToolbar } from "../components/EditorToolbar";
 
@@ -39,6 +40,14 @@ test("shows the presets and the buttons; Free is selected", async () => {
   await render(<CropScreen clipId="a" visible onClose={() => {}} />);
   for (const l of ["Free", "9:16", "1:1", "4:5", "16:9", "Reset", "Cancel", "Done"]) expect(screen.getByRole("button", { name: l })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Free" })).toBeSelected();
+});
+
+test("Crop is a full screen: its Done completes it, so it stays the gold button — the one filled button there", async () => {
+  await render(<CropScreen clipId="a" visible onClose={() => {}} />);
+  expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
+  expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Done");
+  expect(screen.getByTestId("primary-button")).toHaveStyle({ backgroundColor: theme.colors.accent });
+  expect(screen.queryAllByTestId("main-button")).toHaveLength(0);
 });
 
 test("Done applies the working crop as one undo step and closes", async () => {

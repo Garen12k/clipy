@@ -420,7 +420,7 @@ test("an Auto project's cover has the first clip's shape; a wide cover is saved 
 });
 
 describe("look", () => {
-  test("the title is the kit field, the slider is the kit's, Reset is text only in the header, Save to Photos is the one gold button", async () => {
+  test("the title is the kit field, the slider is the kit's, Reset is text only in the header, Save to Photos is the one main button, white", async () => {
     await open();
     expect(field()).toHaveStyle({ backgroundColor: theme.elevation.tile, fontSize: theme.type.input, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md });
     expect(field()).toHaveProp("placeholder", "Add a title");
@@ -428,7 +428,9 @@ describe("look", () => {
     expect(slider()).toHaveProp("minimumTrackTintColor", theme.colors.accent);
     expect(screen.getByText("0 / 40")).toHaveStyle({ fontSize: theme.type.small });
     expect(screen.getByRole("button", { name: "Reset" })).not.toHaveStyle({ borderWidth: 1.5 });
-    expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
-    expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Save to Photos");
+    expect(screen.getAllByTestId("main-button")).toHaveLength(1);
+    expect(screen.getByTestId("main-button")).toHaveAccessibleName("Save to Photos");
+    expect(screen.getByTestId("main-button")).toHaveStyle({ backgroundColor: theme.plain.fill, height: theme.size.control });
+    expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);          // no gold fill inside a tool
   });
 });

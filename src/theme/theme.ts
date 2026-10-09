@@ -102,6 +102,11 @@ export const theme = {
    */
   motion: { press: 120, sheet: { mass: 1, damping: 40, stiffness: 400 }, fade: 200, stagger: 40, minLoading: 1200, fontTimeout: 5000,
     fast: 120, base: 180, slow: 240, enterShift: 8, pressScale: 0.96, selectedScale: 1.03, curve: [0.2, 0, 0, 1], spring: { mass: 1, damping: 40, stiffness: 700 } },
+  /**
+   * A tool's ONE main action inside a strip or a panel (`PrimaryButton tone="plain"`): filled in the label colour with the page's slate as its
+   * ink — white with dark text here, and the other way round in a light appearance. Gold stays a screen's one action (Export, Crop's Done).
+   */
+  plain: { fill: C.text, ink: C.bg },
   /** 2 px gold ring for the selected item in any grid (filters, templates, fonts, ratios, transitions). A picked tile or chip wears it over the `picked` tint, with its label white and semibold. */
   ring: { borderWidth: 2, borderColor: C.accent },
   /** The unselected twin of `ring`: the same width, so selecting moves nothing. */

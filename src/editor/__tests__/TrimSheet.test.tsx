@@ -6,6 +6,7 @@ import { trimClip } from "@/src/editor/model/ops";
 import { makeClip, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { useIsLayer } from "@/src/editor/useItem";
+import { theme } from "@/src/theme/theme";
 import { TrimSheet } from "../components/TrimSheet";
 
 beforeEach(() => { useEditorStore.getState().reset(); });
@@ -22,6 +23,18 @@ test("a photo shows one Length field with helper text; Apply sets its length in 
   const c = useEditorStore.getState().project!.clips[0];
   expect([c.trimStart, c.trimEnd]).toEqual([0, 7.5]);
   expect(useEditorStore.getState().past).toHaveLength(1);
+});
+
+test("Apply is the strip's one main button, white and compact — for a photo and for a video", async () => {
+  useEditorStore.getState().setProject(makeProject({ clips: [makePhotoClip({ id: "p", seconds: 3 }), makeClip({ id: "a", sourceDuration: 4 })] }));
+  for (const id of ["p", "a"]) {
+    const view = await render(<TrimSheet clipId={id} visible onClose={() => {}} />);
+    expect(screen.getAllByTestId("main-button")).toHaveLength(1);
+    expect(screen.getByTestId("main-button")).toHaveAccessibleName("Apply");
+    expect(screen.getByTestId("main-button")).toHaveStyle({ backgroundColor: theme.plain.fill, height: theme.size.controlCompact });
+    expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
+    await view.unmount();
+  }
 });
 
 test("a photo length is clamped to 0.5–60", async () => {

@@ -174,7 +174,7 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
 
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Beat markers">
-      <PrimaryButton title="Tap" onPress={() => run(addBeatMarker, "light")} />
+      <PrimaryButton tone="plain" title="Tap" onPress={() => run(addBeatMarker, "light")} />
       <Body muted style={{ textAlign: "center" }}>{count === 1 ? "1 marker" : `${count} markers`}</Body>
       <View style={{ gap: theme.space.sm }}>
         {/* Compact pairs in rows 44 tall: the 36-pt buttons' hit slop has room, and each pair fits a 375-pt phone between its gutters. */}

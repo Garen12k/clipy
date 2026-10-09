@@ -54,7 +54,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
             <Body>Replace existing captions?</Body>
             {/* Stacked like the "done" branch: three title-style buttons don't fit one row in a panel. All three compact (36): the card
                 is then 166 pt (a line of text + 3 gaps of 12 + 3 × 36 + 4 under Cancel for its hit slop) in a body that shows 171, so nothing scrolls; at 48 it would be 198. */}
-            <PrimaryButton compact title="Replace" onPress={start} />
+            <PrimaryButton tone="plain" compact title="Replace" onPress={start} />
             <SecondaryButton compact title="Style Captions" onPress={() => setStyling(true)} />
             <QuietButton compact title="Cancel" onPress={close} />
           </View>
@@ -62,7 +62,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
 
         {state.status === "idle" && !hasCaptions && (
           <View style={{ gap: theme.space.sm }}>
-            <PrimaryButton title="Transcribe" onPress={start} />
+            <PrimaryButton tone="plain" title="Transcribe" onPress={start} />
             <Body muted>Uses on-device speech recognition. Clips: {clipCount}</Body>
           </View>
         )}
@@ -93,8 +93,8 @@ export function CaptionsSheet({ visible, onClose }: Props) {
           <View style={{ gap: theme.space.md }}>
             <Body>{state.message}</Body>
             {state.code === "E_SPEECH_DENIED"
-              ? <PrimaryButton title="Open Settings" onPress={() => { Linking.openSettings(); }} />
-              : <PrimaryButton title="Try Again" onPress={start} />}
+              ? <PrimaryButton tone="plain" title="Open Settings" onPress={() => { Linking.openSettings(); }} />
+              : <PrimaryButton tone="plain" title="Try Again" onPress={start} />}
           </View>
         )}
       </ToolPanel>

@@ -183,7 +183,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
           {BUNDLED_TRACKS.map((t) => row({ id: `music:${t.id}`, title: t.title, detail: `${formatDuration(t.durationSec)} · ${t.license}`, file: t.file, durationSec: t.durationSec, addLabel: "Use", onAdd: () => addBundled(t) }))}
         </View>
       ))}
-      {tab === "files" && <PrimaryButton title="Choose a File" disabled={busy} onPress={pickFile} />}
+      {tab === "files" && <PrimaryButton tone="plain" title="Choose a File" disabled={busy} onPress={pickFile} />}
       {tab === "effects" && (
         <View style={{ gap: theme.space.sm }}>
           {SFX_IDS.map((id) => row({ id: `sfx:${id}`, title: SFX[id].label, detail: `${SFX[id].durationSec.toFixed(1)} s`, file: SFX[id].file, durationSec: SFX[id].durationSec, addLabel: "Add", onAdd: () => addSfx(id) }))}

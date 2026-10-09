@@ -164,7 +164,7 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
         <Body muted style={{ fontSize: theme.type.small, textAlign: "right" }}>{`${Array.from(title).length} / ${COVER_LIMITS.titleMax}`}</Body>
       </View>
       {message ? <Body muted style={{ textAlign: "center" }}>{message}</Body> : null}
-      <PrimaryButton title="Save to Photos" disabled={saving || typing} onPress={() => { void save(); }} />
+      <PrimaryButton tone="plain" title="Save to Photos" disabled={saving || typing} onPress={() => { void save(); }} />
       </>); }}
     </ToolPanel>
   );
