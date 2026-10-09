@@ -96,7 +96,8 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
   }, [chosen, barsKey, viewport, content]);
 
   // True from the moment a pinch is recognised (not from a first finger: a tap or a scroll never sets it) until it is over, however
-  // it ends. Only the ruler reads it: it keeps its marks and stretches them instead of building them again on every frame.
+  // it ends. Only the ruler and the sound bars' outlines read it: they keep their marks and stretch them instead of building them
+  // again on every frame.
   const [pinching, setPinching] = useState(false);
   const pinch = useMemo(
     () =>
@@ -148,7 +149,7 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
             style={{ height: viewport, flexGrow: 0, flexShrink: 0, marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: pad }}>
             {/* Keyed by the lane: one that appears or goes leaves the others (and the scroll views) mounted. They stack in the model's order; the layers lane is as many rows as there are layers. */}
             {lanes.map(({ id }) =>
-              id === "layers" ? <LayerLane key={id} /> : id === "overlays" ? <OverlayLane key={id} /> : id === "effects" ? <EffectLane key={id} /> : <AudioLane key={id} kind={id} />,
+              id === "layers" ? <LayerLane key={id} /> : id === "overlays" ? <OverlayLane key={id} /> : id === "effects" ? <EffectLane key={id} /> : <AudioLane key={id} kind={id} hold={pinching} />,
             )}
           </ScrollView>
           <SnapGuide left={pad} height={height} />
