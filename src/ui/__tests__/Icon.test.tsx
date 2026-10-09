@@ -65,3 +65,32 @@ test("a name with no SF Symbol in the table (a brand mark) is the Ionicon, even 
   expect(screen.getByTestId("ionicon")).toHaveTextContent("logo-youtube");
   expect(screen.queryByTestId("symbol")).toBeNull();
 });
+
+test("the kit parts draw through Icon: a tool, a tile, the Done tick and a button are symbols; a `plain` button is the text glyph", async () => {
+  const { DoneButton } = require("../DoneButton") as typeof import("../DoneButton");
+  const { IconButton } = require("../IconButton") as typeof import("../IconButton");
+  const { Tile } = require("../Tile") as typeof import("../Tile");
+  const { ToolButton } = require("../ToolButton") as typeof import("../ToolButton");
+  const noop = () => {};
+  await render(
+    <>
+      <ToolButton variant="bar" label="Split" icon="cut-outline" onPress={noop} />
+      <ToolButton label="Glow" icon="bulb-outline" active onPress={noop} />
+      <Tile label="None" icon="ban-outline" selected onPress={noop} />
+      <DoneButton onPress={noop} />
+      <IconButton name="close-outline" accessibilityLabel="Close" onPress={noop} />
+      <IconButton plain name="play-outline" accessibilityLabel="Play" color={theme.colors.accent} onPress={noop} />
+    </>,
+  );
+  const symbols = screen.getAllByTestId("symbol");
+  expect(symbols.map((s) => [s.props.name, s.props.tintColor, s.props.size])).toEqual([
+    ["scissors", theme.colors.text, theme.size.icon.lg * SYMBOL_SCALE],
+    ["lightbulb", theme.colors.accent, theme.size.icon.md * SYMBOL_SCALE],
+    ["nosign", theme.colors.accent, theme.size.icon.md * SYMBOL_SCALE],
+    ["checkmark", theme.colors.text, theme.size.icon.md * SYMBOL_SCALE],
+    ["xmark", theme.colors.text, theme.size.icon.lg * SYMBOL_SCALE],
+  ]);
+  expect(screen.getByTestId("done-check")).toHaveStyle({ width: theme.size.icon.md, height: theme.size.icon.md });
+  expect(screen.getByTestId("ionicon")).toHaveTextContent("play-outline");
+  expect(screen.getByTestId("ionicon")).toHaveStyle({ fontSize: theme.size.icon.lg, color: theme.colors.accent });
+});

@@ -166,7 +166,8 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
 
   const row = (r: { id: string; title: string; detail: string; file: number; durationSec: number; addLabel: string; onAdd: () => void }) => (
     <View key={r.id} style={ROW}>
-      <IconButton name={previewId === r.id ? "stop-outline" : "play-outline"} color={theme.colors.accent}
+      {/* One in every row of a long list that scrolls: the text glyph, not a native symbol view. */}
+      <IconButton plain name={previewId === r.id ? "stop-outline" : "play-outline"} color={theme.colors.accent}
         accessibilityLabel={`${previewId === r.id ? "Stop" : "Play"} ${r.title}`} onPress={() => togglePreview(r.id, r.file, r.durationSec)} />
       <View style={{ flex: 1 }}><Body>{r.title}</Body><Body muted style={{ fontSize: theme.type.small }}>{r.detail}</Body></View>
       <SecondaryButton compact title={r.addLabel} accessibilityLabel={`${r.addLabel} ${r.title}`} disabled={busy} onPress={r.onAdd} />

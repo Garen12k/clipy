@@ -1,5 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
 import { theme } from "@/src/theme/theme";
+import { Icon } from "./Icon";
 import { PressableScale } from "./PressableScale";
 
 /** (44 − 32) / 2: the target is 44 pt and stays inside a 44-pt header (iOS does not deliver a touch outside the parent). */
@@ -11,7 +11,7 @@ export function DoneButton({ onPress }: { onPress: () => void }) {
     <PressableScale accessibilityRole="button" accessibilityLabel="Done" onPress={onPress} hitSlop={SLOP}
       style={{ width: theme.size.done, height: theme.size.done, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center",
         backgroundColor: theme.elevation.lifted }}>
-      <Ionicons testID="done-check" name="checkmark-outline" size={theme.size.icon.md} color={theme.colors.text} />
+      <Icon testID="done-check" name="checkmark-outline" size={theme.size.icon.md} color={theme.colors.text} />
     </PressableScale>
   );
 }
