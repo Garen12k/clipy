@@ -16,6 +16,7 @@ import { closeStrip, useToolStrip } from "@/src/editor/toolStrip";
 import { EXTRACT_MESSAGES } from "@/src/editor/useExtractAudio";
 import { useToast } from "@/src/ui/Toast";
 import { EditorToolbar } from "../components/EditorToolbar";
+import { MessageBar } from "../components/MessageBar";
 import { tool } from "../testing/toolbar";
 
 const st = () => useEditorStore.getState();
@@ -95,6 +96,7 @@ test("Voice on a clip: the clip's sound is put on the audio row first (one undo 
   expect(st().selectedAudioId).toBe("new-track");
   expect(useToolStrip.getState().open).toEqual({ id: "voice", key: "audio:new-track" });
   expect(said).toEqual([EXTRACT_MESSAGES.moved]);
+  expect(useToast.getState()).toMatchObject({ kind: "done", undo: true });   // the bar offers Undo: one step, just applied
   off();
   // The panel is on the new bar, and it stays open (the closer saw the bar's key, not the clip's).
   await tap("Deep");
@@ -113,6 +115,7 @@ test("Sound on a video layer: the same, on the layer's own sound", async () => {
   expect(st().past).toHaveLength(1);
   expect(useToolStrip.getState().open).toEqual({ id: "soundQuality", key: "audio:new-track" });
   expect(toast()).toBe(EXTRACT_MESSAGES.moved);
+  expect(useToast.getState()).toMatchObject({ kind: "done", undo: true });   // the bar offers Undo: one step, just applied
 });
 
 test("Sound on a clip whose sound is already on the audio row: that bar is selected and the strip opens, nothing is added, nothing is said", async () => {
@@ -228,6 +231,7 @@ test("Voice on a duplicate that still has its sound: it gets a bar of its own (n
   expect(st().project!.clips[1].muted).toBe(true);
   expect(useToolStrip.getState().open).toEqual({ id: "voice", key: "audio:new-track" });
   expect(said).toEqual([EXTRACT_MESSAGES.moved]);
+  expect(useToast.getState()).toMatchObject({ kind: "done", undo: true });   // the bar offers Undo: one step, just applied
 });
 
 test("Voice on a clip, and another clip is selected before the file has answered: nothing is made, nothing opens, nothing is said", async () => {
@@ -245,4 +249,32 @@ test("Voice on a clip, and another clip is selected before the file has answered
   expect(st().selectedClipId).toBe("b");
   expect(openTool()).toBeNull();
   expect(toast()).toBeNull();
+});
+
+test("with the editor's message bar: Voice on a clip says the sound is its own bar and offers Undo — Undo takes the bar back, un-mutes the clip and the panel closes", async () => {
+  st().select("b");
+  await render(<><EditorToolbar /><MessageBar /></>);
+  await tap("Voice");
+  // Said after the panel opened, so the opening did not take it away; it lies inside the panel's card.
+  expect(screen.getByText(EXTRACT_MESSAGES.moved)).toBeTruthy();
+  expect(screen.getByTestId("message-symbol-done")).toBeTruthy();
+  expect(openTool()).toBe("voice");
+  expect(st().past).toHaveLength(1);
+  await fireEvent.press(screen.getByRole("button", { name: "Undo" }));
+  for (let i = 0; i < 3; i++) await act(async () => { await Promise.resolve(); });
+  expect(st().project!.audioTracks.map((t) => t.id)).toEqual(["m"]);
+  expect(st().project!.clips[1].muted).toBeFalsy();
+  expect(st().past).toHaveLength(0);
+  expect(screen.queryByTestId("message-bar")).toBeNull();
+  expect(openTool()).toBeNull();   // its bar is gone: the closer closes the panel
+});
+
+test("with the editor's message bar: a refusal has no Undo", async () => {
+  jest.mocked(isSoundAvailable).mockReturnValue(false);
+  st().select("b");
+  await render(<><EditorToolbar /><MessageBar /></>);
+  await tap("Voice");
+  expect(screen.getByText(SOUND_UNAVAILABLE)).toBeTruthy();
+  expect(screen.getByTestId("message-symbol-plain")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
 });

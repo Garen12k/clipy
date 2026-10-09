@@ -114,6 +114,7 @@ test("a capture failure toasts and leaves the project unchanged", async () => {
   const { result } = await renderHook(() => useFreezeFrame());
   await act(async () => { await result.current.freeze(); });
   expect(useToast.getState().message).toBe("Couldn't capture that frame");
+  expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
   expect(st().project).toBe(project);
   expect(result.current.busy).toBe(false);
   (console.warn as jest.Mock).mockRestore();
@@ -127,6 +128,7 @@ test("a save failure toasts and leaves the project unchanged", async () => {
   const { result } = await renderHook(() => useFreezeFrame());
   await act(async () => { await result.current.freeze(); });
   expect(useToast.getState().message).toBe("Couldn't capture that frame");
+  expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
   expect(st().project).toBe(project);
   (console.warn as jest.Mock).mockRestore();
 });

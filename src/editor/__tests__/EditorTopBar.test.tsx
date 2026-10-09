@@ -48,6 +48,7 @@ test("Export is the bar's one gold button, with a share symbol before its label"
   const gold = screen.getByTestId("primary-button");
   expect(gold).toHaveAccessibleName("Export");
   expect(gold).toHaveStyle({ backgroundColor: theme.colors.accent });
+  expect(screen.queryAllByTestId("main-button")).toHaveLength(0);              // the white button belongs inside tools only
   expect(within(gold).getByTestId("export-symbol")).toBeTruthy();
 });
 

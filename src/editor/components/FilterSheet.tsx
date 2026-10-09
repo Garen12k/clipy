@@ -10,7 +10,7 @@ import { haptic } from "@/src/ui/haptics";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { Slider } from "@/src/ui/Slider";
 import { Body } from "@/src/ui/Text";
-import { StripSlider, StripTiles, ToolStrip, tilesStartXIn } from "@/src/ui/ToolStrip";
+import { StripSlider, StripTiles, ToolStrip, tilesStartXIn, toolWidth } from "@/src/ui/ToolStrip";
 import { FilterLayer } from "./FilterLayer";
 import { getThumb } from "./thumbnails";
 
@@ -43,7 +43,7 @@ export function FilterSheet({ clipId, clipIds, visible, onClose }: { clipId: str
   // Where the row starts: the selected tile in view. Worked out when the strip opens (and for another clip) — NOT on every pick: a
   // ScrollView applies a changed contentOffset at once, and the row must not move under the finger.
   const startX = useMemo(
-    () => tilesStartXIn(Math.max(0, FILTER_IDS.indexOf(clip?.filter ?? "none")), TILE_W, FILTER_IDS.length, windowW),
+    () => tilesStartXIn(Math.max(0, FILTER_IDS.indexOf(clip?.filter ?? "none")), TILE_W, FILTER_IDS.length, toolWidth(windowW)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visible, clip?.id, windowW],
   );

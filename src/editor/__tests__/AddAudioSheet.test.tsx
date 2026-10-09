@@ -17,6 +17,7 @@ jest.mock("@/src/projects/audioInfo", () => ({ audioDuration: jest.fn(async () =
 import * as DocumentPicker from "expo-document-picker";
 import { storage } from "@/src/projects";
 import { audioDuration } from "@/src/projects/audioInfo";
+import { theme } from "@/src/theme/theme";
 import { useToast } from "@/src/ui/Toast";
 import { AUDIO_LIMITS, makeAudioTrack, makeClip, makeProject } from "@/src/editor/model/types";
 import { SFX, SFX_IDS } from "@/src/editor/sfx";
@@ -173,6 +174,7 @@ test("an add refused for another reason than the limit does not blame the limit"
   await render(<AddAudioSheet visible onClose={onClose} />);
   await fireEvent.press(btn("Use Sunny Loop"));
   await waitFor(() => expect(useToast.getState().message).toBe("Couldn't add that audio file."));
+  expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
   expect(order).toEqual(["close:null"]);
   expect(tracks()).toHaveLength(1);
   expect(useEditorStore.getState().selectedAudioId).toBeNull();
@@ -220,6 +222,19 @@ describe("the playhead at the project's end", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(DocumentPicker.getDocumentAsync).not.toHaveBeenCalled();
   });
+});
+
+test("Files: Choose a File is the tab's one main button, white; the other tabs have none, and nothing is filled gold", async () => {
+  await render(<AddAudioSheet visible onClose={() => {}} />);
+  expect(screen.queryAllByTestId("main-button")).toHaveLength(0);              // Music: rows of grey buttons
+  await fireEvent.press(btn("Files"));
+  expect(screen.getAllByTestId("main-button")).toHaveLength(1);
+  expect(screen.getByTestId("main-button")).toHaveAccessibleName("Choose a File");
+  expect(screen.getByTestId("main-button")).toHaveStyle({ backgroundColor: theme.plain.fill });
+  expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
+  await fireEvent.press(btn("Effects"));
+  expect(screen.queryAllByTestId("main-button")).toHaveLength(0);
+  expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
 });
 
 test("the sheet only adds: with tracks present it shows no track controls", async () => {

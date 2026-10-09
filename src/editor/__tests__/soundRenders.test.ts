@@ -143,6 +143,7 @@ describe("syncSounds", () => {
     await flush();
     expect(files()[DEEP]).toEqual({ status: "failed", message: "sound engine: boom" });
     expect(useToast.getState().message).toBe(SOUND_FAILED);
+    expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
     expect(warn).toHaveBeenCalledWith("sound render failed", "sound engine: boom");
     syncSounds("p1", [{ name: DEEP, sourceUri: SRC, sound: deep }]);
     await flush();

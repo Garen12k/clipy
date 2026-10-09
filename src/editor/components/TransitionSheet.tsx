@@ -9,7 +9,7 @@ import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
 import { Slider } from "@/src/ui/Slider";
 import { Body } from "@/src/ui/Text";
-import { STRIP, StripNote, StripSlider, StripTiles, ToolStrip } from "@/src/ui/ToolStrip";
+import { STRIP, StripNote, StripSlider, StripTiles, ToolStrip, toolWidth } from "@/src/ui/ToolStrip";
 
 type Props = { clipIndex: number; visible: boolean; onClose: () => void };
 
@@ -32,7 +32,7 @@ function TransitionChips({ current, onPick }: { current: TransitionType; onPick:
     const chosen = spots.get(chosenAtOpening), end = spots.get(last);
     if (placed.current || !chosen || !end) return;
     placed.current = true;
-    const rowEnd = end.x + end.width + theme.space.gutter - windowW;      // the content ends one gutter after the last chip
+    const rowEnd = end.x + end.width + theme.space.gutter - toolWidth(windowW);      // the content ends one gutter after the last chip; the row is as wide as the strip's card
     setStartX(Math.max(0, Math.min(chosen.x - theme.size.toolColumn, rowEnd)));
   };
   return (

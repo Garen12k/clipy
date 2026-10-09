@@ -224,6 +224,7 @@ test("a copy nobody needs any more is cancelled at once and forgotten; a failed 
   await tick();
   expect(files()[SLOW]).toEqual({ status: "failed", message: "steady writer: boom" });
   expect(useToast.getState().message).toBe(SMOOTH_FAILED);
+  expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
   expect(STABILIZE_FAILED).toBe("Could not stabilize the clip. It shows as it was.");
   expect(SMOOTH_FAILED).toBe("Could not smooth the slow motion. The clip shows as it was.");
   render.mockResolvedValueOnce(made(SLOW));

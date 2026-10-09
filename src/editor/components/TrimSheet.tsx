@@ -65,7 +65,7 @@ export function TrimSheet({ clipId, visible, onClose }: { clipId: string | null;
       <ToolStrip visible={visible} onClose={onClose} title="Trim" note={<StripNote lines={2}>How long the photo stays on screen (0.5 – 60 s)</StripNote>}>
         <View testID="trim-row" style={row}>
           <TextInput accessibilityLabel="Length" keyboardType="decimal-pad" value={end} onChangeText={setEnd} style={field} />
-          <PrimaryButton compact title="Apply" onPress={() => submit(0, Number(end) || 0)} />
+          <PrimaryButton tone="plain" compact title="Apply" onPress={() => submit(0, Number(end) || 0)} />
         </View>
       </ToolStrip>
     );
@@ -75,7 +75,7 @@ export function TrimSheet({ clipId, visible, onClose }: { clipId: string | null;
       <View testID="trim-row" style={row}>
         <TextInput accessibilityLabel="Trim start" keyboardType="decimal-pad" value={start} onChangeText={setStart} style={field} />
         <TextInput accessibilityLabel="Trim end" keyboardType="decimal-pad" value={end} onChangeText={setEnd} style={field} />
-        <PrimaryButton compact title="Apply" onPress={() => submit(Number(start) || 0, Number(end) || 0)} />
+        <PrimaryButton tone="plain" compact title="Apply" onPress={() => submit(Number(start) || 0, Number(end) || 0)} />
       </View>
     </ToolStrip>
   );

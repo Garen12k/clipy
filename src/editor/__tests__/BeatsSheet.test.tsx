@@ -38,6 +38,15 @@ test("Remove nearest and Clear all are compact, so the pair fits between the gut
   expect(btn("Tap")).toHaveStyle({ height: theme.size.control });
 });
 
+test("Tap is the panel's one main button and it is white: nothing in the panel is filled gold", async () => {
+  await render(<BeatsSheet visible onClose={() => {}} />);
+  expect(screen.getAllByTestId("main-button")).toHaveLength(1);
+  expect(screen.getByTestId("main-button")).toHaveAccessibleName("Tap");
+  expect(btn("Tap")).toHaveStyle({ backgroundColor: theme.plain.fill });
+  expect(screen.getByText("Tap")).toHaveStyle({ color: theme.plain.ink });
+  expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
+});
+
 test("Tap adds a marker at the playhead as it is at press time (also while playing), one undo step each, with a light haptic", async () => {
   await render(<BeatsSheet visible onClose={() => {}} />);
   await act(() => { st().seek(1.5); st().setPlaying(true); });

@@ -7,6 +7,7 @@ import { EnterView } from "./Enter";
 import { useKeyboard } from "./keyboard";
 import { QuietButton } from "./QuietButton";
 import { Title } from "./Text";
+import { ToolCard, toolWidth } from "./ToolStrip";
 
 /** Heights in points. `compact` and the regular / typing rules give the bottom area's height while a panel shows (see `panelHeight`). */
 export const PANEL = { header: 44, lead: 44, compact: 240, regularShare: 0.46, regularMin: 300, regularMax: 430, typingShare: 0.22, typingMin: 148, typingMax: 200 } as const;
@@ -18,23 +19,27 @@ export function panelHeight(size: PanelSize, windowHeight: number, typing = fals
   if (size === "compact") return PANEL.compact;
   return clamp(Math.round(windowHeight * PANEL.regularShare), PANEL.regularMin, PANEL.regularMax);
 }
+/** The width a panel's body content has in a window `windowWidth` wide: the card's inner width less the body's gutter on each side. A grid lays out by this, never by the window. */
+export const panelBodyWidth = (windowWidth: number): number => toolWidth(windowWidth) - 2 * theme.space.gutter;
 /** How many panels are showing, and the size of the one that is. The editor hides the bar and the timeline while count > 0. */
 export const usePanelPresence = create<{ count: number; size: PanelSize }>(() => ({ count: 0, size: "regular" }));
 
 type Props = { visible: boolean; onClose: () => void; title: string; size?: PanelSize; action?: { label: string; onPress: () => void };
-  lead?: React.ReactNode; pinned?: { height: number; content: React.ReactNode }; scroll?: boolean; bodyTestID?: string; children: React.ReactNode | ((bodyHeight: number) => React.ReactNode) };
+  lead?: React.ReactNode; pinned?: { height: number; content: React.ReactNode }; scroll?: boolean; bodyTestID?: string; /** A function child is told the body's real size: its height, and the width its content has (the card's inner width less the body's two gutters). */
+  children: React.ReactNode | ((bodyHeight: number, bodyWidth: number) => React.ReactNode) };
 
 /**
  * A tall inline tool panel that takes the place of the timeline and the toolbar — NOT a Modal: no scrim, the preview above it stays
  * usable. Every part has an explicit height (never `flex: 1` for height); the body scrolls vertically when its content is taller.
- * The bar that hosts it owns the top hairline and the bottom padding (safe area or keyboard).
+ * It is drawn as a rounded card (`ToolCard`, the strip's) inside its box, whose height is `panelHeight`'s, unchanged; no grabber, no
+ * swipe to close. The bar that hosts it owns the bottom padding (safe area or keyboard).
  * `pinned` is fixed content between the header (and the lead) and the body, at its own explicit height, which the body gives up:
  * it stays in view while the body scrolls.
  * While the keyboard is up the panel takes its typing height and renders neither its lead nor its pinned content; the host pads the
  * bottom by the keyboard.
  */
 export function ToolPanel({ visible, onClose, title, size = "regular", action, lead, pinned, scroll = true, bodyTestID, children }: Props) {
-  const { height: windowH } = useWindowDimensions();
+  const { height: windowH, width: windowW } = useWindowDimensions();
   // Counted before paint, so the host hides its bar and the timeline in the same frame the panel appears.
   useLayoutEffect(() => {
     if (!visible) return;
@@ -62,10 +67,10 @@ export function ToolPanel({ visible, onClose, title, size = "regular", action, l
     return () => Keyboard.dismiss();
   }, [visible]);
   if (!visible) return null;
-  const content = typeof children === "function" ? children(bodyH) : children;
+  const content = typeof children === "function" ? children(bodyH, panelBodyWidth(windowW)) : children;
   return (
-    <View testID="tool-panel" style={{ height, backgroundColor: theme.elevation.bar }}>
-      {/* Only the content moves: the panel's own box is in place, opaque, from the first frame. The keyboard changing the height re-renders it and replays nothing. */}
+    <ToolCard testID="tool-panel" height={height}>
+      {/* Only the content moves: the panel's own box and its card are in place, opaque, from the first frame. The keyboard changing the height re-renders it and replays nothing. */}
       <EnterView testID="tool-panel-content" style={{ height }}>
         <View testID="tool-panel-header" style={{ height: PANEL.header, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.gutter }}>
           <Title size={theme.type.headline} accessibilityRole="header">{title}</Title>
@@ -84,6 +89,6 @@ export function ToolPanel({ visible, onClose, title, size = "regular", action, l
           <View testID={bodyTestID ?? "tool-panel-body"} style={{ height: bodyH, paddingHorizontal: theme.space.gutter }}>{content}</View>
         )}
       </EnterView>
-    </View>
+    </ToolCard>
   );
 }

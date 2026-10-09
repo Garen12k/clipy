@@ -6,6 +6,7 @@ import { Dimensions } from "react-native";
 import { FILTERS } from "@/src/editor/effects";
 import { FILTER_IDS, makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { toolWidth } from "@/src/ui/ToolStrip";
 import { FilterSheet } from "../components/FilterSheet";
 
 beforeEach(() => { useEditorStore.getState().reset(); useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })] })); });
@@ -89,8 +90,8 @@ test("clipIds: a tile and the slider write every listed main clip, one undo step
 type Inst = ReturnType<typeof screen.getByTestId>;
 const findScroll = (n: Inst): Inst | null => { if (n.props.contentOffset !== undefined) return n; for (const c of n.children) { if (typeof c === "string") continue; const f = findScroll(c as Inst); if (f) return f; } return null; };
 const startX = () => findScroll(screen.getByTestId("strip-tiles"))!.props.contentOffset.x as number;
-/** As the kit computes it: 32 tiles of 52, gaps of 8, a 16 gutter each side. */
-const rowEnd = () => 32 * 52 + 31 * 8 + 32 - Dimensions.get("window").width;
+/** As the kit computes it: 32 tiles of 52, gaps of 8, a 16 gutter each side — in a row as wide as the strip's card, not the window. */
+const rowEnd = () => 32 * 52 + 31 * 8 + 32 - toolWidth(Dimensions.get("window").width);
 
 test("32 tiles: the twenty old filters first, in their order, then the twelve new ones; one thumbnail request for all of them", async () => {
   const { getThumb } = jest.requireMock("@/src/editor/components/thumbnails") as { getThumb: jest.Mock };

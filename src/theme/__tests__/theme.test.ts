@@ -29,7 +29,7 @@ test("the dark palette, the editor's family: soft slate (the three values the ow
   const step = (a: string, b: string) => Math.round(ratio(rgb(a), rgb(b)) * 100) / 100;
   expect([step(D.timeline, D.bg), step(D.surfaceBar, D.timeline), step(D.surfaceBar, D.bg), step(D.surfaceAlt, D.surfaceBar), step(D.surfaceHigh, D.surfaceAlt), step(D.surfaceHigh, D.surfaceBar)])
     .toEqual([1.09, 1.16, 1.27, 1.22, 1.24, 1.52]);
-  expect(theme.elevation).toEqual({ page: D.bg, bar: D.surfaceBar, tile: D.surfaceAlt, lifted: D.surfaceHigh });
+  expect(theme.elevation).toEqual({ page: D.bg, bar: D.surfaceBar, tile: D.surfaceAlt, lifted: D.surfaceHigh, picked: D.surfacePicked });
   expect(theme.ring).toEqual({ borderWidth: 2, borderColor: D.accent });
   expect(theme.ringClear).toEqual({ borderWidth: 2, borderColor: "transparent" });
 });
@@ -37,12 +37,12 @@ test("the dark palette, the editor's family: soft slate (the three values the ow
 test("the screen family: the navy of every screen that is not the editor — four steps, each lighter than the last, with its own muted, separator and red", () => {
   expect(D).toMatchObject({ screenBg: "#0A1B33", screenBar: "#112C4D", screenTile: "#17365C", screenLifted: "#1F4572",
     screenMuted: "rgba(235,235,245,0.7)", screenHairline: "#2B5080", screenDangerText: "#FF9A93" });
-  expect(theme.screen).toEqual({ page: D.screenBg, bar: D.screenBar, tile: D.screenTile, lifted: D.screenLifted, muted: D.screenMuted, separator: D.screenHairline, dangerText: D.screenDangerText });
-  // Two roles inside ONE palette: the same seven names in each family, the editor's being the neutrals `elevation` already names.
+  expect(theme.screen).toEqual({ page: D.screenBg, bar: D.screenBar, tile: D.screenTile, lifted: D.screenLifted, picked: D.screenPicked, muted: D.screenMuted, separator: D.screenHairline, dangerText: D.screenDangerText });
+  // Two roles inside ONE palette: the same eight names in each family, the editor's being the neutrals `elevation` already names.
   expect(theme.surfaces.screen).toBe(theme.screen);
   expect(theme.surfaces.editor).toEqual({ ...theme.elevation, muted: D.textMuted, separator: D.hairline, dangerText: D.dangerText });
   expect(Object.keys(theme.surfaces.editor).sort()).toEqual(Object.keys(theme.surfaces.screen).sort());
-  for (const k of ["page", "bar", "tile", "lifted", "separator"] as const) expect(theme.surfaces.screen[k]).not.toBe(theme.surfaces.editor[k]);
+  for (const k of ["page", "bar", "tile", "lifted", "picked", "separator"] as const) expect(theme.surfaces.screen[k]).not.toBe(theme.surfaces.editor[k]);
   // Navy, not grey: blue leads red by at least 40 in each step, and each step is lighter than the one under it.
   const steps = [D.screenBg, D.screenBar, D.screenTile, D.screenLifted].map(rgb);
   for (const c of steps) expect(c[2] - c[0]).toBeGreaterThanOrEqual(40);
@@ -93,6 +93,24 @@ test("contrast on slate: white, the muted label, the red text and gold on all fi
   expect([D.bg, D.surfaceBar].map((s) => r2(ratio(rgb(D.danger), rgb(s))))).toEqual([5.36, 4.23]);
   // The video's own frame is true black, darker than its slate surround: the picture's edge is where the export's is.
   expect(r2(ratio(rgb(D.bg), rgb(D.surface)))).toBe(1.15);
+});
+
+test("the picked tile's tint: the one gold at 16 % over the tile step of each family, opaque; a white label and the gold ring read on it", () => {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const mix = (top: string, under: string, a: number) => "#" + rgb(top).map((v, i) => Math.round(v * a + rgb(under)[i] * (1 - a)).toString(16).padStart(2, "0")).join("").toUpperCase();
+  expect(D.surfacePicked).toBe("#484C52");
+  expect(D.screenPicked).toBe("#364A5E");
+  expect(mix(D.accent, D.surfaceAlt, 0.16)).toBe(D.surfacePicked);
+  expect(mix(D.accent, D.screenTile, 0.16)).toBe(D.screenPicked);
+  expect(theme.elevation.picked).toBe(D.surfacePicked);
+  expect(theme.surfaces.editor.picked).toBe(D.surfacePicked);
+  expect(theme.surfaces.screen.picked).toBe(D.screenPicked);
+  // The white label on the tint (≥ 4.5; it clears 7), the gold ring and glyph on it (≥ 3), and the tint apart from the unpicked tile.
+  expect([D.surfacePicked, D.screenPicked].map((s) => r2(ratio(rgb(D.text), rgb(s))))).toEqual([8.64, 9.14]);
+  for (const s of [D.surfacePicked, D.screenPicked]) { expect(ratio(rgb(D.text), rgb(s))).toBeGreaterThanOrEqual(7); expect(ratio(rgb(D.accent), rgb(s))).toBeGreaterThanOrEqual(3); }
+  expect([r2(ratio(rgb(D.surfacePicked), rgb(D.surfaceAlt))), r2(ratio(rgb(D.screenPicked), rgb(D.screenTile)))]).toEqual([1.37, 1.34]);
+  // A tint of the gold, warmer than the step it lies on: red has come up further than blue.
+  for (const [p, t] of [[D.surfacePicked, D.surfaceAlt], [D.screenPicked, D.screenTile]]) expect(rgb(p)[0] - rgb(t)[0]).toBeGreaterThan(rgb(p)[2] - rgb(t)[2]);
 });
 
 test("the eight timeline kinds: the design's values, all different, none the accent, black reads on each (9:1)", () => {

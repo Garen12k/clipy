@@ -98,7 +98,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   /** After an import: a panel the user already dismissed must not be closed again (the parent may be showing another tool by now). */
   const closeIfOpen = () => { if (open.current) close(); };
   // Close first: the toast shows where the panel was.
-  const dismissWith = (message: string) => { closeIfOpen(); useToast.getState().show(message); };
+  const dismissWith = (message: string) => { closeIfOpen(); useToast.getState().show(message, message === FAILED_MESSAGE ? { kind: "problem" } : undefined); };
   /** An add the op refused: the limit is blamed only when the project really is at it. */
   const refuse = () => {
     const count = useEditorStore.getState().project?.audioTracks.length ?? 0;
@@ -118,7 +118,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
     adding.current = true;
     setBusy(true);
     try { await work(); }
-    catch (e) { useToast.getState().show(FAILED_MESSAGE); console.warn(e); }
+    catch (e) { useToast.getState().show(FAILED_MESSAGE, { kind: "problem" }); console.warn(e); }
     finally { adding.current = false; setBusy(false); }
   }
   /** Resolves (download / measure) and imports the file, then adds the track at `at` — the playhead when the user pressed, not when the copy finished. */
@@ -183,7 +183,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
           {BUNDLED_TRACKS.map((t) => row({ id: `music:${t.id}`, title: t.title, detail: `${formatDuration(t.durationSec)} · ${t.license}`, file: t.file, durationSec: t.durationSec, addLabel: "Use", onAdd: () => addBundled(t) }))}
         </View>
       ))}
-      {tab === "files" && <PrimaryButton title="Choose a File" disabled={busy} onPress={pickFile} />}
+      {tab === "files" && <PrimaryButton tone="plain" title="Choose a File" disabled={busy} onPress={pickFile} />}
       {tab === "effects" && (
         <View style={{ gap: theme.space.sm }}>
           {SFX_IDS.map((id) => row({ id: `sfx:${id}`, title: SFX[id].label, detail: `${SFX[id].durationSec.toFixed(1)} s`, file: SFX[id].file, durationSec: SFX[id].durationSec, addLabel: "Add", onAdd: () => addSfx(id) }))}

@@ -1,6 +1,6 @@
 import { requestPermissionsAsync, saveToLibraryAsync } from "expo-media-library/legacy";
 import { useEffect, useRef, useState } from "react";
-import { PixelRatio, useWindowDimensions, View } from "react-native";
+import { PixelRatio, View } from "react-native";
 import { frameUriAt } from "@/src/editor/coverFrame";
 import { setCover } from "@/src/editor/model/ops";
 import { coverTimeOf, frameAt, totalDuration } from "@/src/editor/model/timeline";
@@ -17,6 +17,8 @@ import { CoverFrame } from "./CoverFrame";
 
 /** The frame's height in the panel. It never changes: this view is the picture Save to Photos captures. */
 const FRAME_HEIGHT = 240;
+/** How much the frame shrinks to fit a body `bodyWidth` wide (never grows): a wide cover is as wide as the panel's body, no wider. */
+export const coverScale = (bodyWidth: number, ratio: number): number => Math.min(1, bodyWidth / (FRAME_HEIGHT * ratio));
 /** The shorter side, in pixels, of the picture saved to Photos; the other side follows the project's aspect ratio (a wide cover is 1080 high, not 1080 wide). */
 const SAVE_SHORT_SIDE = 1080;
 /** The saved picture's size in pixels for a frame of this shape (width / height). */
@@ -45,7 +47,6 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
   const total = useEditorStore((s) => (visible && s.project ? totalDuration(s.project) : 0));
   const ratio = useEditorStore((s) => (visible && s.project ? frameAspect(s.project) : 1));
   const shown = useEditorStore((s) => (visible ? frameKey(s.project) : ""));
-  const { width: windowW } = useWindowDimensions();
   /** The keyboard is up: the panel is short, without its slider, and the frame scrolled out of the way, so it is not saved now. */
   const typing = useKeyboard((s) => s.height > 0);
   // The field's own text (the cover holds it trimmed, the field must keep a space just typed), and the stored title it stands for:
@@ -87,7 +88,6 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
   if (!hasClips) return null;
 
   const title = draft && draft.stored === stored ? draft.text : stored;
-  const scale = Math.min(1, (windowW - theme.space.xl * 2) / (FRAME_HEIGHT * ratio));
   const slide = (v: number) => {
     const s = useEditorStore.getState();
     // A value without a drag (VoiceOver moves the slider in steps) is a step of its own.
@@ -153,6 +153,8 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
 
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Cover" action={{ label: "Reset", onPress: reset }} lead={timeRow}>
+      {/* The frame fits the body's real width (the panel tells it), never the window's. */}
+      {(_bodyHeight, bodyWidth) => { const scale = coverScale(bodyWidth, ratio); return (<>
       <View testID="cover-frame-row" style={{ height: FRAME_HEIGHT, alignItems: "center", justifyContent: "center" }}>
         <CoverFrame ref={frameRef} uri={uri} title={title} width={FRAME_HEIGHT * ratio * scale} height={FRAME_HEIGHT * scale} />
       </View>
@@ -162,7 +164,8 @@ export function CoverSheet({ visible, onClose }: { visible: boolean; onClose: ()
         <Body muted style={{ fontSize: theme.type.small, textAlign: "right" }}>{`${Array.from(title).length} / ${COVER_LIMITS.titleMax}`}</Body>
       </View>
       {message ? <Body muted style={{ textAlign: "center" }}>{message}</Body> : null}
-      <PrimaryButton title="Save to Photos" disabled={saving || typing} onPress={() => { void save(); }} />
+      <PrimaryButton tone="plain" title="Save to Photos" disabled={saving || typing} onPress={() => { void save(); }} />
+      </>); }}
     </ToolPanel>
   );
 }

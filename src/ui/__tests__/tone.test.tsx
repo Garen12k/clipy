@@ -43,9 +43,9 @@ function expectFamily(s: typeof NAVY) {
   expect(screen.getByLabelText("Name")).toHaveStyle({ backgroundColor: s.tile });
   expect(screen.getByLabelText("Name")).toHaveProp("placeholderTextColor", s.muted);
   expect(screen.getByLabelText("X")).toHaveStyle({ backgroundColor: s.tile });
-  expect(btn("On")).toHaveStyle({ backgroundColor: s.lifted, ...theme.ring });
+  expect(btn("On")).toHaveStyle({ backgroundColor: s.picked, ...theme.ring });
   expect(btn("Off")).toHaveStyle({ backgroundColor: s.tile });
-  expect(screen.getByTestId("tile-on")).toHaveStyle({ backgroundColor: s.lifted });
+  expect(screen.getByTestId("tile-on")).toHaveStyle({ backgroundColor: s.picked, ...theme.ring });
   expect(screen.getByTestId("tile-off")).toHaveStyle({ backgroundColor: s.tile });
 }
 

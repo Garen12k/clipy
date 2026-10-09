@@ -44,8 +44,15 @@ test("offers Style captions next to Replace when captions already exist", async 
     const parentStyle = StyleSheet.flatten(screen.getByRole("button", { name }).parent?.props.style) ?? {};
     expect(parentStyle.flexDirection).not.toBe("row");
   }
-  // One main button on the card: Replace. Style captions is the grey button, Cancel is text only.
-  expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
+  // One main button on the card: Replace — the WHITE one (no gold fill inside a tool). Style captions is the grey button, Cancel is text only.
+  expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
+  expect(screen.getAllByTestId("main-button")).toHaveLength(1);
+  expect(screen.getByTestId("main-button")).toHaveAccessibleName("Replace");
+  expect(screen.getByTestId("main-button")).toHaveStyle({ backgroundColor: theme.plain.fill });
+  // Replace is visibly the main one of the pair: a filled white pill against Cancel's bare text, at the same height — Cancel is never the larger.
+  expect(screen.getByRole("button", { name: "Cancel" }).props.style.backgroundColor).toBeUndefined();
+  expect(screen.getByText("Replace")).toHaveStyle({ color: theme.plain.ink, fontSize: theme.type.body });
+  expect(screen.getByText("Cancel")).toHaveStyle({ fontSize: theme.type.body });
   expect(screen.getByText("Cancel")).toHaveStyle({ color: theme.colors.accent });
   // All three are the same height (compact), and the card fits the compact panel's body without scrolling:
   // 239 − 44 (header) − 2 × 12 (the body's padding) = 171 ≥ one line of text (18) + 3 × 12 (gaps) + 3 × 36 = 162.
@@ -77,11 +84,29 @@ test("permission denied explains and links to Settings", async () => {
   jest.mocked(transcribe).mockRejectedValue(Object.assign(new Error("Speech recognition permission denied"), { code: "E_SPEECH_DENIED" }));
   const open = jest.spyOn(Linking, "openSettings").mockResolvedValue(undefined);
   await render(<CaptionsSheet visible onClose={() => {}} />);
+  // Before the run: Transcribe is the panel's one main button, white.
+  expect(screen.getAllByTestId("main-button")).toHaveLength(1);
+  expect(screen.getByTestId("main-button")).toHaveAccessibleName("Transcribe");
   await fireEvent.press(screen.getByText("Transcribe"));   // run rejects at once, so this settles
   expect(screen.getByText(SPEECH_DENIED_MESSAGE)).toBeTruthy();
   expect(screen.queryByText("Try Again")).toBeNull();
+  // After it: Open Settings is — still one, still white, and nothing in the panel is filled gold.
+  expect(screen.getAllByTestId("main-button")).toHaveLength(1);
+  expect(screen.getByTestId("main-button")).toHaveAccessibleName("Open Settings");
+  expect(screen.getByTestId("main-button")).toHaveStyle({ backgroundColor: theme.plain.fill });
+  expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
   await fireEvent.press(screen.getByText("Open Settings"));
   expect(open).toHaveBeenCalledTimes(1);
+});
+
+test("another error offers Try Again as the one white main button", async () => {
+  mockNative = true; load(false);
+  jest.mocked(transcribe).mockRejectedValue(Object.assign(new Error("The recognizer stopped"), { code: "E_OTHER" }));
+  await render(<CaptionsSheet visible onClose={() => {}} />);
+  await fireEvent.press(screen.getByText("Transcribe"));
+  expect(screen.getAllByTestId("main-button")).toHaveLength(1);
+  expect(screen.getByTestId("main-button")).toHaveAccessibleName("Try Again");
+  expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
 });
 
 test("the Replace card leaves room under Cancel for its hit slop, and still fits the compact body", async () => {

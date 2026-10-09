@@ -13,7 +13,7 @@ import { Slider } from "@/src/ui/Slider";
 import { Spinner } from "@/src/ui/Spinner";
 import { Tile, TILE_WIDTH } from "@/src/ui/Tile";
 import { PANEL, ToolPanel } from "@/src/ui/ToolPanel";
-import { STRIP, StripNote, StripSlider, StripTiles, tilesStartXIn } from "@/src/ui/ToolStrip";
+import { STRIP, StripNote, StripSlider, StripTiles, tilesStartXIn, toolWidth } from "@/src/ui/ToolStrip";
 
 /** Pitch 0: the slider ticks lightly when a drag reaches or passes it. */
 const REST = [0] as const;
@@ -38,7 +38,7 @@ export function VoiceSheet({ trackId, visible, onClose }: { trackId: string | nu
   // Where the row starts: the ringed tile in view (None is tile 0). Worked out when the panel opens (and for another track) — NOT
   // on every pick: a ScrollView applies a changed contentOffset at once, and the row must not move under the finger.
   const startX = useMemo(
-    () => tilesStartXIn(sound.voice ? VOICE_IDS.indexOf(sound.voice) + 1 : 0, TILE_WIDTH, VOICE_IDS.length + 1, windowW),
+    () => tilesStartXIn(sound.voice ? VOICE_IDS.indexOf(sound.voice) + 1 : 0, TILE_WIDTH, VOICE_IDS.length + 1, toolWidth(windowW)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visible, track?.id, windowW],
   );

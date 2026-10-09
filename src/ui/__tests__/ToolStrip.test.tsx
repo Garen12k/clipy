@@ -29,17 +29,19 @@ test("Done closes; the action runs", async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-test("the header is 44 pt: the ringed ✓ and the quiet action both have a 44-pt target inside it", async () => {
+test("the header is 44 pt: the plain ✓ and the quiet action both have a 44-pt target inside it", async () => {
   await render(<ToolStrip visible onClose={() => {}} title="Filter" action={{ label: "Apply to all", onPress: () => {} }}><Text>body</Text></ToolStrip>);
   expect(screen.getByTestId("tool-strip-header")).toHaveStyle({ height: theme.size.touch, paddingHorizontal: theme.space.gutter });
   const done = screen.getByRole("button", { name: "Done" });
-  expect(done).toHaveStyle({ width: theme.size.done, height: theme.size.done, backgroundColor: theme.elevation.tile, borderColor: theme.colors.accent });
+  expect(done).toHaveStyle({ width: theme.size.done, height: theme.size.done, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.lifted });
   expect(theme.size.done + 2 * (done.props.hitSlop as number)).toBe(STRIP.header);            // reaches 44 and stays inside the header
   const action = screen.getByRole("button", { name: "Apply to all" });
   const slop = action.props.hitSlop as { top: number; bottom: number };
   expect(action).toHaveStyle({ height: theme.size.controlCompact });
   expect(theme.size.controlCompact + slop.top + slop.bottom).toBe(STRIP.header);
-  expect(screen.getByTestId("tool-strip")).toHaveStyle({ backgroundColor: theme.elevation.bar });
+  // The bar's colour is the card's now; the box around it is the page.
+  expect(screen.getByTestId("tool-card")).toHaveStyle({ backgroundColor: theme.elevation.bar });
+  expect(screen.getByTestId("tool-strip")).toHaveStyle({ backgroundColor: theme.elevation.page });
 });
 
 test("StripSlider: the name and the value are one text; the value has tabular digits; an empty name shows the value alone", async () => {

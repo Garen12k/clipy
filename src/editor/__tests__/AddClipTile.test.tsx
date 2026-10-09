@@ -49,6 +49,7 @@ test("some items failing shows how many were added", async () => {
   await render(<AddClipTile left={0} />);
   await fireEvent.press(screen.getByRole("button", { name: "Add clips" }));
   await waitFor(() => expect(useToast.getState().message).toBe("1 of 3 added"));
+  expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
   expect(useEditorStore.getState().project!.clips).toHaveLength(3);
 });
 

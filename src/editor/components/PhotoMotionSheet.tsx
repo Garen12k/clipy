@@ -8,7 +8,7 @@ import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { haptic } from "@/src/ui/haptics";
 import { Slider } from "@/src/ui/Slider";
 import { Tile, TILE_WIDTH } from "@/src/ui/Tile";
-import { StripSlider, StripTiles, ToolStrip, tilesStartXIn } from "@/src/ui/ToolStrip";
+import { StripSlider, StripTiles, ToolStrip, tilesStartXIn, toolWidth } from "@/src/ui/ToolStrip";
 
 /**
  * A photo's Motion: None or one of seven slow moves over its whole length, and how strong. What is ringed is `shownPhotoMotion` —
@@ -24,7 +24,7 @@ export function PhotoMotionSheet({ clipId, visible, onClose }: { clipId: string 
   // Where the row starts: the ringed tile in view (None is tile 0). Worked out when the strip opens (and for another photo) — NOT on
   // every pick: a ScrollView applies a changed contentOffset at once, and the row must not move under the finger.
   const startX = useMemo(
-    () => tilesStartXIn(shown ? PHOTO_MOTION_IDS.indexOf(shown.id) + 1 : 0, TILE_WIDTH, PHOTO_MOTION_IDS.length + 1, windowW),
+    () => tilesStartXIn(shown ? PHOTO_MOTION_IDS.indexOf(shown.id) + 1 : 0, TILE_WIDTH, PHOTO_MOTION_IDS.length + 1, toolWidth(windowW)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visible, clip?.id, windowW],
   );

@@ -65,6 +65,7 @@ test("permission denied: a toast, nothing is touched, state stays idle", async (
   const r = await mount(onDismiss);
   await act(async () => { await r.current.start(); });
   expect(toast()).toBe("Microphone access is needed to record.");
+  expect(useToast.getState()).toMatchObject({ kind: null, undo: false });   // a refusal: plain, no Undo
   expect(onDismiss).toHaveBeenCalledTimes(1);
   expect(r.current.state).toBe("idle");
   expect(st().recording).toBe(false);
@@ -304,6 +305,7 @@ describe("the recording flag is held until the save is over (the tool store wait
     expect(st().recording).toBe(true);
     await act(async () => { fail(new Error("disk full")); await stopping; });
     expect(toast()).toBe("Couldn't save that recording.");
+    expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
     expectRestored();
     warn.mockRestore();
   });
