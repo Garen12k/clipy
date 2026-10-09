@@ -144,6 +144,7 @@ test("Cut to beats: one tap shortens the clips onto the markers, one undo brings
   expect(st().project!.clips.map((c) => clipDuration(c))).toEqual([4, 3, 3]);   // 4 and 4 + 3 are on beats already
   expect(st().past).toHaveLength(0);
   expect(useToast.getState().message).toBe("Nothing more to cut.");
+  expect(useToast.getState()).toMatchObject({ kind: null, undo: false });   // a refusal: plain, no Undo
   await act(() => { st().apply((p) => ({ ...p, beatMarkers: [1.5, 3.5, 6] })); });
   await fireEvent.press(btn("Cut to Beats"));
   expect(st().project!.clips.map((c) => clipDuration(c))).toEqual([3.5, 2.5, 3]);
@@ -151,6 +152,7 @@ test("Cut to beats: one tap shortens the clips onto the markers, one undo brings
   expect(st().past).toHaveLength(2);
   expect(impact).toHaveBeenLastCalledWith("medium");
   expect(useToast.getState().message).toBe("Clips cut to the beat. Undo brings them back.");
+  expect(useToast.getState()).toMatchObject({ kind: "done", undo: true });   // the bar offers Undo: one step, just applied
   await act(() => { st().undo(); });
   expect(st().project!.clips).toBe(before);
 });

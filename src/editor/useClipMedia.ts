@@ -31,7 +31,7 @@ async function withLock(run: () => Promise<void>, failMessage: string): Promise<
   if (useMediaBusy.getState().busy) return;
   useMediaBusy.setState({ busy: true });
   try { await run(); }
-  catch (e) { console.warn(e); useToast.getState().show(failMessage); }
+  catch (e) { console.warn(e); useToast.getState().show(failMessage, { kind: "problem" }); }
   finally { useMediaBusy.setState({ busy: false }); }
 }
 
@@ -84,9 +84,9 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     const { clips } = await storage.importMedia(projectId, assets);
     const { project, apply } = useEditorStore.getState();
     if (project?.id !== projectId) return;   // the project was closed meanwhile: say nothing
-    if (clips.length === 0) { useToast.getState().show("Couldn't add those items."); return; }
+    if (clips.length === 0) { useToast.getState().show("Couldn't add those items.", { kind: "problem" }); return; }
     apply((p) => addClips(p, clips));
-    if (clips.length < assets.length) useToast.getState().show(`${clips.length} of ${assets.length} added`);
+    if (clips.length < assets.length) useToast.getState().show(`${clips.length} of ${assets.length} added`, { kind: "problem" });   // it reports the ones that failed: no Undo
   }, "Couldn't add those items.");
 
   /** `clipId`: a main clip's or a layer's id. */
@@ -106,7 +106,7 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     }
     const { clips } = await storage.importMedia(projectId, [picked]);
     const media = clips[0];
-    if (!media) { useToast.getState().show("Couldn't replace the clip."); return; }
+    if (!media) { useToast.getState().show("Couldn't replace the clip.", { kind: "problem" }); return; }
     const { project, apply } = useEditorStore.getState();
     if (project?.id !== projectId || !findItem(project, clipId)) return;
     // Still checked after import: the imported duration is the authoritative one.
@@ -137,7 +137,7 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     const clip = clips[0];
     const { project, apply, select } = useEditorStore.getState();
     if (project?.id !== projectId || project.clips.length === 0) return;   // the project was closed (or emptied) meanwhile: say nothing
-    if (!clip) { useToast.getState().show("Couldn't add that item."); return; }
+    if (!clip) { useToast.getState().show("Couldn't add that item.", { kind: "problem" }); return; }
     // Still checked after import: the imported duration is the authoritative one, and layers may have changed meanwhile.
     const next = addLayer(project, clip, start);
     if (next === project) { useToast.getState().show(addLayerRefusal(project, clip)); return; }
@@ -158,7 +158,7 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     const n = COLLAGE_CELLS[layout];
     if (!n) return;   // a layout that does not exist: nothing to pick for
     const free = LAYER_LIMITS.max - pressed.project.layers.length;
-    const tell = (why: CollageRefusal, picked: number) => useToast.getState().show(collageMessage(why, layout, picked, free));
+    const tell = (why: CollageRefusal, picked: number) => { const message = collageMessage(why, layout, picked, free); useToast.getState().show(message, message === ADD_FAILED ? { kind: "problem" } : undefined); };
     if (free < n) { tell("limit", 0); return; }
     const start = newLayerStart(pressed.project, pressed.playhead);
     const assets = await pickMedia({ limit: n });
@@ -178,7 +178,7 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     const { clips } = await storage.importMedia(projectId, picked);
     const { project, apply, select } = useEditorStore.getState();
     if (project?.id !== projectId || project.clips.length === 0) return;   // the project was closed (or emptied) meanwhile: say nothing
-    if (clips.length < n) { useToast.getState().show(ADD_FAILED); return; }
+    if (clips.length < n) { useToast.getState().show(ADD_FAILED, { kind: "problem" }); return; }
     // Still checked after import: the imported durations are the authoritative ones, and layers may have changed meanwhile.
     const next = addCollage(project, clips, layout, start, newId());
     if (next === project) { tell(collageRefusal(project, clips, layout, start) ?? "empty", clips.length); return; }

@@ -5,7 +5,7 @@ import { newId } from "@/src/lib/id";
 import { storage } from "@/src/projects";
 import { expoFs } from "@/src/projects/expoFs";
 import { haptic } from "@/src/ui/haptics";
-import { useToast } from "@/src/ui/Toast";
+import { useToast, type MessageOptions } from "@/src/ui/Toast";
 import { placeSpeech, speakableText, speechFileName, speechRate, speechRefusal, speechTracksOf } from "./model/speech";
 import { isTextOverlay } from "./model/types";
 import { useEditorStore } from "./store";
@@ -53,7 +53,7 @@ export function useReadAloud(): { read: (overlayId: string, voiceId: string | nu
 
   const read = useCallback(async (overlayId: string, voiceId: string | null, pace: number): Promise<boolean> => {
     if (reading.current) return false;
-    const say = (message: string) => useToast.getState().show(message);
+    const say = (message: string, options?: MessageOptions) => useToast.getState().show(message, options);
     if (!isSpeechAvailable()) { say(READ_ALOUD.unavailable); return false; }
     const first = useEditorStore.getState().project;
     if (!first) return false;
@@ -107,19 +107,19 @@ export function useReadAloud(): { read: (overlayId: string, voiceId: string | nu
         await forget();
         const refusal = speechRefusal(now, overlayId);
         if (!refusal) console.warn("read aloud failed", `speech render: an answer of ${String(made.seconds)} s`);
-        say(refusal ? READ_ALOUD[refusal] : READ_ALOUD.failed);
+        say(refusal ? READ_ALOUD[refusal] : READ_ALOUD.failed, refusal ? undefined : { kind: "problem" });
         return false;
       }
       haptic("light");
       useEditorStore.getState().apply(() => placed);
-      say(replaces ? READ_ALOUD.replaced : READ_ALOUD.done);
+      say(replaces ? READ_ALOUD.replaced : READ_ALOUD.done, { kind: "done", undo: true });   // one step, just applied: `placeSpeech`
       return true;
     } catch (e) {
       await forget();
       if (halted || isSpeechCancelled(e)) return false;
       console.warn("read aloud failed", e instanceof Error ? e.message : String(e));
       if (!answered) tellPhone();   // the deadline: a reading that never answered is told to stop
-      say(READ_ALOUD.failed);
+      say(READ_ALOUD.failed, { kind: "problem" });
       return false;
     } finally {
       if (timer !== null) clearTimeout(timer);

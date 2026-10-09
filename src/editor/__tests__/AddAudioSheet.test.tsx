@@ -174,6 +174,7 @@ test("an add refused for another reason than the limit does not blame the limit"
   await render(<AddAudioSheet visible onClose={onClose} />);
   await fireEvent.press(btn("Use Sunny Loop"));
   await waitFor(() => expect(useToast.getState().message).toBe("Couldn't add that audio file."));
+  expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
   expect(order).toEqual(["close:null"]);
   expect(tracks()).toHaveLength(1);
   expect(useEditorStore.getState().selectedAudioId).toBeNull();

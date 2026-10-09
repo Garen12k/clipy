@@ -238,7 +238,7 @@ async function pump(): Promise<void> {
         const message = e instanceof Error ? e.message : String(e);
         console.warn("steady render failed", message);
         setFile(next.name, { status: "failed", message });
-        if (!toldFailure) useToast.getState().show(next.level > 0 ? STABILIZE_FAILED : SMOOTH_FAILED);
+        if (!toldFailure) useToast.getState().show(next.level > 0 ? STABILIZE_FAILED : SMOOTH_FAILED, { kind: "problem" });
         toldFailure = true;
       }
     }

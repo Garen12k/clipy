@@ -71,7 +71,8 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
 
   const setPhase = (next: VoiceRecorderState) => { phase.current = next; if (mounted.current) setState(next); };
   const stopTimer = () => { if (timer.current) { clearInterval(timer.current); timer.current = null; } };
-  const notify = (message: string) => { onDismiss.current?.(); useToast.getState().show(message); };
+  // A sentence that starts "Couldn't" is a failure; the others say why not.
+  const notify = (message: string) => { onDismiss.current?.(); useToast.getState().show(message, message.startsWith("Couldn't") ? { kind: "problem" } : undefined); };
 
   /**
    * Ends the session: recorder stopped if asked (it may already be released), playback mode restored, and — unless a save follows,

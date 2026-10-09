@@ -194,7 +194,7 @@ async function pump(): Promise<void> {
         const message = e instanceof Error ? e.message : String(e);
         console.warn("cutout render failed", message);
         setFile(next.name, { status: "failed", message });
-        if (!toldFailure) useToast.getState().show(isNoPerson(message) ? CUTOUT_NO_PERSON : CUTOUT_FAILED);
+        if (!toldFailure) useToast.getState().show(isNoPerson(message) ? CUTOUT_NO_PERSON : CUTOUT_FAILED, { kind: "problem" });
         toldFailure = true;
       }
     }

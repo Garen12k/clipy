@@ -166,7 +166,7 @@ async function pump(): Promise<void> {
         const message = e instanceof Error ? e.message : String(e);
         console.warn("sound render failed", message);
         setFile(next.name, { status: "failed", message });
-        if (!toldFailure) useToast.getState().show(SOUND_FAILED);
+        if (!toldFailure) useToast.getState().show(SOUND_FAILED, { kind: "problem" });
         toldFailure = true;
       }
     }

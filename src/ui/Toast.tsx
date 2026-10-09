@@ -8,17 +8,24 @@ import { enterTo, fadeOutTo } from "./motion";
 import { Body } from "./Text";
 import { isReducedMotion } from "./useReducedMotion";
 
-type ToastState = { message: string | null; stamp: number; show: (message: string) => void; clear: () => void };
+/** What a message is: `done` confirms something that just happened, `problem` says something went wrong. Without one it is plain information. */
+export type MessageKind = "done" | "problem";
+/**
+ * Read only by the editor's message bar (src/editor/components/MessageBar.tsx): its leading symbol, and whether it offers Undo — asked
+ * only for a message that confirms ONE undo step the same tap has just applied. `ToastHost` ignores both.
+ */
+export type MessageOptions = { kind?: MessageKind; undo?: true };
+type ToastState = { message: string | null; stamp: number; kind: MessageKind | null; undo: boolean; show: (message: string, options?: MessageOptions) => void; clear: () => void };
 export const useToast = create<ToastState>((set) => ({
-  message: null, stamp: 0,
-  show: (message) => set({ message, stamp: Date.now() }),
-  clear: () => set({ message: null }),
+  message: null, stamp: 0, kind: null, undo: false,
+  show: (message, options) => set({ message, stamp: Date.now(), kind: options?.kind ?? null, undo: options?.undo === true }),
+  clear: () => set({ message: null, kind: null, undo: false }),
 }));
 
 export const TOAST_MS = 2500;
 const SHIFT = theme.motion.enterShift;
 
-/** Mount once near the root of a screen. Shows the latest message for 2.5 s: it eases in, and out over its last moments (timers, not animation callbacks). */
+/** Mount once near the root of a screen (the editor mounts its message bar instead). Shows the latest message for 2.5 s: it eases in, and out over its last moments (timers, not animation callbacks). */
 export function ToastHost() {
   const { message, stamp, clear } = useToast();
   const s = useSurfaces();

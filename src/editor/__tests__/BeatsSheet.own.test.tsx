@@ -103,6 +103,7 @@ test("a file that cannot be listened to: one plain toast, nothing placed, the bu
     await fireEvent.press(btn("Find Beats"));
     await act(async () => { await Promise.resolve(); });
     expect(useToast.getState().message).toBe(BEAT_MESSAGES.failed);
+    expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
     expect(markers()).toEqual([]);
     expect(btn("Find Beats")).toBeEnabled();
   } finally { warn.mockRestore(); }

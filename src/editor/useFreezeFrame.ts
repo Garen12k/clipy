@@ -40,13 +40,13 @@ export function useFreezeFrame(): { freeze(): Promise<void>; busy: boolean } {
       if (index < 0 || store.project.clips[index].sourceUri !== clip.sourceUri) return; // removed or Replaced meanwhile
       const id = newId();
       const next = insertFreezeFrame(store.project, clipStartTimes(store.project)[index] + offsetInClip, { id, sourceUri: uri, width: clip.width, height: clip.height });
-      if (next === store.project) { useToast.getState().show("Couldn't capture that frame"); return; }
+      if (next === store.project) { useToast.getState().show("Couldn't capture that frame", { kind: "problem" }); return; }
       store.apply(() => next);
       store.select(id);
       store.seek(clipStartTimes(next)[next.clips.findIndex((c) => c.id === id)]);
     } catch (e) {
       console.warn(e);
-      useToast.getState().show("Couldn't capture that frame");
+      useToast.getState().show("Couldn't capture that frame", { kind: "problem" });
     } finally { useFreezeBusy.setState({ busy: false }); }
   };
 

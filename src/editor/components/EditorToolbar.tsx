@@ -290,7 +290,7 @@ export function EditorToolbar() {
       // The hook has just selected the bar (it answers null when the owner went elsewhere while the file was asked).
       if (!r || !here.current) return;
       openStrip(id);
-      if (r.made) useToast.getState().show(EXTRACT_MESSAGES.moved);
+      if (r.made) useToast.getState().show(EXTRACT_MESSAGES.moved, { kind: "done", undo: true });
     });
   };
 

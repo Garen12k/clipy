@@ -154,7 +154,7 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
       if (now.project && now.project.id === project.id && beatTrack(now.project, now.selectedAudioId)?.id === track.id) find();
     } catch (e) {
       console.warn("find beats failed", e);
-      if (shown.current) useToast.getState().show(BEAT_MESSAGES.failed);
+      if (shown.current) useToast.getState().show(BEAT_MESSAGES.failed, { kind: "problem" });
     } finally {
       if (shown.current) setBusy(false);
     }
@@ -166,7 +166,7 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
     if (next === project) { useToast.getState().show(NOTHING_TO_CUT); return; }
     haptic("medium");
     apply(() => next);
-    useToast.getState().show(CUT_DONE);
+    useToast.getState().show(CUT_DONE, { kind: "done", undo: true });
   };
   const cutHint = CUT_HINT[cutState];
   const small = { fontSize: theme.type.small } as const;

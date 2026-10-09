@@ -5,6 +5,7 @@ import { AudioPreview } from "@/src/editor/components/AudioPreview";
 import { EditorLayout } from "@/src/editor/components/EditorLayout";
 import { EditorToolbar } from "@/src/editor/components/EditorToolbar";
 import { EditorTopBar } from "@/src/editor/components/EditorTopBar";
+import { MessageBar } from "@/src/editor/components/MessageBar";
 import { PreviewPlayer } from "@/src/editor/components/PreviewPlayer";
 import { ReorderHandle } from "@/src/editor/components/ReorderHandle";
 import { Timeline } from "@/src/editor/components/Timeline";
@@ -22,7 +23,7 @@ import { storage } from "@/src/projects";
 import { theme } from "@/src/theme/theme";
 import { Screen } from "@/src/ui/Screen";
 import { Body, Title } from "@/src/ui/Text";
-import { ToastHost } from "@/src/ui/Toast";
+import { useToast } from "@/src/ui/Toast";
 
 export default function EditorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -45,7 +46,7 @@ export default function EditorScreen() {
   return (
     <Screen tone="editor">
       <EditorLayout
-        top={<EditorTopBar onExport={() => { if (!closeForExport()) return; useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />}
+        top={<EditorTopBar onExport={() => { if (!closeForExport()) return; useToast.getState().clear(); useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />}
         preview={<>
           <PreviewPlayer onOpenPanel={(overlayId) => {
             // A double-tap on a text or a sticker: select it first, open second, so the panel's key is that overlay.
@@ -78,7 +79,8 @@ export default function EditorScreen() {
         />}
         toolbar={<EditorToolbar />}
       />
-      <ToastHost />
+      {/* The editor's messages: a bar above the tools, not the toast. Last, and no ancestor of the preview or the timeline. */}
+      <MessageBar />
     </Screen>
   );
 }

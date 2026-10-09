@@ -63,6 +63,7 @@ test("a reading: the cleaned text, the voice, the rate and a new file in the med
   expect(st().isPlaying).toBe(false);                         // the preview was paused first
   expect(st().selectedOverlayId).toBe("o1");                  // the text stays selected: the panel stays open
   expect(said()).toBe(READ_ALOUD.done);
+  expect(useToast.getState()).toMatchObject({ kind: "done", undo: true });   // the bar offers Undo: one step, just applied
   expect(result.current.busy).toBe(false);
   expect(expoFs.remove).not.toHaveBeenCalled();               // the file that became the bar is kept
   expect(cancelSpeech).not.toHaveBeenCalled();
@@ -102,6 +103,7 @@ test("what is said: a first reading is under the text; a reading that replaced a
   expect(tracks()).toHaveLength(1);
   expect(tracks()[0].start).toBe(9);
   expect(said()).toBe("The voice was replaced on the audio row.");
+  expect(useToast.getState()).toMatchObject({ kind: "done", undo: true });   // the bar offers Undo: one step, just applied
   expect(READ_ALOUD.replaced).toBe("The voice was replaced on the audio row.");
   // The bar deleted by hand: the next reading is a first one again, at the text's start.
   await act(async () => { st().apply((p) => deleteAudioTrack(p, tracks()[0].id)); });
@@ -245,6 +247,7 @@ test("a failure is said once in plain words, the reason goes to the log, and not
   const { result } = await renderHook(() => useReadAloud());
   await act(async () => { expect(await result.current.read("o1", "en.ava", 0.5)).toBe(false); });
   expect(said()).toBe(READ_ALOUD.failed);
+  expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
   expect(warn).toHaveBeenCalledWith("read aloud failed", "speech render: no sound came out");
   expect(tracks()).toEqual([]);
   expect(st().past).toHaveLength(0);
@@ -262,6 +265,7 @@ test("the phone refusing outright (an older build's error) and a folder that can
   const { result } = await renderHook(() => useReadAloud());
   await act(async () => { expect(await result.current.read("o1", "en.ava", 0.5)).toBe(false); });
   expect(said()).toBe(READ_ALOUD.failed);
+  expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
   expect(cancelSpeech).not.toHaveBeenCalled();                // the phone never took the job: nothing to stop
   useToast.setState({ message: null });
   speak.mockReset();

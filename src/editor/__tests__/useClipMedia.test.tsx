@@ -43,6 +43,7 @@ test("a picker error is reported and releases the lock", async () => {
   const { result } = await renderHook(() => useClipMedia());
   await act(async () => { await result.current.addMedia(); });
   expect(useToast.getState().message).toBe("Couldn't add those items.");
+  expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
   expect(result.current.busy).toBe(false);
   (console.warn as jest.Mock).mockRestore();
 });
@@ -62,6 +63,7 @@ test("Replace refuses a too-short video before importing it, so no file is copie
   await act(async () => { await result.current.replaceMedia("a"); });
   expect(importMedia).not.toHaveBeenCalled();
   expect(useToast.getState().message).toBe("That video is too short.");
+  expect(useToast.getState()).toMatchObject({ kind: null, undo: false });   // a refusal: plain, no Undo
   expect(useEditorStore.getState().past).toHaveLength(0);
 });
 
@@ -150,6 +152,7 @@ describe("addOverlay", () => {
     const { result } = await renderHook(() => useClipMedia());
     await act(async () => { await result.current.addOverlay(); });
     expect(useToast.getState().message).toBe("Couldn't add that item.");
+    expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
     useToast.getState().clear();
     pick.mockResolvedValueOnce(null);
     await act(async () => { await result.current.addOverlay(); });
@@ -239,6 +242,7 @@ describe("makeCollage", () => {
     await run("grid4");
     expect(pick).not.toHaveBeenCalled();
     expect(useToast.getState().message).toBe("Not enough room: this layout adds 4 layers and there is room for 2.");
+    expect(useToast.getState()).toMatchObject({ kind: null, undo: false });   // a refusal: plain, no Undo
   });
 
   test("refused before anything is copied: too few picked, three videos, a third video on screen", async () => {
@@ -264,6 +268,7 @@ describe("makeCollage", () => {
     importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "n1" })], failed: 1 });
     await run("sideBySide");
     expect(useToast.getState().message).toBe("Couldn't add those items.");
+    expect(useToast.getState()).toMatchObject({ kind: "problem", undo: false });
     expect(state().project!.layers).toHaveLength(0);
     useToast.getState().clear();
     pick.mockResolvedValueOnce([shot(1), shot(2)]);

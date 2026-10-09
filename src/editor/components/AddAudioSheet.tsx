@@ -98,7 +98,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
   /** After an import: a panel the user already dismissed must not be closed again (the parent may be showing another tool by now). */
   const closeIfOpen = () => { if (open.current) close(); };
   // Close first: the toast shows where the panel was.
-  const dismissWith = (message: string) => { closeIfOpen(); useToast.getState().show(message); };
+  const dismissWith = (message: string) => { closeIfOpen(); useToast.getState().show(message, message === FAILED_MESSAGE ? { kind: "problem" } : undefined); };
   /** An add the op refused: the limit is blamed only when the project really is at it. */
   const refuse = () => {
     const count = useEditorStore.getState().project?.audioTracks.length ?? 0;
@@ -118,7 +118,7 @@ export function AddAudioSheet({ visible, onClose }: { visible: boolean; onClose:
     adding.current = true;
     setBusy(true);
     try { await work(); }
-    catch (e) { useToast.getState().show(FAILED_MESSAGE); console.warn(e); }
+    catch (e) { useToast.getState().show(FAILED_MESSAGE, { kind: "problem" }); console.warn(e); }
     finally { adding.current = false; setBusy(false); }
   }
   /** Resolves (download / measure) and imports the file, then adds the track at `at` — the playhead when the user pressed, not when the copy finished. */
