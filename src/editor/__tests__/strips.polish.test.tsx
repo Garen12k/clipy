@@ -56,11 +56,11 @@ test("Adjust ticks at 0 for a two-sided control; Reset is a quiet button, disabl
 /** As in the app: the editor says its family once, on its Screen (src/ui/tone.ts); a part rendered bare would be on a navy screen. */
 const inEditor = { wrapper: ({ children }: { children: React.ReactNode }) => <ToneContext.Provider value="editor">{children}</ToneContext.Provider> };
 
-test("Mask uses the kit tile: the ring and the lighter box on the selected one, one undo step per pick", async () => {
+test("Mask uses the kit tile: the ring and the tinted box on the selected one, one undo step per pick", async () => {
   await render(<MaskSheet clipId="a" visible onClose={() => {}} />, inEditor);
   expect(screen.getByRole("button", { name: "None" })).toBeSelected();
   expect(screen.getByRole("button", { name: "None" })).toHaveStyle({ width: TILE_WIDTH });
-  expect(screen.getByTestId("mask-tile-none")).toHaveStyle({ backgroundColor: theme.elevation.lifted, ...theme.ring });
+  expect(screen.getByTestId("mask-tile-none")).toHaveStyle({ backgroundColor: theme.elevation.picked, ...theme.ring });
   expect(screen.getByTestId("mask-tile-circle")).toHaveStyle({ backgroundColor: theme.elevation.tile, ...theme.ringClear });
   await fireEvent.press(screen.getByRole("button", { name: "Circle" }));
   expect(st().project!.clips[0].mask).toBe("circle");

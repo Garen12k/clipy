@@ -10,6 +10,7 @@ type Props = { label: string; selected: boolean; onPress: () => void; disabled?:
   still?: boolean;
 };
 
+/** A chip. Picked = the tile's rule: the 2-pt gold ring on the soft gold tint (`picked`), the label white (a chip's label is always semibold). */
 export function Chip({ label, selected, onPress, disabled, accessibilityLabel, compact, still }: Props) {
   const s = useSurfaces();
   return (
@@ -18,8 +19,8 @@ export function Chip({ label, selected, onPress, disabled, accessibilityLabel, c
       accessibilityState={{ selected, disabled: !!disabled }}
       disabled={disabled} onPress={onPress} hitSlop={compact ? { top: 10, bottom: 10, left: 4, right: 4 } : { top: 4, bottom: 4 }}
       style={[{ height: compact ? theme.size.chipCompact : theme.size.chip, justifyContent: "center", paddingHorizontal: compact ? theme.space.md : theme.space.lg, borderRadius: theme.radius.pill,
-        backgroundColor: selected ? s.lifted : s.tile, opacity: disabled ? 0.4 : 1 }, selected ? theme.ring : theme.ringClear]}>
-      <Text style={{ fontWeight: theme.weight.semi, color: selected ? theme.colors.accent : theme.colors.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</Text>
+        backgroundColor: selected ? s.picked : s.tile, opacity: disabled ? 0.4 : 1 }, selected ? theme.ring : theme.ringClear]}>
+      <Text style={{ fontWeight: theme.weight.semi, color: theme.colors.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</Text>
     </PressableScale>
   );
 }

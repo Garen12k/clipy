@@ -73,10 +73,11 @@ test("Chip still: the ring and the colours switch at once, the lift does not spr
   const view = await render(ui(false));
   await view.rerender(ui(true));
   expect(btn("2×")).toBeSelected();
-  expect(btn("2×")).toHaveStyle({ backgroundColor: theme.screen.lifted, ...theme.ring });
-  expect(screen.getByText("2×")).toHaveStyle({ color: theme.colors.accent });
+  expect(btn("2×")).toHaveStyle({ backgroundColor: theme.screen.picked, ...theme.ring });
+  expect(screen.getByText("2×")).toHaveStyle({ color: theme.colors.text });
   await view.rerender(ui(false));
   expect(btn("2×")).toHaveStyle({ backgroundColor: theme.screen.tile, ...theme.ringClear });
+  expect(screen.getByText("2×")).toHaveStyle({ color: theme.colors.text });
   expect(S).not.toHaveBeenCalled();
 });
 
@@ -136,11 +137,12 @@ test("ToolButton: a 72-pt column with a 44-pt box; active = ring, lifted surface
   expect(screen.getByText("Reverse")).toHaveStyle({ color: theme.colors.accent, fontWeight: theme.weight.semi, fontSize: theme.type.small });
 });
 
-test("Chip: explicit heights; selected = ring + lifted surface + gold label; regular chips reach 44 pt too", async () => {
+test("Chip: explicit heights; picked = the gold ring + the soft tint + a white semibold label; regular chips reach 44 pt too", async () => {
   await render(<><Chip label="9:16" selected onPress={() => {}} /><Chip label="1:1" selected={false} onPress={() => {}} /><Chip compact label="In" selected={false} onPress={() => {}} /></>);
   expect(btn("9:16")).toBeSelected();
-  expect(btn("9:16")).toHaveStyle({ height: theme.size.chip, backgroundColor: theme.screen.lifted, ...theme.ring });
-  expect(screen.getByText("9:16")).toHaveStyle({ color: theme.colors.accent });
+  expect(btn("9:16")).toHaveStyle({ height: theme.size.chip, backgroundColor: theme.screen.picked, ...theme.ring });
+  expect(screen.getByText("9:16")).toHaveStyle({ color: theme.colors.text, fontWeight: theme.weight.semi });
+  expect(btn("1:1")).not.toBeSelected();
   expect(btn("1:1")).toHaveStyle({ height: theme.size.chip, backgroundColor: theme.screen.tile, ...theme.ringClear });
   expect(screen.getByText("1:1")).toHaveStyle({ color: theme.colors.text });
   expect(btn("In")).toHaveStyle({ height: theme.size.chipCompact, paddingHorizontal: theme.space.md });

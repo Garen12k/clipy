@@ -12,7 +12,8 @@ export type Palette = {
   /** The video's own frame behind the picture (PreviewPlayer): true black, as in the export. */ surface: string;
   /** A bar, a strip, a panel, a card, a sheet. */ surfaceBar: string;
   /** A tile or a field on one of those. */ surfaceAlt: string;
-  /** The selected tile; a secondary button. */ surfaceHigh: string;
+  /** A secondary button; the tick; a selected row that is not a tile. */ surfaceHigh: string;
+  /** The PICKED tile or chip: the gold at 16 % over the tile step — a soft tint under the gold ring. Opaque, worked out by hand (a colour is never mixed in code). */ surfacePicked: string;
   /** The ONE gold: the fill of a screen's main action, and the ink of rings, slider fills, progress and text actions. */ accent: string;
   /** Text and symbols on the gold fill. */ onAccent: string;
   text: string; textMuted: string;
@@ -26,7 +27,8 @@ export type Palette = {
   /** Outside the editor — the page. */ screenBg: string;
   /** A card, a sheet, the Home pill. */ screenBar: string;
   /** A field, a tile, the rest of a progress bar. */ screenTile: string;
-  /** The selected tile; a secondary button. */ screenLifted: string;
+  /** A secondary button. */ screenLifted: string;
+  /** The picked tile or chip on those: the gold at 16 % over the navy tile step. */ screenPicked: string;
   /** Secondary text on those four. */ screenMuted: string;
   /** A quiet separator on those four. */ screenHairline: string;
   /** Red for TEXT on those four (4.5:1 on each). */ screenDangerText: string;
@@ -36,14 +38,14 @@ const DARK: Palette = {
   // Soft slate — a blue-grey charcoal, softer than black and calmer than navy. The surround, the timeline and the bar are the three values the owner
   // approved; tile and selected continue the ramp in the same hue with the steps the neutral greys had (1.22 each); `surface` is the video's own
   // frame and stays true black — it is content: what the export draws where no picture is.
-  bg: "#10151F", timeline: "#171E2B", surface: "#000000", surfaceBar: "#212A3A", surfaceAlt: "#2C384D", surfaceHigh: "#374661",
+  bg: "#10151F", timeline: "#171E2B", surface: "#000000", surfaceBar: "#212A3A", surfaceAlt: "#2C384D", surfaceHigh: "#374661", surfacePicked: "#484C52",
   accent: "#D9B36A", onAccent: "#1A1408",
   text: "#FFFFFF", textMuted: "rgba(235,235,245,0.7)", hairline: "#35435D", track: "#52688F",
   danger: "#FF453A", dangerText: "#FF9A93",
   kindText: "#79B6F4", kindCaption: "#AFB965", kindSticker: "#E095C7", kindMusic: "#47C5D2", kindVoice: "#6DC799", kindSfx: "#ED997B", kindLayer: "#A8B2BE", kindEffect: "#B6A3F0",
   onKind: "#000000",
   scrim: "rgba(0,0,0,0.55)", scrimStrong: "rgba(0,0,0,0.72)",
-  screenBg: "#0A1B33", screenBar: "#112C4D", screenTile: "#17365C", screenLifted: "#1F4572",
+  screenBg: "#0A1B33", screenBar: "#112C4D", screenTile: "#17365C", screenLifted: "#1F4572", screenPicked: "#364A5E",
   screenMuted: "rgba(235,235,245,0.7)", screenHairline: "#2B5080", screenDangerText: "#FF9A93",
 };
 
@@ -57,8 +59,8 @@ export function resolvePalette(palettes: typeof PALETTES): Palette {
 }
 const C = resolvePalette(PALETTES);
 
-const SCREEN: Surfaces = { page: C.screenBg, bar: C.screenBar, tile: C.screenTile, lifted: C.screenLifted, muted: C.screenMuted, separator: C.screenHairline, dangerText: C.screenDangerText };
-const EDITOR: Surfaces = { page: C.bg, bar: C.surfaceBar, tile: C.surfaceAlt, lifted: C.surfaceHigh, muted: C.textMuted, separator: C.hairline, dangerText: C.dangerText };
+const SCREEN: Surfaces = { page: C.screenBg, bar: C.screenBar, tile: C.screenTile, lifted: C.screenLifted, picked: C.screenPicked, muted: C.screenMuted, separator: C.screenHairline, dangerText: C.screenDangerText };
+const EDITOR: Surfaces = { page: C.bg, bar: C.surfaceBar, tile: C.surfaceAlt, lifted: C.surfaceHigh, picked: C.surfacePicked, muted: C.textMuted, separator: C.hairline, dangerText: C.dangerText };
 
 /** Apple's text styles: size and leading in points, and the weight. `theme.type` reads its sizes from here; leading is taken up screen by screen in later stages. */
 const TEXT = {
@@ -87,8 +89,8 @@ export const theme = {
     headline: TEXT.headline.size, heading: TEXT.title3.size, title: TEXT.title2.size, screen: TEXT.largeTitle.size },
   /** The system font's weights. UI text names no font family: that is what makes it the system font (SF Pro). */
   weight: { regular: "400", semi: "600", bold: "700" },
-  /** The EDITOR's layering by colour (no shadows over the video): the page, a bar / strip / panel, a tile or field inside it, the selected tile. */
-  elevation: { page: C.bg, bar: C.surfaceBar, tile: C.surfaceAlt, lifted: C.surfaceHigh },
+  /** The EDITOR's layering by colour (no shadows over the video): the page, a bar / strip / panel, a tile or field inside it, a secondary button or the tick, the picked tile's tint. */
+  elevation: { page: C.bg, bar: C.surfaceBar, tile: C.surfaceAlt, lifted: C.surfaceHigh, picked: C.surfacePicked },
   /** The navy family of every screen that is not the editor. Read directly by code that is only ever drawn there (app/, src/auth, src/projects, src/export, src/publish). */
   screen: SCREEN,
   /** Both families by tone, for the kit, which is drawn on both sides (`useSurfaces` in src/ui/tone.ts). `editor` repeats `elevation` and the editor's muted / separator / red. */
@@ -100,7 +102,7 @@ export const theme = {
    */
   motion: { press: 120, sheet: { mass: 1, damping: 40, stiffness: 400 }, fade: 200, stagger: 40, minLoading: 1200, fontTimeout: 5000,
     fast: 120, base: 180, slow: 240, enterShift: 8, pressScale: 0.96, selectedScale: 1.03, curve: [0.2, 0, 0, 1], spring: { mass: 1, damping: 40, stiffness: 700 } },
-  /** 2 px gold ring for the selected item in any grid (filters, templates, fonts, ratios, transitions). */
+  /** 2 px gold ring for the selected item in any grid (filters, templates, fonts, ratios, transitions). A picked tile or chip wears it over the `picked` tint, with its label white and semibold. */
   ring: { borderWidth: 2, borderColor: C.accent },
   /** The unselected twin of `ring`: the same width, so selecting moves nothing. */
   ringClear: { borderWidth: 2, borderColor: "transparent" },
@@ -108,7 +110,7 @@ export const theme = {
 
 /** Which family a part of the app wears: the editor (and Crop), or every other screen. A route says it once, on its `Screen` (src/ui/tone.ts). */
 export type Tone = "screen" | "editor";
-/** What differs between the two families — the same seven roles in each. Text (`colors.text`), the gold, the fill red and the scrims are shared. */
-export type Surfaces = { page: string; bar: string; tile: string; lifted: string; muted: string; separator: string; dangerText: string };
+/** What differs between the two families — the same eight roles in each. Text (`colors.text`), the gold, the fill red and the scrims are shared. */
+export type Surfaces = { page: string; bar: string; tile: string; lifted: string; picked: string; muted: string; separator: string; dangerText: string };
 
 export type Theme = typeof theme;
