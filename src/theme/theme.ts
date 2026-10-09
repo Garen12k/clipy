@@ -72,10 +72,10 @@ export const theme = {
   colors: C,
   /** The one spacing scale. `gutter` is the screen's left / right edge (a row that starts with an IconButton pads by `sm`: the button's own inset completes it). */
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, gutter: 16 },
-  /** `pill`: a capsule (buttons, chips). `card`: a card. `box`: a tool tile's box. `field`: a text field. `chip`: a bar, a clip, a small box. `sheet`: a sheet's top corners. */
-  radius: { card: 20, chip: 8, tile: 7, field: 12, sheet: 28, pill: 999, box: 12, cover: 16 },
-  /** Component sizes in points. `touch` is the smallest touch target: a smaller visual reaches it with hitSlop that stays inside its parent. `listRow`: a platform row; `avatar`: an account picture; `ring`: the export progress ring. */
-  size: { touch: 44, control: 48, controlCompact: 36, iconButton: 40, toolBox: 44, toolColumn: 72, chip: 36, chipCompact: 28, row: 48, header: 44, done: 32, listRow: 56, avatar: 32, ring: 120, icon: { sm: 16, md: 20, lg: 24 } },
+  /** `pill`: a capsule (buttons, chips). `card`: a card. `box`: a tool tile's box. `field`: a text field. `chip`: a bar, a clip, a small box. `sheet`: a sheet's top corners. `cover`: a project's picture on Home. `emblem`: the tile behind an empty state's symbol. */
+  radius: { card: 20, chip: 8, tile: 7, field: 12, sheet: 28, pill: 999, box: 12, cover: 20, emblem: 28 },
+  /** Component sizes in points. `touch` is the smallest touch target: a smaller visual reaches it with hitSlop that stays inside its parent. `listRow`: a platform row; `avatar`: an account picture; `ring`: the export progress ring; `badge`: the length pill on a cover; `more`: the round More button under one; `emblem`: the tile behind an empty state's symbol (its symbol is `icon.hero`). */
+  size: { touch: 44, control: 48, controlCompact: 36, iconButton: 40, toolBox: 44, toolColumn: 72, chip: 36, chipCompact: 28, row: 48, header: 44, done: 32, listRow: 56, avatar: 32, ring: 120, badge: 24, more: 32, emblem: 88, icon: { sm: 16, md: 20, lg: 24, xl: 32, hero: 48 } },
   /** Apple's text styles (see TEXT). */
   text: TEXT,
   /**

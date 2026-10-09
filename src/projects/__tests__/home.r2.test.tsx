@@ -51,13 +51,13 @@ test("with Reduce Motion the list is simply there", async () => {
   expect(T).not.toHaveBeenCalled();
 });
 
-test("one gold button, with and without projects; the header is a 48-pt row on the gutter", async () => {
+test("one gold button, with and without projects; the header is on the gutter, its large title on a line of its own", async () => {
   list.mockResolvedValue([]);
   const empty = await render(<ProjectsScreen />);
   await screen.findByText("No clips yet");
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
   expect(screen.getByTestId("primary-button")).toHaveAccessibleName("New Project");
-  expect(screen.getByTestId("home-header")).toHaveStyle({ height: theme.size.row, paddingLeft: theme.space.gutter, paddingRight: theme.space.sm, alignItems: "center" });
+  expect(screen.getByTestId("home-header")).toHaveStyle({ paddingHorizontal: theme.space.gutter, marginBottom: theme.space.sm });
   expect(screen.getByRole("header", { name: "Projects" })).toHaveStyle({ fontSize: theme.type.screen });
   await empty.unmount();
   list.mockResolvedValue([p("a", "Beach")]);

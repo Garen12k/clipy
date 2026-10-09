@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { render, screen, within } from "@testing-library/react-native";
 import { Text } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { Card, cardShape } from "../Card";
@@ -33,4 +33,14 @@ test("EmptyState: the title is shown as typed (sentence case), centred, in the t
   await render(<EmptyState emoji="🏝️" title="No clips yet" hint="Pick some videos" />);
   expect(screen.getByText("No clips yet")).toHaveStyle({ fontWeight: theme.weight.bold, fontSize: theme.type.title, textAlign: "center" });
   expect(screen.getByText("Pick some videos")).toHaveStyle({ textAlign: "center" });
+  expect(screen.getByText("🏝️")).toBeTruthy();                                    // as every other screen uses it: an emoji, no tile, no pointer
+  expect(screen.queryByTestId("empty-emblem", { includeHiddenElements: true })).toBeNull();
+  expect(screen.queryByTestId("empty-pointer")).toBeNull();
+});
+
+test("EmptyState: with an icon the picture is a gold symbol on a rounded navy tile; a pointer is one quiet last line", async () => {
+  await render(<EmptyState icon="boat-outline" title="No clips yet" hint="Pick some videos" pointer="New Project or Quick Edit, below" />);
+  expect(screen.getByTestId("empty-emblem", { includeHiddenElements: true })).toHaveStyle({ width: theme.size.emblem, height: theme.size.emblem, borderRadius: theme.radius.emblem, backgroundColor: theme.screen.tile });
+  expect(screen.getByText("No clips yet")).toHaveStyle({ fontSize: theme.type.title, textAlign: "center" });
+  expect(within(screen.getByTestId("empty-pointer")).getByText("New Project or Quick Edit, below")).toHaveStyle({ color: theme.screen.muted });
 });

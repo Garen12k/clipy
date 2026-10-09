@@ -146,14 +146,16 @@ describe("the aspect-ratio picker when a project is created", () => {
     expect(storage.createProject).not.toHaveBeenCalled();
   });
 
-  test("while the project is being made (the media is copied) New project does nothing", async () => {
+  test("while the project is being made (the media is copied) New project cannot be started", async () => {
     await start();
     let made: (v: unknown) => void = () => {};
     (storage.createProject as jest.Mock).mockReset();
     (storage.createProject as jest.Mock).mockImplementationOnce(() => new Promise((r) => { made = r; }));
     const pressed = fireEvent.press(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(storage.createProject).toHaveBeenCalledTimes(1));
-    await fireEvent.press(screen.getByRole("button", { name: "New Project" }));
+    // The button is not there to press: one capsule has taken the two actions' place.
+    expect(await screen.findByText("Creating your project")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "New Project" })).toBeNull();
     expect(pickMedia).toHaveBeenCalledTimes(1);
     made({ project: { id: "p9" }, failed: 0 });
     await pressed;

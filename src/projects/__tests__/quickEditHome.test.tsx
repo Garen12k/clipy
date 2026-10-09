@@ -40,12 +40,12 @@ const openSheet = async () => {
   return screen.findByRole("header", { name: "Quick edit" });
 };
 
-test("Quick edit sits beside New project: a grey button on a pill of its own; New project stays the one gold button", async () => {
+test("Quick edit sits across from New project: a grey button on a pill of its own at the leading corner; New project stays the one gold button", async () => {
   await render(<ProjectsScreen />);
   await screen.findByText("No clips yet");
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
   expect(screen.getByTestId("primary-button")).toHaveAccessibleName("New Project");
-  expect(screen.getByTestId("home-actions")).toHaveStyle({ flexDirection: "row", justifyContent: "center", gap: theme.space.md });
+  expect(screen.getByTestId("home-actions")).toHaveStyle({ flexDirection: "row", justifyContent: "space-between", left: theme.space.gutter, right: theme.space.gutter });
   expect(btn("Quick Edit").parent).toHaveStyle({ borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar });
   expect(screen.queryByRole("header", { name: "Quick edit" })).toBeNull();
 });
