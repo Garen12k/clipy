@@ -22,13 +22,13 @@ function screens(dir: string, out: string[] = []): string[] {
 }
 
 test("every screen: no header, the navy behind it, and the standard iOS transition — not a fade", () => {
-  expect(STACK_OPTIONS).toEqual({ headerShown: false, contentStyle: { backgroundColor: theme.colors.bg }, animation: "default" });
+  expect(STACK_OPTIONS).toEqual({ headerShown: false, contentStyle: { backgroundColor: theme.screen.page }, animation: "default" });
 });
 
 test("per screen: the editor is pushed and swipes back from the edge only; Export is the standard modal; home is 'gone back to' when replaced; the redirect does not slide", () => {
   expect(ROUTE_OPTIONS).toEqual({
     "index": { animationTypeForReplace: "pop" },
-    "editor/[id]/index": { fullScreenGestureEnabled: false },
+    "editor/[id]/index": { fullScreenGestureEnabled: false, contentStyle: { backgroundColor: theme.surfaces.editor.page } },   // no navy behind the editor while it slides
     "editor/[id]/export": { presentation: "modal" },
     "post": {},
     "accounts": {},

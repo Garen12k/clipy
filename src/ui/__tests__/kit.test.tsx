@@ -40,11 +40,11 @@ test("SecondaryButton draws its icon before the title; without one it is the tit
   expect(withIcon.children).toHaveLength(2);
   expect(withIcon.children[0]).toBe(screen.getByTestId("mail-icon"));
   expect(withIcon.children[1]).toBe(screen.getByText("Continue with email"));
-  expect(withIcon).toHaveStyle({ backgroundColor: theme.elevation.lifted, height: theme.size.control });
+  expect(withIcon).toHaveStyle({ backgroundColor: theme.screen.lifted, height: theme.size.control });
   await v.rerender(<SecondaryButton title="Share" onPress={() => {}} />);
   const plain = screen.getByRole("button", { name: "Share" });
   expect(plain.children).toHaveLength(1);
-  expect(plain).toHaveStyle({ backgroundColor: theme.elevation.lifted, height: theme.size.control });
+  expect(plain).toHaveStyle({ backgroundColor: theme.screen.lifted, height: theme.size.control });
 });
 
 test("ToolButton is a button and shows the selected state when active", async () => {

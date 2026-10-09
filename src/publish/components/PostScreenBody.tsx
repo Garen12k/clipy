@@ -71,7 +71,7 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
               <Field accessibilityLabel="Caption" multiline value={form.caption} onChangeText={form.setCaption} placeholder="Write a caption…"
                 style={{ minHeight: CAPTION_MIN, textAlignVertical: "top" }} />
               {form.captionMax !== null ? (
-                <Body muted style={[small, { alignSelf: "flex-end" }, form.overLimit ? { color: theme.colors.dangerText } : null]}>{`${form.caption.length} / ${form.captionMax}`}</Body>
+                <Body muted style={[small, { alignSelf: "flex-end" }, form.overLimit ? { color: theme.screen.dangerText } : null]}>{`${form.caption.length} / ${form.captionMax}`}</Body>
               ) : form.anyTicked ? (
                 // Only platforms that don't take the caption are ticked: no limit, never red.
                 <Body muted style={[small, { alignSelf: "flex-end" }]}>{String(form.caption.length)}</Body>
@@ -89,7 +89,7 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
             ) : accounts.status !== "ready" ? spinner : (
               <Card style={{ paddingVertical: theme.space.xs }}>
                 {form.views.map((v, i) => (
-                  <View key={v.status.id} style={i > 0 ? { borderTopWidth: 1, borderTopColor: theme.colors.hairline } : undefined}>
+                  <View key={v.status.id} style={i > 0 ? { borderTopWidth: 1, borderTopColor: theme.screen.separator } : undefined}>
                     <PostRow view={v} row={rows[v.status.id]} onToggle={() => form.toggle(v.status.id)} onOptions={() => setOptionsFor(v.status.id)}
                       onConnect={() => router.push("/accounts")}
                       onReconnect={() => { form.markReconnect(v.status.id); router.push("/accounts"); }}

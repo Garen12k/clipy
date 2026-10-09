@@ -156,14 +156,14 @@ function ProjectsScreen() {
         {making ? (
           // The pill gives the spinner and its words a surface: the cards scroll underneath.
           // One accessible element: VoiceOver reads the words once, not once for the spinner and once for the text.
-          <View testID="home-making" accessible accessibilityLabel="Making your quick edit" style={{ height: theme.size.control, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
+          <View testID="home-making" accessible accessibilityLabel="Making your quick edit" style={{ height: theme.size.control, flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar }}>
             <Spinner />
             <Body>Making your quick edit</Body>
           </View>
         ) : (
           <>
             {/* The grey button has its own fill; the pill behind it only keeps it readable over the cards. */}
-            <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar }}>
+            <View style={{ borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar }}>
               <SecondaryButton title="Quick Edit" onPress={onQuick} />
             </View>
             <PrimaryButton title="New Project" icon={<Ionicons name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />

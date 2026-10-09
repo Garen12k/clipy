@@ -36,14 +36,14 @@ export default function EditorScreen() {
   const project = useEditorStore((s) => s.project);
   const clipById = (clipId: string) => project?.clips.find((c) => c.id === clipId);
 
-  if (load.status === "loading") return <Screen style={{ justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></Screen>;
+  if (load.status === "loading") return <Screen tone="editor" style={{ justifyContent: "center" }}><ActivityIndicator color={theme.colors.accent} /></Screen>;
   if (load.status === "error") return (
-    <Screen style={{ justifyContent: "center", alignItems: "center", padding: theme.space.xxl, gap: theme.space.md }}>
+    <Screen tone="editor" style={{ justifyContent: "center", alignItems: "center", padding: theme.space.xxl, gap: theme.space.md }}>
       <Title>Can't open project</Title><Body muted>{load.error}</Body>
     </Screen>
   );
   return (
-    <Screen>
+    <Screen tone="editor">
       <EditorLayout
         top={<EditorTopBar onExport={() => { if (!closeForExport()) return; useEditorStore.getState().setPlaying(false); router.push(`/editor/${id}/export`); }} />}
         preview={<>

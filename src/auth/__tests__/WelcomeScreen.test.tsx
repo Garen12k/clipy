@@ -53,9 +53,9 @@ describe("the first step", () => {
     expect(screen.getByText("Edit, caption and post your clips.")).toBeTruthy();
     expect(await screen.findByLabelText("Continue with Apple")).toHaveStyle({ height: theme.size.control, width: "100%" });
     expect(screen.getByLabelText("Continue with Apple").props).toMatchObject({ buttonType: Apple.AppleAuthenticationButtonType.CONTINUE, buttonStyle: Apple.AppleAuthenticationButtonStyle.WHITE, cornerRadius: theme.size.control / 2 });
-    expect(button("Continue with Google")).toHaveStyle({ backgroundColor: theme.elevation.lifted });
-    expect(button("Continue with Email")).toHaveStyle({ backgroundColor: theme.elevation.lifted });
-    expect(button("Continue Without an Account")).not.toHaveStyle({ backgroundColor: theme.elevation.lifted });
+    expect(button("Continue with Google")).toHaveStyle({ backgroundColor: theme.screen.lifted });
+    expect(button("Continue with Email")).toHaveStyle({ backgroundColor: theme.screen.lifted });
+    expect(button("Continue Without an Account")).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
     expect(screen.getByText("You only need an account to post. Editing works without one.")).toHaveStyle({ fontSize: theme.type.small });
     expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();

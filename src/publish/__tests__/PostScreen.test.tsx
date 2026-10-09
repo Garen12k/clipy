@@ -105,7 +105,7 @@ test("unticking everything disables Post; a not-connected platform links to Acco
 test("a caption over the smallest limit turns the counter red and disables Post", async () => {
   await render(<PostScreen />);
   await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(5001));
-  expect(screen.getByText("5001 / 5000")).toHaveStyle({ color: theme.colors.dangerText });
+  expect(screen.getByText("5001 / 5000")).toHaveStyle({ color: theme.screen.dangerText });
   expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
 });
 
@@ -341,7 +341,7 @@ describe("TikTok", () => {
     await render(<PostScreen />);
     await fireEvent.press(screen.getByRole("checkbox", { name: "YouTube" }));
     await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(6000));
-    expect(screen.getByText("6000")).not.toHaveStyle({ color: theme.colors.dangerText });
+    expect(screen.getByText("6000")).not.toHaveStyle({ color: theme.screen.dangerText });
     expect(screen.queryByText(/\/ 5000/)).toBeNull();
     expect(screen.getByText(TT_CAPTION)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Post" })).toBeEnabled();
@@ -362,7 +362,7 @@ describe("TikTok", () => {
     ]);
     p.start.mockClear();
     await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(5001));
-    expect(screen.getByText("5001 / 5000")).toHaveStyle({ color: theme.colors.dangerText });
+    expect(screen.getByText("5001 / 5000")).toHaveStyle({ color: theme.screen.dangerText });
     expect(screen.getByText("YouTube descriptions can be up to 5000 characters.")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Post" }));
     expect(p.start).toHaveBeenCalledWith([{ platform: "tiktok", caption: "x".repeat(5001), options: {} }]);
@@ -479,7 +479,7 @@ describe("Instagram and Facebook", () => {
     await fireEvent.changeText(screen.getByLabelText("Caption"), "Sunny");
     expect(screen.getByText("5 / 2200")).toBeTruthy();
     await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(2201));
-    expect(screen.getByText("2201 / 2200")).toHaveStyle({ color: theme.colors.dangerText });
+    expect(screen.getByText("2201 / 2200")).toHaveStyle({ color: theme.screen.dangerText });
     expect(screen.getByText("Instagram captions can be up to 2200 characters.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
     // Instagram has no options, so tapping its held-back row unticks it
@@ -585,9 +585,9 @@ describe("Instagram and Facebook", () => {
       const p = post(); usePostReturns(p);
       await render(<PostScreen />);
       await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(280));
-      expect(screen.getByText("280 / 280")).not.toHaveStyle({ color: theme.colors.dangerText });
+      expect(screen.getByText("280 / 280")).not.toHaveStyle({ color: theme.screen.dangerText });
       await fireEvent.changeText(screen.getByLabelText("Caption"), "x".repeat(281));
-      expect(screen.getByText("281 / 280")).toHaveStyle({ color: theme.colors.dangerText });
+      expect(screen.getByText("281 / 280")).toHaveStyle({ color: theme.screen.dangerText });
       expect(screen.getByText(X_TOO_LONG)).toBeTruthy();
       expect(screen.getByRole("checkbox", { name: "X" })).not.toBeChecked();
       // X has no options, so tapping its held-back row unticks it and the limit goes back to Instagram's
@@ -603,7 +603,7 @@ describe("Instagram and Facebook", () => {
       await render(<PostScreen />);
       const c = "日".repeat(141); // 141 characters, weight 282
       await fireEvent.changeText(screen.getByLabelText("Caption"), c);
-      expect(screen.getByText("141 / 280")).not.toHaveStyle({ color: theme.colors.dangerText });
+      expect(screen.getByText("141 / 280")).not.toHaveStyle({ color: theme.screen.dangerText });
       expect(screen.getByText(X_TOO_LONG)).toBeTruthy();
       expect(screen.getByRole("checkbox", { name: "X" })).not.toBeChecked();
       await fireEvent.press(screen.getByRole("button", { name: "Post" }));
@@ -723,11 +723,11 @@ describe("cover frame", () => {
 describe("round 2 look (no behaviour)", () => {
   test("the caption is the kit field; Post is the one gold button; Share… is grey", async () => {
     await render(<PostScreen />);
-    expect(screen.getByLabelText("Caption")).toHaveStyle({ backgroundColor: theme.elevation.tile, fontSize: theme.type.input, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md, minHeight: 96 });
+    expect(screen.getByLabelText("Caption")).toHaveStyle({ backgroundColor: theme.screen.tile, fontSize: theme.type.input, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md, minHeight: 96 });
     expect(screen.getByLabelText("Caption")).toHaveProp("placeholder", "Write a caption…");
     expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
     expect(screen.getByTestId("primary-button")).toHaveAccessibleName("Post");
-    expect(screen.getByRole("button", { name: "Share…" })).toHaveStyle({ backgroundColor: theme.elevation.lifted });
+    expect(screen.getByRole("button", { name: "Share…" })).toHaveStyle({ backgroundColor: theme.screen.lifted });
     expect(screen.getByRole("header", { name: "Post" })).toHaveStyle({ fontSize: theme.type.screen });
   });
 
@@ -736,10 +736,10 @@ describe("round 2 look (no behaviour)", () => {
     expect(screen.getByTestId("post-row-youtube")).toHaveStyle({ minHeight: theme.size.listRow });
     const options = screen.getByRole("button", { name: "YouTube options" });
     expect(options).toHaveStyle({ height: theme.size.controlCompact });
-    expect(options).not.toHaveStyle({ backgroundColor: theme.elevation.lifted });
+    expect(options).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
     // The tick row itself fills the 56-pt row, so a tap above or below the text still lands.
     expect(screen.getByRole("checkbox", { name: "YouTube" })).toHaveStyle({ alignSelf: "stretch", alignItems: "center" });
-    expect(screen.getByText(/private until Google reviews/i)).toHaveStyle({ fontSize: theme.type.small, color: theme.colors.textMuted });
+    expect(screen.getByText(/private until Google reviews/i)).toHaveStyle({ fontSize: theme.type.small, color: theme.screen.muted });
   });
 
   test("Connect under its reason is a 44-pt target: 36 pt, 4 pt of slop each way, and 4 pt of room under the button", async () => {
@@ -752,14 +752,14 @@ describe("round 2 look (no behaviour)", () => {
   test("a row's action is a compact grey button; its error is red and a size larger than a note", async () => {
     usePostReturns(post({ rows: rows({ phase: "failed", message: "The video has been rejected.", resumable: false }) }));
     await render(<PostScreen />);
-    expect(screen.getByRole("button", { name: "Retry YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });
-    expect(screen.getByText("The video has been rejected.")).toHaveStyle({ fontSize: theme.type.label, color: theme.colors.dangerText });
+    expect(screen.getByRole("button", { name: "Retry YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.screen.lifted });
+    expect(screen.getByText("The video has been rejected.")).toHaveStyle({ fontSize: theme.type.label, color: theme.screen.dangerText });
   });
 
   test("uploading: the percentage does not jitter and the bar is a 4-pt pill", async () => {
     usePostReturns(post({ rows: rows({ phase: "uploading", progress: 0.42 }), busy: true }));
     await render(<PostScreen />);
     expect(screen.getByText("42%")).toHaveStyle({ fontSize: theme.type.label, fontVariant: ["tabular-nums"] });
-    expect(screen.getByRole("progressbar")).toHaveStyle({ height: 4, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.tile });
+    expect(screen.getByRole("progressbar")).toHaveStyle({ height: 4, borderRadius: theme.radius.pill, backgroundColor: theme.screen.tile });
   });
 });

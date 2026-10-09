@@ -12,7 +12,7 @@ const over = (rgba: string, bg: string) => { const [r, g, b, a] = rgba.match(/[\
 const NEUTRALS = [D.bg, D.timeline, D.surface, D.surfaceBar, D.surfaceAlt, D.surfaceHigh, D.hairline, D.track];
 const KINDS = [D.kindText, D.kindCaption, D.kindSticker, D.kindMusic, D.kindVoice, D.kindSfx, D.kindLayer, D.kindEffect];
 
-test("the dark palette is the design's: hue-free neutrals, one gold with dark ink, system reds", () => {
+test("the dark palette, the editor's family: the design's hue-free neutrals, one gold with dark ink, system reds", () => {
   expect(D).toMatchObject({
     bg: "#000000", timeline: "#0E0E0F", surface: "#0E0E0F", surfaceBar: "#1C1C1E", surfaceAlt: "#2C2C2E", surfaceHigh: "#3A3A3C",
     accent: "#D9B36A", onAccent: "#1A1408", text: "#FFFFFF", textMuted: "rgba(235,235,245,0.6)", hairline: "#38383A", track: "#636366",
@@ -23,6 +23,44 @@ test("the dark palette is the design's: hue-free neutrals, one gold with dark in
   expect(theme.elevation).toEqual({ page: D.bg, bar: D.surfaceBar, tile: D.surfaceAlt, lifted: D.surfaceHigh });
   expect(theme.ring).toEqual({ borderWidth: 2, borderColor: D.accent });
   expect(theme.ringClear).toEqual({ borderWidth: 2, borderColor: "transparent" });
+});
+
+test("the screen family: the navy of every screen that is not the editor — four steps, each lighter than the last, with its own muted, separator and red", () => {
+  expect(D).toMatchObject({ screenBg: "#0A1B33", screenBar: "#112C4D", screenTile: "#17365C", screenLifted: "#1F4572",
+    screenMuted: "rgba(235,235,245,0.7)", screenHairline: "#2B5080", screenDangerText: "#FF9A93" });
+  expect(theme.screen).toEqual({ page: D.screenBg, bar: D.screenBar, tile: D.screenTile, lifted: D.screenLifted, muted: D.screenMuted, separator: D.screenHairline, dangerText: D.screenDangerText });
+  // Two roles inside ONE palette: the same seven names in each family, the editor's being the neutrals `elevation` already names.
+  expect(theme.surfaces.screen).toBe(theme.screen);
+  expect(theme.surfaces.editor).toEqual({ ...theme.elevation, muted: D.textMuted, separator: D.hairline, dangerText: D.dangerText });
+  expect(Object.keys(theme.surfaces.editor).sort()).toEqual(Object.keys(theme.surfaces.screen).sort());
+  for (const k of ["page", "bar", "tile", "lifted", "separator"] as const) expect(theme.surfaces.screen[k]).not.toBe(theme.surfaces.editor[k]);
+  // Navy, not grey: blue leads red by at least 40 in each step, and each step is lighter than the one under it.
+  const steps = [D.screenBg, D.screenBar, D.screenTile, D.screenLifted].map(rgb);
+  for (const c of steps) expect(c[2] - c[0]).toBeGreaterThanOrEqual(40);
+  for (let i = 1; i < steps.length; i++) expect(lum(steps[i])).toBeGreaterThan(lum(steps[i - 1]));
+  // The editor's side did not move with it.
+  expect(theme.elevation.page).toBe("#000000");
+  expect(theme.colors.timeline).toBe("#0E0E0F");
+});
+
+test("contrast on navy: white, the muted label, gold and the red text on all four steps; the layering steps; the red fill", () => {
+  const steps = [D.screenBg, D.screenBar, D.screenTile, D.screenLifted];
+  const table = steps.map((s) => [ratio(rgb(D.text), rgb(s)), ratio(over(D.screenMuted, s), rgb(s)), ratio(rgb(D.screenDangerText), rgb(s)), ratio(rgb(D.accent), rgb(s))].map((r) => Math.round(r * 100) / 100));
+  // The measured numbers (page, bar, tile, lifted) × (text, muted, red text, gold) — recorded in the spec.
+  expect(table).toEqual([[17.25, 7.65, 8.46, 8.71], [14.08, 6.59, 6.9, 7.11], [12.22, 5.91, 5.99, 6.17], [9.76, 4.94, 4.78, 4.93]]);
+  for (const row of table) { expect(row[0]).toBeGreaterThanOrEqual(7); for (const r of row.slice(1)) expect(r).toBeGreaterThanOrEqual(4.5); }
+  // A secondary button (`lifted`) is a navy step lighter than what it sits on — about the editor's own steps (1.85 / 1.50 / 1.23), so it is a button, not a grey patch.
+  expect(ratio(rgb(D.screenLifted), rgb(D.screenBg))).toBeGreaterThanOrEqual(1.7);
+  expect(ratio(rgb(D.screenLifted), rgb(D.screenBar))).toBeGreaterThanOrEqual(1.4);
+  expect(ratio(rgb(D.screenLifted), rgb(D.screenTile))).toBeGreaterThanOrEqual(1.2);
+  // The separator is quiet but there: a card's edge on the page and a row line on the card.
+  expect(ratio(rgb(D.screenHairline), rgb(D.screenBg))).toBeGreaterThanOrEqual(2);
+  expect(ratio(rgb(D.screenHairline), rgb(D.screenBar))).toBeGreaterThanOrEqual(1.7);
+  // Red as a fill, a border or an icon (the broken card's edge, the export's error icon), and the gold progress on its navy rest.
+  for (const s of [D.screenBg, D.screenBar]) expect(ratio(rgb(D.danger), rgb(s))).toBeGreaterThanOrEqual(3);
+  expect(ratio(rgb(D.accent), rgb(D.screenTile))).toBeGreaterThanOrEqual(3);
+  // Ink on gold is untouched.
+  expect(Math.round(ratio(rgb(D.onAccent), rgb(D.accent)) * 100) / 100).toBe(9.24);
 });
 
 test("the eight timeline kinds: the design's values, all different, none the accent, black reads on each (9:1)", () => {

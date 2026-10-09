@@ -130,7 +130,7 @@ function CropEditor({ clip, onClose }: { clip: Clip; onClose: () => void }) {
   const box = pic ? { left: crop.x * pic.width, top: crop.y * pic.height, width: crop.w * pic.width, height: crop.h * pic.height } : null;
 
   return (
-    <Screen edges={["top", "bottom"]}>
+    <Screen tone="editor" edges={["top", "bottom"]}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.lg, gap: theme.space.md }}>
         <SecondaryButton title="Cancel" onPress={onClose} />
         <Title size={theme.type.headline} accessibilityRole="header">Crop</Title>

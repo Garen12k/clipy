@@ -108,7 +108,7 @@ describe("round 2 look (no behaviour)", () => {
     (useAccounts as jest.Mock).mockReturnValue(hook());
     await render(<AccountsScreen />);
     expect(screen.getByTestId("account-row-youtube")).toHaveStyle({ minHeight: theme.size.listRow });
-    expect(screen.getByRole("button", { name: "Connect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });
+    expect(screen.getByRole("button", { name: "Connect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.screen.lifted });
     expect(screen.getByRole("header", { name: "Accounts" })).toHaveStyle({ fontSize: theme.type.screen });
   });
 
@@ -119,11 +119,11 @@ describe("round 2 look (no behaviour)", () => {
     ] }));
     await render(<AccountsScreen />);
     expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
-    expect(screen.getByRole("button", { name: "Reconnect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });
+    expect(screen.getByRole("button", { name: "Reconnect YouTube" })).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.screen.lifted });
     expect(screen.getByRole("button", { name: "Disconnect TikTok" })).toHaveStyle({ height: theme.size.controlCompact });
-    expect(screen.getByRole("button", { name: "Disconnect TikTok" })).not.toHaveStyle({ backgroundColor: theme.elevation.lifted });
-    expect(screen.getByRole("button", { name: "Sign Out" })).not.toHaveStyle({ backgroundColor: theme.elevation.lifted });
-    expect(screen.getByText("Sign-in expired")).toHaveStyle({ fontSize: theme.type.label, color: theme.colors.dangerText });
+    expect(screen.getByRole("button", { name: "Disconnect TikTok" })).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
+    expect(screen.getByRole("button", { name: "Sign Out" })).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
+    expect(screen.getByText("Sign-in expired")).toHaveStyle({ fontSize: theme.type.label, color: theme.screen.dangerText });
   });
 });
 

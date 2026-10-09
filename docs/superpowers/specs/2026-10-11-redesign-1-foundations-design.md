@@ -6,6 +6,10 @@
 
 ---
 
+> **Owner's decision, 9 October 2026 (after seeing stage 1 on the phone).** The black and dark grey stay only where colour must be judged — the editor (and Crop): around the video, the timeline and the editor's chrome; every other screen (Home and its sheets, Export, Post, Accounts, welcome / sign-in, the loading screen) wears the old deep navy again, with the gold, the system font, the casing, the eight bar colours, the grey-capsule secondary button and "Projects" all kept. The design hand-off's all-neutral palette is therefore NOT followed outside the editor: wherever this document says "no navy" or gives a neutral for a card, a sheet or a page that is not in the editor, the navy screen family below replaces it.
+>
+> *How.* One palette, two families of the same seven roles (`theme.surfaces.screen` / `.editor`: page, bar, tile, lifted, muted, separator, dangerText); a route says its family once, on its kit `Screen` (`tone="editor"` for the editor and Crop, navy by default), and the kit parts drawn on both sides read it through `useSurfaces()` (src/ui/tone.ts). Screen family: page `#0A1B33`, bar `#112C4D`, tile `#17365C`, lifted `#1F4572`, text `#FFFFFF`, muted `rgba(235,235,245,0.7)`, separator `#2B5080`, red text `#FF9A93`. Measured on page / bar / tile / lifted — text 17.25 / 14.08 / 12.22 / 9.76; muted 7.65 / 6.59 / 5.91 / 4.94; red text 8.46 / 6.90 / 5.99 / 4.78; gold 8.71 / 7.11 / 6.17 / 4.93; the red fill 5.06 on the page and 4.13 on a card; a secondary button (lifted) against page / bar / tile 1.77 / 1.44 / 1.25; the separator 2.10 on the page and 1.72 on a card; ink on gold 9.24, unchanged. The editor's muted (0.6) and red text (`#FF8078`) would be 4.08 and 4.00 on navy `lifted`, which is why the screen family has its own. Not brought back: the cream and blue-grey text, the gold hairline, the sea blues, the three other navies (`#081527`, `#0C2542`, `#0E2440`) — the guard still forbids them.
+
 ## 1. What this stage is
 
 The owner approved the iOS 27 redesign in seven stages, each tested on the phone and merged before the next. This is the first: **the app as it is today, wearing the new colours and the new type.**

@@ -22,7 +22,7 @@ function Message({ text, error }: { text: string; error?: boolean }) {
   useEffect(() => { AccessibilityInfo.announceForAccessibility(text); }, [text]);
   return (
     <Body testID={error ? "welcome-error" : "welcome-note"} muted={!error} accessibilityRole="alert" accessibilityLiveRegion="polite"
-      style={error ? { color: theme.colors.dangerText } : undefined}>{text}</Body>
+      style={error ? { color: theme.screen.dangerText } : undefined}>{text}</Body>
   );
 }
 

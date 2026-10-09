@@ -20,7 +20,7 @@ export default function RootLayout() {
   // Our own loading screen is the first thing drawn, so the native splash can go as soon as it lays out.
   const hideSplash = useCallback(() => { SplashScreen.hideAsync().catch(() => {}); }, []);
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.colors.bg }} onLayout={hideSplash}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.screen.page }} onLayout={hideSplash}>
       {ready ? (
         <Stack screenOptions={STACK_OPTIONS}>
           {ROUTE_NAMES.map((name) => <Stack.Screen key={name} name={name} options={ROUTE_OPTIONS[name]} />)}

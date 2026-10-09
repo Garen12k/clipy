@@ -46,7 +46,7 @@ test("Quick edit sits beside New project: a grey button on a pill of its own; Ne
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
   expect(screen.getByTestId("primary-button")).toHaveAccessibleName("New Project");
   expect(screen.getByTestId("home-actions")).toHaveStyle({ flexDirection: "row", justifyContent: "center", gap: theme.space.md });
-  expect(btn("Quick Edit").parent).toHaveStyle({ borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar });
+  expect(btn("Quick Edit").parent).toHaveStyle({ borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar });
   expect(screen.queryByRole("header", { name: "Quick edit" })).toBeNull();
 });
 

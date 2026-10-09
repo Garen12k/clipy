@@ -43,7 +43,7 @@ export function LoadingScreen({ leaving, onGone }: { leaving: boolean; onGone: (
           <Animated.View testID="loading-compass" style={spin}><Compass size={96} /></Animated.View>
           <Animated.View style={[{ alignItems: "center", gap: theme.space.sm }, up]}>
             <Text style={{ fontSize: WORDMARK.size, fontWeight: theme.weight.bold, color: theme.colors.text }}>Clipy</Text>
-            <Text style={{ fontSize: theme.type.label, fontWeight: theme.weight.semi, color: theme.colors.textMuted }}>Edit · Set sail · Share</Text>
+            <Text style={{ fontSize: theme.type.label, fontWeight: theme.weight.semi, color: theme.screen.muted }}>Edit · Set sail · Share</Text>
           </Animated.View>
         </View>
         <Waves still={reduced} />

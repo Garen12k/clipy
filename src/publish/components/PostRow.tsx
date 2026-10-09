@@ -24,7 +24,7 @@ const BAR = 4;
 /** A standing note under a row. */
 const note = { fontSize: theme.type.small } as const;
 /** Something went wrong, or needs checking before posting again: red and a size larger than a note. */
-const alarm = { fontSize: theme.type.label, color: theme.colors.dangerText } as const;
+const alarm = { fontSize: theme.type.label, color: theme.screen.dangerText } as const;
 /** The row's state on the right ("Preparing…", "42%"). */
 const status = { fontSize: theme.type.label } as const;
 const ICON = theme.size.icon.lg;
@@ -45,7 +45,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
     side = <Body muted style={[status, { fontVariant: ["tabular-nums"] }]}>{`${pct}%`}</Body>;
     below.push(
       <View key="bar" accessible accessibilityRole="progressbar" accessibilityLabel={`Uploading to ${label}`} accessibilityValue={{ min: 0, max: 100, now: pct }}
-        style={{ height: BAR, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.tile, overflow: "hidden" }}>
+        style={{ height: BAR, borderRadius: theme.radius.pill, backgroundColor: theme.screen.tile, overflow: "hidden" }}>
         <View style={{ width: `${pct}%` as const, height: "100%", backgroundColor: theme.colors.accent }} />
       </View>,
     );
@@ -73,7 +73,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
     side = (
       // paddingBottom: the compact button's 4-pt bottom slop stays inside its parent, so the target is the full 44.
       <View style={{ alignItems: "flex-end", gap: theme.space.xs, paddingBottom: theme.space.xs }}>
-        <Body muted style={[note, reason === "Sign-in expired" ? { color: theme.colors.dangerText } : null]}>{reason}</Body>
+        <Body muted style={[note, reason === "Sign-in expired" ? { color: theme.screen.dangerText } : null]}>{reason}</Body>
         {reason === "Not connected" ? <SecondaryButton compact title="Connect" accessibilityLabel={`Connect ${label}`} onPress={onConnect} /> : null}
         {reason === "Sign-in expired" ? <SecondaryButton compact title="Reconnect" accessibilityLabel={`Reconnect ${label}`} onPress={onReconnect} /> : null}
       </View>
@@ -87,7 +87,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
   if (captionNote && !done) below.push(<View key="c">{msg(captionNote)}</View>);
 
   const identity = (<>
-    <Ionicons name={icon} size={ICON} color={reason && !done ? theme.colors.textMuted : theme.colors.text} />
+    <Ionicons name={icon} size={ICON} color={reason && !done ? theme.screen.muted : theme.colors.text} />
     <View style={{ flex: 1, gap: theme.space.xs }}>
       <Body weight="semi" muted={!!reason && !done}>{label}</Body>
       {account.connected && account.name ? <Body muted numberOfLines={1} style={note}>{account.name}</Body> : null}
@@ -110,7 +110,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
           <PressableScale accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{ checked, disabled: !!reason || active }}
             disabled={!!reason || active} onPress={error && hasOptions(account.id) ? onOptions : onToggle} style={rowStyle}>
             {/* Gold = on (ticked); white = can be ticked; muted = cannot. */}
-            <Ionicons name={checked ? "checkbox-outline" : "square-outline"} size={ICON} color={reason ? theme.colors.textMuted : checked ? theme.colors.accent : theme.colors.text} />
+            <Ionicons name={checked ? "checkbox-outline" : "square-outline"} size={ICON} color={reason ? theme.screen.muted : checked ? theme.colors.accent : theme.colors.text} />
             {identity}
           </PressableScale>
         )}

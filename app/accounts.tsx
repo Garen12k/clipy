@@ -47,7 +47,7 @@ export default function AccountsScreen() {
         ) : status !== "ready" ? spinner : (
           <Card style={{ paddingVertical: theme.space.xs }}>
             {platforms.map((p, i) => (
-              <View key={p.id} style={i > 0 ? { borderTopWidth: 1, borderTopColor: theme.colors.hairline } : undefined}>
+              <View key={p.id} style={i > 0 ? { borderTopWidth: 1, borderTopColor: theme.screen.separator } : undefined}>
                 <AccountRow status={p} busy={busy === p.id} onConnect={() => connect(p.id)} onDisconnect={() => disconnect(p.id)} />
               </View>
             ))}

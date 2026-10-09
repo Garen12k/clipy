@@ -1,9 +1,13 @@
 /**
  * Every colour of one appearance. Stage 1 has one appearance (dark); a later one is a second object with exactly these keys.
  * A colour is only ever used as a style value or a colour prop — never concatenated, sliced or parsed (palette.guard.test.ts).
+ *
+ * One palette holds TWO families of surfaces (the owner's choice, 9 October 2026): the EDITOR's hue-free neutrals (`bg`, `surface*`,
+ * `textMuted`, `hairline`, `dangerText`), so a filter is judged against no colour, and the navy of every OTHER screen (`screen*`).
+ * They are two roles inside one appearance, not two appearances: a light palette brings its own pair.
  */
 export type Palette = {
-  /** The page, and the surround of the preview. */ bg: string;
+  /** The editor's page, and the surround of the preview. */ bg: string;
   /** The timeline's background. */ timeline: string;
   /** The empty preview frame (PreviewPlayer). */ surface: string;
   /** A bar, a strip, a panel, a card, a sheet. */ surfaceBar: string;
@@ -15,10 +19,17 @@ export type Palette = {
   /** A separator line. */ hairline: string;
   /** The rest of a slider's track. */ track: string;
   /** Red for fills, borders and icons. */ danger: string;
-  /** Red for TEXT: 4.5:1 on every neutral surface. */ dangerText: string;
+  /** Red for TEXT in the editor: 4.5:1 on every neutral surface. */ dangerText: string;
   kindText: string; kindCaption: string; kindSticker: string; kindMusic: string; kindVoice: string; kindSfx: string; kindLayer: string; kindEffect: string;
   /** Labels and glyphs on a timeline bar. */ onKind: string;
   scrim: string; scrimStrong: string;
+  /** Outside the editor — the page. */ screenBg: string;
+  /** A card, a sheet, the Home pill. */ screenBar: string;
+  /** A field, a tile, the rest of a progress bar. */ screenTile: string;
+  /** The selected tile; a secondary button. */ screenLifted: string;
+  /** Secondary text on those four. */ screenMuted: string;
+  /** A quiet separator on those four. */ screenHairline: string;
+  /** Red for TEXT on those four (4.5:1 on each). */ screenDangerText: string;
 };
 
 const DARK: Palette = {
@@ -29,6 +40,8 @@ const DARK: Palette = {
   kindText: "#79B6F4", kindCaption: "#AFB965", kindSticker: "#E095C7", kindMusic: "#47C5D2", kindVoice: "#6DC799", kindSfx: "#ED997B", kindLayer: "#A8B2BE", kindEffect: "#B6A3F0",
   onKind: "#000000",
   scrim: "rgba(0,0,0,0.55)", scrimStrong: "rgba(0,0,0,0.72)",
+  screenBg: "#0A1B33", screenBar: "#112C4D", screenTile: "#17365C", screenLifted: "#1F4572",
+  screenMuted: "rgba(235,235,245,0.7)", screenHairline: "#2B5080", screenDangerText: "#FF9A93",
 };
 
 /** One palette per appearance. Stage 5 adds `light` here. */
@@ -40,6 +53,9 @@ export function resolvePalette(palettes: typeof PALETTES): Palette {
   return palettes.dark;
 }
 const C = resolvePalette(PALETTES);
+
+const SCREEN: Surfaces = { page: C.screenBg, bar: C.screenBar, tile: C.screenTile, lifted: C.screenLifted, muted: C.screenMuted, separator: C.screenHairline, dangerText: C.screenDangerText };
+const EDITOR: Surfaces = { page: C.bg, bar: C.surfaceBar, tile: C.surfaceAlt, lifted: C.surfaceHigh, muted: C.textMuted, separator: C.hairline, dangerText: C.dangerText };
 
 /** Apple's text styles: size and leading in points, and the weight. `theme.type` reads its sizes from here; leading is taken up screen by screen in later stages. */
 const TEXT = {
@@ -68,8 +84,12 @@ export const theme = {
     headline: TEXT.headline.size, heading: TEXT.title3.size, title: TEXT.title2.size, screen: TEXT.largeTitle.size },
   /** The system font's weights. UI text names no font family: that is what makes it the system font (SF Pro). */
   weight: { regular: "400", semi: "600", bold: "700" },
-  /** Layering by colour (no shadows over the video): the page, a bar / strip / panel, a tile or field inside it, the selected tile. */
+  /** The EDITOR's layering by colour (no shadows over the video): the page, a bar / strip / panel, a tile or field inside it, the selected tile. */
   elevation: { page: C.bg, bar: C.surfaceBar, tile: C.surfaceAlt, lifted: C.surfaceHigh },
+  /** The navy family of every screen that is not the editor. Read directly by code that is only ever drawn there (app/, src/auth, src/projects, src/export, src/publish). */
+  screen: SCREEN,
+  /** Both families by tone, for the kit, which is drawn on both sides (`useSurfaces` in src/ui/tone.ts). `editor` repeats `elevation` and the editor's muted / separator / red. */
+  surfaces: { screen: SCREEN, editor: EDITOR },
   /**
    * `fast` / `base` / `slow`: the editor's three durations (nothing there runs longer than 250 ms). `curve`: the one easing, as cubic-bezier
    * control points. `spring`: the one spring (mass is explicit — Reanimated 4's default is 4); settles in about 200 ms.
@@ -82,5 +102,10 @@ export const theme = {
   /** The unselected twin of `ring`: the same width, so selecting moves nothing. */
   ringClear: { borderWidth: 2, borderColor: "transparent" },
 } as const;
+
+/** Which family a part of the app wears: the editor (and Crop), or every other screen. A route says it once, on its `Screen` (src/ui/tone.ts). */
+export type Tone = "screen" | "editor";
+/** What differs between the two families — the same seven roles in each. Text (`colors.text`), the gold, the fill red and the scrims are shared. */
+export type Surfaces = { page: string; bar: string; tile: string; lifted: string; muted: string; separator: string; dangerText: string };
 
 export type Theme = typeof theme;

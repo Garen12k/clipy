@@ -42,7 +42,7 @@ export function AspectRatioSheet({ assets, onCancel, onCreate }: Props) {
               return (
                 <PressableScale key={id} lifted={selected} accessibilityRole="button" accessibilityLabel={aspectLabel(id)} accessibilityState={{ selected }} onPress={() => setRatio(id)}
                   style={[{ width: OPTION.width, height: OPTION.height, borderRadius: theme.radius.box, alignItems: "center", justifyContent: "center", gap: theme.space.sm,
-                    backgroundColor: selected ? theme.elevation.lifted : theme.elevation.tile }, selected ? theme.ring : theme.ringClear]}>
+                    backgroundColor: selected ? theme.screen.lifted : theme.screen.tile }, selected ? theme.ring : theme.ringClear]}>
                   <RatioShape aspect={frameAspect({ aspectRatio: id, clips: shown })} selected={selected} dashed={id === "auto"} />
                   <Body numberOfLines={1} weight={selected ? "semi" : "regular"} style={{ color: tint, fontSize: theme.type.small }}>{aspectLabel(id)}</Body>
                 </PressableScale>

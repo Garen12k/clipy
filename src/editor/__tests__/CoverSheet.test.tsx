@@ -14,6 +14,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { useKeyboard } from "@/src/ui/keyboard";
 import { PANEL, panelHeight } from "@/src/ui/ToolPanel";
+import { ToneContext } from "@/src/ui/tone";
 import { CoverSheet } from "../components/CoverSheet";
 
 const frame = frameUriAt as jest.Mock;
@@ -34,10 +35,13 @@ const drag = async (...values: number[]) => {
   await fireEvent(slider(), "slidingComplete", values[values.length - 1]);
 };
 
+/** As in the app: the editor says its family once, on its Screen (src/ui/tone.ts); a part rendered bare would be on a navy screen. */
+const inEditor = { wrapper: ({ children }: { children: React.ReactNode }) => <ToneContext.Provider value="editor">{children}</ToneContext.Provider> };
+
 async function open(cover: Cover | null = null) {
   state().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 6 })], aspectRatio: "9:16", cover }));
   const onClose = jest.fn();
-  await render(<CoverSheet visible onClose={onClose} />);
+  await render(<CoverSheet visible onClose={onClose} />, inEditor);
   await waitFor(() => expect(frame).toHaveBeenCalled());
   return onClose;
 }

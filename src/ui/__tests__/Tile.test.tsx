@@ -11,8 +11,8 @@ test("a 72-pt column with a 44-pt box; unselected is calm, selected is ringed, l
   expect(a).toHaveStyle({ width: TILE_WIDTH });
   expect(a).not.toBeSelected();
   expect(b).toBeSelected();
-  expect(screen.getByTestId("box-a")).toHaveStyle({ width: theme.size.toolBox, height: theme.size.toolBox, borderRadius: theme.radius.box, backgroundColor: theme.elevation.tile, ...theme.ringClear });
-  expect(screen.getByTestId("box-b")).toHaveStyle({ backgroundColor: theme.elevation.lifted, ...theme.ring });
+  expect(screen.getByTestId("box-a")).toHaveStyle({ width: theme.size.toolBox, height: theme.size.toolBox, borderRadius: theme.radius.box, backgroundColor: theme.screen.tile, ...theme.ringClear });
+  expect(screen.getByTestId("box-b")).toHaveStyle({ backgroundColor: theme.screen.lifted, ...theme.ring });
   expect(screen.getByText("Rounded")).toHaveStyle({ color: theme.colors.text, fontSize: theme.type.small });
   expect(screen.getByText("Circle")).toHaveStyle({ color: theme.colors.accent, fontWeight: theme.weight.semi, fontSize: theme.type.small });
   expect(screen.getByTestId("shape")).toBeTruthy();

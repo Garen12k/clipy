@@ -26,8 +26,8 @@ export function ProjectCard({ summary, onPress, onLongPress }: Props) {
   return (
     <View testID="project-card-cell" style={{ width: "50%", padding: theme.space.sm }}>
       <PressableScale accessibilityRole="button" accessibilityLabel={summary.name} onPress={onPress} onLongPress={onLongPress} delayLongPress={350}
-        style={{ aspectRatio: 3 / 4, borderRadius: theme.radius.cover, overflow: "hidden", backgroundColor: theme.elevation.tile,
-          borderWidth: summary.broken ? 1.5 : 1, borderColor: summary.broken ? theme.colors.danger : theme.colors.hairline }}>
+        style={{ aspectRatio: 3 / 4, borderRadius: theme.radius.cover, overflow: "hidden", backgroundColor: theme.screen.tile,
+          borderWidth: summary.broken ? 1.5 : 1, borderColor: summary.broken ? theme.colors.danger : theme.screen.separator }}>
         {summary.thumbUri ? <Image source={{ uri: summary.thumbUri }} style={{ position: "absolute", width: "100%", height: "100%" }} resizeMode="cover" />
           : <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><Body muted>{summary.broken ? "Damaged" : "No preview"}</Body></View>}
         {summary.broken ? null : (
@@ -41,7 +41,7 @@ export function ProjectCard({ summary, onPress, onLongPress }: Props) {
             style={{ position: "absolute", left: theme.space.sm, right: theme.space.sm, bottom: COVER_TITLE.bottom, textAlign: "center", fontFamily: COVER_FONT, fontSize: COVER_TITLE.size, color: theme.colors.text }}>{summary.coverTitle}</Text>
         ) : null}
         <LinearGradient testID="project-card-fade" colors={["transparent", theme.colors.scrimStrong, theme.colors.scrimStrong]} locations={[0, 0.3, 1]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.md, paddingTop: theme.space.xxl }}>
-          <Body weight="semi" numberOfLines={1} style={{ fontSize: theme.type.body, color: summary.broken ? theme.colors.dangerText : theme.colors.text }}>{summary.name}</Body>
+          <Body weight="semi" numberOfLines={1} style={{ fontSize: theme.type.body, color: summary.broken ? theme.screen.dangerText : theme.colors.text }}>{summary.name}</Body>
           <Body muted numberOfLines={2} style={{ fontSize: theme.type.small }}>{secondLine}</Body>
         </LinearGradient>
       </PressableScale>

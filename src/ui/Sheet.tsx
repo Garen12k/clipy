@@ -4,6 +4,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-g
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "@/src/theme/theme";
+import { useSurfaces } from "./tone";
 import { sheetTo } from "./motion";
 import { QuietButton } from "./QuietButton";
 import { Title } from "./Text";
@@ -31,6 +32,7 @@ const GRABBER = { width: 36, height: 4 } as const;
  */
 export function Sheet({ visible, onClose, title, children, height, action, avoidKeyboard }: Props) {
   const insets = useSafeAreaInsets();
+  const s = useSurfaces();
   const y = useSharedValue(START_OFFSET);
   const [panelH, setPanelH] = useState(400);
 
@@ -50,11 +52,11 @@ export function Sheet({ visible, onClose, title, children, height, action, avoid
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" enabled={!!avoidKeyboard}>
           <Pressable style={{ flex: 1, backgroundColor: theme.colors.scrim }} onPress={onClose} accessibilityLabel="Close sheet" />
           <Animated.View testID="sheet-panel" onLayout={(e) => setPanelH(e.nativeEvent.layout.height)}
-            style={[{ backgroundColor: theme.elevation.bar, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet,
-              borderTopWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: theme.space.xl, paddingBottom: insets.bottom + theme.space.lg, gap: theme.space.lg, maxHeight: height }, anim]}>
+            style={[{ backgroundColor: s.bar, borderTopLeftRadius: theme.radius.sheet, borderTopRightRadius: theme.radius.sheet,
+              borderTopWidth: 1, borderColor: s.separator, paddingHorizontal: theme.space.xl, paddingBottom: insets.bottom + theme.space.lg, gap: theme.space.lg, maxHeight: height }, anim]}>
             <GestureDetector gesture={pan}>
               <View testID="sheet-header" style={{ paddingTop: theme.space.sm, gap: theme.space.md }}>
-                <View style={{ alignSelf: "center", width: GRABBER.width, height: GRABBER.height, borderRadius: theme.radius.pill, backgroundColor: theme.colors.textMuted, opacity: 0.5 }} />
+                <View style={{ alignSelf: "center", width: GRABBER.width, height: GRABBER.height, borderRadius: theme.radius.pill, backgroundColor: s.muted, opacity: 0.5 }} />
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                   <Title size={theme.type.heading} accessibilityRole="header">{title}</Title>
                   {action ? <QuietButton compact title={action.label} onPress={action.onPress} /> : null}

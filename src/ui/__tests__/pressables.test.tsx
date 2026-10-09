@@ -73,10 +73,10 @@ test("Chip still: the ring and the colours switch at once, the lift does not spr
   const view = await render(ui(false));
   await view.rerender(ui(true));
   expect(btn("2×")).toBeSelected();
-  expect(btn("2×")).toHaveStyle({ backgroundColor: theme.elevation.lifted, ...theme.ring });
+  expect(btn("2×")).toHaveStyle({ backgroundColor: theme.screen.lifted, ...theme.ring });
   expect(screen.getByText("2×")).toHaveStyle({ color: theme.colors.accent });
   await view.rerender(ui(false));
-  expect(btn("2×")).toHaveStyle({ backgroundColor: theme.elevation.tile, ...theme.ringClear });
+  expect(btn("2×")).toHaveStyle({ backgroundColor: theme.screen.tile, ...theme.ringClear });
   expect(S).not.toHaveBeenCalled();
 });
 
@@ -90,7 +90,7 @@ test("the three buttons share one box and one label style; compact is 36", async
   for (const name of ["Main", "Second", "Quiet"]) expect(btn(name)).toHaveStyle({ height: theme.size.control, borderRadius: theme.radius.pill });
   for (const name of ["Main small", "Second small", "Quiet small"]) expect(btn(name)).toHaveStyle({ height: theme.size.controlCompact });
   expect(btn("Main")).toHaveStyle({ backgroundColor: theme.colors.accent });
-  expect(btn("Second")).toHaveStyle({ backgroundColor: theme.elevation.lifted });
+  expect(btn("Second")).toHaveStyle({ backgroundColor: theme.screen.lifted });
   expect(StyleSheet.flatten(btn("Second").props.style)).not.toHaveProperty("borderWidth");
   expect(btn("Second").props.style).not.toEqual(expect.objectContaining({ backgroundColor: theme.colors.accent }));
   expect(screen.getByText("Quiet")).toHaveStyle({ color: theme.colors.accent, fontWeight: theme.weight.semi });
@@ -116,7 +116,7 @@ test("QuietButton: presses, can be disabled, danger is red, compact reaches 44 p
   await fireEvent.press(btn("Off"));
   expect(onPress).toHaveBeenCalledTimes(1);
   expect(btn("Off")).toBeDisabled();
-  expect(screen.getByText("Remove")).toHaveStyle({ color: theme.colors.dangerText });
+  expect(screen.getByText("Remove")).toHaveStyle({ color: theme.screen.dangerText });
   const slop = btn("Reset").props.hitSlop as { top: number; bottom: number };
   expect(theme.size.controlCompact + slop.top + slop.bottom).toBeGreaterThanOrEqual(theme.size.touch);
   expect(btn("Reset")).toHaveStyle({ minWidth: theme.size.touch });
@@ -139,9 +139,9 @@ test("ToolButton: a 72-pt column with a 44-pt box; active = ring, lifted surface
 test("Chip: explicit heights; selected = ring + lifted surface + gold label; regular chips reach 44 pt too", async () => {
   await render(<><Chip label="9:16" selected onPress={() => {}} /><Chip label="1:1" selected={false} onPress={() => {}} /><Chip compact label="In" selected={false} onPress={() => {}} /></>);
   expect(btn("9:16")).toBeSelected();
-  expect(btn("9:16")).toHaveStyle({ height: theme.size.chip, backgroundColor: theme.elevation.lifted, ...theme.ring });
+  expect(btn("9:16")).toHaveStyle({ height: theme.size.chip, backgroundColor: theme.screen.lifted, ...theme.ring });
   expect(screen.getByText("9:16")).toHaveStyle({ color: theme.colors.accent });
-  expect(btn("1:1")).toHaveStyle({ height: theme.size.chip, backgroundColor: theme.elevation.tile, ...theme.ringClear });
+  expect(btn("1:1")).toHaveStyle({ height: theme.size.chip, backgroundColor: theme.screen.tile, ...theme.ringClear });
   expect(screen.getByText("1:1")).toHaveStyle({ color: theme.colors.text });
   expect(btn("In")).toHaveStyle({ height: theme.size.chipCompact, paddingHorizontal: theme.space.md });
   const slop = btn("1:1").props.hitSlop as { top: number; bottom: number };
