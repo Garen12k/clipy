@@ -10,6 +10,9 @@ import { theme } from "@/src/theme/theme";
 import { useToast } from "@/src/ui/Toast";
 import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { LANE_HEIGHT, ROW_SLOP } from "../timelineLayout";
+import { BAR, BAR_GLYPH, barParts } from "../timelineMarks";
+import { BarGrip, GRIP_BOX } from "./BarGrip";
+
 
 const HANDLE_W = 12;
 /** A bar is never drawn narrower than this; HIT_SLOP keeps it tappable — sideways only: up and down it stops at ROW_SLOP, inside its own row. */
@@ -120,18 +123,15 @@ export function LayerBar({ layer: l, missing = false, selected, onPress }: Props
   const color = theme.colors.kindLayer;
   const leftPx = timeToX(l.start, pps), width = Math.max(MIN_WIDTH, timeToX(clipDuration(l), pps));
   const roomy = width >= LABEL_MIN_WIDTH;
+  const parts = barParts(width);   // a narrow bar leaves its label out first, then its glyph
   const handleW = Math.min(HANDLE_W, width / 2);
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`layer-bar-${l.id}`} onPress={onPress} accessibilityLabel={photo ? "Photo layer" : "Video layer"} hitSlop={{ top: ROW_SLOP, bottom: ROW_SLOP, left: HIT_SLOP, right: HIT_SLOP }}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color,
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
-        {roomy && (
-          <>
-            <Ionicons name={photo ? "image" : "videocam"} size={14} color={theme.colors.onKind} />
-            <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: 12, flex: 1 }}>Layer</Text>
-          </>
-        )}
+        {parts.glyph && <Ionicons testID={`bar-glyph-${l.id}`} name={BAR_GLYPH["layer"]} size={BAR.glyph} color={theme.colors.onKind} />}
+        {parts.label && <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>Layer</Text>}
         {missing && (
           <View testID={`layer-bar-${l.id}-missing`} style={{ position: "absolute", top: 4, right: roomy ? HANDLE_W + 2 : 0, backgroundColor: theme.colors.danger, borderRadius: theme.radius.pill, padding: 2 }}>
             <Ionicons name="warning" size={12} color={theme.colors.onAccent} />
@@ -139,8 +139,8 @@ export function LayerBar({ layer: l, missing = false, selected, onPress }: Props
         )}
         {selected && (
           <>
-            {!photo && <GestureDetector gesture={gestures.left}><View accessibilityLabel="Layer start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: handleW, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>}
-            <GestureDetector gesture={gestures.right}><View accessibilityLabel="Layer end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: handleW, backgroundColor: theme.colors.text, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} /></GestureDetector>
+            {!photo && <GestureDetector gesture={gestures.left}><View accessibilityLabel="Layer start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: handleW, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6, ...GRIP_BOX }}><BarGrip /></View></GestureDetector>}
+            <GestureDetector gesture={gestures.right}><View accessibilityLabel="Layer end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: handleW, backgroundColor: theme.colors.text, borderTopRightRadius: 6, borderBottomRightRadius: 6, ...GRIP_BOX }}><BarGrip /></View></GestureDetector>
           </>
         )}
       </Pressable>

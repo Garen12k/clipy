@@ -1,16 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
-import { SPEED_CURVES } from "@/src/editor/effects";
 import { clipStartTimes, outputOffsetOf } from "@/src/editor/model/timeline";
 import { isPhoto, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
-import { formatSpeed } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { STRIP_HEIGHT, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
+import { BADGE, clipBadges } from "../timelineMarks";
 import { KeyframeDots } from "./KeyframeDots";
 import { getThumb } from "./thumbnails";
 
+/** A badge is one line of the smallest text on its scrim. */
+const BADGE_H = 16;
 const thumbKey = (uri: string, t: number) => `${uri}@${t}`;
 
 type Props = { clip: Clip; pixelsPerSecond: number; selected: boolean; missing: boolean; onPress: () => void; children?: React.ReactNode };
@@ -21,8 +22,7 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
   const slotWidth = thumbInterval(pixelsPerSecond) * pixelsPerSecond;
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const photo = isPhoto(clip);
-  // One badge slot for speed: the curve's label when a curve is set, else the constant speed when it is not 1×.
-  const speedBadge = clip.speedCurve ? SPEED_CURVES[clip.speedCurve.id].label : clip.speed !== 1 ? formatSpeed(clip.speed) : null;
+  const badges = clipBadges(clip, width, selected);
   // No dots in multi-select mode: a tap on a dot would seek instead of toggling the clip.
   const selecting = useEditorStore((s) => s.multiSelect !== null);
   const showDots = selected && !selecting && clip.keyframes.length > 0;
@@ -58,33 +58,25 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
           </View>
         );
       })}
+      {/* The file is gone: the same warning as before, clear of the trim handle on a selected clip. */}
       {missing && (
-        <View style={{ position: "absolute", top: 4, left: 4, backgroundColor: theme.colors.danger, borderRadius: 999, padding: 2 }}>
-          <Ionicons name="warning" size={14} color={theme.colors.text} />
+        <View testID="clip-missing" accessibilityLabel="File missing" pointerEvents="none" style={{ position: "absolute", top: 4, left: selected ? BADGE.selectedInset : BADGE.inset, width: BADGE_H, height: BADGE_H, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.danger, borderRadius: theme.radius.pill }}>
+          <Ionicons name="warning" size={12} color={theme.colors.text} />
         </View>
       )}
-      <View style={{ position: "absolute", bottom: 4, left: 4, flexDirection: "row", gap: theme.space.xs }}>
-        {speedBadge !== null && (
-          <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1 }}>
-            <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>{speedBadge}</Text>
-          </View>
-        )}
-        {clip.reversed && (
-          <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1 }}>
-            <Text style={{ fontSize: 10, color: theme.colors.onAccent, fontWeight: "700" }}>◀</Text>
-          </View>
-        )}
-        {photo && (
-          <View accessibilityLabel="Photo" style={{ backgroundColor: theme.colors.scrimStrong, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1, justifyContent: "center" }}>
-            <Ionicons name="image" size={10} color={theme.colors.text} />
-          </View>
-        )}
-        {clip.filter && (
-          <View style={{ backgroundColor: theme.colors.scrimStrong, borderRadius: 4, paddingHorizontal: theme.space.xs, paddingVertical: 1 }}>
-            <Text style={{ fontSize: 10, color: theme.colors.text, fontWeight: "700" }}>f</Text>
-          </View>
-        )}
-      </View>
+      {/* What the clip carries, in words, on a solid dark scrim: only the badges that fit (clipBadges) — never cut off. */}
+      {badges.length > 0 && (
+        <View testID="clip-badges" pointerEvents="none" style={{ position: "absolute", bottom: 4, left: selected ? BADGE.selectedInset : BADGE.inset, flexDirection: "row", gap: theme.space.xs }}>
+          {badges.map((b) => (
+            <View key={b.id} testID={`clip-badge-${b.id}`} accessibilityLabel={b.id === "photo" ? "Photo" : undefined}
+              style={{ height: BADGE_H, backgroundColor: theme.colors.scrimStrong, borderRadius: 4, paddingHorizontal: theme.space.xs, justifyContent: "center" }}>
+              {b.id === "photo"
+                ? <Ionicons name="image-outline" size={10} color={theme.colors.text} />
+                : <Text numberOfLines={1} style={{ fontSize: theme.type.micro, color: theme.colors.text, fontWeight: theme.weight.semi, fontVariant: ["tabular-nums"] }}>{b.text}</Text>}
+            </View>
+          ))}
+        </View>
+      )}
       {showDots && (
         <KeyframeDots times={clip.keyframes.map((k) => outputOffsetOf(clip, k.t))} width={width} pps={pixelsPerSecond}
           onPress={(offset) => useEditorStore.getState().seek(clipStart + offset)} />

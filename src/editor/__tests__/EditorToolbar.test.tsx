@@ -18,20 +18,32 @@ import { useEditorStore } from "@/src/editor/store";
 import { EditorToolbar } from "../components/EditorToolbar";
 import { LANE_GAP, LANE_HEIGHT } from "../timelineLayout";
 import { closeStrip, openStrip, useToolStrip } from "../toolStrip";
+import { everyTool, showGroup, tool, toolsByGroup } from "../testing/toolbar";
 
 const renderBar = () => render(<EditorToolbar />);
 const st = () => useEditorStore.getState();
 const btn = (name: string) => screen.getByRole("button", { name });
 const gone = (name: string) => expect(screen.queryByRole("button", { name })).toBeNull();
-/** Every button on screen, in order (with nothing open: the back arrow, then the bar's tools). */
+/** Every button on screen, in order (with nothing open: the back arrow, the group button of a long bar, the tools the row shows, then the pinned Delete). */
 const row = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
 /** Closes whatever tool is open: a strip's or a panel's ✓. */
 const closeTool = async () => { await fireEvent.press(screen.getByRole("button", { name: "Done" })); };
 const BACK = "Back to main tools";
 const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Collage", "Effects", "Filter", "Adjust", "Ratio", "Background", "Cover", "Templates"];
-const CLIP = ["Split", "Trim", "Select", "Speed", "Volume", "Extract audio", "Voice", "Sound", "Animate", "Filter", "Adjust", "Background", "Templates", "Crop", "Transform", "Opacity", "Mask", "Green screen", "Cut out", "Stabilize", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate", "Delete"];
-const TEXT = ["Edit", "Animate", "Keyframe", "Duplicate", "Delete", "Add text"];
-const SOUND = ["Split", "Volume", "Fade", "Voice", "Sound", "Duplicate", "Delete", "Add audio", "Ducking", "Beats"];
+/** A video clip's bar: its tools by group, each in `contextFor`'s order. A fresh selection shows the first group. */
+const GROUPS = {
+  Basics: ["Split", "Trim", "Select", "Speed", "Volume", "Filter", "Cut out", "Stabilize"],
+  Edit: ["Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate"],
+  Audio: ["Extract audio", "Voice", "Sound"],
+  Look: ["Animate", "Adjust", "Templates"],
+  Frame: ["Background", "Crop", "Transform", "Opacity", "Mask", "Green screen"],
+};
+const GROUP = "Tool groups, Basics";
+/** What the row shows for a freshly selected video clip, after Back: the group button, Basics, and Delete pinned. */
+const CLIP = [GROUP, ...GROUPS.Basics, "Delete"];
+// Flat bars: Delete is pinned at the trailing end, after the row.
+const TEXT = ["Edit", "Animate", "Keyframe", "Duplicate", "Add text", "Delete"];
+const SOUND = ["Split", "Volume", "Fade", "Voice", "Sound", "Duplicate", "Add audio", "Ducking", "Beats", "Delete"];
 
 beforeEach(() => {
   closeStrip();
@@ -58,10 +70,11 @@ describe("bars", () => {
     await renderBar();
     await act(() => { st().select("a"); });
     expect(row()).toEqual([BACK, ...CLIP]);
+    expect(await toolsByGroup()).toEqual(GROUPS);
     await act(() => { st().selectOverlay("t1"); });
     expect(row()).toEqual([BACK, ...TEXT]);
     await act(() => { st().selectOverlay("c1"); });
-    expect(row()).toEqual([BACK, "Edit", "Captions", "Duplicate", "Delete", "Add text"]);
+    expect(row()).toEqual([BACK, "Edit", "Captions", "Duplicate", "Add text", "Delete"]);
     await act(() => { st().selectOverlay("s1"); });
     expect(row()).toEqual([BACK, "Edit", "Animate", "Keyframe", "Duplicate", "Delete"]);
     await act(() => { st().selectAudio("m1"); });
@@ -90,9 +103,9 @@ describe("bars", () => {
     const disabled = () => screen.getAllByRole("button").filter((b) => b.props.accessibilityState?.disabled).map((b) => b.props.accessibilityLabel);
     expect(disabled()).toEqual([]);
     await act(() => { st().select("a"); st().seek(1); });
-    expect(disabled()).toEqual([]);
+    for (const g of Object.keys(GROUPS)) { await showGroup(g); expect(disabled()).toEqual([]); }
     await act(() => { st().seek(6); });                 // the playhead is on b
-    expect(disabled()).toEqual(["Keyframe"]);
+    for (const g of Object.keys(GROUPS)) { await showGroup(g); expect(disabled()).toEqual(g === "Edit" ? ["Keyframe"] : []); }
     await act(() => { st().selectOverlay("t1"); st().seek(2); });
     expect(disabled()).toEqual([]);
     await act(() => { st().selectAudio("m1"); });                  // m1 is 0 … 5: the playhead (2) is on it
@@ -105,13 +118,14 @@ describe("bars", () => {
     st().setProject(makeProject({ clips: [makePhotoClip({ id: "p" }), makeClip({ id: "z", sourceDuration: 4 })] }));
     await renderBar();
     await act(() => { st().select("p"); });
-    for (const l of ["Speed", "Volume", "Reverse", "Freeze"]) gone(l);
-    expect(btn("Transition")).toBeEnabled();
+    const photo = await everyTool();
+    for (const l of ["Speed", "Volume", "Reverse", "Freeze"]) expect(photo).not.toContain(l);
+    expect((await tool("Transition"))).toBeEnabled();
     await act(() => { st().select("z"); });
-    gone("Transition");
+    expect(await everyTool()).not.toContain("Transition");
     expect(btn("Speed")).toBeEnabled();
     await act(() => { st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] })); st().select("a"); });
-    gone("Select");
+    expect(await everyTool()).not.toContain("Select");
     await act(() => { st().setProject(makeProject()); });
     expect(row()).toEqual(["Audio", "Effects", "Ratio"]);
   });
@@ -131,7 +145,7 @@ describe("main bar entries", () => {
     await fireEvent.press(btn("Edit"));
     expect(st()).toMatchObject({ selectedClipId: "b", playhead: 5 });
     expect(st().past).toHaveLength(0);
-    expect(row()[1]).toBe("Split");
+    expect(row().slice(0, 3)).toEqual([BACK, GROUP, "Split"]);
   });
 
   test("Edit past the end of the video selects the last clip", async () => {
@@ -212,7 +226,7 @@ describe("main bar entries", () => {
   test("Background on the clip bar opens for the selected clip, not the one under the playhead", async () => {
     await renderBar();
     await act(() => { st().select("a"); st().seek(5); });               // the playhead is on b
-    await fireEvent.press(btn("Background"));
+    await fireEvent.press((await tool("Background")));
     expect(st().selectedClipId).toBe("a");
     expect(useToolStrip.getState().open).toMatchObject({ id: "background", key: "clip:a" });
     const before = st().project!.clips[1].background;
@@ -223,11 +237,11 @@ describe("main bar entries", () => {
 
   test("Templates on the clip bar offers This clip; on the main bar it cannot", async () => {
     await renderBar();
-    await fireEvent.press(btn("Templates"));
+    await fireEvent.press((await tool("Templates")));
     expect(btn("This Clip")).toBeDisabled();
     await closeTool();
     await act(() => { st().select("b"); });
-    await fireEvent.press(btn("Templates"));
+    await fireEvent.press((await tool("Templates")));
     expect(btn("Random template")).toBeTruthy();
     expect(btn("This Clip")).toBeEnabled();
   });
@@ -244,7 +258,7 @@ describe("main bar entries", () => {
     await renderBar();
     await fireEvent.press(btn("Audio"));
     await act(() => { st().select("a"); });
-    expect(row()[1]).toBe("Split");
+    expect(row().slice(0, 3)).toEqual([BACK, GROUP, "Split"]);
     await act(() => { st().select(null); });
     expect(row()).toEqual(MAIN);
   });
@@ -292,7 +306,7 @@ describe("main bar entries", () => {
     await act(() => { st().select("a"); });
     expect(useToolStrip.getState().open).toBeNull();
     await act(() => { st().select(null); });
-    await fireEvent.press(btn("Templates"));
+    await fireEvent.press((await tool("Templates")));
     expect(btn("Random template")).toBeTruthy();
     await closeTool();
     await fireEvent.press(btn("Ratio"));
@@ -359,16 +373,16 @@ describe("text and sticker bars", () => {
     await fireEvent.press(btn("Edit"));
     await act(() => { st().apply((p) => ops.updateOverlay(p, "t1", { text: "  " })); });
     const past = st().past.length;
-    expect(btn("Duplicate")).toBeDisabled();
-    await fireEvent.press(btn("Duplicate"));
+    expect((await tool("Duplicate"))).toBeDisabled();
+    await fireEvent.press((await tool("Duplicate")));
     expect(st().project!.overlays.map((o) => o.id)).toEqual(["t1", "s1", "c1"]);
     expect(st().past).toHaveLength(past);
     expect(st().selectedOverlayId).toBe("t1");
     expect(useToolStrip.getState().open).toEqual({ id: "text", key: "overlay:t1" });
     // With a text again it copies, in one step.
     await act(() => { st().apply((p) => ops.updateOverlay(p, "t1", { text: "Hi" })); });
-    expect(btn("Duplicate")).toBeEnabled();
-    await fireEvent.press(btn("Duplicate"));
+    expect((await tool("Duplicate"))).toBeEnabled();
+    await fireEvent.press((await tool("Duplicate")));
     expect(st().project!.overlays).toHaveLength(4);
     expect(st().past).toHaveLength(past + 2);
   });
@@ -377,7 +391,7 @@ describe("text and sticker bars", () => {
     withOverlays();
     await renderBar();
     await act(() => { st().selectOverlay("t1"); });
-    await fireEvent.press(btn("Duplicate"));
+    await fireEvent.press((await tool("Duplicate")));
     const list = st().project!.overlays;
     expect(list).toHaveLength(4);
     expect(st().selectedOverlayId).toBe(list[1].id);
@@ -395,12 +409,12 @@ describe("text and sticker bars", () => {
     await renderBar();
     await act(() => { st().selectOverlay("t1"); });
     const refused = jest.spyOn(ops, "duplicateOverlay").mockImplementationOnce((p) => p);
-    await fireEvent.press(btn("Duplicate"));
+    await fireEvent.press((await tool("Duplicate")));
     expect(refused).toHaveBeenCalled();
     expect(buzz).not.toHaveBeenCalled();
     expect(st().past).toHaveLength(0);
     expect(st().selectedOverlayId).toBe("t1");
-    await fireEvent.press(btn("Duplicate"));
+    await fireEvent.press((await tool("Duplicate")));
     expect(buzz).toHaveBeenCalledWith("light");
     expect(st().past).toHaveLength(1);
     buzz.mockRestore(); refused.mockRestore();
@@ -410,12 +424,12 @@ describe("text and sticker bars", () => {
     withOverlays();
     await renderBar();
     await act(() => { st().selectOverlay("t1"); });
-    await fireEvent.press(btn("Animate"));
+    await fireEvent.press((await tool("Animate")));
     expect(useToolStrip.getState().open?.id).toBe("overlayAnimation");
     expect(btn("Loop")).toBeTruthy();
     await closeTool();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Animate"));
+    await fireEvent.press((await tool("Animate")));
     expect(useToolStrip.getState().open?.id).toBe("clipAnimation");
     expect(btn("Combo")).toBeTruthy();
   });
@@ -425,7 +439,7 @@ describe("strips and the bar", () => {
   test("with no lanes under the clips a strip is not lifted at all; with one lane, by that lane", async () => {
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Opacity"));
+    await fireEvent.press((await tool("Opacity")));
     expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: 0 });
     await act(() => { st().setProject({ ...st().project!, effects: [makeEffect({ id: "e1", start: 0, end: 2 })] }); st().select("a"); openStrip("opacity"); });
     expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -(LANE_HEIGHT + LANE_GAP) });
@@ -436,13 +450,13 @@ describe("strips and the bar", () => {
     st().setProject({ ...st().project!, overlays: [makeOverlay({ id: "o1", text: "Hi", start: 0, end: 2 })], audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })] });
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Opacity"));
+    await fireEvent.press((await tool("Opacity")));
     expect(screen.getByRole("header", { name: "Opacity" })).toBeTruthy();
     expect(screen.queryByTestId("toolbar-row")).toBeNull();
     gone("Split"); gone(BACK);
     expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -STRIP.lift });
     await fireEvent.press(btn("Done"));
-    expect(row()).toEqual([BACK, ...CLIP]);
+    expect(row()).toEqual([BACK, "Tool groups, Frame", ...GROUPS.Frame, "Delete"]);     // the bar comes back on the group the tool was in
     expect(screen.getByTestId("editor-toolbar")).toHaveStyle({ height: BAR_HEIGHT + 8, marginTop: 0 });
     expect(st().past).toHaveLength(0);
   });
@@ -451,7 +465,7 @@ describe("strips and the bar", () => {
     await renderBar();
     for (const change of [() => st().select("b"), () => st().select(null), () => st().apply((p) => deleteClip(p, "a"))]) {
       await act(() => { st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 }), makeClip({ id: "b", sourceDuration: 4 })] })); st().select("a"); });
-      await fireEvent.press(btn("Opacity"));
+      await fireEvent.press((await tool("Opacity")));
       expect(screen.getByTestId("tool-strip")).toBeTruthy();
       await act(() => { change(); });
       expect(screen.queryByTestId("tool-strip")).toBeNull();
@@ -462,7 +476,7 @@ describe("strips and the bar", () => {
   test("Transition on the clip bar opens for the selected clip's cut", async () => {
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Transition"));
+    await fireEvent.press((await tool("Transition")));
     expect(useToolStrip.getState().open).toEqual({ id: "transition", key: "clip:a" });
     expect(btn("Dissolve")).toBeTruthy();
   });
@@ -471,7 +485,7 @@ describe("strips and the bar", () => {
     st().setProject(makeProject({ clips: ["a", "b", "c"].map((id) => makeClip({ id, sourceDuration: 4 })) }));
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Transition"));
+    await fireEvent.press((await tool("Transition")));
     await act(() => { st().apply((p) => moveClip(p, "a", 1)); });         // b, a, c
     expect(st().project!.clips.map((c) => c.id)).toEqual(["b", "a", "c"]);
     expect(useToolStrip.getState().open?.id).toBe("transition");
@@ -487,12 +501,12 @@ describe("strips and the bar", () => {
     st().setProject(makeProject({ clips: ["a", "b", "c"].map((id) => makeClip({ id, sourceDuration: 4 })) }));
     await renderBar();
     await act(() => { st().select("b"); });
-    await fireEvent.press(btn("Transition"));
+    await fireEvent.press((await tool("Transition")));
     expect(screen.getByTestId("tool-strip")).toBeTruthy();
     await act(() => { st().apply((p) => moveClip(p, "b", 2)); });
     expect(useToolStrip.getState().open).toBeNull();
     expect(screen.queryByTestId("tool-strip")).toBeNull();
-    expect(row()).not.toContain("Transition");
+    expect(await everyTool()).not.toContain("Transition");
   });
 
   test("the bar is one horizontally scrolling row that starts again from the left when the bar changes", async () => {
@@ -517,8 +531,8 @@ describe("strips and the bar", () => {
 
 test("Templates is enabled without a selection when the project has clips and opens the Templates panel", async () => {
   await renderBar();
-  expect(btn("Templates")).toBeEnabled();
-  await fireEvent.press(btn("Templates"));
+  expect((await tool("Templates"))).toBeEnabled();
+  await fireEvent.press((await tool("Templates")));
   expect(btn("Random template")).toBeTruthy();
 });
 
@@ -527,7 +541,7 @@ test("Split cuts at the playhead; Duplicate and Delete act on the selection", as
   await act(() => { st().select("a"); st().seek(1.5); });
   await fireEvent.press(btn("Split"));
   expect(st().project?.clips).toHaveLength(3);
-  await fireEvent.press(btn("Duplicate"));
+  await fireEvent.press((await tool("Duplicate")));
   expect(st().project?.clips).toHaveLength(4);
   await fireEvent.press(btn("Delete"));
   expect(st().project?.clips).toHaveLength(3);
@@ -555,7 +569,7 @@ test("Volume is enabled after selecting a clip", async () => {
 test("Freeze is enabled for a selected video clip", async () => {
   await renderBar();
   await act(() => { st().select("a"); });
-  expect(btn("Freeze")).toBeEnabled();
+  expect((await tool("Freeze"))).toBeEnabled();
 });
 
 test("pressing Freeze runs the freeze capture for the selected clip", async () => {
@@ -565,7 +579,7 @@ test("pressing Freeze runs the freeze capture for the selected clip", async () =
   (storage as unknown as { saveStill: jest.Mock }).saveStill.mockResolvedValueOnce({ uri: "file:///p/media/s.jpg" });
   await renderBar();
   await act(() => { st().select("a"); st().seek(1); });
-  await fireEvent.press(btn("Freeze"));
+  await fireEvent.press((await tool("Freeze")));
   await waitFor(() => expect(VT.getThumbnailAsync).toHaveBeenCalledWith(expect.any(String), { time: 1000, quality: 1 }));
   await waitFor(() => expect(st().project!.clips).toHaveLength(4));
 });
@@ -574,20 +588,18 @@ test("a photo selection has no Reverse, Freeze, Speed or Volume but keeps Transf
   st().setProject(makeProject({ clips: [makePhotoClip({ id: "p" }), makeClip({ id: "a", sourceDuration: 4 })] }));
   await renderBar();
   await act(() => { st().select("p"); });
-  gone("Reverse");
-  gone("Freeze");
-  gone("Speed");
-  gone("Volume");
-  expect(btn("Transform")).toBeEnabled();
+  const photo = await everyTool();
+  for (const l of ["Reverse", "Freeze", "Speed", "Volume"]) expect(photo).not.toContain(l);
+  expect((await tool("Transform"))).toBeEnabled();
 });
 
 test("Reverse toggles the clip and shows active; one undo step each", async () => {
   await renderBar();
   await act(() => { st().select("a"); });
-  await fireEvent.press(btn("Reverse"));
+  await fireEvent.press((await tool("Reverse")));
   expect(st().project!.clips[0].reversed).toBe(true);
-  expect(btn("Reverse")).toBeSelected();
-  await fireEvent.press(btn("Reverse"));
+  expect((await tool("Reverse"))).toBeSelected();
+  await fireEvent.press((await tool("Reverse")));
   expect(st().project!.clips[0].reversed).toBe(false);
   await act(() => { st().undo(); });
   expect(st().project!.clips[0].reversed).toBe(true);
@@ -596,7 +608,7 @@ test("Reverse toggles the clip and shows active; one undo step each", async () =
 test("Transform opens its sheet", async () => {
   await renderBar();
   await act(() => { st().select("a"); });
-  await fireEvent.press(btn("Transform"));
+  await fireEvent.press((await tool("Transform")));
   expect(btn("Rotate 90°")).toBeTruthy();
 });
 
@@ -611,7 +623,7 @@ describe("Replace", () => {
     st().setProject(makeProject({ clips: [makePhotoClip({ id: "p" })] }));
     await renderBar();
     await act(() => { st().select("p"); });
-    expect(btn("Replace")).toBeEnabled();
+    expect((await tool("Replace"))).toBeEnabled();
   });
 
   test("swaps the selected clip's media in one undo step and keeps it selected", async () => {
@@ -619,7 +631,7 @@ describe("Replace", () => {
     importMedia.mockResolvedValueOnce({ clips: [makeClip({ id: "imported", sourceDuration: 9, sourceUri: "file:///p1/media/imported.mov", width: 1920, height: 1080 })], failed: 0 });
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Replace"));
+    await fireEvent.press((await tool("Replace")));
     await waitFor(() => expect(st().project!.clips[0].sourceUri).toBe("file:///p1/media/imported.mov"));
     expect(pick).toHaveBeenCalledWith({ multiple: false });
     expect(importMedia).toHaveBeenCalledWith("p1", [videoAsset]);
@@ -633,7 +645,7 @@ describe("Replace", () => {
     pick.mockResolvedValueOnce(null);
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Replace"));
+    await fireEvent.press((await tool("Replace")));
     await waitFor(() => expect(pick).toHaveBeenCalled());
     expect(importMedia).not.toHaveBeenCalled();
     expect(st().past).toHaveLength(0);
@@ -645,7 +657,7 @@ describe("Replace", () => {
     importMedia.mockResolvedValueOnce({ clips: [], failed: 1 });
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Replace"));
+    await fireEvent.press((await tool("Replace")));
     await waitFor(() => expect(useToast.getState().message).toBe("Couldn't replace the clip."));
     expect(st().past).toHaveLength(0);
   });
@@ -655,7 +667,7 @@ describe("Replace", () => {
     importMedia.mockResolvedValueOnce({ clips: [makeClip({ id: "imported", sourceDuration: 0.05 })], failed: 0 });
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Replace"));
+    await fireEvent.press((await tool("Replace")));
     await waitFor(() => expect(useToast.getState().message).toBe("That video is too short."));
     expect(st().past).toHaveLength(0);
     expect(st().project!.clips[0].sourceUri).toBe("file:///media/a.mp4");
@@ -666,8 +678,8 @@ describe("Replace", () => {
     pick.mockReturnValueOnce(new Promise<null>((resolve) => { finish = resolve; }));
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Replace"));
-    expect(btn("Replace")).toBeDisabled();
+    await fireEvent.press((await tool("Replace")));
+    expect((await tool("Replace"))).toBeDisabled();
     await act(async () => { finish(null); });
     await waitFor(() => expect(btn("Replace")).toBeEnabled());
   });
@@ -677,7 +689,7 @@ test("a reversed clip has no Volume (the export is silent)", async () => {
   st().setProject(makeProject({ clips: [makeClip({ id: "r", sourceDuration: 4, reversed: true }), makeClip({ id: "a", sourceDuration: 4 })] }));
   await renderBar();
   await act(() => { st().select("r"); });
-  gone("Volume");
+  expect(await everyTool()).not.toContain("Volume");
   await act(() => { st().select("a"); });
   expect(btn("Volume")).toBeEnabled();
 });
@@ -685,8 +697,8 @@ test("a reversed clip has no Volume (the export is silent)", async () => {
 test("Adjust opens the sheet for a selected clip", async () => {
   await renderBar();
   await act(() => { st().select("a"); });
-  expect(btn("Adjust")).toBeEnabled();
-  await fireEvent.press(btn("Adjust"));
+  expect((await tool("Adjust"))).toBeEnabled();
+  await fireEvent.press((await tool("Adjust")));
   expect(btn("Reset")).toBeTruthy();
 });
 
@@ -731,7 +743,7 @@ describe("Effects on the timeline", () => {
     withEffect();
     await renderBar();
     await act(() => { st().selectEffect("e1"); });
-    await fireEvent.press(btn("Duplicate"));
+    await fireEvent.press((await tool("Duplicate")));
     expect(effects()).toMatchObject([{ id: "e1", start: 1, end: 3 }, { id: "dup", type: "glow", start: 3, end: 5 }]);
     expect(st().past).toHaveLength(1);
     expect(st().selectedEffectId).toBe("dup");
@@ -902,7 +914,7 @@ describe("Audio tools", () => {
     withAudio();
     await renderBar();
     await act(() => { st().selectAudio("t1"); });
-    await fireEvent.press(btn("Duplicate"));
+    await fireEvent.press((await tool("Duplicate")));
     expect(tracks().map((t) => t.id)).toEqual(["t1", "dup", "t2"]);
     expect(past()).toBe(1);
     expect(st().selectedAudioId).toBe("dup");
@@ -914,7 +926,7 @@ describe("Audio tools", () => {
     withAudio(AUDIO_LIMITS.maxTracks);
     await renderBar();
     await act(() => { st().selectAudio("t1"); });
-    await fireEvent.press(btn("Duplicate"));
+    await fireEvent.press((await tool("Duplicate")));
     expect(tracks()).toHaveLength(AUDIO_LIMITS.maxTracks);
     expect(past()).toBe(0);
     expect(st().selectedAudioId).toBe("t1");
@@ -946,32 +958,32 @@ describe("Animate and Keyframe", () => {
   test("Edit: a selected clip enables Animate; Keyframe also needs the playhead on that clip", async () => {
     await renderBar();
     await act(() => { st().select("a"); st().seek(1); });
-    expect(btn("Animate")).toBeEnabled();
-    expect(btn("Keyframe")).toBeEnabled();
+    expect((await tool("Animate"))).toBeEnabled();
+    expect((await tool("Keyframe"))).toBeEnabled();
     await act(() => { st().seek(5); });
-    expect(btn("Animate")).toBeEnabled();
-    expect(btn("Keyframe")).toBeDisabled();
+    expect((await tool("Animate"))).toBeEnabled();
+    expect((await tool("Keyframe"))).toBeDisabled();
     await act(() => { st().select("b"); });
-    expect(btn("Keyframe")).toBeEnabled();
+    expect((await tool("Keyframe"))).toBeEnabled();
   });
 
   test("Edit: Keyframe adds a pin then removes it, the diamond fills while on the pin, one undo step each", async () => {
     await renderBar();
     await act(() => { st().select("a"); st().seek(1); });
-    expect(btn("Keyframe")).not.toBeSelected();
-    await fireEvent.press(btn("Keyframe"));
+    expect((await tool("Keyframe"))).not.toBeSelected();
+    await fireEvent.press((await tool("Keyframe")));
     expect(clipPins()).toHaveLength(1);
     expect(clipPins()[0].t).toBeCloseTo(1);
     expect(past()).toBe(1);
-    expect(btn("Keyframe")).toBeSelected();
+    expect((await tool("Keyframe"))).toBeSelected();
     await act(() => { st().seek(2); });
-    expect(btn("Keyframe")).not.toBeSelected();
+    expect((await tool("Keyframe"))).not.toBeSelected();
     await act(() => { st().seek(1); });
-    expect(btn("Keyframe")).toBeSelected();
-    await fireEvent.press(btn("Keyframe"));
+    expect((await tool("Keyframe"))).toBeSelected();
+    await fireEvent.press((await tool("Keyframe")));
     expect(clipPins()).toHaveLength(0);
     expect(past()).toBe(2);
-    expect(btn("Keyframe")).not.toBeSelected();
+    expect((await tool("Keyframe"))).not.toBeSelected();
     await act(() => { st().undo(); });
     expect(clipPins()).toHaveLength(1);
   });
@@ -980,7 +992,7 @@ describe("Animate and Keyframe", () => {
     await renderBar();
     await act(() => { st().select("a"); });
     expect(screen.queryByRole("button", { name: "Combo" })).toBeNull();
-    await fireEvent.press(btn("Animate"));
+    await fireEvent.press((await tool("Animate")));
     expect(btn("Combo")).toBeTruthy();
     await fireEvent.press(btn("Fade"));
     expect(st().project!.clips[0].animation.in).toEqual({ id: "fade", duration: 0.5 });
@@ -990,33 +1002,33 @@ describe("Animate and Keyframe", () => {
     withOverlays();
     await renderBar();
     await act(() => { st().selectOverlay("t1"); st().seek(2); });
-    expect(btn("Animate")).toBeEnabled();
-    expect(btn("Keyframe")).toBeEnabled();
+    expect((await tool("Animate"))).toBeEnabled();
+    expect((await tool("Keyframe"))).toBeEnabled();
     await act(() => { st().seek(1); });
-    expect(btn("Keyframe")).toBeEnabled();
+    expect((await tool("Keyframe"))).toBeEnabled();
     await act(() => { st().seek(3); });
-    expect(btn("Keyframe")).toBeEnabled();
+    expect((await tool("Keyframe"))).toBeEnabled();
     await act(() => { st().seek(0.5); });
-    expect(btn("Keyframe")).toBeDisabled();
+    expect((await tool("Keyframe"))).toBeDisabled();
     await act(() => { st().seek(5); });
-    expect(btn("Keyframe")).toBeDisabled();
-    expect(btn("Animate")).toBeEnabled();
+    expect((await tool("Keyframe"))).toBeDisabled();
+    expect((await tool("Animate"))).toBeEnabled();
   });
 
   test("Text: Keyframe toggles a pin on the text and Animate opens the overlay sheet", async () => {
     withOverlays();
     await renderBar();
     await act(() => { st().selectOverlay("t1"); st().seek(2); });
-    await fireEvent.press(btn("Keyframe"));
+    await fireEvent.press((await tool("Keyframe")));
     expect(overlayPins("t1")).toHaveLength(1);
     expect(overlayPins("t1")[0].t).toBeCloseTo(1);
     expect(past()).toBe(1);
-    expect(btn("Keyframe")).toBeSelected();
-    await fireEvent.press(btn("Keyframe"));
+    expect((await tool("Keyframe"))).toBeSelected();
+    await fireEvent.press((await tool("Keyframe")));
     expect(overlayPins("t1")).toHaveLength(0);
     expect(past()).toBe(2);
-    expect(btn("Keyframe")).not.toBeSelected();
-    await fireEvent.press(btn("Animate"));
+    expect((await tool("Keyframe"))).not.toBeSelected();
+    await fireEvent.press((await tool("Animate")));
     expect(btn("Loop")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Combo" })).toBeNull();
     await fireEvent.press(btn("Pop"));
@@ -1035,11 +1047,11 @@ describe("Animate and Keyframe", () => {
     withOverlays();
     await renderBar();
     await act(() => { st().selectOverlay("s1"); st().seek(2); });
-    expect(btn("Animate")).toBeEnabled();
-    await fireEvent.press(btn("Keyframe"));
+    expect((await tool("Animate"))).toBeEnabled();
+    await fireEvent.press((await tool("Keyframe")));
     expect(overlayPins("s1")).toHaveLength(1);
     expect(overlayPins("t1")).toHaveLength(0);
-    await fireEvent.press(btn("Animate"));
+    await fireEvent.press((await tool("Animate")));
     expect(btn("Loop")).toBeTruthy();
   });
 });
@@ -1062,7 +1074,7 @@ describe("Select (multi-select)", () => {
   test("entering multi-select closes an open strip", async () => {
     await renderBar();
     await act(() => { st().select("a"); });
-    await fireEvent.press(btn("Opacity"));
+    await fireEvent.press((await tool("Opacity")));
     await act(() => { st().enterMultiSelect(); });
     expect(useToolStrip.getState().open).toBeNull();
     expect(screen.getByRole("header", { name: "1 selected" })).toBeTruthy();   // the mode starts with the selected clip chosen
@@ -1094,29 +1106,29 @@ describe("Motion and Collage on the bar", () => {
     st().setProject(makeProject({ clips: [makePhotoClip({ id: "p" }), makeClip({ id: "a", sourceDuration: 4 })] }));
     await renderBar();
     await act(() => { st().select("p"); });
-    await fireEvent.press(btn("Motion"));
+    await fireEvent.press((await tool("Motion")));
     expect(useToolStrip.getState().open).toEqual({ id: "photoMotion", key: "clip:p" });
     expect(screen.getByText("Apply to All Photos")).toBeTruthy();
     await fireEvent.press(btn("Zoom in"));
     expect(st().project!.clips[0].motion).toEqual({ id: "zoomIn", strength: 0.5 });
     expect(st().past).toHaveLength(1);
     await closeTool();
-    gone("Keyframe");                       // a photo with a Motion: one way of moving at a time
+    expect(await everyTool()).not.toContain("Keyframe");                       // a photo with a Motion: one way of moving at a time
     await act(() => { st().select("a"); });
-    gone("Motion");
+    expect(await everyTool()).not.toContain("Motion");
   });
 
   test("a photo with keyframes has Keyframe and no Motion", async () => {
     st().setProject(makeProject({ clips: [makePhotoClip({ id: "p", keyframes: [makeKeyframe({ t: 0 })] }), makeClip({ id: "a", sourceDuration: 4 })] }));
     await renderBar();
     await act(() => { st().select("p"); });
-    gone("Motion");
-    expect(btn("Keyframe")).toBeTruthy();
+    expect(await everyTool()).not.toContain("Motion");
+    expect((await tool("Keyframe"))).toBeTruthy();
   });
 
   test("Collage on the main bar opens the panel with the six layouts and nothing selected", async () => {
     await renderBar();
-    await fireEvent.press(btn("Collage"));
+    await fireEvent.press((await tool("Collage")));
     expect(useToolStrip.getState().open).toEqual({ id: "collage", key: "none" });
     expect(btn("Grid of four")).toBeTruthy();
     expect(st().selectedClipId).toBeNull();
@@ -1130,9 +1142,11 @@ describe("Motion and Collage on the bar", () => {
     st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })], layers: [cell] }));
     await renderBar();
     await act(() => { st().select("c"); });
-    expect(row().slice(0, 3)).toEqual([BACK, "Collage", "Trim"]);
-    gone("Motion");
-    await fireEvent.press(btn("Collage"));
+    // Collage is the first tool the cell's bar shows (`contextFor` lists it first; it is in the first group, which keeps that order).
+    expect(row().slice(0, 3)).toEqual([BACK, GROUP, "Collage"]);
+    expect((await toolsByGroup()).Basics[0]).toBe("Collage");
+    expect(await everyTool()).not.toContain("Motion");
+    await fireEvent.press((await tool("Collage")));
     expect(useToolStrip.getState().open).toEqual({ id: "collage", key: "clip:c" });
     expect(btn("Side by side")).toBeSelected();
     expect(screen.queryByRole("button", { name: "Grid of four" })).toBeNull();
@@ -1144,7 +1158,7 @@ describe("Motion and Collage on the bar", () => {
     pick.mockResolvedValueOnce([photo, photo]);
     importMedia.mockResolvedValueOnce({ clips: [makePhotoClip({ id: "i1", width: 1000, height: 1000 }), makePhotoClip({ id: "i2", width: 1000, height: 1000 })], failed: 0 });
     await renderBar();
-    await fireEvent.press(btn("Collage"));
+    await fireEvent.press((await tool("Collage")));
     await fireEvent.press(btn("Side by side"));
     await waitFor(() => expect(st().project!.layers).toHaveLength(2));
     const first = st().project!.layers[0];
@@ -1155,6 +1169,7 @@ describe("Motion and Collage on the bar", () => {
     expect(screen.queryByRole("button", { name: "Grid of four" })).toBeNull();   // edit mode: only the layouts with as many cells
     expect(st().past).toHaveLength(1);
     await closeTool();
-    expect(row().slice(0, 3)).toEqual([BACK, "Collage", "Trim"]);
+    expect(row().slice(0, 3)).toEqual([BACK, GROUP, "Collage"]);              // a new selection: its first group, Collage first
+    expect((await toolsByGroup()).Basics[0]).toBe("Collage");
   });
 });

@@ -1,5 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { deleteClips, duplicateClips, mainClipIds } from "@/src/editor/model/ops";
 import { isPhoto, type Project } from "@/src/editor/model/types";
@@ -9,19 +10,23 @@ import { theme } from "@/src/theme/theme";
 import { haptic } from "@/src/ui/haptics";
 import { Body } from "@/src/ui/Text";
 import { ToolButton } from "@/src/ui/ToolButton";
-import { STRIP, useStripPresence } from "@/src/ui/ToolStrip";
+import { BAR_HEIGHT, STRIP, useStripPresence } from "@/src/ui/ToolStrip";
 import { FilterSheet } from "./FilterSheet";
 import { SpeedSheet } from "./SpeedSheet";
+import { BarCapsule, BarSeparator, ToolScroll } from "./ToolbarRow";
 import { VolumeSheet } from "./VolumeSheet";
 
 const firstVideoOf = (project: Project, multi: string[]) => { const ids = mainClipIds(project, multi); return project.clips.find((c) => ids.includes(c.id) && !isPhoto(c))?.id ?? null; };
 const firstSoundingOf = (project: Project, multi: string[]) => { const ids = mainClipIds(project, multi); return project.clips.find((c) => ids.includes(c.id) && !isPhoto(c) && !c.reversed)?.id ?? null; };
 
-/** The bar's height (the "N selected" line and one row of tool buttons), without the bottom safe-area padding. */
-export const MULTI_BAR_HEIGHT = 104;
+/** The bar's height without the bottom safe-area padding: the toolbar's own, so entering the mode moves neither the preview nor the timeline. */
+export const MULTI_BAR_HEIGHT = BAR_HEIGHT;
 
 /**
- * Multi-select mode's action bar: it takes the toolbar's place while `multiSelect` is not null. Every action is one undo step for all
+ * Multi-select mode's action bar: it takes the toolbar's place while `multiSelect` is not null — the same capsule, one row: the count
+ * ("3 selected", a small capsule) and Done at the leading end, the actions in a sideways scroll, and Delete pinned alone after the
+ * separator at the trailing end. Done and Delete are both outside the scroll, so both are in view on the narrowest phone — and at
+ * opposite ends, so a slip from Done never lands on Delete. Every action is one undo step for all
  * the chosen main clips. Delete ends the mode (the store does, once none of the chosen clips exists); Duplicate keeps the originals chosen.
  * Its height is explicit; while a tool strip shows, the line and the buttons give their place to it and the bar grows upwards
  * (a negative top margin, over the timeline's lowest lanes) instead of pushing the preview. It never rises over the clips: with too
@@ -53,19 +58,27 @@ export function MultiSelectBar() {
   const pad = Math.max(insets.bottom, theme.space.sm);
 
   return (
-    <View testID="multi-select-bar" style={{ backgroundColor: theme.elevation.bar, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingBottom: pad,
+    // While the bar shows, the area is the page and the capsule floats on it; a strip is the bar's colour edge to edge, under its hairline.
+    <View testID="multi-select-bar" style={{ backgroundColor: stripShown ? theme.elevation.bar : theme.elevation.page, borderTopWidth: 1, borderTopColor: stripShown ? theme.colors.hairline : theme.elevation.page, paddingBottom: pad,
       height: (stripShown ? STRIP.height : MULTI_BAR_HEIGHT) + pad, marginTop: stripShown && lift > 0 ? -lift : 0 }}>
-      {stripShown ? null : <Body weight="semi" accessibilityRole="header" style={{ textAlign: "center", paddingTop: theme.space.sm }}>{`${ids.length} selected`}</Body>}
       {stripShown ? null : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
-          <ToolButton label="Delete" icon="trash-outline" disabled={none} onPress={() => { haptic("medium"); apply((p) => deleteClips(p, ids)); }} />
-          <ToolButton label="Duplicate" icon="copy-outline" disabled={none} onPress={() => { haptic("light"); apply((p) => duplicateClips(p, ids)); }} />
-          <ToolButton label="Filter" icon="color-filter-outline" disabled={none} onPress={() => setSheet("filter")} />
-          <ToolButton label="Speed" icon="speedometer-outline" disabled={!firstVideo} onPress={() => setSheet("speed")} />
-          <ToolButton label="Volume" icon="volume-high-outline" disabled={!firstSounding} onPress={() => setSheet("volume")} />
-          <ToolButton label="Select all" icon="albums-outline" onPress={selectAllClips} />
-          <ToolButton label="Done" icon="checkmark-outline" onPress={exitMultiSelect} />
-        </ScrollView>
+        <BarCapsule testID="multi-row">
+          <View testID="multi-count" style={{ height: theme.size.touch, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.sm, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.tile }}>
+            <Ionicons name="checkmark-circle-outline" size={theme.size.icon.sm} color={theme.colors.accent} />
+            <Body weight="semi" accessibilityRole="header" numberOfLines={1} style={{ fontSize: theme.type.label, fontVariant: ["tabular-nums"] }}>{`${ids.length} selected`}</Body>
+          </View>
+          {/* Done stands here, the whole row away from Delete. */}
+          <ToolButton variant="bar" label="Done" icon="checkmark-outline" onPress={exitMultiSelect} />
+          <ToolScroll testID="multi-scroll">
+            <ToolButton variant="bar" label="Speed" icon="speedometer-outline" disabled={!firstVideo} onPress={() => setSheet("speed")} />
+            <ToolButton variant="bar" label="Volume" icon="volume-high-outline" disabled={!firstSounding} onPress={() => setSheet("volume")} />
+            <ToolButton variant="bar" label="Filter" icon="color-filter-outline" disabled={none} onPress={() => setSheet("filter")} />
+            <ToolButton variant="bar" label="Duplicate" icon="copy-outline" disabled={none} onPress={() => { haptic("light"); apply((p) => duplicateClips(p, ids)); }} />
+            <ToolButton variant="bar" label="Select all" icon="albums-outline" onPress={selectAllClips} />
+          </ToolScroll>
+          <BarSeparator />
+          <ToolButton variant="bar" danger label="Delete" icon="trash-outline" disabled={none} onPress={() => { haptic("medium"); apply((p) => deleteClips(p, ids)); }} />
+        </BarCapsule>
       )}
       <FilterSheet clipId={ids[0] ?? null} clipIds={ids} visible={sheet === "filter"} onClose={() => setSheet(null)} />
       <SpeedSheet clipId={firstVideo} clipIds={ids} visible={sheet === "speed"} onClose={() => setSheet(null)} />

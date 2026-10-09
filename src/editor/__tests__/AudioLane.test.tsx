@@ -28,7 +28,11 @@ test("a lane holds one bar per track of its kind, placed by start and trimmed le
   expect(screen.getByTestId("audio-bar-v1")).toHaveStyle({ position: "absolute", left: 100, width: 100, backgroundColor: theme.colors.kindVoice });
   expect(screen.getByTestId("audio-bar-s1")).toHaveStyle({ position: "absolute", left: 200, width: 50, backgroundColor: theme.colors.kindSfx });
   expect(within(screen.getByTestId("audio-bar-m1")).getByText("100%")).toHaveStyle({ color: theme.colors.onKind, fontVariant: ["tabular-nums"] });
-  for (const title of ["Song", "Second", "Voice-over 1", "Whoosh"]) expect(screen.getByText(title)).toBeTruthy();
+  for (const title of ["Song", "Second", "Voice-over 1"]) expect(screen.getByText(title)).toBeTruthy();
+  // The 50-pt sound effect has room for its glyph only: a narrow bar leaves the words out first (barParts). Its name is still read out.
+  expect(screen.queryByText("Whoosh")).toBeNull();
+  expect(screen.getByTestId("bar-glyph-s1")).toBeTruthy();
+  expect(screen.getByLabelText("Sound effect Whoosh")).toBeTruthy();
 });
 
 test("a lane shows only its own kind", async () => {

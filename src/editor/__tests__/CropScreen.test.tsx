@@ -125,6 +125,9 @@ test("the Crop tool is not on the main bar and opens the screen for a video or a
   expect(screen.queryByRole("button", { name: "Crop" })).toBeNull();
   for (const id of ["a", "p"]) {
     await act(() => { useEditorStore.getState().select(id); });
+    // Crop is in the clip's Frame group: the group button, then the group.
+    await fireEvent.press(screen.getByRole("button", { name: "Tool groups, Basics" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Frame" }));
     expect(screen.getByRole("button", { name: "Crop" })).toBeEnabled();
     await fireEvent.press(screen.getByRole("button", { name: "Crop" }));
     expect(screen.getByRole("button", { name: "Done" })).toBeTruthy();

@@ -1,5 +1,5 @@
 import type { Ionicons } from "@expo/vector-icons";
-import type { ToolId } from "./toolbarContext";
+import type { BarId, ToolId } from "./toolbarContext";
 
 export type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -71,3 +71,53 @@ export const TOOL_META: Record<ToolId, { label: string; icon: IoniconName }> = {
   effectDuplicate: { label: "Duplicate", icon: "copy-outline" },
   effectDelete: { label: "Delete", icon: "trash-outline" },
 };
+
+/** The five groups a long bar is split into, in the order the chooser shows them. The first one is where a new selection starts. */
+export const GROUPS = [
+  { id: "basics", label: "Basics", icon: "apps-outline" },
+  { id: "edit", label: "Edit", icon: "construct-outline" },
+  { id: "audio", label: "Audio", icon: "musical-notes-outline" },
+  { id: "look", label: "Look", icon: "brush-outline" },
+  { id: "frame", label: "Frame", icon: "scan-outline" },
+] as const satisfies readonly { id: string; label: string; icon: IoniconName }[];
+export type GroupId = (typeof GROUPS)[number]["id"];
+export type ToolGroup<T extends string = ToolId> = { id: GroupId; label: string; icon: IoniconName; tools: T[] };
+
+/**
+ * Which group a tool is shown in. A tool that is not named here is in the FIRST group, so a new tool can never be hidden.
+ * Collage is in the first group: `contextFor` lists it first on a collage cell, so it is the first tool a selected cell shows.
+ */
+const GROUP_OF: Partial<Record<ToolId, GroupId>> = {
+  collage: "basics", split: "basics", trim: "basics", speed: "basics", volume: "basics", filter: "basics", cutout: "basics", stabilize: "basics", select: "basics",
+  transition: "edit", keyframe: "edit", duplicate: "edit", replace: "edit", reverse: "edit", freeze: "edit", layerForward: "edit", layerBack: "edit",
+  extractAudio: "audio", voice: "audio", soundQuality: "audio",
+  adjust: "look", templates: "look", animate: "look", motion: "look",
+  crop: "frame", transform: "frame", opacity: "frame", mask: "frame", blend: "frame", background: "frame", chroma: "frame",
+};
+/** The Delete of each bar: pinned at the bar's trailing edge, outside the groups and outside the scrolling row. */
+const PINNED: readonly string[] = ["delete", "overlayDelete", "audioDelete", "effectDelete"] satisfies ToolId[];
+/** A bar with more tools than this (its Delete not counted) is shown in groups. */
+export const FLAT_LIMIT = 7;
+
+export const groupOf = (id: string): GroupId => (GROUP_OF as Record<string, GroupId | undefined>)[id] ?? GROUPS[0].id;
+
+/** The bar's Delete (null when it has none) and every other tool, in the order given. */
+export function pinTools<T extends string>(tools: readonly T[]): { pinned: T | null; rest: T[] } {
+  return { pinned: tools.find((t) => PINNED.includes(t)) ?? null, rest: tools.filter((t) => !PINNED.includes(t)) };
+}
+
+/** The tools split into the groups, each keeping the order given; a group without a tool is left out. */
+export function groupTools<T extends string>(tools: readonly T[]): ToolGroup<T>[] {
+  return GROUPS.map((g) => ({ ...g, tools: tools.filter((t) => groupOf(t) === g.id) })).filter((g) => g.tools.length > 0);
+}
+
+/**
+ * How a bar is laid out — presentation only: WHICH tools there are, and in which order, is `contextFor`'s list, passed in.
+ * `groups` is null for a flat row: the main bar (as it always was), a sound's bar (its own order: Split, Volume, Fade first) and every
+ * bar of `FLAT_LIMIT` tools or fewer beside its Delete.
+ */
+export function barLayout<T extends string>(bar: BarId, tools: readonly T[]): { pinned: T | null; rest: T[]; groups: ToolGroup<T>[] | null } {
+  const { pinned, rest } = pinTools(tools);
+  const flat = bar === "main" || bar === "audio" || rest.length <= FLAT_LIMIT;
+  return { pinned, rest, groups: flat ? null : groupTools(rest) };
+}

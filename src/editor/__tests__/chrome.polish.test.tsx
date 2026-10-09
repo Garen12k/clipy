@@ -14,7 +14,7 @@ beforeEach(() => { closeStrip(); st().reset(); st().setProject(makeProject({ cli
 test("the top bar is an explicit 48-pt row on the gutter; Export is still its one main button", async () => {
   const onExport = jest.fn();
   await render(<EditorTopBar onExport={onExport} />);
-  expect(screen.getByTestId("editor-top-bar")).toHaveStyle({ height: theme.size.row, paddingLeft: theme.space.sm, paddingRight: theme.space.gutter, paddingBottom: theme.space.sm });
+  expect(screen.getByTestId("editor-top-bar")).toHaveStyle({ height: theme.size.row, paddingHorizontal: theme.space.gutter, paddingBottom: theme.space.sm });   // the round Back has an edge of its own now: it starts on the gutter
   expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
   expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
   await fireEvent.press(screen.getByRole("button", { name: "Export" }));
@@ -23,7 +23,7 @@ test("the top bar is an explicit 48-pt row on the gutter; Export is still its on
 
 test("the play row is an explicit 48-pt row; undo, play, the ratio pill and redo work as before", async () => {
   await render(<TransportRow />);
-  expect(screen.getByTestId("transport-row")).toHaveStyle({ height: theme.size.row, paddingHorizontal: theme.space.sm });
+  expect(screen.getByTestId("transport-row")).toHaveStyle({ height: theme.size.row, paddingHorizontal: theme.space.gutter });   // the Undo / Redo capsule has an edge of its own: it starts on the gutter
   expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Redo" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Play" })).toHaveStyle({ width: theme.size.iconButton, height: theme.size.iconButton });

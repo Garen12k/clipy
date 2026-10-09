@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -9,6 +10,8 @@ import { SHAPES } from "@/src/editor/effects";
 import { theme } from "@/src/theme/theme";
 import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { LANE_HEIGHT } from "../timelineLayout";
+import { BAR, BAR_GLYPH, barParts } from "../timelineMarks";
+import { BarGrip, GRIP_BOX } from "./BarGrip";
 import { KeyframeDots } from "./KeyframeDots";
 
 const HANDLE_W = 12;
@@ -52,20 +55,23 @@ export function OverlayPill({ overlay: o, selected, top = 0, onPress }: { overla
 
   const label = isSticker(o) ? (o.emoji ?? SHAPES[o.shape!].label) : isTextOverlay(o) ? o.text : "";
   const leftPx = timeToX(o.start, pps), width = Math.max(HANDLE_W * 2 + 4, timeToX(o.end - o.start, pps));
+  // A narrow bar leaves its label out first, then its glyph (barParts).
+  const parts = barParts(width), kind = isSticker(o) ? "sticker" : o.kind === "caption" ? "caption" : "text";
   const fill = isSticker(o) ? theme.colors.kindSticker : o.kind === "caption" ? theme.colors.kindCaption : theme.colors.kindText;
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`overlay-pill-${o.id}`} onPress={onPress} accessibilityLabel={`${isSticker(o) ? "Sticker" : "Text"} ${label}`}
         style={{ position: "absolute", left: leftPx, top, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: fill,
-          borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", justifyContent: "center", paddingHorizontal: HANDLE_W + 2 }}>
-        <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: 12 }}>{label}</Text>
+          borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: HANDLE_W + 2 }}>
+        {parts.glyph && <Ionicons testID={`bar-glyph-${o.id}`} name={BAR_GLYPH[kind]} size={BAR.glyph} color={theme.colors.onKind} />}
+        {parts.label && <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{label}</Text>}
         {selected && o.keyframes.length > 0 && (
           <KeyframeDots times={o.keyframes.map((k) => k.t)} width={width} pps={pps} onPress={(t) => store.seek(o.start + t)} />
         )}
         {selected && (
           <>
-            <GestureDetector gesture={gestures.left}><View accessibilityLabel="Text start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>
-            <GestureDetector gesture={gestures.right}><View accessibilityLabel="Text end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} /></GestureDetector>
+            <GestureDetector gesture={gestures.left}><View accessibilityLabel="Text start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6, ...GRIP_BOX }}><BarGrip /></View></GestureDetector>
+            <GestureDetector gesture={gestures.right}><View accessibilityLabel="Text end handle" style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopRightRadius: 6, borderBottomRightRadius: 6, ...GRIP_BOX }}><BarGrip /></View></GestureDetector>
           </>
         )}
       </Pressable>

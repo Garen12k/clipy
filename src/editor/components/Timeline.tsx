@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { clipStartTimes, timeToX, totalDuration } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { barIds, barRow, CLIP_AREA_HEIGHT, laneModel, rowScrollTarget, timelineFrame } from "../timelineLayout";
+import { cutMarks } from "../timelineMarks";
 import { createScrubController } from "../timelineScroll";
 import { AddClipTile } from "./AddClipTile";
 import { AudioLane } from "./AudioLane";
@@ -15,6 +16,7 @@ import { EffectLane } from "./EffectLane";
 import { LayerLane } from "./LayerLane";
 import { OverlayLane } from "./OverlayLane";
 import { RowsThumb, useRowsScroll } from "./RowsThumb";
+import { TimeRuler } from "./TimeRuler";
 import { SnapGuide } from "./SnapGuide";
 
 type Props = { renderStripExtras?: (clipId: string, index: number) => React.ReactNode; onCutPress?: (index: number) => void };
@@ -23,6 +25,8 @@ const offsetX = (e: NativeSyntheticEvent<NativeScrollEvent>) => e.nativeEvent.co
 
 /**
  * Horizontal strip of clips. The playhead is fixed at the horizontal centre; scrolling scrubs.
+ * The clip area (`CLIP_AREA_HEIGHT`) holds, top to bottom, the time ruler, the beat ticks and the clips (`timelineMarks.ts` has the
+ * division); the ruler and the cut markers are out of the flow, so they change no height and no scroll width.
  * Its height is `timelineFrame`: the clip area and the rows under it up to a cap. The rows sit in ONE vertical scroll view that is a
  * child of the horizontal one's content, under the clip area — so there is still a single sideways scroll (the scrub controller and
  * every bar's x are untouched), the clips stay where they are while the rows go up and down under them, and the two directions are
@@ -91,14 +95,23 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosen, barsKey, viewport, content]);
 
+  // True from the moment a pinch is recognised (not from a first finger: a tap or a scroll never sets it) until it is over, however
+  // it ends. Only the ruler reads it: it keeps its marks and stretches them instead of building them again on every frame.
+  const [pinching, setPinching] = useState(false);
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
         .onBegin(() => { basePps.current = useEditorStore.getState().pixelsPerSecond; })
+        .onStart(() => { setPinching(true); })
         .onUpdate((e) => { setZoom(basePps.current * e.scale); })
+        .onFinalize(() => { setPinching(false); })
         .runOnJS(true),
     [],
   );
+  const clips = project?.clips;
+  // The same marks (and so the same markers) while the cuts, the zoom and the selection are the same: the playhead draws none again.
+  const inMulti = multi !== null;
+  const marks = useMemo(() => (clips ? cutMarks({ clips }, pps, selectedId, inMulti) : []), [clips, pps, selectedId, inMulti]);
 
   if (!project) return null;
   const starts = clipStartTimes(project);
@@ -115,17 +128,16 @@ export function Timeline({ renderStripExtras, onCutPress }: Props) {
           onScroll={(e) => scrub.onScroll(offsetX(e), pps)}
           contentContainerStyle={{ paddingHorizontal: pad, height, flexDirection: "column" }}>
           <View testID="timeline-clips" style={{ height: CLIP_AREA_HEIGHT, flexDirection: "row", alignItems: "center" }}>
+            {/* The time marks along the top: out of the flow, drawn only when the zoom or the length changes — and during a pinch only stretched. */}
+            <TimeRuler hold={pinching} />
             {project.clips.map((clip, i) => (
               <ClipThumbStrip key={clip.id} clip={clip} pixelsPerSecond={pps} selected={multi ? multi.includes(clip.id) : clip.id === selectedId} missing={missing.includes(clip.sourceUri)}
                 onPress={multi ? () => useEditorStore.getState().toggleMultiSelect(clip.id) : () => { select(clip.id === selectedId ? null : clip.id); seek(starts[i]); }}>
                 {renderStripExtras?.(clip.id, i)}
               </ClipThumbStrip>
             ))}
-            {project.clips.map((clip, i) =>
-              i < project.clips.length - 1 && clip.transitionOut.type !== "none" ? (
-                <CutMarker key={`cut-${clip.id}`} index={i} pixelsPerSecond={pps} onPress={onCutPress} />
-              ) : null,
-            )}
+            {/* On the cuts, after the clips (so above them): a diamond where there is a transition, "+" where there is none (cutMarks). */}
+            {marks.map((mark) => <CutMarker key={`cut-${project.clips[mark.index].id}`} mark={mark} onPress={onCutPress} />)}
             {/* Out of the flow, inside the trailing padding: the scrubbable width still ends at the last clip. */}
             <AddClipTile left={timeToX(totalDuration(project), pps) + theme.space.sm} />
             <BeatTicks />

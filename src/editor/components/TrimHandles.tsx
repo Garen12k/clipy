@@ -9,6 +9,9 @@ import { theme } from "@/src/theme/theme";
 import { createSnapper, sameTime } from "../snapping";
 import { STRIP_HEIGHT } from "../timelineLayout";
 
+/** The handle as drawn: 16 pt of gold with a dark grip line. Its gesture and its hit slop are what they were. */
+export const TRIM_HANDLE_W = 16;
+
 const snap = (t: number) => Math.round(t * 10) / 10;
 
 /** Where clip `id` ends on the timeline (null: not a main clip). */
@@ -67,10 +70,11 @@ function Handle({ clip, edge }: { clip: Clip; edge: "start" | "end" }) {
   return (
     <GestureDetector gesture={pan}>
       <View accessibilityLabel={`${edge === "start" ? "Trim start" : "Trim end"} handle`} hitSlop={{ left: 12, right: 12, top: 12, bottom: 12 }}
-        style={{ position: "absolute", [edge === "start" ? "left" : "right"]: -2, top: -2, width: 14, height: STRIP_HEIGHT + 4, backgroundColor: theme.colors.accent,
+        style={{ position: "absolute", [edge === "start" ? "left" : "right"]: -2, top: -2, width: TRIM_HANDLE_W, height: STRIP_HEIGHT + 4, backgroundColor: theme.colors.accent,
           borderTopLeftRadius: edge === "start" ? 8 : 0, borderBottomLeftRadius: edge === "start" ? 8 : 0, borderTopRightRadius: edge === "end" ? 8 : 0, borderBottomRightRadius: edge === "end" ? 8 : 0,
           alignItems: "center", justifyContent: "center" }}>
-        <View style={{ width: 2, height: 20, backgroundColor: theme.colors.onAccent, borderRadius: 1 }} />
+        {/* The grip: a dark line on the gold — drawing only, the touch is the handle's. */}
+        <View testID={`trim-grip-${edge}`} pointerEvents="none" style={{ width: 3, height: 24, backgroundColor: theme.colors.onAccent, borderRadius: 2 }} />
       </View>
     </GestureDetector>
   );

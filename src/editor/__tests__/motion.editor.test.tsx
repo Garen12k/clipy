@@ -18,6 +18,8 @@ import { EditorToolbar } from "../components/EditorToolbar";
 import { Timeline } from "../components/Timeline";
 import { TransportRow } from "../components/TransportRow";
 import { closeStrip, useToolStrip } from "../toolStrip";
+import { showGroup, tool } from "../testing/toolbar";
+import { TOOLBAR } from "@/src/ui/ToolButton";
 
 jest.mock("react-native-reanimated", () => {
   const m = require("react-native-reanimated/mock");
@@ -66,8 +68,10 @@ test("the row of tools enters when the bar changes; the back arrow is outside it
   await render(<EditorToolbar />);
   expect(enters()).toBe(1);
   const tools = screen.getByTestId("toolbar-tools");
-  expect(tools).toHaveStyle({ flex: 1, height: BAR_HEIGHT - 1 });
-  expect(screen.getByTestId("toolbar-scroll")).toHaveStyle({ height: BAR_HEIGHT - 1 });
+  // The row is the capsule now: the entering wrapper and the scroller are a tool high; the slot keeps the bottom area's height.
+  expect(tools).toHaveStyle({ flex: 1, height: TOOLBAR.tool });
+  expect(screen.getByTestId("toolbar-scroll")).toHaveStyle({ height: TOOLBAR.tool });
+  expect(screen.getByTestId("toolbar-slot")).toHaveStyle({ height: BAR_HEIGHT - 1 });
   expect(within(tools).getByRole("button", { name: "Filter" })).toBeTruthy();
   await act(() => { st().seek(1); });
   await act(() => { st().seek(1.5); });
@@ -78,13 +82,17 @@ test("the row of tools enters when the bar changes; the back arrow is outside it
   expect(within(screen.getByTestId("toolbar-tools")).queryByRole("button", { name: "Back to main tools" })).toBeNull();
   await act(() => { st().select("b"); });                    // clip → clip: the same bar, nothing replays
   expect(enters()).toBe(2);
+  await showGroup("Frame");                                  // the chooser and another group swap the row at once: nothing enters
+  await showGroup("Look");
+  expect(enters()).toBe(2);
+  expect(within(screen.getByTestId("toolbar-tools")).queryByRole("button", { name: /^Tool groups/ })).toBeNull();   // the group button stays put too
 });
 
 test("opening and closing a strip: the tool store closes at once, the bar's tools come back with their own entrance, the preview mounts once", async () => {
   await render(<EditorLayout top={null} preview={<Probe />} transport={<TransportRow />} timeline={<Timeline />} toolbar={<EditorToolbar />} />);
   await act(() => { st().select("a"); });
   const before = enters();
-  await fireEvent.press(btn("Opacity"));
+  await fireEvent.press((await tool("Opacity")));
   expect(screen.getByTestId("tool-strip-content")).toBeTruthy();
   expect(enters()).toBe(before + 1);
   await fireEvent.press(btn("Done"));
@@ -99,6 +107,6 @@ test("with Reduce Motion nothing enters", async () => {
   setReducedMotionForTests(true);
   await render(<EditorToolbar />);
   await act(() => { st().select("a"); });
-  await fireEvent.press(btn("Opacity"));
+  await fireEvent.press((await tool("Opacity")));
   expect(enters()).toBe(0);
 });

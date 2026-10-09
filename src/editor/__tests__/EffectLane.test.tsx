@@ -21,7 +21,10 @@ test("one pill per effect, placed by time, labelled and coloured from the theme"
   expect(screen.getByTestId("effect-pill-e1")).toHaveStyle({ left: 100, width: 150, backgroundColor: theme.colors.kindEffect });
   expect(screen.getByTestId("effect-pill-e2")).toHaveStyle({ left: 300, width: 50 });
   expect(screen.getByText("Glitch")).toHaveStyle({ color: theme.colors.onKind });
-  expect(screen.getByText("Old film")).toBeTruthy();
+  // A 50-pt pill has room for its glyph only: a narrow bar leaves the label out first (barParts). Its name is still read out.
+  expect(screen.queryByText("Old film")).toBeNull();
+  expect(screen.getByTestId("bar-glyph-e2")).toBeTruthy();
+  expect(screen.getByLabelText("Effect Old film")).toBeTruthy();
 });
 
 test("tapping a pill selects the effect and clears the clip selection", async () => {

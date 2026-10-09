@@ -8,7 +8,7 @@ import { BeatTicks } from "../components/BeatTicks";
 
 beforeEach(() => { useEditorStore.getState().reset(); });
 
-test("one 2 × 10 pt accent tick per beat marker, centred on its time at the top, out of the flow and untouchable", async () => {
+test("one 2 × 10 pt accent tick per beat marker, centred on its time, right above the clips under the time ruler, out of the flow and untouchable", async () => {
   useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], beatMarkers: [0.5, 2, 4.25] }));
   useEditorStore.getState().setZoom(40);
   await render(<BeatTicks />);
@@ -17,7 +17,7 @@ test("one 2 × 10 pt accent tick per beat marker, centred on its time at the top
   expect(StyleSheet.flatten(layer.props.style)).toEqual({ position: "absolute", left: 0, top: 0, width: 0, height: 0 });
   const ticks = screen.getAllByTestId("beat-tick");
   expect(ticks.map((t) => StyleSheet.flatten(t.props.style).left)).toEqual([19, 79, 169]);
-  for (const t of ticks) expect(t).toHaveStyle({ position: "absolute", top: 0, width: 2, height: 10, backgroundColor: theme.colors.accent });
+  for (const t of ticks) expect(t).toHaveStyle({ position: "absolute", top: 18, width: 2, height: 10, backgroundColor: theme.colors.accent });
 });
 
 test("no markers, no ticks", async () => {

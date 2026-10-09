@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 jest.mock("@/src/lib/id", () => { let n = 0; return { newId: () => `copy${++n}` }; });
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-04T10:00:00.000Z" }));
 jest.mock("@/src/editor/components/thumbnails", () => ({ getThumb: jest.fn(async () => "file:///thumb.jpg") }));
@@ -6,7 +6,9 @@ import * as Haptics from "expo-haptics";
 import { makeAudioTrack, makeClip, makeEffect, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { Text } from "react-native";
 import { useEditorStore } from "@/src/editor/store";
-import { STRIP, ToolStrip } from "@/src/ui/ToolStrip";
+import { theme } from "@/src/theme/theme";
+import { TOOLBAR } from "@/src/ui/ToolButton";
+import { BAR_HEIGHT, STRIP, ToolStrip } from "@/src/ui/ToolStrip";
 import { MULTI_BAR_HEIGHT, MultiSelectBar } from "../components/MultiSelectBar";
 import { LANE_GAP, LANE_HEIGHT } from "../timelineLayout";
 
@@ -46,7 +48,8 @@ test("nothing selected: the clip actions are disabled; Select all and Done are e
   expect(header("0 selected")).toBeTruthy();
   for (const l of ["Delete", "Duplicate", "Filter", "Speed", "Volume"]) expect(btn(l)).toBeDisabled();
   for (const l of ["Select all", "Done"]) expect(btn(l)).toBeEnabled();
-  expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Delete", "Duplicate", "Filter", "Speed", "Volume", "Select all", "Done"]);
+  // Done at the leading end, right after the count; the actions scroll; Delete is pinned alone at the trailing end.
+  expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Done", "Speed", "Volume", "Filter", "Duplicate", "Select all", "Delete"]);
 });
 
 test("Select all chooses every clip", async () => {
@@ -162,11 +165,11 @@ test("the bar has an explicit height; while a strip shows it hides its buttons a
   st().setProject({ ...st().project!, audioTracks: [makeAudioTrack({ id: "m", sourceDuration: 5 })], effects: [makeEffect({ id: "e1", start: 0, end: 1 })] });
   st().enterMultiSelect(); st().toggleMultiSelect("a");
   const view = await render(<><MultiSelectBar /><ToolStrip visible={false} onClose={() => {}} title="X"><Text>x</Text></ToolStrip></>);
-  expect(MULTI_BAR_HEIGHT).toBe(104);
-  expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: 104 + 8, marginTop: 0 });
+  expect(MULTI_BAR_HEIGHT).toBe(BAR_HEIGHT);                  // the toolbar's own height: entering the mode moves nothing
+  expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: BAR_HEIGHT + 8, marginTop: 0 });
   expect(header("1 selected")).toBeTruthy();
   await view.rerender(<><MultiSelectBar /><ToolStrip visible onClose={() => {}} title="X"><Text>x</Text></ToolStrip></>);
-  expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -(STRIP.height - 104) });
+  expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ height: STRIP.height + 8, marginTop: -STRIP.lift });
   expect(screen.queryByRole("header", { name: "1 selected" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Select all" })).toBeNull();
 });
@@ -189,4 +192,57 @@ test("a strip whose clip vanishes closes and does not reopen by itself later", a
   await act(async () => { st().toggleMultiSelect("a"); });
   expect(screen.queryByRole("header", { name: /Speed/ })).toBeNull();
   expect(btn("Speed")).toBeEnabled();
+});
+
+test("the same capsule as the toolbar: the count is a small capsule with a check at the leading end, and it is still the bar's header", async () => {
+  await renderWith("a", "b", "c");
+  expect(screen.getByTestId("multi-select-bar")).toHaveStyle({ backgroundColor: theme.elevation.page, height: BAR_HEIGHT + 8 });
+  const capsule = screen.getByTestId("multi-row");
+  expect(capsule).toHaveStyle({ height: TOOLBAR.height, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar, marginHorizontal: theme.space.xs, flexDirection: "row" });
+  const count = screen.getByTestId("multi-count");
+  expect(capsule.props.children[0].props.testID).toBe("multi-count");                    // first in the row
+  expect(count).toHaveStyle({ height: theme.size.touch, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.tile });
+  expect(within(count).getByRole("header", { name: "3 selected" })).toBeTruthy();
+  expect(within(count).getByText("3 selected")).toHaveStyle({ fontWeight: theme.weight.semi, color: theme.colors.text });
+  expect(count.props.children[0].props.name).toBe("checkmark-circle-outline");
+});
+
+test("Done and Delete are never neighbours: Done right after the count at the leading end, Delete alone after the separator at the trailing end", async () => {
+  await renderWith("a", "b");
+  const kids = (screen.getByTestId("multi-row").props.children as { props: { testID?: string; label?: string } }[]).map((k) => k.props.testID ?? k.props.label ?? "separator");
+  expect(kids).toEqual(["multi-count", "Done", "multi-scroll", "separator", "Delete"]);
+  expect(screen.getAllByTestId("toolbar-separator")).toHaveLength(1);
+  const order = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string);
+  expect(order[0]).toBe("Done");
+  expect(order[order.length - 1]).toBe("Delete");
+  expect(Math.abs(order.indexOf("Done") - order.indexOf("Delete"))).toBe(order.length - 1);   // the whole row between them
+  // What they do is what they did.
+  await press("Done");
+  expect(st().multiSelect).toBeNull();
+  expect(clips().map((c) => c.id)).toEqual(["a", "b", "c"]);
+  expect(past()).toBe(0);
+});
+
+test("Done and Delete are pinned outside the scrolling actions, so both are in view on a 375-pt screen", async () => {
+  await renderWith("a");
+  const inScroll = within(screen.getByTestId("multi-scroll")).getAllByRole("button").map((b) => b.props.accessibilityLabel);
+  expect(inScroll).toEqual(["Speed", "Volume", "Filter", "Duplicate", "Select all"]);
+  const capsule = within(screen.getByTestId("multi-row"));
+  for (const l of ["Delete", "Done"]) {
+    expect(capsule.getByRole("button", { name: l })).toBeTruthy();
+    expect(within(screen.getByTestId("multi-scroll")).queryByRole("button", { name: l })).toBeNull();
+  }
+  expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel).slice(-2)).toEqual(["Select all", "Delete"]);
+  expect(screen.getByTestId("toolbar-separator")).toBeTruthy();
+  expect(screen.getByText("Delete")).toHaveStyle({ color: theme.colors.dangerText });
+  expect(screen.getByText("Done")).toHaveStyle({ color: theme.colors.text });
+  // The pinned parts are a tool's smallest width each; the scrolling part takes what is left (`flex: 1`), so however wide the count
+  // grows, it is the actions that scroll — never Delete or Done that leave the screen. At 375 pt beside "3 selected": 140 pt, two
+  // actions whole and 44 of the third's 48 (the separator's clear side took 4 pt; the third already ended under the 16-pt fade).
+  expect(btn("Done")).toHaveStyle({ minWidth: theme.size.control });
+  expect(btn("Delete")).toHaveStyle({ minWidth: theme.size.control });
+  expect(screen.getByTestId("multi-scroll").parent).toHaveStyle({ flex: 1 });
+  const inside = 375 - 4 * theme.space.xs, pinned = 2 * theme.size.control + 1 + theme.space.xs, gaps = 4 * theme.space.xs, count = 102;
+  expect(inside - count - pinned - gaps).toBe(140);
+  expect(140 - 2 * theme.size.control).toBe(44);
 });

@@ -9,7 +9,6 @@ const DIRS = ["src/ui", "src/editor/components", "src/projects", "src/export", "
  */
 const ALLOW: Record<string, { max: number; why: string }> = {
   "src/editor/components/AudioBar.tsx": { max: 2, why: "HANDLE_W + 2 and the warning dot's padding: geometry inside a 28-pt lane, below the 4-pt scale" },
-  "src/editor/components/ClipThumbStrip.tsx": { max: 5, why: "the 10-pt badges on a thumbnail: 1 and 2 pt, below the 4-pt scale" },
   "src/editor/components/EffectPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/LayerBar.tsx": { max: 2, why: "HANDLE_W + 2 and the warning dot's padding: geometry inside a 28-pt lane, below the 4-pt scale" },
   "src/editor/components/OverlayPill.tsx": { max: 1, why: "HANDLE_W + 2: geometry inside a 28-pt lane, below the 4-pt scale" },
@@ -200,7 +199,6 @@ test("no raw padding / margin / gap numbers in the kit, the editor's components,
 test("the allow-table is at its agreed minimum: timeline-lane geometry below the 4-pt scale, and nothing else", () => {
   expect(Object.fromEntries(Object.entries(ALLOW).map(([file, a]) => [file, a.max]))).toEqual({
     "src/editor/components/AudioBar.tsx": 2,
-    "src/editor/components/ClipThumbStrip.tsx": 5,
     "src/editor/components/EffectPill.tsx": 1,
     "src/editor/components/LayerBar.tsx": 2,
     "src/editor/components/OverlayPill.tsx": 1,

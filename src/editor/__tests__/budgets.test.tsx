@@ -46,8 +46,9 @@ const LABEL = Math.ceil(theme.type.micro * 1.25);
 test("a strip rises over exactly two lanes, so its top edge sits on a lane's top edge", () => {
   expect(STRIP.lift).toBe(2 * (LANE_HEIGHT + LANE_GAP));
   expect(STRIP.height).toBe(BAR_HEIGHT + STRIP.lift);
-  expect(MULTI_BAR_HEIGHT).toBe(104);
-  expect(STRIP.height - MULTI_BAR_HEIGHT).toBe(50);
+  // Multi-select's bar is the toolbar's height now (its count moved into the row), so a strip rises by the same two lanes there.
+  expect(MULTI_BAR_HEIGHT).toBe(BAR_HEIGHT);
+  expect(STRIP.height - MULTI_BAR_HEIGHT).toBe(STRIP.lift);
 });
 
 test("a strip only ever covers lanes: with fewer than two it rises over what there is and the preview gives the rest", () => {

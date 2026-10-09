@@ -10,6 +10,9 @@ import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { LANE_HEIGHT } from "../timelineLayout";
+import { BAR, BAR_GLYPH, barParts } from "../timelineMarks";
+import { BarGrip, GRIP_BOX } from "./BarGrip";
+
 
 const HANDLE_W = 12;
 /** A bar is never drawn narrower than this (a 0.1 s effect must not look half a second long); HIT_SLOP keeps it tappable. */
@@ -79,17 +82,19 @@ export function AudioBar({ track: t, missing, selected, overlapping = false, onP
   const { label, color } = KIND[t.kind];
   const leftPx = timeToX(t.start, pps), width = Math.max(MIN_WIDTH, timeToX(t.trimEnd - t.trimStart, pps));
   const roomy = width >= LABEL_MIN_WIDTH;
+  const parts = barParts(width);   // a narrow bar leaves its label out first, then its glyph
   const handleW = Math.min(HANDLE_W, width / 2);
   return (
     <GestureDetector gesture={gestures.move}>
       <Pressable testID={`audio-bar-${t.id}`} onPress={onPress} accessibilityLabel={`${label} ${t.title}`} hitSlop={HIT_SLOP}
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color, opacity: overlapping ? OVERLAP_OPACITY : 1,
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
-        {roomy && (
+        {/* The kind's own glyph (a note, a microphone, a speaker), then today's words: the volume and the title. */}
+        {parts.glyph && <Ionicons testID={`bar-glyph-${t.id}`} name={BAR_GLYPH[t.kind]} size={BAR.glyph} color={theme.colors.onKind} />}
+        {parts.label && (
           <>
-            <Ionicons name="volume-medium" size={14} color={theme.colors.onKind} />
-            <Text style={{ color: theme.colors.onKind, fontSize: 12, fontVariant: ["tabular-nums"] }}>{Math.round(t.volume * 100)}%</Text>
-            <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: 12, flex: 1 }}>{t.title}</Text>
+            <Text style={{ color: theme.colors.onKind, fontSize: theme.type.small, fontVariant: ["tabular-nums"] }}>{Math.round(t.volume * 100)}%</Text>
+            <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{t.title}</Text>
           </>
         )}
         {missing && (
@@ -99,8 +104,8 @@ export function AudioBar({ track: t, missing, selected, overlapping = false, onP
         )}
         {selected && (
           <>
-            <GestureDetector gesture={gestures.left}><View accessibilityLabel={`${label} start handle`} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: handleW, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }} /></GestureDetector>
-            <GestureDetector gesture={gestures.right}><View accessibilityLabel={`${label} end handle`} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: handleW, backgroundColor: theme.colors.text, borderTopRightRadius: 6, borderBottomRightRadius: 6 }} /></GestureDetector>
+            <GestureDetector gesture={gestures.left}><View accessibilityLabel={`${label} start handle`} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: handleW, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6, ...GRIP_BOX }}><BarGrip /></View></GestureDetector>
+            <GestureDetector gesture={gestures.right}><View accessibilityLabel={`${label} end handle`} style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: handleW, backgroundColor: theme.colors.text, borderTopRightRadius: 6, borderBottomRightRadius: 6, ...GRIP_BOX }}><BarGrip /></View></GestureDetector>
           </>
         )}
       </Pressable>
