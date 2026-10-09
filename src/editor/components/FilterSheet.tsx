@@ -56,7 +56,7 @@ export function FilterSheet({ clipId, clipIds, visible, onClose }: { clipId: str
   return (
     <ToolStrip visible={visible} onClose={onClose} title={clipIds ? `Filter · ${count} ${count === 1 ? "clip" : "clips"}` : "Filter"}
       // "Apply to all" writes the main clips: it is not offered for a layer, nor for a multi-selection (which names its own clips).
-      action={layer || clipIds ? undefined : { label: "Apply to all clips", onPress: () => apply((p) => setFilterForAllClips(p, clip.filter, clip.filterIntensity)) }}>
+      action={layer || clipIds ? undefined : { label: "Apply to All Clips", onPress: () => apply((p) => setFilterForAllClips(p, clip.filter, clip.filterIntensity)) }}>
       <StripTiles initialX={startX}>
         {FILTER_IDS.map((id) => {
           const def = FILTERS[id];

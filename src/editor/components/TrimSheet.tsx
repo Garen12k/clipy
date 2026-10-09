@@ -9,7 +9,7 @@ import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { useToast } from "@/src/ui/Toast";
 import { STRIP, StripNote, ToolStrip } from "@/src/ui/ToolStrip";
 
-const field = { backgroundColor: theme.elevation.tile, color: theme.colors.text, borderRadius: theme.radius.chip, padding: theme.space.md, fontSize: 18, flex: 1, fontFamily: theme.fonts.body } as const;
+const field = { backgroundColor: theme.elevation.tile, color: theme.colors.text, borderRadius: theme.radius.field, padding: theme.space.md, fontSize: 18, flex: 1 } as const;
 
 /** Whether the typed range, once fitted to what the source allows, is another range than the one the item has. */
 function differs(clip: Clip, start: number, end: number): boolean {

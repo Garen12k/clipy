@@ -24,7 +24,7 @@ test("This clip applies to the selected clip only; Whole project applies to ever
   expect(s.project!.clips.map((c) => c.filter)).toEqual(["vintage", null]);
   expect(s.project!.overlays).toHaveLength(2);
   expect(s.past).toHaveLength(1);
-  await fireEvent.press(screen.getByRole("button", { name: "Whole project" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Whole Project" }));
   await fireEvent.press(screen.getByRole("button", { name: "Template Minimal" }));
   s = useEditorStore.getState();
   expect(s.project!.clips.map((c) => c.filter)).toEqual(["mono", "mono"]);
@@ -56,8 +56,8 @@ test("closing the sheet ends the re-roll session: a later apply does not undo un
 
 test("This clip is disabled and Whole project selected when no clip is selected", async () => {
   await render(<TemplateSheet clipId={null} visible onClose={() => {}} />);
-  expect(screen.getByRole("button", { name: "This clip" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "Whole project" })).toBeSelected();
+  expect(screen.getByRole("button", { name: "This Clip" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Whole Project" })).toBeSelected();
   await fireEvent.press(screen.getByRole("button", { name: "Template Retro" }));
   expect(useEditorStore.getState().project!.clips.map((c) => c.filter)).toEqual(["vintage", "vintage"]);
 });

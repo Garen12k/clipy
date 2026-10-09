@@ -122,7 +122,7 @@ test("Apply to all clips gives every clip its own copy in one undo step", async 
   await render(<ClipAnimationSheet clipId="a" visible onClose={() => {}} />);
   await press("Fade");
   const before = past();
-  await press("Apply to all clips");
+  await press("Apply to All Clips");
   expect(anim(1)).toEqual({ in: { id: "fade", duration: 0.5 }, out: null, combo: null });
   expect(anim(1)).not.toBe(anim(0));
   expect(anim(1).in).not.toBe(anim(0).in);
@@ -145,7 +145,7 @@ test("renders nothing when the clip is gone", async () => {
 });
 
 describe("a photo: zoom and pan live in the Motion tool", () => {
-  const rowLabels = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string).filter((l) => !["In", "Out", "Combo", "Done", "Apply to all clips"].includes(l));
+  const rowLabels = () => screen.getAllByRole("button").map((b) => b.props.accessibilityLabel as string).filter((l) => !["In", "Out", "Combo", "Done", "Apply to All Clips"].includes(l));
 
   test("the Combo tab lists None, Sway and Pulse for a photo; a video still sees all six", async () => {
     useEditorStore.getState().setProject(makeProject({ clips: [makePhotoClip({ id: "p" }), makeClip({ id: "a", sourceDuration: 4 })] }));

@@ -23,7 +23,7 @@ test("edits text, font, color, alignment, outline, background through the store"
   expect(ov().fontId).toBe("anton");
   await fireEvent.press(screen.getByLabelText("Color #F5C542"));
   expect(ov().color).toBe("#F5C542");
-  await fireEvent.press(screen.getByRole("button", { name: "Align left" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Align Left" }));
   expect(ov().align).toBe("left");
   await fireEvent(screen.getByLabelText("Outline"), "valueChange", false);
   expect(ov().outline).toBe(false);

@@ -30,7 +30,7 @@ export function AdjustSheet({ clipId, visible, onClose }: { clipId: string | nul
   return (
     <ToolStrip visible={visible} onClose={onClose} title="Adjust"
       // "Apply to all" writes the main clips: it is not offered for a layer.
-      action={layer ? undefined : { label: "Apply to all", onPress: () => { haptic("light"); apply((p) => setAdjustForAllClips(p, clip.adjust)); } }}>
+      action={layer ? undefined : { label: "Apply to All", onPress: () => { haptic("light"); apply((p) => setAdjustForAllClips(p, clip.adjust)); } }}>
       <StripTiles>
         {ADJUST_KEYS.map((k) => (
           <Chip key={k} label={clip.adjust[k] !== 0 ? `${ADJUST_LABELS[k]} •` : ADJUST_LABELS[k]} accessibilityLabel={ADJUST_LABELS[k]} selected={key === k} onPress={() => setKey(k)} />

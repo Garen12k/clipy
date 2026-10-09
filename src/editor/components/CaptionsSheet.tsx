@@ -45,7 +45,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
             <Body>Captions need the native build</Body>
             <Body muted>Transcription runs on your iPhone with Apple&apos;s speech recognizer, which Expo Go can&apos;t load.</Body>
             {/* The looks can still be tried here: the style panel previews them on its sample. */}
-            <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
+            <SecondaryButton title="Style Captions" onPress={() => setStyling(true)} />
           </View>
         )}
 
@@ -55,7 +55,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
             {/* Stacked like the "done" branch: three uppercase buttons don't fit one row in a panel. All three compact (36): the card
                 is then 166 pt (a line of text + 3 gaps of 12 + 3 × 36 + 4 under Cancel for its hit slop) in a body that shows 171, so nothing scrolls; at 48 it would be 198. */}
             <PrimaryButton compact title="Replace" onPress={start} />
-            <SecondaryButton compact title="Style captions" onPress={() => setStyling(true)} />
+            <SecondaryButton compact title="Style Captions" onPress={() => setStyling(true)} />
             <QuietButton compact title="Cancel" onPress={close} />
           </View>
         )}
@@ -85,7 +85,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
                 No speech found in: {state.skipped.map((id) => `clip ${clipIds.indexOf(id) + 1}`).join(", ")}
               </Body>
             )}
-            <SecondaryButton title="Style captions" onPress={() => setStyling(true)} />
+            <SecondaryButton title="Style Captions" onPress={() => setStyling(true)} />
           </View>
         )}
 
@@ -94,7 +94,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
             <Body>{state.message}</Body>
             {state.code === "E_SPEECH_DENIED"
               ? <PrimaryButton title="Open Settings" onPress={() => { Linking.openSettings(); }} />
-              : <PrimaryButton title="Try again" onPress={start} />}
+              : <PrimaryButton title="Try Again" onPress={start} />}
           </View>
         )}
       </ToolPanel>

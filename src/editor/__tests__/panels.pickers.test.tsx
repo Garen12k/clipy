@@ -32,7 +32,7 @@ describe("Templates", () => {
     expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: panelHeight("regular", H) - 1 });
     expect(screen.getByTestId("tool-panel-body")).toHaveStyle({ height: panelHeight("regular", H) - 1 - PANEL.header - PANEL.lead });
     expect(screen.queryByLabelText("Close sheet")).toBeNull();
-    expect(btn("This clip")).toBeSelected();
+    expect(btn("This Clip")).toBeSelected();
     await fireEvent.press(btn("Done"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -75,7 +75,7 @@ describe("Captions", () => {
     expect(screen.getByRole("header", { name: "Captions" })).toBeTruthy();
     expect(screen.getByTestId("tool-panel")).toHaveStyle({ height: 239 });
     expect(screen.queryByLabelText("Close sheet")).toBeNull();
-    await fireEvent.press(btn("Style captions"));
+    await fireEvent.press(btn("Style Captions"));
     expect(screen.getAllByTestId("tool-panel")).toHaveLength(1);         // one panel at a time
     expect(screen.getByRole("header", { name: "Caption style" })).toBeTruthy();
     expect(screen.queryByRole("header", { name: "Captions" })).toBeNull();
@@ -86,7 +86,7 @@ describe("Captions", () => {
 
   test("hidden by its host while styling, it opens on Captions the next time", async () => {
     const view = await render(<CaptionsSheet visible onClose={() => {}} />);
-    await fireEvent.press(btn("Style captions"));
+    await fireEvent.press(btn("Style Captions"));
     await view.rerender(<CaptionsSheet visible={false} onClose={() => {}} />);
     expect(screen.queryByTestId("tool-panel")).toBeNull();
     await view.rerender(<CaptionsSheet visible onClose={() => {}} />);

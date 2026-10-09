@@ -20,7 +20,7 @@ beforeEach(() => {
 
 test("a strip's slider is the kit's: themed, and its name and value are one text with the value picked out", async () => {
   await render(<OpacitySheet clipId="a" visible onClose={() => {}} />);
-  expect(screen.getByTestId("opacity-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.sea, thumbTintColor: theme.colors.accent });
+  expect(screen.getByTestId("opacity-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.track, thumbTintColor: theme.colors.accent });
   expect(screen.getByText("Opacity 100 %")).toBeTruthy();
   expect(screen.getByText("100 %")).toHaveStyle({ color: theme.colors.text, fontVariant: ["tabular-nums"] });
 });
@@ -41,7 +41,7 @@ test("Volume ticks at 100 %; the drag is still one undo step and the value is no
 test("Adjust ticks at 0 for a two-sided control; Reset is a quiet button, disabled while nothing is adjusted", async () => {
   await render(<AdjustSheet clipId="a" visible onClose={() => {}} />);
   expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
-  expect(screen.getByText("Reset")).toHaveStyle({ color: theme.colors.accent, textTransform: "uppercase" });
+  expect(screen.getByText("Reset")).toHaveStyle({ color: theme.colors.accent, fontWeight: theme.weight.semi });
   const s = screen.getByTestId("adjust-slider");
   await fireEvent(s, "slidingStart", 0);
   await fireEvent(s, "valueChange", 0.35);

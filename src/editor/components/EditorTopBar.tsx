@@ -14,7 +14,7 @@ export function EditorTopBar({ onExport }: { onExport: () => void }) {
     <View testID="editor-top-bar" style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingLeft: theme.space.sm, paddingRight: theme.space.gutter, paddingBottom: theme.space.sm, gap: theme.space.xs }}>
       <IconButton name="chevron-back-outline" accessibilityLabel="Back" onPress={() => router.back()} />
       <Pressable style={{ flex: 1 }} accessibilityRole="button" accessibilityHint="Rename project" onPress={() => Alert.prompt("Rename project", undefined, (n) => n && apply((p) => renameProject(p, n)), "plain-text", name)}>
-        <Title size={16} numberOfLines={1} style={{ textAlign: "center" }}>{name}</Title>
+        <Title size={theme.type.headline} numberOfLines={1} style={{ textAlign: "center" }}>{name}</Title>
       </Pressable>
       <PrimaryButton compact title="Export" onPress={onExport} />
     </View>

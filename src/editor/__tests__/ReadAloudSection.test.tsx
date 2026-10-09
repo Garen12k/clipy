@@ -60,7 +60,7 @@ test("opened: the languages (the phone's first), the voices of that language (be
   expect(screen.queryByRole("button", { name: "Melina" })).toBeNull();
   expect(screen.getByTestId("read-aloud-speed").props.value).toBe(0.5);
   expect(screen.getByText("Speed Normal")).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Read aloud" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Read Aloud" })).toBeTruthy();
   expect(screen.getByTestId("read-aloud-languages")).toHaveStyle({ height: theme.size.touch });
   expect(screen.getByTestId("read-aloud-voices")).toHaveStyle({ height: theme.size.touch });
 });
@@ -89,7 +89,7 @@ test("Read aloud: the chosen voice and speed go to the phone, one voice bar land
   jest.mocked(speakToFile).mockResolvedValue({ fileUri: "x", seconds: 1.5 });
   await openSection();
   await fireEvent.press(chip("Samantha"));
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   expect(speakToFile).toHaveBeenCalledWith(expect.objectContaining({ text: "Hello there", voiceId: "en.samantha", rate: 0.5 }));
   expect(st().project!.audioTracks).toHaveLength(1);
@@ -100,10 +100,10 @@ test("Read aloud: the chosen voice and speed go to the phone, one voice bar land
 test("while the phone is speaking: a spinner and Stop in the button's place; Stop cancels", async () => {
   jest.mocked(speakToFile).mockReturnValue(new Promise(() => {}));
   await openSection();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   expect(screen.getByLabelText("Preparing the voice")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Read aloud" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Read Aloud" })).toBeNull();
   await fireEvent.press(screen.getByRole("button", { name: "Stop" }));
   expect(cancelSpeech).toHaveBeenCalledTimes(1);
 });
@@ -112,7 +112,7 @@ test("no voices on the phone: it says so and offers no button", async () => {
   jest.mocked(listVoices).mockResolvedValue({ current: "en-US", voices: [] });
   await openSection();
   expect(screen.getByText("No voices are installed on this iPhone.")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Read aloud" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Read Aloud" })).toBeNull();
 });
 
 test("the list cannot be read: it says so, and the row can be closed and opened to try again", async () => {
@@ -120,7 +120,7 @@ test("the list cannot be read: it says so, and the row can be closed and opened 
   await openSection();
   // One sentence in one slot: what happened and what to do about it.
   expect(screen.getByText("Could not read the list of voices. Close and open this row to try again.")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Read aloud" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Read Aloud" })).toBeNull();
   await fireEvent.press(row());
   await fireEvent.press(row());
   await flush();
@@ -178,18 +178,18 @@ test("nothing to read (only an emoji): the reason is said, nothing is asked of t
   st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 20 })], overlays: [makeOverlay({ id: "o1", text: "\u{1F600}", start: 2, end: 5 })] }));
   const before = st().project;
   await openSection();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   expect(useToast.getState().message).toBe("There is nothing to read in this text.");
   expect(speakToFile).not.toHaveBeenCalled();
   expect(st().project).toBe(before);
-  expect(screen.getByRole("button", { name: "Read aloud" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Read Aloud" })).toBeTruthy();
 });
 
 test("a text over the limit: the reason is said and the phone is not asked", async () => {
   st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 20 })], overlays: [makeOverlay({ id: "o1", text: "word ".repeat(250), start: 2, end: 5 })] }));
   await openSection();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   expect(useToast.getState().message).toBe("This text is too long to read aloud.");
   expect(speakToFile).not.toHaveBeenCalled();
@@ -200,7 +200,7 @@ test("the row leaving the screen while the phone is speaking (the panel closed) 
   const view = await render(<ReadAloudSection overlayId="o1" />);
   await fireEvent.press(row());
   await flush();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   await view.unmount();
   await flush();
@@ -216,7 +216,7 @@ test("the panel moving to another text while the phone is speaking cancels: the 
   const view = await render(<ReadAloudSection overlayId="o1" />);
   await fireEvent.press(row());
   await flush();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   await view.rerender(<ReadAloudSection overlayId="o2" />);
   await flush();
@@ -225,7 +225,7 @@ test("the panel moving to another text while the phone is speaking cancels: the 
   await flush();
   expect(st().project!.audioTracks).toHaveLength(0);
   expect(row().props.accessibilityState).toMatchObject({ expanded: true });
-  expect(screen.getByRole("button", { name: "Read aloud" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Read Aloud" })).toBeTruthy();
   expect(useToast.getState().message).toBeNull();
 });
 
@@ -233,35 +233,35 @@ test("the words changed while the phone was speaking: no bar, and it says why", 
   let answer: (v: { fileUri: string; seconds: number }) => void = () => {};
   jest.mocked(speakToFile).mockReturnValue(new Promise((r) => { answer = r; }));
   await openSection();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   await act(async () => { st().apply((x) => ({ ...x, overlays: x.overlays.map((o) => (o.id === "o1" ? ({ ...o, text: "Hello there, you" } as typeof o) : o)) })); });
   await act(async () => { answer({ fileUri: "x", seconds: 1.5 }); });
   await flush();
   expect(st().project!.audioTracks).toHaveLength(0);
   expect(useToast.getState().message).toBe("The text changed, so nothing was read. Tap Read aloud again.");
-  expect(screen.getByRole("button", { name: "Read aloud" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Read Aloud" })).toBeTruthy();
 });
 
 test("Stop says nothing more, even when the words had changed", async () => {
   jest.mocked(speakToFile).mockReturnValue(new Promise(() => {}));
   await openSection();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   await act(async () => { st().apply((x) => ({ ...x, overlays: x.overlays.map((o) => (o.id === "o1" ? ({ ...o, text: "Other words" } as typeof o) : o)) })); });
   await fireEvent.press(screen.getByRole("button", { name: "Stop" }));
   await flush();
   expect(useToast.getState().message).toBeNull();
-  expect(screen.getByRole("button", { name: "Read aloud" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Read Aloud" })).toBeTruthy();
 });
 
 test("a second reading with another voice replaces the bar: one bar, one more undo step", async () => {
   jest.mocked(speakToFile).mockResolvedValue({ fileUri: "x", seconds: 1.5 });
   await openSection();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   await fireEvent.press(chip("Samantha"));
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   expect(speakToFile).toHaveBeenCalledTimes(2);
   expect(st().project!.audioTracks).toHaveLength(1);
@@ -272,7 +272,7 @@ test("closing the row while the phone is speaking ends the reading first: the ph
   let answer: (v: { fileUri: string; seconds: number }) => void = () => {};
   jest.mocked(speakToFile).mockReturnValue(new Promise((r) => { answer = r; }));
   await openSection();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   expect(screen.getByLabelText("Preparing the voice")).toBeTruthy();
   await fireEvent.press(row());
@@ -288,7 +288,7 @@ test("closing the row while the phone is speaking ends the reading first: the ph
   await fireEvent.press(row());
   await flush();
   expect(screen.queryByLabelText("Preparing the voice")).toBeNull();
-  expect(screen.getByRole("button", { name: "Read aloud" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Read Aloud" })).toBeTruthy();
   expect(listVoices).toHaveBeenCalledTimes(1);                // the list it had is still good
 });
 
@@ -302,10 +302,10 @@ test("closing the row with nothing under way tells the phone nothing", async () 
 test("the sentence after a reading: a first one is on the audio row under the text, a second one was replaced", async () => {
   jest.mocked(speakToFile).mockResolvedValue({ fileUri: "x", seconds: 1.5 });
   await openSection();
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   expect(useToast.getState().message).toBe("The voice is on the audio row, under the text.");
-  await fireEvent.press(screen.getByRole("button", { name: "Read aloud" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Read Aloud" }));
   await flush();
   expect(useToast.getState().message).toBe("The voice was replaced on the audio row.");
 });

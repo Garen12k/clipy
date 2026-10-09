@@ -28,7 +28,7 @@ const open = async (id: string, clipIds?: string[]) => {
   await act(() => { st().select(id); });
   await render(<SpeedSheet clipId={id} clipIds={clipIds} visible onClose={() => {}} />);
 };
-const openTab = async (id: string) => { await open(id); await fireEvent.press(chip("Slow motion")!); };
+const openTab = async (id: string) => { await open(id); await fireEvent.press(chip("Slow Motion")!); };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -57,19 +57,19 @@ test("the Slow motion tab is there only while the clip is slowed, and never for 
   await open("a");
   expect(chip("Normal")).toBeTruthy();
   expect(chip("Curve")).toBeTruthy();
-  expect(chip("Slow motion")).toBeNull();
+  expect(chip("Slow Motion")).toBeNull();
   await act(() => { st().apply((p) => setClipSpeed(p, "a", 0.5)); });
-  expect(chip("Slow motion")).toBeTruthy();
+  expect(chip("Slow Motion")).toBeTruthy();
   await act(() => { st().apply((p) => setClipSpeed(p, "a", 1)); });
-  expect(chip("Slow motion")).toBeNull();
+  expect(chip("Slow Motion")).toBeNull();
   await screen.unmount();
   await open("slow", ["slow", "long"]);
-  expect(chip("Slow motion")).toBeNull();
+  expect(chip("Slow Motion")).toBeNull();
 });
 
 test("the tab holds one switch and one status line; switching on is one undo step and only writes the switch", async () => {
   await openTab("slow");
-  expect(chip("Slow motion")).toBeSelected();
+  expect(chip("Slow Motion")).toBeSelected();
   expect(screen.getByText("Smooth slow motion")).toBeTruthy();
   expect(screen.getByText("Fills the gaps between frames with blended ones. The copy takes about 11 MB.")).toBeTruthy();
   expect(screen.queryByTestId("speed-slider")).toBeNull();
@@ -94,7 +94,7 @@ test("switching on asks again for a copy that failed before", async () => {
 test("a clip that stops being slowed while its tab is open falls back to Normal", async () => {
   await openTab("slow");
   await act(() => { st().apply((p) => setClipSpeed(p, "slow", 1)); });
-  expect(chip("Slow motion")).toBeNull();
+  expect(chip("Slow Motion")).toBeNull();
   expect(chip("Normal")).toBeSelected();
   expect(screen.getByTestId("speed-slider")).toBeTruthy();
 });
@@ -137,7 +137,7 @@ test("a clip that fell back to Normal stays there when the slider slows it again
   await fireEvent(slider, "slidingStart", 1);
   await fireEvent(slider, "valueChange", 0.5);
   expect(item("slow").speed).toBe(0.5);
-  expect(chip("Slow motion")).toBeTruthy();
+  expect(chip("Slow Motion")).toBeTruthy();
   expect(chip("Normal")).toBeSelected();
   expect(screen.getByTestId("speed-slider")).toBeTruthy();
   await fireEvent(slider, "slidingComplete", 0.5);
@@ -169,7 +169,7 @@ test("a drag that takes the clip to 1× and over loses the Slow motion chip and 
   const slider = screen.getByTestId("speed-slider");
   await fireEvent(slider, "slidingStart", 0.5);
   await fireEvent(slider, "valueChange", 1.5);
-  expect(chip("Slow motion")).toBeNull();
+  expect(chip("Slow Motion")).toBeNull();
   expect(chip("Normal")).toBeSelected();
   await fireEvent(slider, "slidingComplete", 1.5);
   expect(holds()).toEqual([true, false]);
@@ -213,13 +213,13 @@ test("a reversed clip has no Slow motion tab, however slow it is; reversed while
   await render(<SpeedSheet clipId="rev" visible onClose={() => {}} />);
   expect(chip("Normal")).toBeTruthy();
   expect(chip("Curve")).toBeTruthy();
-  expect(chip("Slow motion")).toBeNull();
+  expect(chip("Slow Motion")).toBeNull();
   await screen.unmount();
   await act(() => { st().select("fwd"); });
   await render(<SpeedSheet clipId="fwd" visible onClose={() => {}} />);
-  await fireEvent.press(chip("Slow motion")!);
+  await fireEvent.press(chip("Slow Motion")!);
   expect(screen.queryByLabelText("Smooth slow motion")).toBeTruthy();
   await act(() => { st().apply((p) => ({ ...p, clips: p.clips.map((c) => (c.id === "fwd" ? { ...c, reversed: true } : c)) })); });
-  expect(chip("Slow motion")).toBeNull();
+  expect(chip("Slow Motion")).toBeNull();
   expect(screen.queryByLabelText("Smooth slow motion")).toBeNull();
 });

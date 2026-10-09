@@ -20,7 +20,7 @@ export function BackgroundSheet({ clipId, visible, onClose }: { clipId: string |
   const isColor = (c: string) => bg.type === "color" && bg.color.toUpperCase() === c.toUpperCase();
 
   return (
-    <ToolStrip visible={visible} onClose={onClose} title="Background" action={{ label: "Apply to all", onPress: () => { haptic("light"); apply((p) => setBackgroundForAllClips(p, clip.background)); } }}>
+    <ToolStrip visible={visible} onClose={onClose} title="Background" action={{ label: "Apply to All", onPress: () => { haptic("light"); apply((p) => setBackgroundForAllClips(p, clip.background)); } }}>
       <StripTiles>
         <PressableScale lifted={bg.type === "black"} accessibilityRole="button" accessibilityLabel="Black" accessibilityState={{ selected: bg.type === "black" }} onPress={() => choose({ type: "black" })}
           style={[{ width: SWATCH, height: SWATCH, borderRadius: SWATCH / 2, backgroundColor: CONTENT_BLACK, borderWidth: 1, borderColor: theme.colors.hairline }, ringOrClear(bg.type === "black")]} />

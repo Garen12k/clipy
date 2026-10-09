@@ -18,7 +18,8 @@ import { TemplateStrip, TEXT_TEMPLATE_TILES } from "./TemplateStrip";
 import { TextStyleSection } from "./TextStyleSection";
 
 type Props = { overlayId: string | null; visible: boolean; onClose: () => void; onRetarget?: (id: string) => void };
-const field = { backgroundColor: theme.elevation.tile, color: theme.colors.text, borderRadius: theme.radius.chip, fontFamily: theme.fonts.body, padding: theme.space.md, fontSize: 16, minWidth: 72 } as const;
+const field = { backgroundColor: theme.elevation.tile, color: theme.colors.text, borderRadius: theme.radius.field, padding: theme.space.md, fontSize: 16, minWidth: 72 } as const;
+const ALIGN_LABEL: Record<Align, string> = { left: "Align Left", center: "Align Center", right: "Align Right" };
 
 export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
   const found = useEditorStore((s) => s.project?.overlays.find((o) => o.id === overlayId) ?? null);
@@ -74,11 +75,11 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
         <Slider testID="size-slider" minimumValue={OVERLAY_LIMITS.fontScale[0]} maximumValue={OVERLAY_LIMITS.fontScale[1]} value={overlay.fontScale} {...sizeSlider} /></View>
       <ColorRow value={overlay.color} onChange={(color) => patch({ color })} />
       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: theme.space.md }}>
-        {(["left", "center", "right"] as Align[]).map((a) => <Chip key={a} label={`Align ${a}`} selected={overlay.align === a} onPress={() => patch({ align: a })} />)}
+        {(["left", "center", "right"] as Align[]).map((a) => <Chip key={a} label={ALIGN_LABEL[a]} selected={overlay.align === a} onPress={() => patch({ align: a })} />)}
       </View>
       <Pressable onPress={() => setFine((f) => !f)} accessibilityRole="button" hitSlop={12} style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
-        <Body style={{ color: theme.colors.sea }}>Fine-tune</Body>
-        <Body style={{ color: theme.colors.sea }}>{fine ? "▲" : "▼"}</Body>
+        <Body style={{ color: theme.colors.accent }}>Fine-tune</Body>
+        <Body style={{ color: theme.colors.accent }}>{fine ? "▲" : "▼"}</Body>
       </Pressable>
       {fine && (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.md }}>

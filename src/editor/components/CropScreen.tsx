@@ -133,7 +133,7 @@ function CropEditor({ clip, onClose }: { clip: Clip; onClose: () => void }) {
     <Screen edges={["top", "bottom"]}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.lg, gap: theme.space.md }}>
         <SecondaryButton title="Cancel" onPress={onClose} />
-        <Title size={18} accessibilityRole="header">Crop</Title>
+        <Title size={theme.type.headline} accessibilityRole="header">Crop</Title>
         <PrimaryButton title="Done" compact onPress={done} />
       </View>
 

@@ -52,7 +52,7 @@ export function ClipAnimationSheet({ clipId, visible, onClose }: { clipId: strin
   return (
     <ToolStrip visible={visible} onClose={onClose} title="Animation"
       // "Apply to all" writes the main clips: it is not offered for a layer.
-      action={layer ? undefined : { label: "Apply to all clips", onPress: () => { haptic("light"); apply((p) => setAnimationForAllClips(p, clip.animation)); } }}>
+      action={layer ? undefined : { label: "Apply to All Clips", onPress: () => { haptic("light"); apply((p) => setAnimationForAllClips(p, clip.animation)); } }}>
       <StripTiles key={tab} initialX={startX} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
         {tab === "combo"
           ? <AnimationTiles ids={comboIds} registry={ANIM_COMBO} selected={anim.combo} onPick={pickCombo} />

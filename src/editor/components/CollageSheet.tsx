@@ -64,7 +64,7 @@ export function CollageSheet({ clipId, visible, onClose }: { clipId: string | nu
 
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Collage" size="compact" scroll={false}
-      action={tag && stale ? { label: "Fit to frame", onPress: () => { haptic("light"); apply((p) => relayCollage(p, tag.group, {})); } } : undefined}>
+      action={tag && stale ? { label: "Fit to Frame", onPress: () => { haptic("light"); apply((p) => relayCollage(p, tag.group, {})); } } : undefined}>
       {/* A fixed slot over the header's free middle: the spinner shows in it while the collage is being made, and nothing moves. */}
       <View testID="collage-busy-slot" pointerEvents="none" style={{ position: "absolute", top: -PANEL.header, left: 0, right: 0, height: PANEL.header, alignItems: "center", justifyContent: "center" }}>
         {busy ? <Spinner label="Making the collage" /> : null}

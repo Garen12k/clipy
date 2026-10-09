@@ -29,7 +29,7 @@ beforeEach(() => {
 
 test("the text panel's sliders are the kit's and its Size line is one text with the value picked out", async () => {
   await render(<TextPanel overlayId="t" visible onClose={() => {}} />);
-  expect(screen.getByTestId("size-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.sea });
+  expect(screen.getByTestId("size-slider").props).toMatchObject({ minimumTrackTintColor: theme.colors.accent, maximumTrackTintColor: theme.colors.track });
   const overlay = st().project!.overlays[0] as TextOverlay;
   const pct = `${Math.round(overlay.fontScale * 100)}%`;
   expect(screen.getByText(`Size ${pct}`)).toBeTruthy();
@@ -53,6 +53,6 @@ test("fields and font chips sit on the tile surface, on the scale; the chosen fo
 test("Add audio: a row's button is outlined, not a chip, and the list has no gold button", async () => {
   await render(<AddAudioSheet visible onClose={() => {}} />);
   const use = screen.getAllByRole("button", { name: /^Use / })[0];
-  expect(use).toHaveStyle({ height: theme.size.controlCompact, borderWidth: 1.5 });
+  expect(use).toHaveStyle({ height: theme.size.controlCompact, backgroundColor: theme.elevation.lifted });
   expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
 });

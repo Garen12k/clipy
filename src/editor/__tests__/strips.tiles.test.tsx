@@ -42,7 +42,7 @@ test("the notes sit in the strip's header", async () => {
   const view = await render(<BlendSheet clipId="L" visible onClose={() => {}} />);
   expect(screen.getByText("Shows in the exported video")).toBeTruthy();
   await view.rerender(<BackgroundSheet clipId="a" visible onClose={() => {}} />);
-  expect(screen.getByRole("button", { name: "Apply to all" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Apply to All" })).toBeTruthy();
   await view.rerender(<RatioSheet visible onClose={() => {}} />);
   expect(screen.getByText("Auto fits your first clip. 9:16 for TikTok, Reels and Shorts. 16:9 for YouTube.")).toBeTruthy();
 });

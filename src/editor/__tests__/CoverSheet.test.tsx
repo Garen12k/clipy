@@ -6,6 +6,7 @@ jest.mock("expo-media-library/legacy", () => ({ requestPermissionsAsync: jest.fn
 import { requestPermissionsAsync, saveToLibraryAsync } from "expo-media-library/legacy";
 import { Dimensions, PixelRatio } from "react-native";
 import { captureRef, releaseCapture } from "react-native-view-shot";
+import { COVER_FONT } from "@/src/editor/coverFont";
 import { frameUriAt } from "@/src/editor/coverFrame";
 import * as timeline from "@/src/editor/model/timeline";
 import { makeClip, makeProject, type Cover } from "@/src/editor/model/types";
@@ -63,6 +64,7 @@ test("opens on the stored cover (read clamped, nothing written)", async () => {
   expect(slider().props.value).toBe(10);
   expect(field().props.value).toBe("Trip");
   expect(screen.getByTestId("cover-title")).toHaveTextContent("Trip");
+  expect(screen.getByTestId("cover-title")).toHaveStyle({ fontFamily: COVER_FONT });   // the cover is the owner's content: it keeps its own font
   expect(state().project!.cover).toEqual({ time: 99, title: "Trip" });
   expect(state().past).toHaveLength(0);
 });
@@ -418,7 +420,7 @@ describe("look", () => {
     await open();
     expect(field()).toHaveStyle({ backgroundColor: theme.elevation.tile, fontSize: theme.type.input, paddingHorizontal: theme.space.md, paddingVertical: theme.space.md });
     expect(field()).toHaveProp("placeholder", "Add a title");
-    expect(slider()).toHaveProp("maximumTrackTintColor", theme.colors.sea);
+    expect(slider()).toHaveProp("maximumTrackTintColor", theme.colors.track);
     expect(slider()).toHaveProp("minimumTrackTintColor", theme.colors.accent);
     expect(screen.getByText("0 / 40")).toHaveStyle({ fontSize: theme.type.small });
     expect(screen.getByRole("button", { name: "Reset" })).not.toHaveStyle({ borderWidth: 1.5 });
