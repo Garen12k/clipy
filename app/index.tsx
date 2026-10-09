@@ -15,11 +15,12 @@ import { QuickEditSheet } from "@/src/projects/QuickEditSheet";
 import { useProjects } from "@/src/projects/useProjects";
 import type { PickedAsset, ProjectSummary } from "@/src/projects";
 import { pickVideoForPost } from "@/src/publish/pickVideo";
-import { theme } from "@/src/theme/theme";
+import { glassTint, theme } from "@/src/theme/theme";
 import { useSurfaces } from "@/src/ui/tone";
 import { DISABLED_OPACITY } from "@/src/ui/buttonStyle";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { EnterView } from "@/src/ui/Enter";
+import { Glass } from "@/src/ui/Glass";
 import { haptic } from "@/src/ui/haptics";
 import { IconButton } from "@/src/ui/IconButton";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
@@ -147,10 +148,11 @@ function ProjectsScreen() {
       <View testID="home-header" style={{ paddingHorizontal: theme.space.gutter, marginBottom: theme.space.sm, gap: theme.space.xs }}>
         <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
           {/* 44 pt high; each button is 40 with slop that stays inside the pill, so each target is 44 by 44. */}
-          <View testID="home-header-actions" pointerEvents={touch} style={{ height: theme.size.touch, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.xs, borderRadius: theme.radius.pill, backgroundColor: s.bar, opacity: dim }}>
+          {/* Glass where the phone has it (GLASS.home); while it is dimmed it is the solid colour — glass is never drawn under an opacity. */}
+          <Glass side="home" color={s.bar} tint={glassTint(s)} testID="home-header-actions" pointerEvents={touch} style={{ height: theme.size.touch, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.xs, borderRadius: theme.radius.pill, opacity: dim }}>
             <IconButton name="paper-plane-outline" accessibilityLabel="Post a video" onPress={onPostVideo} />
             <IconButton name="person-circle-outline" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
-          </View>
+          </Glass>
         </View>
         <Title size={theme.type.screen} accessibilityRole="header" style={{ lineHeight: theme.text.largeTitle.leading }}>Projects</Title>
       </View>
@@ -186,10 +188,10 @@ function ProjectsScreen() {
           </View>
         ) : (
           <>
-            {/* The grey button has its own fill; the pill behind it only keeps it readable over the cards. */}
-            <View style={{ borderRadius: theme.radius.pill, backgroundColor: s.bar }}>
-              <SecondaryButton title="Quick Edit" icon={<Icon name="color-wand-outline" size={theme.size.icon.md} color={s.text} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onQuick} />
-            </View>
+            {/* The grey button has its own fill; the pill behind it only keeps it readable over the cards. As glass (GLASS.home) the pill IS the button's fill. */}
+            <Glass side="home" color={s.bar} tint={glassTint(s)} testID="home-quick-backing" glassRadius={theme.size.control / 2} style={{ borderRadius: theme.radius.pill }}>
+              <SecondaryButton glass="home" title="Quick Edit" icon={<Icon name="color-wand-outline" size={theme.size.icon.md} color={s.text} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onQuick} />
+            </Glass>
             <PrimaryButton title="New Project" icon={<Icon name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
           </>
         )}

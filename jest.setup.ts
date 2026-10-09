@@ -2,6 +2,9 @@
 // the main module is imported (e.g. via `render` in a test file), so no
 // separate "extend-expect" import is needed here.
 
+// The test phone is older than Liquid Glass (iOS 26): every suite sees the SOLID app — the pixels it had before the glass trial —
+// whatever `GLASS` in theme.ts says. The suites about glass say otherwise themselves (Glass*.test.tsx, home.glass, toolbar.glass).
+jest.mock("expo-glass-effect", () => ({ GlassView: require("react-native").View, GlassContainer: require("react-native").View, isLiquidGlassAvailable: () => false, isGlassEffectAPIAvailable: () => false }));
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], isLoaded: () => true }));
 // Audio feature deps: harmless defaults so suites that mount EditorToolbar (which always
 // renders AddAudioSheet) don't need to know about them. AddAudioSheet.test.tsx overrides these
