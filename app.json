@@ -6,11 +6,17 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "clipy",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0A1B33",
     "ios": {
       "bundleIdentifier": "com.astinos.clipy",
       "supportsTablet": false,
       "usesAppleSignIn": true,
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSSpeechRecognitionUsageDescription": "Clipy turns speech in your clips into captions.",
@@ -18,13 +24,18 @@
       }
     },
     "plugins": [
+      "./plugins/withoutPushEntitlement",
       "expo-router",
       [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0A1B33"
+          "backgroundColor": "#0A1B33",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0A1B33"
+          }
         }
       ],
       "expo-video",

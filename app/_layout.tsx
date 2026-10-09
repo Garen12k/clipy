@@ -6,10 +6,13 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { coverFontAssets } from "@/src/editor/coverFont";
 import { fontAssets } from "@/src/editor/fonts";
 import { ROUTE_NAMES, ROUTE_OPTIONS, STACK_OPTIONS } from "@/src/navigation/screenOptions";
+import { applyAppearance } from "@/src/theme/appearance";
 import { theme } from "@/src/theme/theme";
 import { LoadingScreen } from "@/src/ui/LoadingScreen";
 import { useAppReady } from "@/src/ui/useAppReady";
 
+// The installed app follows the phone's appearance; until the light palette exists the app says "dark" itself (src/theme/appearance.ts).
+applyAppearance();
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
