@@ -1,14 +1,21 @@
-import { ApiError, PlatformError } from "../errors.ts";
+import { ApiError, isRejectionStatus, isTemporaryStatus, plainCode, PlatformError } from "../errors.ts";
 import type { AdapterCtx, CreatorInfo, PrepareInput, PrepareResult, PublishResult, ServerAdapter, TikTokPrivacy, Tokens } from "../types.ts";
 import { FORM, formBody } from "./http.ts";
 
 const API = "https://open.tiktokapis.com";
-/**
- * `video.upload` sends a draft to the inbox; `video.publish` is Direct Post ("Post now") and creator info. An account connected
- * before `video.publish` was asked for keeps working for drafts. Comma-separated, as TikTok requires.
- */
-const SCOPES = "user.info.basic,video.upload,video.publish";
+/** What connecting asks for while Post now is off: `video.upload` sends a draft to the inbox. Comma-separated, as TikTok requires. */
+const SCOPES = "user.info.basic,video.upload";
+/** Direct Post ("Post now") and creator info. Asked for ONLY while the switch below is on; an account without it keeps working for drafts. */
 export const DIRECT_SCOPE = "video.publish";
+/**
+ * Post now is switched on by the server secret `TIKTOK_DIRECT_POST=true`, set only after Direct Post and `video.publish` are enabled
+ * for the app in TikTok's portal (TikTok refuses a connect that asks for a scope the app does not have). Absent or anything else:
+ * connecting asks for exactly the two draft scopes, and Post now answers `direct_off`. Drafts never read it.
+ */
+const directOn = (c: AdapterCtx) => c.env.get("TIKTOK_DIRECT_POST") === "true";
+export const DIRECT_OFF = "Posting straight to TikTok isn't switched on yet. Choose Send as draft.";
+/** A plain ApiError, like `needs_permission`: nothing is wrong with the account, so it is never flagged. */
+const directOff = () => new ApiError(409, "direct_off", DIRECT_OFF);
 const DRAFT_SCOPE = "video.upload";
 /** The stored grant as a list: TikTok separates with commas; white space is accepted too. */
 export const scopeList = (scopes: string): string[] => scopes.split(/[\s,]+/).filter(Boolean);
@@ -67,6 +74,15 @@ const DIRECT_FAILED: Record<string, string> = {
 };
 /** On a direct call these mean "the grant has no video.publish": the account still posts drafts. */
 const DIRECT_SCOPE_CODES = ["scope_not_authorized", "scope_permission_missed"];
+/** A direct call refused with a code this file does not know: never TikTok's own text, never the bare code. */
+const DIRECT_REFUSED = "TikTok didn't accept this. Try again later, or choose Send as draft in the TikTok options.";
+/** A direct post that FAILED for a reason this file does not know. */
+const DIRECT_UNUSABLE = "TikTok couldn't use this video.";
+/** A direct post's status call refused without a verdict: the post may be live. */
+const DIRECT_UNCONFIRMED = "TikTok couldn't confirm this post. Check your TikTok profile before posting again.";
+const CONNECT_REFUSED = "TikTok didn't let Clipy connect. Try again in a few minutes.";
+/** The raw code of something this file has no sentence for goes to the server log only (a code, never a token or TikTok's text). */
+const logCode = (what: string, code: string) => console.error(`tiktok ${what}: ${plainCode(code)}`);
 
 const key = (c: AdapterCtx) => c.env.get("TIKTOK_CLIENT_KEY") ?? "";
 const secret = (c: AdapterCtx) => c.env.get("TIKTOK_CLIENT_SECRET") ?? "";
@@ -88,6 +104,14 @@ function fail(status: number, code: string, message: string, friendly: Record<st
   e.reason = code;
   throw e;
 }
+/** A refused direct call: the listed sentence, else "busy" for a temporary status, else one generic sentence. */
+function failDirect(status: number, code: string): never {
+  const known = DIRECT_FRIENDLY[code];
+  if (!known && code !== "access_token_invalid") logCode("direct call refused", code);
+  const e = new PlatformError("tiktok", status, known ?? (isTemporaryStatus(status) ? BUSY : DIRECT_REFUSED));
+  e.reason = code;
+  throw e;
+}
 /** OAuth endpoints answer with a flat `{ error, error_description }`; TikTok does not document the HTTP status, so a 200 can carry one too. */
 async function oauthJson(res: Response): Promise<Record<string, unknown>> {
   const b = await body(res);
@@ -104,8 +128,14 @@ async function apiJson(res: Response, direct = false): Promise<Record<string, un
   const err = (typeof b.error === "object" && b.error !== null ? b.error : {}) as { code?: unknown; message?: unknown };
   const code = typeof err.code === "string" ? err.code : res.ok ? "ok" : `http_${res.status}`;
   if (!res.ok || code !== "ok") {
-    if (direct && DIRECT_SCOPE_CODES.includes(code)) throw needsPermission();
-    fail(res.ok ? ((direct ? DIRECT_STATUS : CODE_STATUS)[code] ?? 400) : res.status, code, typeof err.message === "string" ? err.message : "", direct ? DIRECT_FRIENDLY : FRIENDLY);
+    if (direct) {
+      const status = res.ok ? (DIRECT_STATUS[code] ?? 400) : res.status;
+      // Only `access_token_invalid` says the token itself is bad. Any other 401 on a direct call is taken as the missing permission:
+      // the account still posts drafts, so merely opening Post now must never flag it "Sign-in expired".
+      if (DIRECT_SCOPE_CODES.includes(code) || (status === 401 && code !== "access_token_invalid")) throw needsPermission();
+      failDirect(status, code);
+    }
+    fail(res.ok ? (CODE_STATUS[code] ?? 400) : res.status, code, typeof err.message === "string" ? err.message : "");
   }
   return (typeof b.data === "object" && b.data !== null ? b.data : {}) as Record<string, unknown>;
 }
@@ -118,12 +148,26 @@ const authed = (accessToken: string) => ({ Authorization: `Bearer ${accessToken}
 async function fetchStatus(c: AdapterCtx, accessToken: string, ref: Record<string, unknown>): Promise<PublishResult> {
   // Asking again cannot repair a missing reference: final (`platform_error`), so the phone starts a fresh upload.
   if (typeof ref.publishId !== "string" || !ref.publishId) throw new PlatformError("tiktok", 502, "TikTok upload reference is missing.", "platform_error");
-  const data = await apiJson(await c.fetch(`${API}/v2/post/publish/status/fetch/`, { method: "POST", headers: authed(accessToken), body: JSON.stringify({ publish_id: ref.publishId }) }));
+  let data: Record<string, unknown>;
+  try { data = await apiJson(await c.fetch(`${API}/v2/post/publish/status/fetch/`, { method: "POST", headers: authed(accessToken), body: JSON.stringify({ publish_id: ref.publishId }) })); }
+  catch (e) {
+    // Direct Post only: the status CALL was refused, which is no verdict on the post — it may be live. Final for this session, with its
+    // own code so the phone says "check your profile" and never "Retry will upload the video again". An auth error stays what it is.
+    if (ref.direct === true && e instanceof PlatformError && isRejectionStatus(e.status) && !AUTH_CODES.includes(e.reason ?? "")) {
+      logCode("direct status refused", e.reason ?? "");
+      const unknown = new PlatformError("tiktok", e.status, DIRECT_UNCONFIRMED, "outcome_unknown");
+      unknown.reason = e.reason;
+      throw unknown;
+    }
+    throw e;
+  }
   if (data.status === "FAILED") {
     const reason = typeof data.fail_reason === "string" && data.fail_reason ? data.fail_reason : "unknown";
     // FAILED is final for this publish_id (asking again returns FAILED again), so even TikTok's own `internal` failure stays a 400:
     // the session fails and the phone's Retry uploads afresh, which is the only retry that can work.
-    const plain = ref.direct === true ? DIRECT_FAILED[reason] : undefined;
+    // A direct post never shows a bare reason: the listed sentence, the shared "internal" one below, or one generic sentence (the reason goes to the log).
+    const plain = ref.direct === true ? (DIRECT_FAILED[reason] ?? (reason === "internal" ? undefined : DIRECT_UNUSABLE)) : undefined;
+    if (plain === DIRECT_UNUSABLE) logCode("direct post failed", reason);
     const e = new PlatformError("tiktok", 400, plain ?? (reason === "internal" ? "TikTok had a problem processing the video." : `TikTok couldn't use this video: ${reason}.`));
     e.reason = reason;
     throw e;
@@ -163,6 +207,7 @@ const turnedOff = (what: string, verb: "are" | "is") => `${what} ${verb} turned 
  * answer before the post is opened. A refusal opens nothing. `video/init` is called once and never repeated.
  */
 async function prepareDirect(c: AdapterCtx, accessToken: string, input: PrepareInput): Promise<PrepareResult> {
+  if (!directOn(c)) throw directOff();
   const o = directOptions(input.options);
   if (input.caption.length > TIKTOK_TITLE_MAX) throw refuse(`TikTok captions can be up to ${TIKTOK_TITLE_MAX} characters.`);
   const info = await queryCreator(c, accessToken);
@@ -193,7 +238,7 @@ export const tiktok: ServerAdapter = {
 
   // TikTok's web flow has no PKCE (code_verifier is for mobile/desktop apps only); the client secret stays on the server and `state` protects the redirect.
   authUrl(c, { state }) {
-    return `https://www.tiktok.com/v2/auth/authorize/?${new URLSearchParams({ client_key: key(c), response_type: "code", scope: SCOPES, redirect_uri: c.redirectUri, state })}`;
+    return `https://www.tiktok.com/v2/auth/authorize/?${new URLSearchParams({ client_key: key(c), response_type: "code", scope: directOn(c) ? `${SCOPES},${DIRECT_SCOPE}` : SCOPES, redirect_uri: c.redirectUri, state })}`;
   },
   async exchange(c, { code }) {
     const res = await c.fetch(`${API}/v2/oauth/token/`, { method: "POST", headers: FORM, body: formBody({ client_key: key(c), client_secret: secret(c), code, grant_type: "authorization_code", redirect_uri: c.redirectUri }) });
@@ -228,8 +273,11 @@ export const tiktok: ServerAdapter = {
   finalize: (c, accessToken, s) => fetchStatus(c, accessToken, s.ref),
   status: (c, accessToken, ref) => fetchStatus(c, accessToken, ref),
   async creatorInfo(c, accessToken, grant) {
+    if (!directOn(c)) throw directOff();
     if (knownToLackDirect(grant.scopes)) throw needsPermission();
     return queryCreator(c, accessToken);
   },
   isAuthError: (e) => AUTH_CODES.includes(e.reason ?? ""),
+  // `access_denied` is the user's own "no" on TikTok's page; anything else is TikTok refusing the request (e.g. a scope the app does not have).
+  connectError: (code) => (code === "access_denied" ? null : CONNECT_REFUSED),
 };

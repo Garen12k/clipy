@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiFailure, type CreatorInfo } from "./api";
 import type { PlatformId } from "./platforms";
 
-export type CreatorState = { status: "idle" } | { status: "loading" } | { status: "ready"; info: CreatorInfo } | { status: "needsPermission" } | { status: "error"; message: string };
+export type CreatorState = { status: "idle" } | { status: "loading" } | { status: "ready"; info: CreatorInfo } | { status: "needsPermission" } | { status: "switchedOff" } | { status: "error"; message: string };
 
 /**
  * What the connected account may post right now, asked from the server only when `load()` is called (the TikTok sheet showing
@@ -22,6 +22,8 @@ export function useCreatorInfo(platform: PlatformId, ask: (platform: PlatformId)
       (e: unknown) => {
         if (!live()) return;
         if (e instanceof ApiFailure && e.code === "needs_permission") setState({ status: "needsPermission" });
+        // Post now is not switched on on the server (`TIKTOK_DIRECT_POST`): nothing to reconnect for, nothing to try again.
+        else if (e instanceof ApiFailure && e.code === "direct_off") setState({ status: "switchedOff" });
         else setState({ status: "error", message: e instanceof Error && e.message ? e.message : "Something went wrong." });
       },
     );

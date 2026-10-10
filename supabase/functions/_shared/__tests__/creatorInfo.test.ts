@@ -5,7 +5,7 @@ import { saveTokens } from "../tokens.ts";
 import type { CreatorInfo } from "../types.ts";
 import { fakeAdapter, fakeDeps, tokens, USER } from "./fakes.ts";
 
-const ENV: Record<string, string> = { TIKTOK_CLIENT_KEY: "ck", TIKTOK_CLIENT_SECRET: "cs", YOUTUBE_CLIENT_ID: "cid", YOUTUBE_CLIENT_SECRET: "secret" };
+const ENV: Record<string, string> = { TIKTOK_CLIENT_KEY: "ck", TIKTOK_CLIENT_SECRET: "cs", TIKTOK_DIRECT_POST: "true", YOUTUBE_CLIENT_ID: "cid", YOUTUBE_CLIENT_SECRET: "secret" };
 const env = { get: (n: string) => ENV[n] };
 const INFO: CreatorInfo = { nickname: "Sunny", username: "sunny", avatarUrl: null, privacyOptions: ["SELF_ONLY"], commentDisabled: false, duetDisabled: true, stitchDisabled: true, maxDurationSec: 300 };
 const profile = { accountId: "o1", displayName: "Mo", avatarUrl: null };
@@ -58,4 +58,18 @@ test("end to end with the real adapter: an old grant is told to reconnect withou
   await expect(creatorInfo(deps, USER, { platform: "tiktok" })).rejects.toMatchObject({ code: "needs_permission" });
   expect(fetchFake).not.toHaveBeenCalled();
   expect((await deps.db.getAccount(USER, "tiktok"))!.meta.needsReconnect).toBeUndefined();
+});
+
+test("end to end with the switch off: one plain refusal, no call to TikTok, the account not flagged — whatever the grant", async () => {
+  const OFF: Record<string, string> = { TIKTOK_CLIENT_KEY: "ck", TIKTOK_CLIENT_SECRET: "cs" };
+  for (const scopes of ["user.info.basic,video.upload", "user.info.basic,video.upload,video.publish"]) {
+    const fetchFake = jest.fn();
+    const deps = fakeDeps({ env: { get: (n: string) => OFF[n] }, fetch: fetchFake as unknown as typeof fetch, adapters: { tiktok } });
+    await saveTokens(deps, USER, "tiktok", tokens({ scopes }), profile);
+    const e = await creatorInfo(deps, USER, { platform: "tiktok" }).catch((x: unknown) => x);
+    expect(e).not.toBeInstanceOf(PlatformError);
+    expect(e).toMatchObject({ status: 409, code: "direct_off", message: "Posting straight to TikTok isn't switched on yet. Choose Send as draft." });
+    expect(fetchFake).not.toHaveBeenCalled();
+    expect((await deps.db.getAccount(USER, "tiktok"))!.meta.needsReconnect).toBeUndefined();
+  }
 });

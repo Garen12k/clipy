@@ -45,3 +45,10 @@ test("the newest request wins, and nothing is set after unmount", async () => {
   await h.unmount();
   await act(async () => { late.resolve(INFO); }); // must not warn or throw
 });
+
+test("Post now switched off on the server is its own state: not an error to retry, not a permission to reconnect for", async () => {
+  const ask = jest.fn().mockRejectedValue(new ApiFailure("direct_off", "Posting straight to TikTok isn't switched on yet. Choose Send as draft."));
+  const h = await renderHook(() => useCreatorInfo("tiktok", ask));
+  await act(async () => { h.result.current.load(); });
+  expect(h.result.current.state).toEqual({ status: "switchedOff" });
+});

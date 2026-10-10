@@ -17,6 +17,7 @@ export const tiktok: ClientAdapter = {
   captionMax: null,
   captionLimit: (options) => (isDirect(options) ? TITLE_MAX : null),
   hasOptions: true,
+  optionsAfterFailure: true,
   defaultOptions: () => ({}),
   sendOptions: (options) => (isDirect(options) ? sendDirect(readDirect(options)) : {}),
   validate(video, _caption, options) {

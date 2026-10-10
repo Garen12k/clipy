@@ -34,6 +34,11 @@ export interface ServerAdapter {
   status(ctx: AdapterCtx, accessToken: string, ref: Record<string, unknown>): Promise<PublishResult>;
   /** What the account may post right now (TikTok Direct Post). `grant.scopes` is the stored scope string. */
   creatorInfo?(ctx: AdapterCtx, accessToken: string, grant: { scopes: string }): Promise<CreatorInfo>;
+  /**
+   * The sentence for an OAuth redirect that came back with `error=<code>`, or null when that code is the user's own "no" (which stays
+   * quiet). A platform without it reports every `error=` as cancelled, as it always did.
+   */
+  connectError?(code: string): string | null;
   /** True when a platform error (besides a 401) means the grant itself is not enough, e.g. a permission was not given: the account must be reconnected. */
   isAuthError?(e: PlatformError): boolean;
 }

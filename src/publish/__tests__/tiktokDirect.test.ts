@@ -1,6 +1,6 @@
 import { clientAdapters } from "../adapters";
 import type { CreatorInfo } from "../api";
-import { BRAND_PICK, BRANDED_PRIVATE, CHOOSE_PRIVACY, consentLine, DIRECT_DONE, DIRECT_NOT_READY, directBlocker, directNote, isDirect, labelLine, OPEN_OPTIONS, PRIVACY_LABEL, readDirect, reconcile, sendDirect, TITLE_MAX } from "../tiktokDirect";
+import { DIRECT_OFF, STOP_MAY_POST, BRAND_PICK, BRANDED_PRIVATE, CHOOSE_PRIVACY, consentLine, DIRECT_DONE, DIRECT_NOT_READY, directBlocker, directNote, isDirect, labelLine, OPEN_OPTIONS, PRIVACY_LABEL, readDirect, reconcile, sendDirect, TITLE_MAX } from "../tiktokDirect";
 
 const video = { fileUri: "file:///v.mp4", fileSize: 10, durationSec: 21, mimeType: "video/mp4" };
 const creator: CreatorInfo = { nickname: "Sunny", username: "sunny", avatarUrl: null, privacyOptions: ["FOLLOWER_OF_CREATOR", "MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"], commentDisabled: false, duetDisabled: true, stitchDisabled: true, maxDurationSec: 300 };
@@ -82,4 +82,10 @@ test("the adapter in direct mode: options, the caption limit, what is sent, the 
   expect(tt.noteFor!(video, ready)).toBe(directNote(video, readDirect(ready)));
   expect(tt.doneNoteFor!({})).toBe("Sent to TikTok — open TikTok to finish posting.");
   expect(tt.doneNoteFor!(ready)).toBe(DIRECT_DONE);
+});
+
+test("the two sentences of the fix wave, and the flag that puts Options on a failed row — TikTok's alone", () => {
+  expect(DIRECT_OFF).toBe("Posting straight to TikTok isn't switched on yet. Choose Send as draft.");
+  expect(STOP_MAY_POST).toBe("If TikTok already has the video, it may still post — check your TikTok profile.");
+  expect(Object.values(clientAdapters).filter((a) => a?.optionsAfterFailure).map((a) => a!.id)).toEqual(["tiktok"]);
 });

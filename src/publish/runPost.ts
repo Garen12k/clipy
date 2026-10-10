@@ -133,6 +133,12 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
     const uploaded = !!info?.uploaded;
     if (signal.aborted && !uploaded) update({ ...IDLE_ROW });
     else if (e instanceof ApiFailure && e.code === "reconnect") update({ phase: "needsReconnect", message: e.message });
+    else if (uploaded && e instanceof ApiFailure && e.code === "outcome_unknown") {
+      // The platform would not say what became of a post that publishes by itself: it may be live. The server's sentence says to
+      // check first; nothing is kept to resume and nothing here invites a second upload.
+      update({ phase: "failed", message: messageOf(e), resumable: false });
+      return null;
+    }
     else if (uploaded && e instanceof ApiFailure && FINAL_AFTER_UPLOAD.has(e.code)) {
       // Nothing left to resume: drop the info so Retry starts over, and say so.
       update({ phase: "failed", message: `${messageOf(e)} Retry will upload the video again.`, resumable: false });

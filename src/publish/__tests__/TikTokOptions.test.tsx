@@ -38,10 +38,23 @@ test("Post now asks for the creator once when it is shown, and shows a spinner m
   expect(screen.queryByText("Who can see it")).toBeNull();
 });
 
-test("a fresh answer is written into the options, dropping only what is no longer possible", async () => {
+// The answer is written into the options by the Post screen (which outlives the sheet), not by the sheet: PostScreen.tiktokDirect.test.tsx.
+test("an answer arriving while the sheet is shown makes the sheet write nothing itself", async () => {
   const { p, view } = setup({ mode: "direct", privacy: "PUBLIC_TO_EVERYONE", allowDuet: true }, ready);
   await view;
-  expect(p.onChange).toHaveBeenCalledWith({ creator: info, privacy: null, allowDuet: false });
+  expect(p.onChange).not.toHaveBeenCalled();
+});
+
+test("switched off on the server: the one sentence, and nothing to press but How to send", async () => {
+  const { p, view } = setup({ mode: "direct" }, { status: "switchedOff" });
+  await view;
+  expect(screen.getByText("Posting straight to TikTok isn't switched on yet. Choose Send as draft.")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Reconnect TikTok" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Try Again" })).toBeNull();
+  expect(screen.queryByText("Who can see it")).toBeNull();
+  expect(screen.queryByText(/one more permission/)).toBeNull();
+  await fireEvent.press(screen.getByRole("button", { name: "Send as draft" }));
+  expect(p.onChange).toHaveBeenLastCalledWith({ mode: "draft" });
 });
 
 test("ready: the account, only the offered choices with NOTHING picked, three switches off, the brand switch off, the consent and the wait", async () => {

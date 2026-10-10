@@ -7,7 +7,8 @@ type Call = { url: string; init: RequestInit };
 function ctx(responses: Response[]): { ctx: AdapterCtx; calls: Call[] } {
   const calls: Call[] = [];
   const f = (async (url: string, init: RequestInit = {}) => { calls.push({ url: String(url), init }); return responses.shift()!; }) as unknown as typeof fetch;
-  const ENV: Record<string, string> = { TIKTOK_CLIENT_KEY: "ck", TIKTOK_CLIENT_SECRET: "cs" };
+  // Post now is switched on by a server secret; every test here runs with it on (off: tiktok.switch.test.ts).
+  const ENV: Record<string, string> = { TIKTOK_CLIENT_KEY: "ck", TIKTOK_CLIENT_SECRET: "cs", TIKTOK_DIRECT_POST: "true" };
   return { ctx: { fetch: f, env: { get: (n) => ENV[n] }, redirectUri: "https://ref.supabase.co/functions/v1/oauth-callback" }, calls };
 }
 const ok = (data: unknown) => new Response(JSON.stringify({ data, error: { code: "ok", message: "" } }), { status: 200 });
@@ -19,6 +20,10 @@ const OPTS = { mode: "direct", privacy: "SELF_ONLY", allowComment: true, allowDu
 const input = (over: Record<string, unknown> = {}, options: Record<string, unknown> = {}) => ({ ...INPUT, fileSize: 25 * 1024 * 1024, caption: "  Beach day #sun  ", ...over, options: { ...OPTS, ...options } });
 const CREATOR_URL = "https://open.tiktokapis.com/v2/post/publish/creator_info/query/";
 const INIT_URL = "https://open.tiktokapis.com/v2/post/publish/video/init/";
+// A refusal this adapter has no sentence for writes its code to the server log (pinned in tiktok.switch.test.ts): kept out of the test output.
+let logged: jest.SpyInstance;
+beforeEach(() => { logged = jest.spyOn(console, "error").mockImplementation(() => {}); });
+afterEach(() => logged.mockRestore());
 
 test("the scope list and the shortcut", () => {
   expect(DIRECT_SCOPE).toBe("video.publish");
@@ -154,7 +159,8 @@ describe("prepare, direct", () => {
     ["spam_risk_too_many_posts", 403, "platform_error", "TikTok says this account has posted too much today. Try again tomorrow, or post from TikTok."],
     ["reached_active_user_cap", 403, "platform_error", "Clipy has reached TikTok's daily limit of accounts that can post. Try again tomorrow, or choose Send as draft in the TikTok options."],
     ["rate_limit_exceeded", 429, "platform_unavailable", "TikTok is busy — wait a minute, then try again."],
-    ["invalid_param", 400, "platform_error", "title is too long"],
+    // An unlisted code never shows TikTok's own text ("title is too long" below) or the bare code.
+    ["invalid_param", 400, "platform_error", "TikTok didn't accept this. Try again later, or choose Send as draft in the TikTok options."],
   ])("init refused with %s, inside a 200 or with its own status", async (code, status, clipy, said) => {
     for (const http of [200, status]) {
       await expect(tiktok.prepare(ctx([creator(), err(code, "title is too long", http)]).ctx, "at", input())).rejects.toMatchObject({ status, code: clipy, reason: code, message: said });
@@ -187,7 +193,7 @@ describe("status, direct", () => {
     ["spam_risk_user_banned_from_posting", "TikTok has stopped this account from posting for now. Open TikTok to see why."],
     ["auth_removed", "TikTok access was removed while posting. Reconnect TikTok and post again."],
     ["internal", "TikTok had a problem processing the video."],
-    ["frame_rate_check_failed", "TikTok couldn't use this video: frame_rate_check_failed."],
+    ["frame_rate_check_failed", "TikTok couldn't use this video."],
   ])("FAILED with %s is final, in plain words", async (reason, said) => {
     await expect(tiktok.status(ctx([st("FAILED", { fail_reason: reason })]).ctx, "at", ref)).rejects.toMatchObject({ status: 400, code: "platform_error", reason, message: said });
   });

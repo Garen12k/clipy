@@ -118,7 +118,7 @@ test("connect / disconnect are ignored while another one is in flight", async ()
   (WebBrowser.openAuthSessionAsync as jest.Mock).mockReturnValueOnce(new Promise((r) => { finish = r; }));
   const h = await renderHook(() => useAccounts(true));
   await waitFor(() => expect(h.result.current.status).toBe("ready"));
-  let first!: Promise<void>;
+  let first!: Promise<unknown>;
   await act(async () => { first = h.result.current.connect("youtube"); });
   expect(h.result.current.busy).toBe("youtube");
   await act(async () => { await h.result.current.connect("youtube"); await h.result.current.disconnect("youtube"); });
@@ -136,4 +136,32 @@ test("disconnect calls the server and refreshes", async () => {
   await act(() => h.result.current.disconnect("youtube"));
   expect(api.disconnect).toHaveBeenCalledWith("youtube");
   expect(api.accounts).toHaveBeenCalledTimes(2);
+});
+
+test("connect says how it ended, so a caller can tell a failure (toast shown) from a connection or a plain close", async () => {
+  (api.oauthStart as jest.Mock).mockResolvedValue("https://x");
+  const h = await renderHook(() => useAccounts(true));
+  await waitFor(() => expect(h.result.current.status).toBe("ready"));
+  const run = async (answer: unknown) => {
+    (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValueOnce(answer);
+    let out: unknown;
+    await act(async () => { out = await h.result.current.connect("youtube"); });
+    return out;
+  };
+  expect(await run({ type: "success", url: "exp://h/--/oauth?status=ok&platform=youtube" })).toBe("ok");
+  expect(await run({ type: "success", url: "exp://h/--/oauth?status=cancelled&platform=youtube" })).toBe("cancelled");
+  expect(await run({ type: "cancel" })).toBe("cancelled");
+  expect(await run({ type: "success", url: "exp://h/--/oauth?status=error&platform=youtube&message=Bad%20Request" })).toBe("error");
+  (WebBrowser.openAuthSessionAsync as jest.Mock).mockRejectedValueOnce(new Error("Browser unavailable"));
+  let thrown: unknown;
+  await act(async () => { thrown = await h.result.current.connect("youtube"); });
+  expect(thrown).toBe("error");
+  // Another connect already running: nothing was shown to the user by this call.
+  let finish!: (v: unknown) => void;
+  (WebBrowser.openAuthSessionAsync as jest.Mock).mockReturnValueOnce(new Promise((r) => { finish = r; }));
+  let first!: Promise<unknown>, second: unknown;
+  await act(async () => { first = h.result.current.connect("youtube"); });
+  await act(async () => { second = await h.result.current.connect("youtube"); });
+  expect(second).toBe("busy");
+  await act(async () => { finish({ type: "cancel" }); await first; });
 });

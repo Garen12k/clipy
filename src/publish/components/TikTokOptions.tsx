@@ -11,7 +11,7 @@ import { Body } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
 import { useSurfaces } from "@/src/ui/tone";
 import type { TikTokPrivacy } from "../api";
-import { ALLOW, BRAND_PICK, BRAND_SWITCH, BRANDED_CONTENT, BRANDED_PRIVATE, BRANDED_URL, CHECKING, consentLine, DRAFT_EXPLAINED, HOW_TO_SEND, isBranded, isDirect, labelLine, MUSIC_URL, NEEDS_PERMISSION_HERE, PRIVACY_LABEL, PRIVACY_ORDER, readDirect, reconcile, SEND_MODES, TAKES_MINUTES, TURNED_OFF, WHO_CAN_SEE, YOUR_BRAND } from "../tiktokDirect";
+import { ALLOW, BRAND_PICK, BRAND_SWITCH, BRANDED_CONTENT, BRANDED_PRIVATE, BRANDED_URL, CHECKING, consentLine, DIRECT_OFF, DRAFT_EXPLAINED, HOW_TO_SEND, isBranded, isDirect, labelLine, MUSIC_URL, NEEDS_PERMISSION_HERE, PRIVACY_LABEL, PRIVACY_ORDER, readDirect, SEND_MODES, TAKES_MINUTES, TURNED_OFF, WHO_CAN_SEE, YOUR_BRAND } from "../tiktokDirect";
 import type { CreatorState } from "../useCreatorInfo";
 
 type Props = { options: Record<string, unknown>; onChange: (patch: Record<string, unknown>) => void; creator: CreatorState; onLoad: () => void; onReconnect: () => void };
@@ -63,7 +63,8 @@ function TickRow({ label, checked, disabled, onPress }: { label: string; checked
 /**
  * The TikTok options: "How to send" first. A draft needs nothing else. "Post now" asks the server what the account may post each time
  * it is shown (`onLoad`), then offers ONLY what TikTok returned, with nothing chosen and every switch off until the user decides —
- * TikTok's rules for apps that post directly. Every change is one `onChange` patch; nothing is sent to TikTok from here.
+ * TikTok's rules for apps that post directly. Every change is one `onChange` patch; nothing is sent to TikTok from here. The answer
+ * itself is written into the options by the Post screen (`PostScreenBody`), which is still there when this sheet has been closed.
  */
 export function TikTokOptions({ options, onChange, creator, onLoad, onReconnect }: Props) {
   const { height } = useWindowDimensions();
@@ -71,9 +72,6 @@ export function TikTokOptions({ options, onChange, creator, onLoad, onReconnect 
   const o = readDirect(options);
   // Asked when Post now is first shown and each time the user switches to it. Only `direct` starts it.
   useEffect(() => { if (direct) onLoad(); }, [direct]);
-  // An answer is kept in the options (the Post screen validates against it) and drops only what is no longer possible: each new
-  // answer, and the one already there when Post now is switched to (the fresh one asked above then replaces it).
-  useEffect(() => { if (direct && creator.status === "ready") onChange(reconcile(readDirect(options), creator.info)); }, [direct, creator]);
 
   const info = creator.status === "ready" ? creator.info : null;
   const branded = isBranded(o);
@@ -92,6 +90,7 @@ export function TikTokOptions({ options, onChange, creator, onLoad, onReconnect 
           <QuietButton title="Reconnect" accessibilityLabel="Reconnect TikTok" onPress={onReconnect} />
         </View>
       ) : null}
+      {direct && creator.status === "switchedOff" ? <Body>{DIRECT_OFF}</Body> : null}
       {direct && creator.status === "error" ? (
         <View style={{ gap: theme.space.sm, alignItems: "flex-start" }}>
           <Body>{creator.message}</Body>

@@ -16,6 +16,11 @@ export interface ClientAdapter {
   doneNote?: string;
   /** False when the platform has no per-post options (no "options" button). Default true. */
   hasOptions?: boolean;
+  /**
+   * True when a failed row that can only start afresh (not resumable) also shows the Options button: the platform's refusals point at
+   * its options ("choose Send as draft in the TikTok options"), and Retry sends the options as they are NOW. Only TikTok sets it.
+   */
+  optionsAfterFailure?: boolean;
   /** Per-post options that carry the project's cover frame (milliseconds into the video); only platforms that accept a frame offset define it. */
   coverOptions?(coverMs: number): Record<string, unknown>;
   /** The caption limit for these options (a platform whose limit depends on a choice); when absent, `captionMax`. */

@@ -32,6 +32,10 @@ export const TAKES_MINUTES = "It may take a few minutes to appear.";
 export const MUSIC_URL = "https://www.tiktok.com/legal/page/global/music-usage-confirmation/en";
 export const BRANDED_URL = "https://www.tiktok.com/legal/page/global/bc-policy/en";
 export const NEEDS_PERMISSION_HERE = "To post directly, TikTok needs one more permission. Reconnect TikTok and allow everything it asks for.";
+/** Post now is switched on by a server secret; while it is off the sheet says this (the server's own words for `direct_off`) and offers no Reconnect. */
+export const DIRECT_OFF = "Posting straight to TikTok isn't switched on yet. Choose Send as draft.";
+/** Added to "Stop posting?" while a Post now upload runs: its last piece publishes by itself, so a stop cannot promise that nothing was posted. */
+export const STOP_MAY_POST = "If TikTok already has the video, it may still post — check your TikTok profile.";
 export const OPEN_OPTIONS = "Open the TikTok options to finish setting up Post now.";
 export const CHOOSE_PRIVACY = "Choose who can see it in the TikTok options.";
 export const DIRECT_NOT_READY = "Post now publishes to your TikTok profile.";

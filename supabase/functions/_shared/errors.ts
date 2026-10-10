@@ -12,6 +12,8 @@ export class PlatformError extends ApiError {
   /** A temporary failure gets its own code, so the phone keeps a finished upload and asks again instead of uploading anew. */
   constructor(public platform: string, status: number, message: string, code = isTemporaryStatus(status) ? "platform_unavailable" : "platform_error") { super(status, code, message); }
 }
+/** A platform's machine code as it may be written to the server log: a plain word, or nothing of what was sent. */
+export const plainCode = (code: string): string => (/^[A-Za-z0-9_.-]{1,80}$/.test(code) ? code : "unreadable");
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }

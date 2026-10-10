@@ -181,3 +181,184 @@ describe("TikTok options on the Post screen", () => {
     } finally { jest.useRealTimers(); }
   });
 });
+
+describe("after the review", () => {
+  const creatorMock = (state: unknown, load = jest.fn()) => { (useCreatorInfo as jest.Mock).mockReturnValue({ state, load }); return load; };
+  const PRIVATE_ONLY = "TikTok only lets Clipy post to private accounts for now. Set your TikTok account to private, or choose Send as draft in the TikTok options.";
+  const OPEN = "Open the TikTok options to finish setting up Post now.";
+  const beforeRemove = () => (mockNav.addListener.mock.calls as unknown as [string, (e: unknown) => void][]).find(([name]) => name === "beforeRemove")![1];
+  beforeEach(() => { (useAccounts as jest.Mock).mockReturnValue(accounts({}, TT_ON)); });
+
+  test("a refused Post now: the failed row has Options beside Retry, and after choosing Send as draft there Retry sends the CURRENT options", async () => {
+    startWith({ mode: "direct", privacy: "SELF_ONLY", creator });
+    creatorMock({ status: "ready", info: creator });
+    const p = post({ rows: rows({}, { phase: "failed", message: PRIVATE_ONLY, resumable: false }) }); usePostReturns(p);
+    await render(<PostScreen />);
+    expect(screen.getByText(PRIVATE_ONLY)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry TikTok" })).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "TikTok options" }));
+    expect(screen.getByRole("button", { name: "Post now" })).toBeSelected();
+    await fireEvent.press(screen.getByRole("button", { name: "Send as draft" }));
+    await fireEvent.press(screen.getByLabelText("Close sheet"));
+    await fireEvent.press(screen.getByRole("button", { name: "Retry TikTok" }));
+    expect(p.retry).toHaveBeenCalledTimes(1);
+    expect(p.retry).toHaveBeenCalledWith({ platform: "tiktok", caption: "", options: {} });
+  });
+
+  test("a refused choice: Options, choose again, and Retry sends the new choice", async () => {
+    startWith({ mode: "direct", privacy: "FOLLOWER_OF_CREATOR", creator });
+    creatorMock({ status: "ready", info: creator });
+    const p = post({ rows: rows({}, { phase: "failed", message: "TikTok no longer offers that choice of who can see it. Open the TikTok options and choose again.", resumable: false }) }); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "TikTok options" }));
+    await fireEvent.press(screen.getByRole("radio", { name: "Only me" }));
+    await fireEvent.press(screen.getByLabelText("Close sheet"));
+    await fireEvent.press(screen.getByRole("button", { name: "Retry TikTok" }));
+    expect(p.retry).toHaveBeenCalledWith({ platform: "tiktok", caption: "", options: { mode: "direct", privacy: "SELF_ONLY", allowComment: false, allowDuet: false, allowStitch: false, brandOrganic: false, brandContent: false } });
+  });
+
+  test("Options is offered only where a fresh post is what Retry does: not on a resumable TikTok row, not on a reconnect row, never on another platform's failed row", async () => {
+    startWith({ mode: "direct", privacy: "SELF_ONLY", creator });
+    usePostReturns(post({ rows: rows({ phase: "failed", message: "The video has been rejected.", resumable: false }, { phase: "failed", message: "TikTok is busy — wait a minute, then try again.", resumable: true }) }));
+    const a = await render(<PostScreen />);
+    expect(screen.getByRole("button", { name: "Resume TikTok" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "TikTok options" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Retry YouTube" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "YouTube options" })).toBeNull();
+    await a.unmount();
+    usePostReturns(post({ rows: rows({}, { phase: "needsReconnect", message: "Reconnect tiktok in Accounts." }) }));
+    await render(<PostScreen />);
+    expect(screen.getByRole("button", { name: "Reconnect TikTok" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "TikTok options" })).toBeNull();
+  });
+
+  test("the answer that arrives after the sheet was closed still reaches the options", async () => {
+    creatorMock({ status: "loading" });
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "TikTok options" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Post now" }));
+    await fireEvent.press(screen.getByLabelText("Close sheet"));
+    expect(screen.getByText(OPEN)).toBeTruthy();
+    creatorMock({ status: "ready", info: creator });
+    await screen.rerender(<PostScreen />);
+    expect(screen.queryByText(OPEN)).toBeNull();
+    expect(screen.getByText("Choose who can see it in the TikTok options.")).toBeTruthy();
+  });
+
+  test("a fresh answer drops a choice TikTok no longer offers even with the sheet closed: Post cannot go out with the old one", async () => {
+    startWith({ mode: "direct", privacy: "PUBLIC_TO_EVERYONE", allowDuet: true, creator: { ...creator, privacyOptions: ["PUBLIC_TO_EVERYONE", "SELF_ONLY"], duetDisabled: false } });
+    creatorMock({ status: "loading" });
+    const p = post(); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("checkbox", { name: "YouTube" }));
+    expect(screen.getByRole("button", { name: "Post" })).toBeEnabled();
+    creatorMock({ status: "ready", info: creator });
+    await screen.rerender(<PostScreen />);
+    expect(screen.getByText("Choose who can see it in the TikTok options.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
+  });
+
+  test("a draft is never written to by an answer", async () => {
+    startWith({ mode: "draft", privacy: "PUBLIC_TO_EVERYONE" });
+    creatorMock({ status: "ready", info: creator });
+    const p = post(); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("checkbox", { name: "YouTube" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([{ platform: "tiktok", caption: "", options: {} }]);
+    expect(screen.getByText(TT_NOTE)).toBeTruthy();
+  });
+
+  test("another TikTok account connected meanwhile: the old account's answer is dropped, the row no longer names it and Post waits for the options", async () => {
+    startWith({ mode: "direct", privacy: "SELF_ONLY", creator });
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("checkbox", { name: "YouTube" }));
+    expect(screen.getByText(/^Posting to Sunny\./)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Post" })).toBeEnabled();
+    (useAccounts as jest.Mock).mockReturnValue(accounts({}, { ...TT_ON, name: "@someone-else" }));
+    await screen.rerender(<PostScreen />);
+    expect(screen.queryByText(/Posting to Sunny/)).toBeNull();
+    expect(screen.getByText(OPEN)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
+  });
+
+  test("the same account after a reload of the list keeps its answer", async () => {
+    startWith({ mode: "direct", privacy: "SELF_ONLY", creator });
+    await render(<PostScreen />);
+    (useAccounts as jest.Mock).mockReturnValue(accounts({ name: "Renamed Channel" }, { ...TT_ON }));
+    await screen.rerender(<PostScreen />);
+    expect(screen.getByText(/^Posting to Sunny\./)).toBeTruthy();
+  });
+
+  test("Stop while a Post now upload runs says the video may still post", async () => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    const e = { preventDefault: jest.fn(), data: { action: { type: "GO_BACK" } } };
+    startWith({ mode: "direct", privacy: "SELF_ONLY", creator });
+    usePostReturns(post({ rows: rows({}, { phase: "uploading", progress: 0.9 }), busy: true }));
+    const a = await render(<PostScreen />);
+    await act(async () => { beforeRemove()(e); });
+    expect(alert).toHaveBeenLastCalledWith("Stop posting?", "Uploads in progress will be cancelled. If TikTok already has the video, it may still post — check your TikTok profile.", expect.any(Array));
+    await a.unmount();
+  });
+
+  test.each([
+    ["a draft upload", {}, { phase: "uploading", progress: 0.9 }],
+    ["a Post now that is only being prepared (nothing sent yet)", { mode: "direct", privacy: "SELF_ONLY", creator }, { phase: "preparing" }],
+  ])("Stop during %s keeps the old words", async (_n, options, row) => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    startWith(options);
+    usePostReturns(post({ rows: rows({}, row), busy: true }));
+    await render(<PostScreen />);
+    await act(async () => { beforeRemove()({ preventDefault: jest.fn(), data: { action: { type: "GO_BACK" } } }); });
+    expect(alert).toHaveBeenLastCalledWith("Stop posting?", "Uploads in progress will be cancelled.", expect.any(Array));
+  });
+
+  test.each([["error"], ["busy"]])("Reconnect that ends as %s leaves the sheet closed, so the message is not hidden under it", async (outcome) => {
+    jest.useFakeTimers();
+    try {
+      creatorMock({ status: "needsPermission" });
+      const a = accounts({}, TT_ON); (a.connect as jest.Mock).mockResolvedValue(outcome);
+      (useAccounts as jest.Mock).mockReturnValue(a);
+      startWith({ mode: "direct" });
+      await render(<PostScreen />);
+      await fireEvent.press(screen.getByRole("button", { name: "TikTok options" }));
+      await fireEvent.press(screen.getByRole("button", { name: "Reconnect TikTok" }));
+      await act(async () => { jest.advanceTimersByTime(350); });
+      expect(a.connect).toHaveBeenCalledWith("tiktok");
+      await act(async () => {});
+      expect(screen.queryByText("TikTok options")).toBeNull();
+    } finally { jest.useRealTimers(); }
+  });
+
+  test.each([["ok"], ["cancelled"]])("Reconnect that ends as %s opens the sheet again", async (outcome) => {
+    jest.useFakeTimers();
+    try {
+      creatorMock({ status: "needsPermission" });
+      const a = accounts({}, TT_ON); (a.connect as jest.Mock).mockResolvedValue(outcome);
+      (useAccounts as jest.Mock).mockReturnValue(a);
+      startWith({ mode: "direct" });
+      await render(<PostScreen />);
+      await fireEvent.press(screen.getByRole("button", { name: "TikTok options" }));
+      await fireEvent.press(screen.getByRole("button", { name: "Reconnect TikTok" }));
+      await act(async () => { jest.advanceTimersByTime(350); });
+      await act(async () => {});
+      expect(screen.getByText("TikTok options")).toBeTruthy();
+    } finally { jest.useRealTimers(); }
+  });
+
+  test("switched off on the server: the sheet says so with no Reconnect, and Send as draft goes out as ever", async () => {
+    creatorMock({ status: "switchedOff" });
+    const p = post(); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("checkbox", { name: "YouTube" }));
+    await fireEvent.press(screen.getByRole("button", { name: "TikTok options" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Post now" }));
+    expect(screen.getByText("Posting straight to TikTok isn't switched on yet. Choose Send as draft.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Reconnect TikTok" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Post" })).toBeDisabled();
+    await fireEvent.press(screen.getByRole("button", { name: "Send as draft" }));
+    await fireEvent.press(screen.getByLabelText("Close sheet"));
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([{ platform: "tiktok", caption: "", options: {} }]);
+  });
+});
