@@ -1,3 +1,4 @@
+jest.unmock("@/src/lib/notify");   // jest.setup.ts gives every other suite a phone without notifications
 jest.mock("expo-modules-core", () => {
   const actual = jest.requireActual("expo-modules-core");
   return { ...actual, requireOptionalNativeModule: jest.fn() };
@@ -139,7 +140,15 @@ test("notifyState reads what iOS says and never asks: not asked, allowed, refuse
   expect(await fresh(false).notifyState()).toBe("unavailable");
 });
 
-test("no screen notifies yet: besides the wrapper's own file, only the wizard's permission row asks (src/auth/permissions.ts) — and nothing shows a notification", () => {
-  expect(sources().filter((f) => /notifyDone\(|askToNotify\(|lib\/notify"/.test(f.src)).map((f) => f.rel).sort()).toEqual(["src/auth/permissions.ts", "src/lib/notify.ts"]);
-  expect(sources().filter((f) => /notifyDone\(/.test(f.src)).map((f) => f.rel)).toEqual(["src/lib/notify.ts"]);
+test("who notifies: the wizard's row and the Export screen's offer card ask; ONLY the export's notice shows a notification — nothing else does either", () => {
+  const naming = (what: RegExp) => sources().filter((f) => what.test(f.src)).map((f) => f.rel).sort();
+  expect(naming(/notifyDone\(|askToNotify\(|lib\/notify"/)).toEqual(["src/auth/permissions.ts", "src/export/exportNotice.ts", "src/export/notifyOffer.tsx", "src/lib/notify.ts"]);
+  expect(naming(/askToNotify\(/)).toEqual(["src/auth/permissions.ts", "src/export/notifyOffer.tsx", "src/lib/notify.ts"]);
+  expect(naming(/notifyDone\(/)).toEqual(["src/export/exportNotice.ts", "src/lib/notify.ts"]);
+  // Each has ONE user: the notice is the export route's, the offer the Export screen's.
+  expect(naming(/useExportNotice\(/)).toEqual(["app/editor/[id]/export.tsx", "src/export/exportNotice.ts"]);
+  expect(naming(/useNotifyOffer\(/)).toEqual(["src/export/ExportScreenBody.tsx", "src/export/notifyOffer.tsx"]);
+  // Local only, and never a promise of work in the background: no push token, no background task, no background mode.
+  expect(naming(/getExpoPushTokenAsync|getDevicePushTokenAsync|registerTaskAsync|expo-task-manager|expo-background/)).toEqual([]);
+  expect(readFileSync(join(root, "app.json"), "utf8")).not.toContain("UIBackgroundModes");
 });
