@@ -86,7 +86,7 @@ Create Clipy's tables in the database. It asks for the database password from st
 npx.cmd supabase db push
 ```
 
-Upload the server code (all seven functions):
+Upload the server code (all eight functions):
 
 ```powershell
 npx.cmd supabase functions deploy
@@ -208,9 +208,9 @@ After steps 1 to 5 above, on your iPhone in Expo Go:
 
 ## 11. TikTok
 
-Clipy sends your video to TikTok as a **draft in your TikTok inbox**. You then open TikTok, add the caption and post it there. Clipy never posts to TikTok by itself.
+Clipy can send a video to TikTok in two ways. **Send as draft** (the default) puts it in your TikTok inbox: you open TikTok, add the caption and post it there. **Post now** posts it straight to your profile with the caption you typed in Clipy. You choose in the TikTok row's **Options**.
 
-> **Honest status:** none of this has run against the real TikTok yet. It was written from TikTok's developer documentation (October 2026). If a screen looks different, trust the screen and tell the developer what you saw.
+> **Honest status:** sending drafts has run against the real TikTok (you post drafts from your phone today). **Post now** has not run live yet: steps g to i are written from TikTok's developer documentation (October 2026). If a screen looks different, trust the screen and tell the developer what you saw.
 
 Do steps 1 to 4a above first (the Supabase project, the server online, the encryption key).
 
@@ -226,7 +226,7 @@ Use the TikTok account you will post with.
 6. Open **Login Kit**. In **Redirect URI**, paste exactly (with your project ref, no slash at the end):
    `https://<ref>.supabase.co/functions/v1/oauth-callback`
    This is the same address as for YouTube.
-7. Open **Content Posting API**. Make sure uploading drafts (the **video.upload** permission) is available. You do **not** need to turn on **Direct Post** *(may be named slightly differently)*.
+7. Open **Content Posting API**. Make sure uploading drafts (the **video.upload** permission) is available. For **Post now**, also turn on **Direct Post** and add the **video.publish** permission (step g).
 8. Under **Credentials**, you see the **Client key** and the **Client secret**. Keep this page open for step c.
 
 ### b. Sandbox: let your own account use the app
@@ -261,7 +261,7 @@ Until both are set, the app shows TikTok as "Not available yet".
 - **At most 5 unfinished drafts a day.** TikTok refuses a new upload when 5 drafts from Clipy are still waiting in the last 24 hours. Clipy then says: "TikTok allows 5 unfinished drafts a day. Open TikTok and post or delete some first."
 - **No link back.** Because you finish the post in TikTok, the TikTok row ends with "Sent to TikTok — open TikTok to finish posting." and has no "View on TikTok" link.
 - **The TikTok connection lasts about a day at a time** and renews itself. If you do not use Clipy for a year, you will need to reconnect.
-- **None of this has run against live TikTok yet.** If a step fails, tell the developer what you saw.
+- **Drafts have run against live TikTok.** If a step fails, tell the developer what you saw.
 
 ### e. TikTok troubleshooting
 
@@ -278,7 +278,7 @@ Until both are set, the app shows TikTok as "Not available yet".
 After steps a to c above, on your iPhone in Expo Go:
 
 1. Accounts → **Connect TikTok** → TikTok asks for permission (allow everything) → back in Clipy, the TikTok row shows your TikTok name.
-2. Home → **Post a video** → pick a short clip → tick **TikTok**. There is no options button for TikTok, and the line "TikTok doesn't receive this caption — you'll write it in TikTok." appears under the caption.
+2. Home → **Post a video** → pick a short clip → tick **TikTok**. TikTok has an **Options** button; leave it on **Send as draft** for this checklist. The line "TikTok doesn't receive this caption — you'll write it in TikTok." appears under the caption.
 3. **Post** → Preparing → Uploading % → the TikTok row reads **"Sent to TikTok — open TikTok to finish posting."** (no View button).
 4. TikTok sends a notification and the **draft appears in your TikTok inbox**.
 5. **Finish in TikTok:** open the draft, add the caption, choose who can see it, post. Nothing was public before this step.
@@ -286,6 +286,55 @@ After steps a to c above, on your iPhone in Expo Go:
 7. **Dropped upload:** start a TikTok post and turn on Airplane mode while it is uploading. After a few seconds the row says "The connection dropped. Post again to restart the TikTok upload." Turn Airplane mode off and tap **Retry**: the video uploads again from the start, and only **one** draft ends up in the TikTok inbox.
 8. **TikTok busy after the upload:** if the row fails *after* Uploading reached 100 % with a "TikTok is busy" or "TikTok is having trouble" message, tap **Retry**: it should finish without uploading again (no second draft in the inbox).
 9. YouTube still posts in the same session (tick both; a long caption holds back only YouTube).
+
+### g. Post now: switch it on (once)
+
+Do these in this order. Step 1 must be done before step 2, or connecting TikTok stops working (Clipy will then ask TikTok for three permissions, and TikTok refuses one it has not been given).
+
+1. In the TikTok developer site, with **Sandbox** selected at the top: open **Content Posting API** and turn on **Direct Post**. Under **Scopes**, add **video.publish**. Click **Apply changes**. *(Names may differ slightly.)*
+2. In PowerShell, in the project folder:
+
+   ```powershell
+   npx.cmd supabase functions deploy
+   ```
+
+3. In the TikTok app on your phone: **Settings and privacy → Privacy → Private account** — switch it **on**. Until TikTok has reviewed Clipy, it only lets Clipy post to a private account.
+4. In Clipy: **Post a video** → pick a clip → on the TikTok row tap **Options** → **Post now**. It says TikTok needs one more permission: tap **Reconnect** and allow everything TikTok asks for. The options open again and show "Posting to" with your TikTok name.
+
+### h. Post now: what to expect
+
+- **Nothing is chosen for you.** You pick who can see the post each time, and comments, duet and stitch stay off until you switch them on. That is TikTok's rule for apps that post directly.
+- **Until TikTok reviews Clipy, every post is private.** Choose **Only me**. Your TikTok account must be private while you post, at most 5 accounts can post through Clipy in a day, and TikTok allows about 15 direct posts a day per account. To show a post to others later: make your account public in TikTok, then change that post to **Everyone** in TikTok.
+- **The caption is sent** (up to 2200 characters). Drafts still take none.
+- **No link back.** The row ends with "Posted to TikTok. It may take a few minutes to appear."
+- **An account connected before this keeps working for drafts** without reconnecting.
+- **Post now has not run against live TikTok yet** (drafts have). If a step fails, tell the developer what you saw.
+
+| What you see | Why | What to do |
+| --- | --- | --- |
+| Connecting TikTok fails with an error about a **scope** or permission | Step g.1 was skipped, so TikTok does not offer **video.publish** | Do step g.1, wait a few minutes, connect again. |
+| **To post directly, TikTok needs one more permission.** | TikTok was connected before Post now existed, or a permission was unticked | Tap **Reconnect** and allow everything. |
+| **TikTok only lets Clipy post to private accounts for now.** | Your TikTok account is public | Do step g.3, or choose **Send as draft**. |
+| **Clipy has reached TikTok's daily limit of accounts that can post.** | More than 5 accounts posted through Clipy today | Try tomorrow, or choose **Send as draft**. |
+| **TikTok says this account has posted too much today.** | TikTok's daily limit for your account | Try tomorrow, or post from TikTok. |
+| **TikTok no longer offers that choice of who can see it.** | You changed your account between opening the options and posting | Open the TikTok options and choose again. |
+| A row ends with **check your TikTok profile before posting again** | The connection dropped at the very end, so the post may already be there | Look at your TikTok profile first. Post again only if it is not there. |
+
+### i. First live run: Post now
+
+After g, on your iPhone:
+
+1. TikTok **Options** → **Post now**: "Posting to" your name and picture; under **Who can see it** only the choices TikTok gives a private account (**Followers**, **Friends**, **Only me**), none ticked; **Allow duet** and **Allow stitch** greyed out (TikTok switches them off for a private account); **Post** on the screen is disabled.
+2. Choose **Only me**, close the options: the TikTok row reads "Posting to … Who can see it: Only me. By posting, you agree to TikTok's Music Usage Confirmation. It may take a few minutes to appear." Type a caption. **Post**.
+3. Preparing → Uploading % → Publishing → **Done** with "Posted to TikTok. It may take a few minutes to appear." The video is on your profile, visible only to you, with your caption.
+4. Tap the two links at the bottom of the options (**Music Usage Confirmation**; **Branded Content Policy** appears after switching on **Promotes a brand or product** and ticking **Branded content** with a choice other than Only me). Both must open the right TikTok page — tell the developer if one does not.
+5. Switch on **Promotes a brand or product** and tick nothing: Post is disabled and the row says what is missing. Tick **Your brand**: Post is enabled again.
+6. With **Only me** chosen, **Branded content** cannot be ticked; with **Branded content** ticked, **Only me** cannot be chosen.
+7. Make your TikTok account public, then Post now again: Clipy says "TikTok only lets Clipy post to private accounts for now. …" and nothing is posted.
+8. Switch back to **Send as draft** and post: it arrives in the TikTok inbox exactly as before.
+9. On a phone that has NOT reconnected (or before step g.4): a draft still posts; Post now offers Reconnect.
+
+Tell the developer what happened at each step, and especially: what step 1 showed, how long step 3 took, and any message that is not in the table above.
 
 ## 12. Instagram and Facebook
 
