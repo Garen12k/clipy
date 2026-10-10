@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { activeTimeout } from "@/src/lib/activeTime";
 import { LATEST_TOOLS, NEEDS_LATEST_BUILD } from "@/src/lib/buildInfo";
 import { addSoundListener, cancelSoundRender, isNoiseAvailable, isNoiseBuild, isSoundAvailable, isSoundCancelled, renderSound, SOUND_CANCELLED } from "@/modules/clipy-video";
 import { neededSounds, soundChain, soundFileName, type NeededSound } from "@/src/editor/model/sound";
@@ -82,12 +83,13 @@ function answered(entry: Running, start: () => Promise<unknown>, deadlineMs: num
     const settle = (end: () => void): void => {
       if (!open) return;
       open = false;
-      clearTimeout(deadline);
+      stopDeadline();
       if (grace !== null) clearTimeout(grace);
       entry.giveUp = null;
       end();
     };
-    const deadline = setTimeout(() => settle(() => {
+    // Counted in the time the app ran in front (activeTimeout): a suspension must not end a render that had no chance to run.
+    const stopDeadline = activeTimeout(() => settle(() => {
       stopNative(entry.jobId);
       reject(new Error(`sound render: no answer after ${deadlineMs / 1000} s`));
     }), deadlineMs);

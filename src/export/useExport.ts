@@ -5,6 +5,7 @@ import { activeCutout, clampExportSettings, DEFAULT_EXPORT_SETTINGS, EFFECT_END_
 import { steadyOf } from "@/src/editor/model/steady";
 import { addExportListener, cancelExport, exportTimeline, isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSteadyAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
 import { expoFs } from "@/src/projects/expoFs";
+import { useStayAwake } from "./exportAwake";
 import { blursOriginal, CUTOUT_SHARE, cutoutBytesToMake, prepareCutouts, withCutout } from "./exportCutouts";
 import { prepareSounds, SOUND_SHARE } from "./exportSounds";
 import { prepareSteady, STEADY_SHARE, steadyBytesToMake, withSteady } from "./exportSteady";
@@ -14,6 +15,8 @@ export type ExportState = { status: "idle" | "unavailable" | "exporting" | "done
 
 export function useExport(project: Project | null, missingSourceUris: string[]) {
   const [state, setState] = useState<ExportState>({ status: isNativeAvailable() ? "idle" : "unavailable", progress: 0 });
+  // The screen stays on from the tap on Export (the preparations included) to the end, whatever the end is; unmounting lets it go too.
+  useStayAwake(state.status === "exporting");
   const jobId = useRef<string | null>(null);
   /** The part of the progress taken before the video export starts (preparing changed sounds and cut-out copies): 0 for a project without any. */
   const share = useRef(0);
