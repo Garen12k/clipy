@@ -12,7 +12,11 @@ export type UploadProtocol = "google-resumable" | "relay" | "tiktok-chunks" | "m
  * per account), and whether running out of time means "tap Resume" rather than "done".
  */
 export interface WaitHint { maxSeconds: number; intervalSeconds: number; resumeOnTimeout: boolean }
-export interface PrepareResult { protocol: UploadProtocol; uploadUrl: string | null; uploadHeaders: Record<string, string>; chunkSize: number; ref: Record<string, unknown>; wait?: WaitHint }
+export interface PrepareResult { protocol: UploadProtocol; uploadUrl: string | null; uploadHeaders: Record<string, string>; chunkSize: number; ref: Record<string, unknown>; wait?: WaitHint;
+  /** The upload itself publishes: a lost last piece may already be a live post. */
+  publishes?: boolean }
+export type TikTokPrivacy = "PUBLIC_TO_EVERYONE" | "FOLLOWER_OF_CREATOR" | "MUTUAL_FOLLOW_FRIENDS" | "SELF_ONLY";
+export interface CreatorInfo { nickname: string; username: string | null; avatarUrl: string | null; privacyOptions: TikTokPrivacy[]; commentDisabled: boolean; duetDisabled: boolean; stitchDisabled: boolean; maxDurationSec: number }
 export type PublishResult = { status: "done"; url: string | null } | { status: "processing" };
 export interface AdapterCtx { fetch: typeof fetch; env: Env; redirectUri: string }
 export interface ServerAdapter {
@@ -28,6 +32,8 @@ export interface ServerAdapter {
   relayChunk?(ctx: AdapterCtx, accessToken: string, ref: Record<string, unknown>, chunk: { offset: number; total: number; body: Uint8Array }): Promise<{ nextOffset: number; ref?: Record<string, unknown> }>;
   finalize(ctx: AdapterCtx, accessToken: string, s: { ref: Record<string, unknown>; input: PrepareInput; clientResult: string | null; account: Profile }): Promise<PublishResult>;
   status(ctx: AdapterCtx, accessToken: string, ref: Record<string, unknown>): Promise<PublishResult>;
+  /** What the account may post right now (TikTok Direct Post). `grant.scopes` is the stored scope string. */
+  creatorInfo?(ctx: AdapterCtx, accessToken: string, grant: { scopes: string }): Promise<CreatorInfo>;
   /** True when a platform error (besides a 401) means the grant itself is not enough, e.g. a permission was not given: the account must be reconnected. */
   isAuthError?(e: PlatformError): boolean;
 }

@@ -16,7 +16,7 @@ const form = (init: RequestInit) => Object.fromEntries(new URLSearchParams(init.
 test("authUrl uses the web flow with comma-separated scopes", () => {
   const u = new URL(tiktok.authUrl(ctx([]).ctx, { state: "st", codeChallenge: "unused" }));
   expect(u.origin + u.pathname).toBe("https://www.tiktok.com/v2/auth/authorize/");
-  expect(Object.fromEntries(u.searchParams)).toEqual({ client_key: "ck", response_type: "code", scope: "user.info.basic,video.upload", redirect_uri: REDIRECT, state: "st" });
+  expect(Object.fromEntries(u.searchParams)).toEqual({ client_key: "ck", response_type: "code", scope: "user.info.basic,video.upload,video.publish", redirect_uri: REDIRECT, state: "st" });
 });
 
 test("exchange and refresh map tokens; refresh returns the rotated refresh token", async () => {
