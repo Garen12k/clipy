@@ -320,12 +320,12 @@ test.each([
 describe("TikTok", () => {
   beforeEach(() => { (useAccounts as jest.Mock).mockReturnValue(accounts({}, TT_ON)); });
 
-  test("TikTok is ticked by default with its note and has no options button", async () => {
+  test("TikTok is ticked by default as a draft, with its note and an options button", async () => {
     await render(<PostScreen />);
     expect(screen.getByRole("checkbox", { name: "TikTok" })).toBeChecked();
     expect(screen.getByText("@sunny")).toBeTruthy();
     expect(screen.getByText(TT_NOTE)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "TikTok options" })).toBeNull();
+    expect(screen.getByRole("button", { name: "TikTok options" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "YouTube options" })).toBeTruthy();
     expect(screen.getByText(TT_CAPTION)).toBeTruthy();
     expect(screen.getAllByText("Not available yet")).toHaveLength(3);

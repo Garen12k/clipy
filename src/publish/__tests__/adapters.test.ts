@@ -76,11 +76,11 @@ test("facebook: caption 5000, no options, Reel limits at the boundaries, the Dev
   expect(fb.doneNote).toBeUndefined();
 });
 
-test("tiktok: no caption, no options, its limits, the inbox note and the done note", () => {
+test("tiktok as a draft: no caption, its limits, the inbox note and the done note", () => {
   const tt = clientAdapters.tiktok!;
   expect(tt.id).toBe("tiktok");
   expect(tt.captionMax).toBeNull();
-  expect(tt.hasOptions).toBe(false);
+  expect(tt.hasOptions).toBe(true);
   expect(tt.defaultOptions("Beach day")).toEqual({});
   expect(tt.validate(video, "x".repeat(10000), {})).toBeNull();
   expect(tt.validate({ ...video, durationSec: 600 }, "", {})).toBeNull();

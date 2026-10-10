@@ -360,6 +360,13 @@ describe("tiktok-chunks", () => {
     expect(d.api.prepare).toHaveBeenCalledTimes(2);
     expect(t.row()).toMatchObject({ phase: "done" });
   });
+  test("a plan that publishes tells the uploader so; the row ends done with no link", async () => {
+    const direct = { ...tt, publishes: true, wait: { maxSeconds: 300, intervalSeconds: 5, resumeOnTimeout: false } };
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => direct), finalize: jest.fn(async () => ({ status: "done" as const, url: null })) } }), t = track();
+    await runPost({ ...job, platform: "tiktok" }, d, t.update, signal());
+    expect((d.uploadTikTokChunks as jest.Mock).mock.calls[0][1]).toMatchObject({ publishes: true });
+    expect(t.row()).toMatchObject({ phase: "done", url: null, message: null });
+  });
 });
 
 describe("meta-rupload and the wait hint", () => {

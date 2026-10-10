@@ -55,31 +55,37 @@ export function usePostForm(video: VideoInfo, platforms: PlatformStatus[], title
     const reason: Reason | null = !status.available || !adapter ? "Not available yet" : status.needsReconnect ? "Sign-in expired" : !status.connected ? "Not connected" : null;
     const opts = adapter ? optionsFor(status.id, adapter) : {};
     const on = !reason && (ticked[status.id] ?? true);
-    return { status, adapter, reason, on, opts, error: on && adapter ? adapter.validate(video, caption, opts) : null };
+    // A platform's limit may depend on its options (TikTok: none as a draft, 2200 as Post now); without the hook it is `captionMax`.
+    const limit = adapter ? (adapter.captionLimit ? adapter.captionLimit(opts) : adapter.captionMax) : null;
+    return { status, adapter, reason, on, opts, limit, error: on && adapter ? adapter.validate(video, caption, opts) : null };
   });
   // The caption limit is the smallest one among the ticked platforms that receive the caption.
-  const tickedAdapters = base.filter((b) => b.on && b.adapter).map((b) => b.adapter!);
-  const limits = tickedAdapters.flatMap((a) => (a.captionMax === null ? [] : [a.captionMax]));
+  const tickedOn = base.filter((b) => b.on && b.adapter);
+  const limits = tickedOn.flatMap((b) => (b.limit === null ? [] : [b.limit]));
   const captionMax = limits.length ? Math.min(...limits) : null;
   const overLimit = captionMax !== null && caption.length > captionMax;
   /** Some platform is ticked, so the caption counter is shown (with or without a limit). */
-  const anyTicked = tickedAdapters.length > 0;
+  const anyTicked = tickedOn.length > 0;
   /** Ticked platforms that never receive the caption, by id. */
-  const captionless = tickedAdapters.filter((a) => a.captionMax === null).map((a) => a.id);
+  const captionless = tickedOn.filter((b) => b.limit === null).map((b) => b.adapter!.id);
 
-  const views: PlatformView[] = base.map(({ status, adapter, reason, on, opts, error }) => {
+  const views: PlatformView[] = base.map(({ status, adapter, reason, on, opts, limit, error }) => {
     // A platform that doesn't receive the caption is never held back by its length.
-    const tooLong = overLimit && adapter?.captionMax !== null;
+    const tooLong = overLimit && limit !== null;
     const blocker = !on ? null : error ?? (tooLong ? `Captions can be up to ${captionMax} characters.` : null);
     return {
       status, adapter, reason, checked: on && !error, error, options: opts,
       canPost: on && !blocker, blocker,
-      note: on && adapter ? adapter.note(video) : null,
+      note: on && adapter ? (adapter.noteFor ? adapter.noteFor(video, opts) : adapter.note(video)) : null,
       captionNote: on && adapter?.captionNote ? adapter.captionNote(caption) : null,
       canResume: rows[status.id]?.phase === "needsReconnect" && returned.has(status.id) && !reason,
     };
   });
-  const jobFor = (v: PlatformView): Job => ({ platform: v.status.id, caption, options: coverMs !== null && v.adapter?.coverOptions ? { ...v.options, ...v.adapter.coverOptions(coverMs) } : v.options });
+  const jobFor = (v: PlatformView): Job => {
+    // Only what the server reads leaves the phone (TikTok keeps the creator and its brand switch here; a draft sends {}).
+    const sent = v.adapter?.sendOptions ? v.adapter.sendOptions(v.options) : v.options;
+    return { platform: v.status.id, caption, options: coverMs !== null && v.adapter?.coverOptions ? { ...sent, ...v.adapter.coverOptions(coverMs) } : sent };
+  };
   // Rows that already ran keep their own Retry / Resume / View; Post only sends the fresh ones.
   const jobs = views.filter((v) => v.canPost && (rows[v.status.id]?.phase ?? "idle") === "idle").map(jobFor);
 

@@ -63,7 +63,7 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
       </View>
     ) : <Body weight="semi" style={{ color: s.accentInk }}>Done</Body>;
     // No link (e.g. a TikTok draft): the row's own message, else the platform's done note.
-    const doneText = url ? null : row.message ?? view.adapter?.doneNote ?? null;
+    const doneText = url ? null : row.message ?? (view.adapter?.doneNoteFor ? view.adapter.doneNoteFor(view.options) : view.adapter?.doneNote) ?? null;
     if (doneText) below.push(<View key="m">{msg(doneText)}</View>);
   } else if (row.phase === "failed" || row.phase === "needsReconnect") {
     const verb = row.phase === "failed" ? (row.resumable ? "Resume" : "Retry") : canResume ? "Resume" : null;

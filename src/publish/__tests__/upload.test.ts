@@ -434,3 +434,20 @@ describe("meta-rupload (uploadMetaWhole)", () => {
     expect(err!.message).toBe("bad … 123456789");
   });
 });
+
+describe("TikTok, an upload that publishes (Post now)", () => {
+  test("a 416 on the last chunk says to check the profile; before the last chunk nothing changes", async () => {
+    fetchMock.mockResolvedValueOnce(r(206)).mockResolvedValueOnce(r(416));
+    await expect(uploadTikTokChunks("https://up/x", args({ publishes: true }))).rejects.toEqual(E("TikTok may already have this video — check your TikTok profile before posting again."));
+    fetchMock.mockReset(); fetchMock.mockResolvedValueOnce(r(416));
+    await expect(uploadTikTokChunks("https://up/x", args({ publishes: true }))).rejects.toEqual(E("TikTok lost track of the upload. Post again."));
+  });
+  test("the last chunk lost after every retry says to check the profile; an earlier chunk lost says what it always said", async () => {
+    fetchMock.mockResolvedValueOnce(r(206)).mockRejectedValue(new TypeError("Network request failed"));
+    await expect(uploadTikTokChunks("https://up/x", args({ publishes: true }))).rejects.toEqual(E("The connection dropped at the end of the upload. Check your TikTok profile before posting again."));
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    fetchMock.mockReset(); fetchMock.mockRejectedValue(new TypeError("Network request failed"));
+    await expect(uploadTikTokChunks("https://up/x", args({ publishes: true }))).rejects.toEqual(E("The connection dropped. Post again to restart the TikTok upload."));
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});

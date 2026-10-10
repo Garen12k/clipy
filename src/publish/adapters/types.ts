@@ -18,4 +18,12 @@ export interface ClientAdapter {
   hasOptions?: boolean;
   /** Per-post options that carry the project's cover frame (milliseconds into the video); only platforms that accept a frame offset define it. */
   coverOptions?(coverMs: number): Record<string, unknown>;
+  /** The caption limit for these options (a platform whose limit depends on a choice); when absent, `captionMax`. */
+  captionLimit?(options: Record<string, unknown>): number | null;
+  /** What is sent to the server for these options; when absent, the options as they are. */
+  sendOptions?(options: Record<string, unknown>): Record<string, unknown>;
+  /** The standing note for these options; when absent, `note(video)`. */
+  noteFor?(video: VideoInfo, options: Record<string, unknown>): string | null;
+  /** The done note for these options; when absent, `doneNote`. */
+  doneNoteFor?(options: Record<string, unknown>): string | undefined;
 }

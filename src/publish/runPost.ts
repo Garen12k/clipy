@@ -103,7 +103,7 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
       if (p.protocol === "meta-rupload") await deps.uploadMetaWhole(p.uploadUrl ?? "", p.uploadHeaders, job.video.fileUri, { onProgress, signal });
       else {
         reader = deps.openReader(job.video.fileUri);
-        const args = { reader, mimeType: job.video.mimeType, chunkSize: p.chunkSize, onProgress, signal, resume: !!resumeFrom };
+        const args = { reader, mimeType: job.video.mimeType, chunkSize: p.chunkSize, onProgress, signal, resume: !!resumeFrom, ...(p.publishes === true ? { publishes: true } : {}) };
         if (p.protocol === "google-resumable") clientResult = await deps.uploadGoogleResumable(p.uploadUrl ?? "", p.uploadHeaders, args);
         else if (p.protocol === "tiktok-chunks") await deps.uploadTikTokChunks(p.uploadUrl ?? "", args);
         else await deps.uploadRelay((offset, total, bytes, sig) => deps.api.uploadChunk(p.sessionId, offset, total, bytes, sig), args);

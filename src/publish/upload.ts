@@ -3,7 +3,9 @@ import type { ChunkReader } from "./fileReader";
 import { postWholeFile } from "./wholeFileUpload";
 
 export class UploadError extends Error { constructor(message: string, public resumable: boolean) { super(message); } }
-export interface UploadArgs { reader: ChunkReader; mimeType: string; chunkSize: number; onProgress(fraction: number): void; signal: AbortSignal; resume?: boolean; sleep?(ms: number): Promise<void> }
+export interface UploadArgs { reader: ChunkReader; mimeType: string; chunkSize: number; onProgress(fraction: number): void; signal: AbortSignal; resume?: boolean; sleep?(ms: number): Promise<void>;
+  /** The upload itself publishes (TikTok Post now): when the LAST piece's fate is unknown the video may already be posted, so the user is told to check, never to post again. */
+  publishes?: boolean }
 export const MAX_ATTEMPTS = 3;
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -126,7 +128,7 @@ const retryInPlace = (status: number) => status >= 500 || status === 408 || stat
  * PUTs one chunk, retrying a dropped connection, 5xx, 408 or 429 in place (MAX_ATTEMPTS retries with backoff).
  * Returns any other reply for the caller to judge.
  */
-async function putTikTokChunk(url: string, init: { headers: Record<string, string>; body: Uint8Array }, a: UploadArgs, sleep: (ms: number) => Promise<void>) {
+async function putTikTokChunk(url: string, init: { headers: Record<string, string>; body: Uint8Array }, a: UploadArgs, sleep: (ms: number) => Promise<void>, unsure: boolean) {
   for (let failures = 0; failures <= MAX_ATTEMPTS; failures++) {
     if (failures > 0) await sleepOrAbort(1000 * 2 ** (failures - 1), a.signal, sleep);
     if (a.signal.aborted) throw cancelled();
@@ -135,7 +137,7 @@ async function putTikTokChunk(url: string, init: { headers: Record<string, strin
       if (!retryInPlace(res.status)) return res;
     } catch { if (a.signal.aborted) throw cancelled(); }
   }
-  throw new UploadError("The connection dropped. Post again to restart the TikTok upload.", false);
+  throw new UploadError(unsure ? "The connection dropped at the end of the upload. Check your TikTok profile before posting again." : "The connection dropped. Post again to restart the TikTok upload.", false);
 }
 
 /**
@@ -150,13 +152,14 @@ export async function uploadTikTokChunks(url: string, a: UploadArgs): Promise<vo
     const { start, end } = ranges[i], last = i === ranges.length - 1;
     if (a.signal.aborted) throw cancelled();
     const body = readChunk(a.reader, start, end - start);
-    const res = await putTikTokChunk(url, { headers: { "Content-Type": a.mimeType, "Content-Range": `bytes ${start}-${end - 1}/${total}` }, body }, a, sleep);
+    const unsure = last && a.publishes === true;
+    const res = await putTikTokChunk(url, { headers: { "Content-Type": a.mimeType, "Content-Range": `bytes ${start}-${end - 1}/${total}` }, body }, a, sleep, unsure);
     const s = res.status;
     if (s === 200 || s === 201) { if (!last) throw again("TikTok ended the upload early."); }
     else if (s === 206) { if (last) throw again("TikTok did not confirm the upload."); }
     else if (s === 403) throw again("The TikTok upload link expired.");
     // On the last chunk a 416 usually means a retry of a chunk TikTok already has: the video may well be there.
-    else if (s === 416) throw last ? new UploadError("TikTok may already have this video — check your TikTok inbox before posting again.", false) : again("TikTok lost track of the upload.");
+    else if (s === 416) throw last ? new UploadError(a.publishes === true ? "TikTok may already have this video — check your TikTok profile before posting again." : "TikTok may already have this video — check your TikTok inbox before posting again.", false) : again("TikTok lost track of the upload.");
     else if (s >= 400) throw new UploadError(await platformText(res, `Upload failed (${s}).`), false);
     else throw again("TikTok sent an unexpected reply.");
     a.onProgress(end / total);
