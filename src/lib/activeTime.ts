@@ -49,3 +49,8 @@ export function whenActive(then: () => void): () => void {
   });
   return () => { if (waiting) { waiting = false; sub.remove(); } };
 }
+
+/** Settles as soon as the app is in front (at once when it is). */
+export function untilActive(): Promise<void> {
+  return new Promise<void>((resolve) => { whenActive(resolve); });
+}

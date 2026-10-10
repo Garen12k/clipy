@@ -5,7 +5,7 @@ import { clipDuration } from "@/src/editor/model/timeline";
 import { activeCutout, clampExportSettings, DEFAULT_EXPORT_SETTINGS, EFFECT_END_SLACK, frameAspect, type Clip, type ExportSettings, type LayerClip, type Project } from "@/src/editor/model/types";
 import { steadyOf } from "@/src/editor/model/steady";
 import { addExportListener, cancelExport, exportTimeline, isCutoutAvailable, isNativeAvailable, isSoundAvailable, isSteadyAvailable, toExportAudioTrack, toExportClip, toExportEffect, toExportLayer, toExportOverlay, type ExportAudioTrack } from "@/modules/clipy-video";
-import { EXPORT_INTERRUPTED, isBackgroundExportBuild } from "@/modules/clipy-video/background";
+import { EXPORT_INTERRUPTED, isBackgroundExportBuild, saysInterrupted } from "@/modules/clipy-video/background";
 import { activeTimeout, whenActive } from "@/src/lib/activeTime";
 import { expoFs } from "@/src/projects/expoFs";
 import { beginRun, EXPORT_RESTARTED, type ExportRun, type RunOutcome } from "./backgroundExport";
@@ -72,7 +72,7 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
   const fail = useCallback((message: string, code?: string) => {
     unwatch();
     const again = asked.current;
-    const interrupted = (code === EXPORT_INTERRUPTED || left.current) && isBackgroundExportBuild();
+    const interrupted = (code === EXPORT_INTERRUPTED || left.current || saysInterrupted(message)) && isBackgroundExportBuild();
     if (!interrupted || !again || restarts.current >= MAX_RESTARTS) {
       endRun("error");
       setState({ status: "error", progress: 0, message });

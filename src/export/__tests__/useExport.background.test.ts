@@ -15,6 +15,7 @@ jest.mock("@/modules/clipy-video", () => ({
 }));
 jest.mock("@/modules/clipy-video/background", () => ({
   EXPORT_INTERRUPTED: "interrupted",
+  saysInterrupted: jest.requireActual("@/modules/clipy-video/background").saysInterrupted,
   isBackgroundExportBuild: jest.fn(() => true),
   backgroundExportSupport: jest.fn(() => ({ os: "27.0", continued: true, gpu: false })),
   beginBackgroundExport: jest.fn(async () => ({ grace: true, continued: true, reason: "" })),

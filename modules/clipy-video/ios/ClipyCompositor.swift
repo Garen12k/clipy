@@ -239,6 +239,9 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
   func renderContextChanged(_ newRenderContext: AVVideoCompositionRenderContext) {}
 
   func startRequest(_ req: AVAsynchronousVideoCompositionRequest) {
+    // In the background the GPU may not be used: the frame is not drawn and not finished. It WAITS — and is drawn by
+    // this same function the moment the app is in front again, or given back if the export is cancelled meanwhile.
+    if hold(req) { return }
     // How often the app had left when this frame was begun: asked again once it is drawn (`drawnInFront`).
     let leaves = ExportPause.shared.leaveCount
     guard let inst = req.videoCompositionInstruction as? ClipyInstruction, let out = req.renderContext.newPixelBuffer() else {
@@ -312,16 +315,32 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
     }
     ctx.render(result.cropped(to: rect).composited(over: black), to: out)
     // The render above says nothing when the GPU refused it. A frame that was not drawn with the app in front from
-    // its first line to here is therefore never handed on: the request fails, and the export ends as INTERRUPTED
-    // (`ExportInterruption`) instead of carrying a wrong picture.
+    // its first line to here is therefore never handed on. The app is still away: the frame waits and is drawn
+    // again, into a new buffer, when it is back. The app left AND came back within this one frame: nothing can say
+    // what was drawn, so the request fails and the export ends as INTERRUPTED (`ExportInterruption`) instead of
+    // carrying a wrong picture.
     guard ClipyCompositor.drawnInFront(since: leaves) else {
+      if hold(req) { return }
       req.finish(with: ExportInterruption.frameError())
       return
     }
     req.finish(withComposedVideoFrame: out)
   }
 
-  func cancelAllPendingVideoCompositionRequests() {}
+  /// The frames that wait for the app to be in front are given back as cancelled; a frame that is being drawn
+  /// finishes by itself, as it always did.
+  func cancelAllPendingVideoCompositionRequests() {
+    for frame in ExportPause.shared.release(owner: ObjectIdentifier(self)) { frame.cancel() }
+  }
+
+  /// Keeps the request while the app is in the background (`ExportPause.hold`): true = it waits, and the caller
+  /// returns without drawing or finishing it.
+  private func hold(_ req: AVAsynchronousVideoCompositionRequest) -> Bool {
+    return ExportPause.shared.hold(HeldFrame(
+      owner: ObjectIdentifier(self),
+      draw: { self.startRequest(req) },
+      cancel: { req.finishCancelledRequest() }))
+  }
 
   /// Whether a frame begun when the app had left `leaves` times was drawn with the app in front the whole time: iOS
   /// lets only an app in front use the GPU, and `ctx.render` does not report a refusal.

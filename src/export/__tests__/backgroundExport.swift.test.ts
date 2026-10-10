@@ -62,7 +62,7 @@ describe("a frame's outcome is known", () => {
   });
 
   test("a frame that was not drawn with the app in front all the way is never handed on", () => {
-    inOrder(body, ["let leaves = ExportPause.shared.leaveCount", "guard let inst = req.videoCompositionInstruction", "ctx.render(", "guard ClipyCompositor.drawnInFront(since: leaves) else {", "req.finish(with: ExportInterruption.frameError())", "return", "req.finish(withComposedVideoFrame: out)"]);
+    inOrder(body, ["if hold(req) { return }", "let leaves = ExportPause.shared.leaveCount", "guard let inst = req.videoCompositionInstruction", "ctx.render(", "guard ClipyCompositor.drawnInFront(since: leaves) else {", "if hold(req) { return }", "req.finish(with: ExportInterruption.frameError())", "return", "req.finish(withComposedVideoFrame: out)"]);
     expect(between(compositor, "  static func drawnInFront(since leaves: Int) -> Bool {", "\n  }\n")).toContain("return !ExportPause.shared.hasLeft(since: leaves)");
   });
 });
@@ -86,5 +86,58 @@ describe("an interrupted export says so", () => {
     // done and cancelled are what they were
     expect(session).toContain('self.onEvent(["jobId": jobId, "type": "done", "fileUri": outputURL.absoluteString])');
     expect(session).toContain('        try? FileManager.default.removeItem(at: outputURL)\n        self.onEvent(["jobId": jobId, "type": "cancelled"])');
+  });
+});
+
+describe("in the background the frames WAIT (they are neither drawn nor finished), and go on by themselves", () => {
+  test("deciding and keeping are one step under the lock; the waiting frames are drawn when the app is active again, off the main thread", () => {
+    const hold = between(background, "  func hold(_ frame: HeldFrame) -> Bool {", "\n  }\n");
+    inOrder(hold, ["lock.lock()", "let keep = background", "if keep { held.append(frame) }", "lock.unlock()", "return keep"]);
+    const set = between(background, "  private func set(background now: Bool) {", "\n  }\n");
+    inOrder(set, ["lock.lock()", "if !now {", "waiting = held", "held = []", "lock.unlock()", "drawing.async {", "for frame in waiting { frame.draw() }"]);
+    expect(background).toContain('private let drawing = DispatchQueue(label: "clipy.export.held")');
+  });
+
+  test("the compositor keeps a request with how to draw it again and how to give it back; a cancel gives every waiting one back", () => {
+    const keep = between(compositor, "  private func hold(_ req: AVAsynchronousVideoCompositionRequest) -> Bool {", "\n  }\n");
+    expect(keep).toContain("owner: ObjectIdentifier(self)");
+    expect(keep).toContain("draw: { self.startRequest(req) }");
+    expect(keep).toContain("cancel: { req.finishCancelledRequest() }");
+    const cancel = between(compositor, "  func cancelAllPendingVideoCompositionRequests() {", "\n  }\n");
+    expect(cancel).toContain("for frame in ExportPause.shared.release(owner: ObjectIdentifier(self)) { frame.cancel() }");
+    const release = between(background, "  func release(owner: ObjectIdentifier) -> [HeldFrame] {", "\n  }\n");
+    inOrder(release, ["lock.lock()", "held.filter", "held.removeAll", "return own"]);
+  });
+
+  test("a flag that is ever wrong is put right by asking the app itself, on the main thread", () => {
+    const confirm = between(background, "  private func confirm() {", "\n  }\n");
+    inOrder(confirm, ["DispatchQueue.main.async {", "UIApplication.shared.applicationState == .active", "self.set(background: false)"]);
+  });
+});
+
+describe("a cut-out or steady copy made while the app was away is never kept", () => {
+  test("leaving stops every copy being made, and each answers as interrupted, not as cancelled", () => {
+    expect(moduleFile).toContain("      ExportPause.shared.onChange { [weak self] (left: Bool) -> Void in\n        if left { self?.interruptCopies() }\n      }");
+    const stop = between(moduleFile, "  private func interruptCopies() {", "\n  }\n");
+    inOrder(stop, ["let cutouts = cutoutJobs", "let steadies = steadyJobs", "leftJobs.insert(id)", "for job in cutouts.values { job.cancel() }", "for job in steadies.values { job.cancel() }"]);
+    expect(stop).not.toContain("soundJobs");                                    // sound copies do not use the GPU: they go on
+    expect(moduleFile.match(/if self\?\.takeLeft\(jobId\) == true \{\n\s+promise\.reject\("E_(CUTOUT|STEADY)_INTERRUPTED"/g)).toHaveLength(3);
+    expect(moduleFile.match(/promise\.reject\("E_CUTOUT_CANCELLED", "Cutout cancelled"\)/g)).toHaveLength(1);
+    expect(moduleFile.match(/promise\.reject\("E_STEADY_CANCELLED", "Steady cancelled"\)/g)).toHaveLength(2);
+  });
+
+  test("each of the three renders reads the count first, is not started in the background, and a finished copy is checked BEFORE it is answered and removed if the app was away", () => {
+    for (const name of ["renderCutout", "measureShake", "renderSteady"]) {
+      const body = between(moduleFile, `    AsyncFunction("${name}")`, "\n    }\n");
+      const kind = name === "renderCutout" ? "CUTOUT" : "STEADY";
+      inOrder(body, ["let leaves = ExportPause.shared.leaveCount", "if ExportPause.shared.isBackground {", `promise.reject("E_${kind}_INTERRUPTED"`, "return", "do {", "if ExportPause.shared.hasLeft(since: leaves) {", `promise.reject("E_${kind}_INTERRUPTED"`, "return", "promise.resolve(answer)"]);
+      if (name !== "measureShake") expect(between(body, "if ExportPause.shared.hasLeft(since: leaves) {", "return")).toContain("ExportSession.removeFile(atPath: request.outputPath)");
+    }
+    expect(between(moduleFile, '    AsyncFunction("renderCutout")', "\n    }\n")).toContain("if !request.stillPath.isEmpty { ExportSession.removeFile(atPath: request.stillPath) }");
+    expect(moduleFile).toContain('return kind + " interrupted: Clipy was in the background while the copy was made"');
+  });
+
+  test("the render files themselves are untouched", () => {
+    for (const file of ["CutoutRender.swift", "SteadyRender.swift", "MediaPrePass.swift", "SoundRender.swift"]) expect(read(file)).not.toContain("ExportPause");
   });
 });

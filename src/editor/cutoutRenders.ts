@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { activeTimeout } from "@/src/lib/activeTime";
+import { isRenderInterrupted } from "@/modules/clipy-video/background";
+import { activeTimeout, untilActive } from "@/src/lib/activeTime";
 import { addCutoutListener, cancelCutout, CUTOUT_CANCELLED, isCutoutAvailable, isCutoutCancelled, renderCutout, type CutoutRequest } from "@/modules/clipy-video";
 import { CUTOUT, cutoutDeadlineMs, cutoutStillName, neededCutouts, parseCutoutName, type NeededCutout } from "@/src/editor/model/cutout";
 import type { Project } from "@/src/editor/model/types";
@@ -193,6 +194,8 @@ async function pump(): Promise<void> {
       } catch (e) {
         if (!stillOpen()) continue;
         if (isCutoutCancelled(e)) { setFile(next.name, null); continue; }   // nobody needed it any more; if someone does again, it is rendered again
+        // Clipy was left while the copy was made: it left no file, and is made again once Clipy is in front (never a failure).
+        if (isRenderInterrupted(e)) { setFile(next.name, null); await untilActive(); continue; }
         const message = e instanceof Error ? e.message : String(e);
         console.warn("cutout render failed", message);
         setFile(next.name, { status: "failed", message });

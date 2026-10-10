@@ -18,6 +18,10 @@ final class ExportPause: @unchecked Sendable {
   private var background = false   // guarded by `lock`
   private var leaves = 0           // guarded by `lock`
   private var watching = false     // guarded by `lock`
+  private var held: [HeldFrame] = []                // guarded by `lock`: the frames that wait for the app to be in front
+  private var watchers: [(Bool) -> Void] = []       // guarded by `lock`: told each change (true = left), on the main thread
+  /// Where the frames that waited are drawn, one after the other, once the app is in front again.
+  private let drawing = DispatchQueue(label: "clipy.export.held")
 
   private init() {}
 
@@ -46,7 +50,63 @@ final class ExportPause: @unchecked Sendable {
     let changed = background != now
     background = now
     if changed && now { leaves += 1 }
+    var waiting: [HeldFrame] = []
+    if !now {
+      waiting = held
+      held = []
+    }
+    let tell: [(Bool) -> Void] = changed ? watchers : []
     lock.unlock()
+    if !waiting.isEmpty {
+      drawing.async {
+        for frame in waiting { frame.draw() }
+      }
+    }
+    for watcher in tell { watcher(now) }
+  }
+
+  /// `watcher` is called with true when the app has entered the background and with false when it is active again
+  /// (on the main thread, after the flag has changed). Never removed: the callers live as long as the app.
+  func onChange(_ watcher: @escaping (Bool) -> Void) {
+    lock.lock()
+    watchers.append(watcher)
+    lock.unlock()
+  }
+
+  /// Keeps `frame` for as long as the app is in the background: true = kept (the caller must neither draw nor finish
+  /// it now; it is drawn when the app is active again, or given back by `release`), false = the app is in front and
+  /// nothing was kept. Deciding and keeping are one step under the lock, so a frame cannot be kept just after the
+  /// waiting ones were let go.
+  func hold(_ frame: HeldFrame) -> Bool {
+    lock.lock()
+    let keep = background
+    if keep { held.append(frame) }
+    lock.unlock()
+    // Should the flag ever be wrong (a notification that did not come), the app's own answer puts it right.
+    if keep { confirm() }
+    return keep
+  }
+
+  /// The frames `owner` has waiting, taken out: its export was cancelled, and each must be given back (`cancel`).
+  func release(owner: ObjectIdentifier) -> [HeldFrame] {
+    lock.lock(); defer { lock.unlock() }
+    let own = held.filter { (frame: HeldFrame) -> Bool in frame.owner == owner }
+    held.removeAll { (frame: HeldFrame) -> Bool in frame.owner == owner }
+    return own
+  }
+
+  /// How many frames wait now.
+  var heldCount: Int {
+    lock.lock(); defer { lock.unlock() }
+    return held.count
+  }
+
+  /// Asks the app itself, on the main thread, whether it is active — and if it is while the flag says background,
+  /// the flag is put right (and the waiting frames are drawn).
+  private func confirm() {
+    DispatchQueue.main.async {
+      if UIApplication.shared.applicationState == .active { self.set(background: false) }
+    }
   }
 
   /// Whether the app is in the background now.
@@ -67,6 +127,14 @@ final class ExportPause: @unchecked Sendable {
     lock.lock(); defer { lock.unlock() }
     return background || leaves != count
   }
+}
+
+/// A frame the export's compositor could not draw because the app was in the background: how to draw it once the app
+/// is in front again, and how to give it back unfinished when its export is cancelled. `owner` is the compositor.
+struct HeldFrame {
+  let owner: ObjectIdentifier
+  let draw: () -> Void
+  let cancel: () -> Void
 }
 
 /// An export (or a copy made for it) that did not fail by itself: it was ended, or could not be trusted, because the

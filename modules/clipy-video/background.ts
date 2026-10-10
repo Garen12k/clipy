@@ -15,6 +15,16 @@ export interface BackgroundRun { grace: boolean; continued: boolean; reason: str
 export type BackgroundExportEvent = { runId: string; type: "cancel" | "expired" };
 /** The `code` of an export `error` event that was not a failure of the export itself: the app was in the background during it. */
 export const EXPORT_INTERRUPTED = "interrupted";
+/**
+ * Whether a native render (a cut-out or a steady copy) rejected because Clipy was in the background while it was made: its code
+ * ends in `_INTERRUPTED`. Such a copy left no file and is simply made again once Clipy is in front. Never true on an older build.
+ */
+export function isRenderInterrupted(e: unknown): boolean {
+  const code = typeof e === "object" && e !== null ? (e as { code?: unknown }).code : undefined;
+  return typeof code === "string" && code.endsWith("_INTERRUPTED");
+}
+/** Whether a message is an interruption's: the native side starts those with "<what> interrupted: " (kept through the words a preparation puts before it). */
+export function saysInterrupted(message: string): boolean { return /(^|[ :(])(export|cutout|steady) interrupted: /.test(message); }
 
 type BackgroundNative = {
   backgroundExportSupport?: () => BackgroundSupport;
