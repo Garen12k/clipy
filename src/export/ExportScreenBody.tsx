@@ -17,6 +17,7 @@ import { ScreenBar } from "@/src/ui/ScreenBar";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Segmented } from "@/src/ui/Segmented";
 import { Body, Title } from "@/src/ui/Text";
+import { NotifyOfferCard, useNotifyOffer } from "./notifyOffer";
 import { canExport4K, estimateBytes, exportableClips, exportDuration, formatBytes, QUALITY_LABELS, RESOLUTIONS, type Resolution } from "./estimate";
 import type { ExportState } from "./useExport";
 
@@ -61,6 +62,10 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
     if (state.status === "done" && !wasDone.current) haptic("success");
     wasDone.current = state.status === "done";
   }, [state.status]);
+  // The notification offer (only while iOS has never been asked). Its room is kept after Continue, at the height it was drawn with,
+  // until the export ends: the ring and Cancel stay where they are when the card goes.
+  const offer = useNotifyOffer(state.status === "exporting");
+  const [offerHeight, setOfferHeight] = useState(0);
   const resLabel = RESOLUTIONS.find((r) => r.value === res)?.label ?? "";
   const estimate = formatBytes(estimateBytes(duration, res, settings));
 
@@ -105,9 +110,17 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
         </ScrollView>
       )}
       {state.status === "exporting" && (
-        <View style={centre}>
-          <ProgressRing progress={state.progress} size={theme.size.ring} />
-          <Body muted>Exporting…</Body>
+        // The ring keeps the middle; the offer has its own place under it, above the pinned Cancel — never among the pinned actions.
+        <View style={{ flex: 1 }}>
+          <View style={centre}>
+            <ProgressRing progress={state.progress} size={theme.size.ring} />
+            <Body muted>Exporting…</Body>
+          </View>
+          {offer.shown ? (
+            <View testID="export-notify-place" onLayout={(e) => setOfferHeight(e.nativeEvent.layout.height)} style={{ paddingHorizontal: theme.space.gutter }}>
+              <NotifyOfferCard onContinue={offer.accept} />
+            </View>
+          ) : offer.kept ? <View testID="export-notify-place" style={{ height: offerHeight }} /> : null}
         </View>
       )}
       {state.status === "done" && (

@@ -1,3 +1,4 @@
+jest.unmock("@/src/projects/camera");   // jest.setup.ts gives every other suite a phone without a camera
 jest.mock("expo", () => ({ isRunningInExpoGo: jest.fn(() => false) }));
 jest.mock("@/modules/clipy-video", () => ({ isPeaksAvailable: jest.fn(() => true) }));
 jest.mock("expo-image-picker", () => ({ requestCameraPermissionsAsync: jest.fn(), launchCameraAsync: jest.fn() }));
@@ -53,18 +54,30 @@ test("closing the camera, a refusal and a camera that cannot open are told apart
   expect(await takeMedia()).toEqual({ status: "unavailable" });
 });
 
-test("no screen opens the camera yet: only this wrapper opens it; the wizard's permission row (src/auth/permissions.ts) asks canUseCamera() and nothing more", () => {
+test("only this wrapper opens the camera, and only the menu's file (src/projects/mediaSource.ts) calls it — for New Project and the editor's \"+\"; the wizard's permission row asks canUseCamera() and nothing more", () => {
   const root = join(__dirname, "..", "..", "..");
-  const found: string[] = [];
+  const files: { rel: string; src: string }[] = [];
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const p = join(dir, name);
       if (statSync(p).isDirectory()) { if (name !== "__tests__" && name !== "node_modules") walk(p); }
-      else if (/\.tsx?$/.test(name) && /launchCameraAsync|takeMedia\(|projects\/camera"/.test(readFileSync(p, "utf8"))) found.push(p.slice(root.length + 1).split("\\").join("/"));
+      else if (/\.tsx?$/.test(name)) files.push({ rel: p.slice(root.length + 1).split("\\").join("/"), src: readFileSync(p, "utf8") });
     }
   };
   walk(join(root, "src")); walk(join(root, "app"));
-  expect(found.sort()).toEqual(["src/auth/permissions.ts", "src/projects/camera.ts"]);
+  const naming = (what: RegExp) => files.filter((f) => what.test(f.src)).map((f) => f.rel).sort();
+  expect(naming(/launchCameraAsync|takeMedia\(|projects\/camera"|from "\.\/camera"/)).toEqual(["src/auth/permissions.ts", "src/projects/camera.ts", "src/projects/mediaSource.ts"]);
+  expect(naming(/launchCameraAsync/)).toEqual(["src/projects/camera.ts"]);
+  expect(naming(/takeMedia\(/)).toEqual(["src/projects/camera.ts", "src/projects/mediaSource.ts"]);
   const wizard = readFileSync(join(root, "src", "auth", "permissions.ts"), "utf8");
   expect(/launchCameraAsync|takeMedia\(/.test(wizard)).toBe(false);
+  // The menu and the camera are reached from exactly two places: Home's New Project and the editor's add-clip flow.
+  expect(naming(/projects\/mediaSource"/)).toEqual(["app/index.tsx", "src/editor/useClipMedia.ts"]);
+  expect(naming(/takeOne\(/)).toEqual(["app/index.tsx", "src/editor/useClipMedia.ts", "src/projects/mediaSource.ts"]);
+  // The camera item is never shown without asking first whether the installed app may open it.
+  for (const rel of ["app/index.tsx", "src/editor/useClipMedia.ts"]) {
+    const src = files.find((f) => f.rel === rel)!.src;
+    expect(src).toContain('const source = sourceMenuShown() ? await askSource() : "library";');
+    expect(src.split("takeOne(").length - 1).toBe(1);
+  }
 });

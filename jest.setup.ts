@@ -5,6 +5,14 @@
 // The test phone is older than Liquid Glass (iOS 26): every suite sees the SOLID app — the pixels it had before the glass trial —
 // whatever `GLASS` in theme.ts says. The suites about glass say otherwise themselves (Glass*.test.tsx, home.glass, toolbar.glass).
 jest.mock("expo-glass-effect", () => ({ GlassView: require("react-native").View, GlassContainer: require("react-native").View, isLiquidGlassAvailable: () => false, isGlassEffectAPIAvailable: () => false }));
+// The test phone cannot open the camera (as an installed app from before "icons and light" cannot): every suite sees New Project and
+// the editor's "+" go straight to the library, with no menu. The suites about the camera say otherwise themselves
+// (camera.test.ts unmocks this; homeCamera / AddClipTile.camera mock the module).
+jest.mock("@/src/projects/camera", () => ({ ...jest.requireActual("@/src/projects/camera"), canUseCamera: () => false }));
+// The test phone has no notifications either: the Export screen offers nothing and an export's end shows nothing, and the real
+// package is never loaded. The suites about them say otherwise themselves (notify.test.ts unmocks this; notifyOffer / exportNotice /
+// the permission suites mock the module).
+jest.mock("@/src/lib/notify", () => ({ notifyAvailable: () => false, notifyState: async () => "unavailable", askToNotify: async () => false, notifyDone: async () => false }));
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], isLoaded: () => true }));
 // Audio feature deps: harmless defaults so suites that mount EditorToolbar (which always
 // renders AddAudioSheet) don't need to know about them. AddAudioSheet.test.tsx overrides these

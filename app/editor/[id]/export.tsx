@@ -6,6 +6,7 @@ import { coverTimeOf, LAST_FRAME_SLACK } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { ExportScreenBody } from "@/src/export/ExportScreenBody";
 import { exportDuration } from "@/src/export/estimate";
+import { useExportNotice } from "@/src/export/exportNotice";
 import { useExport } from "@/src/export/useExport";
 import { exportGesture } from "@/src/navigation/screenOptions";
 import { isBackendConfigured } from "@/src/publish/supabase";
@@ -18,6 +19,8 @@ export default function ExportScreen() {
   // While the video renders the sheet cannot be swiped away (see exportGesture); Cancel is the way out.
   const navigation = useNavigation();
   useEffect(() => { navigation.setOptions(exportGesture(state.status)); }, [navigation, state.status]);
+  // An export that finishes while the app is not in front says so with one local notification (where they are allowed).
+  useExportNotice(state.status, project?.name ?? "");
   if (!project) return null;
 
   // `expo-media-library`'s default (non-legacy) `saveToLibraryAsync` is a shim that throws at
