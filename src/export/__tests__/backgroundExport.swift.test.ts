@@ -31,7 +31,7 @@ const inOrder = (text: string, parts: string[]): void => {
 describe("the app's state, known on every thread", () => {
   test("the flag turns on when the app has entered the background and off only when it is active again; both under the lock", () => {
     const watch = between(background, "  func watch() {", "\n  }\n");
-    inOrder(watch, ["UIApplication.didEnterBackgroundNotification", "self?.set(background: true)", "UIApplication.didBecomeActiveNotification", "self?.set(background: false)"]);
+    inOrder(watch, ["UIApplication.didEnterBackgroundNotification", "self.set(background: true)", "UIApplication.didBecomeActiveNotification", "self.set(background: false)"]);
     expect(watch).not.toContain("willEnterForeground");
     const set = between(background, "  private func set(background now: Bool) {", "\n  }\n");
     inOrder(set, ["lock.lock()", "background = now", "leaves += 1", "lock.unlock()"]);
@@ -94,7 +94,7 @@ describe("in the background the frames WAIT (they are neither drawn nor finished
     const hold = between(background, "  func hold(_ frame: HeldFrame) -> Bool {", "\n  }\n");
     inOrder(hold, ["lock.lock()", "let keep = background", "if keep { held.append(frame) }", "lock.unlock()", "return keep"]);
     const set = between(background, "  private func set(background now: Bool) {", "\n  }\n");
-    inOrder(set, ["lock.lock()", "if !now {", "waiting = held", "held = []", "lock.unlock()", "drawing.async {", "for frame in waiting { frame.draw() }"]);
+    inOrder(set, ["lock.lock()", "let waiting: [HeldFrame] = now ? [] : held", "if !now { held = [] }", "lock.unlock()", "drawing.async {", "for frame in waiting { frame.draw() }"]);
     expect(background).toContain('private let drawing = DispatchQueue(label: "clipy.export.held")');
   });
 
@@ -180,5 +180,109 @@ describe("the grace period on every iOS", () => {
     expect(moduleFile).toContain('self?.sendEvent("onBackgroundExportEvent", ["runId": runId, "type": type])');
     const js = readFileSync(join(IOS, "..", "background.ts"), "utf8");
     for (const name of ["beginBackgroundExport", "reportBackgroundExport", "endBackgroundExport", "onBackgroundExportEvent"]) expect(js).toContain(name);
+  });
+});
+
+describe("the continued processing task (iOS 26 and later)", () => {
+  const keeper = between(background, "final class ExportKeepAlive", "\n}\n");
+  const continued = between(background, "enum ContinuedExport {", "\n}\n");
+  const appJson = JSON.parse(readFileSync(join(IOS, "..", "..", "..", "app.json"), "utf8")) as { expo: { ios: { bundleIdentifier: string; infoPlist: Record<string, unknown>; entitlements?: unknown }; plugins: unknown[] } };
+
+  test("every BackgroundTasks symbol newer than iOS 16.4 is in ONE file, inside the compile guard, behind #available(iOS 26", () => {
+    const NEW = /BGContinuedProcessingTask|BGContinuedProcessingTaskRequest|supportedResources|updateTitle\(|\.strategy\b/;
+    const ios = join(IOS);
+    for (const file of require("fs").readdirSync(ios).filter((n: string) => n.endsWith(".swift") && n !== "ExportBackground.swift")) expect({ file, clean: !/BGTask|BackgroundTasks|BGContinued/.test(read(file)) }).toEqual({ file, clean: true });
+    // Walk the file: a line of code that names a new symbol must be inside `#if canImport(BackgroundTasks) && compiler(>=6.2)` …
+    let guarded = 0;
+    const lines = background.split("\n");
+    lines.forEach((line, i) => {
+      if (line.startsWith("#if canImport(BackgroundTasks) && compiler(>=6.2)") || line.trim() === "#if canImport(BackgroundTasks) && compiler(>=6.2)") guarded += 1;
+      else if (line.trim() === "#else" || line.trim() === "#endif") guarded = Math.max(0, guarded - 1);
+      const code = line.replace(/\/\/.*$/, "");
+      if (!NEW.test(code)) return;
+      expect({ line: line.trim(), guarded: guarded > 0 }).toEqual({ line: line.trim(), guarded: true });
+      // … and under an availability check: its own line, an enclosing `if #available`, or a declaration marked `@available(iOS 26.0, *)`.
+      const before = lines.slice(Math.max(0, i - 60), i + 1).join("\n");
+      expect({ line: line.trim(), available: /#available\(iOS 26\.0, \*\)|@available\(iOS 26\.0, \*\)/.test(before) }).toEqual({ line: line.trim(), available: true });
+    });
+    expect(background).toContain("#if canImport(BackgroundTasks)\nimport BackgroundTasks\n#endif");
+    expect(background).toContain("#if canImport(BackgroundTasks) && compiler(>=6.2)\n/// The continued processing task of iOS 26");
+    expect(background).toContain("@available(iOS 26.0, *)\nenum ContinuedExport {");
+    expect(background).toContain("  @available(iOS 26.0, *)\n  func attach(_ continued: BGContinuedProcessingTask, runId: String) {");
+    // nothing from iOS 27 is named: the build's SDK (Xcode 26.6) does not have it
+    expect(background).not.toMatch(/submitTaskRequest|iOS 27/);
+    // the task is held as AnyObject: a stored property cannot be marked as newer than the app's minimum
+    expect(keeper).toContain("  private var task: AnyObject?");
+  });
+
+  test("the identifier submitted is the one Info.plist permits: <bundle id>.export.<run> under <bundle id>.export.*", () => {
+    expect(continued).toContain('static let middle = ".export."');
+    expect(continued).toContain('guard permitted.contains(bundle + middle + "*") else { return "identifier not in Info.plist" }');
+    expect(continued).toContain("let identifier = bundle + middle + run");
+    expect(appJson.expo.ios.infoPlist.BGTaskSchedulerPermittedIdentifiers).toEqual([`${appJson.expo.ios.bundleIdentifier}.export.*`]);
+    expect(appJson.expo.ios.bundleIdentifier).toBe("com.astinos.clipy");
+  });
+
+  test("app.json adds that one key and nothing else: no background mode, no entitlement, the push-entitlement remover still first", () => {
+    expect(Object.keys(appJson.expo.ios.infoPlist).sort()).toEqual(["BGTaskSchedulerPermittedIdentifiers", "ITSAppUsesNonExemptEncryption", "NSMicrophoneUsageDescription", "NSSpeechRecognitionUsageDescription"]);
+    expect(appJson.expo.ios.infoPlist.UIBackgroundModes).toBeUndefined();
+    expect(appJson.expo.ios.entitlements).toBeUndefined();
+    expect(appJson.expo.plugins[0]).toBe("./plugins/withoutPushEntitlement");
+    expect(JSON.stringify(appJson)).not.toMatch(/continued-processing|aps-environment/);
+  });
+
+  test("registered for this export's own identifier, then submitted: strategy fail, NO resources asked for; a refusal is only a reason", () => {
+    inOrder(continued, ["BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil)", "guard let continued = task as? BGContinuedProcessingTask else {", "task.setTaskCompleted(success: false)", "keeper.attach(continued, runId: runId)", 'guard registered else { return "not registered" }', "BGContinuedProcessingTaskRequest(identifier: identifier, title: title, subtitle: subtitle)", "request.strategy = .fail", "try BGTaskScheduler.shared.submit(request)", 'return ""', "} catch {", 'return "submit: " + ExportSession.describe(error)']);
+    expect(background).not.toMatch(/requiredResources/);
+    expect(continued).toContain("static func submit(runId: String, title: String, subtitle: String, keeper: ExportKeepAlive) -> String {");
+    // the export goes on whatever the answer: `begin` only reports it
+    const begin = between(keeper, "  func begin(runId: String,", "\n  }\n");
+    inOrder(begin, ["beginGrace(runId)", "if #available(iOS 26.0, *) {", "reason = ContinuedExport.submit(", "continued = reason.isEmpty", 'return ["grace": true, "continued": continued, "reason": reason]']);
+  });
+
+  test("an app that died while the system was asked never asks again (two marker files), so the worst case is one crash, not every export", () => {
+    inOrder(continued, ['if files.fileExists(atPath: off.path) { return "switched off after a crash" }', "if files.fileExists(atPath: trying.path) {", "files.createFile(atPath: off.path, contents: nil)", "guard files.createFile(atPath: trying.path, contents: nil) else", "defer { try? files.removeItem(at: trying) }", "BGTaskScheduler.shared.register("]);
+  });
+
+  test("the progress of the task is the progress of the export, and the second line says when the video waits", () => {
+    expect(keeper).toContain("static let units: Int64 = 1000");
+    const attach = between(keeper, "  func attach(_ continued: BGContinuedProcessingTask, runId: String) {", "\n  }\n");
+    inOrder(attach, ["let mine = self.runId == runId && outcome == nil && task == nil", "if mine { task = continued }", "guard mine else {", "continued.setTaskCompleted(success: false)", "continued.progress.totalUnitCount = ExportKeepAlive.units", "continued.expirationHandler = {", "self.expired(runId: runId)"]);
+    expect(between(keeper, "  private func show(", "\n  }\n")).toContain("continued.progress.completedUnitCount = Int64((now * Double(ExportKeepAlive.units)).rounded())");
+    const changed = between(keeper, "  private func appChanged(left: Bool) {", "\n  }\n");
+    expect(changed).toContain("let second = left ? ExportKeepAlive.pausedSubtitle : subtitle");
+    expect(changed).toContain("continued.updateTitle(first, subtitle: second)");
+    expect(keeper).toContain('static let pausedSubtitle = "Paused. Open Clipy to go on."');
+    // while the frames wait nothing is invented: the only writers of the progress are the export's own number and its end
+    expect(keeper.match(/completedUnitCount = /g)).toHaveLength(3);
+  });
+
+  test("setTaskCompleted exactly once on every exit: whoever completes a task has TAKEN it under the lock", () => {
+    const complete = between(keeper, "  private func complete(_ held: AnyObject?, success: Bool) {", "\n  }\n");
+    expect(complete).toContain("continued.setTaskCompleted(success: success)");
+    // the three takers: the export's end, the expiration, and a later export finding a stale one
+    const end = between(keeper, "  func end(runId: String, success: Bool) {", "\n  }\n");
+    inOrder(end, ["lock.lock()", "guard self.runId == runId, outcome == nil else {", "outcome = success", "let held = task", "task = nil", "lock.unlock()", "endGrace(runId)", "complete(held, success: success)"]);
+    const expired = between(keeper, "  private func expired(runId: String) {", "\n  }\n");
+    inOrder(expired, ["lock.lock()", "guard self.runId == runId, outcome == nil, let held = task else {", "task = nil", "lock.unlock()", "complete(held, success: false)"]);
+    const begin = between(keeper, "  func begin(runId: String,", "\n  }\n");
+    inOrder(begin, ["lock.lock()", "let stale = task", "task = nil", "lock.unlock()", "complete(stale, success: false)"]);
+    expect(keeper.match(/complete\((held|stale), success: /g)).toHaveLength(3);
+    expect(keeper.match(/^ +task = nil$/gm)).toHaveLength(3);
+    expect(keeper.match(/task = continued/g)).toHaveLength(1);
+    // outside `complete`, a task is completed only where it was never kept (not this export's; not a continued task at all)
+    expect(background.match(/setTaskCompleted\(success: false\)/g)).toHaveLength(2);
+  });
+
+  test("the system ending the task does NOT cancel the export; only a stop while the export was moving in the background does", () => {
+    const expired = between(keeper, "  private func expired(runId: String) {", "\n  }\n");
+    expect(expired).toContain("let moving = Date().timeIntervalSince(lastStep) < ExportKeepAlive.movingSeconds");
+    expect(expired).toContain("let away = ExportPause.shared.isBackground");
+    expect(expired).toContain('tell?(away && moving ? "cancel" : "expired")');
+    expect(expired).not.toMatch(/cancelExport|\.cancel\(\)/);       // the native export is never touched from here: the app's Cancel does it
+  });
+
+  test("the podspec links the framework", () => {
+    expect(readFileSync(join(IOS, "ClipyVideo.podspec"), "utf8")).toContain("s.frameworks = 'Speech', 'Accelerate', 'BackgroundTasks'");
   });
 });
