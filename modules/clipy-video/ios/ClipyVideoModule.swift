@@ -183,7 +183,7 @@ public class ClipyVideoModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("ClipyVideo")
-    Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent")
+    Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent", "onBackgroundExportEvent")
 
     // The app's state is watched from the start, so an export knows whether the app was in front (ExportBackground.swift).
     OnCreate {
@@ -613,6 +613,27 @@ public class ClipyVideoModule: Module {
     // Stops that waveform at its next buffer (it then rejects "E_PEAKS_CANCELLED"). An unknown or finished job: nothing.
     Function("cancelSoundPeaks") { (jobId: String) in
       self.lookupPeaksJob(jobId)?.cancel()
+    }
+
+    // The build of 2026-10-13 ("background export"). The app calls this at the tap on Export, before the
+    // preparations: iOS is asked to keep the app alive for the export `runId` (see ExportKeepAlive). Always resolves
+    // `{ grace, continued, reason }`; what the system's interface does to the export arrives as
+    // `onBackgroundExportEvent { runId, type }`. The export itself does not depend on any of it.
+    AsyncFunction("beginBackgroundExport") { (runId: String, title: String, subtitle: String, promise: Promise) in
+      let answer: [String: Any] = ExportKeepAlive.shared.begin(runId: runId, title: title, subtitle: subtitle, onEvent: { [weak self] (type: String) -> Void in
+        self?.sendEvent("onBackgroundExportEvent", ["runId": runId, "type": type])
+      })
+      promise.resolve(answer)
+    }
+
+    // The export's progress, 0 … 1, preparations included (what the Export screen's ring shows).
+    Function("reportBackgroundExport") { (runId: String, progress: Double) in
+      ExportKeepAlive.shared.report(runId: runId, progress: progress)
+    }
+
+    // The export is over: done (`success`), failed or cancelled. Everything begun for it is ended, once.
+    Function("endBackgroundExport") { (runId: String, success: Bool) in
+      ExportKeepAlive.shared.end(runId: runId, success: success)
     }
   }
 }

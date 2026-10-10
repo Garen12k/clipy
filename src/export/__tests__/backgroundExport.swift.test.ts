@@ -141,3 +141,44 @@ describe("a cut-out or steady copy made while the app was away is never kept", (
     for (const file of ["CutoutRender.swift", "SteadyRender.swift", "MediaPrePass.swift", "SoundRender.swift"]) expect(read(file)).not.toContain("ExportPause");
   });
 });
+
+describe("the grace period on every iOS", () => {
+  const begin = between(background, "  private func beginGrace(_ runId: String) {", "\n  }\n");
+  const take = between(background, "  private func takeGrace() -> UIBackgroundTaskIdentifier {", "\n  }\n");
+
+  test("the task is begun with a name and an expiration handler, on the main thread, when the export begins", () => {
+    inOrder(begin, ["DispatchQueue.main.async {", "self.graceRun = runId", 'UIApplication.shared.beginBackgroundTask(withName: "Clipy export") {']);
+    expect(between(background, "  func begin(runId: String,", "\n  }\n")).toContain("beginGrace(runId)");
+    expect(between(background, "  func end(runId: String, success: Bool) {", "\n  }\n")).toContain("endGrace(runId)");
+  });
+
+  test("endBackgroundTask on EVERY path, exactly once: the id is handed out once, and whoever holds a valid one ends it", () => {
+    inOrder(take, ["let id = grace", "grace = .invalid", "return id"]);
+    // every end is fed by the id that was taken (never by the stored one), and only a valid id is ended
+    const ends = background.split("\n").filter((l) => l.includes("UIApplication.shared.endBackgroundTask("));
+    expect(ends).toHaveLength(4);
+    for (const line of ends) expect(line.trim()).toMatch(/^if (stale|expired|id) != \.invalid \{ UIApplication\.shared\.endBackgroundTask\((stale|expired|id)\) \}$|^UIApplication\.shared\.endBackgroundTask\(id\)$/);
+    // a run before this one; the expiration handler; the handler having run before the id was stored; the end of the export
+    inOrder(begin, ["let stale = self.takeGrace()", "endBackgroundTask(stale)", "let expired = self.takeGrace()", "endBackgroundTask(expired)", "if self.graceOpen {", "self.grace = id", "} else if id != .invalid {", "endBackgroundTask(id)"]);
+    const end = between(background, "  private func endGrace(_ runId: String) {", "\n  }\n");
+    inOrder(end, ["DispatchQueue.main.async {", "guard self.graceRun == runId else { return }", "let id = self.takeGrace()", "endBackgroundTask(id)"]);
+    // the stored id is written in one place
+    expect(background.match(/self\.grace = /g)).toHaveLength(1);
+  });
+
+  test("the expiration does not cancel the export, and the frames still wait in that time (the GPU rule holds)", () => {
+    const handler = between(begin, 'beginBackgroundTask(withName: "Clipy export") {', "\n      }\n");
+    expect(handler).not.toMatch(/cancel\(|onEvent/);
+    expect(between(compositor, "  func startRequest(", "\n  }\n")).not.toContain("ExportKeepAlive");
+  });
+
+  test("the three functions of the module and its event are there under the names the JavaScript asks for", () => {
+    expect(moduleFile).toContain('Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent", "onBackgroundExportEvent")');
+    expect(moduleFile).toContain('AsyncFunction("beginBackgroundExport") { (runId: String, title: String, subtitle: String, promise: Promise) in');
+    expect(moduleFile).toContain('Function("reportBackgroundExport") { (runId: String, progress: Double) in');
+    expect(moduleFile).toContain('Function("endBackgroundExport") { (runId: String, success: Bool) in');
+    expect(moduleFile).toContain('self?.sendEvent("onBackgroundExportEvent", ["runId": runId, "type": type])');
+    const js = readFileSync(join(IOS, "..", "background.ts"), "utf8");
+    for (const name of ["beginBackgroundExport", "reportBackgroundExport", "endBackgroundExport", "onBackgroundExportEvent"]) expect(js).toContain(name);
+  });
+});

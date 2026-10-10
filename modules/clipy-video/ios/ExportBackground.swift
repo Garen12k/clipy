@@ -158,3 +158,75 @@ enum ExportInterruption {
     return ["jobId": jobId, "type": "error", "code": code, "message": prefix + message]
   }
 }
+
+/// Keeps the app alive for one export after it is left — one export at a time, from the tap on Export (the
+/// preparations included) to its end. On every iOS: the short time UIKit gives a task that was begun before the app
+/// was left (`beginBackgroundTask`; Apple states no length). The frames of the video still wait while the app is in
+/// the background (`ExportPause`): this time lets the parts that need no GPU finish — a sound copy, the last writes
+/// of a file — and lets the export say what happened before the app is suspended.
+final class ExportKeepAlive: @unchecked Sendable {
+  static let shared = ExportKeepAlive()
+
+  private var graceRun: String?                                      // main thread only
+  private var grace: UIBackgroundTaskIdentifier = .invalid           // main thread only
+  private var graceOpen = false                                      // main thread only
+
+  private init() {}
+
+  /// The export `runId` begins. Answers what was asked of the phone: `grace` (always), `continued` and, when that is
+  /// false, the `reason`.
+  func begin(runId: String, title: String, subtitle: String, onEvent: @escaping (String) -> Void) -> [String: Any] {
+    beginGrace(runId)
+    return ["grace": true, "continued": false, "reason": "not asked"]
+  }
+
+  /// The export's progress, 0 … 1.
+  func report(runId: String, progress value: Double) {}
+
+  /// The export `runId` is over (done, failed or cancelled). A second call, or one for another run, does nothing.
+  func end(runId: String, success: Bool) {
+    endGrace(runId)
+  }
+
+  /// Asks UIKit for time in the background for this export. A run before it that never said it was over is ended
+  /// first. The task is ended exactly once: by `endGrace`, by the next `beginGrace`, or by its own expiration handler
+  /// (which UIKit calls on the main thread shortly before the time is up) — whichever takes the id first (`takeGrace`).
+  private func beginGrace(_ runId: String) {
+    DispatchQueue.main.async {
+      // main thread only
+      let stale = self.takeGrace()
+      if stale != .invalid { UIApplication.shared.endBackgroundTask(stale) }
+      self.graceRun = runId
+      self.graceOpen = true
+      let id = UIApplication.shared.beginBackgroundTask(withName: "Clipy export") {
+        // main thread only: the time is up. The export is not cancelled: the app is suspended and goes on when it is opened.
+        let expired = self.takeGrace()
+        if expired != .invalid { UIApplication.shared.endBackgroundTask(expired) }
+      }
+      // The handler may already have run (iOS could not give the time): then nothing is kept, and the id is ended here.
+      if self.graceOpen {
+        self.grace = id
+      } else if id != .invalid {
+        UIApplication.shared.endBackgroundTask(id)
+      }
+    }
+  }
+
+  private func endGrace(_ runId: String) {
+    DispatchQueue.main.async {
+      // main thread only
+      guard self.graceRun == runId else { return }
+      let id = self.takeGrace()
+      if id != .invalid { UIApplication.shared.endBackgroundTask(id) }
+    }
+  }
+
+  /// Hands the task's id out ONCE (after it there is none): whoever gets a valid id ends the task. Main thread only.
+  private func takeGrace() -> UIBackgroundTaskIdentifier {
+    let id = grace
+    grace = .invalid
+    graceRun = nil
+    graceOpen = false
+    return id
+  }
+}
