@@ -22,6 +22,12 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appName": "Clipy Video Editor",
+        "language": "en-US",
+        "ascAppId": "6821282940"
+      }
+    }
   }
 }
