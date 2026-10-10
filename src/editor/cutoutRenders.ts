@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { isRenderInterrupted } from "@/modules/clipy-video/background";
+import { activeTimeout, untilActive } from "@/src/lib/activeTime";
 import { addCutoutListener, cancelCutout, CUTOUT_CANCELLED, isCutoutAvailable, isCutoutCancelled, renderCutout, type CutoutRequest } from "@/modules/clipy-video";
 import { CUTOUT, cutoutDeadlineMs, cutoutStillName, neededCutouts, parseCutoutName, type NeededCutout } from "@/src/editor/model/cutout";
 import type { Project } from "@/src/editor/model/types";
@@ -76,12 +78,13 @@ function answered(entry: Running, start: () => Promise<unknown>, deadlineMs: num
     const settle = (end: () => void): void => {
       if (!open) return;
       open = false;
-      clearTimeout(deadline);
+      stopDeadline();
       if (grace !== null) clearTimeout(grace);
       entry.giveUp = null;
       end();
     };
-    const deadline = setTimeout(() => settle(() => {
+    // Counted in the time the app ran in front (activeTimeout): a suspension must not end a render that had no chance to run.
+    const stopDeadline = activeTimeout(() => settle(() => {
       stopNative(entry.jobId);
       reject(new Error(`cutout render: no answer after ${Math.round(deadlineMs / 1000)} s`));
     }), deadlineMs);
@@ -191,6 +194,8 @@ async function pump(): Promise<void> {
       } catch (e) {
         if (!stillOpen()) continue;
         if (isCutoutCancelled(e)) { setFile(next.name, null); continue; }   // nobody needed it any more; if someone does again, it is rendered again
+        // Clipy was left while the copy was made: it left no file, and is made again once Clipy is in front (never a failure).
+        if (isRenderInterrupted(e)) { setFile(next.name, null); await untilActive(); continue; }
         const message = e instanceof Error ? e.message : String(e);
         console.warn("cutout render failed", message);
         setFile(next.name, { status: "failed", message });

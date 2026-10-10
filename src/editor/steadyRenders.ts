@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { isRenderInterrupted } from "@/modules/clipy-video/background";
+import { activeTimeout, untilActive } from "@/src/lib/activeTime";
 import { addSteadyListener, cancelSteady, isBlurAndCutsBuild, isSteadyAvailable, isSteadyCancelled, measureShake, renderSteady, STEADY_CANCELLED, type ShakeResult } from "@/modules/clipy-video";
 import { levelRule, neededSteady, parseSteadyName, SMOOTH, SMOOTH_MARK, STEADY, steadyDeadlineMs, type NeededSteady } from "@/src/editor/model/steady";
 import { steadyShifts, type Shifts } from "@/src/editor/model/steadyPath";
@@ -75,12 +77,13 @@ function answered<T>(entry: Running, start: () => Promise<T>, deadlineMs: number
     const settle = (end: () => void): void => {
       if (!open) return;
       open = false;
-      clearTimeout(deadline);
+      stopDeadline();
       if (grace !== null) clearTimeout(grace);
       entry.giveUp = null;
       end();
     };
-    const deadline = setTimeout(() => settle(() => {
+    // Counted in the time the app ran in front (activeTimeout): a suspension must not end a render that had no chance to run.
+    const stopDeadline = activeTimeout(() => settle(() => {
       stopNative(entry.jobId);
       reject(new Error(`steady ${stage}: no answer after ${Math.round(deadlineMs / 1000)} s`));
     }), deadlineMs);
@@ -235,6 +238,8 @@ async function pump(): Promise<void> {
       } catch (e) {
         if (!stillOpen()) continue;
         if (isSteadyCancelled(e)) { setFile(next.name, null); continue; }   // nobody needed it any more
+        // Clipy was left while the copy was made: it left no file, and is made again once Clipy is in front (never a failure).
+        if (isRenderInterrupted(e)) { setFile(next.name, null); await untilActive(); continue; }
         const message = e instanceof Error ? e.message : String(e);
         console.warn("steady render failed", message);
         setFile(next.name, { status: "failed", message });

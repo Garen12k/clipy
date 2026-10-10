@@ -1,4 +1,5 @@
 import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isPeaksAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
+import { isBackgroundExportBuild } from "@/modules/clipy-video/background";
 
 /**
  * What the INSTALLED app can do, newest ability first. Buttons and screens arrive from the dev server at once, but an ability that
@@ -7,6 +8,7 @@ import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isPeaksAvaila
  */
 /** `name` is how `buildLabel` words it in its sentence; `title` is the same name standing alone (the Build row's value). */
 const LEVELS: { name: string; title: string; has: () => boolean }[] = [
+  { name: "background export", title: "Background export", has: isBackgroundExportBuild },
   { name: "icons and light", title: "Icons and light", has: isPeaksAvailable },
   { name: "blur and cuts", title: "Blur and cuts", has: isBlurAndCutsBuild },
   { name: "stabilize and smooth", title: "Stabilize and smooth", has: isSteadyAvailable },

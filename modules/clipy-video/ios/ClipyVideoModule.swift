@@ -148,9 +148,52 @@ public class ClipyVideoModule: Module {
     return steadyJobs[id]
   }
 
+  private let leftLock = NSLock()
+  private var leftJobs = Set<String>()   // guarded by `leftLock`: the cut-out and steady copies stopped because the app left
+
+  /// The app has entered the background. A cut-out or a steady copy is drawn with the GPU, which a background app may
+  /// not use, and those renders do not learn of a refusal: every one being made is stopped now and answers as
+  /// INTERRUPTED (not as cancelled), so the app makes the copy again once it is in front. Sound copies do not use the
+  /// GPU and go on.
+  private func interruptCopies() {
+    cutoutLock.lock()
+    let cutouts = cutoutJobs
+    cutoutLock.unlock()
+    steadyLock.lock()
+    let steadies = steadyJobs
+    steadyLock.unlock()
+    leftLock.lock()
+    for id in cutouts.keys { leftJobs.insert(id) }
+    for id in steadies.keys { leftJobs.insert(id) }
+    leftLock.unlock()
+    for job in cutouts.values { job.cancel() }
+    for job in steadies.values { job.cancel() }
+  }
+
+  /// Whether the copy with that id was stopped because the app left. Asked once: the mark is taken.
+  private func takeLeft(_ id: String) -> Bool {
+    leftLock.lock(); defer { leftLock.unlock() }
+    return leftJobs.remove(id) != nil
+  }
+
+  /// What a copy says when it was not made, or cannot be trusted, because the app was in the background during it.
+  private static func copyInterrupted(_ kind: String) -> String {
+    return kind + " interrupted: Clipy was in the background while the copy was made"
+  }
+
   public func definition() -> ModuleDefinition {
     Name("ClipyVideo")
     Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent")
+    // The "background export" build's own event (the names of every `Events` are joined into the module's list).
+    Events("onBackgroundExportEvent")
+
+    // The app's state is watched from the start, so an export knows whether the app was in front (ExportBackground.swift).
+    OnCreate {
+      ExportPause.shared.watch()
+      ExportPause.shared.onChange { [weak self] (left: Bool) -> Void in
+        if left { self?.interruptCopies() }
+      }
+    }
 
     // Phase 0 smoke test: proves the Swift module is linked and callable.
     Function("hello") { () -> String in
@@ -178,7 +221,9 @@ public class ClipyVideoModule: Module {
           try await session.start(request)
         } catch {
           ExportSession.removeFile(atPath: outputPath)
-          self?.sendEvent("onExportEvent", ["jobId": jobId, "type": "error", "message": "start: " + ExportSession.describe(error)])
+          // A failure after the app was in the background is an interruption (the app starts the export again); in front, the event is the old one.
+          let left = ExportPause.shared.hasLeft(since: session.leavesAtStart)
+          self?.sendEvent("onExportEvent", ExportInterruption.event(jobId: jobId, message: "start: " + ExportSession.describe(error), left: left))
           self?.dropSession(jobId)
         }
       }
@@ -373,6 +418,15 @@ public class ClipyVideoModule: Module {
       self.storeCutoutJob(jobId, job)
       Task { [weak self] in
         defer { self?.dropCutoutJob(jobId) }
+        // A copy is only trusted when the app was in front for all of it (`ExportPause`): asked in the background it is
+        // not started; stopped by `interruptCopies`, failed or finished after the app was away, it answers
+        // "E_CUTOUT_INTERRUPTED" and leaves no file.
+        let leaves = ExportPause.shared.leaveCount
+        if ExportPause.shared.isBackground {
+          _ = self?.takeLeft(jobId)
+          promise.reject("E_CUTOUT_INTERRUPTED", ClipyVideoModule.copyInterrupted("cutout"))
+          return
+        }
         do {
           guard let outputURL = ExportSession.fileURL(from: request.outputPath) else { throw CutoutError.failed("cutout output: not a file path") }
           try await CutoutRender.enter(job)
@@ -389,11 +443,27 @@ public class ClipyVideoModule: Module {
               self?.sendEvent("onCutoutEvent", ["jobId": jobId, "progress": fraction])
             })
           }
+          if ExportPause.shared.hasLeft(since: leaves) {
+            _ = self?.takeLeft(jobId)
+            ExportSession.removeFile(atPath: request.outputPath)
+            if !request.stillPath.isEmpty { ExportSession.removeFile(atPath: request.stillPath) }
+            promise.reject("E_CUTOUT_INTERRUPTED", ClipyVideoModule.copyInterrupted("cutout"))
+            return
+          }
           promise.resolve(answer)
         } catch CutoutError.cancelled {
-          promise.reject("E_CUTOUT_CANCELLED", "Cutout cancelled")
+          if self?.takeLeft(jobId) == true {
+            promise.reject("E_CUTOUT_INTERRUPTED", ClipyVideoModule.copyInterrupted("cutout"))
+          } else {
+            promise.reject("E_CUTOUT_CANCELLED", "Cutout cancelled")
+          }
         } catch {
-          promise.reject("E_CUTOUT", CutoutRender.message(error))
+          _ = self?.takeLeft(jobId)
+          if ExportPause.shared.hasLeft(since: leaves) {
+            promise.reject("E_CUTOUT_INTERRUPTED", ClipyVideoModule.copyInterrupted("cutout") + " (" + CutoutRender.message(error) + ")")
+          } else {
+            promise.reject("E_CUTOUT", CutoutRender.message(error))
+          }
         }
       }
     }
@@ -416,6 +486,13 @@ public class ClipyVideoModule: Module {
       self.storeSteadyJob(jobId, job)
       Task { [weak self] in
         defer { self?.dropSteadyJob(jobId, job) }
+        // As for a cut-out copy: what was measured with the app away is not trusted ("E_STEADY_INTERRUPTED").
+        let leaves = ExportPause.shared.leaveCount
+        if ExportPause.shared.isBackground {
+          _ = self?.takeLeft(jobId)
+          promise.reject("E_STEADY_INTERRUPTED", ClipyVideoModule.copyInterrupted("steady"))
+          return
+        }
         do {
           try await SteadyRender.enter(job)
           defer { CutoutRender.leave() }
@@ -426,11 +503,25 @@ public class ClipyVideoModule: Module {
             lastSent = fraction
             self?.sendEvent("onSteadyEvent", ["jobId": jobId, "progress": fraction])
           })
+          if ExportPause.shared.hasLeft(since: leaves) {
+            _ = self?.takeLeft(jobId)
+            promise.reject("E_STEADY_INTERRUPTED", ClipyVideoModule.copyInterrupted("steady"))
+            return
+          }
           promise.resolve(answer)
         } catch SteadyError.cancelled {
-          promise.reject("E_STEADY_CANCELLED", "Steady cancelled")
+          if self?.takeLeft(jobId) == true {
+            promise.reject("E_STEADY_INTERRUPTED", ClipyVideoModule.copyInterrupted("steady"))
+          } else {
+            promise.reject("E_STEADY_CANCELLED", "Steady cancelled")
+          }
         } catch {
-          promise.reject("E_STEADY", SteadyRender.message(error))
+          _ = self?.takeLeft(jobId)
+          if ExportPause.shared.hasLeft(since: leaves) {
+            promise.reject("E_STEADY_INTERRUPTED", ClipyVideoModule.copyInterrupted("steady") + " (" + SteadyRender.message(error) + ")")
+          } else {
+            promise.reject("E_STEADY", SteadyRender.message(error))
+          }
         }
       }
     }
@@ -443,6 +534,13 @@ public class ClipyVideoModule: Module {
       self.storeSteadyJob(jobId, job)
       Task { [weak self] in
         defer { self?.dropSteadyJob(jobId, job) }
+        // As for a cut-out copy: a copy drawn with the app away is not trusted and leaves no file ("E_STEADY_INTERRUPTED").
+        let leaves = ExportPause.shared.leaveCount
+        if ExportPause.shared.isBackground {
+          _ = self?.takeLeft(jobId)
+          promise.reject("E_STEADY_INTERRUPTED", ClipyVideoModule.copyInterrupted("steady"))
+          return
+        }
         do {
           guard let outputURL = ExportSession.fileURL(from: request.outputPath) else { throw SteadyError.failed("steady output: not a file path") }
           try await SteadyRender.enter(job)
@@ -454,11 +552,26 @@ public class ClipyVideoModule: Module {
             lastSent = fraction
             self?.sendEvent("onSteadyEvent", ["jobId": jobId, "progress": fraction])
           })
+          if ExportPause.shared.hasLeft(since: leaves) {
+            _ = self?.takeLeft(jobId)
+            ExportSession.removeFile(atPath: request.outputPath)
+            promise.reject("E_STEADY_INTERRUPTED", ClipyVideoModule.copyInterrupted("steady"))
+            return
+          }
           promise.resolve(answer)
         } catch SteadyError.cancelled {
-          promise.reject("E_STEADY_CANCELLED", "Steady cancelled")
+          if self?.takeLeft(jobId) == true {
+            promise.reject("E_STEADY_INTERRUPTED", ClipyVideoModule.copyInterrupted("steady"))
+          } else {
+            promise.reject("E_STEADY_CANCELLED", "Steady cancelled")
+          }
         } catch {
-          promise.reject("E_STEADY", SteadyRender.message(error))
+          _ = self?.takeLeft(jobId)
+          if ExportPause.shared.hasLeft(since: leaves) {
+            promise.reject("E_STEADY_INTERRUPTED", ClipyVideoModule.copyInterrupted("steady") + " (" + SteadyRender.message(error) + ")")
+          } else {
+            promise.reject("E_STEADY", SteadyRender.message(error))
+          }
         }
       }
     }
@@ -502,6 +615,35 @@ public class ClipyVideoModule: Module {
     // Stops that waveform at its next buffer (it then rejects "E_PEAKS_CANCELLED"). An unknown or finished job: nothing.
     Function("cancelSoundPeaks") { (jobId: String) in
       self.lookupPeaksJob(jobId)?.cancel()
+    }
+
+    // The build of 2026-10-13 ("background export"): what this iPhone supports, `{ os, continued, gpu }` (see
+    // ExportKeepAlive.support). The app asks whether this function is THERE to know the build: with it, the frames of
+    // an export wait while the app is in the background, an export that was interrupted says so, and the functions
+    // below exist.
+    Function("backgroundExportSupport") { () -> [String: Any] in
+      return ExportKeepAlive.support()
+    }
+
+    // The app calls this at the tap on Export, before the
+    // preparations: iOS is asked to keep the app alive for the export `runId` (see ExportKeepAlive). Always resolves
+    // `{ grace, continued, reason }`; what the system's interface does to the export arrives as
+    // `onBackgroundExportEvent { runId, type }`. The export itself does not depend on any of it.
+    AsyncFunction("beginBackgroundExport") { (runId: String, title: String, subtitle: String, promise: Promise) in
+      let answer: [String: Any] = ExportKeepAlive.shared.begin(runId: runId, title: title, subtitle: subtitle, onEvent: { [weak self] (type: String) -> Void in
+        self?.sendEvent("onBackgroundExportEvent", ["runId": runId, "type": type])
+      })
+      promise.resolve(answer)
+    }
+
+    // The export's progress, 0 … 1, preparations included (what the Export screen's ring shows).
+    Function("reportBackgroundExport") { (runId: String, progress: Double) in
+      ExportKeepAlive.shared.report(runId: runId, progress: progress)
+    }
+
+    // The export is over: done (`success`), failed or cancelled. Everything begun for it is ended, once.
+    Function("endBackgroundExport") { (runId: String, success: Bool) in
+      ExportKeepAlive.shared.end(runId: runId, success: success)
     }
   }
 }
