@@ -7,6 +7,7 @@ import { hasSeenWelcome } from "@/src/auth/welcomeSeen";
 import { WelcomeWizard } from "@/src/auth/WelcomeWizard";
 import type { AspectRatio } from "@/src/editor/model/types";
 import { AFTER_PICKER_MS, AspectRatioSheet } from "@/src/projects/AspectRatioSheet";
+import { sourceMenuShown, takeOne, useMediaSource } from "@/src/projects/mediaSource";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { AFTER_SHEET_MS, ProjectActionsSheet } from "@/src/projects/ProjectActionsSheet";
 import { ProjectCard } from "@/src/projects/ProjectCard";
@@ -73,10 +74,14 @@ function ProjectsScreen() {
   /** WHAT is being made while `busy` (media copied; for a quick edit, the edit built): the two bottom actions give way to one capsule that says it. */
   const [making, setMaking] = useState<keyof typeof MAKING | null>(null);
   const focused = useRef(true);
-  useFocusEffect(useCallback(() => { focused.current = true; return () => { focused.current = false; }; }, []));
+  // New Project's menu (Choose from Library / Take Photo or Video), where the installed app can open the camera. A wait for it is dropped when Home is left.
+  const { ask: askSource, forget: forgetSource } = useMediaSource();
+  useFocusEffect(useCallback(() => { focused.current = true; return () => { focused.current = false; forgetSource(); }; }, [forgetSource]));
   const openEditor = (id: string | null) => { if (id && focused.current) router.push(`/editor/${id}`); };
 
-  // New project: the library, then the aspect-ratio picker, then the project. Nothing exists until Create is pressed.
+  // New project: the library — or, where the camera can be opened, the menu and then the library or the camera (one item, which
+  // continues exactly as one picked item does) —, then the aspect-ratio picker, then the project. Nothing exists until Create is
+  // pressed. `starting` is held from the tap to the end of the pick, the menu and its wait included, so a second tap opens nothing.
   // The button is held back only by the two refs — the library is up, or a project is being made (its media copied) — never by
   // `pending`: if iOS drops the sheet's presentation, `pending` stays set with nothing on screen to clear it, and the button must
   // still work. The sheet itself covers the button while it is really there. A press with media still waiting starts over: the
@@ -89,7 +94,9 @@ function ProjectsScreen() {
     try {
       setPending(null);
       setQuickOpen(false); // the other sheet's flag: it may be set with nothing on screen
-      const assets = await pickMedia();
+      const source = sourceMenuShown() ? await askSource() : "library";
+      if (!source) return;
+      const assets = source === "camera" ? await takeOne() : await pickMedia();
       if (!assets || assets.length === 0) return;
       await new Promise((r) => setTimeout(r, AFTER_PICKER_MS));
       setPending(assets);
