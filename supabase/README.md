@@ -226,7 +226,7 @@ Use the TikTok account you will post with.
 6. Open **Login Kit**. In **Redirect URI**, paste exactly (with your project ref, no slash at the end):
    `https://<ref>.supabase.co/functions/v1/oauth-callback`
    This is the same address as for YouTube.
-7. Open **Content Posting API**. Make sure uploading drafts (the **video.upload** permission) is available. For **Post now**, also turn on **Direct Post** and add the **video.publish** permission (step g).
+7. Open **Content Posting API**. Make sure uploading drafts (the **video.upload** permission) is available. **Post now** needs more (**Direct Post** and the **video.publish** permission) — that is step g, and nothing here depends on it.
 8. Under **Credentials**, you see the **Client key** and the **Client secret**. Keep this page open for step c.
 
 ### b. Sandbox: let your own account use the app
@@ -289,17 +289,33 @@ After steps a to c above, on your iPhone in Expo Go:
 
 ### g. Post now: switch it on (once)
 
-Do these in this order. Step 1 must be done before step 2, or connecting TikTok stops working (Clipy will then ask TikTok for three permissions, and TikTok refuses one it has not been given).
+Post now stays **off** until you set one secret on the server (step 3). While it is off, nothing changes: connecting TikTok asks for the same two permissions as before, drafts work as before, and choosing **Post now** in the options only says "Posting straight to TikTok isn't switched on yet. Choose Send as draft." So this order is safe at every step, and you can stop after any of them.
 
-1. In the TikTok developer site, with **Sandbox** selected at the top: open **Content Posting API** and turn on **Direct Post**. Under **Scopes**, add **video.publish**. Click **Apply changes**. *(Names may differ slightly.)*
-2. In PowerShell, in the project folder:
+1. **Put the server online.** In PowerShell, in the project folder:
 
    ```powershell
    npx.cmd supabase functions deploy
    ```
 
-3. In the TikTok app on your phone: **Settings and privacy → Privacy → Private account** — switch it **on**. Until TikTok has reviewed Clipy, it only lets Clipy post to a private account.
-4. In Clipy: **Post a video** → pick a clip → on the TikTok row tap **Options** → **Post now**. It says TikTok needs one more permission: tap **Reconnect** and allow everything TikTok asks for. The options open again and show "Posting to" with your TikTok name.
+   Then send one TikTok **draft** from your phone, without reconnecting. It must work exactly as before.
+2. **Give the TikTok app the permission.** In the TikTok developer site, with **Sandbox** selected at the top: open **Content Posting API** and turn on **Direct Post**. Under **Scopes**, add **video.publish**. Click **Apply changes** and wait a few minutes. Check on the page that all three are listed: `user.info.basic`, `video.upload`, `video.publish`. *(Names may differ slightly.)*
+3. **Switch Post now on.** Only after step 2:
+
+   ```powershell
+   npx.cmd supabase secrets set TIKTOK_DIRECT_POST=true
+   ```
+
+   It takes effect straight away; no need to deploy again. From now on connecting TikTok asks for three permissions.
+4. In the TikTok app on your phone: **Settings and privacy → Privacy → Private account** — switch it **on**. Until TikTok has reviewed Clipy, it only lets Clipy post to a private account.
+5. **Reconnect TikTok on the phone.** In Clipy: **Post a video** → pick a clip → on the TikTok row tap **Options** → **Post now**. It says TikTok needs one more permission: tap **Reconnect** and allow everything TikTok asks for. The options open again and show "Posting to" with your TikTok name. Do **not** press Disconnect first — the connection you have keeps sending drafts whatever happens.
+
+**To go back** (for example, connecting TikTok starts failing after step 3 because step 2 has not taken effect):
+
+```powershell
+npx.cmd supabase secrets unset TIKTOK_DIRECT_POST
+```
+
+Connecting asks for two permissions again and Post now says it isn't switched on. Drafts are never affected, and an account that was reconnected in step 5 keeps working.
 
 ### h. Post now: what to expect
 
@@ -308,13 +324,17 @@ Do these in this order. Step 1 must be done before step 2, or connecting TikTok 
 - **The caption is sent** (up to 2200 characters). Drafts still take none.
 - **No link back.** The row ends with "Posted to TikTok. It may take a few minutes to appear."
 - **An account connected before this keeps working for drafts** without reconnecting.
+- **Leaving while a Post now upload runs:** the "Stop posting?" question adds that TikTok may still post the video if it already has it. Check your profile.
 - **Post now has not run against live TikTok yet** (drafts have). If a step fails, tell the developer what you saw.
 
 | What you see | Why | What to do |
 | --- | --- | --- |
-| Connecting TikTok fails with an error about a **scope** or permission | Step g.1 was skipped, so TikTok does not offer **video.publish** | Do step g.1, wait a few minutes, connect again. |
-| **To post directly, TikTok needs one more permission.** | TikTok was connected before Post now existed, or a permission was unticked | Tap **Reconnect** and allow everything. |
-| **TikTok only lets Clipy post to private accounts for now.** | Your TikTok account is public | Do step g.3, or choose **Send as draft**. |
+| **Posting straight to TikTok isn't switched on yet. Choose Send as draft.** | The secret of step g.3 is not set (or is not exactly `true`) | Do step g.3. Check with `npx.cmd supabase secrets list`. |
+| Connecting TikTok fails with an error about a **scope** or permission, or Clipy says **TikTok didn't let Clipy connect. Try again in a few minutes.** | The secret is on but step g.2 has not taken effect, so TikTok does not offer **video.publish** | Go back (the command under step g), check step g.2, wait a few minutes, then do step g.3 again. Drafts keep working meanwhile. |
+| **To post directly, TikTok needs one more permission.** | TikTok was connected before Post now was switched on, or a permission was unticked | Tap **Reconnect** and allow everything. |
+| **TikTok only lets Clipy post to private accounts for now.** | Your TikTok account is public | Do step g.4, or tap **Options** on the TikTok row and choose **Send as draft**, then **Retry**. |
+| **TikTok didn't accept this. Try again later, or choose Send as draft in the TikTok options.** | TikTok refused for a reason Clipy has no sentence for | Tell the developer when it happened: the reason is in the server log. |
+| **TikTok couldn't confirm this post. Check your TikTok profile before posting again.** | TikTok would not say what became of the post | Look at your TikTok profile first. Post again only if it is not there. |
 | **Clipy has reached TikTok's daily limit of accounts that can post.** | More than 5 accounts posted through Clipy today | Try tomorrow, or choose **Send as draft**. |
 | **TikTok says this account has posted too much today.** | TikTok's daily limit for your account | Try tomorrow, or post from TikTok. |
 | **TikTok no longer offers that choice of who can see it.** | You changed your account between opening the options and posting | Open the TikTok options and choose again. |
@@ -332,7 +352,8 @@ After g, on your iPhone:
 6. With **Only me** chosen, **Branded content** cannot be ticked; with **Branded content** ticked, **Only me** cannot be chosen.
 7. Make your TikTok account public, then Post now again: Clipy says "TikTok only lets Clipy post to private accounts for now. …" and nothing is posted.
 8. Switch back to **Send as draft** and post: it arrives in the TikTok inbox exactly as before.
-9. On a phone that has NOT reconnected (or before step g.4): a draft still posts; Post now offers Reconnect.
+9. On a phone that has NOT reconnected (or before step g.5): a draft still posts; Post now offers Reconnect.
+10. After a refused Post now (step 7), the TikTok row shows **Options** beside **Retry**: open it, choose **Send as draft**, close, **Retry** — the draft arrives in the inbox.
 
 Tell the developer what happened at each step, and especially: what step 1 showed, how long step 3 took, and any message that is not in the table above.
 
