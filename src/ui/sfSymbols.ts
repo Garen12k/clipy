@@ -37,6 +37,9 @@ export const SF_SYMBOLS: Readonly<Partial<Record<IoniconName, SymbolName>>> = {
   "mic": "mic.fill",
   "play-outline": "play",
   "stop-outline": "stop",
+  // The wizard's permission rows.
+  "camera-outline": "camera",
+  "notifications-outline": "bell",
   // Messages and states.
   "checkmark-circle-outline": "checkmark.circle",
   "alert-circle-outline": "exclamationmark.circle",

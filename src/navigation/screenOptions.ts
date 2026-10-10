@@ -44,6 +44,11 @@ export const ROUTE_OPTIONS = {
    * On first launch the same screen is not this route at all: app/index.tsx draws it in place, as the root, with nothing to go back to.
    */
   "welcome": { presentation: "modal" },
+  /**
+   * The first-launch wizard shown AGAIN ("Show welcome again" on Accounts): it covers the whole screen, as it does on first launch
+   * (there it is no route at all — app/index.tsx draws it in place), rises from the bottom and is closed by its X or by finishing.
+   */
+  "tour": { presentation: "fullScreenModal" },
 } satisfies Record<string, NativeStackNavigationOptions>;
 
 export type RouteName = keyof typeof ROUTE_OPTIONS;
@@ -63,6 +68,7 @@ export const SYSTEM_SCOPE = {
   "accounts": "screen",
   "oauth": "screen",
   "welcome": "screen",
+  "tour": "screen",
 } satisfies Record<RouteName, SystemScope>;
 
 /** The scope of the focused route, from Expo Router's segments (`[]` is Home; a folder's index has no segment of its own). An unknown route is a screen. */

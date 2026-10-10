@@ -32,3 +32,29 @@ export function fadeOutTo(reduced: boolean): number {
 export function sheetTo(reduced: boolean): number {
   return reduced ? 0 : withSpring(0, theme.motion.sheet);
 }
+
+// ── The first-launch wizard's own builders (src/auth/WelcomeWizard.tsx and its pictures) — WIZARD ONLY. The wizard is not beside the
+// video, so its steps may be longer than 250 ms and follow one another; each is still opacity / transform only, is played ONCE when its
+// page first becomes the current one, never loops, and a page's whole sequence is over in under 4 s. With Reduce Motion each returns
+// the end value: the page shows its finished picture at once. ──
+const W = theme.motion.wizard;
+/** Wizard only. The mark's play triangle drawn in, 0 → 1 (opacity; the scale grows with it). */
+export function wizardDrawTo(reduced: boolean): number {
+  return reduced ? 1 : withTiming(1, timing(W.draw));
+}
+/** Wizard only. The mark's spark popping in after the triangle, 0 → 1 on a spring that overshoots a little (scale; opacity follows). */
+export function wizardPopTo(reduced: boolean): number {
+  return reduced ? 1 : withDelay(W.popDelay, withSpring(1, W.pop));
+}
+/** Wizard only. Tile `index` of page 2 lighting up and playing its small picture, 0 → 1, each one after the one before. */
+export function wizardStepTo(reduced: boolean, index: number): number {
+  if (reduced) return 1;
+  const anim = withTiming(1, timing(W.step));
+  return index > 0 ? withDelay(index * W.stagger, anim) : anim;
+}
+/** Wizard only. Row `index` of page 3 coming in, 0 → 1 (opacity and the 8-pt shift), each one after the one before. */
+export function wizardRowTo(reduced: boolean, index: number): number {
+  if (reduced) return 1;
+  const anim = withTiming(1, timing(W.row));
+  return index > 0 ? withDelay(index * W.rowStagger, anim) : anim;
+}

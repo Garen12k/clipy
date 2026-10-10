@@ -68,6 +68,13 @@ export default function AccountsScreen() {
             ))}
           </Group>
         )}
+        {/* The first-launch wizard, again from its first page: only shown — the "seen" flag and the session stay as they are. */}
+        <Group>
+          <PressableScale testID="welcome-again-row" accessibilityRole="button" accessibilityLabel="Show welcome again" onPress={() => router.push("/tour")} style={row}>
+            <Icon name="sparkles-outline" size={theme.size.icon.lg} color={s.text} />
+            <Body style={{ flex: 1 }}>Show welcome again</Body>
+          </PressableScale>
+        </Group>
         {/* Which app is installed: a tool can be on screen in a build too old to run it. In every state of the screen. */}
         <Group>
           <View testID="build-row" accessible accessibilityLabel={buildLabel()} style={row}>

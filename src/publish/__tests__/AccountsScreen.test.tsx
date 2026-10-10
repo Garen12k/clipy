@@ -248,3 +248,31 @@ describe("in light", () => {
     expect(leftovers()).toEqual([]);
   });
 });
+
+describe("Show welcome again", () => {
+  test("a row in its own group just above the Build row, in every state of the screen", async () => {
+    for (const session of [{ status: "signedOut" }, { status: "unconfigured" }, { status: "loading" }, { status: "signedIn", email: "me@icloud.com" }]) {
+      (useSession as jest.Mock).mockReturnValue(session);
+      (useAccounts as jest.Mock).mockReturnValue(hook());
+      const v = await render(<AccountsScreen />);
+      const row = screen.getByRole("button", { name: "Show welcome again" });
+      expect(within(row).getByText("Show welcome again")).toBeTruthy();
+      expect(row).toHaveStyle({ minHeight: theme.size.row });
+      // The Build row stays the screen's last row; this one is the row before it.
+      const ids = JSON.stringify(screen.toJSON()).match(/"testID":"(welcome-again-row|build-row)"/g);
+      expect(ids).toEqual(['"testID":"welcome-again-row"', '"testID":"build-row"']);
+      await v.unmount();
+    }
+  });
+
+  test("it opens the wizard's own route and does nothing else: nobody is signed out and the seen flag is not this screen's to touch", async () => {
+    (useAccounts as jest.Mock).mockReturnValue(hook());
+    await render(<AccountsScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "Show welcome again" }));
+    expect(router.push).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith("/tour");
+    expect(signOut).not.toHaveBeenCalled();
+    expect(require("fs").readFileSync(require("path").join(__dirname, "..", "..", "..", "app", "accounts.tsx"), "utf8")).not.toMatch(/welcomeSeen/);
+    expect(screen.getByTestId("signed-in-row")).toBeTruthy();
+  });
+});
