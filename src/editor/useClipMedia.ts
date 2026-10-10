@@ -7,6 +7,7 @@ import { useEditorStore } from "@/src/editor/store";
 import { rekeyStrip, useToolStrip } from "@/src/editor/toolStrip";
 import { newId } from "@/src/lib/id";
 import { storage } from "@/src/projects";
+import { sourceMenuShown, takeOne, useMediaSource } from "@/src/projects/mediaSource";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { useToast } from "@/src/ui/Toast";
 
@@ -75,11 +76,17 @@ function collageMessage(why: CollageRefusal, layout: CollageLayoutId, picked: nu
  */
 export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId: string): Promise<void>; addOverlay(): Promise<void>; makeCollage(layout: CollageLayoutId): Promise<void>; busy: boolean } {
   const busy = useMediaBusy((s) => s.busy);
+  const { ask: askSource } = useMediaSource();
 
+  // The "+" tile. Where the installed app can open the camera it asks first — the menu: Choose from Library / Take Photo or Video —
+  // inside the lock, so nothing else starts meanwhile; one taken item is then added exactly as picked ones are. Without a camera
+  // there is no menu: straight to the library, as ever.
   const addMedia = () => withLock(async () => {
     const projectId = useEditorStore.getState().project?.id;
     if (!projectId) return;
-    const assets = await pickMedia();
+    const source = sourceMenuShown() ? await askSource() : "library";
+    if (!source) return;
+    const assets = source === "camera" ? await takeOne() : await pickMedia();
     if (!assets || assets.length === 0) return;
     const { clips } = await storage.importMedia(projectId, assets);
     const { project, apply } = useEditorStore.getState();

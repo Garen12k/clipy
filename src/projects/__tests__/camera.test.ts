@@ -54,7 +54,7 @@ test("closing the camera, a refusal and a camera that cannot open are told apart
   expect(await takeMedia()).toEqual({ status: "unavailable" });
 });
 
-test("only this wrapper opens the camera, and only the menu's file (src/projects/mediaSource.ts) calls it — for New Project; the wizard's permission row asks canUseCamera() and nothing more", () => {
+test("only this wrapper opens the camera, and only the menu's file (src/projects/mediaSource.ts) calls it — for New Project and the editor's \"+\"; the wizard's permission row asks canUseCamera() and nothing more", () => {
   const root = join(__dirname, "..", "..", "..");
   const files: { rel: string; src: string }[] = [];
   const walk = (dir: string) => {
@@ -71,11 +71,11 @@ test("only this wrapper opens the camera, and only the menu's file (src/projects
   expect(naming(/takeMedia\(/)).toEqual(["src/projects/camera.ts", "src/projects/mediaSource.ts"]);
   const wizard = readFileSync(join(root, "src", "auth", "permissions.ts"), "utf8");
   expect(/launchCameraAsync|takeMedia\(/.test(wizard)).toBe(false);
-  // The menu and the camera are reached from exactly one place: Home's New Project.
-  expect(naming(/projects\/mediaSource"/)).toEqual(["app/index.tsx"]);
-  expect(naming(/takeOne\(/)).toEqual(["app/index.tsx", "src/projects/mediaSource.ts"]);
+  // The menu and the camera are reached from exactly two places: Home's New Project and the editor's add-clip flow.
+  expect(naming(/projects\/mediaSource"/)).toEqual(["app/index.tsx", "src/editor/useClipMedia.ts"]);
+  expect(naming(/takeOne\(/)).toEqual(["app/index.tsx", "src/editor/useClipMedia.ts", "src/projects/mediaSource.ts"]);
   // The camera item is never shown without asking first whether the installed app may open it.
-  for (const rel of ["app/index.tsx"]) {
+  for (const rel of ["app/index.tsx", "src/editor/useClipMedia.ts"]) {
     const src = files.find((f) => f.rel === rel)!.src;
     expect(src).toContain('const source = sourceMenuShown() ? await askSource() : "library";');
     expect(src.split("takeOne(").length - 1).toBe(1);
