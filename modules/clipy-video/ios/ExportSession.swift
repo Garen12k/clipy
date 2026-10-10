@@ -399,6 +399,8 @@ final class ExportSession {
   private var isCancelled = false              // guarded by `lock`
   private var timer: Timer?                    // main thread only
   private let onEvent: ([String: Any]) -> Void
+  /// How often the app had gone to the background when this export was made (`ExportPause`).
+  let leavesAtStart = ExportPause.shared.leaveCount
 
   init(onEvent: @escaping ([String: Any]) -> Void) { self.onEvent = onEvent }
 
@@ -1478,6 +1480,8 @@ final class ExportSession {
     if cancelledBeforeExport { onEvent(["jobId": id, "type": "cancelled"]); return }
 
     let jobId = id
+    // How often the app had left when the render began: an export that fails after the app was away is INTERRUPTED.
+    let leaves = leavesAtStart
     DispatchQueue.main.async {
       self.timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
         guard let self else { return }
@@ -1503,7 +1507,8 @@ final class ExportSession {
         self.onEvent(["jobId": jobId, "type": "cancelled"])
       default:
         try? FileManager.default.removeItem(at: outputURL)
-        self.onEvent(["jobId": jobId, "type": "error", "message": ExportSession.describe(session.error) + " {" + facts + "}"])
+        let message = ExportSession.describe(session.error) + " {" + facts + "}"
+        self.onEvent(ExportInterruption.event(jobId: jobId, message: message, left: ExportPause.shared.hasLeft(since: leaves)))
       }
     }
   }

@@ -152,6 +152,11 @@ public class ClipyVideoModule: Module {
     Name("ClipyVideo")
     Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent")
 
+    // The app's state is watched from the start, so an export knows whether the app was in front (ExportBackground.swift).
+    OnCreate {
+      ExportPause.shared.watch()
+    }
+
     // Phase 0 smoke test: proves the Swift module is linked and callable.
     Function("hello") { () -> String in
       let version = ProcessInfo.processInfo.operatingSystemVersionString
@@ -178,7 +183,9 @@ public class ClipyVideoModule: Module {
           try await session.start(request)
         } catch {
           ExportSession.removeFile(atPath: outputPath)
-          self?.sendEvent("onExportEvent", ["jobId": jobId, "type": "error", "message": "start: " + ExportSession.describe(error)])
+          // A failure after the app was in the background is an interruption (the app starts the export again); in front, the event is the old one.
+          let left = ExportPause.shared.hasLeft(since: session.leavesAtStart)
+          self?.sendEvent("onExportEvent", ExportInterruption.event(jobId: jobId, message: "start: " + ExportSession.describe(error), left: left))
           self?.dropSession(jobId)
         }
       }

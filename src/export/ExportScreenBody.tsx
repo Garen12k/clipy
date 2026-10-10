@@ -17,6 +17,7 @@ import { ScreenBar } from "@/src/ui/ScreenBar";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Segmented } from "@/src/ui/Segmented";
 import { Body, Title } from "@/src/ui/Text";
+import { EXPORT_PAUSED } from "./backgroundExport";
 import { NotifyOfferCard, useNotifyOffer } from "./notifyOffer";
 import { canExport4K, estimateBytes, exportableClips, exportDuration, formatBytes, QUALITY_LABELS, RESOLUTIONS, type Resolution } from "./estimate";
 import type { ExportState } from "./useExport";
@@ -37,6 +38,8 @@ const rowLabel = { fontSize: theme.type.label } as const;
 const centre = { flex: 1, paddingHorizontal: theme.space.gutter, alignItems: "center", justifyContent: "center", gap: theme.space.md } as const;
 /** The grabber of a sheet: the modal presentation draws none of its own. The bar below it pads its own edges, so each block pads its own too. */
 const GRABBER = { width: 36, height: 5 } as const;
+/** A line under the ring's word: what the export is doing about the app having been left. */
+const note = { fontSize: theme.type.small, textAlign: "center" } as const;
 const FPS_OPTIONS = EXPORT_FPS.map((f) => ({ value: f, label: `${f} fps` }));
 const QUALITY_OPTIONS = EXPORT_QUALITIES.map((q) => ({ value: q, label: QUALITY_LABELS[q] }));
 
@@ -115,6 +118,10 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
           <View style={centre}>
             <ProgressRing progress={state.progress} size={theme.size.ring} />
             <Body muted>Exporting…</Body>
+            {/* Clipy is out of sight (what the app switcher shows): the export waits and goes on by itself. Only on a build that holds the frames. */}
+            {state.paused ? <Body testID="export-paused" muted style={note}>{EXPORT_PAUSED}</Body> : null}
+            {/* One sentence for an export that was started again by itself. */}
+            {state.note ? <Body testID="export-note" muted style={note}>{state.note}</Body> : null}
           </View>
           {offer.shown ? (
             <View testID="export-notify-place" onLayout={(e) => setOfferHeight(e.nativeEvent.layout.height)} style={{ paddingHorizontal: theme.space.gutter }}>

@@ -239,6 +239,8 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
   func renderContextChanged(_ newRenderContext: AVVideoCompositionRenderContext) {}
 
   func startRequest(_ req: AVAsynchronousVideoCompositionRequest) {
+    // How often the app had left when this frame was begun: asked again once it is drawn (`drawnInFront`).
+    let leaves = ExportPause.shared.leaveCount
     guard let inst = req.videoCompositionInstruction as? ClipyInstruction, let out = req.renderContext.newPixelBuffer() else {
       req.finish(with: NSError(domain: "Clipy", code: 1, userInfo: [NSLocalizedDescriptionKey: "Video compositor could not render a frame"]))
       return
@@ -309,10 +311,23 @@ final class ClipyCompositor: NSObject, AVVideoCompositing {
                                     t: time - effect.start, d: effect.end - effect.start, k: effect.intensity, size: size, region: effect.rect)
     }
     ctx.render(result.cropped(to: rect).composited(over: black), to: out)
+    // The render above says nothing when the GPU refused it. A frame that was not drawn with the app in front from
+    // its first line to here is therefore never handed on: the request fails, and the export ends as INTERRUPTED
+    // (`ExportInterruption`) instead of carrying a wrong picture.
+    guard ClipyCompositor.drawnInFront(since: leaves) else {
+      req.finish(with: ExportInterruption.frameError())
+      return
+    }
     req.finish(withComposedVideoFrame: out)
   }
 
   func cancelAllPendingVideoCompositionRequests() {}
+
+  /// Whether a frame begun when the app had left `leaves` times was drawn with the app in front the whole time: iOS
+  /// lets only an app in front use the GPU, and `ctx.render` does not report a refusal.
+  static func drawnInFront(since leaves: Int) -> Bool {
+    return !ExportPause.shared.hasLeft(since: leaves)
+  }
 
   /// A composed clip frame's look: the filter chain mixed in at the clip's strength (`original·(1 − s) + filtered·s`;
   /// s = 1 skips the mix, s = 0 or no filter skips the chain), then the Adjust recipe (skipped when neutral). A clip

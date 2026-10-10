@@ -11,7 +11,7 @@ import type { Resolution } from "@/src/export/estimate";
 export type ExportEvent = { jobId: string } & (
   | { type: "progress"; progress: number }
   | { type: "done"; fileUri: string }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; /** `EXPORT_INTERRUPTED` when the app was in the background during the export (the "background export" build); absent for a failure. */ code?: string }
   | { type: "cancelled" });
 
 export interface ExportAnimEdge { id: string; duration: number }
@@ -289,6 +289,8 @@ function optional(): ClipyVideoNative | null { return requireOptionalNativeModul
 function native(): ClipyVideoNative { const m = optional(); if (!m) throw new Error(NOT_LINKED); return m; }
 
 export function isNativeAvailable(): boolean { return optional() !== null; }
+// The "background export" build: what the phone supports, the keep-alive around an export, the interruption code (background.ts).
+export * from "./background";
 /** Returns a greeting from the Swift module. Phase 0 smoke test only. */
 export function hello(): string { return native().hello(); }
 export function exportTimeline(req: ExportRequest): Promise<string> { return native().exportTimeline(req); }
