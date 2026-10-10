@@ -24,12 +24,14 @@ afterEach(() => logged.mockRestore());
 
 describe("the readout", () => {
   test("its four values, from what the phone answers", () => {
-    expect(supportLabel({ os: "27.0", continued: true, gpu: true })).toBe("Full");
+    // Clipy asks for no GPU, so a phone that would allow one still pauses the video: the row says what HAPPENS, the log keeps the raw flag.
+    expect(supportLabel({ os: "27.0", continued: true, gpu: true })).toBe("Stays alive, pauses the video");
     expect(supportLabel({ os: "27.0", continued: true, gpu: false })).toBe("Stays alive, pauses the video");
     expect(supportLabel({ os: "18.5", continued: false, gpu: false })).toBe("Pauses until you return");
     expect(supportLabel({ os: "18.5", continued: false, gpu: true })).toBe("Pauses until you return");     // no task, so nothing a GPU could be used in
     expect(supportLabel(null)).toBe("Needs the newest Clipy build");
-    expect(SUPPORT).toEqual({ full: "Full", alive: "Stays alive, pauses the video", pauses: "Pauses until you return", old: "Needs the newest Clipy build" });
+    expect(SUPPORT).toEqual({ full: "Stays alive, pauses the video", alive: "Stays alive, pauses the video", pauses: "Pauses until you return", old: "Needs the newest Clipy build" });
+    expect(Object.values(SUPPORT)).not.toContain("Full");
     support.mockReturnValue(null);
     expect(supportLabel()).toBe("Needs the newest Clipy build");
   });
@@ -129,4 +131,13 @@ describe("one export as the phone is told about it", () => {
       expect(end).toContain('"restarts":1');
     } finally { jest.useRealTimers(); }
   });
+});
+
+test("a phone that reports the GPU: the row does not claim more, and the raw flag is still in the log", () => {
+  support.mockReturnValue({ os: "27.0", continued: true, gpu: true });
+  expect(supportLabel()).toBe("Stays alive, pauses the video");
+  beginRun("Exporting x", "720p", jest.fn()).end("done");
+  const lines = logged.mock.calls.map((c) => `${c[0]} ${c[1]}`);
+  expect(lines[0]).toContain('"gpu":true');
+  expect(lines.find((l) => l.startsWith("background export: end"))).toContain('"gpu":true');
 });

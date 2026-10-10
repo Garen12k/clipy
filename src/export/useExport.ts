@@ -29,6 +29,10 @@ export const MAX_RESTARTS = 2;
  * taken for stuck (the session did not survive the wait) and is started again like any interrupted one. The first step forward ends the watch.
  */
 export const EXPORT_STALL_MS = 30000;
+/** Shown, with Try Again, when an export was interrupted again after its automatic restarts were used up: never the system's raw words. */
+export const EXPORT_GAVE_UP = "The export couldn't finish because Clipy kept going to the background. Keep Clipy open and try again.";
+/** From this shown progress on, the watch for a stuck export is not started: the long final write of the file moves no number. */
+export const EXPORT_STALL_CEILING = 0.99;
 /** What a stuck export is ended with (it then restarts, or is shown once the restarts are used up). */
 export const EXPORT_STUCK = "export interrupted: the export did not go on after Clipy came back";
 
@@ -72,10 +76,19 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
   const fail = useCallback((message: string, code?: string) => {
     unwatch();
     const again = asked.current;
-    const interrupted = (code === EXPORT_INTERRUPTED || left.current || saysInterrupted(message)) && isBackgroundExportBuild();
-    if (!interrupted || !again || restarts.current >= MAX_RESTARTS) {
+    // Only the NATIVE side says what an interruption is: its code, or (for a copy, whose code a preparation's own words replace) its
+    // words. That Clipy was away at some point does not make a real failure one: that is shown at once.
+    const interrupted = (code === EXPORT_INTERRUPTED || saysInterrupted(message)) && isBackgroundExportBuild();
+    if (!interrupted || !again) {
       endRun("error");
       setState({ status: "error", progress: 0, message });
+      return;
+    }
+    if (restarts.current >= MAX_RESTARTS) {
+      // The restarts are used up: one plain sentence, and the system's own words go to the log.
+      console.warn("export gave up after restarts", message);
+      endRun("error");
+      setState({ status: "error", progress: 0, message: EXPORT_GAVE_UP });
       return;
     }
     restarts.current += 1;
@@ -142,7 +155,7 @@ export function useExport(project: Project | null, missingSourceUris: string[]) 
           return rest;
         });
         const job = jobId.current;
-        if (!job || !left.current || stall.current) return;
+        if (!job || !left.current || stall.current || shown.current >= EXPORT_STALL_CEILING) return;
         stall.current = activeTimeout(() => {
           stall.current = null;
           if (jobId.current !== job) return;

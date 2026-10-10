@@ -36,7 +36,7 @@ import { ensureSound } from "@/src/editor/soundRenders";
 import { makeAudioTrack, makeClip, makeProject, NO_SOUND } from "@/src/editor/model/types";
 import { EXPORT_PAUSED, EXPORT_RESTARTED } from "../backgroundExport";
 import { useStayAwake } from "../exportAwake";
-import { EXPORT_STALL_MS, EXPORT_STUCK, MAX_RESTARTS, useExport } from "../useExport";
+import { EXPORT_GAVE_UP, EXPORT_STALL_MS, EXPORT_STUCK, MAX_RESTARTS, useExport } from "../useExport";
 
 const project = makeProject({ id: "p1", name: "Beach day", clips: [makeClip({ id: "a", sourceDuration: 4 })] });
 const withSound = makeProject({ id: "p2", name: "Beach day", clips: [makeClip({ id: "a", sourceDuration: 4 })], audioTracks: [makeAudioTrack({ id: "m", sourceUri: "file:///media/m.m4a", sourceDuration: 9, sound: { ...NO_SOUND, voice: "deep" } })] });
@@ -88,7 +88,7 @@ test("an INTERRUPTED export is not shown as a failure: it starts again by itself
   expect(ended).toHaveBeenCalledWith("run-1", true);
 });
 
-test("no restart loop: after MAX_RESTARTS the interruption is the error it is, with its message and Try Again", async () => {
+test("no restart loop: after MAX_RESTARTS one plain sentence (never the raw system string) with Try Again", async () => {
   expect(MAX_RESTARTS).toBe(2);
   const { result } = await renderHook(() => useExport(project, []));
   await act(() => result.current.start(1080));
@@ -96,9 +96,13 @@ test("no restart loop: after MAX_RESTARTS the interruption is the error it is, w
   await emit({ jobId: "job2", type: "error", code: "interrupted", message: "export interrupted: two" });
   expect(timeline).toHaveBeenCalledTimes(3);
   expect(result.current.state.status).toBe("exporting");
-  await emit({ jobId: "job3", type: "error", code: "interrupted", message: "export interrupted: three" });
+  const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  await emit({ jobId: "job3", type: "error", code: "interrupted", message: "export interrupted: The operation could not be completed [AVFoundationErrorDomain -11847]" });
   expect(timeline).toHaveBeenCalledTimes(3);
-  expect(result.current.state).toEqual({ status: "error", progress: 0, message: "export interrupted: three" });
+  expect(result.current.state).toEqual({ status: "error", progress: 0, message: EXPORT_GAVE_UP });
+  expect(EXPORT_GAVE_UP).toBe("The export couldn't finish because Clipy kept going to the background. Keep Clipy open and try again.");
+  expect(result.current.state.message).not.toMatch(/11847|AVFoundation|interrupted:/);
+  expect(warn).toHaveBeenCalledWith("export gave up after restarts", expect.stringContaining("-11847"));   // the raw string is kept for the log
   expect(ended).toHaveBeenCalledTimes(1);
   expect(ended).toHaveBeenCalledWith("run-1", false);
   // Try Again, then Export: a new export gets its own restarts.
@@ -162,7 +166,7 @@ test("progress never runs backwards within one attempt", async () => {
   expect(seen).toEqual([0.2, 0.5, 0.5, 0.5, 0.5, 0.8]);
 });
 
-test("a preparation that fails after Clipy was left is an interruption too: the export starts again and finds the copy", async () => {
+test("a copy the native side says was interrupted is an interruption too (its words come through the preparation): the export starts again", async () => {
   const sound = ensureSound as jest.Mock;
   let failCopy: (e: Error) => void = () => {};
   sound.mockImplementationOnce(() => new Promise<string>((_, reject) => { failCopy = reject; }));
@@ -171,7 +175,7 @@ test("a preparation that fails after Clipy was left is an interruption too: the 
   await act(async () => { started = result.current.start(1080); await Promise.resolve(); });
   await act(async () => app("background"));
   await act(async () => app("active"));
-  await act(async () => { failCopy(new Error("sound write: interrupted")); await started; });
+  await act(async () => { failCopy(new Error("cutout interrupted: Clipy was in the background while the copy was made")); await started; });
   expect(sound).toHaveBeenCalledTimes(2);                                      // asked again by the restart
   expect(timeline).toHaveBeenCalledTimes(1);
   expect(result.current.state.status).toBe("exporting");
@@ -303,4 +307,56 @@ describe("on a build from before background export, everything is as it was", ()
     expect(logged).not.toHaveBeenCalled();
     expect(useStayAwake).toHaveBeenCalled();                                   // the screen is still kept awake: that needs no new build
   });
+});
+
+test("a REAL failure after an absence is not retried: shown at once with Try Again, zero restarts (only the native side says interrupted)", async () => {
+  const { result } = await renderHook(() => useExport(project, []));
+  await act(() => result.current.start(1080));
+  await act(async () => app("background"));
+  await act(async () => app("active"));
+  await emit({ jobId: "job1", type: "error", message: "Cannot Decode [AVFoundationErrorDomain -11821]" });
+  expect(timeline).toHaveBeenCalledTimes(1);
+  expect(result.current.state).toEqual({ status: "error", progress: 0, message: "Cannot Decode [AVFoundationErrorDomain -11821]" });
+  expect(ended).toHaveBeenCalledWith("run-1", false);
+});
+
+test("the same for a preparation: an ordinary failure after an absence is the error it is", async () => {
+  let failCopy: (e: Error) => void = () => {};
+  (ensureSound as jest.Mock).mockImplementationOnce(() => new Promise<string>((_, reject) => { failCopy = reject; }));
+  const { result } = await renderHook(() => useExport(withSound, []));
+  let started: Promise<void> = Promise.resolve();
+  await act(async () => { started = result.current.start(1080); await Promise.resolve(); });
+  await act(async () => app("background"));
+  await act(async () => app("active"));
+  await act(async () => { failCopy(new Error("sound write: no room")); await started; });
+  expect(ensureSound).toHaveBeenCalledTimes(1);
+  expect(result.current.state).toEqual({ status: "error", progress: 0, message: "Could not prepare a sound for the export: sound write: no room" });
+});
+
+test("the stall watch is not armed during the long final write of the file (shown progress 0.99 or more)", async () => {
+  jest.useFakeTimers();
+  const { result } = await renderHook(() => useExport(project, []));
+  await act(() => result.current.start(1080));
+  await emit({ jobId: "job1", type: "progress", progress: 0.99 });
+  await act(async () => app("background"));
+  await act(async () => app("active"));
+  await emit({ jobId: "job1", type: "progress", progress: 0.99 });
+  await act(async () => { jest.advanceTimersByTime(EXPORT_STALL_MS * 4); });
+  expect(cancelExport).not.toHaveBeenCalled();
+  expect(timeline).toHaveBeenCalledTimes(1);
+  expect(result.current.state).toEqual({ status: "exporting", progress: 0.99 });
+  await emit({ jobId: "job1", type: "done", fileUri: "file:///x.mp4" });
+  expect(result.current.state.status).toBe("done");
+});
+
+test("just under it the watch is armed as before", async () => {
+  jest.useFakeTimers();
+  const { result } = await renderHook(() => useExport(project, []));
+  await act(() => result.current.start(1080));
+  await emit({ jobId: "job1", type: "progress", progress: 0.98 });
+  await act(async () => app("background"));
+  await act(async () => app("active"));
+  await act(async () => { jest.advanceTimersByTime(EXPORT_STALL_MS); });
+  expect(cancelExport).toHaveBeenCalledWith("job1");
+  expect(result.current.state.status).toBe("exporting");
 });

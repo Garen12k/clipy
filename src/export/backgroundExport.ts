@@ -4,11 +4,12 @@ import { newId } from "@/src/lib/id";
 
 /**
  * What an export does when Clipy is left, as this iPhone allows it — the value of the Accounts screen's "Background export" row. It
- * states what the phone supports and nothing more: `full` = iOS keeps the app alive AND lets such a task draw; `alive` = iOS keeps
+ * states what HAPPENS on this phone and nothing more: `full` = iOS keeps the app alive and would let such a task draw — but Clipy
+ * asks for no GPU, so the video waits all the same and the row says what `alive` says (the raw `gpu` flag stays in the log); `alive` = iOS keeps
  * the app alive but the video waits (iOS does not let a background app use the GPU there); `pauses` = an iOS from before the
  * continued task: the export waits until Clipy is opened again; `old` = the installed app is from before all of it.
  */
-export const SUPPORT = { full: "Full", alive: "Stays alive, pauses the video", pauses: "Pauses until you return", old: "Needs the newest Clipy build" } as const;
+export const SUPPORT = { full: "Stays alive, pauses the video", alive: "Stays alive, pauses the video", pauses: "Pauses until you return", old: "Needs the newest Clipy build" } as const;
 export function supportLabel(s: BackgroundSupport | null = backgroundExportSupport()): string {
   if (!s) return SUPPORT.old;
   if (!s.continued) return SUPPORT.pauses;
