@@ -329,7 +329,7 @@ describe("TikTok", () => {
     expect(screen.getByRole("button", { name: "YouTube options" })).toBeTruthy();
     expect(screen.getByText(TT_CAPTION)).toBeTruthy();
     expect(screen.getAllByText("Not available yet")).toHaveLength(3);
-    // tapping the row unticks it (there is no options sheet to open); the caption line goes with it
+    // tapping the row unticks it (a valid draft has nothing to set, so its options sheet does not open); the caption line goes with it
     await fireEvent.press(screen.getByRole("checkbox", { name: "TikTok" }));
     expect(screen.getByRole("checkbox", { name: "TikTok" })).not.toBeChecked();
     expect(screen.queryByText("TikTok options")).toBeNull();

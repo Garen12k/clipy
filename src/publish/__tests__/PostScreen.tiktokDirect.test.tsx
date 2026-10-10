@@ -65,8 +65,9 @@ beforeEach(() => {
 });
 afterEach(() => { if (jest.isMockFunction(Alert.alert)) (Alert.alert as jest.Mock).mockRestore(); });
 
-jest.mock("../useCreatorInfo", () => ({ useCreatorInfo: jest.fn(() => ({ state: { status: "idle" }, load: jest.fn() })) }), { virtual: true });
+jest.mock("../useCreatorInfo", () => ({ useCreatorInfo: jest.fn(() => ({ state: { status: "idle" }, load: jest.fn() })) }));
 import { clientAdapters } from "../adapters";
+import { useCreatorInfo } from "../useCreatorInfo";
 const creator = { nickname: "Sunny", username: "sunny", avatarUrl: null, privacyOptions: ["FOLLOWER_OF_CREATOR", "MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"], commentDisabled: false, duetDisabled: true, stitchDisabled: true, maxDurationSec: 300 };
 const MUSIC = "By posting, you agree to TikTok's Music Usage Confirmation.";
 /** These tests start the TikTok row in a chosen state by replacing its defaults (the sheet that sets them is Task 4's). */
@@ -128,5 +129,55 @@ describe("TikTok, Post now", () => {
     expect(screen.getByText("TikTok doesn't receive this caption — you'll write it in TikTok.")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Post" }));
     expect(p.start).toHaveBeenCalledWith([{ platform: "tiktok", caption: "", options: {} }]);
+  });
+});
+
+describe("TikTok options on the Post screen", () => {
+  const creatorMock = (state: unknown, load = jest.fn()) => { (useCreatorInfo as jest.Mock).mockReturnValue({ state, load }); return load; };
+  beforeEach(() => { (useAccounts as jest.Mock).mockReturnValue(accounts({}, TT_ON)); });
+
+  test("opening the options of a draft asks TikTok nothing; choosing Post now asks once", async () => {
+    const load = creatorMock({ status: "idle" });
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("button", { name: "TikTok options" }));
+    expect(screen.getByText("TikTok options")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send as draft" })).toBeSelected();
+    expect(load).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", { name: "Post now" }));
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  test("Post now from the sheet to Post: choose who can see it, close, Post sends the direct job", async () => {
+    creatorMock({ status: "ready", info: creator });
+    const p = post(); usePostReturns(p);
+    await render(<PostScreen />);
+    await fireEvent.press(screen.getByRole("checkbox", { name: "YouTube" }));
+    await fireEvent.press(screen.getByRole("button", { name: "TikTok options" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Post now" }));
+    expect(screen.getByRole("button", { name: "Post" })).toBeDisabled(); // nothing chosen yet
+    await fireEvent.press(screen.getByRole("radio", { name: "Only me" }));
+    await fireEvent.press(screen.getByLabelText("Close sheet"));
+    await fireEvent.press(screen.getByRole("button", { name: "Post" }));
+    expect(p.start).toHaveBeenCalledWith([{ platform: "tiktok", caption: "", options: { mode: "direct", privacy: "SELF_ONLY", allowComment: false, allowDuet: false, allowStitch: false, brandOrganic: false, brandContent: false } }]);
+  });
+
+  test("Reconnect closes the sheet, starts the existing connect flow for TikTok and opens the sheet again", async () => {
+    jest.useFakeTimers();
+    try {
+      creatorMock({ status: "needsPermission" });
+      const a = accounts({}, TT_ON); (a.connect as jest.Mock).mockResolvedValue(undefined);
+      (useAccounts as jest.Mock).mockReturnValue(a);
+      startWith({ mode: "direct" });
+      await render(<PostScreen />);
+      await fireEvent.press(screen.getByRole("button", { name: "TikTok options" }));
+      await fireEvent.press(screen.getByRole("button", { name: "Reconnect TikTok" }));
+      expect(screen.queryByText("TikTok options")).toBeNull();
+      expect(a.connect).not.toHaveBeenCalled();
+      await act(async () => { jest.advanceTimersByTime(350); });
+      expect(a.connect).toHaveBeenCalledWith("tiktok");
+      await act(async () => {});
+      expect(screen.getByText("TikTok options")).toBeTruthy();
+      expect(router.push).not.toHaveBeenCalledWith("/accounts");
+    } finally { jest.useRealTimers(); }
   });
 });

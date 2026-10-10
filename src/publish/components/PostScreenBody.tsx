@@ -6,6 +6,7 @@ import { formatBytes } from "@/src/export/estimate";
 import { useEditorStore } from "@/src/editor/store";
 import { nowIso } from "@/src/lib/clock";
 import { formatDuration } from "@/src/lib/format";
+import { AFTER_SHEET_MS } from "@/src/projects/ProjectActionsSheet";
 import { theme } from "@/src/theme/theme";
 import { useSurfaces } from "@/src/ui/tone";
 import { Card } from "@/src/ui/Card";
@@ -21,6 +22,7 @@ import { Body } from "@/src/ui/Text";
 import { ToastHost, useToast } from "@/src/ui/Toast";
 import { PLATFORMS, type PlatformId } from "../platforms";
 import { useAccounts } from "../useAccounts";
+import { useCreatorInfo } from "../useCreatorInfo";
 import { usePost } from "../usePost";
 import type { PostTarget } from "../postParams";
 import { usePostForm } from "../usePostForm";
@@ -51,6 +53,21 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
   const form = usePostForm(video, accounts.platforms, title, rows, accounts.refresh, coverMs);
   const [optionsFor, setOptionsFor] = useState<PlatformId | null>(null);
   useLeaveGuard(busy, cancel);
+  const creator = useCreatorInfo("tiktok");
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  /**
+   * "Post now" without TikTok's posting permission: the existing connect flow, started from here because Accounts offers no Reconnect
+   * for a healthy account. The sheet closes first (iOS presents the sign-in browser only once the modal is gone), and opens again
+   * when the user is back, which asks TikTok afresh.
+   */
+  const reconnectTikTok = useCallback(() => {
+    setOptionsFor(null);
+    setTimeout(() => {
+      if (!mounted.current) return;
+      accounts.connect("tiktok").then(() => { if (mounted.current) setOptionsFor("tiktok"); }, () => {});
+    }, AFTER_SHEET_MS);
+  }, [accounts.connect]);
 
   const onPost = () => { haptic("light"); start(form.jobs); };
   async function onShare() {
@@ -110,7 +127,8 @@ export function PostScreenBody({ target: { video, projectId, title, coverMs } }:
         </View>
       </KeyboardAvoidingView>
       <PostOptionsSheet platform={optionsFor} options={form.views.find((v) => v.status.id === optionsFor)?.options ?? {}}
-        onChange={(patch) => optionsFor && form.setOption(optionsFor, patch)} onClose={() => setOptionsFor(null)} />
+        onChange={(patch) => optionsFor && form.setOption(optionsFor, patch)} onClose={() => setOptionsFor(null)}
+        tiktok={{ creator: creator.state, onLoad: creator.load, onReconnect: reconnectTikTok }} />
       <ToastHost />
     </Screen>
   );
