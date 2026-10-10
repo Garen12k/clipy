@@ -9,7 +9,7 @@ export const EXPORT_NOTICE = { title: "Your video is ready", body: (name: string
  * "Your video is ready": ONE local notification when an export finishes while the app is not the active one — and only where
  * notifications are already allowed (this never asks). In front, the Export screen itself shows the end, so nothing more is said;
  * a failure or a cancel says nothing. It only watches the export's state — `useExport` and its request are untouched — and it is
- * not a promise that an export goes on after the app is left: iOS decides that, and nothing here asks for time in the background.
+ * not a promise that an export goes on after the app is left: iOS decides that (what is asked of it is in backgroundExport.ts, and the video's frames wait there).
  * Once per export: it fires only on the CHANGE from exporting to done (the status before is kept in a ref and replaced before
  * anything is said), so a second render, a second run of the effect or the done state seen again says nothing.
  */

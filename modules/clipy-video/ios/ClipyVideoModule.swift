@@ -183,7 +183,9 @@ public class ClipyVideoModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("ClipyVideo")
-    Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent", "onBackgroundExportEvent")
+    Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent")
+    // The "background export" build's own event (the names of every `Events` are joined into the module's list).
+    Events("onBackgroundExportEvent")
 
     // The app's state is watched from the start, so an export knows whether the app was in front (ExportBackground.swift).
     OnCreate {
@@ -615,7 +617,15 @@ public class ClipyVideoModule: Module {
       self.lookupPeaksJob(jobId)?.cancel()
     }
 
-    // The build of 2026-10-13 ("background export"). The app calls this at the tap on Export, before the
+    // The build of 2026-10-13 ("background export"): what this iPhone supports, `{ os, continued, gpu }` (see
+    // ExportKeepAlive.support). The app asks whether this function is THERE to know the build: with it, the frames of
+    // an export wait while the app is in the background, an export that was interrupted says so, and the functions
+    // below exist.
+    Function("backgroundExportSupport") { () -> [String: Any] in
+      return ExportKeepAlive.support()
+    }
+
+    // The app calls this at the tap on Export, before the
     // preparations: iOS is asked to keep the app alive for the export `runId` (see ExportKeepAlive). Always resolves
     // `{ grace, continued, reason }`; what the system's interface does to the export arrives as
     // `onBackgroundExportEvent { runId, type }`. The export itself does not depend on any of it.

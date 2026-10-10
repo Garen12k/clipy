@@ -173,7 +173,8 @@ describe("the grace period on every iOS", () => {
   });
 
   test("the three functions of the module and its event are there under the names the JavaScript asks for", () => {
-    expect(moduleFile).toContain('Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent", "onBackgroundExportEvent")');
+    expect(moduleFile).toContain('    Events("onExportEvent", "onSoundEvent", "onCutoutEvent", "onSteadyEvent")\n');
+    expect(moduleFile).toContain('    Events("onBackgroundExportEvent")\n');
     expect(moduleFile).toContain('AsyncFunction("beginBackgroundExport") { (runId: String, title: String, subtitle: String, promise: Promise) in');
     expect(moduleFile).toContain('Function("reportBackgroundExport") { (runId: String, progress: Double) in');
     expect(moduleFile).toContain('Function("endBackgroundExport") { (runId: String, success: Bool) in');
@@ -284,5 +285,13 @@ describe("the continued processing task (iOS 26 and later)", () => {
 
   test("the podspec links the framework", () => {
     expect(readFileSync(join(IOS, "ClipyVideo.podspec"), "utf8")).toContain("s.frameworks = 'Speech', 'Accelerate', 'BackgroundTasks'");
+  });
+});
+
+describe("what the phone supports", () => {
+  test("a read, never a request: the iOS version, the continued task from iOS 26, the GPU from supportedResources (false below 26)", () => {
+    const support = between(background, "  static func support() -> [String: Any] {", "\n  }\n");
+    inOrder(support, ["var continued = false", "var gpu = false", "#if canImport(BackgroundTasks) && compiler(>=6.2)", "if #available(iOS 26.0, *) {", "continued = true", "gpu = BGTaskScheduler.supportedResources.contains(.gpu)", "#endif", 'return ["os": "\\(version.majorVersion).\\(version.minorVersion)", "continued": continued, "gpu": gpu]']);
+    expect(moduleFile).toContain('    Function("backgroundExportSupport") { () -> [String: Any] in\n      return ExportKeepAlive.support()\n    }');
   });
 });

@@ -198,6 +198,22 @@ final class ExportKeepAlive: @unchecked Sendable {
   /// `lock`, and TAKEN (set to nil) by whoever completes it, so it is completed exactly once.
   private var task: AnyObject?
 
+  /// What this iPhone can do for an export in the background — a READ, nothing is asked for: the iOS version,
+  /// whether iOS has the continued processing task (26 and later), and whether it would let such a task use the GPU
+  /// (`BGTaskScheduler.supportedResources`; the app does not ask for it). The app shows it on the Accounts screen.
+  static func support() -> [String: Any] {
+    let version = ProcessInfo.processInfo.operatingSystemVersion
+    var continued = false
+    var gpu = false
+    #if canImport(BackgroundTasks) && compiler(>=6.2)
+    if #available(iOS 26.0, *) {
+      continued = true
+      gpu = BGTaskScheduler.supportedResources.contains(.gpu)
+    }
+    #endif
+    return ["os": "\(version.majorVersion).\(version.minorVersion)", "continued": continued, "gpu": gpu]
+  }
+
   private init() {
     ExportPause.shared.onChange { [weak self] (left: Bool) -> Void in
       guard let self else { return }
