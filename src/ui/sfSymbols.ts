@@ -53,6 +53,7 @@ export const SF_SYMBOLS: Readonly<Partial<Record<IoniconName, SymbolName>>> = {
   // Home, sign-in, accounts, Quick edit.
   "paper-plane-outline": "paperplane",
   "person-circle-outline": "person.crop.circle",
+  "person-remove-outline": "person.badge.minus",
   "log-out-outline": "rectangle.portrait.and.arrow.right",
   "mail-outline": "envelope",
   "boat-outline": "sailboat",

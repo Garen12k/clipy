@@ -67,5 +67,7 @@ export const api = {
   uploadChunk: (sessionId: string, offset: number, total: number, bytes: Uint8Array, signal?: AbortSignal) =>
     call<{ nextOffset: number }>("post-upload", { bytes, signal, headers: { "Content-Type": "application/octet-stream", "x-session-id": sessionId, "x-offset": String(offset), "x-total": String(total) } }),
   finalize: (sessionId: string, clientResult: string | null) => call<PublishResult>("post-finalize", { json: { sessionId, clientResult } }),
+  /** Delete my account. Nothing says WHO: the server takes the user from the session token alone. */
+  deleteAccount: async () => { await call("delete-account", { json: {} }); },
   status: (sessionId: string) => call<PublishResult>("post-status", { json: { sessionId } }),
 };

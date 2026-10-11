@@ -101,3 +101,18 @@ test("creatorInfo posts the platform to creator-info; a refusal keeps the server
   await expect(api.creatorInfo("tiktok")).rejects.toMatchObject({ code: "needs_permission" });
   await expect(api.creatorInfo("tiktok")).rejects.toBeInstanceOf(ApiFailure);
 });
+
+test("deleteAccount is one POST to delete-account with the session token and nothing about who: the server reads the user from the token", async () => {
+  fetchMock.mockResolvedValue(res(200, { ok: true }));
+  await expect(api.deleteAccount()).resolves.toBeUndefined();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe("https://ref.supabase.co/functions/v1/delete-account");
+  expect(init.method).toBe("POST");
+  expect(init.headers).toMatchObject({ Authorization: "Bearer jwt", apikey: "pk" });
+  expect(init.body).toBe("{}");
+  fetchMock.mockResolvedValue(res(500, { code: "delete_failed", message: "Couldn't delete the account. Try again." }));
+  await expect(api.deleteAccount()).rejects.toMatchObject({ code: "delete_failed", message: "Couldn't delete the account. Try again." });
+  fetchMock.mockRejectedValue(new TypeError("Network request failed"));
+  await expect(api.deleteAccount()).rejects.toMatchObject({ code: "unreachable" });
+});

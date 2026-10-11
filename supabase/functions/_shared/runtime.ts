@@ -18,6 +18,11 @@ function makeDeps(admin: SupabaseClient): Deps {
     db: supabaseDb(admin), env: { get: (n: string) => Deno.env.get(n) }, fetch, now: () => new Date(), adapters,
     key: () => (key ??= importKey(Deno.env.get("TOKEN_ENC_KEY") ?? "")),
     callbackUrl: `${Deno.env.get("SUPABASE_URL")}/functions/v1/oauth-callback`,
+    // A hard delete (the admin API's default): the user's row goes, and with it — by the tables' cascade — anything still pointing at it.
+    deleteAuthUser: async (userId: string) => {
+      const { error } = await admin.auth.admin.deleteUser(userId);
+      return error ? { status: (error as { status?: number }).status, code: (error as { code?: string }).code } : null;
+    },
   };
 }
 
