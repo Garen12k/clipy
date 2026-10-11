@@ -471,7 +471,7 @@ Nothing here has run against live Meta. Check each of these the first time, and 
 
 Clipy posts your video to X with your caption. **X charges for every post** (see "What to expect" below), so you need an X developer account with some credit on it.
 
-> **Honest status:** none of this has run against the real X yet. No X developer app existed when it was written; everything comes from X's developer documentation (October 2026). If a screen looks different, trust the screen and tell the developer what you saw.
+> **Honest status:** connecting and posting have run against the real X (11 October 2026, the owner's phone); the steps below were written before that, from from X's developer documentation (October 2026). If a screen looks different, trust the screen and tell the developer what you saw.
 
 Do steps 1 to 4a above first (the Supabase project, the server online, the encryption key).
 
@@ -523,7 +523,7 @@ In Clipy, Accounts → **Connect X** → X asks you to allow Clipy → **Authori
 - **To remove Clipy's access:** on X, **Settings and privacy → Security and account access → Apps and sessions → Connected apps** → Clipy → **Revoke app permissions** *(may be named slightly differently)*. Disconnecting in Clipy also asks X to forget the connection.
 - **If Clipy says "X didn't confirm the post":** the connection to X failed just as the post was being made, so Clipy cannot tell whether it went out. **Look at your X profile first.** Only post again if the post is not there — otherwise you would post it twice (and pay twice). Clipy never retries this step by itself.
 - **X refuses identical posts.** If you post the same caption you posted recently, X may refuse it as a duplicate; Clipy shows X's message. Change the caption a little and post again.
-- **None of this has run against live X yet.** If a step fails, tell the developer what you saw.
+- **Connecting and posting have run live (11 October 2026).** If a step fails, tell the developer what you saw.
 
 ### e. X troubleshooting
 
@@ -541,7 +541,7 @@ In Clipy, Accounts → **Connect X** → X asks you to allow Clipy → **Authori
 
 ### f. First live run: X
 
-Nothing here has run against live X. Check each of these the first time, and if one fails, tell the developer what you saw (copy any error message).
+Connecting and a first post have run against live X (11 October 2026); the rest has not. Check each of these the first time, and if one fails, tell the developer what you saw (copy any error message).
 
 1. **Login with PKCE.** Accounts → Connect X opens X's sign-in page, you allow access, and the X row shows your `@name`. (If X says the request is invalid, the developer needs to know: the sign-in uses "PKCE", which X requires.)
 2. **The upload is accepted with your X login.** After you press Post, Preparing finishes and Uploading starts. If it fails right at the start with an "authentication" message, X did not accept this kind of login for video uploads.
