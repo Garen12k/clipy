@@ -239,3 +239,13 @@ In this order; the first step must come before the second, or connecting TikTok 
 | U12 | That iOS presents the sign-in browser 350 ms after the sheet's modal closes | `AFTER_SHEET_MS`, as Home does after its sheet | Step 4 opens TikTok's page. If nothing opens, connect from Accounts (Disconnect, then Connect). |
 | U13 | The whole draft path against live TikTok | Unchanged from Phase 4B (never run live) | README 11 f. |
 | U14 | That `max_video_post_duration_sec` is always present | 600 when absent | — |
+
+## As built (2026-10-11)
+
+Where the build departed from the text above, after the independent review and the first live run:
+
+- Post now is behind a server secret, `TIKTOK_DIRECT_POST=true`. Off, connecting asks for the two draft scopes only and `creator-info` / a direct prepare answer `direct_off`; on, connecting also asks for `video.publish`. Deploying can therefore never break connecting or drafts.
+- A TikTok code with no sentence of its own shows one generic sentence, never TikTok's text or the bare code; the code is in the function log.
+- A failed TikTok row that can only start afresh shows Options beside Retry.
+- An OAuth redirect carrying `error=` is a plain failure for TikTok (`access_denied` stays the quiet cancel); other platforms are unchanged.
+- First live run (owner's phone, TestFlight build 5, sandbox app, private account, "Only me"): Post now WORKS — U1 is settled: a sandbox app may post directly as SELF_ONLY. The other unverified items were not looked at one by one.
