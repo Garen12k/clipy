@@ -88,3 +88,16 @@ test("the unreachable message is for the person posting: it names no dashboard, 
     expect(log).not.toHaveBeenCalled();
   } finally { log.mockRestore(); }
 });
+
+test("creatorInfo posts the platform to creator-info; a refusal keeps the server's code", async () => {
+  const info = { nickname: "Sunny", username: "sunny", avatarUrl: null, privacyOptions: ["SELF_ONLY"], commentDisabled: false, duetDisabled: true, stitchDisabled: true, maxDurationSec: 300 };
+  fetchMock.mockResolvedValue(res(200, info));
+  expect(await api.creatorInfo("tiktok")).toEqual(info);
+  const [url, init] = fetchMock.mock.calls[0];
+  expect(url).toBe("https://ref.supabase.co/functions/v1/creator-info");
+  expect(init.method).toBe("POST");
+  expect(JSON.parse(init.body)).toEqual({ platform: "tiktok" });
+  fetchMock.mockResolvedValue(res(403, { code: "needs_permission", message: "Reconnect TikTok to allow posting directly, or choose Send as draft in the TikTok options." }));
+  await expect(api.creatorInfo("tiktok")).rejects.toMatchObject({ code: "needs_permission" });
+  await expect(api.creatorInfo("tiktok")).rejects.toBeInstanceOf(ApiFailure);
+});

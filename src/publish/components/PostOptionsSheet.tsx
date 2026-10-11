@@ -6,6 +6,8 @@ import { Sheet } from "@/src/ui/Sheet";
 import { Body } from "@/src/ui/Text";
 import { clientAdapters } from "../adapters";
 import { PLATFORMS, type PlatformId } from "../platforms";
+import type { CreatorState } from "../useCreatorInfo";
+import { TikTokOptions } from "./TikTokOptions";
 
 const TITLE_MAX = 100;
 const PRIVACY = [{ value: "public", label: "Public" }, { value: "unlisted", label: "Unlisted" }, { value: "private", label: "Private" }] as const;
@@ -13,10 +15,12 @@ const PRIVACY = [{ value: "public", label: "Public" }, { value: "unlisted", labe
 /** Platforms that have options of their own (adapter `hasOptions`, default true); the others have no Options button. */
 export const hasOptions = (id: PlatformId) => { const a = clientAdapters[id]; return !!a && a.hasOptions !== false; };
 
-type Props = { platform: PlatformId | null; options: Record<string, unknown>; onChange: (patch: Record<string, unknown>) => void; onClose: () => void };
+type Props = { platform: PlatformId | null; options: Record<string, unknown>; onChange: (patch: Record<string, unknown>) => void; onClose: () => void;
+  /** What the TikTok body needs besides its options: the creator's state, how to ask for it, and the reconnect offer. */
+  tiktok?: { creator: CreatorState; onLoad: () => void; onReconnect: () => void } };
 
 /** Per-platform options. Every change applies at once; closing the sheet keeps them. */
-export function PostOptionsSheet({ platform, options, onChange, onClose }: Props) {
+export function PostOptionsSheet({ platform, options, onChange, onClose, tiktok }: Props) {
   const label = platform ? PLATFORMS[platform].label : "";
   const title = typeof options.title === "string" ? options.title : "";
   return (
@@ -37,6 +41,7 @@ export function PostOptionsSheet({ platform, options, onChange, onClose }: Props
           </View>
         </View>
       ) : null}
+      {platform === "tiktok" && tiktok ? <TikTokOptions options={options} onChange={onChange} creator={tiktok.creator} onLoad={tiktok.onLoad} onReconnect={tiktok.onReconnect} /> : null}
     </Sheet>
   );
 }

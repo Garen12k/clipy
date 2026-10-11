@@ -103,7 +103,7 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
       if (p.protocol === "meta-rupload") await deps.uploadMetaWhole(p.uploadUrl ?? "", p.uploadHeaders, job.video.fileUri, { onProgress, signal });
       else {
         reader = deps.openReader(job.video.fileUri);
-        const args = { reader, mimeType: job.video.mimeType, chunkSize: p.chunkSize, onProgress, signal, resume: !!resumeFrom };
+        const args = { reader, mimeType: job.video.mimeType, chunkSize: p.chunkSize, onProgress, signal, resume: !!resumeFrom, ...(p.publishes === true ? { publishes: true } : {}) };
         if (p.protocol === "google-resumable") clientResult = await deps.uploadGoogleResumable(p.uploadUrl ?? "", p.uploadHeaders, args);
         else if (p.protocol === "tiktok-chunks") await deps.uploadTikTokChunks(p.uploadUrl ?? "", args);
         else await deps.uploadRelay((offset, total, bytes, sig) => deps.api.uploadChunk(p.sessionId, offset, total, bytes, sig), args);
@@ -133,6 +133,12 @@ export async function runPost(job: PostJob, deps: PostDeps, update: (patch: Part
     const uploaded = !!info?.uploaded;
     if (signal.aborted && !uploaded) update({ ...IDLE_ROW });
     else if (e instanceof ApiFailure && e.code === "reconnect") update({ phase: "needsReconnect", message: e.message });
+    else if (uploaded && e instanceof ApiFailure && e.code === "outcome_unknown") {
+      // The platform would not say what became of a post that publishes by itself: it may be live. The server's sentence says to
+      // check first; nothing is kept to resume and nothing here invites a second upload.
+      update({ phase: "failed", message: messageOf(e), resumable: false });
+      return null;
+    }
     else if (uploaded && e instanceof ApiFailure && FINAL_AFTER_UPLOAD.has(e.code)) {
       // Nothing left to resume: drop the info so Retry starts over, and say so.
       update({ phase: "failed", message: `${messageOf(e)} Retry will upload the video again.`, resumable: false });

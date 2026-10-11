@@ -320,16 +320,16 @@ test.each([
 describe("TikTok", () => {
   beforeEach(() => { (useAccounts as jest.Mock).mockReturnValue(accounts({}, TT_ON)); });
 
-  test("TikTok is ticked by default with its note and has no options button", async () => {
+  test("TikTok is ticked by default as a draft, with its note and an options button", async () => {
     await render(<PostScreen />);
     expect(screen.getByRole("checkbox", { name: "TikTok" })).toBeChecked();
     expect(screen.getByText("@sunny")).toBeTruthy();
     expect(screen.getByText(TT_NOTE)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "TikTok options" })).toBeNull();
+    expect(screen.getByRole("button", { name: "TikTok options" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "YouTube options" })).toBeTruthy();
     expect(screen.getByText(TT_CAPTION)).toBeTruthy();
     expect(screen.getAllByText("Not available yet")).toHaveLength(3);
-    // tapping the row unticks it (there is no options sheet to open); the caption line goes with it
+    // tapping the row unticks it (a valid draft has nothing to set, so its options sheet does not open); the caption line goes with it
     await fireEvent.press(screen.getByRole("checkbox", { name: "TikTok" }));
     expect(screen.getByRole("checkbox", { name: "TikTok" })).not.toBeChecked();
     expect(screen.queryByText("TikTok options")).toBeNull();

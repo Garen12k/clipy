@@ -12,7 +12,11 @@ export interface Prepared {
   sessionId: string; protocol: UploadProtocol; uploadUrl: string | null; uploadHeaders: Record<string, string>; chunkSize: number;
   /** How long to keep polling after finalize, how many seconds apart, and whether running out of time means "tap Resume" rather than "done". */
   wait?: { maxSeconds: number; intervalSeconds?: number; resumeOnTimeout: boolean };
+  /** The upload itself publishes (TikTok Post now): a lost last piece may already be a live post. */
+  publishes?: boolean;
 }
+export type TikTokPrivacy = "PUBLIC_TO_EVERYONE" | "FOLLOWER_OF_CREATOR" | "MUTUAL_FOLLOW_FRIENDS" | "SELF_ONLY";
+export interface CreatorInfo { nickname: string; username: string | null; avatarUrl: string | null; privacyOptions: TikTokPrivacy[]; commentDisabled: boolean; duetDisabled: boolean; stitchDisabled: boolean; maxDurationSec: number }
 export type PublishResult = { status: "done"; url: string | null } | { status: "processing" };
 
 const UNREACHABLE = "Clipy's server is asleep or unreachable. Try again in a few minutes.";
@@ -58,6 +62,7 @@ export const api = {
   accounts: async () => (await call<{ platforms: PlatformStatus[] }>("accounts")).platforms,
   disconnect: async (platform: PlatformId) => { await call("accounts", { method: "DELETE", query: { platform } }); },
   oauthStart: async (platform: PlatformId, returnUrl: string) => (await call<{ authUrl: string }>("oauth-start", { json: { platform, returnUrl } })).authUrl,
+  creatorInfo: (platform: PlatformId) => call<CreatorInfo>("creator-info", { json: { platform } }),
   prepare: (body: { platform: PlatformId; fileSize: number; durationSec: number; mimeType: string; caption: string; options: Record<string, unknown> }) => call<Prepared>("post-prepare", { json: body }),
   uploadChunk: (sessionId: string, offset: number, total: number, bytes: Uint8Array, signal?: AbortSignal) =>
     call<{ nextOffset: number }>("post-upload", { bytes, signal, headers: { "Content-Type": "application/octet-stream", "x-session-id": sessionId, "x-offset": String(offset), "x-total": String(total) } }),

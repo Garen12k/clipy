@@ -63,14 +63,23 @@ export function PostRow({ view, row, onToggle, onOptions, onConnect, onReconnect
       </View>
     ) : <Body weight="semi" style={{ color: s.accentInk }}>Done</Body>;
     // No link (e.g. a TikTok draft): the row's own message, else the platform's done note.
-    const doneText = url ? null : row.message ?? view.adapter?.doneNote ?? null;
+    const doneText = url ? null : row.message ?? (view.adapter?.doneNoteFor ? view.adapter.doneNoteFor(view.options) : view.adapter?.doneNote) ?? null;
     if (doneText) below.push(<View key="m">{msg(doneText)}</View>);
   } else if (row.phase === "failed" || row.phase === "needsReconnect") {
     const verb = row.phase === "failed" ? (row.resumable ? "Resume" : "Retry") : canResume ? "Resume" : null;
     // Retry / Resume follow the same rule as Post: not while the row is invalid or the caption is too long.
-    side = verb
-      ? <QuietButton compact title={verb} accessibilityLabel={`${verb} ${label}`} disabled={!canPost} onPress={onRetry} />
-      : <QuietButton compact title="Reconnect" accessibilityLabel={`Reconnect ${label}`} onPress={onReconnect} />;
+    const again = verb ? <QuietButton compact title={verb} accessibilityLabel={`${verb} ${label}`} disabled={!canPost} onPress={onRetry} /> : null;
+    // A refusal that points at the platform's options (TikTok: "choose Send as draft in the TikTok options") must leave them reachable:
+    // where Retry is a fresh post, Options stands beside it, and Retry sends the options as they are then.
+    const optionsToo = row.phase === "failed" && !row.resumable && view.adapter?.optionsAfterFailure === true && hasOptions(account.id);
+    side = !again
+      ? <QuietButton compact title="Reconnect" accessibilityLabel={`Reconnect ${label}`} onPress={onReconnect} />
+      : !optionsToo ? again : (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm }}>
+          <QuietButton compact title="Options" accessibilityLabel={`${label} options`} onPress={onOptions} />
+          {again}
+        </View>
+      );
     below.push(<View key="m">{msg(row.message ?? (row.phase === "failed" ? "Something went wrong." : `Reconnect ${label} in Accounts.`), true)}</View>);
     if (blocker) below.push(<View key="b">{msg(blocker, true)}</View>);
   } else if (reason) {

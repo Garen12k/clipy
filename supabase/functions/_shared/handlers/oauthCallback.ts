@@ -1,4 +1,4 @@
-import { ApiError } from "../errors.ts";
+import { ApiError, plainCode } from "../errors.ts";
 import { saveTokens } from "../tokens.ts";
 import { adapterCtx, availableAdapter, type Deps, type Tokens } from "../types.ts";
 
@@ -11,6 +11,13 @@ export async function oauthCallback(deps: Deps, url: URL): Promise<{ redirect: s
   if (!row || new Date(row.expiresAt).getTime() < deps.now().getTime()) throw new ApiError(400, "bad_state", "This sign-in link has expired. Go back to Clipy and try again.");
   const { platform, returnUrl } = row;
   const code = url.searchParams.get("code");
+  // A refusal by the platform itself (not the user's "no") is said, for the platforms that name theirs; the code stays in the log.
+  const refused = url.searchParams.get("error");
+  const said = refused ? (deps.adapters[platform]?.connectError?.(refused) ?? null) : null;
+  if (refused && said) {
+    console.error(`oauth callback: ${platform} answered ${plainCode(refused)}`);
+    return { redirect: back(returnUrl, { status: "error", platform, message: said }) };
+  }
   if (url.searchParams.get("error") || !code) return { redirect: back(returnUrl, { status: "cancelled", platform }) };
   const adapter = availableAdapter(deps, platform);
   const ctx = adapterCtx(deps);

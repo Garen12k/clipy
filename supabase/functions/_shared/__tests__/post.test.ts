@@ -580,3 +580,11 @@ describe("X handlers: a post whose outcome is unknown is never created a second 
     expect(posts()).toBe(2);
   });
 });
+
+test("prepare passes the adapter's `publishes` through only when it is true", async () => {
+  const yes = await connected({ adapters: { youtube: fakeAdapter({ prepare: jest.fn(async () => ({ protocol: "tiktok-chunks" as const, uploadUrl: "https://up.test/x", uploadHeaders: {}, chunkSize: 1, ref: {}, publishes: true })) }) } });
+  expect((await postPrepare(yes, USER, body)).publishes).toBe(true);
+  expect("publishes" in (await postPrepare(await connected(), USER, body))).toBe(false);
+  const no = await connected({ adapters: { youtube: fakeAdapter({ prepare: jest.fn(async () => ({ protocol: "tiktok-chunks" as const, uploadUrl: "https://up.test/x", uploadHeaders: {}, chunkSize: 1, ref: {}, publishes: false })) }) } });
+  expect("publishes" in (await postPrepare(no, USER, body))).toBe(false);
+});

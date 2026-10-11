@@ -360,6 +360,13 @@ describe("tiktok-chunks", () => {
     expect(d.api.prepare).toHaveBeenCalledTimes(2);
     expect(t.row()).toMatchObject({ phase: "done" });
   });
+  test("a plan that publishes tells the uploader so; the row ends done with no link", async () => {
+    const direct = { ...tt, publishes: true, wait: { maxSeconds: 300, intervalSeconds: 5, resumeOnTimeout: false } };
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => direct), finalize: jest.fn(async () => ({ status: "done" as const, url: null })) } }), t = track();
+    await runPost({ ...job, platform: "tiktok" }, d, t.update, signal());
+    expect((d.uploadTikTokChunks as jest.Mock).mock.calls[0][1]).toMatchObject({ publishes: true });
+    expect(t.row()).toMatchObject({ phase: "done", url: null, message: null });
+  });
 });
 
 describe("meta-rupload and the wait hint", () => {
@@ -679,5 +686,28 @@ describe("a network blip after the upload is retried, not shown as a failed post
     expect(d.api.prepare).toHaveBeenCalledTimes(1);
     expect(d.sleep).not.toHaveBeenCalled();
     expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: PLAIN });
+  });
+});
+
+describe("a direct post whose outcome the server could not learn", () => {
+  const tt: Prepared = { sessionId: "s9", protocol: "tiktok-chunks", uploadUrl: "https://open-upload.tiktokapis.com/video/?upload_id=9", uploadHeaders: {}, chunkSize: 4, publishes: true, wait: { maxSeconds: 300, intervalSeconds: 5, resumeOnTimeout: false } };
+  const UNKNOWN = "TikTok couldn't confirm this post. Check your TikTok profile before posting again.";
+  test("outcome_unknown from a status poll: the sentence as it is — never 'Retry will upload the video again' — and nothing kept to resume", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt), finalize: jest.fn(async () => ({ status: "processing" as const })), status: jest.fn().mockRejectedValue(new ApiFailure("outcome_unknown", UNKNOWN)) } }), t = track();
+    expect(await runPost({ ...job, platform: "tiktok" }, d, t.update, signal())).toBeNull();
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: UNKNOWN });
+    expect(d.api.status).toHaveBeenCalledTimes(1);
+    expect(d.api.prepare).toHaveBeenCalledTimes(1);
+    expect(d.uploadTikTokChunks).toHaveBeenCalledTimes(1);
+  });
+  test("the same from finalize", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt), finalize: jest.fn().mockRejectedValue(new ApiFailure("outcome_unknown", UNKNOWN)) } }), t = track();
+    expect(await runPost({ ...job, platform: "tiktok" }, d, t.update, signal())).toBeNull();
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: UNKNOWN });
+  });
+  test("a verdict (platform_error) keeps its words: Retry will upload the video again", async () => {
+    const d = deps({ api: { ...deps().api, prepare: jest.fn(async () => tt), finalize: jest.fn().mockRejectedValue(new ApiFailure("platform_error", "TikTok refused the caption. Change it and post again.")) } }), t = track();
+    await runPost({ ...job, platform: "tiktok" }, d, t.update, signal());
+    expect(t.row()).toMatchObject({ phase: "failed", resumable: false, message: "TikTok refused the caption. Change it and post again. Retry will upload the video again." });
   });
 });
