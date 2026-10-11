@@ -17,6 +17,11 @@ export function memoryDb(): Db {
     createSession: async (row) => { const id = `session-${++n}`; sessions.set(id, { ...row, id }); return id; },
     getSession: async (id) => sessions.get(id) ?? null,
     updateSession: async (id, patch) => { const s = sessions.get(id); if (s) sessions.set(id, { ...s, ...patch }); },
+    deleteUserData: async (u) => {
+      for (const [key, a] of accounts) if (a.userId === u) accounts.delete(key);
+      for (const [key, s] of states) if (s.userId === u) states.delete(key);
+      for (const [key, s] of sessions) if (s.userId === u) sessions.delete(key);
+    },
     claimSession: async (id, from, to, patch = {}) => { const s = sessions.get(id); if (!s || s.status !== from) return false; sessions.set(id, { ...s, ...patch, status: to }); return true; },
   };
 }

@@ -81,6 +81,12 @@ export function supabaseDb(sb: SupabaseClient): Db {
       if (Object.keys(p).length === 0 || !UUID.test(id)) return;
       check(await sb.from("post_sessions").update(p).eq("id", id), "updateSession");
     },
+    /** Three deletes, each by `user_id` alone; any failure throws, so the caller never goes on to delete the sign-in over rows it could not remove. */
+    async deleteUserData(userId) {
+      check(await sb.from("connected_accounts").delete().eq("user_id", userId), "deleteUserData accounts");
+      check(await sb.from("oauth_states").delete().eq("user_id", userId), "deleteUserData states");
+      check(await sb.from("post_sessions").delete().eq("user_id", userId), "deleteUserData sessions");
+    },
     /** One conditional UPDATE (status and patch together, guarded by the current status) — never a read followed by a write. */
     async claimSession(id, from, to, patch = {}) {
       if (!UUID.test(id)) return false;

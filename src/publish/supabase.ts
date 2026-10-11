@@ -5,6 +5,8 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { AppState } from "react-native";
+// api.ts imports this file too: both sides use the other only inside functions, never while loading.
+import { api, ApiFailure } from "./api";
 
 export const backendUrl = () => process.env.EXPO_PUBLIC_SUPABASE_URL;
 export const backendKey = () => process.env.EXPO_PUBLIC_SUPABASE_KEY;
@@ -145,4 +147,32 @@ export async function signOut(): Promise<void> {
   let still = true;
   try { still = !!(await supabase.auth.getSession()).data.session; } catch { /* unknown: not claimed as signed out */ }
   if (still) throw new Error(plain(error).message === NO_CONNECTION ? NO_CONNECTION : "Couldn't sign out.");
+}
+
+/** What a deletion that did not happen says when the server gave no sentence of ours. */
+export const DELETE_FAILED = "Couldn't delete the account. Try again.";
+/** The failures whose message is already one of Clipy's own plain sentences; anything else (a gateway's words, "Something went wrong.") is DELETE_FAILED. */
+const SAID = new Set(["delete_failed", "unreachable", "signed_out", "unauthorized", "not_configured"]);
+
+/**
+ * Delete my account: ONE request to the server (the `delete-account` function removes the sign-in, the connected accounts and
+ * everything else it holds for this user), and only after its yes, this phone's session is ended. Projects on the phone are not
+ * touched — nothing here knows of them.
+ * Refused or unreachable → one plain sentence is thrown and nothing local has changed (still signed in; asking again is safe).
+ * After the yes it always resolves: the account IS gone, so a local sign-out that fails cannot leave a half state — the session is
+ * ended on this phone alone (`scope: "local"`: there is no user left on the server to sign out), and if one is somehow still
+ * stored, the stored session is removed by hand.
+ */
+export async function deleteAccount(): Promise<void> {
+  const supabase = configured();
+  try { await api.deleteAccount(); }
+  catch (e) { throw new Error(e instanceof ApiFailure && SAID.has(e.code) && e.message ? e.message : DELETE_FAILED); }
+  try { await supabase.auth.signOut({ scope: "local" }); } catch { /* looked at below */ }
+  let still = true;
+  try { still = !!(await supabase.auth.getSession()).data.session; } catch { /* unknown: treated as still there */ }
+  if (!still) return;
+  try {
+    const key = (supabase.auth as unknown as { storageKey?: unknown }).storageKey;
+    if (typeof key === "string" && key) localStorage.removeItem(key);
+  } catch { /* nothing more can be done from here; the session's user no longer exists, so it can do nothing */ }
 }

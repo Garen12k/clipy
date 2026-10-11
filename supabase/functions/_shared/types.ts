@@ -60,12 +60,19 @@ export interface Db {
   updateSession(id: string, patch: Partial<Pick<PostSessionRow, "ref" | "status" | "url" | "error">>): Promise<void>;
   /** Atomically moves a session from one status to another; false when it was not in `from`. */
   claimSession(id: string, from: SessionStatus, to: SessionStatus, patch?: { url?: string | null; error?: string | null }): Promise<boolean>;
+  /** Delete my account: every row of this user in all three tables (connected accounts, pending connects, post sessions) — nobody else's. */
+  deleteUserData(userId: string): Promise<void>;
 }
 export interface Deps {
   db: Db; env: Env; fetch: typeof fetch; now(): Date; key(): Promise<CryptoKey>;
   adapters: Partial<Record<PlatformId, ServerAdapter>>;
   /** The public HTTPS URL of the oauth-callback function, registered on every platform. */
   callbackUrl: string;
+  /**
+   * Deletes the Clipy sign-in itself (the auth user) through the admin API. Answers null when it is gone, or what the auth server
+   * said (`status`, `code` — never its text) when it is not; only `handlers/deleteAccount.ts` calls it.
+   */
+  deleteAuthUser(userId: string): Promise<{ status?: number; code?: string } | null>;
 }
 
 export function isPlatformId(v: unknown): v is PlatformId { return (PLATFORM_IDS as readonly unknown[]).includes(v); }

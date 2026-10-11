@@ -86,7 +86,7 @@ Create Clipy's tables in the database. It asks for the database password from st
 npx.cmd supabase db push
 ```
 
-Upload the server code (all eight functions):
+Upload the server code (all nine functions):
 
 ```powershell
 npx.cmd supabase functions deploy
@@ -552,3 +552,34 @@ Connecting and a first post have run against live X (11 October 2026); the rest 
 7. **Disconnect.** Accounts → Disconnect X, then check on X under **Connected apps** whether Clipy is gone (the server asks X to remove it, but this was never tested).
 8. **A dropped connection mid-upload.** With a video of at least 9 MB, turn on airplane mode at about 50 % of Uploading, wait for the row to offer **Resume**, turn airplane mode off and press Resume. Resume sends the pieces again from the start to the same X upload, so pieces X already has are sent a second time. The row should reach Done with one post. If X refuses instead, tell the developer: Resume must then start a new X upload.
 9. **Resume after X was busy while posting.** If the row ever offers Resume after X said it was busy or too many requests while posting, press Resume: the row should reach Done with one post (Resume asks X to finish the upload a second time, which X's documentation does not describe). If it fails with an X "media" message instead, tell the developer.
+
+---
+
+## 14. Deleting an account
+
+Apple requires that anyone who can sign in can also delete their account from inside the app. In Clipy that is **Accounts → Delete account** (the red row under Sign Out, shown only while signed in).
+
+**What it does.** After you confirm, the app sends one request to the server function `delete-account`. For the person who is signed in, and nobody else, the server:
+
+1. asks each connected platform to forget the connection where the platform offers that (the same step as **Disconnect**), giving them 8 seconds in all. A platform that does not answer never stops the deletion;
+2. deletes everything the server holds for that person: the connected accounts with their locked sign-ins, any half-finished Connect, and the records of their posts;
+3. deletes the Clipy sign-in itself.
+
+The app says **Account deleted.** only after step 3 worked, and then signs out on the phone. If anything fails, it says **Couldn't delete the account. Try again.** and you are still signed in; trying again is safe.
+
+**What it does not do.** Projects and videos on the phone stay: they were never on the server. Videos already posted to YouTube, TikTok, Instagram, Facebook or X stay on those platforms. Signing in again later with the same email or Apple/Google account simply makes a new, empty Clipy account.
+
+**It must be put online once.** The function is new, so the server needs one more upload (the developer does this):
+
+```powershell
+npx.cmd supabase functions deploy
+```
+
+Until then the row answers **Couldn't delete the account. Try again.** Nothing else is affected, and no new secret or database change is needed.
+
+**First live run (never tested against the real server):**
+
+1. Sign in with a throw-away email, connect one platform, then **Accounts → Delete account → Delete**. Expected: **Account deleted.** and the Sign In card.
+2. In the Supabase dashboard, **Authentication → Users**: the address is gone. **Table Editor → connected_accounts**: no row for it.
+3. Sign in again with the same address: it works, and no platform is connected.
+4. If the row says **Couldn't delete the account. Try again.** every time, open **Edge Functions → delete-account → Logs** and copy the line starting `delete-account:` for the developer.

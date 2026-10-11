@@ -7,6 +7,7 @@ import { AccountRow } from "@/src/publish/components/AccountRow";
 import { SignInCard } from "@/src/publish/components/SignInCard";
 import { signOut } from "@/src/publish/supabase";
 import { useAccounts } from "@/src/publish/useAccounts";
+import { useDeleteAccount } from "@/src/publish/useDeleteAccount";
 import { useSession } from "@/src/publish/useSession";
 import { theme } from "@/src/theme/theme";
 import { useSurfaces } from "@/src/ui/tone";
@@ -28,6 +29,7 @@ export default function AccountsScreen() {
   const session = useSession();
   const signedIn = session.status === "signedIn";
   const { status, platforms, error, busy, refresh, connect, disconnect } = useAccounts(signedIn);
+  const { deleting, ask: askDelete } = useDeleteAccount();
 
   const goBack = () => (router.canGoBack() ? router.back() : router.replace("/"));
   const confirmSignOut = () => Alert.alert("Sign out of Clipy?", "Your connected accounts stay connected.", [
@@ -54,6 +56,13 @@ export default function AccountsScreen() {
             <PressableScale accessibilityRole="button" accessibilityLabel="Sign Out" onPress={confirmSignOut} style={row}>
               <Icon name="log-out-outline" size={theme.size.icon.lg} color={s.danger} />
               <Body style={{ flex: 1, color: s.dangerText }}>Sign Out</Body>
+            </PressableScale>
+            {/* Removes the Clipy account from the server (useDeleteAccount); the projects on this phone are not part of it. */}
+            <PressableScale testID="delete-account-row" accessibilityRole="button" accessibilityLabel="Delete account" accessibilityState={{ busy: deleting, disabled: deleting }} disabled={deleting} onPress={askDelete} style={row}>
+              {deleting
+                ? <Spinner label="Deleting account" style={{ width: theme.size.icon.lg, height: theme.size.icon.lg }} />
+                : <Icon name="person-remove-outline" size={theme.size.icon.lg} color={s.danger} />}
+              <Body style={{ flex: 1, color: s.dangerText }}>Delete account</Body>
             </PressableScale>
           </Group>
         ) : null}

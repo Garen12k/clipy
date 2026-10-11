@@ -1,16 +1,18 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { Alert } from "react-native";
 jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: () => true }, Redirect: () => null, useFocusEffect: (cb: () => void) => { require("react").useEffect(() => { cb(); }, []); } }));
 jest.mock("../useSession", () => ({ useSession: jest.fn() }));
 jest.mock("../useAccounts", () => ({ useAccounts: jest.fn() }));
-jest.mock("../supabase", () => ({ signInWithApple: jest.fn(), signOut: jest.fn() }));
+jest.mock("../supabase", () => ({ signInWithApple: jest.fn(), signOut: jest.fn(), deleteAccount: jest.fn() }));
 // The engine is not linked under Jest (the build is "Expo Go"); one ability can be switched on to name a build.
 jest.mock("@/modules/clipy-video", () => ({ ...jest.requireActual("@/modules/clipy-video"), isSteadyAvailable: jest.fn(() => false) }));
 import { isSteadyAvailable } from "@/modules/clipy-video";
 import { router } from "expo-router";
 import AccountsScreen from "@/app/accounts";
 import { useToast } from "@/src/ui/Toast";
-import { signOut } from "../supabase";
+import { deleteAccount, signOut } from "../supabase";
 import { useAccounts } from "../useAccounts";
 import { theme } from "@/src/theme/theme";
 import { useSession } from "../useSession";
@@ -229,6 +231,7 @@ describe("in light", () => {
     expect(hasSurface("#F7F1E3")).toBe(true);
     expect(hasSurface("#FFFBF1")).toBe(true);
     expect(screen.getByText("Sign Out")).toHaveStyle({ color: "#A3261C" });
+    expect(screen.getByText("Delete account")).toHaveStyle({ color: "#A3261C" });
     expect(screen.getByText("me@icloud.com")).toHaveStyle({ color: "#0A1B33" });
     expect(screen.getAllByText("Connect")[0]).toHaveStyle({ color: "#7A5200" });
   });
@@ -274,5 +277,124 @@ describe("Show welcome again", () => {
     expect(signOut).not.toHaveBeenCalled();
     expect(require("fs").readFileSync(require("path").join(__dirname, "..", "..", "..", "app", "accounts.tsx"), "utf8")).not.toMatch(/welcomeSeen/);
     expect(screen.getByTestId("signed-in-row")).toBeTruthy();
+  });
+});
+
+describe("Delete account", () => {
+  const TITLE = "Delete your Clipy account?";
+  const MESSAGE = "Your sign-in and connected accounts are removed from Clipy's server. This can't be undone. Projects on this phone stay.";
+  type Button = { text: string; style?: string; onPress?: () => void };
+  const buttonsOf = (alert: jest.SpyInstance, call = 0) => alert.mock.calls[call][2] as Button[];
+  const row = () => screen.getByRole("button", { name: "Delete account" });
+  /** How many icon glyphs of this colour are on screen (under Jest an icon is its Ionicons text glyph). */
+  const icons = (color: string) => (JSON.stringify(screen.toJSON()).match(new RegExp(`\{"fontSize":24,"color":"${color}"\},null,\{"fontFamily":"ionicons"`, "g")) ?? []).length;
+  beforeEach(() => { (useAccounts as jest.Mock).mockReturnValue(hook()); (deleteAccount as jest.Mock).mockReset().mockResolvedValue(undefined); });
+
+  test("signed in: a red row directly under Sign Out in 'Clipy account' — words, an outline icon, never a filled button", async () => {
+    await render(<AccountsScreen />);
+    const account = within(screen.getByTestId("clipy-account"));
+    expect(account.getByText("Delete account")).toHaveStyle({ color: theme.screen.dangerText });
+    expect(account.getByRole("button", { name: "Delete account" })).toHaveStyle({ minHeight: theme.size.row });
+    expect(row()).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
+    expect(screen.queryAllByTestId("primary-button")).toHaveLength(0);
+    const tree = JSON.stringify(screen.toJSON());
+    const order = [tree.indexOf("signed-in-row"), tree.indexOf('"accessibilityLabel":"Sign Out"'), tree.indexOf("delete-account-row"), tree.indexOf("welcome-again-row"), tree.indexOf('"testID":"build-row"')];
+    expect(order.every((at) => at > -1)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Its icon is the red one, as Sign Out's: two red glyphs in the group.
+    expect(icons(theme.screen.danger)).toBe(2);
+    expect(readFileSync(join(__dirname, "..", "..", "..", "app", "accounts.tsx"), "utf8")).toMatch(/name="person-remove-outline"/);
+  });
+
+  test("not signed in — signed out, not set up, loading: no such row", async () => {
+    for (const status of ["signedOut", "unconfigured", "loading"]) {
+      (useSession as jest.Mock).mockReturnValue({ status });
+      (useAccounts as jest.Mock).mockReturnValue(hook({ status: "idle", platforms: [] }));
+      const view = await render(<AccountsScreen />);
+      expect(screen.queryByText("Delete account")).toBeNull();
+      expect(screen.queryByTestId("delete-account-row")).toBeNull();
+      await view.unmount();
+    }
+  });
+
+  test("a tap asks with the system alert, word for word, and deletes nothing yet; Cancel does nothing", async () => {
+    const alert = alertSpy().mockImplementation(() => {});
+    await render(<AccountsScreen />);
+    await fireEvent.press(row());
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith(TITLE, MESSAGE, expect.any(Array));
+    expect(buttonsOf(alert).map((b) => [b.text, b.style])).toEqual([["Cancel", "cancel"], ["Delete", "destructive"]]);
+    expect(deleteAccount).not.toHaveBeenCalled();
+    await act(async () => { await buttonsOf(alert)[0].onPress?.(); });
+    expect(deleteAccount).not.toHaveBeenCalled();
+    expect(signOut).not.toHaveBeenCalled();
+    expect(useToast.getState().message).toBeNull();
+    expect(screen.queryByLabelText("Deleting account")).toBeNull();
+  });
+
+  test("Delete: one call; while it runs the row shows a spinner in place of its icon and takes no second tap", async () => {
+    let finish!: () => void;
+    (deleteAccount as jest.Mock).mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const alert = alertSpy().mockImplementation(() => {});
+    await render(<AccountsScreen />);
+    await fireEvent.press(row());
+    const del = buttonsOf(alert)[1].onPress!;
+    await act(async () => { del(); del(); });   // two presses in the same frame
+    expect(deleteAccount).toHaveBeenCalledTimes(1);
+    expect(deleteAccount).toHaveBeenCalledWith();
+    expect(within(row()).getByLabelText("Deleting account")).toBeTruthy();
+    expect(icons(theme.screen.danger)).toBe(1);   // Sign Out's alone: the spinner stands where this row's icon was
+    expect(screen.getByText("Delete account")).toBeTruthy();
+    await fireEvent.press(row());                // the row itself, while it runs
+    expect(alert).toHaveBeenCalledTimes(1);
+    await act(async () => { del(); });           // and the old alert's button once more
+    expect(deleteAccount).toHaveBeenCalledTimes(1);
+    await act(async () => { finish(); });
+    expect(screen.queryByLabelText("Deleting account")).toBeNull();
+    expect(useToast.getState().message).toBe("Account deleted.");
+    expect(signOut).not.toHaveBeenCalled();     // the local ending is deleteAccount's own (supabase.ts), not the Sign Out flow
+  });
+
+  test("it worked: 'Account deleted.', and the screen is the signed-out one as soon as the session says so", async () => {
+    const alert = alertSpy().mockImplementation(() => {});
+    const view = await render(<AccountsScreen />);
+    await fireEvent.press(row());
+    await act(async () => { await buttonsOf(alert)[1].onPress!(); });
+    expect(useToast.getState().message).toBe("Account deleted.");
+    (useSession as jest.Mock).mockReturnValue({ status: "signedOut" });
+    await view.rerender(<AccountsScreen />);
+    expect(screen.queryByTestId("clipy-account")).toBeNull();
+    expect(screen.getByRole("button", { name: "Sign In" })).toBeTruthy();
+  });
+
+  test("it failed: still signed in, the sentence is said, and the row can be tapped again", async () => {
+    (deleteAccount as jest.Mock).mockRejectedValueOnce(new Error("Clipy's server is asleep or unreachable. Try again in a few minutes."));
+    const alert = alertSpy().mockImplementation(() => {});
+    await render(<AccountsScreen />);
+    await fireEvent.press(row());
+    await act(async () => { await buttonsOf(alert)[1].onPress!(); });
+    expect(useToast.getState().message).toBe("Clipy's server is asleep or unreachable. Try again in a few minutes.");
+    expect(signOut).not.toHaveBeenCalled();
+    expect(screen.getByTestId("signed-in-row")).toBeTruthy();
+    expect(screen.queryByLabelText("Deleting account")).toBeNull();
+    (deleteAccount as jest.Mock).mockRejectedValueOnce("no words");
+    await fireEvent.press(row());
+    expect(alert).toHaveBeenCalledTimes(2);
+    await act(async () => { await buttonsOf(alert, 1)[1].onPress!(); });
+    expect(deleteAccount).toHaveBeenCalledTimes(2);
+    expect(useToast.getState().message).toBe("Couldn't delete the account. Try again.");
+  });
+
+  test("in light the busy row is cream too", async () => {
+    (deleteAccount as jest.Mock).mockImplementation(() => new Promise<void>(() => {}));
+    const alert = alertSpy().mockImplementation(() => {});
+    wear("light");
+    try {
+      await render(<AccountsScreen />);
+      await fireEvent.press(row());
+      await act(async () => { buttonsOf(alert)[1].onPress!(); });
+      expect(screen.getByLabelText("Deleting account")).toBeTruthy();
+      expect(leftovers()).toEqual([]);
+    } finally { wear("dark"); }
   });
 });

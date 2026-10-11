@@ -32,6 +32,7 @@ export function fakeDeps(over: Partial<Deps> = {}): Deps {
     db: memoryDb(), env: { get: (n) => env.get(n) }, fetch: jest.fn() as unknown as typeof fetch,
     now: () => new Date("2026-10-02T10:00:00.000Z"), key: () => importKey(TEST_KEY),
     adapters: { youtube: fakeAdapter() }, callbackUrl: "https://ref.supabase.co/functions/v1/oauth-callback",
+    deleteAuthUser: jest.fn(async () => null),
     ...over,
   };
 }
