@@ -165,3 +165,10 @@ test("connect says how it ended, so a caller can tell a failure (toast shown) fr
   expect(second).toBe("busy");
   await act(async () => { finish({ type: "cancel" }); await first; });
 });
+
+it("leaves out a platform Clipy does not show (Facebook), whatever the server lists", async () => {
+  (api.accounts as jest.Mock).mockResolvedValue([yt(), yt({ id: "instagram" }), yt({ id: "facebook" })]);
+  const h = await renderHook(() => useAccounts(true));
+  await waitFor(() => expect(h.result.current.status).toBe("ready"));
+  expect(h.result.current.platforms.map((p) => p.id)).toEqual(["youtube", "instagram"]);
+});

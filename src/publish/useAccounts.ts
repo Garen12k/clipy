@@ -3,7 +3,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/src/ui/Toast";
 import { api, type PlatformStatus } from "./api";
-import type { PlatformId } from "./platforms";
+import { isShown, type PlatformId } from "./platforms";
 
 type Status = "idle" | "loading" | "ready" | "error";
 /** How a connect / disconnect ended: `error` = it failed and the toast says why; `busy` = another one was running, so this call did nothing. */
@@ -25,7 +25,7 @@ export function useAccounts(enabled: boolean) {
     try {
       const list = await api.accounts();
       if (!mounted.current || id !== requestId.current) return;
-      setPlatforms(list); setError(null); setStatus("ready");
+      setPlatforms(list.filter((p) => isShown(p.id))); setError(null); setStatus("ready");
     } catch (e) {
       if (!mounted.current || id !== requestId.current) return;
       setError(text(e)); setStatus("error");
