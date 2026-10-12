@@ -191,7 +191,7 @@ function ProjectsScreen() {
           // One accessible element: VoiceOver reads the words once, not once for the spinner and once for the text.
           <View testID="home-making" accessible accessibilityLabel={MAKING[making]} style={{ flex: 1, height: theme.size.control, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: s.bar }}>
             <Spinner />
-            <Body weight="semi">{MAKING[making]}</Body>
+            <Body fit weight="semi">{MAKING[making]}</Body>
           </View>
         ) : (
           <>

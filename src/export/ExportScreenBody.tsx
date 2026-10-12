@@ -106,8 +106,8 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
           {state.status === "unavailable" && (
             <Card style={{ gap: theme.space.sm }}>
               <Title size={theme.type.heading}>Export needs the native build</Title>
-              <Body>Rendering the final video uses Clipy's Swift engine, which Expo Go can't load. Install a development build to export.</Body>
-              <Body muted>Everything else in Clipy works in Expo Go.</Body>
+              <Body scale="reading">Rendering the final video uses Clipy's Swift engine, which Expo Go can't load. Install a development build to export.</Body>
+              <Body scale="reading" muted>Everything else in Clipy works in Expo Go.</Body>
             </Card>
           )}
         </ScrollView>

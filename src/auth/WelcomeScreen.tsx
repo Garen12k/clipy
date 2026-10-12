@@ -204,7 +204,7 @@ export function SignInBody({ first = false, onDone, session, heading, onStep, ma
             <View style={{ flexGrow: 1, alignItems: "center", justifyContent: "center", gap: theme.space.sm, paddingVertical: theme.space.xxl }}>
               {heading ? <Title size={theme.text.title1.size} accessibilityRole="header" style={{ textAlign: "center" }}>{heading.title}</Title>
                 : <Title size={WORDMARK.size} accessibilityRole="header">Clipy</Title>}
-              <Body muted style={{ fontSize: theme.type.input, textAlign: "center" }}>{heading ? heading.body : TAGLINE}</Body>
+              <Body scale="reading" muted style={{ fontSize: theme.type.input, textAlign: "center" }}>{heading ? heading.body : TAGLINE}</Body>
               {/* Google's session is completed after its browser has closed: this is what shows that something is happening. */}
               <View testID="welcome-working" style={{ height: WORKING_SLOT, justifyContent: "center" }}>
                 {working !== null ? <Spinner label={working} /> : null}
@@ -229,7 +229,7 @@ export function SignInBody({ first = false, onDone, session, heading, onStep, ma
                 icon={<Icon name="mail-outline" size={theme.size.icon.md} color={iconColor} {...hidden} />} />
               <QuietButton title={first ? "Continue Without an Account" : "Not Now"} disabled={busy} onPress={leave} />
             </View>
-            <Body muted style={{ fontSize: theme.type.small, textAlign: "center" }}>{FOOTER}</Body>
+            <Body scale="reading" muted style={{ fontSize: theme.type.small, textAlign: "center" }}>{FOOTER}</Body>
           </EnterView>
         ) : step === "email" ? (
           <EmailStep email={email} onChange={(text) => { setEmail(text); setEmailError(null); setEmailNote(null); }}

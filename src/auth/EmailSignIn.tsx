@@ -23,7 +23,7 @@ function Message({ text, error }: { text: string; error?: boolean }) {
   useEffect(() => { AccessibilityInfo.announceForAccessibility(text); }, [text]);
   const s = useSurfaces();
   return (
-    <Body testID={error ? "welcome-error" : "welcome-note"} muted={!error} accessibilityRole="alert" accessibilityLiveRegion="polite"
+    <Body scale="reading" testID={error ? "welcome-error" : "welcome-note"} muted={!error} accessibilityRole="alert" accessibilityLiveRegion="polite"
       style={error ? { color: s.dangerText } : undefined}>{text}</Body>
   );
 }
@@ -63,7 +63,7 @@ export function CodeStep({ email, code, onChange, note, error, working, resendIn
   const busy = working !== null;
   return (
     <EnterView style={{ gap: theme.space.lg }}>
-      <Body accessibilityRole="header" style={{ fontSize: theme.type.input }}>{preview ? "Enter the 6-digit code from the email." : `Enter the 6-digit code we sent to ${email}`}</Body>
+      <Body scale="reading" accessibilityRole="header" style={{ fontSize: theme.type.input }}>{preview ? "Enter the 6-digit code from the email." : `Enter the 6-digit code we sent to ${email}`}</Body>
       <Field accessibilityLabel="6-digit code" value={code} onChangeText={onChange} placeholder="000000" editable={!busy} autoFocus
         keyboardType="number-pad" textContentType="oneTimeCode" autoComplete="one-time-code" maxLength={CODE_LENGTH}
         style={{ fontVariant: ["tabular-nums"], letterSpacing: theme.space.sm }} />
