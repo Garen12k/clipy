@@ -16,10 +16,12 @@ import { Screen } from "@/src/ui/Screen";
 import { ScreenBar } from "@/src/ui/ScreenBar";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Segmented } from "@/src/ui/Segmented";
+import { Tile } from "@/src/ui/Tile";
 import { Body, Title } from "@/src/ui/Text";
 import { EXPORT_PAUSED } from "./backgroundExport";
 import { NotifyOfferCard, useNotifyOffer } from "./notifyOffer";
 import { canExport4K, estimateBytes, exportableClips, exportDuration, formatBytes, QUALITY_LABELS, RESOLUTIONS, type Resolution } from "./estimate";
+import { fpsLabel, pickedPreset, PRESETS, presetLabel, presetLine, presetsShown, presetValues, type PresetId } from "./presets";
 import type { ExportState } from "./useExport";
 
 type Props = {
@@ -40,7 +42,7 @@ const centre = { flex: 1, paddingHorizontal: theme.space.gutter, alignItems: "ce
 const GRABBER = { width: 36, height: 5 } as const;
 /** A line under the ring's word: what the export is doing about the app having been left. */
 const note = { fontSize: theme.type.small, textAlign: "center" } as const;
-const FPS_OPTIONS = EXPORT_FPS.map((f) => ({ value: f, label: `${f} fps` }));
+const FPS_OPTIONS = EXPORT_FPS.map((f) => ({ value: f, label: fpsLabel(f) }));
 const QUALITY_OPTIONS = EXPORT_QUALITIES.map((q) => ({ value: q, label: QUALITY_LABELS[q] }));
 
 /** The quiet line between two rows of the card. */
@@ -57,6 +59,9 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
   const change = (patch: Partial<ExportSettings>) => { const next = { ...settings, ...patch }; setSettings(next); useEditorStore.getState().setExportSettings(next); };
   const clips = exportableClips(project, missingSourceUris);
   const has4K = canExport4K(clips);
+  // A preset sets the three controls in one change. Which tile is picked is read from the controls, never kept (presets.ts).
+  const picked = pickedPreset(res, settings, has4K);
+  const applyPreset = (id: PresetId) => { const v = presetValues(id, has4K); setRes(v.res); change({ fps: v.fps, quality: v.quality }); };
   const duration = exportDuration(project, missingSourceUris);
   const doneUri = state.status === "done" ? state.fileUri ?? "" : "";
   const bytes = useMemo(() => fileSize(doneUri), [doneUri]);
@@ -81,6 +86,13 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
       {(state.status === "idle" || state.status === "unavailable") && (
         // The choices scroll only if a small phone cannot hold them: the gold button below never leaves the bottom.
         <ScrollView testID="export-scroll" style={{ flex: 1 }} alwaysBounceVertical={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: theme.space.gutter, gap: theme.space.lg }}>
+          {/* The shortcuts: equal tiles across the gutter (two when Best would be Social again). The controls below stay as they are. */}
+          <View testID="export-presets" style={{ flexDirection: "row", gap: theme.space.sm }}>
+            {presetsShown(has4K).map((id) => (
+              <Tile key={id} fill label={PRESETS[id].label} icon={PRESETS[id].icon} note={presetLine(presetValues(id, has4K))} hint={PRESETS[id].hint}
+                accessibilityLabel={presetLabel(id, has4K)} selected={picked === id} onPress={() => applyPreset(id)} boxTestID={`export-preset-${id}`} />
+            ))}
+          </View>
           <Card testID="export-options" style={{ gap: theme.space.md }}>
             <View style={row}>
               <Body muted style={rowLabel}>Resolution</Body>

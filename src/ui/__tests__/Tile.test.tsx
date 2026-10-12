@@ -24,6 +24,22 @@ test("a 72-pt column with a 44-pt box; unselected is calm; picked is the 2-pt go
   expect(onPress).toHaveBeenCalledTimes(1);
 });
 
+test("the optional second line, hint, spoken label and fill: a muted micro line under the label, and none of it without the props", async () => {
+  await render(<><Tile label="Plain" selected={false} onPress={() => {}} icon="ellipse-outline" />
+    <Tile label="Social" selected onPress={() => {}} icon="ellipse-outline" note="1080p · 30 · High" hint="For TikTok" accessibilityLabel="Social, 1080p, 30 fps, High" fill /></>);
+  const plain = screen.getByRole("button", { name: "Plain" }), rich = screen.getByRole("button", { name: "Social, 1080p, 30 fps, High" });
+  expect(plain).toHaveStyle({ width: TILE_WIDTH });
+  expect(plain.props.accessibilityHint).toBeUndefined();
+  expect(plain).not.toHaveStyle({ flex: 1 });
+  expect(rich).toHaveStyle({ flex: 1 });
+  expect(rich).not.toHaveStyle({ width: TILE_WIDTH });
+  expect(rich.props.accessibilityHint).toBe("For TikTok");
+  expect(rich).toBeSelected();
+  expect(screen.getByText("1080p · 30 · High")).toHaveStyle({ fontSize: theme.type.micro, color: theme.screen.muted, textAlign: "center" });
+  expect(screen.getByText("1080p · 30 · High")).toHaveProp("numberOfLines", 2);
+  expect(screen.getByText("Social")).toHaveStyle({ color: theme.colors.text, fontWeight: theme.weight.semi });
+});
+
 test("in the editor the picked tile wears the slate family's tint; its glyph keeps the gold, the unpicked one's is white", async () => {
   await render(<ToneContext.Provider value="editor"><Tile label="None" selected onPress={() => {}} icon="ban-outline" boxTestID="on" /><Tile label="Deep" selected={false} onPress={() => {}} icon="mic-outline" boxTestID="off" /></ToneContext.Provider>);
   expect(screen.getByTestId("on")).toHaveStyle({ backgroundColor: theme.elevation.picked, ...theme.ring });
