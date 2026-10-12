@@ -326,3 +326,51 @@ Anything cut off, overlapping, ending in dots where it did not at A, or a video 
 9. **Apple's sign-in button** and other system-drawn parts at size C inside their fixed slots.
 10. **The small phone (375 × 667) at size C:** the wizard's pages and the sign-in page scroll far enough; sheets stay inside the screen.
 11. **Home's two bottom buttons at size B on the narrowest phone:** expected to shrink back toward the default width rather than overlap.
+
+## 10. As built (after the independent review of f09ccb9..37cb08f)
+
+The review found two things this document had wrong. Both were fixed in `015bf07`; where this section and an earlier one disagree, this one is what the code does.
+
+### 10.1 "Fit back" has no floor on iOS (D3, section 7, 9.2 — superseded)
+
+D3 said a line-limited text "may shrink, at most back to the size it has at the default", by `minimumFontScale` = its own ÷ the scale shown. That floor does not exist. Read in React Native 0.86.3 (not seen on a phone):
+
+- `ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/RCTTextLayoutManager.mm` (lines 246–249), the only place the new architecture shrinks text on iOS, uses `paragraphAttributes.minimumFontSize`, 4 pt when it is not given, and never `minimumFontScale`.
+- `Libraries/Text/TextNativeComponent.js` sends `adjustsFontSizeToFit` and `minimumFontScale` only: JavaScript cannot give the 4 another value.
+- The only iOS reader of `minimumFontScale` is the old architecture's `RCTTextShadowView.mm`, which this app does not run.
+
+So the rule as first built — every text with `numberOfLines` gets shrink-to-fit above the default — would have drawn a long project name whole at about 7 pt where it used to end in dots. The same reading shows that the 0.85 "floor" of tool and tile labels (written long before this work) was never in force either: those labels have always shrunk as far as they needed. They are short fixed labels, so nothing is wrong with them, and they are unchanged.
+
+What is built instead:
+
+- **Fit is an explicit opt-in.** `KitText` shrinks nothing unless it is given `fit`. `fitProps(scale, lines, fit)` answers `{ numberOfLines, adjustsFontSizeToFit: true }` above the default and null otherwise; it sends no `minimumFontScale`. A text with `numberOfLines` and no `fit` is capped and ends in dots, exactly as before the branch.
+- **Who may fit:** only a short fixed label the app itself writes, bounded and fitting at the default size, so the shrink ends at or above the default. The users are the exact tables `FIT_KIT` / `FIT_EDITOR` / `FIT_SCREENS` in the guard, each with its reason (28 labels in 23 files: buttons, chips, segments, the screen bar's title, the twelve row labels of Task 2, registry names under tiles, the play row's time, Home's capsule, the two readouts on Accounts, a ratio's name).
+- **Who may not:** anything a user or a platform wrote, and any unbounded sentence — the project's name on Home's card and in the editor's top bar, the card's status, an account's name, the email address, TikTok's nickname, the editor's message bar, hints and status sentences in strips. They keep their line limit and their dots. A `Chip` whose label the phone supplies (Read aloud's languages and voices) says `fit={false}`.
+- **The guard:** `adjustsFontSizeToFit` is named only in `src/ui/textScale.ts` and in `SHRINKS_AS_WRITTEN` (the six labels that asked for it themselves before this work, pinned by the default-tree PROOF); `minimumFontScale` only in those six; `minimumFontSize` nowhere. `fit` is counted on any component, first or not, with or without a value.
+- **Cost:** a two-line fixed note in a strip (`StripNote`, a status line) that only just fits at the default may end in dots at 1.16. That is what it did before the branch at that size, and it is the lesser harm.
+
+### 10.2 Home's two bottom actions (section 6 "Home bottom actions", 9.11 — superseded)
+
+Section 6 kept the row as it was on the premise that `fit` would bring the buttons back. It could not: neither button could shrink (React Native's default `flexShrink` is 0), so each label was measured against the whole row and had nothing to fit into; the row overflowed and the gold button left the screen.
+
+Widths, from the review's estimates of the label widths (±5 %): a button is 24 + 20 + 8 + label + 24; Quick Edit's label is about 82 pt and New Project's about 97 pt at the default.
+
+| Phone | Row | Needed at ×1.35 | Over | Label size after sharing (default 17 pt, asked 23 pt) |
+|---|---|---|---|---|
+| 375 pt | 343 | 406 | 63 | about 17 pt |
+| 393 pt | 361 | 406 | 45 | about 18.7 pt |
+| 430 pt | 398 | 406 | 8 | about 22.2 pt |
+
+What is built: above the default size only (`useTextScale() > 1` in app/index.tsx) Quick Edit's pill and New Project (`PrimaryButton shrink`) get `flexShrink: 1`, and a `fit` label gets `flexShrink: 1` too, so each button gives up its share of the overflow and its label fits what is left. Both labels land at or above the default size on every phone, so no lower cap for this row was added to `theme.textScale`. At the default size the tree is what it was (no wrapper, no extra style entry — the PROOF and the Home suites are unedited). No height changed; the glass pill and the `home-making` capsule keep their boxes.
+
+### 10.3 Smaller things
+
+- `KitText` no longer changes its component type with `numberOfLines` (it depends on `fit` alone), so a text whose line limit appears later is not remounted.
+- `useTextScale` now has a caller (Home).
+- The guard also refuses a `require("react-native")`, a default import and single-quoted imports, and in a content-only file checks `Body` / `Title` / `ValueLabel` / `StripNote` as well as `KitText`.
+- The tests no longer pin a `minimumFontScale` number: Jest has no layout and iOS drops the prop.
+- Left as they are: the tiles row at 1.16 (0.6 pt over its 72, section 9.4 — a phone decides); React Native adding a large-content interaction each time the prop turns true on a recycled view (not ours; watch for a doubled viewer on the phone).
+
+### 10.4 Section 9, corrected
+
+Item 2 ("fit back lands on the default size") is no longer a claim about `minimumFontScale`: what a phone must show is that a `fit` label is never smaller than at the default and a long name ends in dots. Item 11 is now: at sizes B and C on the narrowest phone, both bottom buttons are inside the screen with readable labels. The owner's checklist is `docs/text-size-phone-checklist.md`.
