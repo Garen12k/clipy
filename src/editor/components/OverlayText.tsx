@@ -1,7 +1,8 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { FONTS } from "@/src/editor/fonts";
 import { layoutOverlay } from "@/src/editor/model/overlayLayout";
 import type { TextOverlay } from "@/src/editor/model/types";
+import { KitText } from "@/src/ui/Text";
 
 /**
  * `opacity`: the animated opacity (left out = none). `frameOnly`: an unseen copy that only gives the selection frame its place and size.
@@ -42,15 +43,15 @@ export function OverlayText({ overlay: o, frameW, frameH, opacity, frameOnly, ti
       style={{ position: "absolute", left: l.centerX, top: l.centerY, width: 0, height: 0, alignItems: "center", justifyContent: "center", transform: [{ rotate: `${l.rotation}deg` }], ...(faded === undefined ? null : { opacity: faded }) }}>
       <View testID={frameOnly ? `overlay-base-body-${o.id}` : `overlay-body-${o.id}`} style={{ position: "absolute", maxWidth: l.maxWidth, padding: l.padding, borderRadius: l.boxRadius }}>
         {o.background && !frameOnly && <View pointerEvents="none" style={{ position: "absolute", inset: 0, backgroundColor: o.background.color, opacity: o.background.opacity, borderRadius: l.boxRadius }} />}
-        {!frameOnly && l.glow && <Text testID={`overlay-glow-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.glow.color, ...halo(l.glow.color, l.glow.radius) }}>{plain}</Text>}
+        {!frameOnly && l.glow && <KitText scale="fixed" testID={`overlay-glow-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.glow.color, ...halo(l.glow.color, l.glow.radius) }}>{plain}</KitText>}
         {!frameOnly && l.shadow && (
-          <Text testID={`overlay-shadow-${o.id}`} aria-hidden pointerEvents="none"
-            style={{ ...under, color: l.shadow.color, opacity: l.shadow.opacity, textShadowColor: l.shadow.color, textShadowRadius: l.shadow.blur, textShadowOffset: { width: l.shadow.dx, height: l.shadow.dy } }}>{plain}</Text>
+          <KitText scale="fixed" testID={`overlay-shadow-${o.id}`} aria-hidden pointerEvents="none"
+            style={{ ...under, color: l.shadow.color, opacity: l.shadow.opacity, textShadowColor: l.shadow.color, textShadowRadius: l.shadow.blur, textShadowOffset: { width: l.shadow.dx, height: l.shadow.dy } }}>{plain}</KitText>
         )}
-        {!frameOnly && stacked && outline && <Text testID={`overlay-outline-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.outlineColor, ...outline }}>{plain}</Text>}
+        {!frameOnly && stacked && outline && <KitText scale="fixed" testID={`overlay-outline-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.outlineColor, ...outline }}>{plain}</KitText>}
         {frameOnly
-          ? <Text aria-hidden pointerEvents="none" style={{ ...metrics, opacity: 0 }}>{plain}</Text>
-          : <Text style={{ ...metrics, color: o.color, ...(stacked ? null : outline) }}>{spans ?? plain}</Text>}
+          ? <KitText scale="fixed" aria-hidden pointerEvents="none" style={{ ...metrics, opacity: 0 }}>{plain}</KitText>
+          : <KitText scale="fixed" style={{ ...metrics, color: o.color, ...(stacked ? null : outline) }}>{spans ?? plain}</KitText>}
         {children}
       </View>
     </View>
@@ -63,7 +64,7 @@ function wordSpans(o: TextOverlay, time: number | undefined): React.ReactNode[] 
   if (o.kind !== "caption" || o.words.length === 0 || !highlight) return null;
   const t = time === undefined ? null : time - o.start;
   return o.words.flatMap((w, i) => {
-    const span = <Text key={i} style={t !== null && t >= w.start && t < w.end ? { color: highlight } : undefined}>{w.text}</Text>;
+    const span = <KitText scale="fixed" key={i} style={t !== null && t >= w.start && t < w.end ? { color: highlight } : undefined}>{w.text}</KitText>;
     return i === 0 ? [span] : [" ", span];
   });
 }

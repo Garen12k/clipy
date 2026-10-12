@@ -108,7 +108,7 @@ export function ReadAloudSection({ overlayId }: { overlayId: string }) {
     <View testID="read-aloud">
       <View testID="read-aloud-row" style={ROW}>
         <PressableScale accessibilityRole="button" accessibilityLabel="Read aloud options" accessibilityState={{ expanded: open }} onPress={toggle} style={NAME}>
-          <Body weight="semi">Read aloud</Body>
+          <Body fit weight="semi">Read aloud</Body>
           <Icon name={open ? "chevron-up-outline" : "chevron-down-outline"} size={theme.size.icon.md} color={theme.colors.textMuted} />
         </PressableScale>
       </View>

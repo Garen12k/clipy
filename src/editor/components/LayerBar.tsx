@@ -1,12 +1,13 @@
 import { Icon } from "@/src/ui/Icon";
 import { useEffect, useMemo, useRef } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { moveLayer, trimLayer } from "@/src/editor/model/ops";
 import { clipDuration, layerEnd, sourceAfter, timeToX, xToTime } from "@/src/editor/model/timeline";
 import { clampNum, isPhoto, LAYER_LIMITS, PHOTO, type LayerClip, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { KitText } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
 import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { LANE_HEIGHT, ROW_SLOP } from "../timelineLayout";
@@ -131,7 +132,7 @@ export function LayerBar({ layer: l, missing = false, selected, onPress }: Props
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, zIndex: selected ? 1 : 0, borderRadius: theme.radius.chip, backgroundColor: color,
           borderWidth: 2, borderColor: selected ? theme.colors.text : color, flexDirection: "row", alignItems: "center", paddingHorizontal: roomy ? HANDLE_W + 2 : 0, gap: theme.space.xs }}>
         {parts.glyph && <Icon plain testID={`bar-glyph-${l.id}`} name={BAR_GLYPH["layer"]} size={BAR.glyph} color={theme.colors.onKind} />}
-        {parts.label && <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>Layer</Text>}
+        {parts.label && <KitText scale="fixed" numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>Layer</KitText>}
         {missing && (
           <View testID={`layer-bar-${l.id}-missing`} style={{ position: "absolute", top: 4, right: roomy ? HANDLE_W + 2 : 0, backgroundColor: theme.colors.danger, borderRadius: theme.radius.pill, padding: 2 }}>
             <Icon plain name="warning" size={12} color={theme.colors.onAccent} />

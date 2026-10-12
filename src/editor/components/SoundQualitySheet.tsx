@@ -97,13 +97,13 @@ export function SoundQualitySheet({ trackId, visible, onClose }: { trackId: stri
           {EQ_IDS.map((id) => <Tile key={id} label={EQS[id].label} icon={EQS[id].icon} selected={sound.eq === id} onPress={() => pick(id)} />)}
         </StripTiles>
         <View testID="sound-level-row" style={{ ...SWITCH_ROW, height: STRIP.slider }}>
-          <Body style={{ fontSize: theme.type.small }}>Even out loudness</Body>
+          <Body fit style={{ fontSize: theme.type.small }}>Even out loudness</Body>
           <Switch accessibilityLabel="Even out loudness" value={sound.level} onValueChange={(on) => write((p) => setTrackSound(p, track.id, { level: on }), false)} trackColor={{ true: theme.colors.accent }} />
         </View>
         {/* The line under the name is always there, in the row's own height: nothing moves when the switch does. */}
         <View testID="sound-noise-row" style={{ ...SWITCH_ROW, height: NOISE_ROW }}>
           <View style={{ flex: 1, height: NOISE_ROW, justifyContent: "center" }}>
-            <Body style={{ fontSize: theme.type.small }}>Reduce noise</Body>
+            <Body fit style={{ fontSize: theme.type.small }}>Reduce noise</Body>
             <StripNote>{NOISE_HINT}</StripNote>
           </View>
           <Switch accessibilityLabel="Reduce noise" value={noiseOn} onValueChange={setNoise} trackColor={{ true: theme.colors.accent }} />

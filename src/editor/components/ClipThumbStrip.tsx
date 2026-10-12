@@ -1,10 +1,11 @@
 import { Icon } from "@/src/ui/Icon";
 import { useEffect, useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, View } from "react-native";
 import { clipStartTimes, outputOffsetOf } from "@/src/editor/model/timeline";
 import { isPhoto, type Clip } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { KitText } from "@/src/ui/Text";
 import { STRIP_HEIGHT, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
 import { BADGE, clipBadges } from "../timelineMarks";
 import { KeyframeDots } from "./KeyframeDots";
@@ -72,7 +73,7 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
               style={{ height: BADGE_H, backgroundColor: theme.colors.scrimStrong, borderRadius: 4, paddingHorizontal: theme.space.xs, justifyContent: "center" }}>
               {b.id === "photo"
                 ? <Icon plain name="image-outline" size={10} color={theme.colors.text} />
-                : <Text numberOfLines={1} style={{ fontSize: theme.type.micro, color: theme.colors.text, fontWeight: theme.weight.semi, fontVariant: ["tabular-nums"] }}>{b.text}</Text>}
+                : <KitText scale="fixed" numberOfLines={1} style={{ fontSize: theme.type.micro, color: theme.colors.text, fontWeight: theme.weight.semi, fontVariant: ["tabular-nums"] }}>{b.text}</KitText>}
             </View>
           ))}
         </View>

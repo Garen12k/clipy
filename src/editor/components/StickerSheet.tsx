@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { EMOJI_BY_PACK, EMOJI_PACK_IDS, EMOJI_PACKS, searchEmoji, type EmojiEntry, type EmojiPackId } from "@/src/editor/emoji";
 import { addSticker, defaultOverlayRange } from "@/src/editor/model/ops";
@@ -12,7 +12,7 @@ import { DEFAULT_STICKER_COLOR } from "@/src/editor/components/ColorRow";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { useKeyboard } from "@/src/ui/keyboard";
-import { Body } from "@/src/ui/Text";
+import { Body, KitInput, KitText } from "@/src/ui/Text";
 import { PANEL, ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow } from "./ColorRow";
 
@@ -86,7 +86,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
       {(bodyHeight, bodyWidth) => tab === "emoji" ? (
         <View style={{ height: bodyHeight }}>
           <View style={{ height: SEARCH_ROW, justifyContent: "center" }}>
-            <TextInput accessibilityLabel="Search emoji" value={query} onChangeText={setQuery}
+            <KitInput accessibilityLabel="Search emoji" value={query} onChangeText={setQuery}
               placeholder="Search" placeholderTextColor={theme.colors.textMuted}
               style={{ color: theme.colors.text, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.field, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm }} />
           </View>
@@ -96,14 +96,14 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap", marginBottom: theme.space.sm }}>
                 {recent.map((char) => (
                   <Pressable key={char} accessibilityLabel={`Recent ${char}`} onPress={() => addEmoji({ char, name: char, keywords: [] })}>
-                    <Text style={{ fontSize: 28 }}>{char}</Text>
+                    <KitText scale="fixed" style={{ fontSize: 28 }}>{char}</KitText>
                   </Pressable>
                 ))}
               </View>
             ) : null}
             renderItem={({ item }) => (
               <Pressable accessibilityLabel={`Emoji ${item.name}`} onPress={() => addEmoji(item)} style={{ width: emojiCellWidth(bodyWidth), height: EMOJI_CELL, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: 24 }}>{item.char}</Text>
+                <KitText scale="fixed" style={{ fontSize: 24 }}>{item.char}</KitText>
               </Pressable>
             )} />
         </View>

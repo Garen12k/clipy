@@ -26,7 +26,7 @@ export function BackgroundSheet({ clipId, visible, onClose }: { clipId: string |
           style={[{ width: SWATCH, height: SWATCH, borderRadius: SWATCH / 2, backgroundColor: CONTENT_BLACK, borderWidth: 1, borderColor: theme.colors.hairline }, ringOrClear(bg.type === "black")]} />
         <PressableScale lifted={bg.type === "blur"} accessibilityRole="button" accessibilityLabel="Blur" accessibilityState={{ selected: bg.type === "blur" }} onPress={() => choose({ type: "blur" })}
           style={[{ height: SWATCH, borderRadius: SWATCH / 2, paddingHorizontal: theme.space.md, justifyContent: "center", backgroundColor: theme.elevation.tile }, ringOrClear(bg.type === "blur")]}>
-          <Body weight="semi">Blur</Body>
+          <Body fit weight="semi">Blur</Body>
         </PressableScale>
         {PALETTE.filter((c) => c.toUpperCase() !== CONTENT_BLACK).map((c) => (
           <PressableScale key={c} lifted={isColor(c)} accessibilityRole="button" accessibilityLabel={`Color ${c}`} accessibilityState={{ selected: isColor(c) }} onPress={() => choose({ type: "color", color: c })}

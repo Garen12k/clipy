@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { overlayBaseAt } from "@/src/editor/model/motion";
 import { applyTextTemplate, deleteOverlay, duplicateOverlay, editOverlayAt, setTextStyle, updateOverlay, updateOverlayShared } from "@/src/editor/model/ops";
 import { isTextOverlay, OVERLAY_LIMITS, type Align, type Project, type TextStyle } from "@/src/editor/model/types";
@@ -9,7 +9,7 @@ import { Chip } from "@/src/ui/Chip";
 import { NumField } from "@/src/ui/NumField";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Slider } from "@/src/ui/Slider";
-import { Body, ValueLabel } from "@/src/ui/Text";
+import { Body, KitInput, ValueLabel } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 import { ColorRow } from "./ColorRow";
 import { FontStrip } from "./FontStrip";
@@ -60,7 +60,7 @@ export function TextPanel({ overlayId, visible, onClose, onRetarget }: Props) {
 
   return (
     <ToolPanel visible={visible} onClose={onClose} title="Text" bodyTestID="text-panel-scroll">
-      <TextInput accessibilityLabel="Overlay text" multiline autoFocus value={overlay.text} onChangeText={type}
+      <KitInput accessibilityLabel="Overlay text" multiline autoFocus value={overlay.text} onChangeText={type}
         style={{ ...field, minHeight: 64, textAlignVertical: "top" }} placeholder="Your text" placeholderTextColor={theme.colors.textMuted} />
       {/* Templates are for texts only (`applyTextTemplate` refuses captions, which have their own presets). */}
       {overlay.kind === "text" && <TemplateStrip tiles={TEXT_TEMPLATE_TILES} onPick={(templateId) => apply((x) => applyTextTemplate(x, id, templateId))} />}

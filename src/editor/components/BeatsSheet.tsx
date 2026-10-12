@@ -183,7 +183,7 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
           <SecondaryButton compact title="Cut to Beats" disabled={cutHint !== null} onPress={cut} />
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", height: theme.size.touch, gap: theme.space.md }}>
-          <Body muted style={small}>Fewer</Body>
+          <Body fit muted style={small}>Fewer</Body>
           <View style={{ flex: 1, height: theme.size.touch, justifyContent: "center" }}>
             <Slider testID="beats-density" accessibilityLabel="How many beats" minimumValue={0} maximumValue={2} step={1} value={density} detents={[DEFAULT_BEAT_DENSITY]}
               disabled={status !== "ok"}
@@ -199,7 +199,7 @@ export function BeatsSheet({ visible, onClose }: { visible: boolean; onClose: ()
                 if (live && project && leftOut(project, live, asDensity(v)) > 0) useToast.getState().show(LEFT_OUT);
               }} />
           </View>
-          <Body muted style={small}>More</Body>
+          <Body fit muted style={small}>More</Body>
         </View>
         {/* A row of fixed height: the spinner takes the place of the sentence while the phone listens, and nothing below it moves. */}
         <View style={{ height: theme.size.controlCompact, alignItems: "center", justifyContent: "center" }}>

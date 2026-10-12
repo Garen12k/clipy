@@ -19,24 +19,28 @@ const sorted = (table: Record<string, number>) => Object.fromEntries(Object.entr
 /** The one file that draws React Native's Text and TextInput. */
 const KIT_TEXT = "src/ui/Text.tsx";
 /** Files that still draw raw text: emptied by the task that owns them (the plan's Task 2 and Task 3). Both are [] when the work is done. */
-const PENDING_EDITOR: string[] = ["src/editor/components/AudioBar.tsx", "src/editor/components/ClipThumbStrip.tsx", "src/editor/components/ColorRow.tsx", "src/editor/components/CoverFrame.tsx",
-  "src/editor/components/FontStrip.tsx", "src/editor/components/LayerBar.tsx", "src/editor/components/OverlayPill.tsx", "src/editor/components/OverlayText.tsx", "src/editor/components/StickerSheet.tsx",
-  "src/editor/components/StickerView.tsx", "src/editor/components/TemplateSheet.tsx", "src/editor/components/TextPanel.tsx", "src/editor/components/TimeRuler.tsx", "src/editor/components/TransportRow.tsx",
-  "src/editor/components/TrimSheet.tsx"];
+const PENDING_EDITOR: string[] = [];
 const PENDING_SCREENS: string[] = ["src/projects/ProjectCard.tsx"];
 const PENDING = [...PENDING_EDITOR, ...PENDING_SCREENS];
 
 /** Never scaled (spec D5): file → how many texts. Content in the video frame, marks on the timeline, a glyph as a picture. */
 const FIXED_KIT: Record<string, number> = { "src/ui/EmptyState.tsx": 1, "src/ui/LoadingScreen.tsx": 2, "src/ui/ProgressRing.tsx": 1 };
-const FIXED_EDITOR: Record<string, number> = {};
+const FIXED_EDITOR: Record<string, number> = { "src/editor/components/AudioBar.tsx": 2, "src/editor/components/ClipThumbStrip.tsx": 1, "src/editor/components/CoverFrame.tsx": 1,
+  "src/editor/components/EffectPill.tsx": 1, "src/editor/components/FontStrip.tsx": 1, "src/editor/components/LayerBar.tsx": 1, "src/editor/components/OverlayPill.tsx": 1,
+  "src/editor/components/OverlayText.tsx": 6, "src/editor/components/StickerSheet.tsx": 2, "src/editor/components/StickerView.tsx": 2, "src/editor/components/TemplateSheet.tsx": 1,
+  "src/editor/components/TimeRuler.tsx": 1 };
 const FIXED_SCREENS: Record<string, number> = {};
 /** Files that draw content only: every text in them is fixed. */
-const CONTENT_ONLY: string[] = ["src/ui/LoadingScreen.tsx"];
+const CONTENT_ONLY: string[] = ["src/ui/LoadingScreen.tsx", "src/editor/components/AudioBar.tsx", "src/editor/components/ClipThumbStrip.tsx", "src/editor/components/CoverFrame.tsx",
+  "src/editor/components/FontStrip.tsx", "src/editor/components/LayerBar.tsx", "src/editor/components/OverlayPill.tsx", "src/editor/components/OverlayText.tsx", "src/editor/components/StickerView.tsx",
+  "src/editor/components/TimeRuler.tsx"];
 /** A paragraph under a title on a page that scrolls (spec D6): file → how many. */
 const READING: Record<string, number> = {};
 /** One-line labels in a box of a fixed height that fit back at a larger text size (spec D3): file → how many. */
 const FIT_KIT: Record<string, number> = { "src/ui/Chip.tsx": 1, "src/ui/PrimaryButton.tsx": 1, "src/ui/QuietButton.tsx": 1, "src/ui/SecondaryButton.tsx": 1 };
-const FIT_EDITOR: Record<string, number> = {};
+const FIT_EDITOR: Record<string, number> = { "src/editor/components/BackgroundSheet.tsx": 1, "src/editor/components/BeatsSheet.tsx": 2, "src/editor/components/ReadAloudSection.tsx": 1,
+  "src/editor/components/SoundQualitySheet.tsx": 2, "src/editor/components/SpeedSheet.tsx": 1, "src/editor/components/TemplateSheet.tsx": 2, "src/editor/components/TextStyleSection.tsx": 1,
+  "src/editor/components/TransportRow.tsx": 1, "src/editor/components/VolumeSheet.tsx": 1 };
 const FIT_SCREENS: Record<string, number> = {};
 
 const DRAWS = /<Text(Input)?(?![A-Za-z0-9_])|Animated\.Text|createAnimatedComponent\(\s*Text/;
