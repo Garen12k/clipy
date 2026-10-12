@@ -10,9 +10,9 @@ export const TILE_WIDTH = theme.size.toolColumn;
 
 type Props = { label: string; selected: boolean; onPress: () => void; icon?: IconName; /** On the box (the ring is on it). */ boxTestID?: string;
   /** The box's content when there is no icon (a shape, a sparkline). */ children?: React.ReactNode;
-  /** A small muted second line under the label (two lines at most). Absent = the tile as it always was. */ note?: string;
+  /** A small muted second line under the label: one line that shrinks to fit, like the label. Absent = the tile as it always was. */ note?: string;
   /** VoiceOver's hint. */ hint?: string; /** What VoiceOver reads instead of the label alone. */ accessibilityLabel?: string;
-  /** An equal share of its row instead of the fixed column. */ fill?: boolean };
+  /** An equal share of its row instead of the fixed column, and the row's height: the tiles of a row are equally tall. */ fill?: boolean };
 
 /**
  * A pick-one tile for a strip's row: a rounded box over a one-line label. Picked = the 2-pt gold ring on a soft gold tint (`picked`), the
@@ -23,13 +23,13 @@ export function Tile({ label, selected, onPress, icon, boxTestID, children, note
   const glyph = selected ? s.accentInk : s.text;
   return (
     <PressableScale lifted={selected} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={hint} accessibilityState={{ selected }} onPress={onPress}
-      style={{ alignItems: "center", ...(fill ? { flex: 1 } : { width: TILE_WIDTH }), paddingVertical: theme.space.xs, gap: theme.space.xs }}>
+      style={{ alignItems: "center", ...(fill ? { flex: 1, alignSelf: "stretch" as const } : { width: TILE_WIDTH }), paddingVertical: theme.space.xs, gap: theme.space.xs }}>
       <View testID={boxTestID} style={[{ width: theme.size.toolBox, height: theme.size.toolBox, borderRadius: theme.radius.box, alignItems: "center", justifyContent: "center",
         backgroundColor: selected ? s.picked : s.tile }, selected ? ringOf(s) : theme.ringClear]}>
         {icon ? <Icon name={icon} size={theme.size.icon.md} color={glyph} /> : children}
       </View>
       <Body numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} weight={selected ? "semi" : "regular"} style={{ color: s.text, fontSize: theme.type.small }}>{label}</Body>
-      {note === undefined ? null : <Body muted numberOfLines={2} style={{ fontSize: theme.type.micro, textAlign: "center" }}>{note}</Body>}
+      {note === undefined ? null : <Body muted numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ fontSize: theme.type.micro, textAlign: "center" }}>{note}</Body>}
     </PressableScale>
   );
 }

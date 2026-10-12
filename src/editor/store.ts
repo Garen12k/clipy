@@ -126,7 +126,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const s = get();
     if (!s.project) return;
     const next = clampExportSettings(v);
-    if (next.fps === s.project.exportSettings.fps && next.quality === s.project.exportSettings.quality) return;
+    const cur = s.project.exportSettings;
+    if (next.fps === cur.fps && next.quality === cur.quality && next.resolution === clampExportSettings(cur).resolution) return;
     set({ project: { ...s.project, exportSettings: next }, dirty: true });
   },
   undo: () => {

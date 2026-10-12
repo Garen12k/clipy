@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/src/ui/Icon";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { clampExportSettings, EXPORT_FPS, EXPORT_QUALITIES, type ExportSettings, type Project } from "@/src/editor/model/types";
+import { clampExportSettings, DEFAULT_RESOLUTION, EXPORT_FPS, EXPORT_QUALITIES, exportResolution, type ExportSettings, type Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { fileSize } from "@/src/lib/fileInfo";
 import { formatDuration } from "@/src/lib/format";
@@ -53,15 +53,24 @@ function Line() {
 
 export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone, onPost }: Props) {
   const s = useSurfaces();
-  const [res, setRes] = useState<Resolution>(1080);
   // Read clamped: settings the app does not offer (a damaged file) still show a picked segment — the defaults.
+  // The three controls are remembered with the project: the resolution too (absent = 1080p).
   const [settings, setSettings] = useState<ExportSettings>(() => clampExportSettings(project.exportSettings));
-  const change = (patch: Partial<ExportSettings>) => { const next = { ...settings, ...patch }; setSettings(next); useEditorStore.getState().setExportSettings(next); };
   const clips = exportableClips(project, missingSourceUris);
   const has4K = canExport4K(clips);
+  // A saved 4K on a project that can no longer export it (its 4K clip is gone) shows and exports 1080p. The project is not rewritten for
+  // that — the clip may come back — until the user changes something: a change writes what is shown.
+  const saved = exportResolution(settings);
+  const res: Resolution = saved === 2160 && !has4K ? DEFAULT_RESOLUTION : saved;
+  /** Every change of the three controls: one state change and ONE project write (not an undo step — `setExportSettings`). */
+  const change = (patch: Partial<ExportSettings>) => {
+    const next = clampExportSettings({ fps: settings.fps, quality: settings.quality, resolution: res, ...patch });
+    setSettings(next);
+    useEditorStore.getState().setExportSettings(next);
+  };
   // A preset sets the three controls in one change. Which tile is picked is read from the controls, never kept (presets.ts).
   const picked = pickedPreset(res, settings, has4K);
-  const applyPreset = (id: PresetId) => { const v = presetValues(id, has4K); setRes(v.res); change({ fps: v.fps, quality: v.quality }); };
+  const applyPreset = (id: PresetId) => { const v = presetValues(id, has4K); change({ resolution: v.res, fps: v.fps, quality: v.quality }); };
   const duration = exportDuration(project, missingSourceUris);
   const doneUri = state.status === "done" ? state.fileUri ?? "" : "";
   const bytes = useMemo(() => fileSize(doneUri), [doneUri]);
@@ -86,8 +95,8 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
       {(state.status === "idle" || state.status === "unavailable") && (
         // The choices scroll only if a small phone cannot hold them: the gold button below never leaves the bottom.
         <ScrollView testID="export-scroll" style={{ flex: 1 }} alwaysBounceVertical={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: theme.space.gutter, gap: theme.space.lg }}>
-          {/* The shortcuts: equal tiles across the gutter (two when Best would be Social again). The controls below stay as they are. */}
-          <View testID="export-presets" style={{ flexDirection: "row", gap: theme.space.sm }}>
+          {/* The shortcuts: tiles of equal width and height across the gutter (two when Best would be Social again). The controls below stay as they are. */}
+          <View testID="export-presets" style={{ flexDirection: "row", alignItems: "stretch", gap: theme.space.sm }}>
             {presetsShown(has4K).map((id) => (
               <Tile key={id} fill label={PRESETS[id].label} icon={PRESETS[id].icon} note={presetLine(presetValues(id, has4K))} hint={PRESETS[id].hint}
                 accessibilityLabel={presetLabel(id, has4K)} selected={picked === id} onPress={() => applyPreset(id)} boxTestID={`export-preset-${id}`} />
@@ -96,7 +105,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
           <Card testID="export-options" style={{ gap: theme.space.md }}>
             <View style={row}>
               <Body muted style={rowLabel}>Resolution</Body>
-              <Segmented options={RESOLUTIONS.map((r) => ({ value: r.value, label: r.label, disabled: r.value === 2160 && !has4K }))} value={res} onChange={setRes} />
+              <Segmented options={RESOLUTIONS.map((r) => ({ value: r.value, label: r.label, disabled: r.value === 2160 && !has4K }))} value={res} onChange={(resolution) => change({ resolution })} />
               {!has4K && <Body muted style={{ fontSize: theme.type.small }}>4K needs a 4K source clip.</Body>}
             </View>
             <Line />
@@ -160,7 +169,7 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
       {/* The state's actions, pinned at the bottom of the sheet above the home indicator: what is above takes the room that is left. */}
       {state.status !== "unavailable" && (
         <View testID="export-actions" style={{ paddingHorizontal: theme.space.gutter, gap: theme.space.md }}>
-          {state.status === "idle" && <PrimaryButton title="Export" onPress={() => start(res, settings)} />}
+          {state.status === "idle" && <PrimaryButton title="Export" onPress={() => start(res, { fps: settings.fps, quality: settings.quality })} />}
           {state.status === "exporting" && <SecondaryButton title="Cancel" onPress={cancel} />}
           {state.status === "done" && (<>
             {onPost ? (<>

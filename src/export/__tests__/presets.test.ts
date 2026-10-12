@@ -1,6 +1,6 @@
 import { EXPORT_FPS, EXPORT_QUALITIES, type ExportSettings } from "@/src/editor/model/types";
 import { QUALITY_LABELS, RESOLUTIONS, type Resolution } from "../estimate";
-import { fpsLabel, pickedPreset, PRESET_IDS, PRESETS, presetLabel, presetLine, presetsShown, presetValues, type PresetId } from "../presets";
+import { fpsLabel, pickedPreset, PRESET_IDS, PRESETS, presetLabel, presetLine, presetsShown, presetValues, QUALITY_SHORT, type PresetId } from "../presets";
 
 const high: ExportSettings = { fps: 30, quality: "high" };
 
@@ -72,15 +72,24 @@ test("for every combination of the controls at most one shown tile is picked, an
   }
 });
 
-test("the line and the spoken label are written from the real values through the label tables", () => {
+test("the line and the spoken label are written from the real values through the label tables — the line with the SHORT quality word, the label with the full one", () => {
   expect(fpsLabel(30)).toBe("30 fps");
+  expect(QUALITY_SHORT).toEqual({ high: "High", small: "Small" });
+  expect(Object.keys(QUALITY_SHORT)).toEqual([...EXPORT_QUALITIES]);
   const res = (r: Resolution) => RESOLUTIONS.find((x) => x.value === r)!.label;
   for (const has4K of [true, false]) for (const id of PRESET_IDS as readonly PresetId[]) {
     const v = presetValues(id, has4K);
-    expect(presetLine(v)).toBe(`${res(v.res)} · ${v.fps} · ${QUALITY_LABELS[v.quality]}`);
+    expect(presetLine(v)).toBe(`${res(v.res)} · ${v.fps} · ${QUALITY_SHORT[v.quality]}`);
     expect(presetLabel(id, has4K)).toBe(`${PRESETS[id].label}, ${res(v.res)}, ${v.fps} fps, ${QUALITY_LABELS[v.quality]}`);
   }
   expect(presetLine(presetValues("social", false))).toBe("1080p · 30 · High");
-  expect(presetLine(presetValues("message", false))).toBe("720p · 30 · Smaller file");
+  expect(presetLine(presetValues("message", false))).toBe("720p · 30 · Small");
   expect(presetLine(presetValues("best", true))).toBe("4K · 30 · High");
+  expect(presetLabel("message", false)).toBe("Message, 720p, 30 fps, Smaller file");       // VoiceOver keeps the full words
+});
+
+test("every shown preset's small line fits one row of a 109-pt tile: at most 18 characters", () => {
+  for (const has4K of [true, false]) for (const id of presetsShown(has4K)) expect(presetLine(presetValues(id, has4K)).length).toBeLessThanOrEqual(18);
+  // And so does the longest line the tables can make at all, should a preset ever change.
+  for (const r of RESOLUTIONS) for (const fps of EXPORT_FPS) for (const quality of EXPORT_QUALITIES) expect(presetLine({ res: r.value, fps, quality }).length).toBeLessThanOrEqual(18);
 });

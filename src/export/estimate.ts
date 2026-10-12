@@ -1,7 +1,8 @@
 import { clipDuration } from "@/src/editor/model/timeline";
-import { clampExportSettings, DEFAULT_EXPORT_SETTINGS, type AudioTrack, type Clip, type ExportFps, type ExportQuality, type ExportSettings, type LayerClip, type Project } from "@/src/editor/model/types";
+import { clampExportSettings, DEFAULT_EXPORT_SETTINGS, type AudioTrack, type Clip, type ExportFps, type ExportQuality, type ExportSettings, type LayerClip, type Project, type Resolution } from "@/src/editor/model/types";
 
-export type Resolution = 720 | 1080 | 2160;
+/** The type lives with the project model (it is stored in `ExportSettings`); the values here are pinned to `EXPORT_RESOLUTIONS` in exportResolution.test.ts. */
+export type { Resolution };
 export const RESOLUTIONS: { value: Resolution; label: string }[] = [{ value: 720, label: "720p" }, { value: 1080, label: "1080p" }, { value: 2160, label: "4K" }];
 export const BITRATE_MBPS: Record<Resolution, number> = { 720: 5, 1080: 10, 2160: 35 };
 

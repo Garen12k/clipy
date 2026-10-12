@@ -36,7 +36,13 @@ test("the optional second line, hint, spoken label and fill: a muted micro line 
   expect(rich.props.accessibilityHint).toBe("For TikTok");
   expect(rich).toBeSelected();
   expect(screen.getByText("1080p · 30 · High")).toHaveStyle({ fontSize: theme.type.micro, color: theme.screen.muted, textAlign: "center" });
-  expect(screen.getByText("1080p · 30 · High")).toHaveProp("numberOfLines", 2);
+  // ONE line that shrinks to fit, like the label: a tile never grows taller than its neighbours because of its words.
+  expect(screen.getByText("1080p · 30 · High")).toHaveProp("numberOfLines", 1);
+  expect(screen.getByText("1080p · 30 · High")).toHaveProp("adjustsFontSizeToFit", true);
+  expect(screen.getByText("1080p · 30 · High")).toHaveProp("minimumFontScale", 0.85);
+  // A filling tile takes the height of its row, so the tiles of a row are equally tall whatever they say.
+  expect(rich).toHaveStyle({ alignSelf: "stretch" });
+  expect(plain).not.toHaveStyle({ alignSelf: "stretch" });
   expect(screen.getByText("Social")).toHaveStyle({ color: theme.colors.text, fontWeight: theme.weight.semi });
 });
 
