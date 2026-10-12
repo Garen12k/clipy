@@ -1,4 +1,5 @@
-import { Text } from "react-native";
+import { KitText } from "./Text";
+import { largeContent } from "./textScale";
 import { theme } from "@/src/theme/theme";
 import { buttonBox, buttonLabel, buttonSlop, DISABLED_OPACITY } from "./buttonStyle";
 import { PressableScale } from "./PressableScale";
@@ -18,10 +19,10 @@ export function PrimaryButton({ title, onPress, disabled, icon, compact, accessi
   const plain = tone === "plain";
   return (
     <PressableScale testID={plain ? "main-button" : "primary-button"} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} accessibilityState={{ disabled: !!disabled }}
-      disabled={disabled} onPress={onPress} hitSlop={buttonSlop(compact)}
+      disabled={disabled} onPress={onPress} {...largeContent(title)} hitSlop={buttonSlop(compact)}
       style={[buttonBox(compact), { backgroundColor: plain ? theme.plain.fill : theme.colors.accent, opacity: disabled ? DISABLED_OPACITY : 1 }]}>
       {icon ?? null}
-      <Text style={[buttonLabel(compact), { color: primaryInk(tone) }]}>{title}</Text>
+      <KitText fit style={[buttonLabel(compact), { color: primaryInk(tone) }]}>{title}</KitText>
     </PressableScale>
   );
 }

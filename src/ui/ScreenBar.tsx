@@ -4,6 +4,7 @@ import { DISABLED_OPACITY } from "./buttonStyle";
 import { Icon } from "./Icon";
 import { PressableScale } from "./PressableScale";
 import { Title } from "./Text";
+import { largeContent } from "./textScale";
 import { useSurfaces } from "./tone";
 
 type Props = {
@@ -34,7 +35,7 @@ export function ScreenBar({ title, leading, onLeading, leadingDisabled, leadingL
   return (
     <View testID="screen-bar" style={{ height: theme.size.header, flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.gutter }}>
       <PressableScale accessibilityRole="button" accessibilityLabel={leadingLabel ?? LABELS[leading]} accessibilityState={{ disabled: !!leadingDisabled }}
-        disabled={leadingDisabled} onPress={onLeading} hitSlop={SLOP}
+        disabled={leadingDisabled} onPress={onLeading} hitSlop={SLOP} {...largeContent(leadingLabel ?? LABELS[leading])}
         style={{ width: CIRCLE, height: CIRCLE, borderRadius: theme.radius.pill, backgroundColor: s.tile, alignItems: "center", justifyContent: "center", opacity: leadingDisabled ? DISABLED_OPACITY : 1 }}>
         <Icon name={LEADING_ICON[leading]} size={theme.size.icon.md} color={s.text} />
       </PressableScale>

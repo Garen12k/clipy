@@ -13,6 +13,17 @@ jest.mock("@/src/projects/camera", () => ({ ...jest.requireActual("@/src/project
 // package is never loaded. The suites about them say otherwise themselves (notify.test.ts unmocks this; notifyOffer / exportNotice /
 // the permission suites mock the module).
 jest.mock("@/src/lib/notify", () => ({ notifyAvailable: () => false, notifyState: async () => "unavailable", askToNotify: async () => false, notifyDone: async () => false }));
+// The test phone's text size is the DEFAULT (the preset's own phone says fontScale 2): every suite sees the app as it is at the size
+// most phones are on, and nothing in it "fits back". A suite about text size moves the slider itself (`textSize` in
+// src/ui/testing/textSize.ts) and puts it back; phoneTextSize.test.ts tests the real module.
+jest.mock("@/src/ui/phoneTextSize", () => {
+  const phone = { scale: 1, listeners: new Set<() => void>() };
+  return {
+    readFontScale: () => phone.scale,
+    onFontScale: (listener: () => void) => { phone.listeners.add(listener); return () => { phone.listeners.delete(listener); }; },
+    __setFontScale: (scale: number) => { phone.scale = scale; for (const listener of [...phone.listeners]) listener(); },
+  };
+});
 jest.mock("expo-font", () => ({ useFonts: () => [true, null], isLoaded: () => true }));
 // Audio feature deps: harmless defaults so suites that mount EditorToolbar (which always
 // renders AddAudioSheet) don't need to know about them. AddAudioSheet.test.tsx overrides these

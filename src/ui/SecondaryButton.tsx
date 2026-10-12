@@ -1,4 +1,5 @@
-import { Text } from "react-native";
+import { KitText } from "./Text";
+import { largeContent } from "./textScale";
 import type { GlassSide } from "@/src/theme/theme";
 import { useSurfaces } from "./tone";
 import { buttonBox, buttonLabel, buttonSlop, DISABLED_OPACITY } from "./buttonStyle";
@@ -13,10 +14,10 @@ export function SecondaryButton({ title, onPress, disabled, danger, icon, compac
   const onGlass = useGlass(glass ?? null) !== null;
   const color = danger ? s.dangerText : s.text;
   return (
-    <PressableScale accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} hitSlop={buttonSlop(compact)}
+    <PressableScale accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} {...largeContent(title)} hitSlop={buttonSlop(compact)}
       style={[buttonBox(compact), onGlass ? { opacity: disabled ? DISABLED_OPACITY : 1 } : { backgroundColor: s.lifted, opacity: disabled ? DISABLED_OPACITY : 1 }]}>
       {icon ?? null}
-      <Text style={[buttonLabel(compact), { color }]}>{title}</Text>
+      <KitText fit style={[buttonLabel(compact), { color }]}>{title}</KitText>
     </PressableScale>
   );
 }

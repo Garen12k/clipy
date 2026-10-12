@@ -1,4 +1,5 @@
-import { Text } from "react-native";
+import { KitText } from "./Text";
+import { largeContent } from "./textScale";
 import { theme } from "@/src/theme/theme";
 import { useSurfaces } from "./tone";
 import { buttonBox, buttonLabel, buttonSlop, DISABLED_OPACITY } from "./buttonStyle";
@@ -10,11 +11,11 @@ type Props = { title: string; onPress: () => void; disabled?: boolean; danger?: 
 export function QuietButton({ title, onPress, disabled, danger, icon, compact, accessibilityLabel }: Props) {
   const s = useSurfaces();
   return (
-    <PressableScale accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress}
+    <PressableScale accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? title} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} {...largeContent(title)}
       hitSlop={buttonSlop(compact)}
       style={[buttonBox(compact), { paddingHorizontal: theme.space.sm, minWidth: theme.size.touch, opacity: disabled ? DISABLED_OPACITY : 1 }]}>
       {icon ?? null}
-      <Text style={[buttonLabel(compact), { color: danger ? s.dangerText : s.accentInk }]}>{title}</Text>
+      <KitText fit style={[buttonLabel(compact), { color: danger ? s.dangerText : s.accentInk }]}>{title}</KitText>
     </PressableScale>
   );
 }

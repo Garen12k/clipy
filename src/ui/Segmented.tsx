@@ -1,6 +1,8 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { DISABLED_OPACITY } from "./buttonStyle";
+import { KitText } from "./Text";
+import { largeContent } from "./textScale";
 import { useSurfaces } from "./tone";
 
 export type Segment<T> = { value: T; label: string; disabled?: boolean };
@@ -23,9 +25,9 @@ export function Segmented<T extends string | number>({ options, value, onChange,
         const selected = o.value === value;
         return (
           <Pressable key={o.value} accessibilityRole="button" accessibilityLabel={o.label} accessibilityState={{ selected, disabled: !!o.disabled }}
-            disabled={o.disabled} onPress={() => onChange(o.value)} hitSlop={SLOP}
+            disabled={o.disabled} onPress={() => onChange(o.value)} hitSlop={SLOP} {...largeContent(o.label)}
             style={{ flex: 1, alignItems: "center", justifyContent: "center", borderRadius: theme.radius.chip, opacity: o.disabled ? DISABLED_OPACITY : 1, ...(selected ? { backgroundColor: s.lifted } : null) }}>
-            <Text numberOfLines={1} style={{ fontSize: theme.type.body, fontWeight: selected ? theme.weight.semi : theme.weight.regular, color: s.text }}>{o.label}</Text>
+            <KitText numberOfLines={1} style={{ fontSize: theme.type.body, fontWeight: selected ? theme.weight.semi : theme.weight.regular, color: s.text }}>{o.label}</KitText>
           </Pressable>
         );
       })}

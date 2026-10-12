@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { TextInput, View } from "react-native";
+import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { useSurfaces } from "./tone";
-import { Body } from "./Text";
+import { Body, KitInput } from "./Text";
 
 const field = { borderRadius: theme.radius.field, padding: theme.space.md, fontSize: theme.type.input, minWidth: 72 } as const;
 
@@ -19,7 +19,7 @@ export function NumField({ label, value, onCommit, step = 1 }: Props) {
   return (
     <View style={{ gap: theme.space.xs }}>
       <Body muted style={{ fontSize: theme.type.small }}>{label}</Body>
-      <TextInput accessibilityLabel={label} keyboardType="numbers-and-punctuation" value={text} onChangeText={setText}
+      <KitInput accessibilityLabel={label} keyboardType="numbers-and-punctuation" value={text} onChangeText={setText}
         onBlur={() => { const n = Number(text); if (Number.isFinite(n)) onCommit(Math.round(n / step) * step); else setText(String(value)); }} style={[field, { backgroundColor: s.tile, color: s.text }]} />
     </View>
   );

@@ -18,7 +18,7 @@ export function ProgressRing({ progress, size = 120, done }: { progress: number;
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={s.accentInk} strokeWidth={stroke} fill="none" strokeLinecap="round"
           strokeDasharray={`${c} ${c}`} strokeDashoffset={c * (1 - (done ? 1 : p))} />
       </Svg>
-      {done ? <Icon name="checkmark" size={size * 0.4} color={s.accentInk} /> : <Title size={size * 0.22} style={{ fontVariant: ["tabular-nums"] }}>{`${pct}%`}</Title>}
+      {done ? <Icon name="checkmark" size={size * 0.4} color={s.accentInk} /> : <Title scale="fixed" size={size * 0.22} style={{ fontVariant: ["tabular-nums"] }}>{`${pct}%`}</Title>}
     </View>
   );
 }

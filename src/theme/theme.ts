@@ -131,6 +131,14 @@ export const theme = {
     headline: TEXT.headline.size, heading: TEXT.title3.size, title: TEXT.title2.size, screen: TEXT.largeTitle.size },
   /** The system font's weights. UI text names no font family: that is what makes it the system font (SF Pro). */
   weight: { regular: "400", semi: "600", bold: "700" },
+  /**
+   * How far text follows the phone's text size (Dynamic Type), as the largest multiplier it may reach. `editor`: every word of the
+   * editor's chrome — the hand-off's number (0.85 × 1.16 < 1: a label that shrinks to fit never needs more width than at the default).
+   * `screen`: everything else that is a control, a title or a row — the largest of the seven STANDARD sizes (1.353), so only the
+   * accessibility sizes are held. `reading`: a paragraph under a title on a page that scrolls. Applied only by the kit's text
+   * (src/ui/Text.tsx, by tone); content drawn in the video frame or on the timeline does not scale at all.
+   */
+  textScale: { editor: 1.16, screen: 1.35, reading: 1.65 },
   /** The EDITOR's layering by colour (no shadows over the video): the page, a bar / strip / panel, a tile or field inside it, a secondary button or the tick, the picked tile's tint. */
   elevation: { page: C.bg, bar: C.surfaceBar, tile: C.surfaceAlt, lifted: C.surfaceHigh, picked: C.surfacePicked },
   /**

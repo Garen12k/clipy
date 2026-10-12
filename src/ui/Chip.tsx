@@ -1,4 +1,5 @@
-import { Text } from "react-native";
+import { KitText } from "./Text";
+import { largeContent } from "./textScale";
 import { theme } from "@/src/theme/theme";
 import { ringOf, useSurfaces } from "./tone";
 import { PressableScale } from "./PressableScale";
@@ -17,10 +18,10 @@ export function Chip({ label, selected, onPress, disabled, accessibilityLabel, c
     <PressableScale lifted={selected} still={still}
       accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ selected, disabled: !!disabled }}
-      disabled={disabled} onPress={onPress} hitSlop={compact ? { top: 10, bottom: 10, left: 4, right: 4 } : { top: 4, bottom: 4 }}
+      disabled={disabled} onPress={onPress} {...largeContent(label)} hitSlop={compact ? { top: 10, bottom: 10, left: 4, right: 4 } : { top: 4, bottom: 4 }}
       style={[{ height: compact ? theme.size.chipCompact : theme.size.chip, justifyContent: "center", paddingHorizontal: compact ? theme.space.md : theme.space.lg, borderRadius: theme.radius.pill,
         backgroundColor: selected ? s.picked : s.tile, opacity: disabled ? 0.4 : 1 }, selected ? ringOf(s) : theme.ringClear]}>
-      <Text style={{ fontWeight: theme.weight.semi, color: s.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</Text>
+      <KitText fit style={{ fontWeight: theme.weight.semi, color: s.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</KitText>
     </PressableScale>
   );
 }
