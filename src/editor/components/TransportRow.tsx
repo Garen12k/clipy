@@ -50,7 +50,7 @@ export function TransportRow() {
         <Icon name={isPlaying ? "pause" : "play"} size={theme.size.icon.md} color={theme.colors.onAccent} />
       </PressableScale>
       <View testID="transport-trailing" style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: theme.space.sm }}>
-        <Body testID="transport-time" muted numberOfLines={1} style={{ flexShrink: 1, fontVariant: ["tabular-nums"], fontSize: theme.type.small }}>
+        <Body fit testID="transport-time" muted numberOfLines={1} style={{ flexShrink: 1, fontVariant: ["tabular-nums"], fontSize: theme.type.small }}>
           <KitText style={{ color: theme.colors.text, fontWeight: theme.weight.semi }}>{formatDuration(playhead)}</KitText>{` / ${formatDuration(total)}`}
         </Body>
         <PressableScale accessibilityRole="button" accessibilityLabel="Aspect ratio" onPress={() => openStrip("ratio")} {...largeContent("Aspect ratio")} hitSlop={{ top: theme.space.sm, bottom: theme.space.sm }}>

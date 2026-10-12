@@ -20,24 +20,27 @@ export const shownScale = (phone: number, cap: number): number => Math.min(phone
 /** The phone's text size now, kept up to date. Only a part that must know it calls this (a line-limited text): it is drawn again when the size changes. */
 export const usePhoneScale = (): number => useSyncExternalStore(onFontScale, readFontScale, readFontScale);
 
-/** The scale a text of this role is shown at here (1 for a fixed one): for a layout that must know. Nothing in the app needs it yet. */
+/** The scale a text of this role is shown at here (1 for a fixed one): for a layout that must know — Home's two bottom actions share their row only above 1. */
 export function useTextScale(role: TextRole = "chrome"): number {
   const tone = useTone();
   const phone = usePhoneScale();
   return role === "fixed" ? 1 : shownScale(phone, textCap(tone, role));
 }
 
-export type Fit = { numberOfLines?: number; adjustsFontSizeToFit?: boolean; minimumFontScale?: number };
+export type Fit = { numberOfLines: number; adjustsFontSizeToFit: true };
 /**
- * "Fit back": while a text is shown larger than the default (`scale` > 1) and is limited to lines — its own `numberOfLines`, or `fit`
- * (true = one line, a number = that many) — it may shrink to fit them, at most back to the size it has at the default: its own floor
- * (`minimumFontScale`, 1 when it has none) divided by the scale. So it never needs more room than it has today. Null = add nothing:
- * at the default size, below it, and for a text with no limit (which wraps and grows).
+ * "Fit": while a label that asked for it (`fit`: true = one line, a number = that many; its own `numberOfLines` wins) is shown larger
+ * than the default (`scale` > 1), it keeps to those lines and may shrink until its words fit the room it is given. Null = add
+ * nothing: at the default size, below it, and for every text that did not ask — a line limit alone ends in dots, as it always did.
+ *
+ * THERE IS NO FLOOR. iOS (the new architecture's text layout) shrinks down to 4 pt and does not read a minimum scale, and React
+ * Native has no prop for the 4. So `fit` is safe only where the words are known to fit at the default size — a short fixed label
+ * the app itself writes; then the shrink ends at or above that size. Never `fit` what a user or a platform wrote, a message or an
+ * error sentence: a long one would be drawn tiny instead of ending in dots (the list is exact: textScale.guard.test.ts).
  */
-export function fitProps(scale: number, given: Fit, fit?: boolean | number): Fit | null {
-  const lines = given.numberOfLines || (fit === true ? 1 : typeof fit === "number" ? fit : 0);
-  if (!(scale > 1) || !lines) return null;
-  return { numberOfLines: lines, adjustsFontSizeToFit: true, minimumFontScale: (given.minimumFontScale ?? 1) / scale };
+export function fitProps(scale: number, lines: number | undefined, fit?: boolean | number): Fit | null {
+  if (!fit || !(scale > 1)) return null;
+  return { numberOfLines: lines || (fit === true ? 1 : fit), adjustsFontSizeToFit: true };
 }
 
 /**

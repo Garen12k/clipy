@@ -29,6 +29,7 @@ import { Screen } from "@/src/ui/Screen";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Spinner } from "@/src/ui/Spinner";
 import { Body, Title } from "@/src/ui/Text";
+import { useTextScale } from "@/src/ui/textScale";
 import { ToastHost } from "@/src/ui/Toast";
 
 /**
@@ -43,6 +44,9 @@ export default function Home() {
 }
 
 /** What the one capsule says while a project is being made. Only what the app knows: it has no count of items copied and no step to report. */
+/** The pill behind Quick Edit; and the same pill while the row is shared at a larger text size (the button in it is as wide as the pill). */
+const QUICK_BACKING = { borderRadius: theme.radius.pill } as const;
+const QUICK_SHARES = { ...QUICK_BACKING, flexShrink: 1 } as const;
 const MAKING = { project: "Creating your project", quick: "Making your quick edit" } as const;
 
 function ProjectsScreen() {
@@ -148,6 +152,9 @@ function ProjectsScreen() {
   const dim = busy ? DISABLED_OPACITY : 1;
   /** How far the bottom actions sit above the screen's edge: clear of the home indicator, and never on the edge itself. */
   const actionsBottom = Math.max(insets.bottom, theme.space.sm) + theme.space.sm;
+  // At the default text size the two bottom actions are their natural widths, as ever (a 375-pt phone holds them with nothing to spare).
+  // Larger, they would not fit side by side — so above the default, and only there, both may give way and each label fits what it gets.
+  const share = useTextScale() > 1;
   const openActions = (p: ProjectSummary) => { haptic("light"); setActionsFor(p); };
   return (
     <Screen>
@@ -196,10 +203,10 @@ function ProjectsScreen() {
         ) : (
           <>
             {/* The grey button has its own fill; the pill behind it only keeps it readable over the cards. As glass (GLASS.home) the pill IS the button's fill. */}
-            <Glass side="home" color={s.bar} tint={glassTint(s)} testID="home-quick-backing" glassRadius={theme.size.control / 2} style={{ borderRadius: theme.radius.pill }}>
+            <Glass side="home" color={s.bar} tint={glassTint(s)} testID="home-quick-backing" glassRadius={theme.size.control / 2} style={share ? QUICK_SHARES : QUICK_BACKING}>
               <SecondaryButton glass="home" title="Quick Edit" icon={<Icon name="color-wand-outline" size={theme.size.icon.md} color={s.text} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onQuick} />
             </Glass>
-            <PrimaryButton title="New Project" icon={<Icon name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
+            <PrimaryButton shrink={share} title="New Project" icon={<Icon name="add-outline" size={theme.size.icon.md} color={theme.colors.onAccent} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />} onPress={onNew} />
           </>
         )}
       </View>

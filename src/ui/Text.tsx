@@ -5,8 +5,10 @@ import { useSurfaces, useTone } from "./tone";
 
 /**
  * `scale`: how the text follows the phone's text size (textScale.ts) — left out, it is capped like everything in its family.
- * `fit`: at a larger text size keep to one line (or that many) and fit back; at the default it adds nothing. It is written first,
- * right after the component's name (the guard counts it there; do not write the tag with it in a comment).
+ * `fit`: ONLY for a short fixed label the app itself writes. At a larger text size it keeps to one line (or that many) and may shrink
+ * to the room it has; at the default it adds nothing. Without it a text with a line limit ends in dots at every size — which is what
+ * a name, an address, a message or an error must do (the shrink has no floor on iOS: textScale.ts). Write it first, right after the
+ * component's name; the guard counts every use, so do not write a tag with it in a comment.
  */
 export type KitTextProps = TextProps & { scale?: TextRole; fit?: boolean | number };
 
@@ -17,19 +19,25 @@ export type KitTextProps = TextProps & { scale?: TextRole; fit?: boolean | numbe
  */
 export function KitText({ scale = "chrome", fit, ...rest }: KitTextProps) {
   if (scale === "fixed") return <Text {...rest} allowFontScaling={false} />;
-  if (fit || rest.numberOfLines) return <Fitted how={scale} fit={fit} {...rest} />;
+  if (fit) return <Fitted how={scale} lines={fit === true ? 1 : fit} {...rest} />;
   return <Capped how={scale} {...rest} />;
 }
 // `how`, not `role`: React Native's Text already has a `role` prop (the accessibility role), which must pass through untouched.
-/** A text with no line limit: it reads its family and nothing else. */
+/** Every text that did not ask to fit, line-limited or not: it reads its family and nothing else, and is as written but for its cap. */
 function Capped({ how, ...rest }: TextProps & { how: TextRole }) {
   return <Text {...rest} maxFontSizeMultiplier={textCap(useTone(), how)} />;
 }
-/** A line-limited text: the only kind that listens for the phone's text size, to fit back while it is shown larger than the default. */
-function Fitted({ how, fit, ...rest }: TextProps & { how: TextRole; fit?: boolean | number }) {
+/** In a row a label is measured against the whole row unless it may give way: with this it is offered what is left beside its neighbours, and so has something to fit into. */
+const GIVES_WAY = { flexShrink: 1 } as const;
+/**
+ * A label that asked to fit: the only kind that listens for the phone's text size. While it is shown larger than the default it is
+ * limited to its lines, may shrink to them, and may be given less width than it asks for. At the default it is exactly as written.
+ */
+function Fitted({ how, lines, ...rest }: TextProps & { how: TextRole; lines: number }) {
   const cap = textCap(useTone(), how);
-  const fitted = fitProps(shownScale(usePhoneScale(), cap), rest, fit);
-  return <Text {...rest} {...fitted} maxFontSizeMultiplier={cap} />;
+  const fitted = fitProps(shownScale(usePhoneScale(), cap), rest.numberOfLines, lines);
+  if (!fitted) return <Text {...rest} maxFontSizeMultiplier={cap} />;
+  return <Text {...rest} {...fitted} style={[rest.style, GIVES_WAY]} maxFontSizeMultiplier={cap} />;
 }
 
 /** THE text field of the app: the only place React Native's `TextInput` is drawn. What is typed is capped like the words around it. */

@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react-native";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { Chip } from "../Chip";
 import { DoneButton } from "../DoneButton";
@@ -45,6 +45,7 @@ test("a kit text is capped by the tone it is drawn in; reading grows further on 
 
 test("at the default size a text gets its cap and nothing else — line limits and shrink-to-fit pass through as written", async () => {
   await render(<><KitText numberOfLines={2}>two lines</KitText><KitText fit>a label</KitText><KitText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>a tool</KitText></>);
+  expect(StyleSheet.flatten(screen.getByText("a label").props.style) ?? {}).not.toHaveProperty("flexShrink");
   expect(screen.getByText("two lines").props).toMatchObject({ numberOfLines: 2, maxFontSizeMultiplier: S });
   expect(screen.getByText("two lines").props.adjustsFontSizeToFit).toBeUndefined();
   expect(screen.getByText("two lines").props.minimumFontScale).toBeUndefined();
@@ -55,32 +56,46 @@ test("at the default size a text gets its cap and nothing else — line limits a
   expect(screen.getByText("a tool").props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.85 });
 });
 
-test("above the default a line-limited text fits back: it may shrink, at most to the size it has at the default", async () => {
-  await render(<><KitText numberOfLines={2}>two lines</KitText><KitText fit>a label</KitText><KitText fit={2}>two at most</KitText><KitText>free</KitText>
+// Jest has no layout: these tests see the PROPS a text is given, never a drawn size. On the phone shrink-to-fit has NO floor of ours —
+// iOS (the new architecture) does not read `minimumFontScale` and stops at 4 pt — which is why only `fit` asks for it.
+test("above the default only a `fit` label may shrink to its lines; a line-limited text without it keeps its dots", async () => {
+  await render(<><KitText numberOfLines={2}>two lines</KitText><KitText numberOfLines={1}>a name the user typed</KitText><KitText fit>a label</KitText><KitText fit={2}>two at most</KitText>
+    <KitText fit numberOfLines={2}>its own two</KitText><KitText fit={false}>not this one</KitText><KitText>free</KitText>
     {editor(<KitText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>a tool</KitText>)}</>);
-  await textSize(XL);
-  expect(screen.getByText("two lines").props).toMatchObject({ numberOfLines: 2, adjustsFontSizeToFit: true });
-  expect(screen.getByText("two lines").props.minimumFontScale).toBeCloseTo(1 / XL, 6);
-  await textSize(AX5);
-  expect(screen.getByText("two lines").props.minimumFontScale).toBeCloseTo(1 / S, 6);                 // the phone asks for 3.571; the text is shown at 1.35
-  expect(screen.getByText("a label").props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true });
-  expect(screen.getByText("a label").props.minimumFontScale).toBeCloseTo(1 / S, 6);
-  expect(screen.getByText("two at most").props.numberOfLines).toBe(2);
-  expect(screen.getByText("a tool").props.minimumFontScale).toBeCloseTo(0.85 / E, 6);                 // the same 10.2 pt floor as today
-  expect(screen.getByText("free").props.numberOfLines).toBeUndefined();                               // a text with no limit wraps and grows
-  expect(screen.getByText("free").props.adjustsFontSizeToFit).toBeUndefined();
+  for (const size of [XL, XXXL, AX5]) {
+    await textSize(size);
+    for (const kept of ["two lines", "a name the user typed"]) {
+      expect(screen.getByText(kept).props.adjustsFontSizeToFit).toBeUndefined();                      // it ends in dots, as it always did
+      expect(screen.getByText(kept).props.minimumFontScale).toBeUndefined();
+      expect(screen.getByText(kept).props.maxFontSizeMultiplier).toBe(S);
+    }
+    expect(screen.getByText("two lines").props.numberOfLines).toBe(2);
+    expect(screen.getByText("a name the user typed").props.numberOfLines).toBe(1);
+    expect(screen.getByText("a label").props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true, maxFontSizeMultiplier: S });
+    expect(screen.getByText("a label").props.minimumFontScale).toBeUndefined();                       // nothing is promised that iOS does not keep
+    expect(StyleSheet.flatten(screen.getByText("a label").props.style)).toMatchObject({ flexShrink: 1 }); // so a row can offer it less than it asks for
+    expect(screen.getByText("two at most").props.numberOfLines).toBe(2);
+    expect(screen.getByText("its own two").props).toMatchObject({ numberOfLines: 2, adjustsFontSizeToFit: true });
+    expect(screen.getByText("not this one").props.adjustsFontSizeToFit).toBeUndefined();
+    expect(screen.getByText("not this one").props.numberOfLines).toBeUndefined();
+    expect(screen.getByText("a tool").props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.85, maxFontSizeMultiplier: E });   // as written, at every size
+    expect(screen.getByText("free").props.numberOfLines).toBeUndefined();                             // a text with no limit wraps and grows
+    expect(screen.getByText("free").props.adjustsFontSizeToFit).toBeUndefined();
+  }
   await textSize(0.823);
-  expect(screen.getByText("two lines").props.adjustsFontSizeToFit).toBeUndefined();                   // smaller than the default: as written
-  expect(screen.getByText("a label").props.numberOfLines).toBeUndefined();
+  expect(screen.getByText("a label").props.numberOfLines).toBeUndefined();                            // smaller than the default: as written
+  expect(screen.getByText("a label").props.adjustsFontSizeToFit).toBeUndefined();
+  expect(StyleSheet.flatten(screen.getByText("a label").props.style) ?? {}).not.toHaveProperty("flexShrink");
 });
 
-test("fitProps: nothing at or below the default; the floor is the text's own, divided by the scale shown", () => {
-  expect(fitProps(1, { numberOfLines: 1 })).toBeNull();
-  expect(fitProps(0.9, {}, true)).toBeNull();
-  expect(fitProps(1.2, {})).toBeNull();                                                               // no limit, no fit: nothing to fit into
-  expect(fitProps(1.25, { numberOfLines: 3 })).toEqual({ numberOfLines: 3, adjustsFontSizeToFit: true, minimumFontScale: 0.8 });
-  expect(fitProps(1.25, { minimumFontScale: 0.5 }, true)).toEqual({ numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.4 });
-  expect(fitProps(1.25, { numberOfLines: 2 }, true)).toMatchObject({ numberOfLines: 2 });             // the caller's own limit wins
+test("fitProps: nothing at or below the default and nothing without `fit`; above it the lines and shrink-to-fit, and no floor", () => {
+  expect(fitProps(1, 1, true)).toBeNull();
+  expect(fitProps(0.9, undefined, true)).toBeNull();
+  expect(fitProps(1.2, 3)).toBeNull();                                                                // a line limit alone is not a wish to shrink
+  expect(fitProps(1.2, 3, false)).toBeNull();
+  expect(fitProps(1.25, undefined, true)).toEqual({ numberOfLines: 1, adjustsFontSizeToFit: true });
+  expect(fitProps(1.25, undefined, 2)).toEqual({ numberOfLines: 2, adjustsFontSizeToFit: true });
+  expect(fitProps(1.25, 2, true)).toEqual({ numberOfLines: 2, adjustsFontSizeToFit: true });          // the caller's own limit wins
 });
 
 test("Body, Title and ValueLabel are that text: they take the role and hand it to their span", async () => {
@@ -108,17 +123,26 @@ test("every text the kit draws has a rule, in both families, at any size — and
   for (const mark of ["🏝️", "40%"]) for (const t of texts().filter((x) => x.text === mark)) expect(t.props.allowFontScaling).toBe(false);
 });
 
-test("buttons and chips are one line that fits back; a tile and a tool keep their 0.85 floor in points", async () => {
+test("buttons, chips, segments and a bar's title are one line that fits back; a tile and a tool are as written; a chip can opt out", async () => {
   await textSize(AX5);
   await render(<><PrimaryButton title="Export" onPress={nothing} /><SecondaryButton title="Quick Edit" onPress={nothing} /><QuietButton title="Skip" onPress={nothing} />
-    <Chip label="Curve" selected={false} onPress={nothing} /><Tile label="Rounded" selected={false} onPress={nothing} icon="color-wand-outline" />
+    <Chip label="Curve" selected={false} onPress={nothing} /><Chip fit={false} label="Samantha (Enhanced)" selected={false} onPress={nothing} />
+    <Segmented options={[{ value: "a", label: "1080p" }, { value: "b", label: "4K" }]} value="a" onChange={nothing} /><ScreenBar title="Accounts" leading="back" onLeading={nothing} />
+    <Tile label="Rounded" selected={false} onPress={nothing} icon="color-wand-outline" />
     {editor(<ToolButton variant="bar" label="Speed" icon="speedometer-outline" onPress={nothing} />)}</>);
-  for (const label of ["Export", "Quick Edit", "Skip", "Curve"]) {
+  for (const label of ["Export", "Quick Edit", "Skip", "Curve", "1080p", "4K", "Accounts"]) {
     expect(screen.getByText(label).props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true });
-    expect(screen.getByText(label).props.minimumFontScale).toBeCloseTo(1 / S, 6);
+    expect(screen.getByText(label).props.minimumFontScale).toBeUndefined();
   }
-  expect(screen.getByText("Rounded").props.minimumFontScale).toBeCloseTo(0.85 / S, 6);
-  expect(screen.getByText("Speed").props.minimumFontScale).toBeCloseTo(0.85 / E, 6);
+  expect(screen.getByText("Samantha (Enhanced)").props.adjustsFontSizeToFit).toBeUndefined();          // a name the phone gives, not ours: never shrunk
+  expect(screen.getByText("Rounded").props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.85 });
+  expect(screen.getByText("Speed").props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.85 });
+});
+
+test("the shrinkable gold button: only where it is asked to share a row", async () => {
+  await render(<><PrimaryButton title="Export" onPress={nothing} /><PrimaryButton shrink title="New Project" onPress={nothing} /></>);
+  expect(StyleSheet.flatten(screen.getByRole("button", { name: "Export" }).props.style)).not.toHaveProperty("flexShrink");
+  expect(StyleSheet.flatten(screen.getByRole("button", { name: "New Project" }).props.style)).toMatchObject({ flexShrink: 1 });
 });
 
 test("capped controls offer the large-content viewer with their name", async () => {

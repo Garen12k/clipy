@@ -65,7 +65,7 @@ export function MultiSelectBar() {
         <BarCapsule testID="multi-row">
           <View testID="multi-count" style={{ height: theme.size.touch, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.sm, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.tile }}>
             <Icon name="checkmark-circle-outline" size={theme.size.icon.sm} color={theme.colors.accent} />
-            <Body weight="semi" accessibilityRole="header" numberOfLines={1} style={{ fontSize: theme.type.label, fontVariant: ["tabular-nums"] }}>{`${ids.length} selected`}</Body>
+            <Body fit weight="semi" accessibilityRole="header" numberOfLines={1} style={{ fontSize: theme.type.label, fontVariant: ["tabular-nums"] }}>{`${ids.length} selected`}</Body>
           </View>
           {/* Done stands here, the whole row away from Delete. */}
           <ToolButton variant="bar" label="Done" icon="checkmark-outline" onPress={exitMultiSelect} />

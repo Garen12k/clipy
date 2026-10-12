@@ -5,21 +5,32 @@ import { ProjectCard } from "@/src/projects/ProjectCard";
 import { SignInCard } from "@/src/publish/components/SignInCard";
 import { useSession } from "@/src/publish/useSession";
 import { theme } from "@/src/theme/theme";
-import { textSize, unruled } from "@/src/ui/testing/textSize";
+import { PlatformIdentity } from "@/src/publish/components/PlatformIdentity";
+import { shrinks, textSize, unruled } from "@/src/ui/testing/textSize";
 
 const AX5 = 3.571, S = theme.textScale.screen, R = theme.textScale.reading;
 const summary = { id: "p1", name: "Beach day", durationSec: 21, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] as ("youtube" | "tiktok")[], coverTitle: "Summer" };
 afterEach(() => textSize(1));
 
-test("a project card: what is on the picture never scales; the name under it is capped and fits back on its one line", async () => {
+test("a project card: what is on the picture never scales; the name the user typed is capped and keeps its one line and its dots", async () => {
   await textSize(AX5);
   await render(<ProjectCard summary={summary} onPress={jest.fn()} onLongPress={jest.fn()} onMore={jest.fn()} />);
   expect(unruled()).toEqual([]);
   expect(screen.getByTestId("project-cover-title").props.allowFontScaling).toBe(false);
   expect(screen.getByText("0:21").props.allowFontScaling).toBe(false);
   const name = screen.getByText("Beach day");
-  expect(name.props).toMatchObject({ maxFontSizeMultiplier: S, numberOfLines: 1, adjustsFontSizeToFit: true });
-  expect(name.props.minimumFontScale).toBeCloseTo(1 / S, 6);
+  expect(name.props).toMatchObject({ maxFontSizeMultiplier: S, numberOfLines: 1 });
+  expect(name.props.adjustsFontSizeToFit).toBeUndefined();                       // never shrunk: iOS has no floor, and a long name would become tiny
+  expect(shrinks()).toEqual([]);                                                 // nor is the status under it
+});
+
+test("what the user or a platform wrote is never shrunk to fit: an account's name keeps its line and its dots", async () => {
+  await textSize(AX5);
+  await render(<PlatformIdentity status={{ id: "youtube", connected: true, name: "A very long channel name that does not fit in the row at all", avatarUrl: null } as never} />);
+  const name = screen.getByText(/A very long channel name/);
+  expect(name.props).toMatchObject({ maxFontSizeMultiplier: S, numberOfLines: 1 });
+  expect(name.props.adjustsFontSizeToFit).toBeUndefined();
+  expect(shrinks()).toEqual([]);
 });
 
 test("a paragraph under a title on a scrolling page grows further than its title; the button is a control", async () => {

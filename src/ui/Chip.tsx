@@ -9,10 +9,12 @@ type Props = { label: string; selected: boolean; onPress: () => void; disabled?:
   compact?: boolean;
   /** The ring still switches at once, but the selected lift does not spring: set it while a slider that moves the selection is dragged. */
   still?: boolean;
+  /** `false` where the label is not the app's own word (a language's or a voice's name, which the phone supplies): it is then never shrunk to fit. */
+  fit?: boolean;
 };
 
 /** A chip. Picked = the tile's rule: the 2-pt gold ring on the soft gold tint (`picked`), the label in the text colour (a chip's label is always semibold). */
-export function Chip({ label, selected, onPress, disabled, accessibilityLabel, compact, still }: Props) {
+export function Chip({ label, selected, onPress, disabled, accessibilityLabel, compact, still, fit = true }: Props) {
   const s = useSurfaces();
   return (
     <PressableScale lifted={selected} still={still}
@@ -21,7 +23,7 @@ export function Chip({ label, selected, onPress, disabled, accessibilityLabel, c
       disabled={disabled} onPress={onPress} {...largeContent(label)} hitSlop={compact ? { top: 10, bottom: 10, left: 4, right: 4 } : { top: 4, bottom: 4 }}
       style={[{ height: compact ? theme.size.chipCompact : theme.size.chip, justifyContent: "center", paddingHorizontal: compact ? theme.space.md : theme.space.lg, borderRadius: theme.radius.pill,
         backgroundColor: selected ? s.picked : s.tile, opacity: disabled ? 0.4 : 1 }, selected ? ringOf(s) : theme.ringClear]}>
-      <KitText fit style={{ fontWeight: theme.weight.semi, color: s.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</KitText>
+      <KitText fit={fit} style={{ fontWeight: theme.weight.semi, color: s.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</KitText>
     </PressableScale>
   );
 }

@@ -75,7 +75,7 @@ export function FilterSheet({ clipId, clipIds, visible, onClose }: { clipId: str
                 {thumb ? <Image testID={`filter-thumb-${id}`} source={{ uri: thumb }} style={{ width: TILE_W, height: TILE_H }} resizeMode="cover" /> : null}
                 <FilterLayer filter={id} />
               </View>
-              <Body numberOfLines={1} style={[{ fontSize: theme.type.micro }, selected ? { color: theme.colors.accent } : null]}>{def.label}</Body>
+              <Body fit numberOfLines={1} style={[{ fontSize: theme.type.micro }, selected ? { color: theme.colors.accent } : null]}>{def.label}</Body>
             </PressableScale>
           );
         })}

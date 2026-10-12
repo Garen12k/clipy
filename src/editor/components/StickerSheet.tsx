@@ -115,7 +115,7 @@ export function StickerSheet({ visible, onClose, onAdded }: { visible: boolean; 
               <Pressable key={id} accessibilityRole="button" accessibilityLabel={SHAPES[id].label} onPress={() => addShape(id)}
                 style={{ width: 64, alignItems: "center", gap: theme.space.xs }}>
                 <Svg width={48} height={48} viewBox="0 0 100 100"><Path d={SHAPES[id].path} fill={color} /></Svg>
-                <Body numberOfLines={2} style={{ fontSize: theme.type.small, textAlign: "center" }}>{SHAPES[id].label}</Body>
+                <Body fit numberOfLines={2} style={{ fontSize: theme.type.small, textAlign: "center" }}>{SHAPES[id].label}</Body>
               </Pressable>
             ))}
           </View>

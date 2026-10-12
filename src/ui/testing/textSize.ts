@@ -26,6 +26,11 @@ export function texts(): TextNode[] {
   return found;
 }
 
+/** The texts that may be shrunk to fit their lines as they are drawn now. Empty wherever the words are a user's or a platform's: those end in dots. */
+export function shrinks(): string[] {
+  return texts().filter((t) => t.props.adjustsFontSizeToFit === true).map((t) => `${t.type} "${t.text}"`);
+}
+
 /** The texts that would follow the phone without a limit: neither a cap of 1 or more nor `allowFontScaling={false}`. Empty on anything built from the kit. */
 export function unruled(): string[] {
   return texts().filter((t) => t.props.allowFontScaling !== false && !(typeof t.props.maxFontSizeMultiplier === "number" && t.props.maxFontSizeMultiplier >= 1))

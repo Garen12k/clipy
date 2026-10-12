@@ -39,7 +39,7 @@ export function ScreenBar({ title, leading, onLeading, leadingDisabled, leadingL
         style={{ width: CIRCLE, height: CIRCLE, borderRadius: theme.radius.pill, backgroundColor: s.tile, alignItems: "center", justifyContent: "center", opacity: leadingDisabled ? DISABLED_OPACITY : 1 }}>
         <Icon name={LEADING_ICON[leading]} size={theme.size.icon.md} color={s.text} />
       </PressableScale>
-      <Title size={theme.type.headline} accessibilityRole="header" numberOfLines={1} style={{ flex: 1, textAlign: "center" }}>{title}</Title>
+      <Title fit size={theme.type.headline} accessibilityRole="header" numberOfLines={1} style={{ flex: 1, textAlign: "center" }}>{title}</Title>
       <View testID="screen-bar-trailing" style={{ width: CIRCLE }} />
     </View>
   );
