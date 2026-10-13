@@ -294,3 +294,47 @@ collapsed, leading dots removed, at most 80 characters, `Clipy project` if nothi
 Automatic or iCloud backup of all projects; opening Clipy by tapping a `.clipy` in Files or AirDrop (needs a build-time plist
 change); compression; encryption; backing up anything on the server (accounts, post history); several projects in one file;
 showing the Documents folder in the Files app; a native (Swift) writer.
+
+## 9. As built (13 October 2026)
+
+Built as designed, on branch `project-backup` (b933001 … 683d449, then the review's minors, c67e7f2). Where the code differs
+from the text above, the code is right and this section says how.
+
+**Deviations from the design**
+
+1. **Stricter name rules (§2.2).** A header is also refused when two entries are one name to a file system — the same letters in
+   another case, or composed differently (`nameKey`: NFC, lower case). After the review, `isSafeName` also refuses `%`, `#` and
+   `?`: a name is joined into a `file://` uri, where they would be read as an escape, a fragment or a query. The app's own names
+   (`<id>.<ext>`, `speech-<id>-<id>.caf`) have none of these.
+2. **The writer's pre-check (§3).** `writeProjectFile` refuses, before the first byte, a header `readHeader` would not accept (an
+   unsafe or repeated path, a size that is not a whole number, a total past what a number holds): a copy that could not be opened
+   again is never made.
+3. **The collision refusal (§4).** `restoreProject` refuses when the new id's folder already exists. A folder moved onto an
+   existing one would land INSIDE it, and the clean-up removes the new folder — which must only ever be one this run made.
+4. **The wait after the picker (§5).** An opened file starts `AFTER_PICKER_MS` (350 ms, AspectRatioSheet's existing constant)
+   after the picker answers: iOS drops an alert presented while the picker is still leaving, and a file that is not a project
+   fails at once. Save a Copy waits `AFTER_SHEET_MS` after the actions sheet for the same reason (the share sheet).
+5. **Missing media at save (§2.4).** A source file that is missing, or is not `<project>/media/<name>`, is left out and counted;
+   the copy is still made and a toast says how many after the share sheet.
+6. **The copy is NOT removed when the share sheet closes (§5; §7 items 5 and 10) — review m1.** A share target may still be
+   reading the file when the sheet reports closed, and a cut-off copy is a backup that does not open. The copy stays in the cache
+   until the next save or open, or the next launch (`sweepProjectFiles` at each). So free space returns then, not at once.
+
+**The review's twelve minor findings** (verdict: ship; no blocker, no major)
+
+Applied (c67e7f2): m1 (item 6 above) · m2 (`%#?` refused in names) · m5 (free space the phone does not report is unknown, not
+zero — `tooFull`) · m6 (`fileNameFor` caps the name at 200 UTF-8 bytes and drops a lone surrogate: 80 emoji were 320 bytes, more
+than a file's name may be, and such a save failed for ever) · m8 (`extractFiles` takes a turn, and hears Cancel, for every file
+with no bytes) · m11 (the field guard sees any case and `string` / `string[]` / `string | null`; it now also lists
+`PostRecord.url`, a web address).
+
+Left, each with its reason: m3 (Home is not inert in the 350 ms between the choice and the start — no data is harmed, the sheet or
+the picker covers the screen, and the fix reaches into Home's `busy` rules) · m4 (a share sheet or picker iOS never presents leaves
+the four actions dead until a restart — the same exposure as `pickMedia`; a timeout could release the guard under a sheet that IS
+up) · m7 (Cancel is not heard while the new project's pictures are made — harmless, the project is whole) · m9 (entries nothing
+refers to are extracted — only inside the new project's own folder, removed with it) · m10 (the picker's temporary copy is not
+swept after a force-quit — it is in iOS's own temporary folder, which iOS clears; sweeping it means deleting by a guessed or a
+stored path, which only a phone can prove right) · m12 (saving does not check room for the copy the share target makes —
+informational; Apple says it in its own words).
+
+**Still only a phone can show:** §7, written for the owner as `docs/project-backup-phone-checklist.md`.
