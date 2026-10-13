@@ -274,3 +274,74 @@ Phone (the owner; one line each in `docs/undo-history-phone-checklist.md`, plan 
 - Memory after a full restore on a long project (the snapshots no longer share their clips).
 - How long the re-render of a swept cut-out / steady copy takes when undoing into it (checklist 7).
 - `expo-file-system`'s `File.write` of a 4 MB string and `move` with overwrite, timed on the device.
+
+## 11. As built (2026-10-13)
+
+What this document says in §§1–10 is what was built, except where this section says otherwise.
+
+### 11.1 The review, and the bug it found under the feature
+
+The independent review of the first two tasks (`.superpowers/sdd/2026-10-13-undo-history/task-3-review.md`) found the safety
+rule sound — no path applies a history to a text it was not written beside — and Undo present on reopening in the four common
+flows. It also found, by reading the installed `expo-file-system`, a bug that was NOT this feature's:
+
+- **Two overlapping saves of one project could delete `project.json`.** The phone's `File.move(…, overwrite)` is queued on
+  one serial queue (behind thumbnails) and removes the destination BEFORE it moves; two saves share `project.json.tmp`, so the
+  second move found no tmp after it had removed the project. `main` already had one such pair (autosave × save-on-leave);
+  this feature added a second (autosave × the write when the app stops being active).
+- **The autosave marked saved a project it had not written** (an edit made while a save was on its way lost its own save).
+
+Both were fixed at the root, on their own branch (`safe-save`, merged into `next-build` before this feature): saves of one
+project run one at a time inside the storage (a chain per project id, last state wins), `expoFs.move` refuses a missing
+source, `markSaved` only for the very object written, a project left with only its tmp is recovered, `updateProject` is
+read → change → write in one turn, opening waits for a queued save, and a deleted id cannot be made again by a late save.
+Report: `.superpowers/sdd/safe-save-report.md`.
+
+### 11.2 What changed in the keeper because of it
+
+§4 describes two separate calls — `saveProject`, then `saveHistory`, which re-reads the disk to check its stamp — and the
+first build serialised them with a queue of its own in `historyKeeper.ts` (`historyTurn`). With the storage's chain that
+queue would have been a second, competing ordering. As built:
+
+- **One call, one turn.** `storage.saveWithHistory(p, past, future)` → `{ saved, kept }` writes the project exactly as
+  `saveProject` does and then, in the SAME turn of that project's chain, the history — stamped from the very string it has
+  just written (no read back), with nothing able to write `project.json` in between. `historyTurn` is gone; the keeper and
+  the leave ask in the very call and the chain orders them behind whatever was asked before (an autosave, a rename, a delete).
+- **The project's save result is its own.** `saved` settles when `project.json` is in place — before the history is even
+  begun — and never hears of the history; `kept` never rejects. A deleted project gets neither.
+- `saveHistory` (the history alone, checked against the disk) is kept, and its check and write are one turn too.
+- **Stale is asked of what is saved.** On leave an empty text may be dropped from the project; the history is then written
+  beside THAT project even when the stacks had already been kept (before, that one case left a history of the other text,
+  which the next open dropped).
+- **"inactive" then "background"** for the same three objects is one write (a small guard in the keeper — the only thing the
+  chain does not cover); a newer write asked while an older one is still on its way is the one that says what the file holds.
+- **Only what is kept is turned into text** (`fitSnapshots`, the review's m1): on a 521 KB project the first build
+  stringified all 100 snapshots — about 50 MB — to keep 7, at the moment the app was being left.
+- A project recovered from `project.json.tmp` has the stamp of the tmp's text, so a history written beside the older
+  `project.json` is dropped.
+
+### 11.3 The four flows, as pinned (`src/editor/__tests__/historyFlows.disk.test.tsx`, real hooks + real storage)
+
+| Flow | Undo on reopening | Why |
+|---|---|---|
+| edit → back → reopen | yes | the leave writes the pair; also when the autosave had already saved (the project is written again so the history is its own) and when the autosave's move is still queued |
+| edit → Export → Done → back → reopen | yes | a changed setting is another project object → stale → the leave writes both; nothing changed → nothing rewritten |
+| edit → background → return → edit more → back → reopen | yes | the later autosave makes the file's stamp old only until the leave writes both; ended in the background → the inactive write was the last save |
+| edit → Post → back → reopen | yes | a post record is another project object → stale; the trip to the browser is an inactive write |
+
+Dropped, as designed: Home's rename; a crash / kill after an autosave with no leave and no trip out of the app since; a schema
+change; a project recovered from its tmp.
+
+### 11.4 The review's minor findings
+
+Done: m1 (above), m3 (the tmp is read back — `safe-save`), m4 (pinned: a `.tmp` is never read, the next write replaces it),
+m8 (the fake fs models the real move; the pairs of saves are pinned on it), m9 (the leave's save is asked in the cleanup again).
+Left: m2 (the inactive write also runs during an export or a recording — its cost was m1's), m5 (a failed project save on
+leave still skips the cover: writing a cover for a project that is not on disk would remove the cover the stored one needs),
+m6 (a toast that happens to be up when the history lands is dismissed — cosmetic), m7 (`deleters.guard` pins a list of files,
+not the rule).
+
+### 11.5 Still only a phone can settle
+
+§10 stands. Added by the save path changing underneath: that an edit made and left at once is there on reopening, and that a
+project still opens after "add a clip, leave within a second" (`docs/undo-history-phone-checklist.md`, the first two items).
