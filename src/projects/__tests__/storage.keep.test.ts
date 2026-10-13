@@ -300,3 +300,14 @@ describe("fitSnapshots: the caps, without turning into text what will not be kep
     expect(asked).toEqual([future[0], future[1]]);
   });
 });
+
+test("(final review, minor 1) a project that cannot be turned into text: `saved` rejects — it never stays open — and no history is kept", async () => {
+  const { fs, storage } = setup();
+  const loop = named("Loop") as Project & { self?: unknown };
+  loop.self = loop;
+  const { saved, kept } = storage.saveWithHistory(loop, [named("Zero")], []);
+  const ended = await Promise.race([saved.then(() => "saved", () => "rejected"), settle().then(() => "open")]);
+  expect(ended).toBe("rejected");
+  expect(await kept).toBe(false);
+  expect(left(fs)).toEqual([]);
+});

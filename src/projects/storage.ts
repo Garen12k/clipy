@@ -347,8 +347,8 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const saved = new Promise<void>((yes, no) => { done = yes; fail = no; });
     const kept = inTurn(p.id, async () => {
       if (deleted.has(p.id)) { done(); return false; }
-      const text = JSON.stringify(p);
-      try { await writeProject(p, text); } catch (e) { fail(e); return false; }
+      let text: string;
+      try { text = JSON.stringify(p); await writeProject(p, text); } catch (e) { fail(e); return false; }
       done();
       await Promise.resolve();                                                // whoever waits for the save hears first
       return writeHistory(p.id, stampOf(text), past, future);
