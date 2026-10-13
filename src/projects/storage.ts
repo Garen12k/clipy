@@ -2,7 +2,7 @@ import { coverTimeOf, frameAt, totalDuration } from "@/src/editor/model/timeline
 import { migrateProject } from "@/src/editor/model/migrate";
 import { DEFAULT_ASPECT_RATIO, DEFAULT_EXPORT_SETTINGS, isAspectRatio, newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AspectRatio, type AudioKind, type AudioTrack, type Clip, type LayerClip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
-import { HISTORY_FILE, decodeHistory, encodeHistory, fitHistory, lineOf, stampOf } from "./history";
+import { HISTORY_FILE, decodeHistory, encodeHistory, fitSnapshots, lineOf, stampOf } from "./history";
 import { PROJECT_FILE, ProjectFileError, baseName, encodeHeader, extractFiles, fileNameFor, freeName, isSafeName, nextTurn, readHeader, totalBytes, writeProjectFile, type FileEntry, type FileHeader, type FileRun, type Pause } from "./projectFile";
 import { rebaseProject } from "./rebase";
 
@@ -97,10 +97,11 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     for (let turn = saving.get(id); turn; turn = saving.get(id)) await turn;
   }
 
-  async function writeProject(p: Project): Promise<void> {
+  /** `text`: the string to write when the caller needs the very one (a history's stamp) — else it is made here, as always. */
+  async function writeProject(p: Project, text?: string): Promise<void> {
     await fs.mkdir(projectDir(p.id));
     const tmp = `${jsonPath(p.id)}.tmp`;
-    await fs.writeText(tmp, JSON.stringify(p));
+    await fs.writeText(tmp, text ?? JSON.stringify(p));
     await fs.move(tmp, jsonPath(p.id));
   }
 
@@ -299,23 +300,60 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const sourcesOf = (p: Project): string[] => [...p.clips, ...p.layers, ...p.audioTracks].map((x) => x.sourceUri);
 
   /**
-   * The editor's undo and redo stacks as `<project>/history.jsonl`, for the project that `saveProject(p)` has JUST written — and
-   * that is checked, not trusted: nothing is written unless project.json on disk is this project's own text. Capped (`fitHistory`),
-   * written as a `.tmp` and moved into place. Never throws and never touches project.json; false when nothing was written (the old
-   * history, or none, stays).
+   * The stacks as `<project>/history.jsonl`, stamped `stamp` — called ONLY inside a turn of the project's chain, with the stamp
+   * of the text that is project.json in that turn. Capped (`fitSnapshots`: nothing beyond the caps is even turned into text),
+   * written as a `.tmp` and moved into place, so a write cut off mid-way leaves only a `.tmp`, which nothing reads. Never
+   * throws and never touches project.json; false when nothing was written (the old history, or none, stays — its stamp no
+   * longer names project.json, so it is dropped on the next open).
    */
-  async function saveHistory(p: Project, past: readonly Project[], future: readonly Project[]): Promise<boolean> {
+  async function writeHistory(id: string, stamp: string, past: readonly Project[], future: readonly Project[]): Promise<boolean> {
     try {
-      const path = historyPath(p.id);
-      const stamp = stampOf(lineOf(p));
-      if (stampOf(await fs.readText(jsonPath(p.id))) !== stamp) return false;
-      const kept = fitHistory(past.map(lineOf), future.map(lineOf));
+      const path = historyPath(id);
+      const kept = fitSnapshots(past, future);
       if (kept.past.length + kept.future.length === 0) { await fs.remove(path); return false; }
       const tmp = `${path}.tmp`;
-      await fs.writeText(tmp, encodeHistory(p.id, SCHEMA_VERSION, stamp, kept));
+      await fs.writeText(tmp, encodeHistory(id, SCHEMA_VERSION, stamp, kept));
       await fs.move(tmp, path);
       return true;
     } catch (e) { console.warn("history save failed", e); return false; }
+  }
+
+  /**
+   * The editor's undo and redo stacks for a project that is ALREADY on disk as `p` — checked, not trusted: nothing is written
+   * unless project.json is this project's own text. The check and the write are ONE turn of the project's chain, so no save can
+   * land between them; a deleted project gets nothing. Never throws; false when nothing was written.
+   */
+  function saveHistory(p: Project, past: readonly Project[], future: readonly Project[]): Promise<boolean> {
+    return inTurn(p.id, async () => {
+      try {
+        if (deleted.has(p.id)) return false;
+        const stamp = stampOf(lineOf(p));
+        if (stampOf(await fs.readText(jsonPath(p.id))) !== stamp) return false;
+      } catch (e) { console.warn("history save failed", e); return false; }
+      return writeHistory(p.id, stampOf(lineOf(p)), past, future);
+    });
+  }
+
+  /**
+   * The project AND the history that belongs to it, as ONE turn of the project's chain — how the editor keeps its undo steps
+   * (historyKeeper.ts). The project is written exactly as `saveProject` writes it; only when that write has landed is the
+   * history written, stamped from the SAME string, and nothing else can write project.json in between (same turn).
+   * `saved` is the project's save and nothing more: it settles the moment project.json is in place (or could not be put
+   * there) and never waits for, and never hears of, the history. `kept` says whether a history was written; it never rejects
+   * (a history that fails is a warning; a project that could not be saved, or was deleted, gets none).
+   */
+  function saveWithHistory(p: Project, past: readonly Project[], future: readonly Project[]): { saved: Promise<void>; kept: Promise<boolean> } {
+    let done!: () => void, fail!: (e: unknown) => void;
+    const saved = new Promise<void>((yes, no) => { done = yes; fail = no; });
+    const kept = inTurn(p.id, async () => {
+      if (deleted.has(p.id)) { done(); return false; }
+      const text = JSON.stringify(p);
+      try { await writeProject(p, text); } catch (e) { fail(e); return false; }
+      done();
+      await Promise.resolve();                                                // whoever waits for the save hears first
+      return writeHistory(p.id, stampOf(text), past, future);
+    });
+    return { saved, kept };
   }
 
   /**
@@ -474,7 +512,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   return {
     projectDir, createProject, listProjects, loadProject, saveProject, updateProject,
     deleteProject,
-    duplicateProject, renameProject, importAudio, importMedia, saveStill, writeCover, saveHistory, loadHistory,
+    duplicateProject, renameProject, importAudio, importMedia, saveStill, writeCover, saveHistory, saveWithHistory, loadHistory,
     packProject, restoreProject, sweepProjectFiles,
   };
 }

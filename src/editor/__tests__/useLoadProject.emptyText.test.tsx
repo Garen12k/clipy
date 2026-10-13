@@ -1,5 +1,11 @@
 import { act, render, waitFor } from "@testing-library/react-native";
-jest.mock("@/src/projects", () => ({ storage: { loadProject: jest.fn(), saveProject: jest.fn(async () => {}), writeCover: jest.fn(async () => {}), loadHistory: jest.fn(async () => null), saveHistory: jest.fn(async () => true) } }));
+jest.mock("@/src/projects", () => {
+  const saveProject = jest.fn(async () => {});
+  const storage = { loadProject: jest.fn(), saveProject, writeCover: jest.fn(async () => {}), loadHistory: jest.fn(async () => null), saveHistory: jest.fn(async () => true),
+    // The project and its history in one turn: for these tests it is the project's save (the history is useLoadProject.history.test.tsx's).
+    saveWithHistory: jest.fn((p: unknown) => { const saved: Promise<void> = Promise.resolve((saveProject as jest.Mock)(p)); return { saved, kept: saved.then(() => true, () => false) }; }) };
+  return { storage };
+});
 import { makeClip, makeOverlay, makeProject, type Project } from "@/src/editor/model/types";
 import { storage } from "@/src/projects";
 import { useEditorStore } from "@/src/editor/store";

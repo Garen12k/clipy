@@ -47,6 +47,31 @@ export function fitHistory(past: readonly string[], future: readonly string[], m
   return { past: p.slice(from), future: f.slice(0, to) };
 }
 
+/**
+ * `fitHistory` for the snapshots themselves — the same answer, but a snapshot is turned into text only until the cap is passed
+ * (a long project keeps a handful of its 100 steps: the rest are megabytes of `JSON.stringify` for nothing, at the moment the
+ * app is being left). The nearest redo steps are measured first, then the undo steps from the newest back.
+ */
+export function fitSnapshots(past: readonly object[], future: readonly object[], maxSteps: number = HISTORY_FILE.maxSteps, maxChars: number = HISTORY_FILE.maxChars, line: (snapshot: object) => string = lineOf): HistoryLines {
+  const p = past.slice(-maxSteps), f = future.slice(0, maxSteps);
+  const keptFuture: string[] = [], keptPast: string[] = [];
+  let size = 0, whole = true;
+  for (const snapshot of f) {
+    const l = line(snapshot);
+    if (size + l.length + 1 > maxChars) { whole = false; break; }
+    size += l.length + 1;
+    keptFuture.push(l);
+  }
+  // An undo step is kept only when every redo step was: the oldest undo steps go before the farthest redo step does.
+  for (let i = p.length - 1; whole && i >= 0; i--) {
+    const l = line(p[i]);
+    if (size + l.length + 1 > maxChars) break;
+    size += l.length + 1;
+    keptPast.unshift(l);
+  }
+  return { past: keptPast, future: keptFuture };
+}
+
 export function encodeHistory(projectId: string, schemaVersion: number, stamp: string, h: HistoryLines): string {
   const header = { app: HISTORY_FILE.app, version: HISTORY_FILE.version, schemaVersion, projectId, stamp, past: h.past.length, future: h.future.length };
   return [JSON.stringify(header), ...h.past, ...h.future].join("\n");

@@ -4,9 +4,12 @@ import { useEditorStore } from "./store";
 
 /**
  * The undo history kept with the project — the editor's half (spec: docs/superpowers/specs/2026-10-13-undo-history-design.md).
- * The file is `storage.saveHistory` / `loadHistory`; this decides WHEN: read once, a moment after a project is on screen;
- * written when the editor is left (useLoadProject) and when the app stops being active — never per edit. Nothing here can fail a
- * project save, and nothing here throws.
+ * The file is the storage's (`saveWithHistory` / `loadHistory`); this decides WHEN: read once, a moment after a project is on
+ * screen; written when the editor is left (useLoadProject) and when the app stops being active — never per edit.
+ * ORDER IS THE STORAGE'S ALONE: `saveWithHistory` writes the project and then its history as ONE turn of that project's chain
+ * of saves — the same chain the autosave, the leave and a rename wait in — so there is no queue here: a write is asked for in
+ * the very call, and the chain puts it behind whatever was asked before. Nothing here can fail a project save, and nothing
+ * here throws.
  */
 export const HISTORY_READ_DELAY_MS = 400;
 
@@ -16,29 +19,18 @@ let kept: Kept | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 /** Raised when the editor is left or another project opens: an answer from before it is dropped. */
 let epoch = 0;
-/** The write that is on its way (null: none). */
-let tail: Promise<void> | null = null;
+/** Counts the writes `keepHistoryNow` has asked for: only the newest one asked may say what the file holds. */
+let asked = 0;
+/** What is being written right now by `keepHistoryNow`, and its end (null: nothing) — "inactive" and then "background" a moment later are ONE write. */
+let writing: (Kept & { done: Promise<void> }) | null = null;
 
-/**
- * One write at a time: the two places that write a history — the app stops being active (`keepHistoryNow`) and the editor is left
- * (useLoadProject) — each save the project and then its history, and a second one starting between those two would change
- * project.json under the first one's history. A job runs AT ONCE (in this very call) when nothing is being written, else when
- * everything before it has ended, and its own answer or failure is handed back; a job that fails holds nobody up. Only those two
- * writes belong in a turn — never the cover, which waits for a thumbnail.
- */
-export function historyTurn<T>(job: () => Promise<T>): Promise<T> {
-  const run = tail === null ? job() : tail.then(job);
-  // The first to hear of the job's end, before whoever awaits `run`: a caller that writes again right after finds the turn free.
-  const over = (): void => { if (tail === mine) tail = null; };
-  const mine: Promise<void> = run.then(over, over);
-  tail = mine;
-  return run;
-}
+const same = (k: Kept | null, s: { project: Project | null; past: Project[]; future: Project[] }): boolean =>
+  k !== null && k.project === s.project && k.past === s.past && k.future === s.future;
 
 /** Is there a history to write? A project is open, a stack is not empty, and the three are not the ones the file already holds. */
 export function historyStale(s: { project: Project | null; past: Project[]; future: Project[] }): boolean {
   if (!s.project || (s.past.length === 0 && s.future.length === 0)) return false;
-  return !(kept !== null && kept.project === s.project && kept.past === s.past && kept.future === s.future);
+  return !same(kept, s);
 }
 
 /** The editor is left, or another project opens: the wait is cancelled and nothing is remembered. */
@@ -71,20 +63,28 @@ export function restoreAfterOpen(opened: Project, stamp: string | undefined): vo
 }
 
 /**
- * Writes the history now, if there is one to write: the project first (its stamp must be of what is on disk), then the history.
- * For the moment the app stops being active. Never rejects. What there is to write is looked at when its turn comes
- * (`historyTurn`), so a second call made while the first is still writing finds the work done and writes nothing.
+ * Writes the history now, if there is one to write: the project and, in the same turn of its chain, the history that belongs to
+ * it (`storage.saveWithHistory`). For the moment the app stops being active. Never rejects. The store is told it is saved when
+ * the PROJECT is saved, whatever becomes of the history. A second call for the very same three while the first is still being
+ * written is that same write; a call with anything new asks for its own, and the chain runs it after.
  */
 export function keepHistoryNow(): Promise<void> {
-  return historyTurn(async () => {
-    const s = useEditorStore.getState();
-    const { project, past, future } = s;
-    if (!project || !historyStale(s)) return;
-    const run = epoch;
+  const s = useEditorStore.getState();
+  const { project, past, future } = s;
+  if (!project || !historyStale(s)) return Promise.resolve();
+  if (writing !== null && same(writing, s)) return writing.done;
+  const run = epoch, turn = ++asked;
+  const write = async (): Promise<void> => {
     try {
-      await storage.saveProject(project);
+      const { saved, kept: wrote } = storage.saveWithHistory(project, past, future);
+      await saved;
       if (useEditorStore.getState().project === project) useEditorStore.getState().markSaved();
-      if ((await storage.saveHistory(project, past, future)) && run === epoch) kept = { project, past, future };
+      // The chain lands them in the order asked, so the newest one asked is what the file ends as.
+      if ((await wrote) && run === epoch && turn === asked) kept = { project, past, future };
     } catch (e) { console.warn("history keep failed", e); }
-  });
+  };
+  const mine: Kept & { done: Promise<void> } = { project, past, future, done: Promise.resolve() };
+  writing = mine;
+  mine.done = write().then(() => { if (writing === mine) writing = null; });
+  return mine.done;
 }

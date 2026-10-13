@@ -1,11 +1,17 @@
-jest.mock("@/src/projects", () => ({ storage: { loadHistory: jest.fn(), saveHistory: jest.fn(async () => true), saveProject: jest.fn(async () => {}) } }));
+jest.mock("@/src/projects", () => ({ storage: { loadHistory: jest.fn(), saveHistory: jest.fn(async () => true), saveProject: jest.fn(async () => {}), saveWithHistory: jest.fn() } }));
 import { storage } from "@/src/projects";
-import { forgetHistory, HISTORY_READ_DELAY_MS, historyStale, historyTurn, keepHistoryNow, restoreAfterOpen } from "../historyKeeper";
+import { forgetHistory, HISTORY_READ_DELAY_MS, historyStale, keepHistoryNow, restoreAfterOpen } from "../historyKeeper";
 import { makeProject, type Project } from "../model/types";
 import { useEditorStore } from "../store";
 
 const st = () => useEditorStore.getState();
 const loadHistory = storage.loadHistory as jest.Mock, saveHistory = storage.saveHistory as jest.Mock, saveProject = storage.saveProject as jest.Mock;
+const saveWithHistory = storage.saveWithHistory as unknown as jest.Mock;
+/** The storage's contract for the pair, over the two mocks: the project first; its history only when that save has landed; `kept` never rejects. */
+const pair = (p: Project, past: Project[], future: Project[]) => {
+  const saved = saveProject(p) as Promise<void>;
+  return { saved, kept: saved.then(() => saveHistory(p, past, future) as Promise<boolean>, () => false) };
+};
 const named = (name: string): Project => makeProject({ id: "p1", name });
 const rename = (name: string) => (p: Project): Project => ({ ...p, name });
 const wait = () => jest.advanceTimersByTimeAsync(HISTORY_READ_DELAY_MS);
@@ -14,6 +20,7 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   loadHistory.mockResolvedValue(null); saveHistory.mockResolvedValue(true); saveProject.mockResolvedValue(undefined);
+  saveWithHistory.mockImplementation(pair);
   forgetHistory(); st().reset();
   warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 });
@@ -180,42 +187,55 @@ test("two calls at once (inactive, then background a moment later): the second w
   expect(saveProject).toHaveBeenCalledTimes(1);
 });
 
-test("a second call that does have something new is written whole AFTER the first: project, history, project, history", async () => {
-  const order: string[] = [];
+test("a second call that has something new starts its own write at once — the storage's chain puts it behind the first (pinned on the real storage)", async () => {
   let saved!: () => void;
-  saveProject.mockImplementationOnce((p: Project) => { order.push(`project ${p.name}`); return new Promise<void>((r) => { saved = r; }); });
-  saveProject.mockImplementation(async (p: Project) => { order.push(`project ${p.name}`); });
-  saveHistory.mockImplementation(async (p: Project) => { order.push(`history ${p.name}`); return true; });
+  saveProject.mockReturnValueOnce(new Promise<void>((r) => { saved = r; }));
   st().setProject(named("Two"));
   st().apply(rename("Edited"));
   const first = keepHistoryNow();
   st().apply(rename("Again"));
+  const again = st();
   const second = keepHistoryNow();
-  await jest.advanceTimersByTimeAsync(0);
-  expect(order).toEqual(["project Edited"]);
+  expect(saveWithHistory).toHaveBeenCalledTimes(2);                  // asked in the very call: the keeper has no queue of its own
+  expect(saveWithHistory).toHaveBeenLastCalledWith(again.project, again.past, again.future);
   saved();
   await Promise.all([first, second]);
-  expect(order).toEqual(["project Edited", "history Edited", "project Again", "history Again"]);
   expect(st().dirty).toBe(false);
   expect(historyStale(st())).toBe(false);
 });
 
-test("historyTurn: a job runs at once when nothing is being written, behind the one that is otherwise — and a job that fails holds nobody up and tells only its own caller", async () => {
-  const order: string[] = [];
-  let ran = false;
-  void historyTurn(async () => { ran = true; });
-  expect(ran).toBe(true);                                            // at once, in the same call: the leave's save starts as it always did
+test("the pair is asked of the storage in ONE call — the keeper never saves the project and the history as two steps of its own", async () => {
+  saveWithHistory.mockImplementation(() => ({ saved: Promise.resolve(), kept: Promise.resolve(true) }));
+  st().setProject(named("Two"));
+  st().apply(rename("Edited"));
+  const { project, past, future } = st();
+  await keepHistoryNow();
+  expect(saveWithHistory).toHaveBeenCalledWith(project, past, future);
+  expect(saveProject).not.toHaveBeenCalled();
+  expect(saveHistory).not.toHaveBeenCalled();
+  expect(st().dirty).toBe(false);
+  expect(historyStale(st())).toBe(false);
+});
+
+test("the store is told it is saved when the PROJECT is saved — not when the history is done, which may take longer or never come", async () => {
+  saveWithHistory.mockImplementation(() => ({ saved: Promise.resolve(), kept: new Promise<boolean>(() => {}) }));
+  st().setProject(named("Two"));
+  st().apply(rename("Edited"));
+  void keepHistoryNow();
   await jest.advanceTimersByTimeAsync(0);
-  let open!: () => void;
-  const a = historyTurn(() => new Promise<void>((r) => { open = () => { order.push("a"); r(); }; }));
-  const b = historyTurn(async () => { order.push("b"); throw new Error("no"); });
-  const c = historyTurn(async () => { order.push("c"); });
-  await jest.advanceTimersByTimeAsync(0);
-  expect(order).toEqual([]);
-  open();
-  await expect(b).rejects.toThrow("no");
-  await expect(Promise.all([a, c])).resolves.toEqual([undefined, undefined]);
-  expect(order).toEqual(["a", "b", "c"]);
+  expect(st().dirty).toBe(false);
+  expect(historyStale(st())).toBe(true);                             // not known to be written: the leave writes it again
+});
+
+test("a storage that throws outright is a warning too", async () => {
+  saveWithHistory.mockImplementation(() => { throw new Error("no storage"); });
+  st().setProject(named("Two"));
+  st().apply(rename("Edited"));
+  await expect(keepHistoryNow()).resolves.toBeUndefined();
+  expect(warn).toHaveBeenCalledWith("history keep failed", expect.any(Error));
+  saveWithHistory.mockImplementation(pair);
+  await keepHistoryNow();                                            // and the next call is not held by the failed one
+  expect(historyStale(st())).toBe(false);
 });
 
 test("the editor left while the write is on its way: the write ends, and is not remembered for the next project", async () => {
@@ -234,11 +254,4 @@ test("the editor left while the write is on its way: the write ends, and is not 
   expect(st().project).toBeNull();
   useEditorStore.setState({ project, past, future });                // were the same three ever in the store again, they would be written again
   expect(historyStale(st())).toBe(true);
-});
-
-test("the turn is free the moment its job has ended: the next one starts at once", async () => {
-  await historyTurn(async () => {});
-  let ran = false;
-  void historyTurn(async () => { ran = true; });
-  expect(ran).toBe(true);
 });
