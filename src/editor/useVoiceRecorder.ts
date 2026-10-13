@@ -1,17 +1,27 @@
-import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, type AudioRecorder } from "expo-audio";
+import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, type AudioRecorder, type RecordingOptions } from "expo-audio";
 import { useEffect, useRef, useState } from "react";
 import { RECORDING_AUDIO_MODE, restorePlaybackAudioMode } from "@/src/editor/audioMode";
 import { addAudioTrack } from "@/src/editor/model/ops";
+import { levelBars, quietSince, tooQuiet, VOICE_COUNT, VOICE_LEVEL } from "@/src/editor/model/voiceLevel";
 import { totalDuration } from "@/src/editor/model/timeline";
 import { AUDIO_LIMITS } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
+import { useVoiceLive } from "@/src/editor/voiceLive";
 import { storage } from "@/src/projects";
 import { audioDuration } from "@/src/projects/audioInfo";
 import { haptic } from "@/src/ui/haptics";
 import { useToast } from "@/src/ui/Toast";
 
-export type VoiceRecorderState = "idle" | "starting" | "recording" | "saving";
-export type VoiceRecorder = { state: VoiceRecorderState; elapsed: number; start(): Promise<void>; stop(): Promise<void>; cancel(): Promise<void> };
+/** `counting`: the 3 … 1 before a recording. Nothing of a recording exists yet — no session, no muted preview, no `recording` flag. */
+export type VoiceRecorderState = "idle" | "counting" | "starting" | "recording" | "saving";
+/**
+ * What the recorder is made with: the package's HIGH_QUALITY preset, every field as it is — so the FILE is what it always was — plus
+ * the one switch that makes the recorder report its input level (`getStatus().metering`). The switch is not an encoder setting:
+ * natively it is `AVAudioRecorder.isMeteringEnabled`, set beside the settings that make the file.
+ */
+export const VOICE_RECORDING_OPTIONS: RecordingOptions = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
+/** `count`: the number the countdown shows (3, 2, 1), 0 outside it. `begin` counts down and then calls `start`; `cancelCount` ends a countdown and nothing else. */
+export type VoiceRecorder = { state: VoiceRecorderState; elapsed: number; count: number; begin(): void; cancelCount(): void; start(): Promise<void>; stop(): Promise<void>; cancel(): Promise<void> };
 
 const ELAPSED_TICK_MS = 200;
 /** How long the save waits for the recorded file's own length before going with the recorder's figure. */
@@ -52,17 +62,26 @@ function measuredSeconds(uri: string): Promise<number | null> {
  * The `recording` flag outlives the recorder by the save: it is cleared when the track is in (or refused), so whatever waits for
  * it (the tool store's closer, Export) waits for the save too; the preview stays muted for that moment.
  *
+ * `begin` is what the record button calls: the same refusals as `start`, said at the tap, then `VOICE_COUNT.from` … 1, a number every
+ * `VOICE_COUNT.stepMs`, and only then `start`, unchanged. The countdown is plain timers and a number in state — nothing is muted,
+ * played, asked or recorded during it — and `cancelCount` or an unmount ends it without a trace. While recording, the input level is
+ * read from the recorder every `VOICE_LEVEL.sampleMs` and written to `useVoiceLive`, never to this hook's state: a level draws the
+ * meter again, not whoever uses this hook.
+ *
  * `onDismiss` is called before any toast and after a successful save, so that a hosting sheet (a native Modal, which would cover
  * the toast) can close. Neither happens once the hook has unmounted: a save still under way then adds its track silently.
  */
 export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRecorder {
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorder = useAudioRecorder(VOICE_RECORDING_OPTIONS);
   const [state, setState] = useState<VoiceRecorderState>("idle");
   const [elapsed, setElapsed] = useState(0);
+  const [count, setCount] = useState(0);
   // The state, readable synchronously: re-entry guards cannot wait for a re-render.
   const phase = useRef<VoiceRecorderState>("idle");
   const session = useRef<Session | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const levelTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);
   // Counts unmounts: a start / stop that began in an earlier life of the hook shows nothing when it ends.
   const life = useRef(0);
@@ -70,7 +89,16 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
   onDismiss.current = opts.onDismiss;
 
   const setPhase = (next: VoiceRecorderState) => { phase.current = next; if (mounted.current) setState(next); };
-  const stopTimer = () => { if (timer.current) { clearInterval(timer.current); timer.current = null; } };
+  /** Ends the elapsed tick and the level reading, and puts the meter back to nothing. */
+  const stopTimer = () => {
+    if (timer.current) { clearInterval(timer.current); timer.current = null; }
+    if (levelTimer.current) { clearInterval(levelTimer.current); levelTimer.current = null; }
+    useVoiceLive.getState().setLevel(0, false);
+  };
+  const stopCount = () => {
+    if (countTimer.current) { clearTimeout(countTimer.current); countTimer.current = null; }
+    useVoiceLive.getState().setCounting(false);
+  };
   // A sentence that starts "Couldn't" is a failure; the others say why not.
   const notify = (message: string) => { onDismiss.current?.(); useToast.getState().show(message, message.startsWith("Couldn't") ? { kind: "problem" } : undefined); };
 
@@ -118,6 +146,17 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
       setElapsed(0);
       setPhase("recording");
       timer.current = setInterval(() => { if (mounted.current) setElapsed((Date.now() - mine.startedMs) / 1000); }, ELAPSED_TICK_MS);
+      // The level: the recorder's own figure, into its own store. Silence counts from the start of the recording; a recorder that
+      // reports no level lights nothing and is never called too quiet.
+      let silentSince: number | null = mine.startedMs;
+      levelTimer.current = setInterval(() => {
+        let db: unknown;
+        try { db = recorder.getStatus().metering; } catch { return; /* released */ }
+        if (typeof db !== "number" || Number.isNaN(db)) return;
+        const now = Date.now();
+        silentSince = quietSince(silentSince, db, now);
+        useVoiceLive.getState().setLevel(levelBars(db), tooQuiet(silentSince, now));
+      }, VOICE_LEVEL.sampleMs);
       useEditorStore.getState().setPlaying(true);
     } catch (e) {
       console.warn(e);
@@ -129,6 +168,37 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
         if (message && life.current === born) notify(message);
       }
     }
+  };
+
+  /** The reasons `start` refuses before it asks for anything — said by `begin` at the tap, so nobody counts down to a refusal. */
+  const begin = () => {
+    if (phase.current !== "idle") return;
+    const project = useEditorStore.getState().project;
+    if (!project) return;
+    if (totalDuration(project) <= 0) { notify("Add a clip before recording."); return; }
+    if (project.audioTracks.length >= AUDIO_LIMITS.maxTracks) { notify(LIMIT_MESSAGE); return; }
+    setPhase("counting");
+    useVoiceLive.getState().setCounting(true);
+    const step = (n: number) => {
+      setCount(n);
+      countTimer.current = setTimeout(() => {
+        countTimer.current = null;
+        if (phase.current !== "counting") return;
+        if (n > 1) { step(n - 1); return; }
+        stopCount();
+        setCount(0);
+        setPhase("idle");   // in the same batch as `start`'s own "starting": the idle button is never drawn between them
+        void start();
+      }, VOICE_COUNT.stepMs);
+    };
+    step(VOICE_COUNT.from);
+  };
+
+  const cancelCount = () => {
+    if (phase.current !== "counting") return;
+    stopCount();
+    setCount(0);
+    setPhase("idle");
   };
 
   const finish = async (save: boolean) => {
@@ -196,7 +266,7 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
     if (prev.isPlaying && !s.isPlaying && phase.current === "recording") void stopRef.current();
   }), []);
 
-  // Unmount with a session open (starting or recording): nothing is saved, everything is put back. useAudioRecorder releases the
+  // Unmount while counting down: the countdown ends, nothing was begun. Unmount with a session open (starting or recording): nothing is saved, everything is put back. useAudioRecorder releases the
   // native recorder in its own cleanup, which runs before this one — stopping a released recorder throws, so swallow it.
   // Unmount during a save: the save goes on silently, but the flag it still holds is given back now.
   useEffect(() => {
@@ -205,6 +275,8 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
       mounted.current = false;
       life.current += 1;
       stopTimer();
+      stopCount();
+      if (phase.current === "counting") phase.current = "idle";
       if (phase.current === "saving") useEditorStore.getState().setRecording(false);
       if (!session.current) return;
       session.current = null;
@@ -217,5 +289,5 @@ export function useVoiceRecorder(opts: { onDismiss?: () => void } = {}): VoiceRe
     };
   }, [recorder]);
 
-  return { state, elapsed, start, stop, cancel };
+  return { state, elapsed, count, begin, cancelCount, start, stop, cancel };
 }
