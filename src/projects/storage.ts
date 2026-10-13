@@ -360,6 +360,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   async function restoreProject(fileUri: string, run: FileRun, pause: Pause = nextTurn): Promise<{ id: string; name: string }> {
     await sweepProjectFiles();
     const id = deps.newId();
+    deleted.delete(id);                                                       // a project is made under this id: it is alive, whatever was deleted under it before
     const stage = `${incoming}/${id}`, dir = projectDir(id);
     // The new project's folder must not exist: a folder moved onto an existing one lands INSIDE it (expoFs.moveDir), and the
     // clean-up below removes `dir` — which must only ever be a folder this run made.
