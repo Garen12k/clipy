@@ -51,6 +51,13 @@ const QUICK_BACKING = { borderRadius: theme.radius.pill } as const;
 const QUICK_SHARES = { ...QUICK_BACKING, flexShrink: 1 } as const;
 const MAKING = { project: "Creating your project", quick: "Making your quick edit" } as const;
 
+/** Takes one of Home's two refs and answers with what lets it go — ONCE: a late second call (a sheet that closes long after) cannot let go of what a newer run holds. */
+function hold(ref: { current: boolean }): () => void {
+  ref.current = true;
+  let held = true;
+  return () => { if (held) { held = false; ref.current = false; } };
+}
+
 function ProjectsScreen() {
   const { projects, loading, reload, create, createQuick, rename, duplicate, remove } = useProjects();
   const { transfer, saveCopy, openFile, cancel } = useProjectFile(reload);
@@ -151,27 +158,37 @@ function ProjectsScreen() {
   }
 
   // Save a Copy and Open Project File share the two refs with New Project and Quick Edit, so none of the four can run together.
-  // While the copy is written or read (`transfer`) the screen is inert as while a project is made; the ref is held on through the
-  // share sheet, which iOS presents over the screen — and through a cancelled run's end, so its files are gone before the next starts.
+  // While the copy is written or read (`transfer`) the screen is inert as while a project is made, and the ref is held through a
+  // cancelled run's end, so its files are gone before the next starts. But NEITHER REF EVER WAITS FOR A SYSTEM SHEET'S PROMISE: if
+  // iOS declines to present the share sheet or the file picker, the phone's call never answers, and a ref held for it would leave
+  // all four actions dead until Clipy is closed. A sheet holds its ref only while it comes up — `AFTER_PICKER_MS` from the moment it
+  // was asked for (or until it answers, if that is sooner); after that the sheet itself covers the screen, if it is there at all.
   async function onSaveCopy(p: ProjectSummary) {
     if (starting.current || creating.current) return;
-    creating.current = true;
-    try { await saveCopy(p); } finally { creating.current = false; }
+    const release = hold(creating);
+    let up: ReturnType<typeof setTimeout> | null = null;
+    try { await saveCopy(p, () => { up = setTimeout(release, AFTER_PICKER_MS); }); }
+    finally { if (up) clearTimeout(up); release(); }
   }
   async function onOpenFile() {
     if (starting.current || creating.current) return;
-    starting.current = true;
+    const release = hold(starting);
+    const up = setTimeout(release, AFTER_PICKER_MS);
     let uri: string | null = null;
     try {
       setPending(null);
       setQuickOpen(false);
       uri = await filePhone.pick();
-      // Apple's picker is still sliding away when the file arrives, and iOS drops an alert presented during that (a file that is not a project fails at once).
-      if (uri) await new Promise((r) => setTimeout(r, AFTER_PICKER_MS));
-    } catch (e) { console.warn("pick failed", e); } finally { starting.current = false; }
+    } catch (e) { console.warn("pick failed", e); } finally { clearTimeout(up); release(); }
     if (!uri) return;
+    // A file that arrives while something else has started (only a picker that answered when it was no longer in front) is not opened.
+    if (starting.current || creating.current) { await filePhone.forget(uri); return; }
     creating.current = true;
-    try { await openFile(uri); } finally { creating.current = false; }
+    try {
+      // Apple's picker is still sliding away when the file arrives, and iOS drops an alert presented during that (a file that is not a project fails at once).
+      await new Promise((r) => setTimeout(r, AFTER_PICKER_MS));
+      await openFile(uri);
+    } finally { creating.current = false; }
   }
 
   const inert = busy || transfer !== null;

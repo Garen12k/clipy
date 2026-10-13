@@ -256,3 +256,74 @@ describe("Open Project File", () => {
     expect(alert).not.toHaveBeenCalled();
   });
 });
+
+// Review M1 (final review): a system sheet's promise never holds Home's guards. iOS can decline to present a share sheet or a
+// picker, and the installed packages then never settle their promise — the four actions must not wait for it.
+describe("a system sheet that never answers does not hold Home", () => {
+  const pickMedia = (jest.requireMock("@/src/projects/pickMedia") as { pickMedia: jest.Mock }).pickMedia;
+  const afterSheet = () => act(async () => { await new Promise((r) => setTimeout(r, AFTER_PICKER_MS + 50)); });
+  const COPY = { uri: "file:///c/Beach.clipy", name: "Beach", bytes: 5e6, missing: 0 };
+  beforeEach(() => { pickMedia.mockReset(); pickMedia.mockResolvedValue(null); });
+
+  test("Save a Copy: the guard is held while the sheet comes up, and let go AFTER_PICKER_MS after it was asked for — the sheet never closing", async () => {
+    const h = await startSave();
+    share.mockImplementationOnce(() => new Promise<void>(() => {}));
+    await h.finish(COPY);
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    await fireEvent.press(btn("Open Project File"));       // the sheet is still coming up
+    expect(pick).not.toHaveBeenCalled();
+    await afterSheet();
+    pick.mockResolvedValueOnce(null);
+    await fireEvent.press(btn("Open Project File"));
+    await waitFor(() => expect(pick).toHaveBeenCalledTimes(1));
+    await fireEvent.press(btn("New Project"));
+    await waitFor(() => expect(pickMedia).toHaveBeenCalledTimes(1));
+  });
+
+  test("Save a Copy: a sheet that closes late lets go of nothing that a newer run holds, and still says what was missing", async () => {
+    const h = await startSave();
+    let closeSheet: () => void = () => {};
+    share.mockImplementationOnce(() => new Promise<void>((r) => { closeSheet = r; }));
+    await h.finish({ ...COPY, missing: 2 });
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    await afterSheet();
+    const second = held(packProject);
+    await fireEvent.press(btn("More for Beach"));
+    await fireEvent.press(await screen.findByRole("button", { name: "Save a Copy" }));
+    await settle();
+    await screen.findByTestId("home-transfer");
+    await act(async () => { closeSheet(); });
+    await waitFor(() => expect(useToast.getState().message).toBe("2 files of this project are missing and are not in the copy"));
+    await fireEvent.press(btn("Open Project File"));       // the second run still holds the guard
+    expect(pick).not.toHaveBeenCalled();
+    await second.fail(new ProjectFileError("cancelled"));
+  });
+
+  test("Open Project File: a picker that never answers holds the guard only while it comes up", async () => {
+    pick.mockImplementationOnce(() => new Promise(() => {}));
+    await home();
+    void fireEvent.press(btn("Open Project File"));
+    await waitFor(() => expect(pick).toHaveBeenCalledTimes(1));
+    await fireEvent.press(btn("New Project"));             // the picker is still coming up
+    expect(pickMedia).not.toHaveBeenCalled();
+    await afterSheet();
+    await fireEvent.press(btn("New Project"));
+    await waitFor(() => expect(pickMedia).toHaveBeenCalledTimes(1));
+  });
+
+  test("Open Project File: a file that arrives while something else has the guard is dropped — its copy removed, nothing opened", async () => {
+    let answer: (v: string | null) => void = () => {};
+    pick.mockImplementationOnce(() => new Promise((r) => { answer = r; }));
+    await home();
+    const first = fireEvent.press(btn("Open Project File"));
+    await waitFor(() => expect(pick).toHaveBeenCalledTimes(1));
+    await afterSheet();
+    pickMedia.mockImplementationOnce(() => new Promise(() => {}));   // New Project's library is up
+    void fireEvent.press(btn("New Project"));
+    await waitFor(() => expect(pickMedia).toHaveBeenCalledTimes(1));
+    await act(async () => { answer("file:///tmp/inbox/Late.clipy"); await first; });
+    expect(forget).toHaveBeenCalledWith("file:///tmp/inbox/Late.clipy");
+    expect(restoreProject).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("home-transfer")).toBeNull();
+  });
+});

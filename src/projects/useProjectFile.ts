@@ -43,18 +43,21 @@ export function useProjectFile(reload: () => Promise<void>) {
   }
 
   /**
-   * Packs the project, then hands the file to Apple's share sheet; resolves when the sheet has closed. The copy is NOT removed
-   * then: a share target may still be reading it when the sheet reports closed, and a cut-off copy is a backup that does not
-   * open. It stays in the cache until the next save or open, or the next launch (storage sweeps at each).
+   * Packs the project, then hands the file to Apple's share sheet; resolves when the sheet has closed — which it may NEVER do:
+   * if iOS declines to present the sheet, the phone's call does not answer. So nobody may wait for this promise before letting
+   * something else start: `asked` is called the moment the sheet has been asked for (the pack is over, its card gone), and that
+   * is what Home's guard goes by. The copy is NOT removed when the sheet closes: a share target may still be reading it when the
+   * sheet reports closed, and a cut-off copy is a backup that does not open. It stays in the cache until the next save or open,
+   * or the next launch (storage sweeps at each).
    */
-  async function saveCopy(p: ProjectSummary): Promise<void> {
+  async function saveCopy(p: ProjectSummary, asked?: () => void): Promise<void> {
     const run = begin("save", p.name);
     let made: Awaited<ReturnType<typeof storage.packProject>> | null = null;
     try { await lastFlush; made = await storage.packProject(p.id, run); }
     catch (e) { failed("save", e); }
     finally { end(); }
     if (!made) return;
-    try { await filePhone.share(made.uri); }
+    try { const closed = filePhone.share(made.uri); asked?.(); await closed; }
     catch (e) { console.warn("share failed", e); Alert.alert(FILE_WORDS.cantSave, FILE_WORDS.shareFailed); }
     if (made.missing > 0) useToast.getState().show(missingWords(made.missing));
   }
