@@ -274,7 +274,7 @@ function copyOf(name: string): string {
  * known as ready. Needed is asked of the OPEN project at the moment each file is about to go (so a copy that became needed
  * meanwhile stays), with every finished copy still in the folder counted as known, so a clip keeps the copy that covers it. A
  * `part-` file always goes, and so does anything that is not a copy of this version; a photo's PNG and its still movie stay or go
- * together. Run once per open (there is no undo history then, so Undo cannot need a copy that goes). Only after it may renders
+ * together. Run once per open, against the open project: a copy only an older undo step needs goes too and is made again if the user undoes into that step. Only after it may renders
  * start. Never touches a media file or another project's folder. Without the tool (Expo Go, an older build) nothing is read,
  * nothing is removed and nothing is ever rendered.
  */

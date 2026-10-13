@@ -216,7 +216,7 @@ export function resetSounds(): void {
 /**
  * Removes the copies in the project's sound folder that no track needs — asked of the OPEN project at the moment each file is about
  * to go, so a copy that became needed meanwhile stays; a `part-` file is judged by the copy it is part of. Run once when a project
- * is opened (there is no undo history then). Never touches a media file.
+ * is opened. A copy only an older undo step needs goes too: it is rendered again if the user undoes into that step. Never touches a media file.
  */
 export async function sweepSounds(projectId: string): Promise<void> {
   const dir = soundDir(projectId);

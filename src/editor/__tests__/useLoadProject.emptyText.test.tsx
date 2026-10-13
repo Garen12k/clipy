@@ -1,5 +1,5 @@
 import { act, render, waitFor } from "@testing-library/react-native";
-jest.mock("@/src/projects", () => ({ storage: { loadProject: jest.fn(), saveProject: jest.fn(async () => {}), writeCover: jest.fn(async () => {}) } }));
+jest.mock("@/src/projects", () => ({ storage: { loadProject: jest.fn(), saveProject: jest.fn(async () => {}), writeCover: jest.fn(async () => {}), loadHistory: jest.fn(async () => null), saveHistory: jest.fn(async () => true) } }));
 import { makeClip, makeOverlay, makeProject, type Project } from "@/src/editor/model/types";
 import { storage } from "@/src/projects";
 import { useEditorStore } from "@/src/editor/store";
