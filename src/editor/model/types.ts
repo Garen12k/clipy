@@ -17,8 +17,16 @@ export const EXPORT_FPS = [24, 30, 60] as const;
 export type ExportFps = (typeof EXPORT_FPS)[number];
 export const EXPORT_QUALITIES = ["high", "small"] as const;
 export type ExportQuality = (typeof EXPORT_QUALITIES)[number];
-export interface ExportSettings { fps: ExportFps; quality: ExportQuality }
+/** The short side of the exported frame in pixels — what the Export screen's Resolution control offers (`RESOLUTIONS` in src/export/estimate.ts names the same three). */
+export const EXPORT_RESOLUTIONS = [720, 1080, 2160] as const;
+export type Resolution = (typeof EXPORT_RESOLUTIONS)[number];
+export const DEFAULT_RESOLUTION: Resolution = 1080;
+/** `resolution` is optional and ABSENT at the default 1080 (never null / undefined / 1080): a project that stays at 1080p is stored as it always was. Read it with `exportResolution`. */
+export interface ExportSettings { fps: ExportFps; quality: ExportQuality; resolution?: Resolution }
 export const DEFAULT_EXPORT_SETTINGS: ExportSettings = { fps: 30, quality: "high" };
+/** The resolution a project's export settings say: the stored one, else 1080. */
+export const exportResolution = (s: ExportSettings): Resolution =>
+  (EXPORT_RESOLUTIONS as readonly unknown[]).includes(s.resolution) ? (s.resolution as Resolution) : DEFAULT_RESOLUTION;
 export interface Cover { time: number; title: string }   // project seconds; title may be ""
 export const COVER_LIMITS = { titleMax: 40 };
 export const POST_PLATFORMS = ["youtube", "tiktok", "instagram", "facebook", "x"] as const;
@@ -256,13 +264,18 @@ export function clampEffectRect(v: unknown): EffectRect {
   const h = clampNum(v.h, REGION_LIMITS.min, 1);
   return { x: clampNum(v.x, 0, 1 - w), y: clampNum(v.y, 0, 1 - h), w, h };
 }
-/** Known fps and quality or the defaults; always a fresh object, unknown keys dropped. */
+/**
+ * Known fps and quality or the defaults; always a fresh object, unknown keys dropped. The resolution is kept only when it is 720 or 2160:
+ * anything else — and the default 1080 — leaves NO key, so settings at 1080p are exactly the two keys they always were.
+ */
 export function clampExportSettings(v: unknown): ExportSettings {
   const r = isRec(v) ? v : {};
-  return {
+  const out: ExportSettings = {
     fps: (EXPORT_FPS as readonly unknown[]).includes(r.fps) ? (r.fps as ExportFps) : DEFAULT_EXPORT_SETTINGS.fps,
     quality: (EXPORT_QUALITIES as readonly unknown[]).includes(r.quality) ? (r.quality as ExportQuality) : DEFAULT_EXPORT_SETTINGS.quality,
   };
+  if ((EXPORT_RESOLUTIONS as readonly unknown[]).includes(r.resolution) && r.resolution !== DEFAULT_RESOLUTION) out.resolution = r.resolution as Resolution;
+  return out;
 }
 /** Not a string → ""; trimmed, cut to COVER_LIMITS.titleMax whole characters (code points), trimmed again so a cut leaves no trailing space. */
 export const clampCoverTitle = (v: unknown): string =>
@@ -545,7 +558,7 @@ export interface Project {
   layers: LayerClip[];    // drawn in list order (later = on top)
   ducking: boolean;       // default false
   beatMarkers: number[];  // project seconds, sorted, unique within BEAT_LIMITS.minGap
-  exportSettings: ExportSettings;   // default { fps: 30, quality: "high" }
+  exportSettings: ExportSettings;   // default { fps: 30, quality: "high" }; `resolution` only when it is not 1080
   cover: Cover | null;              // default null = the first frame, no title
 }
 

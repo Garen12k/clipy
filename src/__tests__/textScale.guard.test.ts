@@ -50,6 +50,7 @@ const FIT_KIT: Record<string, number> = {
   "src/ui/SecondaryButton.tsx": 1,   // a button's title
   "src/ui/ScreenBar.tsx": 1,         // a screen's title: "Post", "Accounts", "Welcome"
   "src/ui/Segmented.tsx": 1,         // a segment: "1080p", "Send as Draft"
+  "src/ui/Tile.tsx": 1,              // a tile's small second line (`note`): an Export preset's values, "720p · 30 · Small" — at most 18 characters, from fixed tables
 };
 const FIT_EDITOR: Record<string, number> = {
   "src/editor/components/BackgroundSheet.tsx": 1,     // "Blur"

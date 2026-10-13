@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { textSize } from "../testing/textSize";
 import { Tile, TILE_WIDTH } from "../Tile";
 import { ToneContext } from "../tone";
 
@@ -22,6 +23,34 @@ test("a 72-pt column with a 44-pt box; unselected is calm; picked is the 2-pt go
   expect(screen.getByTestId("shape")).toBeTruthy();
   await fireEvent.press(a);
   expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+test("the optional second line, hint, spoken label and fill: a muted micro line under the label, and none of it without the props", async () => {
+  await render(<><Tile label="Plain" selected={false} onPress={() => {}} icon="ellipse-outline" />
+    <Tile label="Social" selected onPress={() => {}} icon="ellipse-outline" note="1080p · 30 · High" hint="For TikTok" accessibilityLabel="Social, 1080p, 30 fps, High" fill /></>);
+  const plain = screen.getByRole("button", { name: "Plain" }), rich = screen.getByRole("button", { name: "Social, 1080p, 30 fps, High" });
+  expect(plain).toHaveStyle({ width: TILE_WIDTH });
+  expect(plain.props.accessibilityHint).toBeUndefined();
+  expect(plain).not.toHaveStyle({ flex: 1 });
+  expect(rich).toHaveStyle({ flex: 1 });
+  expect(rich).not.toHaveStyle({ width: TILE_WIDTH });
+  expect(rich.props.accessibilityHint).toBe("For TikTok");
+  expect(rich).toBeSelected();
+  expect(screen.getByText("1080p · 30 · High")).toHaveStyle({ fontSize: theme.type.micro, color: theme.screen.muted, textAlign: "center" });
+  // ONE line: a tile never grows taller than its neighbours because of its words. It is a short fixed label the app writes, so it is the
+  // kit's `fit` (the Text size rule): as written at the default size, and above it the line may shrink to the tile's width.
+  expect(screen.getByText("1080p · 30 · High")).toHaveProp("numberOfLines", 1);
+  expect(screen.getByText("1080p · 30 · High").props.adjustsFontSizeToFit).toBeUndefined();
+  expect(screen.getByText("1080p · 30 · High").props.minimumFontScale).toBeUndefined();
+  expect(screen.getByText("1080p · 30 · High").props.maxFontSizeMultiplier).toBe(theme.textScale.screen);
+  await textSize(1.353);
+  expect(screen.getByText("1080p · 30 · High").props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true, maxFontSizeMultiplier: theme.textScale.screen });
+  expect(screen.getByText("1080p · 30 · High").props.minimumFontScale).toBeUndefined();
+  await textSize(1);
+  // A filling tile takes the height of its row, so the tiles of a row are equally tall whatever they say.
+  expect(rich).toHaveStyle({ alignSelf: "stretch" });
+  expect(plain).not.toHaveStyle({ alignSelf: "stretch" });
+  expect(screen.getByText("Social")).toHaveStyle({ color: theme.colors.text, fontWeight: theme.weight.semi });
 });
 
 test("in the editor the picked tile wears the slate family's tint; its glyph keeps the gold, the unpicked one's is white", async () => {
