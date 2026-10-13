@@ -46,10 +46,10 @@ afterEach(() => warn.mockRestore());
 const home = async () => { await render(<ProjectsScreen />); await screen.findByText("Beach"); };
 
 describe("the header", () => {
-  test("the two actions keep their labels and share one pill, top right; each has a 44-pt target", async () => {
+  test("the three actions keep their labels and share one pill, top right; each has a 44-pt target", async () => {
     await home();
     const pill = screen.getByTestId("home-header-actions");
-    expect(within(pill).getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Post a video", "Accounts"]);
+    expect(within(pill).getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Post a video", "Open Project File", "Accounts"]);
     expect(pill).toHaveStyle({ height: theme.size.touch, flexDirection: "row", borderRadius: theme.radius.pill, backgroundColor: theme.screen.bar });
     expect(pill.parent).toHaveStyle({ flexDirection: "row", justifyContent: "flex-end" });
     // 40-pt buttons with 8 pt of slop, in a pill 44 high with 4 pt at each end and between them: 44 by 44 each, inside the pill.

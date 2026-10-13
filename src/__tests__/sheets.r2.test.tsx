@@ -6,8 +6,8 @@ import { theme } from "@/src/theme/theme";
 const project = { id: "a", name: "Beach", durationSec: 65, updatedAt: "", thumbUri: null, broken: false, postedTo: [], coverTitle: "" };
 
 test("project actions: Rename and Duplicate are the grey secondary buttons, Delete is text only and red; no gold button", async () => {
-  await render(<ProjectActionsSheet project={project} onClose={jest.fn()} onRename={jest.fn()} onDuplicate={jest.fn()} onDelete={jest.fn()} />);
-  for (const n of ["Rename", "Duplicate"]) expect(screen.getByRole("button", { name: n })).toHaveStyle({ backgroundColor: theme.screen.lifted });
+  await render(<ProjectActionsSheet project={project} onClose={jest.fn()} onRename={jest.fn()} onDuplicate={jest.fn()} onSaveCopy={jest.fn()} onDelete={jest.fn()} />);
+  for (const n of ["Rename", "Duplicate", "Save a Copy"]) expect(screen.getByRole("button", { name: n })).toHaveStyle({ backgroundColor: theme.screen.lifted });
   const del = screen.getByRole("button", { name: "Delete" });
   expect(del).not.toHaveStyle({ backgroundColor: theme.screen.lifted });
   expect(within(del).getByText("Delete")).toHaveStyle({ color: theme.screen.dangerText });
@@ -33,7 +33,7 @@ describe("in light", () => {
   afterEach(() => wear("dark"));
   const PICKED = [{ uri: "file:///a.jpg", kind: "photo" as const, durationSec: 0, width: 3024, height: 4032 }];
   const sheets = {
-    "project actions": () => <ProjectActionsSheet project={project} onClose={jest.fn()} onRename={jest.fn()} onDuplicate={jest.fn()} onDelete={jest.fn()} />,
+    "project actions": () => <ProjectActionsSheet project={project} onClose={jest.fn()} onRename={jest.fn()} onDuplicate={jest.fn()} onSaveCopy={jest.fn()} onDelete={jest.fn()} />,
     "Post options": () => <PostOptionsSheet platform="youtube" options={{ title: "Beach day", privacy: "public" }} onChange={jest.fn()} onClose={jest.fn()} />,
     "Aspect ratio": () => <AspectRatioSheet assets={PICKED} onCancel={jest.fn()} onCreate={jest.fn()} />,
   };

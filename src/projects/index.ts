@@ -11,4 +11,5 @@ export const storage = makeStorage(expoFs, {
 });
 // Once per launch: what a save or an open that was killed left behind (storage.sweepProjectFiles never throws).
 void storage.sweepProjectFiles();
+export { filePhone } from "./filePhone";
 export type { PickedAsset, ProjectSummary } from "./storage";
