@@ -320,7 +320,7 @@ export function resetSteady(): void {
  * A project is opened: the files in its steady folder that no clip needs are removed, and the finished copies that are needed are
  * known as ready. Needed is asked of the OPEN project at the moment each file is about to go, with every finished copy still in the
  * folder counted as known. A `part-` file always goes, and so does anything that is not a copy of this version. Run once per open
- * (there is no undo history then). Only after it may renders start. Never touches a media file or another folder. Without the
+ * (against the open project: a copy only an older undo step needs is made again on that undo). Only after it may renders start. Never touches a media file or another folder. Without the
  * tool nothing is read, nothing is removed and nothing is ever rendered.
  * Smooth copies and cuts: on a build that tells a cut inside a clip, a folder without `SMOOTH_MARK` holds smooth copies made
  * before it could (or with another threshold) — ghosted across a cut. They go, once, like a file nobody needs, and the mark is

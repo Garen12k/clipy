@@ -2,6 +2,7 @@ import { coverTimeOf, frameAt, totalDuration } from "@/src/editor/model/timeline
 import { migrateProject } from "@/src/editor/model/migrate";
 import { DEFAULT_ASPECT_RATIO, DEFAULT_EXPORT_SETTINGS, isAspectRatio, newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AspectRatio, type AudioKind, type AudioTrack, type Clip, type LayerClip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
+import { HISTORY_FILE, decodeHistory, encodeHistory, fitSnapshots, lineOf, stampOf } from "./history";
 import { PROJECT_FILE, ProjectFileError, baseName, encodeHeader, extractFiles, fileNameFor, freeName, isSafeName, nextTurn, readHeader, totalBytes, writeProjectFile, type FileEntry, type FileHeader, type FileRun, type Pause } from "./projectFile";
 import { rebaseProject } from "./rebase";
 
@@ -18,8 +19,10 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const projectDir = (id: string) => `${root}/${id}`;
   const jsonPath = (id: string) => `${projectDir(id)}/project.json`;
   const thumbPath = (id: string) => `${projectDir(id)}/thumb.jpg`;
+  const historyPath = (id: string) => `${projectDir(id)}/${HISTORY_FILE.name}`;
   /** Any text as part of a file name. */
   const namePart = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, "_");
+  const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
   const stemOf = (uri: string) => (uri.split("/").pop() ?? "").replace(/\.[A-Za-z0-9]+$/, "");
   const ms = (seconds: number) => Math.round(seconds * 1000);
   /**
@@ -39,9 +42,12 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
    * The ONE reader of a stored project: migrated, and every file reference re-pointed at where the folder is now (rebase.ts).
    * Writes nothing. `path` is project.json, or — for the recovery alone — the project's tmp. Everything that reads a stored
    * project (`readProject`, `readInTurn`) reads through here, so a loaded, a listed, a recovered, a renamed and a duplicated
-   * project are all rebased the same way.
+   * project are all rebased the same way. `text` is the very string that was parsed (what a history's stamp is taken from).
    */
-  async function read(id: string, path = jsonPath(id)): Promise<Project> { return rebaseProject(parse(await fs.readText(path)), projectDir(id)); }
+  async function readDoc(id: string, path = jsonPath(id)): Promise<{ project: Project; text: string }> {
+    const text = await fs.readText(path);
+    return { project: rebaseProject(parse(text), projectDir(id)), text };
+  }
 
   /** The last save asked for each project, while one is on its way: the next save of that project starts after it. */
   const saving = new Map<string, Promise<void>>();
@@ -91,10 +97,11 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     for (let turn = saving.get(id); turn; turn = saving.get(id)) await turn;
   }
 
-  async function writeProject(p: Project): Promise<void> {
+  /** `text`: the string to write when the caller needs the very one (a history's stamp) — else it is made here, as always. */
+  async function writeProject(p: Project, text?: string): Promise<void> {
     await fs.mkdir(projectDir(p.id));
     const tmp = `${jsonPath(p.id)}.tmp`;
-    await fs.writeText(tmp, JSON.stringify(p));
+    await fs.writeText(tmp, text ?? JSON.stringify(p));
     await fs.move(tmp, jsonPath(p.id));
   }
 
@@ -105,17 +112,18 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
    * Anything else is left exactly as it is and the read fails as it always did: a tmp that does not parse (a write cut
    * off mid-way) is never deleted, and a tmp never replaces a project.json that exists, readable or not.
    */
-  async function readInTurn(id: string): Promise<Project> {
-    try { return await read(id); }
+  async function readDocInTurn(id: string): Promise<{ project: Project; text: string }> {
+    try { return await readDoc(id); }
     catch (e) {
       const tmp = `${jsonPath(id)}.tmp`;
       if ((await fs.exists(jsonPath(id))) || !(await fs.exists(tmp))) throw e;
-      let left: Project;
-      try { left = await read(id, tmp); } catch { throw e; }
+      let left: { project: Project; text: string };
+      try { left = await readDoc(id, tmp); } catch { throw e; }
       await fs.move(tmp, jsonPath(id));
       return left;
     }
   }
+  async function readInTurn(id: string): Promise<Project> { return (await readDocInTurn(id)).project; }
 
   /**
    * The stored project for a reader. The ordinary case is ONE read of project.json and nothing else — the tmp is looked
@@ -124,10 +132,10 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
    * wait for and the read is asked in the very call): opened right after it was left, with the leave save still
    * queued, the editor would otherwise get the text from before that save and its next autosave would write it back.
    */
-  async function readProject(id: string): Promise<Project> {
+  async function readProject(id: string): Promise<{ project: Project; text: string }> {
     if (saving.has(id)) await idle(id);
-    try { return await read(id); }
-    catch { return inTurn(id, () => readInTurn(id)); }
+    try { return await readDoc(id); }
+    catch { return inTurn(id, () => readDocInTurn(id)); }
   }
 
   /**
@@ -146,11 +154,12 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   }
 
   async function loadProject(id: string) {
-    const project = await readProject(id);
+    const { project, text } = await readProject(id);
     const missingSourceUris: string[] = [];
     for (const uri of new Set([...project.clips.map((c) => c.sourceUri), ...project.layers.map((l) => l.sourceUri), ...project.audioTracks.map((a) => a.sourceUri)]))
       if (!(await fs.exists(uri))) missingSourceUris.push(uri);
-    return { project, missingSourceUris };
+    // `stamp` names the very text this project came from: only a history written beside that text is ever applied to it (loadHistory).
+    return { project, missingSourceUris, stamp: stampOf(text) };
   }
 
   async function writeThumb(p: Project): Promise<void> {
@@ -233,7 +242,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const out: ProjectSummary[] = [];
     for (const id of await fs.list(root)) {
       try {
-        const p = await readProject(id);
+        const { project: p } = await readProject(id);
         const cover = coverFrame(p)?.path ?? null;
         out.push({ id: p.id, name: p.name, durationSec: totalDuration(p), updatedAt: p.updatedAt,
           thumbUri: cover && (await fs.exists(cover)) ? cover : (await fs.exists(thumbPath(id))) ? thumbPath(id) : null, broken: false,
@@ -287,11 +296,111 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     await updateProject(id, (project) => ({ ...project, name: name.trim() || project.name, updatedAt: deps.nowIso() }));
   }
 
+  // —— Undo history kept with the project. Spec: docs/superpowers/specs/2026-10-13-undo-history-design.md ——
+  const sourcesOf = (p: Project): string[] => [...p.clips, ...p.layers, ...p.audioTracks].map((x) => x.sourceUri);
+
+  /**
+   * The stacks as `<project>/history.jsonl`, stamped `stamp` — called ONLY inside a turn of the project's chain, with the stamp
+   * of the text that is project.json in that turn. Capped (`fitSnapshots`: nothing beyond the caps is even turned into text),
+   * written as a `.tmp` and moved into place, so a write cut off mid-way leaves only a `.tmp`, which nothing reads. Never
+   * throws and never touches project.json; false when nothing was written (the old history, or none, stays — its stamp no
+   * longer names project.json, so it is dropped on the next open).
+   */
+  async function writeHistory(id: string, stamp: string, past: readonly Project[], future: readonly Project[]): Promise<boolean> {
+    try {
+      const path = historyPath(id);
+      const kept = fitSnapshots(past, future);
+      if (kept.past.length + kept.future.length === 0) { await fs.remove(path); return false; }
+      const tmp = `${path}.tmp`;
+      await fs.writeText(tmp, encodeHistory(id, SCHEMA_VERSION, stamp, kept));
+      await fs.move(tmp, path);
+      return true;
+    } catch (e) { console.warn("history save failed", e); return false; }
+  }
+
+  /**
+   * The editor's undo and redo stacks for a project that is ALREADY on disk as `p` — checked, not trusted: nothing is written
+   * unless project.json is this project's own text. The check and the write are ONE turn of the project's chain, so no save can
+   * land between them; a deleted project gets nothing. Never throws; false when nothing was written.
+   */
+  function saveHistory(p: Project, past: readonly Project[], future: readonly Project[]): Promise<boolean> {
+    return inTurn(p.id, async () => {
+      try {
+        if (deleted.has(p.id)) return false;
+        const stamp = stampOf(lineOf(p));
+        if (stampOf(await fs.readText(jsonPath(p.id))) !== stamp) return false;
+      } catch (e) { console.warn("history save failed", e); return false; }
+      return writeHistory(p.id, stampOf(lineOf(p)), past, future);
+    });
+  }
+
+  /**
+   * The project AND the history that belongs to it, as ONE turn of the project's chain — how the editor keeps its undo steps
+   * (historyKeeper.ts). The project is written exactly as `saveProject` writes it; only when that write has landed is the
+   * history written, stamped from the SAME string, and nothing else can write project.json in between (same turn).
+   * `saved` is the project's save and nothing more: it settles the moment project.json is in place (or could not be put
+   * there) and never waits for, and never hears of, the history. `kept` says whether a history was written; it never rejects
+   * (a history that fails is a warning; a project that could not be saved, or was deleted, gets none).
+   */
+  function saveWithHistory(p: Project, past: readonly Project[], future: readonly Project[]): { saved: Promise<void>; kept: Promise<boolean> } {
+    let done!: () => void, fail!: (e: unknown) => void;
+    const saved = new Promise<void>((yes, no) => { done = yes; fail = no; });
+    const kept = inTurn(p.id, async () => {
+      if (deleted.has(p.id)) { done(); return false; }
+      const text = JSON.stringify(p);
+      try { await writeProject(p, text); } catch (e) { fail(e); return false; }
+      done();
+      await Promise.resolve();                                                // whoever waits for the save hears first
+      return writeHistory(p.id, stampOf(text), past, future);
+    });
+    return { saved, kept };
+  }
+
+  /**
+   * The stacks to give back to a project that `loadProject` has just read (`stamp` is that read's) — or null. Applied to nothing
+   * else: another stamp, project, schema or file version, a cut-off file, a line that is not a snapshot of this project in this
+   * schema, and ALL of it is dropped. Each snapshot gets what a project gets on load (the sanity pass, the re-pointing), one per
+   * `pause`. A step that needs a file which is gone — and which the opened project does not itself reference — cuts its stack:
+   * undo keeps the newer steps, redo the nearer ones. Writes nothing, removes nothing, never throws.
+   */
+  async function loadHistory(project: Project, stamp: string, pause: Pause = nextTurn): Promise<{ past: Project[]; future: Project[] } | null> {
+    try {
+      const dir = projectDir(project.id), path = historyPath(project.id);
+      const size = await fs.size(path);
+      if (size === null || size > HISTORY_FILE.maxBytes) return null;
+      const found = decodeHistory(await fs.readText(path), project.id, SCHEMA_VERSION, stamp);
+      if (!found) return null;
+      const snapshot = async (line: string): Promise<Project> => {
+        await pause();
+        const raw: unknown = JSON.parse(line);
+        if (!isObj(raw) || raw.id !== project.id || raw.schemaVersion !== SCHEMA_VERSION) throw new Error("history: not a snapshot of this project");
+        return rebaseProject(migrateProject(raw), dir);
+      };
+      const past: Project[] = [], future: Project[] = [];
+      for (const line of found.past) past.push(await snapshot(line));
+      for (const line of found.future) future.push(await snapshot(line));
+      const there = new Map<string, boolean>(sourcesOf(project).map((uri): [string, boolean] => [uri, true]));
+      const whole = async (p: Project): Promise<boolean> => {
+        for (const uri of sourcesOf(p)) {
+          let ok = there.get(uri);
+          if (ok === undefined) { ok = await fs.exists(uri); there.set(uri, ok); }
+          if (!ok) return false;
+        }
+        return true;
+      };
+      let from = past.length;
+      while (from > 0 && (await whole(past[from - 1]))) from--;
+      let to = 0;
+      while (to < future.length && (await whole(future[to]))) to++;
+      const kept = { past: past.slice(from), future: future.slice(0, to) };
+      return kept.past.length + kept.future.length > 0 ? kept : null;
+    } catch (e) { console.warn("history load failed", e); return null; }
+  }
+
   // —— Project files (.clipy): Save a Copy and Open Project File. Spec: docs/superpowers/specs/2026-10-13-project-backup-design.md ——
   /** Where a copy is written before it is shared; and where an opened file is laid out before its folder is moved into place. Both are swept whole. */
   const filesDir = `${fs.cacheDir}project-files`;
   const incoming = `${fs.documentDir}incoming`;
-  const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
   /** Every item's reference rewritten by `to` — clips, layers and sounds: the model's only file references (rebase.guard.test.ts). */
   const pointed = (list: unknown, to: (uri: unknown) => string): unknown => (Array.isArray(list) ? list.map((x) => (isObj(x) ? { ...x, sourceUri: to(x.sourceUri) } : x)) : list);
 
@@ -403,7 +512,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   return {
     projectDir, createProject, listProjects, loadProject, saveProject, updateProject,
     deleteProject,
-    duplicateProject, renameProject, importAudio, importMedia, saveStill, writeCover,
+    duplicateProject, renameProject, importAudio, importMedia, saveStill, writeCover, saveHistory, saveWithHistory, loadHistory,
     packProject, restoreProject, sweepProjectFiles,
   };
 }

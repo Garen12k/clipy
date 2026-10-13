@@ -36,6 +36,8 @@ interface EditorState {
   setExportSettings: (s: ExportSettings) => void;
   undo: () => void;
   redo: () => void;
+  /** The stacks kept with the project (historyKeeper.ts), given back after it was opened. Only while nothing has happened since — the very object that was loaded, both stacks empty; false otherwise. Changes nothing but the stacks. */
+  restoreHistory: (loaded: Project, past: Project[], future: Project[]) => boolean;
   canUndo: () => boolean;
   canRedo: () => boolean;
   select: (id: string | null) => void;
@@ -141,6 +143,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const [next, ...rest] = s.future;
     if (!next || !s.project) return;
     set({ ...afterChange(s, withLive(next, s.project)), past: [...s.past, s.project].slice(-HISTORY_LIMIT), future: rest });
+  },
+  restoreHistory: (loaded, past, future) => {
+    const s = get();
+    if (s.project !== loaded || s.past.length > 0 || s.future.length > 0 || past.length + future.length === 0) return false;
+    set({ past: past.slice(-HISTORY_LIMIT), future: future.slice(0, HISTORY_LIMIT) });
+    return true;
   },
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,
