@@ -20,7 +20,13 @@ export const expoFs: FsAdapter = {
     f.write(text);
   },
   async copy(from, to) { await new File(from).copy(new File(to), { overwrite: true }); },
-  async move(from, to) { await new File(from).move(new File(to), { overwrite: true }); },
+  // The phone's move with `overwrite` REMOVES the destination first and never asks whether the source is there
+  // (FileSystemPath.swift, `move`): a move with nothing to put in place is refused here, before the phone hears of it.
+  async move(from, to) {
+    const source = new File(from);
+    if (!source.exists) throw new Error(`nothing to move: ${from}`);
+    await source.move(new File(to), { overwrite: true });
+  },
   async remove(p) {
     const d = new Directory(p);
     if (d.exists) { d.delete(); return; }
