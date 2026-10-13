@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { KitInput } from "@/src/ui/Text";
 
 /** User-content colours (burned into exports): fixed literals, independent of the UI theme. */
 export const DEFAULT_STICKER_COLOR = "#F5C542";
@@ -18,7 +19,7 @@ export function ColorRow({ value, onChange, compact }: { value: string; onChange
         <Pressable key={c} accessibilityLabel={`Color ${c}`} onPress={() => onChange(c)}
           style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c, borderWidth: 2, borderColor: value.toUpperCase() === c.toUpperCase() ? theme.ring.borderColor : "transparent" }} />
       ))}
-      {compact ? null : <TextInput accessibilityLabel="Custom color" value={custom} onChangeText={setCustom} onBlur={() => isHex(custom) && onChange(custom.toUpperCase())}
+      {compact ? null : <KitInput accessibilityLabel="Custom color" value={custom} onChangeText={setCustom} onBlur={() => isHex(custom) && onChange(custom.toUpperCase())}
         autoCapitalize="characters" maxLength={7} placeholder="#RRGGBB" placeholderTextColor={theme.colors.textMuted}
         style={{ color: theme.colors.text, backgroundColor: theme.elevation.tile, borderRadius: theme.radius.field, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm, width: 96 }} />}
     </View>

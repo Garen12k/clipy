@@ -1,8 +1,9 @@
 import { memo, useMemo, useRef } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { totalDuration } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { KitText } from "@/src/ui/Text";
 import { RULER, rulerMarks, rulerZoom } from "../timelineMarks";
 
 /** The widest label is laid out in this much room; it starts right after its tick. */
@@ -37,8 +38,8 @@ export const TimeRuler = memo(function TimeRuler({ hold = false }: { hold?: bool
         <View key={`t${m.t}`} testID="ruler-tick" style={{ position: "absolute", left: m.x, top: RULER.height - (m.major ? RULER.major : RULER.tick), width: 1, height: m.major ? RULER.major : RULER.tick, backgroundColor: m.major ? theme.colors.textMuted : theme.colors.track }} />
       ))}
       {marks.labels.map((m) => (
-        <Text key={`l${m.t}`} testID="ruler-label" numberOfLines={1}
-          style={{ position: "absolute", left: m.x + LABEL_LEAD, top: 0, width: LABEL_W, fontSize: theme.type.micro, color: theme.colors.textMuted, fontVariant: ["tabular-nums"] }}>{m.text}</Text>
+        <KitText scale="fixed" key={`l${m.t}`} testID="ruler-label" numberOfLines={1}
+          style={{ position: "absolute", left: m.x + LABEL_LEAD, top: 0, width: LABEL_W, fontSize: theme.type.micro, color: theme.colors.textMuted, fontVariant: ["tabular-nums"] }}>{m.text}</KitText>
       ))}
     </>
   ), [marks]);

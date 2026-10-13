@@ -27,7 +27,7 @@ export function VolumeSheet({ clipId, clipIds, visible, onClose }: { clipId: str
       <StripSlider label="" value={`${Math.round(clip.volume * 100)}%`} labelWidth={48}
         trailing={(
           <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm }}>
-            <Body style={{ fontSize: theme.type.small }}>Mute</Body>
+            <Body fit style={{ fontSize: theme.type.small }}>Mute</Body>
             <Switch accessibilityLabel="Mute" value={clip.muted} onValueChange={(m) => apply(write((p, cid) => setClipMuted(p, cid, m)))} trackColor={{ true: theme.colors.accent }} />
           </View>
         )}>

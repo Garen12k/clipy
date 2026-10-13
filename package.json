@@ -64,7 +64,7 @@
     "start": "expo start",
     "ios": "expo start --ios",
     "test": "npm run test:app && npm run test:server",
-    "test:app": "jest",
+    "test:app": "jest --maxWorkers=8",
     "test:server": "jest -c jest.server.config.js",
     "typecheck": "tsc --noEmit && tsc --noEmit -p supabase",
     "gen:emoji": "node scripts/gen-emoji.mjs",

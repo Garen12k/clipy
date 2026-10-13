@@ -4,6 +4,7 @@ import { Icon, type IconName } from "./Icon";
 import { ringOf, useSurfaces } from "./tone";
 import { PressableScale } from "./PressableScale";
 import { Body } from "./Text";
+import { largeContent } from "./textScale";
 
 /** The column a tile takes in a row (use it with `tilesStartX`). */
 export const TILE_WIDTH = theme.size.toolColumn;
@@ -19,7 +20,7 @@ export function Tile({ label, selected, onPress, icon, boxTestID, children }: Pr
   const s = useSurfaces();
   const glyph = selected ? s.accentInk : s.text;
   return (
-    <PressableScale lifted={selected} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress}
+    <PressableScale lifted={selected} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress} {...largeContent(label)}
       style={{ alignItems: "center", width: TILE_WIDTH, paddingVertical: theme.space.xs, gap: theme.space.xs }}>
       <View testID={boxTestID} style={[{ width: theme.size.toolBox, height: theme.size.toolBox, borderRadius: theme.radius.box, alignItems: "center", justifyContent: "center",
         backgroundColor: selected ? s.picked : s.tile }, selected ? ringOf(s) : theme.ringClear]}>

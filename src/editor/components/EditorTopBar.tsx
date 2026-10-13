@@ -9,6 +9,7 @@ import { theme } from "@/src/theme/theme";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
 import { Title } from "@/src/ui/Text";
+import { largeContent } from "@/src/ui/textScale";
 
 /** The round Back and the name are 40 pt high in a 48-pt row: this much slop each way makes their targets 44. */
 const SLOP = (theme.size.touch - theme.size.iconButton) / 2;
@@ -33,7 +34,7 @@ export function EditorTopBar({ onExport }: { onExport: () => void }) {
   });
   return (
     <View testID="editor-top-bar" style={{ height: theme.size.row, flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.gutter, paddingBottom: theme.space.sm, gap: theme.space.sm }}>
-      <PressableScale accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} hitSlop={SLOP}
+      <PressableScale accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} {...largeContent("Back")} hitSlop={SLOP}
         style={{ width: theme.size.iconButton, height: theme.size.iconButton, borderRadius: theme.radius.pill, backgroundColor: theme.elevation.bar, alignItems: "center", justifyContent: "center" }}>
         <Icon name="chevron-back-outline" size={theme.size.icon.md} color={theme.colors.text} />
       </PressableScale>

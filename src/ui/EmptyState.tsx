@@ -1,7 +1,7 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { Icon, type IconName } from "./Icon";
-import { Body, Title } from "./Text";
+import { Body, KitText, Title } from "./Text";
 import { useSurfaces } from "./tone";
 
 const EMOJI = 64;
@@ -18,7 +18,7 @@ export function EmptyState({ emoji, icon, title, hint, pointer }: Props) {
           style={{ width: theme.size.emblem, height: theme.size.emblem, borderRadius: theme.radius.emblem, backgroundColor: s.tile, alignItems: "center", justifyContent: "center" }}>
           <Icon name={icon} size={theme.size.icon.hero} color={s.accentInk} />
         </View>
-      ) : emoji ? <Text style={{ fontSize: EMOJI }}>{emoji}</Text> : null}
+      ) : emoji ? <KitText scale="fixed" style={{ fontSize: EMOJI }}>{emoji}</KitText> : null}
       <Title size={theme.type.title} style={{ textAlign: "center" }}>{title}</Title>
       <Body muted style={{ textAlign: "center" }}>{hint}</Body>
       {pointer ? (

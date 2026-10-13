@@ -89,12 +89,12 @@ export default function AccountsScreen() {
         <Group>
           <View testID="build-row" accessible accessibilityLabel={buildLabel()} style={row}>
             <Body style={{ flex: 1 }}>Build</Body>
-            <Body testID="build-label" muted numberOfLines={1}>{buildName()}</Body>
+            <Body fit testID="build-label" muted numberOfLines={1}>{buildName()}</Body>
           </View>
           {/* What an export does when Clipy is left, as THIS iPhone allows it: a readout, nothing to tap. */}
           <View testID="background-export-row" accessible accessibilityLabel={`Background export: ${supportLabel()}`} style={row}>
             <Body style={{ flex: 1 }}>Background export</Body>
-            <Body testID="background-export-label" muted numberOfLines={2} style={{ flexShrink: 1, textAlign: "right" }}>{supportLabel()}</Body>
+            <Body fit testID="background-export-label" muted numberOfLines={2} style={{ flexShrink: 1, textAlign: "right" }}>{supportLabel()}</Body>
           </View>
         </Group>
       </ScrollView>

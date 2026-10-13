@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { applyTemplate } from "@/src/editor/model/ops";
 import type { Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -8,7 +8,7 @@ import { theme } from "@/src/theme/theme";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
 import { PressableScale } from "@/src/ui/PressableScale";
-import { Body } from "@/src/ui/Text";
+import { Body, KitText } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 
 type Scope = "clip" | "project";
@@ -49,9 +49,9 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
         <PressableScale accessibilityRole="button" accessibilityLabel="Random template" onPress={() => use(pickRandomTemplate(current))}
           style={{ width: TILE_W, alignItems: "center", gap: theme.space.xs }}>
           <View style={[{ width: TILE_W, height: TILE_H, borderRadius: theme.radius.chip, backgroundColor: theme.elevation.tile, alignItems: "center", justifyContent: "center" }, theme.ringClear]}>
-            <Text style={{ fontSize: 30 }}>🎲</Text>
+            <KitText scale="fixed" style={{ fontSize: 30 }}>🎲</KitText>
           </View>
-          <Body style={{ fontSize: theme.type.small }}>Random</Body>
+          <Body fit style={{ fontSize: theme.type.small }}>Random</Body>
         </PressableScale>
         {TEMPLATE_IDS.map((id) => {
           const t = TEMPLATES[id];
@@ -63,7 +63,7 @@ export function TemplateSheet({ clipId, visible, onClose }: { clipId: string | n
                 <View style={{ flex: 1, backgroundColor: t.swatch[0] }} />
                 <View style={{ flex: 1, backgroundColor: t.swatch[1] }} />
               </View>
-              <Body style={{ fontSize: theme.type.small }}>{t.label}</Body>
+              <Body fit style={{ fontSize: theme.type.small }}>{t.label}</Body>
             </PressableScale>
           );
         })}

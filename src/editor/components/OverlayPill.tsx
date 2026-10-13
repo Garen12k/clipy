@@ -1,6 +1,6 @@
 import { Icon } from "@/src/ui/Icon";
 import { useEffect, useMemo, useRef } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { moveOverlay, updateOverlayShared } from "@/src/editor/model/ops";
 import { timeToX, xToTime } from "@/src/editor/model/timeline";
@@ -8,6 +8,7 @@ import { isSticker, isTextOverlay, type Overlay, type Project } from "@/src/edit
 import { useEditorStore } from "@/src/editor/store";
 import { SHAPES } from "@/src/editor/effects";
 import { theme } from "@/src/theme/theme";
+import { KitText } from "@/src/ui/Text";
 import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { LANE_HEIGHT } from "../timelineLayout";
 import { BAR, BAR_GLYPH, barParts } from "../timelineMarks";
@@ -64,7 +65,7 @@ export function OverlayPill({ overlay: o, selected, top = 0, onPress }: { overla
         style={{ position: "absolute", left: leftPx, top, width, height: LANE_HEIGHT, borderRadius: 8, backgroundColor: fill,
           borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: HANDLE_W + 2 }}>
         {parts.glyph && <Icon plain testID={`bar-glyph-${o.id}`} name={BAR_GLYPH[kind]} size={BAR.glyph} color={theme.colors.onKind} />}
-        {parts.label && <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{label}</Text>}
+        {parts.label && <KitText scale="fixed" numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{label}</KitText>}
         {selected && o.keyframes.length > 0 && (
           <KeyframeDots times={o.keyframes.map((k) => k.t)} width={width} pps={pps} onPress={(t) => store.seek(o.start + t)} />
         )}

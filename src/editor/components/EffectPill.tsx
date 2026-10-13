@@ -60,7 +60,7 @@ export function EffectPill({ effect: fx, selected, onPress }: { effect: EffectIt
         style={{ position: "absolute", left: leftPx, width, height: LANE_HEIGHT, borderRadius: theme.radius.chip, backgroundColor: theme.colors.kindEffect,
           borderWidth: 2, borderColor: selected ? theme.colors.text : "transparent", flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: HANDLE_W + 2 }}>
         {parts.glyph && <Icon plain testID={`bar-glyph-${fx.id}`} name={BAR_GLYPH["effect"]} size={BAR.glyph} color={theme.colors.onKind} />}
-        {parts.label && <Body numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{label}</Body>}
+        {parts.label && <Body scale="fixed" numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, flex: 1 }}>{label}</Body>}
         {selected && (
           <>
             <GestureDetector gesture={gestures.left}><View accessibilityLabel="Effect start handle" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: HANDLE_W, backgroundColor: theme.colors.text, borderTopLeftRadius: 6, borderBottomLeftRadius: 6, ...GRIP_BOX }}><BarGrip /></View></GestureDetector>

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { TextInput, View } from "react-native";
+import { View } from "react-native";
 import { clampNum, isPhoto, PHOTO, type Clip } from "@/src/editor/model/types";
 import { trimClip, trimLayer } from "@/src/editor/model/ops";
 import { useEditorStore } from "@/src/editor/store";
 import { useIsLayer, useItemClip } from "@/src/editor/useItem";
 import { theme } from "@/src/theme/theme";
 import { PrimaryButton } from "@/src/ui/PrimaryButton";
+import { KitInput } from "@/src/ui/Text";
 import { useToast } from "@/src/ui/Toast";
 import { STRIP, StripNote, ToolStrip } from "@/src/ui/ToolStrip";
 
@@ -64,7 +65,7 @@ export function TrimSheet({ clipId, visible, onClose }: { clipId: string | null;
     return (
       <ToolStrip visible={visible} onClose={onClose} title="Trim" note={<StripNote lines={2}>How long the photo stays on screen (0.5 – 60 s)</StripNote>}>
         <View testID="trim-row" style={row}>
-          <TextInput accessibilityLabel="Length" keyboardType="decimal-pad" value={end} onChangeText={setEnd} style={field} />
+          <KitInput accessibilityLabel="Length" keyboardType="decimal-pad" value={end} onChangeText={setEnd} style={field} />
           <PrimaryButton tone="plain" compact title="Apply" onPress={() => submit(0, Number(end) || 0)} />
         </View>
       </ToolStrip>
@@ -73,8 +74,8 @@ export function TrimSheet({ clipId, visible, onClose }: { clipId: string | null;
   return (
     <ToolStrip visible={visible} onClose={onClose} title="Trim" note={<StripNote lines={2}>{`Seconds into the original clip (0 – ${clip.sourceDuration.toFixed(1)})`}</StripNote>}>
       <View testID="trim-row" style={row}>
-        <TextInput accessibilityLabel="Trim start" keyboardType="decimal-pad" value={start} onChangeText={setStart} style={field} />
-        <TextInput accessibilityLabel="Trim end" keyboardType="decimal-pad" value={end} onChangeText={setEnd} style={field} />
+        <KitInput accessibilityLabel="Trim start" keyboardType="decimal-pad" value={start} onChangeText={setStart} style={field} />
+        <KitInput accessibilityLabel="Trim end" keyboardType="decimal-pad" value={end} onChangeText={setEnd} style={field} />
         <PrimaryButton tone="plain" compact title="Apply" onPress={() => submit(Number(start) || 0, Number(end) || 0)} />
       </View>
     </ToolStrip>

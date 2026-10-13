@@ -46,7 +46,7 @@ export function AspectRatioSheet({ assets, onCancel, onCreate }: Props) {
                   style={[{ width: OPTION.width, height: OPTION.height, borderRadius: theme.radius.box, alignItems: "center", justifyContent: "center", gap: theme.space.sm,
                     backgroundColor: selected ? s.lifted : s.tile }, selected ? ringOf(s) : theme.ringClear]}>
                   <RatioShape aspect={frameAspect({ aspectRatio: id, clips: shown })} selected={selected} dashed={id === "auto"} />
-                  <Body numberOfLines={1} weight={selected ? "semi" : "regular"} style={{ color: tint, fontSize: theme.type.small }}>{aspectLabel(id)}</Body>
+                  <Body fit numberOfLines={1} weight={selected ? "semi" : "regular"} style={{ color: tint, fontSize: theme.type.small }}>{aspectLabel(id)}</Body>
                 </PressableScale>
               );
             })}

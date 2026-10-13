@@ -108,7 +108,7 @@ export function ReadAloudSection({ overlayId }: { overlayId: string }) {
     <View testID="read-aloud">
       <View testID="read-aloud-row" style={ROW}>
         <PressableScale accessibilityRole="button" accessibilityLabel="Read aloud options" accessibilityState={{ expanded: open }} onPress={toggle} style={NAME}>
-          <Body weight="semi">Read aloud</Body>
+          <Body fit weight="semi">Read aloud</Body>
           <Icon name={open ? "chevron-up-outline" : "chevron-down-outline"} size={theme.size.icon.md} color={theme.colors.textMuted} />
         </PressableScale>
       </View>
@@ -120,11 +120,11 @@ export function ReadAloudSection({ overlayId }: { overlayId: string }) {
           {list && list.voices.length > 0 ? (
             <>
               <ScrollView testID="read-aloud-languages" horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={CHIP_ROW} contentContainerStyle={CHIPS}>
-                {languagesOf(list.voices, list.current).map((l) => <Chip key={l.code} label={l.name} selected={l.code === language} onPress={() => pickLanguage(l.code, list)} />)}
+                {languagesOf(list.voices, list.current).map((l) => <Chip fit={false} key={l.code} label={l.name} selected={l.code === language} onPress={() => pickLanguage(l.code, list)} />)}
               </ScrollView>
               {/* One row per language (the key): another language starts at its best voice, a pick inside a language leaves the row where it was scrolled. */}
               <ScrollView key={language ?? ""} testID="read-aloud-voices" horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={CHIP_ROW} contentContainerStyle={CHIPS}>
-                {voices.map((v) => <Chip key={v.id} label={voiceLabel(v)} selected={v.id === prefs.voiceId} onPress={() => remember({ ...prefs, voiceId: v.id })} />)}
+                {voices.map((v) => <Chip fit={false} key={v.id} label={voiceLabel(v)} selected={v.id === prefs.voiceId} onPress={() => remember({ ...prefs, voiceId: v.id })} />)}
               </ScrollView>
               <View>
                 <ValueLabel label="Speed" value={paceLabel(prefs.pace)} />

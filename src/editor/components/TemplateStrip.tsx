@@ -43,7 +43,7 @@ const Tile = memo(function Tile({ tile: t, onPick }: { tile: TemplateTile<string
     <PressableScale accessibilityRole="button" accessibilityLabel={t.label} onPress={() => onPick(t.id)} style={{ width: TILE_WIDTH, gap: theme.space.xs }}>
       <TextSample width={TILE_WIDTH} height={TILE_HEIGHT} frameHeight={TILE_FRAME_HEIGHT} backgroundColor={theme.colors.surfaceAlt}
         overlay={makeOverlay({ id: `tile-${t.id}`, text: "Aa", ...t.look, fontScale: TILE_FONT_SCALE, x: 0.5, y: 0.5 })} />
-      <Body muted numberOfLines={2} style={{ fontSize: theme.type.micro, textAlign: "center" }}>{t.label}</Body>
+      <Body fit muted numberOfLines={2} style={{ fontSize: theme.type.micro, textAlign: "center" }}>{t.label}</Body>
     </PressableScale>
   );
 });

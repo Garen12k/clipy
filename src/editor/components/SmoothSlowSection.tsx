@@ -61,7 +61,7 @@ export function SmoothSwitch({ clip }: { clip: Clip }) {
   return (
     <View testID="smooth-slow-switch" style={{ height: STRIP.tiles, flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
       <Switch accessibilityLabel={NAME} value={on} onValueChange={toggle} trackColor={{ true: theme.colors.accent }} />
-      <Body numberOfLines={1} style={{ fontSize: theme.type.small }}>{NAME}</Body>
+      <Body fit numberOfLines={1} style={{ fontSize: theme.type.small }}>{NAME}</Body>
     </View>
   );
 }

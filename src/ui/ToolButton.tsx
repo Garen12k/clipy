@@ -1,7 +1,9 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { Icon, type IconName } from "./Icon";
 import { PressableScale } from "./PressableScale";
+import { KitText } from "./Text";
+import { largeContent } from "./textScale";
 
 /**
  * The editor's bottom bar in points: the capsule's height, a tool's height inside it and the group button's width. A tool is at
@@ -30,27 +32,27 @@ export function ToolButton({ label, icon, onPress, disabled, active, variant = "
     const text = danger ? theme.colors.dangerText : active ? theme.colors.accent : theme.colors.text;
     return (
       <PressableScale testID={testID} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} accessibilityState={{ disabled: !!disabled, selected: !!active }}
-        disabled={disabled} onPress={onPress} style={[{ height: TOOLBAR.tool, alignItems: "center", justifyContent: "center", gap: theme.space.xs, borderRadius: theme.radius.box,
+        disabled={disabled} onPress={onPress} {...largeContent(label)} style={[{ height: TOOLBAR.tool, alignItems: "center", justifyContent: "center", gap: theme.space.xs, borderRadius: theme.radius.box,
           opacity: disabled ? 0.35 : 1, backgroundColor: group ? theme.elevation.tile : active ? theme.elevation.lifted : undefined },
           group ? { width: TOOLBAR.group } : { minWidth: theme.size.control, maxWidth: theme.size.toolColumn + theme.space.sm, paddingHorizontal: theme.space.xs }]}>
         <Icon name={icon} size={theme.size.icon.lg} color={ink} />
         {group ? (
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ flexShrink: 1, fontWeight: theme.weight.semi, color: text, fontSize: theme.type.micro }}>{label}</Text>
+            <KitText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ flexShrink: 1, fontWeight: theme.weight.semi, color: text, fontSize: theme.type.micro }}>{label}</KitText>
             <Icon name="chevron-down-outline" size={CHEVRON} color={theme.colors.text} />
           </View>
-        ) : <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ fontWeight: active ? theme.weight.semi : theme.weight.regular, color: text, fontSize: theme.type.small }}>{label}</Text>}
+        ) : <KitText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ fontWeight: active ? theme.weight.semi : theme.weight.regular, color: text, fontSize: theme.type.small }}>{label}</KitText>}
       </PressableScale>
     );
   }
   return (
     <PressableScale lifted={!!active} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!disabled, selected: !!active }}
-      disabled={disabled} onPress={onPress} style={{ alignItems: "center", width: theme.size.toolColumn, paddingVertical: theme.space.xs, gap: theme.space.xs, opacity: disabled ? 0.35 : 1 }}>
+      disabled={disabled} onPress={onPress} {...largeContent(label)} style={{ alignItems: "center", width: theme.size.toolColumn, paddingVertical: theme.space.xs, gap: theme.space.xs, opacity: disabled ? 0.35 : 1 }}>
       <View style={[{ width: theme.size.toolBox, height: theme.size.toolBox, borderRadius: theme.radius.box, alignItems: "center", justifyContent: "center",
         backgroundColor: active ? theme.elevation.lifted : theme.elevation.tile }, active ? theme.ring : theme.ringClear]}>
         <Icon name={icon} size={theme.size.icon.md} color={active ? theme.colors.accent : theme.colors.text} />
       </View>
-      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ fontWeight: active ? theme.weight.semi : theme.weight.regular, color: active ? theme.colors.accent : theme.colors.text, fontSize: theme.type.small }}>{label}</Text>
+      <KitText numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ fontWeight: active ? theme.weight.semi : theme.weight.regular, color: active ? theme.colors.accent : theme.colors.text, fontSize: theme.type.small }}>{label}</KitText>
     </PressableScale>
   );
 }

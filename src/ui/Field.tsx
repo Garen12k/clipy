@@ -1,5 +1,6 @@
-import { TextInput, type TextInputProps, type TextStyle } from "react-native";
+import type { TextInputProps, TextStyle } from "react-native";
 import { theme } from "@/src/theme/theme";
+import { KitInput } from "./Text";
 import { useSurfaces } from "./tone";
 
 /** The one text-field look (the same as NumField's box): 16-pt text, at least a 44-pt target, in a tile-coloured box of the family it is drawn in (tone.ts). */
@@ -11,5 +12,5 @@ export const fieldStyle: TextStyle = {
 /** A TextInput with the kit's field look. Every TextInput prop passes through; `style` is added after the look (a taller multi-line box, say). */
 export function Field({ style, ...rest }: TextInputProps) {
   const s = useSurfaces();
-  return <TextInput placeholderTextColor={s.muted} {...rest} style={[fieldStyle, { backgroundColor: s.tile, color: s.text }, style]} />;
+  return <KitInput placeholderTextColor={s.muted} {...rest} style={[fieldStyle, { backgroundColor: s.tile, color: s.text }, style]} />;
 }

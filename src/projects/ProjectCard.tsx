@@ -1,13 +1,13 @@
 import { Icon } from "@/src/ui/Icon";
 import { LinearGradient } from "expo-linear-gradient";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, View } from "react-native";
 import { COVER_FONT } from "@/src/editor/coverFont";
 import { PLATFORM_LABELS } from "@/src/editor/model/types";
 import { editedLabel, formatDuration } from "@/src/lib/format";
 import { theme } from "@/src/theme/theme";
 import { useSurfaces } from "@/src/ui/tone";
 import { PressableScale } from "@/src/ui/PressableScale";
-import { Body } from "@/src/ui/Text";
+import { Body, KitText } from "@/src/ui/Text";
 import type { ProjectSummary } from "./storage";
 
 type Props = { summary: ProjectSummary; /** A tap on the picture or on the words under it. */ onPress: () => void; onLongPress: () => void; /** The "…" button. */ onMore: () => void };
@@ -46,13 +46,13 @@ export function ProjectCard({ summary, onPress, onLongPress, onMore }: Props) {
           : <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><Body muted>No preview</Body></View>}
         {summary.broken ? null : (
           <View testID="project-length" style={{ position: "absolute", top: theme.space.sm, right: theme.space.sm, height: theme.size.badge, justifyContent: "center", paddingHorizontal: theme.space.sm, borderRadius: theme.radius.pill, backgroundColor: theme.colors.scrimStrong }}>
-            <Body weight="semi" style={{ fontSize: theme.type.small, fontVariant: ["tabular-nums"], color: theme.colors.onScrim }}>{formatDuration(summary.durationSec)}</Body>
+            <Body scale="fixed" weight="semi" style={{ fontSize: theme.type.small, fontVariant: ["tabular-nums"], color: theme.colors.onScrim }}>{formatDuration(summary.durationSec)}</Body>
           </View>
         )}
         {summary.coverTitle && !summary.broken ? (
           <LinearGradient testID="project-card-fade" colors={["transparent", theme.colors.scrimStrong]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.md, paddingTop: theme.space.xxl }}>
             {/* The cover's own font, as typed. Content, not interface text. */}
-            <Text testID="project-cover-title" numberOfLines={2} style={{ fontFamily: COVER_FONT, fontSize: theme.type.headline, color: theme.colors.onScrim }}>{summary.coverTitle}</Text>
+            <KitText scale="fixed" testID="project-cover-title" numberOfLines={2} style={{ fontFamily: COVER_FONT, fontSize: theme.type.headline, color: theme.colors.onScrim }}>{summary.coverTitle}</KitText>
           </LinearGradient>
         ) : null}
       </PressableScale>

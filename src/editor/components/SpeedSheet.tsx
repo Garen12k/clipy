@@ -222,7 +222,7 @@ function SpeedBody({ clip, clipIds, layer, onClose, title }: { clip: Clip; clipI
         </StripSlider>
       ) : shown === "curve" ? (
         <View testID="speed-smooth-row" style={{ height: STRIP.slider, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.gutter }}>
-          <Body style={{ fontSize: theme.type.small }}>Smooth</Body>
+          <Body fit style={{ fontSize: theme.type.small }}>Smooth</Body>
           <Switch accessibilityLabel="Smooth" value={smooth} onValueChange={toggleSmooth} trackColor={{ true: theme.colors.accent }} />
         </View>
       ) : (

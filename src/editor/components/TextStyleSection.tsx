@@ -61,7 +61,7 @@ export function TextStyleSection({ style, outline, background, onBegin, onPatch,
     <View style={ROW}>
       <PressableScale accessibilityRole="button" accessibilityLabel={on === null ? title : `${title} options`} disabled={on === false}
         accessibilityState={{ expanded: shown, disabled: on === false }} onPress={() => set(id, !open[id])} style={NAME}>
-        <Body weight="semi">{title}</Body>
+        <Body fit weight="semi">{title}</Body>
         {on === false ? null : <Icon name={shown ? "chevron-up-outline" : "chevron-down-outline"} size={theme.size.icon.md} color={theme.colors.textMuted} />}
       </PressableScale>
       {on === null ? null : <Switch accessibilityLabel={title} value={on} onValueChange={(to) => { set(id, to); onChange?.(to); }} trackColor={{ true: theme.colors.accent }} />}

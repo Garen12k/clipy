@@ -1,6 +1,6 @@
 import { Icon } from "@/src/ui/Icon";
 import { useEffect, useMemo, useRef } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { trackEnd } from "@/src/editor/model/audioSync";
 import { moveAudioTrack, updateAudioTrackById } from "@/src/editor/model/ops";
@@ -8,6 +8,7 @@ import { timeToX, xToTime } from "@/src/editor/model/timeline";
 import type { AudioKind, AudioTrack, Project } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
+import { KitText } from "@/src/ui/Text";
 import { createBarSnappers, endSnappers, sameTime, type BarSnappers } from "../snapping";
 import { readyPeaks, usePeaksFiles } from "../peaksFiles";
 import { LANE_HEIGHT } from "../timelineLayout";
@@ -99,8 +100,8 @@ export function AudioBar({ track: t, missing, selected, overlapping = false, onP
   // The title takes the rest of the bar — or, on its backing over an outline, only its own width (shrinking with the bar).
   const words = parts.label && (
     <>
-      <Text style={{ color: theme.colors.onKind, fontSize: theme.type.small, fontVariant: ["tabular-nums"] }}>{Math.round(t.volume * 100)}%</Text>
-      <Text numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, ...(peaks ? { flexShrink: 1 } : { flex: 1 }) }}>{t.title}</Text>
+      <KitText scale="fixed" style={{ color: theme.colors.onKind, fontSize: theme.type.small, fontVariant: ["tabular-nums"] }}>{Math.round(t.volume * 100)}%</KitText>
+      <KitText scale="fixed" numberOfLines={1} style={{ color: theme.colors.onKind, fontSize: theme.type.small, ...(peaks ? { flexShrink: 1 } : { flex: 1 }) }}>{t.title}</KitText>
     </>
   );
   return (

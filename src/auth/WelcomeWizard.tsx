@@ -161,7 +161,7 @@ function Page({ width, current, title, body, button, onButton, lead, children }:
           {lead ?? null}
           <View style={{ gap: theme.space.sm }}>
             <Title size={theme.text.title1.size} accessibilityRole="header" style={{ textAlign: "center" }}>{title}</Title>
-            {body ? <Body muted style={{ fontSize: theme.type.input, textAlign: "center" }}>{body}</Body> : null}
+            {body ? <Body scale="reading" muted style={{ fontSize: theme.type.input, textAlign: "center" }}>{body}</Body> : null}
           </View>
           {children ?? null}
         </View>
