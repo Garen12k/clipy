@@ -2,6 +2,7 @@ import { coverTimeOf, frameAt, totalDuration } from "@/src/editor/model/timeline
 import { migrateProject } from "@/src/editor/model/migrate";
 import { DEFAULT_ASPECT_RATIO, DEFAULT_EXPORT_SETTINGS, isAspectRatio, newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AspectRatio, type AudioKind, type AudioTrack, type Clip, type LayerClip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
+import { HISTORY_FILE, decodeHistory, encodeHistory, fitHistory, lineOf, stampOf } from "./history";
 import { PROJECT_FILE, ProjectFileError, baseName, encodeHeader, extractFiles, fileNameFor, freeName, isSafeName, nextTurn, readHeader, totalBytes, writeProjectFile, type FileEntry, type FileHeader, type FileRun, type Pause } from "./projectFile";
 import { rebaseProject } from "./rebase";
 
@@ -18,8 +19,10 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const projectDir = (id: string) => `${root}/${id}`;
   const jsonPath = (id: string) => `${projectDir(id)}/project.json`;
   const thumbPath = (id: string) => `${projectDir(id)}/thumb.jpg`;
+  const historyPath = (id: string) => `${projectDir(id)}/${HISTORY_FILE.name}`;
   /** Any text as part of a file name. */
   const namePart = (s: string) => s.replace(/[^A-Za-z0-9_-]/g, "_");
+  const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
   const stemOf = (uri: string) => (uri.split("/").pop() ?? "").replace(/\.[A-Za-z0-9]+$/, "");
   const ms = (seconds: number) => Math.round(seconds * 1000);
   /**
@@ -35,8 +38,12 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const isCoverName = (name: string) => /^cover-[A-Za-z0-9_-]+\.jpg$/.test(name);
 
   function parse(text: string): Project { return migrateProject(JSON.parse(text)); }
-  /** The ONE reader of a stored project: migrated, and every file reference re-pointed at where the folder is now (rebase.ts). Writes nothing. */
-  async function read(id: string): Promise<Project> { return rebaseProject(parse(await fs.readText(jsonPath(id))), projectDir(id)); }
+  /** The ONE reader of a stored project: migrated, and every file reference re-pointed at where the folder is now (rebase.ts). Writes nothing. `text` is what was parsed. */
+  async function readDoc(id: string): Promise<{ project: Project; text: string }> {
+    const text = await fs.readText(jsonPath(id));
+    return { project: rebaseProject(parse(text), projectDir(id)), text };
+  }
+  async function read(id: string): Promise<Project> { return (await readDoc(id)).project; }
 
   async function saveProject(p: Project): Promise<void> {
     await fs.mkdir(projectDir(p.id));
@@ -46,11 +53,12 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   }
 
   async function loadProject(id: string) {
-    const project = await read(id);
+    const { project, text } = await readDoc(id);
     const missingSourceUris: string[] = [];
     for (const uri of new Set([...project.clips.map((c) => c.sourceUri), ...project.layers.map((l) => l.sourceUri), ...project.audioTracks.map((a) => a.sourceUri)]))
       if (!(await fs.exists(uri))) missingSourceUris.push(uri);
-    return { project, missingSourceUris };
+    // `stamp` names the very text this project came from: only a history written beside that text is ever applied to it (loadHistory).
+    return { project, missingSourceUris, stamp: stampOf(text) };
   }
 
   async function writeThumb(p: Project): Promise<void> {
@@ -184,11 +192,74 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     await saveProject({ ...project, name: name.trim() || project.name, updatedAt: deps.nowIso() });
   }
 
+  // —— Undo history kept with the project. Spec: docs/superpowers/specs/2026-10-13-undo-history-design.md ——
+  const sourcesOf = (p: Project): string[] => [...p.clips, ...p.layers, ...p.audioTracks].map((x) => x.sourceUri);
+
+  /**
+   * The editor's undo and redo stacks as `<project>/history.jsonl`, for the project that `saveProject(p)` has JUST written — and
+   * that is checked, not trusted: nothing is written unless project.json on disk is this project's own text. Capped (`fitHistory`),
+   * written as a `.tmp` and moved into place. Never throws and never touches project.json; false when nothing was written (the old
+   * history, or none, stays).
+   */
+  async function saveHistory(p: Project, past: readonly Project[], future: readonly Project[]): Promise<boolean> {
+    try {
+      const path = historyPath(p.id);
+      const stamp = stampOf(lineOf(p));
+      if (stampOf(await fs.readText(jsonPath(p.id))) !== stamp) return false;
+      const kept = fitHistory(past.map(lineOf), future.map(lineOf));
+      if (kept.past.length + kept.future.length === 0) { await fs.remove(path); return false; }
+      const tmp = `${path}.tmp`;
+      await fs.writeText(tmp, encodeHistory(p.id, SCHEMA_VERSION, stamp, kept));
+      await fs.move(tmp, path);
+      return true;
+    } catch (e) { console.warn("history save failed", e); return false; }
+  }
+
+  /**
+   * The stacks to give back to a project that `loadProject` has just read (`stamp` is that read's) — or null. Applied to nothing
+   * else: another stamp, project, schema or file version, a cut-off file, a line that is not a snapshot of this project in this
+   * schema, and ALL of it is dropped. Each snapshot gets what a project gets on load (the sanity pass, the re-pointing), one per
+   * `pause`. A step that needs a file which is gone — and which the opened project does not itself reference — cuts its stack:
+   * undo keeps the newer steps, redo the nearer ones. Writes nothing, removes nothing, never throws.
+   */
+  async function loadHistory(project: Project, stamp: string, pause: Pause = nextTurn): Promise<{ past: Project[]; future: Project[] } | null> {
+    try {
+      const dir = projectDir(project.id), path = historyPath(project.id);
+      const size = await fs.size(path);
+      if (size === null || size > HISTORY_FILE.maxBytes) return null;
+      const found = decodeHistory(await fs.readText(path), project.id, SCHEMA_VERSION, stamp);
+      if (!found) return null;
+      const snapshot = async (line: string): Promise<Project> => {
+        await pause();
+        const raw: unknown = JSON.parse(line);
+        if (!isObj(raw) || raw.id !== project.id || raw.schemaVersion !== SCHEMA_VERSION) throw new Error("history: not a snapshot of this project");
+        return rebaseProject(migrateProject(raw), dir);
+      };
+      const past: Project[] = [], future: Project[] = [];
+      for (const line of found.past) past.push(await snapshot(line));
+      for (const line of found.future) future.push(await snapshot(line));
+      const there = new Map<string, boolean>(sourcesOf(project).map((uri): [string, boolean] => [uri, true]));
+      const whole = async (p: Project): Promise<boolean> => {
+        for (const uri of sourcesOf(p)) {
+          let ok = there.get(uri);
+          if (ok === undefined) { ok = await fs.exists(uri); there.set(uri, ok); }
+          if (!ok) return false;
+        }
+        return true;
+      };
+      let from = past.length;
+      while (from > 0 && (await whole(past[from - 1]))) from--;
+      let to = 0;
+      while (to < future.length && (await whole(future[to]))) to++;
+      const kept = { past: past.slice(from), future: future.slice(0, to) };
+      return kept.past.length + kept.future.length > 0 ? kept : null;
+    } catch (e) { console.warn("history load failed", e); return null; }
+  }
+
   // —— Project files (.clipy): Save a Copy and Open Project File. Spec: docs/superpowers/specs/2026-10-13-project-backup-design.md ——
   /** Where a copy is written before it is shared; and where an opened file is laid out before its folder is moved into place. Both are swept whole. */
   const filesDir = `${fs.cacheDir}project-files`;
   const incoming = `${fs.documentDir}incoming`;
-  const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
   /** Every item's reference rewritten by `to` — clips, layers and sounds: the model's only file references (rebase.guard.test.ts). */
   const pointed = (list: unknown, to: (uri: unknown) => string): unknown => (Array.isArray(list) ? list.map((x) => (isObj(x) ? { ...x, sourceUri: to(x.sourceUri) } : x)) : list);
 
@@ -299,7 +370,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   return {
     projectDir, createProject, listProjects, loadProject, saveProject,
     deleteProject: async (id: string) => { await fs.remove(projectDir(id)); },
-    duplicateProject, renameProject, importAudio, importMedia, saveStill, writeCover,
+    duplicateProject, renameProject, importAudio, importMedia, saveStill, writeCover, saveHistory, loadHistory,
     packProject, restoreProject, sweepProjectFiles,
   };
 }
