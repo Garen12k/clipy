@@ -7,6 +7,7 @@ import { assemblePeaks, decodePeaks, encodePeaks, peaksFileName, peaksPlan, type
 import type { Project } from "./model/types";
 import { usePeaksFiles, type PeaksFile } from "./peaksFiles";
 import { useEditorStore } from "./store";
+import { useVoiceLive } from "./voiceLive";
 
 /**
  * The outlines ("waveforms") the timeline's sound bars draw: fetched ONCE per source file for its whole length (`peaksPlan`), kept
@@ -26,7 +27,7 @@ import { useEditorStore } from "./store";
 export const peaksDir = (projectId: string): string => `${storage.projectDir(projectId)}/peaks`;
 /**
  * Nothing is decoded while the editor is in use: a call starts only when two looks this far apart saw the same project, playhead
- * and zoom, nothing playing and nothing being recorded — so not during a drag, a trim, a scrub, a pinch or playback. It is a look
+ * and zoom, nothing playing, nothing being recorded and no voice-over counted down — so not during a drag, a trim, a scrub, a pinch or playback. It is a look
  * every 600 ms while something waits (no listener on the store, nothing per frame); the calls of one file follow each other without
  * a new wait for as long as nothing has moved.
  */
@@ -60,7 +61,8 @@ let epoch = 0;
 let running: { jobId: string; uri: string; giveUp: () => void } | null = null;
 
 type Look = { project: unknown; playhead: number; pps: number; busy: boolean };
-const look = (): Look => { const s = useEditorStore.getState(); return { project: s.project, playhead: s.playhead, pps: s.pixelsPerSecond, busy: s.isPlaying || s.recording }; };
+// A voice-over's countdown (the Record tab's 3 … 1) is busy as well: the recording it leads to must not find a render under way.
+const look = (): Look => { const s = useEditorStore.getState(); return { project: s.project, playhead: s.playhead, pps: s.pixelsPerSecond, busy: s.isPlaying || s.recording || useVoiceLive.getState().counting }; };
 const same = (a: Look, b: Look): boolean => a.project === b.project && a.playhead === b.playhead && a.pps === b.pps;
 /** What the editor looked like when it last stood still (null: not known to stand), and the wait for it. */
 let stood: Look | null = null;

@@ -134,6 +134,18 @@ describe("the queue", () => {
     expect(calls).toHaveLength(1);
   });
 
+  test("a voice-over's countdown is the editor in use too: nothing is asked while 3 … 1 is counted, and the wait ends with it", async () => {
+    const { useVoiceLive } = jest.requireActual<typeof import("../voiceLive")>("../voiceLive");
+    syncPeaks("p1", sources());
+    await flush();
+    useVoiceLive.getState().setCounting(true);
+    await jest.advanceTimersByTimeAsync(PEAKS_SETTLE_MS * 5); await flush();
+    expect(calls).toHaveLength(0);
+    useVoiceLive.getState().setCounting(false);
+    await settle(); await settle();
+    expect(calls).toHaveLength(1);
+  });
+
   test("between two calls of one file: a trim that begins makes the next call wait until it is over", async () => {
     syncPeaks("p1", sources());
     await settle();

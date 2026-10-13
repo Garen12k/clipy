@@ -78,7 +78,7 @@ test("start: permission, mute flag, recording mode, prepare, record, then playba
   const seen: { recording: boolean; isPlaying: boolean }[] = [];
   mockRecorder.record.mockImplementationOnce(() => { mockCalls.push(["record"]); seen.push({ recording: st().recording, isPlaying: st().isPlaying }); });
   const r = await mount();
-  expect(useAudioRecorder).toHaveBeenCalledWith({ extension: ".m4a" });
+  expect(useAudioRecorder).toHaveBeenCalledWith({ extension: ".m4a", isMeteringEnabled: true });   // the preset, and the level meter's switch
   await act(async () => { await r.current.start(); });
   expect(mockCalls).toEqual([["permission"], ["mode", RECORDING_AUDIO_MODE], ["prepare"], ["record"]]);
   expect(seen).toEqual([{ recording: true, isPlaying: false }]);   // muted before the recorder runs; playback starts after it

@@ -14,6 +14,8 @@ jest.mock("@/src/editor/music", () => ({ BUNDLED_TRACKS: [{ id: "t1", title: "Su
 let mockN = 0;
 jest.mock("@/src/projects", () => ({ storage: { importAudio: jest.fn(async (_id: string, a: { uri: string; title: string; durationSec: number }, kind: string = "music") => ({ id: `m${++mockN}`, sourceUri: `file:///p/m${mockN}.mp3`, title: a.title, sourceDuration: a.durationSec, start: 0, trimStart: 0, trimEnd: a.durationSec, volume: 1, kind, fadeIn: 0, fadeOut: 0 })) } }));
 jest.mock("@/src/projects/audioInfo", () => ({ audioDuration: jest.fn(async () => 12) }));
+// The Record tab counts 3, 2, 1 before it starts: here the three steps take no time, so every test below still meets the recording it waits for.
+jest.mock("@/src/editor/model/voiceLevel", () => ({ ...jest.requireActual("@/src/editor/model/voiceLevel"), VOICE_COUNT: { from: 3, stepMs: 0 } }));
 import * as DocumentPicker from "expo-document-picker";
 import { storage } from "@/src/projects";
 import { audioDuration } from "@/src/projects/audioInfo";
