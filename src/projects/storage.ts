@@ -2,6 +2,7 @@ import { coverTimeOf, frameAt, totalDuration } from "@/src/editor/model/timeline
 import { migrateProject } from "@/src/editor/model/migrate";
 import { DEFAULT_ASPECT_RATIO, DEFAULT_EXPORT_SETTINGS, isAspectRatio, newPhotoClip, newVideoClip, POST_PLATFORMS, SCHEMA_VERSION, type AspectRatio, type AudioKind, type AudioTrack, type Clip, type LayerClip, type PostPlatform, type Project } from "@/src/editor/model/types";
 import type { FsAdapter } from "./fs";
+import { rebaseProject } from "./rebase";
 
 export interface PickedAsset { uri: string; kind: "video" | "photo"; durationSec: number; width: number; height: number; fileName?: string }
 export interface ProjectSummary { id: string; name: string; durationSec: number; updatedAt: string; thumbUri: string | null; broken: boolean; postedTo: PostPlatform[]; coverTitle: string }
@@ -33,6 +34,8 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const isCoverName = (name: string) => /^cover-[A-Za-z0-9_-]+\.jpg$/.test(name);
 
   function parse(text: string): Project { return migrateProject(JSON.parse(text)); }
+  /** The ONE reader of a stored project: migrated, and every file reference re-pointed at where the folder is now (rebase.ts). Writes nothing. */
+  async function read(id: string): Promise<Project> { return rebaseProject(parse(await fs.readText(jsonPath(id))), projectDir(id)); }
 
   async function saveProject(p: Project): Promise<void> {
     await fs.mkdir(projectDir(p.id));
@@ -42,7 +45,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   }
 
   async function loadProject(id: string) {
-    const project = parse(await fs.readText(jsonPath(id)));
+    const project = await read(id);
     const missingSourceUris: string[] = [];
     for (const uri of new Set([...project.clips.map((c) => c.sourceUri), ...project.layers.map((l) => l.sourceUri), ...project.audioTracks.map((a) => a.sourceUri)]))
       if (!(await fs.exists(uri))) missingSourceUris.push(uri);
@@ -127,7 +130,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const out: ProjectSummary[] = [];
     for (const id of await fs.list(root)) {
       try {
-        const p = parse(await fs.readText(jsonPath(id)));
+        const p = await read(id);
         const cover = coverFrame(p)?.path ?? null;
         out.push({ id: p.id, name: p.name, durationSec: totalDuration(p), updatedAt: p.updatedAt,
           thumbUri: cover && (await fs.exists(cover)) ? cover : (await fs.exists(thumbPath(id))) ? thumbPath(id) : null, broken: false,
