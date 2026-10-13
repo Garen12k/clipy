@@ -14,7 +14,9 @@ import { ProjectCard } from "@/src/projects/ProjectCard";
 import { QUICK, type QuickRecipeId } from "@/src/projects/quickEdit";
 import { QuickEditSheet } from "@/src/projects/QuickEditSheet";
 import { useProjects } from "@/src/projects/useProjects";
-import type { PickedAsset, ProjectSummary } from "@/src/projects";
+import { filePhone, type PickedAsset, type ProjectSummary } from "@/src/projects";
+import { TransferCard } from "@/src/projects/TransferCard";
+import { useProjectFile } from "@/src/projects/useProjectFile";
 import { pickVideoForPost } from "@/src/publish/pickVideo";
 import { glassTint, theme } from "@/src/theme/theme";
 import { useSurfaces } from "@/src/ui/tone";
@@ -50,7 +52,8 @@ const QUICK_SHARES = { ...QUICK_BACKING, flexShrink: 1 } as const;
 const MAKING = { project: "Creating your project", quick: "Making your quick edit" } as const;
 
 function ProjectsScreen() {
-  const { projects, loading, create, createQuick, rename, duplicate, remove } = useProjects();
+  const { projects, loading, reload, create, createQuick, rename, duplicate, remove } = useProjects();
+  const { transfer, saveCopy, openFile, cancel } = useProjectFile(reload);
   const [actionsFor, setActionsFor] = useState<ProjectSummary | null>(null);
   /** Media picked for a new project that is waiting for its aspect ratio. */
   const [pending, setPending] = useState<PickedAsset[] | null>(null);
@@ -147,9 +150,34 @@ function ProjectsScreen() {
     finally { creating.current = false; setMaking(null); setBusy(false); }
   }
 
-  const touch = busy ? "none" : "auto";
-  // What is inert while a project is made is also dimmed. A plain style value: it lands at once, nothing is animated.
-  const dim = busy ? DISABLED_OPACITY : 1;
+  // Save a Copy and Open Project File share the two refs with New Project and Quick Edit, so none of the four can run together.
+  // While the copy is written or read (`transfer`) the screen is inert as while a project is made; the ref is held on through the
+  // share sheet, which iOS presents over the screen — and through a cancelled run's end, so its files are gone before the next starts.
+  async function onSaveCopy(p: ProjectSummary) {
+    if (starting.current || creating.current) return;
+    creating.current = true;
+    try { await saveCopy(p); } finally { creating.current = false; }
+  }
+  async function onOpenFile() {
+    if (starting.current || creating.current) return;
+    starting.current = true;
+    let uri: string | null = null;
+    try {
+      setPending(null);
+      setQuickOpen(false);
+      uri = await filePhone.pick();
+      // Apple's picker is still sliding away when the file arrives, and iOS drops an alert presented during that (a file that is not a project fails at once).
+      if (uri) await new Promise((r) => setTimeout(r, AFTER_PICKER_MS));
+    } catch (e) { console.warn("pick failed", e); } finally { starting.current = false; }
+    if (!uri) return;
+    creating.current = true;
+    try { await openFile(uri); } finally { creating.current = false; }
+  }
+
+  const inert = busy || transfer !== null;
+  const touch = inert ? "none" : "auto";
+  // What is inert while a project is made, or a project file is saved or opened, is also dimmed. A plain style value: it lands at once, nothing is animated.
+  const dim = inert ? DISABLED_OPACITY : 1;
   /** How far the bottom actions sit above the screen's edge: clear of the home indicator, and never on the edge itself. */
   const actionsBottom = Math.max(insets.bottom, theme.space.sm) + theme.space.sm;
   // At the default text size the two bottom actions are their natural widths, as ever (a 375-pt phone holds them with nothing to spare).
@@ -158,13 +186,14 @@ function ProjectsScreen() {
   const openActions = (p: ProjectSummary) => { haptic("light"); setActionsFor(p); };
   return (
     <Screen>
-      {/* The two header actions share one pill, top right; the title has its own line under them. It stays put: the list scrolls below it. */}
+      {/* The three header actions share one pill, top right; the title has its own line under them. It stays put: the list scrolls below it. */}
       <View testID="home-header" style={{ paddingHorizontal: theme.space.gutter, marginBottom: theme.space.sm, gap: theme.space.xs }}>
         <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
           {/* 44 pt high; each button is 40 with slop that stays inside the pill, so each target is 44 by 44. */}
           {/* Glass where the phone has it (GLASS.home); while it is dimmed it is the solid colour — glass is never drawn under an opacity. */}
           <Glass side="home" color={s.bar} tint={glassTint(s)} testID="home-header-actions" pointerEvents={touch} style={{ height: theme.size.touch, flexDirection: "row", alignItems: "center", gap: theme.space.xs, paddingHorizontal: theme.space.xs, borderRadius: theme.radius.pill, opacity: dim }}>
             <IconButton name="paper-plane-outline" accessibilityLabel="Post a video" onPress={onPostVideo} />
+            <IconButton name="folder-open-outline" accessibilityLabel="Open Project File" onPress={onOpenFile} />
             <IconButton name="person-circle-outline" accessibilityLabel="Accounts" onPress={() => router.push("/accounts")} />
           </Glass>
         </View>
@@ -193,7 +222,7 @@ function ProjectsScreen() {
       </View>
       {/* Quick Edit at the leading corner, New Project at the trailing one, on the gutter; the cards scroll beneath. */}
       <View testID="home-actions" style={{ position: "absolute", left: theme.space.gutter, right: theme.space.gutter, bottom: actionsBottom, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: theme.space.md }}>
-        {making ? (
+        {transfer ? <TransferCard transfer={transfer} onCancel={cancel} /> : making ? (
           // While a project is made the two actions give way to ONE capsule across the screen: a spinner and what is being made.
           // One accessible element: VoiceOver reads the words once, not once for the spinner and once for the text.
           <View testID="home-making" accessible accessibilityLabel={MAKING[making]} style={{ flex: 1, height: theme.size.control, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, borderRadius: theme.radius.pill, backgroundColor: s.bar }}>
@@ -212,7 +241,7 @@ function ProjectsScreen() {
       </View>
       <QuickEditSheet visible={quickOpen} onClose={() => setQuickOpen(false)} onChoose={onQuickChoose} />
       <AspectRatioSheet assets={pending} onCancel={() => setPending(null)} onCreate={onCreate} />
-      <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onDelete={confirmDelete} />
+      <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onSaveCopy={onSaveCopy} onDelete={confirmDelete} />
       <ToastHost />
     </Screen>
   );

@@ -74,7 +74,7 @@ test("glass on, on a phone that draws it: the pill and Quick Edit are glass in t
   expect(flat("home-header-actions-glass").borderRadius).toBe(theme.size.touch / 2);
   expect(flat("home-quick-backing-glass").borderRadius).toBe(theme.size.control / 2);
   // The two buttons are where they were, with their labels and their ink; Quick Edit has no fill of its own — the glass is its fill.
-  expect(within(screen.getByTestId("home-header-actions")).getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Post a video", "Accounts"]);
+  expect(within(screen.getByTestId("home-header-actions")).getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual(["Post a video", "Open Project File", "Accounts"]);
   expect(quick().backgroundColor).toBeUndefined();
   expect(quick()).toMatchObject({ height: theme.size.control, borderRadius: theme.radius.pill });
   expect(screen.getByText("Quick Edit")).toHaveStyle({ color: NAVY.text });

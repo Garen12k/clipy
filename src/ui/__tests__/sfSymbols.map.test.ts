@@ -14,7 +14,7 @@ const GLYPHS: Record<string, number> = require("@expo/vector-icons/build/vendor/
 
 /**
  * EVERY icon name the app draws, found by the scan below and written out here: a new name in the source fails this suite until it
- * is added to this list AND given a symbol in `SF_SYMBOLS` (or a line in `NO_SYMBOL`, with its reason). 124 names.
+ * is added to this list AND given a symbol in `SF_SYMBOLS` (or a line in `NO_SYMBOL`, with its reason). 125 names.
  */
 const USED = [
   "add-circle-outline", "add-outline", "airplane-outline", "albums-outline", "alert-circle-outline", "aperture-outline", "apps-outline", "arrow-back-circle-outline",
@@ -24,7 +24,7 @@ const USED = [
   "chevron-down-outline", "chevron-up-outline", "close-circle-outline", "close-outline", "cloud-outline", "code-outline", "color-fill-outline", "color-filter-outline",
   "color-palette-outline", "color-wand-outline", "construct-outline", "contract-outline", "contrast-outline", "copy-outline", "create-outline", "crop-outline", "cut-outline",
   "diamond", "diamond-outline", "ellipse-outline", "ellipsis-horizontal-outline", "expand-outline", "eye-outline", "film-outline", "fitness-outline", "flame-outline",
-  "flash-outline", "flashlight-outline", "git-branch-outline", "git-compare-outline", "grid-outline", "hand-left-outline", "happy-outline", "hardware-chip-outline",
+  "flash-outline", "flashlight-outline", "folder-open-outline", "git-branch-outline", "git-compare-outline", "grid-outline", "hand-left-outline", "happy-outline", "hardware-chip-outline",
   "heart-outline", "image-outline", "information-circle-outline", "layers-outline", "leaf-outline", "log-out-outline", "logo-facebook", "logo-google", "logo-instagram",
   "logo-tiktok", "logo-x", "logo-youtube", "mail-outline", "mic", "mic-outline", "move-outline", "musical-notes-outline", "notifications-outline", "options-outline", "paper-plane-outline", "pause",
   "paw-outline", "person-circle-outline", "person-remove-outline", "phone-portrait-outline", "play", "play-back-outline", "play-outline", "pulse-outline", "radio-outline", "refresh-outline",
@@ -100,7 +100,7 @@ test("USED is every icon name in the app's source, no more and no fewer", () => 
       + (gone.length > 0 ? `  No longer in the source: ${gone.join(", ")} — delete each from USED and from SF_SYMBOLS.\n` : ""));
   }
   expect(USED).toEqual([...USED].sort());
-  expect(USED).toHaveLength(124);
+  expect(USED).toHaveLength(125);
 });
 
 test("the tables that hand icons to the toolbar, the tiles, the timeline and the platform rows are all in USED", () => {
@@ -116,7 +116,7 @@ test("every icon name has a decision: an SF Symbol, or a listed reason for none 
   expect(USED.filter((n) => table[n] !== undefined && NO_SYMBOL[n] !== undefined)).toEqual([]);
   expect(Object.keys(table).filter((n) => !USED.includes(n))).toEqual([]);
   expect(Object.keys(NO_SYMBOL).filter((n) => !USED.includes(n))).toEqual([]);
-  expect(Object.keys(table)).toHaveLength(118);
+  expect(Object.keys(table)).toHaveLength(119);
   expect(Object.keys(NO_SYMBOL)).toHaveLength(6);
   for (const n of USED) if (n.startsWith("logo-")) expect(table[n]).toBeUndefined();   // a brand mark is never Apple's symbol
 });

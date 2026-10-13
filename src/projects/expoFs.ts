@@ -1,4 +1,6 @@
 import { Directory, File, Paths } from "expo-file-system";
+import { openReader } from "@/src/publish/fileReader";
+import { openWriter } from "./fileWriter";
 import type { FsAdapter } from "./fs";
 
 const withSlash = (uri: string) => (uri.endsWith("/") ? uri : uri + "/");
@@ -27,4 +29,10 @@ export const expoFs: FsAdapter = {
   },
   async list(dir) { const d = new Directory(dir); return d.exists ? d.list().map((e) => e.name) : []; },
   async freeBytes() { return Paths.availableDiskSpace; },
+  async size(p) { const f = new File(p); return f.exists ? f.size : null; },
+  // A destination folder that does not exist yet becomes the moved folder (expo-file-system: getMoveOrCopyPath) — a rename.
+  // Its parent must exist: the move makes no folders.
+  async moveDir(from, to) { await new Directory(from).move(new Directory(to)); },
+  openReader,
+  openWriter,
 };
