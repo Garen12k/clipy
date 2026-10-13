@@ -38,19 +38,37 @@ const isAscii = (b: Uint8Array, at: number, s: string): boolean => { for (let i 
 const join = (...parts: Uint8Array[]): Uint8Array => { const out = new Uint8Array(parts.reduce((n, p) => n + p.byteLength, 0)); let at = 0; for (const p of parts) { out.set(p, at); at += p.byteLength; } return out; };
 const isRec = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-/** One path component that can only be a file inside the folder it is put in. */
+/**
+ * One path component that can only be a file inside the folder it is put in. `%`, `#` and `?` are refused too: a name is joined
+ * into a file:// uri, where they would be read as an escape, a fragment or a query — another name. The app's own names have none.
+ */
 export function isSafeName(name: unknown): name is string {
-  return typeof name === "string" && name.length >= 1 && name.length <= 255 && name !== "." && name !== ".." && !/[\/\\\u0000-\u001f\u007f]/.test(name);
+  return typeof name === "string" && name.length >= 1 && name.length <= 255 && name !== "." && name !== ".." && !/[\/\\%#?\u0000-\u001f\u007f]/.test(name);
 }
 /** The only two places a file of a project file may go: the thumbnail, or one file in media/. */
 export const isEntryPath = (path: unknown): path is string => path === "thumb.jpg" || (typeof path === "string" && path.startsWith("media/") && isSafeName(path.slice(6)));
 /** The last path component of a reference ("" when there is none). */
 export const baseName = (uri: unknown): string => String(uri ?? "").split("/").pop() ?? "";
 
-/** The project's name as a file name: nothing a file system or a share sheet trips over, at most 80 characters, never empty. */
+/** How many bytes one character (a code point) takes in a file's name on the phone (UTF-8). */
+const utf8Length = (c: string): number => { const p = c.codePointAt(0) ?? 0; return p < 0x80 ? 1 : p < 0x800 ? 2 : p < 0x10000 ? 3 : 4; };
+/** Half of a pair on its own: not a character, and encodeURIComponent throws on one. */
+const isLoneSurrogate = (c: string): boolean => c.length === 1 && c >= "\ud800" && c <= "\udfff";
+/** A file's name may be 255 bytes on the phone; this leaves room for the extension and for whatever a share target adds. */
+const NAME_BYTES = 200;
+/**
+ * The project's name as a file name: nothing a file system or a share sheet trips over, at most 80 characters AND at most
+ * NAME_BYTES bytes (80 emoji are 320), no half of a pair, never empty.
+ */
 export function fileNameFor(name: string): string {
-  const clean = Array.from(String(name).replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().replace(/^\.+/, "")).slice(0, 80).join("").trim();
-  return `${clean || "Clipy project"}.${PROJECT_FILE.ext}`;
+  const whole = Array.from(String(name).replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, " ")).filter((c) => !isLoneSurrogate(c)).join("");
+  let clean = "", bytes = 0;
+  for (const c of Array.from(whole.replace(/\s+/g, " ").trim().replace(/^\.+/, "")).slice(0, 80)) {
+    bytes += utf8Length(c);
+    if (bytes > NAME_BYTES) break;
+    clean += c;
+  }
+  return `${clean.trim() || "Clipy project"}.${PROJECT_FILE.ext}`;
 }
 /** `name` if no project has it, else "name copy", "name copy 2", … (Duplicate's word). */
 export function freeName(name: string, taken: readonly string[]): string {
@@ -167,8 +185,11 @@ export async function writeProjectFile(out: ChunkWriter, header: FileHeader, ope
 export async function extractFiles(src: ChunkReader, header: FileHeader, bodyStart: number, open: (path: string) => ChunkWriter, run: FileRun, pause: Pause = nextTurn): Promise<void> {
   let at = bodyStart, done = 0;
   for (const f of header.files) {
+    if (run.cancelled) throw new ProjectFileError("cancelled");
     const out = open(f.path);
     try { done = await copyBytes(src, at, f.size, out, run, pause, done); } finally { out.close(); }
+    // A file with no bytes has no chunk and so no pause: a file that lists thousands of them would hold the screen for all of them.
+    if (f.size === 0) await pause();
     at += f.size;
   }
   if (run.cancelled) throw new ProjectFileError("cancelled");

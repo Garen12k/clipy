@@ -124,7 +124,7 @@ test("the file's name and a free project name", () => {
   expect(fileNameFor(' ..a/b:c*?"<>|  d ')).toBe("a b c d.clipy");
   expect(fileNameFor("///")).toBe("Clipy project.clipy");
   expect(fileNameFor("رحلة")).toBe("رحلة.clipy");
-  expect(fileNameFor("🏖".repeat(100))).toBe(`${"🏖".repeat(80)}.clipy`);
+  expect(fileNameFor("🏖".repeat(100))).toBe(`${"🏖".repeat(50)}.clipy`);   // 200 bytes: a name of 80 emoji is 320, more than a file's name may be (review m6)
   expect(freeName("A", [])).toBe("A");
   expect(freeName("A", ["A"])).toBe("A copy");
   expect(freeName("A", ["A", "A copy", "A copy 2"])).toBe("A copy 3");

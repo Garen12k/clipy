@@ -192,6 +192,9 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   /** Every item's reference rewritten by `to` — clips, layers and sounds: the model's only file references (rebase.guard.test.ts). */
   const pointed = (list: unknown, to: (uri: unknown) => string): unknown => (Array.isArray(list) ? list.map((x) => (isObj(x) ? { ...x, sourceUri: to(x.sourceUri) } : x)) : list);
 
+  /** True only when the phone SAYS it has less room than `need`: no answer (the system's value may be null) is "unknown — go on", never "0 B free". */
+  const tooFull = (free: unknown, need: number): free is number => typeof free === "number" && free < need;
+
   /** Removes a temporary, whatever the file system answers — a clean-up must never be the failure that is reported. */
   async function gone(path: string): Promise<void> { try { await fs.remove(path); } catch { /* swept again on the next run and the next launch */ } }
 
@@ -227,7 +230,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const header: FileHeader = { app: "clipy", schemaVersion: SCHEMA_VERSION, savedAt: deps.nowIso(), name: project.name, project: doc, files };
     const bytes = totalBytes(encodeHeader(header).byteLength, files);
     const free = await fs.freeBytes();
-    if (free < bytes + PROJECT_FILE.spare) throw new ProjectFileError("space", bytes + PROJECT_FILE.spare, free);
+    if (tooFull(free, bytes + PROJECT_FILE.spare)) throw new ProjectFileError("space", bytes + PROJECT_FILE.spare, free);
     run.onStart?.({ name: project.name, bytes });
     const runId = deps.newId();
     const part = `${filesDir}/part-${runId}.${PROJECT_FILE.ext}`, home = `${filesDir}/${runId}`;
@@ -271,7 +274,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       catch (e) { throw new ProjectFileError(e instanceof Error && /newer version/.test(e.message) ? "newer" : "damaged"); }
       const bytes = header.files.reduce((n, f) => n + f.size, 0);
       const free = await fs.freeBytes();
-      if (free < bytes + PROJECT_FILE.spare) throw new ProjectFileError("space", bytes + PROJECT_FILE.spare, free);
+      if (tooFull(free, bytes + PROJECT_FILE.spare)) throw new ProjectFileError("space", bytes + PROJECT_FILE.spare, free);
       const wanted = (typeof project.name === "string" && project.name.trim()) || header.name.trim() || "Project";
       const name = freeName(wanted, (await listProjects()).filter((p) => !p.broken).map((p) => p.name));
       run.onStart?.({ name, bytes });

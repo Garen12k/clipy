@@ -42,7 +42,11 @@ export function useProjectFile(reload: () => Promise<void>) {
     Alert.alert(words.title, words.message);
   }
 
-  /** Packs the project, then hands the file to Apple's share sheet; resolves when the sheet has closed. The temporary file is removed then. */
+  /**
+   * Packs the project, then hands the file to Apple's share sheet; resolves when the sheet has closed. The copy is NOT removed
+   * then: a share target may still be reading it when the sheet reports closed, and a cut-off copy is a backup that does not
+   * open. It stays in the cache until the next save or open, or the next launch (storage sweeps at each).
+   */
   async function saveCopy(p: ProjectSummary): Promise<void> {
     const run = begin("save", p.name);
     let made: Awaited<ReturnType<typeof storage.packProject>> | null = null;
@@ -52,7 +56,6 @@ export function useProjectFile(reload: () => Promise<void>) {
     if (!made) return;
     try { await filePhone.share(made.uri); }
     catch (e) { console.warn("share failed", e); Alert.alert(FILE_WORDS.cantSave, FILE_WORDS.shareFailed); }
-    finally { await storage.sweepProjectFiles(); }
     if (made.missing > 0) useToast.getState().show(missingWords(made.missing));
   }
 

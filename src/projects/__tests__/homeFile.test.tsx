@@ -91,7 +91,7 @@ describe("Save a Copy", () => {
     await h.finish({ uri: "file:///cache/project-files/r/Beach.clipy", name: "Beach", bytes: 2e9, missing: 0 });
   });
 
-  test("done: the share sheet gets the file; Home is itself again at once; the temporary file is swept after the sheet closes; nothing is said", async () => {
+  test("done: the share sheet gets the file; Home is itself again at once; the copy is NOT removed when the sheet closes (a share target may still be reading it); nothing is said", async () => {
     const h = await startSave();
     let closeSheet: () => void = () => {};
     share.mockImplementationOnce(() => new Promise<void>((r) => { closeSheet = r; }));
@@ -101,7 +101,9 @@ describe("Save a Copy", () => {
     expect(screen.getByTestId("home-list").props.pointerEvents).toBe("auto");
     expect(sweep).not.toHaveBeenCalled();
     await act(async () => { closeSheet(); });
-    await waitFor(() => expect(sweep).toHaveBeenCalledTimes(1));
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    // Review m1: the copy stays in the cache until the next save or open, or the next launch — storage sweeps there.
+    expect(sweep).not.toHaveBeenCalled();
     expect(useToast.getState().message).toBeNull();
     expect(alert).not.toHaveBeenCalled();
   });
@@ -157,12 +159,12 @@ describe("Save a Copy", () => {
     expect(share).not.toHaveBeenCalled();
   });
 
-  test("a share sheet that cannot be shown: the plain alert, and the file is still swept", async () => {
+  test("a share sheet that cannot be shown: the plain alert (the file is swept by the next run or launch)", async () => {
     const h = await startSave();
     share.mockRejectedValueOnce(new Error("no view controller"));
     await h.finish({ uri: "file:///c/Beach.clipy", name: "Beach", bytes: 5e6, missing: 0 });
     await waitFor(() => expect(alert).toHaveBeenCalledWith("Couldn't save a copy", "The share sheet couldn't be opened. Try again."));
-    expect(sweep).toHaveBeenCalled();
+    expect(sweep).not.toHaveBeenCalled();
   });
 
   test("while a copy is saved nothing else starts: the folder button's picker is not opened", async () => {
