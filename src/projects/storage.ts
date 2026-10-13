@@ -38,19 +38,26 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   const saving = new Map<string, Promise<void>>();
 
   /**
+   * One project's work on its file runs strictly one piece after another, in the order asked — a save, a recovery, a
+   * read-change-write. A piece with nothing before it starts at once; one that fails rejects for its own caller and
+   * holds nobody up. NEVER ask for a turn from inside a turn of the same project: it would wait for itself.
+   */
+  function inTurn<T>(id: string, work: () => Promise<T>): Promise<T> {
+    const before = saving.get(id);
+    const run = before ? before.then(work) : work();
+    const turn = run.then(() => {}, () => {});
+    saving.set(id, turn);
+    void turn.then(() => { if (saving.get(id) === turn) saving.delete(id); });
+    return run;
+  }
+
+  /**
    * Saves of ONE project run strictly one after another, in the order asked, whoever asks (the autosave, the save on
    * leaving, a rename): each writes the one tmp file and moves it over project.json, and the phone's move is queued and
    * removes project.json before it moves — two at once could leave no project.json at all. The last call's project is
    * what ends on disk; a save that fails rejects for its own caller and holds nobody up.
    */
-  function saveProject(p: Project): Promise<void> {
-    const before = saving.get(p.id);
-    const run = before ? before.then(() => writeProject(p)) : writeProject(p);
-    const turn = run.catch(() => {});
-    saving.set(p.id, turn);
-    void turn.then(() => { if (saving.get(p.id) === turn) saving.delete(p.id); });
-    return run;
-  }
+  function saveProject(p: Project): Promise<void> { return inTurn(p.id, () => writeProject(p)); }
 
   async function writeProject(p: Project): Promise<void> {
     await fs.mkdir(projectDir(p.id));
@@ -59,8 +66,50 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     await fs.move(tmp, jsonPath(p.id));
   }
 
+  /**
+   * The stored project, read INSIDE a turn of its chain (call it only from there). The phone's move removes project.json
+   * and only then renames the tmp, so an app closed between the two leaves ONLY project.json.tmp — a whole, newer copy:
+   * when project.json is NOT there and the tmp reads as a project, the tmp is moved into place and is the project.
+   * Anything else is left exactly as it is and the read fails as it always did: a tmp that does not parse (a write cut
+   * off mid-way) is never deleted, and a tmp never replaces a project.json that exists, readable or not.
+   */
+  async function readInTurn(id: string): Promise<Project> {
+    try { return parse(await fs.readText(jsonPath(id))); }
+    catch (e) {
+      const tmp = `${jsonPath(id)}.tmp`;
+      if ((await fs.exists(jsonPath(id))) || !(await fs.exists(tmp))) throw e;
+      let left: Project;
+      try { left = parse(await fs.readText(tmp)); } catch { throw e; }
+      await fs.move(tmp, jsonPath(id));
+      return left;
+    }
+  }
+
+  /**
+   * The stored project for a reader. The ordinary case is ONE read of project.json and nothing else — the tmp is looked
+   * for only after that read failed, and then in the project's turn, so a recovery can never race a save.
+   */
+  async function readProject(id: string): Promise<Project> {
+    try { return parse(await fs.readText(jsonPath(id))); }
+    catch { return inTurn(id, () => readInTurn(id)); }
+  }
+
+  /**
+   * Read → change → write as ONE turn of the project's chain: the read sees every save asked before it, and no save
+   * can land between the read and the write. Every change of a STORED project made outside the editor's store goes
+   * through here — never `loadProject` and then `saveProject`, which reads before its turn and can write older content
+   * back over a save that was still queued. Resolves with what was written.
+   */
+  function updateProject(id: string, change: (p: Project) => Project): Promise<Project> {
+    return inTurn(id, async () => {
+      const next = change(await readInTurn(id));
+      await writeProject(next);
+      return next;
+    });
+  }
+
   async function loadProject(id: string) {
-    const project = parse(await fs.readText(jsonPath(id)));
+    const project = await readProject(id);
     const missingSourceUris: string[] = [];
     for (const uri of new Set([...project.clips.map((c) => c.sourceUri), ...project.layers.map((l) => l.sourceUri), ...project.audioTracks.map((a) => a.sourceUri)]))
       if (!(await fs.exists(uri))) missingSourceUris.push(uri);
@@ -145,7 +194,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     const out: ProjectSummary[] = [];
     for (const id of await fs.list(root)) {
       try {
-        const p = parse(await fs.readText(jsonPath(id)));
+        const p = await readProject(id);
         const cover = coverFrame(p)?.path ?? null;
         out.push({ id: p.id, name: p.name, durationSec: totalDuration(p), updatedAt: p.updatedAt,
           thumbUri: cover && (await fs.exists(cover)) ? cover : (await fs.exists(thumbPath(id))) ? thumbPath(id) : null, broken: false,
@@ -156,7 +205,8 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   }
 
   async function duplicateProject(id: string): Promise<Project> {
-    const { project } = await loadProject(id);
+    // The source is read in ITS turn: a save of it that is still queued is in what gets copied.
+    const project = await inTurn(id, () => readInTurn(id));
     const copyId = deps.newId();
     await fs.mkdir(`${projectDir(copyId)}/media`);
     const clips: Clip[] = [];
@@ -194,12 +244,11 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   }
 
   async function renameProject(id: string, name: string): Promise<void> {
-    const { project } = await loadProject(id);
-    await saveProject({ ...project, name: name.trim() || project.name, updatedAt: deps.nowIso() });
+    await updateProject(id, (project) => ({ ...project, name: name.trim() || project.name, updatedAt: deps.nowIso() }));
   }
 
   return {
-    projectDir, createProject, listProjects, loadProject, saveProject,
+    projectDir, createProject, listProjects, loadProject, saveProject, updateProject,
     deleteProject: async (id: string) => { await fs.remove(projectDir(id)); },
     duplicateProject, renameProject, importAudio, importMedia, saveStill, writeCover,
   };
