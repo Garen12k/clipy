@@ -57,7 +57,30 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
    * removes project.json before it moves — two at once could leave no project.json at all. The last call's project is
    * what ends on disk; a save that fails rejects for its own caller and holds nobody up.
    */
-  function saveProject(p: Project): Promise<void> { return inTurn(p.id, () => writeProject(p)); }
+  function saveProject(p: Project): Promise<void> { return inTurn(p.id, () => (deleted.has(p.id) ? Promise.resolve() : writeProject(p))); }
+
+  /**
+   * The projects deleted in this session, by id. A delete is a TURN of its project's chain: what was asked before it
+   * ends first, then the folder goes; and whatever comes after it — a save still queued behind it, a leave save that
+   * arrives late, a rename — finds the mark at the start of its own turn and writes nothing, so a deleted project can
+   * never be made again as a folder with nothing but project.json. The mark is set when the delete's turn begins, taken
+   * back if the folder could not be removed (the project is still there, and must still save), and cleared when a
+   * project is made under that id again (ids are new each time, so in practice never).
+   */
+  const deleted = new Set<string>();
+
+  function deleteProject(id: string): Promise<void> {
+    return inTurn(id, async () => {
+      deleted.add(id);
+      try { await fs.remove(projectDir(id)); }
+      catch (e) { deleted.delete(id); throw e; }
+    });
+  }
+
+  /** Resolves when nothing of this project is on its way any more — every turn asked so far, and any asked meanwhile. */
+  async function idle(id: string): Promise<void> {
+    for (let turn = saving.get(id); turn; turn = saving.get(id)) await turn;
+  }
 
   async function writeProject(p: Project): Promise<void> {
     await fs.mkdir(projectDir(p.id));
@@ -88,8 +111,12 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   /**
    * The stored project for a reader. The ordinary case is ONE read of project.json and nothing else — the tmp is looked
    * for only after that read failed, and then in the project's turn, so a recovery can never race a save.
+   * A reader WAITS for this project's chain first (only this project's; with nothing on its way there is nothing to
+   * wait for and the read is asked in the very call): opened right after it was left, with the leave save still
+   * queued, the editor would otherwise get the text from before that save and its next autosave would write it back.
    */
   async function readProject(id: string): Promise<Project> {
+    if (saving.has(id)) await idle(id);
     try { return parse(await fs.readText(jsonPath(id))); }
     catch { return inTurn(id, () => readInTurn(id)); }
   }
@@ -102,6 +129,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
    */
   function updateProject(id: string, change: (p: Project) => Project): Promise<Project> {
     return inTurn(id, async () => {
+      if (deleted.has(id)) throw new Error(`project deleted: ${id}`);
       const next = change(await readInTurn(id));
       await writeProject(next);
       return next;
@@ -131,6 +159,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
    * written only when missing. Older cover files go once the new one is there; a project without a cover keeps none.
    */
   async function writeCover(p: Project): Promise<void> {
+    if (deleted.has(p.id)) return;
     try {
       const names = await fs.list(projectDir(p.id));
       const f = coverFrame(p), want = f?.path ?? null;
@@ -177,6 +206,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
   /** `aspectRatio`: what the creation picker chose; a new project is Auto unless told otherwise. */
   async function createProject(name: string, assets: PickedAsset[], aspectRatio: AspectRatio = DEFAULT_ASPECT_RATIO) {
     const id = deps.newId();
+    deleted.delete(id);
     const now = deps.nowIso();
     const { clips, failed } = await importMedia(id, assets);
     if (assets.length > 0 && clips.length === 0) {
@@ -208,6 +238,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
     // The source is read in ITS turn: a save of it that is still queued is in what gets copied.
     const project = await inTurn(id, () => readInTurn(id));
     const copyId = deps.newId();
+    deleted.delete(copyId);
     await fs.mkdir(`${projectDir(copyId)}/media`);
     const clips: Clip[] = [];
     for (const c of project.clips) {
@@ -249,7 +280,7 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
 
   return {
     projectDir, createProject, listProjects, loadProject, saveProject, updateProject,
-    deleteProject: async (id: string) => { await fs.remove(projectDir(id)); },
+    deleteProject,
     duplicateProject, renameProject, importAudio, importMedia, saveStill, writeCover,
   };
 }
