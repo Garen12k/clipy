@@ -34,7 +34,25 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
 
   function parse(text: string): Project { return migrateProject(JSON.parse(text)); }
 
-  async function saveProject(p: Project): Promise<void> {
+  /** The last save asked for each project, while one is on its way: the next save of that project starts after it. */
+  const saving = new Map<string, Promise<void>>();
+
+  /**
+   * Saves of ONE project run strictly one after another, in the order asked, whoever asks (the autosave, the save on
+   * leaving, a rename): each writes the one tmp file and moves it over project.json, and the phone's move is queued and
+   * removes project.json before it moves — two at once could leave no project.json at all. The last call's project is
+   * what ends on disk; a save that fails rejects for its own caller and holds nobody up.
+   */
+  function saveProject(p: Project): Promise<void> {
+    const before = saving.get(p.id);
+    const run = before ? before.then(() => writeProject(p)) : writeProject(p);
+    const turn = run.catch(() => {});
+    saving.set(p.id, turn);
+    void turn.then(() => { if (saving.get(p.id) === turn) saving.delete(p.id); });
+    return run;
+  }
+
+  async function writeProject(p: Project): Promise<void> {
     await fs.mkdir(projectDir(p.id));
     const tmp = `${jsonPath(p.id)}.tmp`;
     await fs.writeText(tmp, JSON.stringify(p));

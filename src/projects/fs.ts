@@ -25,6 +25,7 @@ export function memoryFs(): FsAdapter & { files: Map<string, string>; dirs: Set<
     if (t === undefined) throw new Error(`ENOENT ${from}`);
     files.set(norm(to), t);
   };
+  let moves: Promise<void> = Promise.resolve();
   return {
     files, dirs,
     documentDir: "file:///doc/", cacheDir: "file:///cache/",
@@ -33,7 +34,21 @@ export function memoryFs(): FsAdapter & { files: Map<string, string>; dirs: Set<
     async readText(p) { const t = files.get(norm(p)); if (t === undefined) throw new Error(`ENOENT ${p}`); return t; },
     async writeText(p, text) { files.set(norm(p), text); },
     copy,
-    async move(from, to) { await copy(from, to); files.delete(norm(from)); },
+    // As the phone's `File.move(…, { overwrite: true })` (expo-file-system, FileSystemPath.swift): the call is QUEUED — one
+    // serial queue, behind the moves asked before it, while a write lands at once — and when its turn comes it REMOVES the
+    // destination first and only then moves, so a source that is gone by then throws with the destination already removed.
+    move(from, to) {
+      const turn = moves.then(() => {
+        const f = norm(from), d = norm(to);
+        files.delete(d);
+        const t = files.get(f);
+        if (t === undefined) throw new Error(`ENOENT ${from}`);
+        files.set(d, t);
+        files.delete(f);
+      });
+      moves = turn.catch(() => {});
+      return turn;
+    },
     async remove(p) {
       const n = norm(p); files.delete(n); dirs.delete(n);
       for (const f of [...files.keys()]) if (inDir(n, f)) files.delete(f);
