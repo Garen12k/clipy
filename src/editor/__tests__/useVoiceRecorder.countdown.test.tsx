@@ -13,6 +13,9 @@ jest.mock("expo-audio", () => ({
   // The installed preset, field for field (node_modules/expo-audio/build/RecordingConstants.js): the second test below holds this to the package.
   RecordingPresets: { HIGH_QUALITY: { extension: ".m4a", sampleRate: 44100, numberOfChannels: 2, bitRate: 128000, android: { outputFormat: "mpeg4", audioEncoder: "aac" },
     ios: { outputFormat: "aac ", audioQuality: 127, linearPCMBitDepth: 16, linearPCMIsBigEndian: false, linearPCMIsFloat: false }, web: { mimeType: "audio/webm", bitsPerSecond: 128000 } } },
+  // The microphone is already allowed here: it is READ at the tap and at the start (no entry in `mockCalls`) and never asked for —
+  // a question would be a ["permission"] entry, and START below has none. (The asking is useVoiceRecorder.permission.test.tsx.)
+  getRecordingPermissionsAsync: jest.fn(async () => ({ granted: true, status: "granted", canAskAgain: true })),
   requestRecordingPermissionsAsync: jest.fn(async () => { mockCalls.push(["permission"]); return { granted: true, status: "granted" }; }),
   setAudioModeAsync: jest.fn(async (mode: unknown) => { mockCalls.push(["mode", mode]); }),
 }));
@@ -32,7 +35,7 @@ const live = () => { const { counting, bars, quiet } = useVoiceLive.getState(); 
 const REST = { counting: false, bars: 0, quiet: false };
 const mount = async () => renderHook(() => useVoiceRecorder());
 const tick = (ms: number) => act(async () => { await jest.advanceTimersByTimeAsync(ms); });
-const START = [["permission"], ["mode", RECORDING_AUDIO_MODE], ["prepare"], ["record"]];
+const START = [["mode", RECORDING_AUDIO_MODE], ["prepare"], ["record"]];
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -160,7 +163,7 @@ describe("the countdown", () => {
   test("begin does nothing while recording; start() itself is still the immediate start", async () => {
     const { result: r } = await mount();
     await act(async () => { await r.current.start(); });
-    expect(mockCalls).toEqual(START);
+    expect(mockCalls).toEqual([["permission"], ...START]);   // called directly, the start still asks by itself
     await act(async () => { r.current.begin(); });
     expect(r.current).toMatchObject({ state: "recording", count: 0 });
     expect(live().counting).toBe(false);
