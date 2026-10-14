@@ -40,6 +40,11 @@ Swipe Clipy away in the app switcher. Open it again.
 - **Right looks like:** the same number of projects as in check 1.
 - **Wrong looks like:** fewer projects, or a new "Can't open" card.
 
+### 5b. Save to Photos still works
+This build saves an exported video to Photos in a new way (so Open Instagram can find it). Export a short project and tap **Save to Photos**. Do it once with Photos allowed, and note what happens if Clipy asks for Photos access first.
+- **Right looks like:** "Saved to Photos", and the video is in the Photos app once, playing normally.
+- **Wrong looks like:** an error message although the video appears in Photos, no video in Photos, or the video twice.
+
 ---
 
 ## B. Saving while you leave the app
