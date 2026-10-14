@@ -5,7 +5,7 @@ import { trackEnd } from "@/src/editor/model/audioSync";
 import { edgeDurations, photoMotionPins } from "@/src/editor/model/motion";
 import type { SoundChain } from "@/src/editor/model/sound";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
-import { clampTextStyle, DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type AnimEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type BoxCorner, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type ExportFps, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
+import { clampTextStyle, DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type TextInEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type BoxCorner, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type ExportFps, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -19,7 +19,7 @@ export interface ExportAnimEdge { id: string; duration: number }
 export interface ExportSpeedSpan { duration: number; speed: number }
 export interface ExportKeyframe { t: number; x: number; y: number; scale: number; rotation: number; opacity: number }
 const copyKeyframe = (k: Keyframe): ExportKeyframe => ({ t: k.t, x: k.x, y: k.y, scale: k.scale, rotation: k.rotation, opacity: k.opacity });
-const toEdge = (e: AnimEdge | null, duration: number): ExportAnimEdge | null => (e && duration > 0 ? { id: e.id, duration } : null);
+const toEdge = (e: TextInEdge | null, duration: number): ExportAnimEdge | null => (e && duration > 0 ? { id: e.id, duration } : null);
 
 /** `TextStyle` as the native record has it: shadow / glow flattened, a null colour = that feature is off (its numbers are 0); the box fields are the background box's padding and corner. */
 export interface ExportTextStyle {

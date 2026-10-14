@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ANIM_IN, ANIM_LOOP } from "@/src/editor/effects";
 import { setOverlayAnimation } from "@/src/editor/model/ops";
-import { ANIM_IN_IDS, ANIM_LOOP_IDS, type AnimInId, type AnimLoopId } from "@/src/editor/model/types";
+import { ANIM_IN_IDS, ANIM_LOOP_IDS, isRevealId, type AnimInId, type AnimLoopId, type OverlayAnimation, type RevealId } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { Chip } from "@/src/ui/Chip";
 import { haptic } from "@/src/ui/haptics";
@@ -10,6 +10,12 @@ import { AnimationLength, AnimationTiles, animationStartX, edgeDuration } from "
 
 type Tab = "in" | "out" | "loop";
 const TABS: { id: Tab; label: string }[] = [{ id: "in", label: "In" }, { id: "out", label: "Out" }, { id: "loop", label: "Loop" }];
+
+/** The Length slider's patch: the open tab's edge with a new length; null while that edge is None. */
+function lengthPatch(a: OverlayAnimation, tab: "in" | "out", v: number): Partial<OverlayAnimation> | null {
+  if (tab === "in") return a.in ? { in: { id: a.in.id, duration: v } } : null;
+  return a.out ? { out: { id: a.out.id, duration: v } } : null;
+}
 
 /** A text's or sticker's In, Out and Loop animations (independent of each other). Captions have none: the sheet renders nothing. */
 export function OverlayAnimationSheet({ overlayId, visible, onClose }: { overlayId: string | null; visible: boolean; onClose: () => void }) {
@@ -23,7 +29,7 @@ export function OverlayAnimationSheet({ overlayId, visible, onClose }: { overlay
     () => {
       if (!overlay || overlay.kind === "caption") return 0;
       const a = overlay.animation;
-      return tab === "loop" ? animationStartX(ANIM_LOOP_IDS, a.loop) : animationStartX(ANIM_IN_IDS, a[tab]?.id ?? null);
+      return tab === "loop" ? animationStartX(ANIM_LOOP_IDS, a.loop) : animationStartX<AnimInId | RevealId>(ANIM_IN_IDS, a[tab]?.id ?? null);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visible, overlay?.id, tab],
@@ -48,11 +54,11 @@ export function OverlayAnimationSheet({ overlayId, visible, onClose }: { overlay
       <StripTiles key={tab} initialX={startX} lead={TABS.map((t) => <Chip compact key={t.id} label={t.label} selected={tab === t.id} onPress={() => setTab(t.id)} />)}>
         {tab === "loop"
           ? <AnimationTiles ids={ANIM_LOOP_IDS} registry={ANIM_LOOP} selected={anim.loop} onPick={pickLoop} />
-          : <AnimationTiles ids={ANIM_IN_IDS} registry={ANIM_IN} selected={edge?.id ?? null} onPick={(id) => pickEdge(tab, id)} />}
+          : <AnimationTiles ids={ANIM_IN_IDS} registry={ANIM_IN} selected={edge === null || isRevealId(edge.id) ? null : edge.id} onPick={(id) => pickEdge(tab, id)} />}
       </StripTiles>
       {tab === "loop" ? null : (
         <AnimationLength edge={edge} onStart={beginTransaction}
-          onChange={(v) => { if (edge) applyTransient((p) => setOverlayAnimation(p, overlay.id, { [tab]: { id: edge.id, duration: v } })); }} />
+          onChange={(v) => { const patch = lengthPatch(anim, tab, v); if (patch) applyTransient((p) => setOverlayAnimation(p, overlay.id, patch)); }} />
       )}
     </ToolStrip>
   );

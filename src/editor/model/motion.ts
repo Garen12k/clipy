@@ -1,4 +1,4 @@
-import { activePhotoMotion, clampOpacity, PHOTO_MOTION_LIMITS, type AnimComboId, type AnimInId, type AnimLoopId, type Clip, type ClipTransform, type Keyframe, type Overlay, type PhotoMotionId } from "./types";
+import { activePhotoMotion, clampOpacity, isRevealId, PHOTO_MOTION_LIMITS, type AnimComboId, type AnimInId, type AnimLoopId, type Clip, type ClipTransform, type Keyframe, type Overlay, type PhotoMotionId, type RevealId } from "./types";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, sourceTimeAt } from "./timeline";
 
 /**
@@ -190,13 +190,15 @@ function compose(a: MotionDelta, b: MotionDelta): MotionDelta {
   return { dx: a.dx + b.dx, dy: a.dy + b.dy, scale: a.scale * b.scale, rotation: a.rotation + b.rotation, opacity: a.opacity * b.opacity };
 }
 
-type Edge = { id: AnimInId; duration: number } | null;
+type Edge = { id: AnimInId | RevealId; duration: number } | null;
 /** In + Out delta at `local` seconds into an item of `length` seconds. After scaling the two windows never overlap. */
 function edgeDelta(inEdge: Edge, outEdge: Edge, local: number, length: number, distance: number): MotionDelta {
   const e = edgeDurations(inEdge ? inEdge.duration : 0, outEdge ? outEdge.duration : 0, length);
   let d = identity();
-  if (inEdge && e.in > 0 && local < e.in) d = compose(d, animInDelta(inEdge.id, local / e.in, distance));
-  if (outEdge && e.out > 0 && local > length - e.out) d = compose(d, animOutDelta(outEdge.id, (local - (length - e.out)) / e.out, distance));
+  // A reveal (Typewriter / Word by word) moves nothing: textReveal.ts decides what shows. The export is never sent one as an edge,
+  // and Motion.swift's `animInDelta` answers the identity for an id it does not know — the pair stays identical in meaning.
+  if (inEdge && !isRevealId(inEdge.id) && e.in > 0 && local < e.in) d = compose(d, animInDelta(inEdge.id, local / e.in, distance));
+  if (outEdge && !isRevealId(outEdge.id) && e.out > 0 && local > length - e.out) d = compose(d, animOutDelta(outEdge.id, (local - (length - e.out)) / e.out, distance));
   return d;
 }
 const lengthOf = (seconds: number): number => (Number.isFinite(seconds) && seconds > 0 ? seconds : 0);
