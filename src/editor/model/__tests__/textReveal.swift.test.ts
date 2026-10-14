@@ -33,8 +33,8 @@ test("TextReveal.swift is pure: Foundation only, no layers, the one function", (
   ]) expect(reveal).toContain(line);
 });
 
-test("the Swift's cap on steps is the app's own REVEAL.maxSteps: a request with more steps is drawn whole", () => {
-  expect(reveal).toContain(`static let maxSteps = ${REVEAL.maxSteps}`);
+test("the Swift's cap on steps is a safety bound at or above the app's own REVEAL.maxSteps (tuning that needs no build)", () => {
+  const m = /static let maxSteps = (\d+)/.exec(reveal); expect(m).not.toBeNull(); expect(REVEAL.maxSteps).toBeLessThanOrEqual(Number(m![1])); expect(Number(m![1])).toBe(120);
 });
 
 test("the request: ExportReveal is two Double lists, and ExportOverlay carries it as an optional", () => {
@@ -61,11 +61,11 @@ test("every text layer (glow, shadow, fill) is copied per step but the last, its
     "let rest = NSRange(location: step.cut, length: part.length - step.cut)",
     "part.addAttribute(key(kCTForegroundColorAttributeName), value: clear, range: rest)",
     "part.addAttribute(key(kCTStrokeColorAttributeName), value: clear, range: rest)",
-    "let shown = textCopy(part)",
-    "shown.shadowColor = pass.shadowColor", "shown.shadowOpacity = pass.shadowOpacity",
-    "shown.shadowRadius = pass.shadowRadius", "shown.shadowOffset = pass.shadowOffset",
-    "container.addSublayer(shown)",
-    "addVisibility(shown, start: o.start + step.from, end: o.start + step.to, opacity: Double(pass.opacity))",
+    "let stepLayer = textCopy(part)",
+    "stepLayer.shadowColor = pass.shadowColor", "stepLayer.shadowOpacity = pass.shadowOpacity",
+    "stepLayer.shadowRadius = pass.shadowRadius", "stepLayer.shadowOffset = pass.shadowOffset",
+    "container.addSublayer(stepLayer)",
+    "addVisibility(stepLayer, start: o.start + step.from, end: o.start + step.to, opacity: Double(pass.opacity))",
     "let last = steps[steps.count - 1]",
     "for pass in passes { addVisibility(pass, start: o.start + last.from, end: o.end, opacity: Double(pass.opacity)) }",
   ]) expect(block).toContain(line);

@@ -31,10 +31,10 @@ final class TextRevealTests: XCTestCase {
     XCTAssertTrue(TextReveal.steps(cuts: [3, 6], from: [0, .nan], length: 6, life: 3).isEmpty)
     XCTAssertTrue(TextReveal.steps(cuts: [3, 6], from: [0, 0.25], length: 6, life: .infinity).isEmpty)
     XCTAssertTrue(TextReveal.steps(cuts: [3, 7], from: [0, 0.25], length: 6, life: 3).isEmpty)            // beyond the text
-    // More steps than the app ever sends (`REVEAL.maxSteps`): drawn whole.
-    let many = (1...31).map { Double($0) }
-    XCTAssertTrue(TextReveal.steps(cuts: many, from: (0..<31).map { Double($0) * 0.01 }, length: 31, life: 3).isEmpty)
-    XCTAssertEqual(TextReveal.steps(cuts: Array(many[..<30]), from: (0..<30).map { Double($0) * 0.01 }, length: 30, life: 3).count, 30)
+    // More steps than the safety bound (`TextReveal.maxSteps`, 120 — above anything the app sends): drawn whole.
+    let many = (1...121).map { Double($0) }
+    XCTAssertTrue(TextReveal.steps(cuts: many, from: (0..<121).map { Double($0) * 0.01 }, length: 121, life: 3).isEmpty)
+    XCTAssertEqual(TextReveal.steps(cuts: Array(many[..<120]), from: (0..<120).map { Double($0) * 0.01 }, length: 120, life: 3).count, 120)
   }
 
   /// The app's segmentation vectors (src/editor/model/__tests__/textReveal.vectors.ts, copied verbatim): every list of

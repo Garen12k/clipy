@@ -767,13 +767,13 @@ final class ExportSession {
             let rest = NSRange(location: step.cut, length: part.length - step.cut)
             part.addAttribute(key(kCTForegroundColorAttributeName), value: clear, range: rest)
             part.addAttribute(key(kCTStrokeColorAttributeName), value: clear, range: rest)
-            let shown = textCopy(part)
-            shown.shadowColor = pass.shadowColor
-            shown.shadowOpacity = pass.shadowOpacity
-            shown.shadowRadius = pass.shadowRadius
-            shown.shadowOffset = pass.shadowOffset
-            container.addSublayer(shown)
-            addVisibility(shown, start: o.start + step.from, end: o.start + step.to, opacity: Double(pass.opacity))
+            let stepLayer = textCopy(part)
+            stepLayer.shadowColor = pass.shadowColor
+            stepLayer.shadowOpacity = pass.shadowOpacity
+            stepLayer.shadowRadius = pass.shadowRadius
+            stepLayer.shadowOffset = pass.shadowOffset
+            container.addSublayer(stepLayer)
+            addVisibility(stepLayer, start: o.start + step.from, end: o.start + step.to, opacity: Double(pass.opacity))
           }
         }
         let last = steps[steps.count - 1]

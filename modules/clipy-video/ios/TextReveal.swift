@@ -4,9 +4,10 @@ import Foundation
 /// layers. Where each step ends and when it begins are the app's (`revealPlan` in src/editor/model/textReveal.ts —
 /// TypeScript only, NOT mirrored here); this only checks the numbers and gives every step its end.
 enum TextReveal {
-  /// The most steps a request may carry: the app's own `REVEAL.maxSteps` (pinned equal in textReveal.swift.test.ts).
+  /// A SAFETY bound on the steps a request may carry, well above the app's own `REVEAL.maxSteps` (which is TypeScript
+  /// only and may be tuned without a build; textReveal.swift.test.ts pins REVEAL.maxSteps <= this).
   /// Each step but the last is one more copy of every text layer, so a request with more is drawn whole.
-  static let maxSteps = 30
+  static let maxSteps = 120
 
   /// `cuts[i]` (UTF-16 offsets into the text: the text before it is shown) and `from[i]` (seconds since the text's
   /// start) as steps `(cut, from, to)`: `to` is the next step's `from`, the last step's is `life`.
