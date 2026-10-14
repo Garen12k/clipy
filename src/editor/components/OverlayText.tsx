@@ -1,12 +1,13 @@
 import { View } from "react-native";
 import { FONTS } from "@/src/editor/fonts";
 import { layoutOverlay } from "@/src/editor/model/overlayLayout";
+import { revealCut } from "@/src/editor/model/textReveal";
 import type { TextOverlay } from "@/src/editor/model/types";
 import { KitText } from "@/src/ui/Text";
 
 /**
  * `opacity`: the animated opacity (left out = none). `frameOnly`: an unseen copy that only gives the selection frame its place and size.
- * `time`: the project time, for a caption's word highlight (left out = no word is highlighted).
+ * `time`: the project time, for a caption's word highlight and a text's reveal (left out = none).
  */
 type Props = { overlay: TextOverlay; frameW: number; frameH: number; opacity?: number; frameOnly?: boolean; time?: number; children?: React.ReactNode };
 
@@ -21,7 +22,7 @@ const NO_OFFSET = { width: 0, height: 0 };
  * an outline alone rides on the fill as its halo.
  * iOS can clip a text shadow at the `Text`'s own frame, so each under-layer reaches `room` px beyond the fill's content box on every side
  * and pads the same amount back in: its content box — and so its wrapping — stays exactly the fill's.
- * Every layer draws the same string (`plain`), so they all wrap alike.
+ * Every layer draws the same string (`plain`, or `drawn` while a text reveals itself), so they all wrap alike.
  * The box's padding and corner radius come from the layout (style.boxPadding / boxCorner); with the default style they are the old 0.25 × font and padding / 2.
  */
 export function OverlayText({ overlay: o, frameW, frameH, opacity, frameOnly, time, children }: Props) {
@@ -37,21 +38,25 @@ export function OverlayText({ overlay: o, frameW, frameH, opacity, frameOnly, ti
   const under = { position: "absolute", left: inset, top: inset, right: inset, bottom: inset, padding: room, ...metrics } as const;
   const spans = wordSpans(o, time);
   const plain = spans ? o.words.map((w) => w.text).join(" ") : o.text;
+  // A text revealing itself (Typewriter / Word by word): every layer draws the whole string — the shown part, then the rest in a
+  // see-through span — so the wrapping and the box are final from the first frame. Captions never reveal (`revealCut` is null for them).
+  const cut = frameOnly || time === undefined ? null : revealCut(o, time);
+  const drawn = revealed(plain, cut);
   const faded = frameOnly ? undefined : opacity === undefined && l.opacity === 1 ? undefined : Math.max(MIN_VIEW_OPACITY, (opacity ?? 1) * l.opacity);
   return (
     <View testID={frameOnly ? `overlay-base-${o.id}` : `overlay-${o.id}`} pointerEvents="box-none"
       style={{ position: "absolute", left: l.centerX, top: l.centerY, width: 0, height: 0, alignItems: "center", justifyContent: "center", transform: [{ rotate: `${l.rotation}deg` }], ...(faded === undefined ? null : { opacity: faded }) }}>
       <View testID={frameOnly ? `overlay-base-body-${o.id}` : `overlay-body-${o.id}`} style={{ position: "absolute", maxWidth: l.maxWidth, padding: l.padding, borderRadius: l.boxRadius }}>
         {o.background && !frameOnly && <View pointerEvents="none" style={{ position: "absolute", inset: 0, backgroundColor: o.background.color, opacity: o.background.opacity, borderRadius: l.boxRadius }} />}
-        {!frameOnly && l.glow && <KitText scale="fixed" testID={`overlay-glow-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.glow.color, ...halo(l.glow.color, l.glow.radius) }}>{plain}</KitText>}
+        {!frameOnly && l.glow && <KitText scale="fixed" testID={`overlay-glow-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.glow.color, ...halo(l.glow.color, l.glow.radius) }}>{drawn}</KitText>}
         {!frameOnly && l.shadow && (
           <KitText scale="fixed" testID={`overlay-shadow-${o.id}`} aria-hidden pointerEvents="none"
-            style={{ ...under, color: l.shadow.color, opacity: l.shadow.opacity, textShadowColor: l.shadow.color, textShadowRadius: l.shadow.blur, textShadowOffset: { width: l.shadow.dx, height: l.shadow.dy } }}>{plain}</KitText>
+            style={{ ...under, color: l.shadow.color, opacity: l.shadow.opacity, textShadowColor: l.shadow.color, textShadowRadius: l.shadow.blur, textShadowOffset: { width: l.shadow.dx, height: l.shadow.dy } }}>{drawn}</KitText>
         )}
-        {!frameOnly && stacked && outline && <KitText scale="fixed" testID={`overlay-outline-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.outlineColor, ...outline }}>{plain}</KitText>}
+        {!frameOnly && stacked && outline && <KitText scale="fixed" testID={`overlay-outline-${o.id}`} aria-hidden pointerEvents="none" style={{ ...under, color: l.outlineColor, ...outline }}>{drawn}</KitText>}
         {frameOnly
           ? <KitText scale="fixed" aria-hidden pointerEvents="none" style={{ ...metrics, opacity: 0 }}>{plain}</KitText>
-          : <KitText scale="fixed" style={{ ...metrics, color: o.color, ...(stacked ? null : outline) }}>{spans ?? plain}</KitText>}
+          : <KitText scale="fixed" style={{ ...metrics, color: o.color, ...(stacked ? null : outline) }}>{spans ?? drawn}</KitText>}
         {children}
       </View>
     </View>
@@ -67,6 +72,14 @@ function wordSpans(o: TextOverlay, time: number | undefined): React.ReactNode[] 
     const span = <KitText scale="fixed" key={i} style={t !== null && t >= w.start && t < w.end ? { color: highlight } : undefined}>{w.text}</KitText>;
     return i === 0 ? [span] : [" ", span];
   });
+}
+
+/** What a reveal hides is laid out but never seen: no fill, and no glow, shadow or outline halo (a nested span's shadow colour replaces its parent's). */
+const UNREVEALED = { color: "transparent", textShadowColor: "transparent" } as const;
+/** A layer's string while a text reveals itself: the shown part, then the rest see-through. `cut` null: the whole string, as without a reveal. */
+function revealed(text: string, cut: number | null): React.ReactNode {
+  if (cut === null) return text;
+  return [text.slice(0, cut), <KitText scale="fixed" key="unrevealed" style={UNREVEALED}>{text.slice(cut)}</KitText>];
 }
 
 /** Lives in the mirrored layout pair now; re-exported so existing imports keep working. */

@@ -1,3 +1,4 @@
+import { Profiler } from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -271,5 +272,87 @@ describe("in the overlay layer", () => {
     await layer([text({ outline: true, style: style({ glow: GLOW }) })], 1, "t");
     expect(screen.queryByTestId("overlay-base-t")).toBeNull();
     expect(within(screen.getByTestId("overlay-t")).getByTestId("selection-frame-t")).toBeTruthy();
+  });
+});
+
+describe("text reveal", () => {
+  const UNREVEALED = { color: "transparent", textShadowColor: "transparent" };
+  const typing = (p: Partial<TextOverlay> = {}) =>
+    text({ text: "Hello world", start: 1, end: 5, animation: { in: { id: "typewriter", duration: 0.5 }, out: null, loop: null }, ...p });
+  const fill = () => screen.getByText("Hello world");
+
+  test("the fill is the shown part, then ONE see-through span holding the rest; its own style is the plain one", async () => {
+    await show(typing(), { time: 1.07 });
+    const kids = fill().props.children as unknown[];
+    expect(kids).toHaveLength(2);
+    expect(kids[0]).toBe("He");
+    expect(flat(within(fill()).getByText("llo world"))).toEqual(UNREVEALED);
+    expect(flat(fill())).toEqual({ fontFamily: FAMILY, fontSize: 40, lineHeight: 48, color: WHITE, textAlign: "center" });
+  });
+
+  test("every under-layer (glow, shadow, outline) hides the same part, so no ghost of a hidden letter shows", async () => {
+    await show(typing({ outline: true, style: style({ glow: GLOW, shadow: SHADOW }) }), { time: 1.27 });
+    for (const id of layerIds) {
+      const layer = screen.getByTestId(id, hidden);
+      expect((layer.props.children as unknown[])[0]).toBe("Hello w");
+      expect(flat(within(layer).getByText("orld", hidden))).toEqual(UNREVEALED);
+    }
+  });
+
+  test("an outline riding on the fill: the hidden span's shadow colour replaces the halo's", async () => {
+    await show(typing({ outline: true }), { time: 1.07 });
+    expect(flat(fill()).textShadowRadius).toBeGreaterThan(0);
+    expect(flat(within(fill()).getByText("llo world")).textShadowColor).toBe("transparent");
+  });
+
+  test("the background box is drawn full size from the first frame (it does not depend on the reveal)", async () => {
+    const boxed = typing({ background: { color: BLUE, opacity: 0.5 } });
+    await show(boxed, { time: 1.07 });
+    const body = () => flat(screen.getByTestId("overlay-body-t"));
+    const box = () => (screen.getByTestId("overlay-body-t").props.children as { props: { style: unknown } }[]).filter(Boolean)[0];
+    const during = { body: body(), box: StyleSheet.flatten(box().props.style as object) };
+    await screen.rerender(<OverlayText overlay={boxed} frameW={W} frameH={H} />);
+    expect({ body: body(), box: StyleSheet.flatten(box().props.style as object) }).toEqual(during);
+  });
+
+  test("the last step, no time, the frame copy and a whole-text In draw the plain string", async () => {
+    const view = await show(typing(), { time: 1.47 });
+    expect(fill().props.children).toBe("Hello world");
+    await view.rerender(<OverlayText overlay={typing()} frameW={W} frameH={H} />);
+    expect(fill().props.children).toBe("Hello world");
+    await view.rerender(<OverlayText overlay={typing({ animation: { in: { id: "pop", duration: 0.5 }, out: null, loop: null } })} frameW={W} frameH={H} time={1.07} />);
+    expect(fill().props.children).toBe("Hello world");
+    await view.rerender(<OverlayText overlay={typing()} frameW={W} frameH={H} frameOnly time={1.07} />);
+    expect(screen.getByText("Hello world", hidden).props.children).toBe("Hello world");
+  });
+
+  test("in the overlay layer: the playhead drives it", async () => {
+    useEditorStore.getState().reset();
+    useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [typing()] }));
+    useEditorStore.getState().seek(1.07);
+    await render(<OverlayLayer frameW={W} frameH={H} onOpenPanel={() => {}} />);
+    expect((fill().props.children as unknown[])[0]).toBe("He");
+  });
+
+  test("re-render cost: a reveal adds no render to the layer, and within one step the drawn tree does not change", async () => {
+    const commits = async (o: TextOverlay, times: number[]) => {
+      useEditorStore.getState().reset();
+      useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [o] }));
+      useEditorStore.getState().seek(times[0]);
+      let n = 0;
+      await render(<Profiler id="overlays" onRender={() => { n++; }}><OverlayLayer frameW={W} frameH={H} onOpenPanel={() => {}} /></Profiler>);
+      const trees: string[] = [JSON.stringify(screen.toJSON())];
+      for (const t of times.slice(1)) { await act(async () => { useEditorStore.getState().seek(t); }); trees.push(JSON.stringify(screen.toJSON())); }
+      await screen.unmount();
+      return { n, trees };
+    };
+    // Step 2 of "Hello world" over 0.5 s is [0.05, 0.10) after the start; step 3 begins at 0.10.
+    const ticks = [1.06, 1.07, 1.08, 1.09, 1.11];
+    const revealing = await commits(typing(), ticks);
+    const plain = await commits(typing({ animation: { in: null, out: null, loop: null } }), ticks);
+    expect(revealing.n).toBe(plain.n);
+    expect(new Set(revealing.trees.slice(0, 4)).size).toBe(1);
+    expect(revealing.trees[4]).not.toBe(revealing.trees[3]);
+    expect(new Set(plain.trees).size).toBe(1);
   });
 });

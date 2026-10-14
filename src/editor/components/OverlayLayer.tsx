@@ -1,5 +1,6 @@
 import { Pressable, View } from "react-native";
 import { hasOverlayMotion, overlayBaseAt, resolveOverlayMotion, type KeyValues } from "@/src/editor/model/motion";
+import { hasReveal } from "@/src/editor/model/textReveal";
 import { isSticker, type Overlay } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { MIN_VIEW_OPACITY, OverlayText } from "./OverlayText";
@@ -41,7 +42,7 @@ export function OverlayLayer({ frameW, frameH, onOpenPanel }: Props) {
         }
         // A see-through text (style opacity) fades its whole wrapper, so its frame goes in the unfaded copy too.
         const apart = m !== null || o.style.opacity < 1;
-        const time = o.kind === "caption" && o.words.length > 0 && o.highlightColor ? playhead : undefined;
+        const time = (o.kind === "caption" && o.words.length > 0 && o.highlightColor) || hasReveal(o) ? playhead : undefined;
         const main = (
           <OverlayText key={o.id} overlay={m ? placed(o, m) : o} {...size} opacity={opacity} time={time}>
             <Pressable style={{ position: "absolute", inset: 0 }} onPress={() => selectOverlay(o.id)} accessibilityLabel={`Overlay ${o.text}`} />
