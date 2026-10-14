@@ -232,3 +232,23 @@ This build also has Typewriter and Word by word, two new ways for a text to appe
 tiles). Do the checks in `text-reveal-phone-checklist.md`, from the top: check 1 (an emoji must not show before its turn) comes
 first, then 2 (the editor and the exported file agree), 3 (outline, shadow, glow and box) and 11 (the heaviest export) are the
 ones that matter most.
+
+---
+
+## H. Open Instagram
+
+Only on this new build (the button needs a setting that only a new build carries; on the build you have now it never shows).
+
+### 36. With Instagram on the phone
+Export any project. On the finished screen tap "Open Instagram".
+- **Right looks like:** a grey "Open Instagram" button with Instagram's mark under Save to Photos. Tapping it says "Saved to
+  Photos" (or asks for Photos access the first time) and Instagram opens with your video picked, ready for you to post it
+  yourself. If Instagram opens on its home screen instead, write that down: the "open on this video" part is Instagram's own
+  and not promised by Meta.
+- **Wrong looks like:** no button although Instagram is installed, two copies of the video in Photos after tapping Save to Photos
+  and then Open Instagram, or nothing happening at all.
+
+### 37. Without Instagram
+On a phone without Instagram (or after deleting it), export again.
+- **Right looks like:** no "Open Instagram" button; Post to… / Save to Photos / Share / Done exactly as before.
+- **Wrong looks like:** the button is there.

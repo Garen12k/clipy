@@ -1,12 +1,13 @@
-import { requestPermissionsAsync, saveToLibraryAsync } from "expo-media-library/legacy";
 import { router, useNavigation } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { coverTimeOf, LAST_FRAME_SLACK } from "@/src/editor/model/timeline";
 import { useEditorStore } from "@/src/editor/store";
 import { ExportScreenBody } from "@/src/export/ExportScreenBody";
 import { exportDuration } from "@/src/export/estimate";
 import { useExportNotice } from "@/src/export/exportNotice";
+import { INSTAGRAM_FAILED, openInInstagram, useInstagramInstalled } from "@/src/export/openInstagram";
+import { saveVideoToPhotos } from "@/src/export/saveVideo";
 import { useExport } from "@/src/export/useExport";
 import { exportGesture } from "@/src/navigation/screenOptions";
 import { isBackendConfigured } from "@/src/publish/supabase";
@@ -21,18 +22,35 @@ export default function ExportScreen() {
   useEffect(() => { navigation.setOptions(exportGesture(state.status)); }, [navigation, state.status]);
   // An export that finishes while the app is not in front says so with one local notification (where they are allowed).
   useExportNotice(state.status, project?.name ?? "");
+  // Open Instagram is offered only while Instagram is installed (read when the video is done and when the app comes back).
+  const instagram = useInstagramInstalled(state.status === "done");
+  /** The asset this screen last put in Photos, by the file it was made from: Open Instagram reuses it rather than saving again. */
+  const saved = useRef<{ uri: string; localIdentifier: string | null } | null>(null);
+  const opening = useRef(false);
   if (!project) return null;
 
-  // `expo-media-library`'s default (non-legacy) `saveToLibraryAsync` is a shim that throws at
-  // runtime in SDK 57 (see `build/legacyWarnings.js`) — use the `/legacy` subpath's real impl.
-  async function onSave() {
-    if (!state.fileUri) return;
+  /** Save to Photos (src/export/saveVideo.ts) with its words; answers the asset when it was saved. */
+  async function save(): Promise<{ localIdentifier: string | null } | null> {
+    const uri = state.fileUri;
+    if (!uri) return null;
     try {
-      const perm = await requestPermissionsAsync(true);
-      if (!perm.granted) { useToast.getState().show("Allow Photos access in Settings to save."); return; }
-      await saveToLibraryAsync(state.fileUri);
+      const result = await saveVideoToPhotos(uri);
+      if (!result.saved) { useToast.getState().show("Allow Photos access in Settings to save."); return null; }
+      saved.current = { uri, localIdentifier: result.localIdentifier };
       useToast.getState().show("Saved to Photos");
-    } catch (e) { useToast.getState().show(e instanceof Error ? e.message : "Could not save to Photos."); }
+      return result;
+    } catch (e) { useToast.getState().show(e instanceof Error ? e.message : "Could not save to Photos."); return null; }
+  }
+  async function onSave() { await save(); }
+  /** The video in Photos (saved now unless this screen already saved it), then Instagram opened on it. One run at a time. */
+  async function onInstagram() {
+    if (opening.current || !state.fileUri) return;
+    opening.current = true;
+    try {
+      const asset = saved.current?.uri === state.fileUri ? saved.current : await save();
+      if (!asset) return;
+      if (!(await openInInstagram(asset.localIdentifier))) useToast.getState().show(INSTAGRAM_FAILED);
+    } finally { opening.current = false; }
   }
   async function onShare() {
     if (!state.fileUri) return;
@@ -57,5 +75,6 @@ export default function ExportScreen() {
   }
 
   return (<><ExportScreenBody project={project} missingSourceUris={missingSourceUris} state={state} start={start} cancel={cancel} reset={reset}
-    onSave={onSave} onShare={onShare} onDone={() => router.back()} onPost={isBackendConfigured() ? onPost : undefined} /><ToastHost /></>);
+    onSave={onSave} onShare={onShare} onDone={() => router.back()} onPost={isBackendConfigured() ? onPost : undefined}
+    onInstagram={instagram ? onInstagram : undefined} /><ToastHost /></>);
 }
