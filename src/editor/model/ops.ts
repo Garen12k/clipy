@@ -5,7 +5,7 @@ import { fitScale } from "./clipLayout";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
-  clampEffectRect, clampOpacity, CLIP_VOLUME, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, activePhotoMotion, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
+  clampEffectRect, clampOpacity, CLIP_VOLUME, FONT_IDS, DEFAULT_ADJUST, DEFAULT_TRANSFORM, EFFECT_END_SLACK, EFFECT_LIMITS, frameAspect, isAspectRatio, isHexColor, isRegionEffect, isSamePinTime, KEYFRAME_LIMITS, makeEffect, activePhotoMotion, isPhoto, isSticker, isTextOverlay, makeOverlay, makeSticker,
   LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_LIMITS, STABILIZE_IDS, TRANSITION_LIMITS,
   clampPhotoMotion, clampSound, COMBO_AS_MOTION, NO_SOUND, type PhotoMotion, type SoundSettings, type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
@@ -1411,6 +1411,43 @@ export function applyTextTemplate(p: Project, overlayId: string, templateId: Tex
 export function applyCaptionPreset(p: Project, presetId: CaptionPresetId): Project {
   if (!(CAPTION_PRESET_IDS as readonly string[]).includes(presetId)) return p;
   return setCaptionStyleForAll(p, CAPTION_PRESETS[presetId].patch);
+}
+
+/**
+ * A text's LOOK, as Copy style takes it and Paste style lays it on another text: the font, the size, the colour, the background, the
+ * outline switch and the WHOLE style (opacity, letter and line spacing, outline colour and width, shadow, glow, the box's padding and
+ * corner). Not the look: the words, where the text is and how it is turned (x / y / scale / rotation), its alignment (it moves the
+ * lines, as a template keeps it), its timing, keyframes and animation, and a caption's words and highlight (captions are not offered).
+ */
+export const TEXT_LOOK_KEYS = ["fontId", "fontScale", "color", "background", "outline", "style"] as const;
+export type TextLook = Pick<TextOverlay, (typeof TEXT_LOOK_KEYS)[number]>;
+
+/** The look of a text (or a copy of a look), in its own objects: nothing is shared with what it was read from, so a later edit of that changes nothing copied. */
+export function textLookOf(o: TextLook): TextLook {
+  return { fontId: o.fontId, fontScale: o.fontScale, color: o.color, background: o.background ? { ...o.background } : null, outline: o.outline,
+    style: { ...o.style, shadow: o.style.shadow ? { ...o.style.shadow } : null, glow: o.style.glow ? { ...o.style.glow } : null } };
+}
+
+/**
+ * Paste style: `look` laid on a TEXT (kind "text" only — a caption, a sticker or an unknown id is the same project). Every look field
+ * becomes the look's, through the Text panel's own rules (the size clamped by `normaliseOverlay`, the style by `clampTextStyle`); a font
+ * that is not one of ours or a colour that is not #RRGGBB keeps the text's own, a background with a bad colour is none. Every other
+ * field stays byte for byte. One change; the same project when the text already wears that look (so no undo step).
+ */
+export function pasteTextLook(p: Project, overlayId: string, look: TextLook): Project {
+  const i = p.overlays.findIndex((o) => o.id === overlayId);
+  if (i < 0) return p;
+  const cur = p.overlays[i];
+  if (cur.kind !== "text") return p;
+  const bg = look.background;
+  const background = bg && isHexColor(bg.color) ? { color: bg.color, opacity: clamp(Number.isFinite(bg.opacity) ? bg.opacity : 1, [0, 1]) } : null;
+  return replaceOverlay(p, i, normaliseOverlay(p, { ...cur,
+    fontId: (FONT_IDS as readonly unknown[]).includes(look.fontId) ? look.fontId : cur.fontId,
+    fontScale: Number.isFinite(look.fontScale) ? look.fontScale : cur.fontScale,
+    color: isHexColor(look.color) ? look.color : cur.color,
+    background,
+    outline: typeof look.outline === "boolean" ? look.outline : cur.outline,
+    style: clampTextStyle(look.style) }));
 }
 
 type PinValues = Pick<Keyframe, "x" | "y" | "scale" | "rotation" | "opacity">;

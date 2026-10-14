@@ -3,9 +3,10 @@ import { useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShallow } from "zustand/react/shallow";
 import { isSoundAvailable } from "@/modules/clipy-video";
-import { addTextOverlay, canSplitAudioAt, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, dropEmptyText, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, duplicateOverlay, extractedTrackOf, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitAudioTrackAt, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
+import { addTextOverlay, canSplitAudioAt, pasteTextLook, textLookOf, clipKeyframeAt, defaultOverlayRange, deleteAudioTrack, deleteClip, deleteEffect, deleteOverlay, dropEmptyText, duplicateAudioTrack, duplicateClip, duplicateEffect, duplicateLayerRefusal, duplicateOverlay, extractedTrackOf, overlayKeyframeAt, reorderLayer, setClipReversed, setDucking, splitAudioTrackAt, splitClipAt, toggleClipKeyframe, toggleOverlayKeyframe } from "@/src/editor/model/ops";
 import { clipAt, findItem, itemOffsetAt } from "@/src/editor/model/timeline";
 import { AUDIO_LIMITS, makeOverlay } from "@/src/editor/model/types";
+import { copyStyle, useCopiedStyle } from "@/src/editor/copiedStyle";
 import { SOUND_UNAVAILABLE } from "@/src/editor/soundRenders";
 import { useEditorStore } from "@/src/editor/store";
 import { useClipMedia } from "@/src/editor/useClipMedia";
@@ -66,8 +67,11 @@ import { VolumeSheet } from "./VolumeSheet";
 const AUDIO_LIMIT_MESSAGE = "You've reached the audio track limit.";
 /** Why a layer was not copied (`duplicateLayerRefusal`). */
 const DUPLICATE_REFUSED = { limit: "You've reached the layer limit.", overlap: "Only two video layers can play at the same time.", noRoom: "There's no room after this layer." } as const;
-/** What `contextFor` reads: the store's selection plus the toolbar's own section. */
-const selOf = (s: SelectionState, section: Section): ToolbarSelection => ({ clipId: s.selectedClipId, overlayId: s.selectedOverlayId, effectId: s.selectedEffectId, audioId: s.selectedAudioId, section });
+/** What Copy style and Paste style say (Paste style's carries Undo: it confirms the one step its tap has just applied). */
+export const STYLE_MESSAGES = { copied: "Style copied", pasted: "Style pasted" } as const;
+/** What `contextFor` reads: the store's selection plus the toolbar's own section and whether a text's style is copied (the session's `useCopiedStyle`). */
+const selOf = (s: SelectionState, section: Section, styleCopied: boolean): ToolbarSelection =>
+  ({ clipId: s.selectedClipId, overlayId: s.selectedOverlayId, effectId: s.selectedEffectId, audioId: s.selectedAudioId, section, styleCopied });
 
 /**
  * The editor's bottom area: ONE bar whose tools follow the selection (`contextFor` decides which bar and which tools; this component
@@ -107,8 +111,9 @@ export function EditorToolbar() {
   const [pick, setPick] = useState<{ key: string; group: GroupId | null; choosing: boolean }>({ key: "", group: null, choosing: false });
   // Forgotten as soon as the selection is another one, so coming BACK to an item is a new selection too.
   if (pick.key !== key && (pick.group !== null || pick.choosing)) setPick({ key, group: null, choosing: false });
-  const bar = useEditorStore((s) => (s.project ? contextFor(selOf(s, section), s.project).bar : "main"));
-  const tools = useEditorStore(useShallow((s) => (s.project ? contextFor(selOf(s, section), s.project).tools : [])));
+  const styleCopied = useCopiedStyle((s) => s.look !== null);
+  const bar = useEditorStore((s) => (s.project ? contextFor(selOf(s, section, styleCopied), s.project).bar : "main"));
+  const tools = useEditorStore(useShallow((s) => (s.project ? contextFor(selOf(s, section, styleCopied), s.project).tools : [])));
   // Tool strips: the closer lives here, the bottom area; the bar gives its place to a strip while one shows.
   useStripCloser();
   const strip = useToolStrip((s) => s.open);
@@ -209,6 +214,26 @@ export function EditorToolbar() {
     // The copy sits right after the original in the list.
     const dup = next.overlays[next.overlays.findIndex((o) => o.id === selectedOverlayId) + 1];
     if (dup) selectOverlay(dup.id);
+  };
+
+  /** Copy style: the selected text's look is remembered for the session (nothing in the project changes, so no Undo is offered). */
+  const copySelectedStyle = () => {
+    const o = useEditorStore.getState().project?.overlays.find((x) => x.id === selectedOverlayId);
+    if (!o || o.kind !== "text") return;
+    haptic("light");
+    copyStyle(textLookOf(o));
+    useToast.getState().show(STYLE_MESSAGES.copied, { kind: "done" });
+  };
+  /** Paste style: the copied look on the selected text, ONE undo step, said right after it with Undo. The same look again: no step, nothing said. */
+  const pasteSelectedStyle = () => {
+    const { project } = useEditorStore.getState();
+    const look = useCopiedStyle.getState().look;
+    if (!project || !selectedOverlayId || !look) return;
+    const next = pasteTextLook(project, selectedOverlayId, look);
+    if (next === project) return;
+    haptic("light");
+    apply(() => next);
+    useToast.getState().show(STYLE_MESSAGES.pasted, { kind: "done", undo: true });
   };
 
   const duplicateSelectedEffect = () => {
@@ -345,6 +370,8 @@ export function EditorToolbar() {
     overlayDelete: { onPress: () => { if (selectedOverlayId) { haptic("medium"); apply((p) => deleteOverlay(p, selectedOverlayId)); } } },
     text: { onPress: addText },
     captions: { onPress: () => openStrip("captions") },
+    copyStyle: { onPress: copySelectedStyle },
+    pasteStyle: { onPress: pasteSelectedStyle },
     addAudio: { onPress: () => openStrip("addAudio") },
     // A preference, not an action on a track: there even before there is a voice-over.
     ducking: { active: ducking, onPress: () => { haptic("light"); apply((p) => setDucking(p, !ducking)); } },

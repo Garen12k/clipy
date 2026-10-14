@@ -6,14 +6,18 @@ export const TOOL_IDS = [
   "edit", "audioMenu", "textMenu", "sticker", "overlay", "effect", "filter", "adjust", "ratio", "background", "cover", "templates", "collage",
   "split", "trim", "speed", "volume", "animate", "motion", "crop", "transform", "opacity", "mask", "blend", "chroma", "cutout", "stabilize", "keyframe", "transition",
   "layerForward", "layerBack", "replace", "reverse", "freeze", "duplicate", "delete", "select",
-  "overlayEdit", "overlayDuplicate", "overlayDelete", "text", "captions",
+  "overlayEdit", "overlayDuplicate", "overlayDelete", "text", "captions", "copyStyle", "pasteStyle",
   "addAudio", "ducking", "beats", "audioSplit", "audioVolume", "audioFade", "audioDuplicate", "audioDelete", "extractAudio", "voice", "soundQuality",
   "effectStrength", "effectDuplicate", "effectDelete",
 ] as const;
 export type ToolId = (typeof TOOL_IDS)[number];
 export type BarId = "main" | "clip" | "layer" | "text" | "sticker" | "audio" | "effect";
 export type Section = "audio" | "text" | null;
-export type ToolbarSelection = { clipId: string | null; overlayId: string | null; effectId: string | null; audioId: string | null; section: Section };
+/**
+ * What `contextFor` is asked about: the store's selection, the toolbar's own section, and — like the section, state that is not the
+ * project's — whether a text's style has been copied this session (`useCopiedStyle`; absent = no).
+ */
+export type ToolbarSelection = { clipId: string | null; overlayId: string | null; effectId: string | null; audioId: string | null; section: Section; styleCopied?: boolean };
 export type ToolbarContext = { bar: BarId; tools: ToolId[] };
 export type SelectionState = { selectedClipId: string | null; selectedOverlayId: string | null; selectedEffectId: string | null; selectedAudioId: string | null; multiSelect: string[] | null };
 
@@ -40,7 +44,9 @@ export function contextFor(sel: ToolbarSelection, p: Project): ToolbarContext {
   if (overlay) {
     if (overlay.kind === "caption") return { bar: "text", tools: ["overlayEdit", "captions", "overlayDuplicate", "overlayDelete", "text"] };
     const sticker = overlay.kind === "sticker";
-    return { bar: sticker ? "sticker" : "text", tools: keep([["overlayEdit"], ["animate"], ["keyframe"], ["overlayDuplicate"], ["overlayDelete"], ["text", !sticker]]) };
+    // Copy style / Paste style: a text's look (`TextLook`), never a caption's (it has Caption style) or a sticker's. Paste only once one is copied.
+    return { bar: sticker ? "sticker" : "text", tools: keep([["overlayEdit"], ["animate"], ["keyframe"], ["copyStyle", !sticker], ["pasteStyle", !sticker && sel.styleCopied === true],
+      ["overlayDuplicate"], ["overlayDelete"], ["text", !sticker]]) };
   }
   const item = sel.clipId ? findItem(p, sel.clipId) : null;
   if (item) {

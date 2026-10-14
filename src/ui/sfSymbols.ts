@@ -122,6 +122,8 @@ export const SF_SYMBOLS: Readonly<Partial<Record<IoniconName, SymbolName>>> = {
   "add-circle-outline": "plus.circle",
   "remove-circle-outline": "minus.circle",
   "chatbox-ellipses-outline": "captions.bubble",
+  "eyedrop-outline": "eyedropper",
+  "clipboard-outline": "doc.on.clipboard",
   // Sound.
   "volume-medium-outline": "speaker.wave.2",
   "volume-low-outline": "speaker.wave.1",

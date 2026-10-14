@@ -54,6 +54,8 @@ export const TOOL_META: Record<ToolId, { label: string; icon: IoniconName }> = {
   overlayDelete: { label: "Delete", icon: "trash-outline" },
   text: { label: "Add text", icon: "add-circle-outline" },
   captions: { label: "Captions", icon: "chatbox-ellipses-outline" },
+  copyStyle: { label: "Copy style", icon: "eyedrop-outline" },
+  pasteStyle: { label: "Paste style", icon: "clipboard-outline" },
   // Audio.
   addAudio: { label: "Add audio", icon: "add-circle-outline" },
   ducking: { label: "Ducking", icon: "volume-low-outline" },

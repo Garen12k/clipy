@@ -42,7 +42,7 @@ const GROUP = "Tool groups, Basics";
 /** What the row shows for a freshly selected video clip, after Back: the group button, Basics, and Delete pinned. */
 const CLIP = [GROUP, ...GROUPS.Basics, "Delete"];
 // Flat bars: Delete is pinned at the trailing end, after the row.
-const TEXT = ["Edit", "Animate", "Keyframe", "Duplicate", "Add text", "Delete"];
+const TEXT = ["Edit", "Animate", "Keyframe", "Copy style", "Duplicate", "Add text", "Delete"];
 const SOUND = ["Split", "Volume", "Fade", "Voice", "Sound", "Duplicate", "Add audio", "Ducking", "Beats", "Delete"];
 
 beforeEach(() => {

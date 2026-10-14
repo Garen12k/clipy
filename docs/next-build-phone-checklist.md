@@ -280,3 +280,19 @@ Sign in with Apple again, Accounts → Delete account → Delete, then close App
 ### 40. Email accounts are unchanged
 Sign in with email, Accounts → Delete account → Delete.
 - **Right looks like:** exactly as before — no Apple sheet, "Account deleted."
+
+## J. Copy style / Paste style for texts
+
+### 41. Copy a text's look onto another
+Make two texts. Give the first a font, a size, a colour, a background and a shadow or glow. Select it: the bar shows Edit,
+Animate, Keyframe, Copy style, Duplicate, Add text, then Delete. Tap Copy style, then select the second text and tap Paste style.
+- **Right looks like:** "Style copied" after the first tap and Paste style appearing beside Copy style; after Paste style the second
+  text wears the first one's look but keeps its own words, place, pinch zoom, turn, alignment and animation, and
+  "Style pasted" shows with Undo. Undo (in the message or the top bar) gives the old look back exactly.
+- **Wrong looks like:** the words or the position change too, two undo steps, Paste style missing, or no message.
+
+### 42. Captions, stickers, and another project
+Select a caption and a sticker; then open another project and select a text there.
+- **Right looks like:** no Copy style / Paste style on a caption's or a sticker's bar; in the other project Paste style is there
+  and works. After closing Clipy completely and opening it again, Paste style is gone until something is copied again.
+- **Wrong looks like:** the tools on a caption or sticker, or Paste style missing in the other project.
