@@ -9,10 +9,22 @@ import { newId } from "@/src/lib/id";
 import { storage } from "@/src/projects";
 import { sourceMenuShown, takeOne, useMediaSource } from "@/src/projects/mediaSource";
 import { pickMedia } from "@/src/projects/pickMedia";
+import { sheetRun, type SheetAsk } from "@/src/projects/sheetGuard";
 import { useToast } from "@/src/ui/Toast";
 
-/** One picker at a time, shared by the "+" tile, the Replace tool and the Overlay tool, so a double tap never opens a second pick. */
+/**
+ * One picker at a time, shared by the "+" tile, the Replace tool, the Overlay tool and Collage, so a double tap never opens a second
+ * pick. The lock is module-wide — it outlives the editor — so it NEVER waits for a system sheet's promise (`sheetRun`): a picker,
+ * the camera or the source menu holds it only while it comes up, and a late answer is dropped if another pick has the lock by then.
+ */
 const useMediaBusy = create<{ busy: boolean }>(() => ({ busy: false }));
+/** Takes the lock; what it answers lets it go, once. */
+function takeLock(): () => void {
+  useMediaBusy.setState({ busy: true });
+  let held = true;
+  return () => { if (held) { held = false; useMediaBusy.setState({ busy: false }); } };
+}
+type Sheet = <T>(ask: SheetAsk<T>) => Promise<T | null>;
 
 const LAYER_LIMIT = "You've reached the layer limit.";
 const LAYER_OVERLAP = "Only two video layers can play at the same time.";
@@ -28,12 +40,13 @@ export function newLayerStart(p: Project, playhead: number): number {
   return Math.min(playhead, Math.max(0, totalDuration(p) - NEW_LAYER_ROOM));
 }
 
-async function withLock(run: () => Promise<void>, failMessage: string): Promise<void> {
+/** `run` asks for every system sheet through `sheet` (a dropped late answer is null, as a cancel). */
+async function withLock(run: (sheet: Sheet) => Promise<void>, failMessage: string): Promise<void> {
   if (useMediaBusy.getState().busy) return;
-  useMediaBusy.setState({ busy: true });
-  try { await run(); }
+  const { sheet, end } = sheetRun(() => useMediaBusy.getState().busy, takeLock);
+  try { await run(sheet); }
   catch (e) { console.warn(e); useToast.getState().show(failMessage, { kind: "problem" }); }
-  finally { useMediaBusy.setState({ busy: false }); }
+  finally { end(); }
 }
 
 type Media = Pick<Clip, "sourceUri" | "sourceDuration" | "width" | "height" | "kind">;
@@ -76,18 +89,20 @@ function collageMessage(why: CollageRefusal, layout: CollageLayoutId, picked: nu
  */
 export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId: string): Promise<void>; addOverlay(): Promise<void>; makeCollage(layout: CollageLayoutId): Promise<void>; busy: boolean } {
   const busy = useMediaBusy((s) => s.busy);
-  const { ask: askSource } = useMediaSource();
+  const { ask: askMenu } = useMediaSource();
 
   // The "+" tile. Where the installed app can open the camera it asks first — the menu: Choose from Library / Take Photo or Video —
   // inside the lock, so nothing else starts meanwhile; one taken item is then added exactly as picked ones are. Without a camera
   // there is no menu: straight to the library, as ever.
-  const addMedia = () => withLock(async () => {
+  const addMedia = () => withLock(async (sheet) => {
     const projectId = useEditorStore.getState().project?.id;
     if (!projectId) return;
+    const askSource = () => sheet(askMenu);
     const source = sourceMenuShown() ? await askSource() : "library";
     if (!source) return;
-    const assets = source === "camera" ? await takeOne() : await pickMedia();
+    const assets = await sheet(() => (source === "camera" ? takeOne() : pickMedia()));
     if (!assets || assets.length === 0) return;
+    if (useEditorStore.getState().project?.id !== projectId) return;   // another project is open by now (a late answer): copy nothing
     const { clips } = await storage.importMedia(projectId, assets);
     const { project, apply } = useEditorStore.getState();
     if (project?.id !== projectId) return;   // the project was closed meanwhile: say nothing
@@ -97,10 +112,10 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
   }, "Couldn't add those items.");
 
   /** `clipId`: a main clip's or a layer's id. */
-  const replaceMedia = (clipId: string) => withLock(async () => {
+  const replaceMedia = (clipId: string) => withLock(async (sheet) => {
     const projectId = useEditorStore.getState().project?.id;
     if (!projectId) return;
-    const assets = await pickMedia({ multiple: false });
+    const assets = await sheet(() => pickMedia({ multiple: false }));
     if (!assets || assets.length === 0) return;
     const picked = assets[0];
     // Refuse before importing, so a video that cannot be used never gets copied into the project (placeholder uri for the check).
@@ -124,13 +139,13 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
   }, "Couldn't replace the clip.");
 
   /** The Overlay tool: one picked photo or video becomes a layer starting at the playhead (as it was when the tool was pressed; see `newLayerStart`), selected. */
-  const addOverlay = () => withLock(async () => {
+  const addOverlay = () => withLock(async (sheet) => {
     const pressed = useEditorStore.getState();
     const projectId = pressed.project?.id;
     if (!pressed.project || !projectId || pressed.project.clips.length === 0) return;
     const start = newLayerStart(pressed.project, pressed.playhead);
     if (pressed.project.layers.length >= LAYER_LIMITS.max) { useToast.getState().show(LAYER_LIMIT); return; }
-    const assets = await pickMedia({ multiple: false });
+    const assets = await sheet(() => pickMedia({ multiple: false }));
     if (!assets || assets.length === 0) return;
     const picked = assets[0];
     // Refuse before importing, so a video that cannot be a layer there never gets copied into the project (placeholder clip for the check).
@@ -158,7 +173,7 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
    * (too few, too many videos, a third video on screen); a failed import adds nothing. One undo step; the first cell is selected and
    * the Collage panel, if still the open tool, is re-keyed onto it so it stays open on the new collage.
    */
-  const makeCollage = (layout: CollageLayoutId) => withLock(async () => {
+  const makeCollage = (layout: CollageLayoutId) => withLock(async (sheet) => {
     const pressed = useEditorStore.getState();
     const projectId = pressed.project?.id;
     if (!pressed.project || !projectId || pressed.project.clips.length === 0) return;
@@ -168,7 +183,7 @@ export function useClipMedia(): { addMedia(): Promise<void>; replaceMedia(clipId
     const tell = (why: CollageRefusal, picked: number) => { const message = collageMessage(why, layout, picked, free); useToast.getState().show(message, message === ADD_FAILED ? { kind: "problem" } : undefined); };
     if (free < n) { tell("limit", 0); return; }
     const start = newLayerStart(pressed.project, pressed.playhead);
-    const assets = await pickMedia({ limit: n });
+    const assets = await sheet(() => pickMedia({ limit: n }));
     if (!assets || assets.length === 0) return;
     const picked = assets.slice(0, n);
     const before = useEditorStore.getState().project;
