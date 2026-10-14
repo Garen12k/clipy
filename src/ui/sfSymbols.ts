@@ -148,6 +148,8 @@ export const SF_SYMBOLS: Readonly<Partial<Record<IoniconName, SymbolName>>> = {
   "heart-outline": "heart",
   "cloud-outline": "cloud",
   "eye-outline": "eye",
+  "keypad-outline": "keyboard",
+  "reader-outline": "text.alignleft",
 };
 
 type SymbolViewType = ComponentType<SymbolViewProps>;

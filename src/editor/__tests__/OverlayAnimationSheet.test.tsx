@@ -98,3 +98,63 @@ test("the tile row keeps its offset across picks; a tab, another overlay or the 
   await view.rerender(<OverlayAnimationSheet overlayId="s1" visible onClose={() => {}} />);
   expect(rowStartX()).toBe(0);
 });
+
+test("a text's In row ends with Typewriter and Word by word; a pick is one undo step and keeps the Length", async () => {
+  await render(<OverlayAnimationSheet overlayId="t1" visible onClose={() => {}} />);
+  expect(tile("Typewriter")).toBeTruthy();
+  expect(tile("Word by word")).toBeTruthy();
+  const before = past();
+  await press("Typewriter");
+  expect(anim("t1").in).toEqual({ id: "typewriter", duration: 0.5 });
+  expect(past()).toBe(before + 1);
+  expect(tile("Typewriter")).toBeSelected();
+  expect(slider().props).toMatchObject({ disabled: false });
+  await press("Word by word");
+  expect(anim("t1").in).toEqual({ id: "wordByWord", duration: 0.5 });
+  await press("Pop");
+  expect(anim("t1").in).toEqual({ id: "pop", duration: 0.5 });     // one In at a time
+});
+
+test("never on a text's Out row, nor anywhere for a sticker", async () => {
+  const view = await render(<OverlayAnimationSheet overlayId="t1" visible onClose={() => {}} />);
+  await press("Out");
+  expect(screen.queryByRole("button", { name: "Typewriter" })).toBeNull();
+  await view.rerender(<OverlayAnimationSheet overlayId="s1" visible onClose={() => {}} />);
+  await press("In");
+  expect(screen.queryByRole("button", { name: "Typewriter" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Word by word" })).toBeNull();
+});
+
+test("the Length slider changes a reveal's length like any In", async () => {
+  useEditorStore.getState().apply((p) => setOverlayAnimation(p, "t1", { in: { id: "typewriter", duration: 0.5 } }));
+  await render(<OverlayAnimationSheet overlayId="t1" visible onClose={() => {}} />);
+  await fireEvent(slider(), "touchStart");
+  await fireEvent(slider(), "touchMove", { v: 1.2 });
+  expect(anim("t1").in).toEqual({ id: "typewriter", duration: 1.2 });
+});
+
+test("a stored reveal: its tile alone is picked, the row starts on it, and another In replaces it in one step at its Length", async () => {
+  useEditorStore.getState().apply((p) => setOverlayAnimation(p, "t1", { in: { id: "wordByWord", duration: 1.5 } }));
+  await render(<OverlayAnimationSheet overlayId="t1" visible onClose={() => {}} />);
+  expect(tile("Word by word")).toBeSelected();
+  for (const name of ["None", "Typewriter", "Fade", "Pop", "Rise"]) expect(tile(name)).not.toBeSelected();
+  expect(rowStartX()).toBe(tilesStartX(12, TILE_WIDTH));    // None, the ten In ids, Typewriter, then Word by word: tile 12
+  const before = past();
+  await press("Fade");
+  expect(anim("t1").in).toEqual({ id: "fade", duration: 1.5 });
+  expect(past()).toBe(before + 1);
+  expect(tile("Word by word")).not.toBeSelected();
+});
+
+test("the reveal tiles carry their name to VoiceOver and to the large-content viewer", async () => {
+  await render(<OverlayAnimationSheet overlayId="t1" visible onClose={() => {}} />);
+  for (const name of ["Typewriter", "Word by word"]) {
+    expect(tile(name).props).toMatchObject({ accessibilityLabel: name, accessibilityShowsLargeContentViewer: true, accessibilityLargeContentTitle: name });
+  }
+});
+
+test("a caption has no animation strip, so no reveal tiles", async () => {
+  await render(<OverlayAnimationSheet overlayId="c1" visible onClose={() => {}} />);
+  expect(screen.queryByRole("button", { name: "Typewriter" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Word by word" })).toBeNull();
+});

@@ -1,4 +1,4 @@
-import type { AnimComboId, AnimInId, AnimLoopId, BlendId, EffectId, FilterId, ShapeId, SpeedCurveId, TextOverlay, TransitionType } from "./model/types";
+import type { AnimComboId, AnimInId, AnimLoopId, BlendId, EffectId, FilterId, RevealId, ShapeId, SpeedCurveId, TextOverlay, TransitionType } from "./model/types";
 import { filterPreviewOf } from "./model/filterRecipes";
 import type { IoniconName } from "./toolGroups";
 
@@ -84,6 +84,11 @@ export const ANIM_IN: Record<AnimInId, { label: string; icon: IoniconName }> = {
   spin:       { label: "Spin",        icon: "sync-outline" },
   pop:        { label: "Pop",         icon: "sparkles-outline" },
   rise:       { label: "Rise",        icon: "trending-up-outline" },
+};
+/** Text reveals (a text's In only): the letters or the words appear in turn. What shows when is model/textReveal.ts. */
+export const ANIM_REVEAL: Record<RevealId, { label: string; icon: IoniconName }> = {
+  typewriter: { label: "Typewriter",   icon: "keypad-outline" },
+  wordByWord: { label: "Word by word", icon: "reader-outline" },
 };
 /** Whole-clip animations (clips only). */
 export const ANIM_COMBO: Record<AnimComboId, { label: string; icon: IoniconName }> = {
