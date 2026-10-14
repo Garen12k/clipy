@@ -81,3 +81,15 @@ describe("never a half state: the server has deleted the account, so it ends as 
     expect(localStorage.getItem("sb-ref-auth-token")).not.toBeNull(); // the mock removed nothing; the session read back was already null
   });
 });
+
+test("with Apple's code: the ONE request carries it, and the rest is as without", async () => {
+  const order: string[] = [];
+  mockDelete.mockImplementation(async () => { order.push("server"); });
+  mockAuth.signOut.mockImplementation(async () => { order.push("local"); return { error: null }; });
+  await expect(configured().deleteAccount("c0de.0.apple")).resolves.toBeUndefined();
+  expect(mockDelete).toHaveBeenCalledTimes(1);
+  expect(mockDelete).toHaveBeenCalledWith({ appleCode: "c0de.0.apple" });
+  expect(order).toEqual(["server", "local"]);
+  mockDelete.mockRejectedValueOnce(failure("delete_failed", FAILED));
+  await expect(configured().deleteAccount("c0de.0.apple")).rejects.toThrow(FAILED);
+});

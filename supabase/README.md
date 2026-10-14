@@ -575,7 +575,7 @@ The app says **Account deleted.** only after step 3 worked, and then signs out o
 npx.cmd supabase functions deploy
 ```
 
-Until then the row answers **Couldn't delete the account. Try again.** Nothing else is affected, and no new secret or database change is needed.
+Until then the row answers **Couldn't delete the account. Try again.** Nothing else is affected, and no database change is needed.
 
 **First live run (never tested against the real server):**
 
@@ -583,3 +583,47 @@ Until then the row answers **Couldn't delete the account. Try again.** Nothing e
 2. In the Supabase dashboard, **Authentication → Users**: the address is gone. **Table Editor → connected_accounts**: no row for it.
 3. Sign in again with the same address: it works, and no platform is connected.
 4. If the row says **Couldn't delete the account. Try again.** every time, open **Edge Functions → delete-account → Logs** and copy the line starting `delete-account:` for the developer.
+
+### Apple: revoking Sign in with Apple when an account is deleted
+
+Apple asks that when someone who signed in with Apple deletes their account, the app also tells Apple to forget Clipy for that Apple ID. Clipy does this on the server, and it stays **off** until two secrets are added. While it is off, deleting works exactly as above (Apple users only see Apple's sheet once more). Whether it is on or off, it never stops a deletion: Apple gets the same 8 seconds as the platforms, and if Apple fails or is slow the account is deleted anyway. Nothing secret (the key, the code, Apple's answers) is ever written to the logs.
+
+**What the person sees.** After **Delete**, someone who signed in with Apple sees Apple's own sheet again and confirms with Face ID. If they close it, or Apple fails (as it does today, while Apple's "Sign Up Not Completed" problem lasts), or the sheet does not answer within two minutes, Clipy asks **Delete without Apple's confirmation?** with **Cancel** and **Delete Anyway**. Delete Anyway deletes the account; Clipy then stays in their Apple ID's Sign in with Apple list until they remove it in Settings. People who use email or Google see nothing new.
+
+**Switch it on (once):**
+
+1. Put the server online (if not done since this change). The developer runs:
+
+   ```powershell
+   npx.cmd supabase functions deploy
+   ```
+
+2. Make a Sign in with Apple key. This ADDS a key to the Apple developer account; nothing there is deleted or revoked. In [developer.apple.com/account](https://developer.apple.com/account): **Certificates, Identifiers & Profiles** → **Keys** → the **+** button. Name it `Clipy Sign in with Apple`, tick **Sign in with Apple**, click **Configure** next to it, choose the primary App ID **com.astinos.clipy**, **Save** → **Continue** → **Register**.
+3. Click **Download**: you get a file `AuthKey_XXXXXXXXXX.p8`. **Apple lets you download it only once** — keep it somewhere safe (not in the project folder). Note the **Key ID** shown on the page (10 letters and digits).
+4. Give the server the Key ID. Copy the Key ID (select it on Apple's page, Ctrl+C). Do not paste it anywhere. Then the developer runs (it reads the clipboard and prints nothing of it):
+
+   ```powershell
+   $k = (Get-Clipboard -Raw).Trim(); npx.cmd supabase secrets set "APPLE_KEY_ID=$k"; Remove-Variable k
+   ```
+
+5. Give the server the key. Open the `.p8` file in Notepad, press Ctrl+A, then Ctrl+C, and close Notepad without saving. Do not paste it anywhere. Then the developer runs (again it reads the clipboard and prints nothing of it):
+
+   ```powershell
+   $k = (Get-Clipboard -Raw) -replace '\s',''; npx.cmd supabase secrets set "APPLE_REVOKE_KEY=$k"; Remove-Variable k
+   ```
+
+   Afterwards copy any ordinary word, so the key is no longer on the clipboard. Secrets take effect straight away; no new deploy is needed for them.
+
+**To switch it off again** (this only removes the server's copies; nothing at Apple changes, and the key stays in the Apple developer account until you choose to revoke it there):
+
+```powershell
+npx.cmd supabase secrets unset APPLE_REVOKE_KEY APPLE_KEY_ID
+```
+
+**First live run** — only possible once Apple sign-in itself works (today Apple answers "Sign Up Not Completed"):
+
+1. On the phone, sign in to Clipy with a throw-away Apple ID. Check iPhone Settings → your name → Sign in with Apple: Clipy is listed.
+2. **Accounts → Delete account → Delete**. Apple's sheet appears; confirm. Expected: **Account deleted.**
+3. **Edge Functions → delete-account → Logs**: a line `apple revoke: done`. A line `apple revoke: code not exchanged 400 invalid_client` means the key, Key ID or App ID is wrong; `invalid_grant` means the code was already used or too old — copy the line for the developer.
+4. Settings → your name → Sign in with Apple: Clipy is gone from that Apple ID's list (this is the Apple ID's own list, not the developer account). Signing in with Apple again asks for name and email again and makes a new, empty Clipy account.
+5. Once more, but close Apple's sheet: **Delete without Apple's confirmation?** appears; **Cancel** keeps you signed in; **Delete Anyway** deletes, and the log has no `apple revoke` line.

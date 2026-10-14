@@ -5,7 +5,7 @@ import { Alert } from "react-native";
 jest.mock("expo-router", () => ({ router: { back: jest.fn(), push: jest.fn(), replace: jest.fn(), canGoBack: () => true }, Redirect: () => null, useFocusEffect: (cb: () => void) => { require("react").useEffect(() => { cb(); }, []); } }));
 jest.mock("../useSession", () => ({ useSession: jest.fn() }));
 jest.mock("../useAccounts", () => ({ useAccounts: jest.fn() }));
-jest.mock("../supabase", () => ({ signInWithApple: jest.fn(), signOut: jest.fn(), deleteAccount: jest.fn() }));
+jest.mock("../supabase", () => ({ signInWithApple: jest.fn(), signOut: jest.fn(), deleteAccount: jest.fn(), appleIdentity: jest.fn(async () => null), confirmWithApple: jest.fn(async () => null) }));
 // The engine is not linked under Jest (the build is "Expo Go"); one ability can be switched on to name a build.
 jest.mock("@/modules/clipy-video", () => ({ ...jest.requireActual("@/modules/clipy-video"), isSteadyAvailable: jest.fn(() => false) }));
 import { isSteadyAvailable } from "@/modules/clipy-video";

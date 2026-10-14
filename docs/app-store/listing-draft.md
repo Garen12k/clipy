@@ -120,7 +120,7 @@ Take them on the phone (side button + volume up) with a real project after the n
 
 - [ ] The next build is installed, the phone checklist (`docs/next-build-phone-checklist.md`) is done, and that build is the one selected for review.
 - [ ] **Sign in with Apple works** — Apple requires it because Google sign-in is offered. It currently fails with "Sign Up Not Completed" (Apple's side). Either Apple fixes it, or Google sign-in is removed before submitting.
-- [ ] **Sign in with Apple token revocation on account deletion** (Apple guideline 5.1.1(v)) — not built yet; needs a key from your Apple developer account.
+- [ ] **Sign in with Apple token revocation on account deletion** (Apple guideline 5.1.1(v)) — built (Apple users confirm with Apple once more; the server revokes); waiting for the Sign in with Apple key from your Apple developer account (`supabase/README.md` §14 "Apple: revoking") and for Apple to fix the "Sign Up Not Completed" sign-in fault before it can be tried.
 - [ ] The privacy answers in section 6 match the privacy page.
 - [ ] Export compliance: already answered in the app (`ITSAppUsesNonExemptEncryption: false`).
 - [ ] Price: Free (or your choice) and the countries to sell in.
