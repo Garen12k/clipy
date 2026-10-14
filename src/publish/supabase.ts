@@ -133,6 +133,49 @@ export async function signInWithApple(): Promise<"ok" | "cancelled"> {
   await ask(() => supabase.auth.signInWithIdToken({ provider: "apple", token }));
   return "ok";
 }
+
+/** An Apple sign-in on the signed-in account; `sub` is Apple's id for that person when the session names it (used only to check that the same Apple ID confirms a deletion). */
+export interface AppleIdentity { sub: string | null }
+/**
+ * Whether the signed-in account has an Apple sign-in, read from the session ONCE: `app_metadata.providers` (all the providers
+ * linked — an account made by email with Apple linked later counts), `app_metadata.provider`, or an `identities` entry. Null for
+ * email and Google accounts, with no session, a session that cannot be read, or no backend. Never throws.
+ */
+export async function appleIdentity(): Promise<AppleIdentity | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  type SessionUser = { app_metadata?: { provider?: unknown; providers?: unknown }; identities?: { provider?: unknown; identity_data?: { sub?: unknown } }[] };
+  let user: SessionUser | undefined;
+  try { user = (await supabase.auth.getSession()).data.session?.user; } catch { return null; }
+  if (!user) return null;
+  const meta = user.app_metadata ?? {};
+  const providers = Array.isArray(meta.providers) ? meta.providers : [];
+  const identity = Array.isArray(user.identities) ? user.identities.find((i) => i?.provider === "apple") : undefined;
+  if (!providers.includes("apple") && meta.provider !== "apple" && !identity) return null;
+  const sub = identity?.identity_data?.sub;
+  return { sub: typeof sub === "string" && sub ? sub : null };
+}
+
+/**
+ * Apple's sheet once more, at deletion, for a FRESH authorization code (single use, five minutes) — the server exchanges it and
+ * revokes the Apple sign-in. Nothing is asked for (no name, no email). Null when Apple does not confirm: the sheet closed, Apple
+ * failed, no code, a DIFFERENT Apple ID than the one that signed in (when `sub` is known), the phone cannot show the sheet, or
+ * Expo Go. Never throws; the code is never logged.
+ */
+export async function confirmWithApple(sub: string | null): Promise<string | null> {
+  if (isRunningInExpoGo()) return null;
+  try {
+    if (!(await AppleAuthentication.isAvailableAsync())) return null;
+    const c = await AppleAuthentication.signInAsync({ requestedScopes: [] });
+    if (!c.authorizationCode) return null;
+    if (sub && c.user !== sub) { console.warn("apple confirm: another Apple ID"); return null; }
+    return c.authorizationCode;
+  } catch (e) {
+    const code = (e as { code?: unknown } | null)?.code;
+    if (code !== "ERR_REQUEST_CANCELED") console.warn("apple confirm: failed", typeof code === "string" ? code : "");
+    return null;
+  }
+}
 /**
  * Signs out of Clipy on this phone. auth-js removes the stored session even when the server could not be told (offline, a server
  * error), so a failed request alone is not a failed sign-out: it is thrown only if a session is STILL there afterwards (or cannot be
@@ -161,11 +204,11 @@ const SAID = new Set(["delete_failed", "unreachable", "signed_out", "unauthorize
  * Refused or unreachable → one plain sentence is thrown and nothing local has changed (still signed in; asking again is safe).
  * After the yes it always resolves: the account IS gone, so a local sign-out that fails cannot leave a half state — the session is
  * ended on this phone alone (`scope: "local"`: there is no user left on the server to sign out), and if one is somehow still
- * stored, the stored session is removed by hand.
+ * stored, the stored session is removed by hand. An Apple user's fresh Apple code, when there is one, goes with that one request.
  */
-export async function deleteAccount(): Promise<void> {
+export async function deleteAccount(appleCode?: string): Promise<void> {
   const supabase = configured();
-  try { await api.deleteAccount(); }
+  try { await (appleCode ? api.deleteAccount({ appleCode }) : api.deleteAccount()); }
   catch (e) { throw new Error(e instanceof ApiFailure && SAID.has(e.code) && e.message ? e.message : DELETE_FAILED); }
   try { await supabase.auth.signOut({ scope: "local" }); } catch { /* looked at below */ }
   let still = true;

@@ -116,3 +116,12 @@ test("deleteAccount is one POST to delete-account with the session token and not
   fetchMock.mockRejectedValue(new TypeError("Network request failed"));
   await expect(api.deleteAccount()).rejects.toMatchObject({ code: "unreachable" });
 });
+
+test("deleteAccount with Apple's code: the code is the body's one field; without it the body stays {}", async () => {
+  fetchMock.mockResolvedValue(res(200, { ok: true }));
+  await expect(api.deleteAccount({ appleCode: "c0de.0.apple" })).resolves.toBeUndefined();
+  expect(fetchMock.mock.calls[0][0]).toBe("https://ref.supabase.co/functions/v1/delete-account");
+  expect(fetchMock.mock.calls[0][1].body).toBe('{"appleCode":"c0de.0.apple"}');
+  await api.deleteAccount();
+  expect(fetchMock.mock.calls[1][1].body).toBe("{}");
+});

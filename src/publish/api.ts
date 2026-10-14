@@ -67,7 +67,8 @@ export const api = {
   uploadChunk: (sessionId: string, offset: number, total: number, bytes: Uint8Array, signal?: AbortSignal) =>
     call<{ nextOffset: number }>("post-upload", { bytes, signal, headers: { "Content-Type": "application/octet-stream", "x-session-id": sessionId, "x-offset": String(offset), "x-total": String(total) } }),
   finalize: (sessionId: string, clientResult: string | null) => call<PublishResult>("post-finalize", { json: { sessionId, clientResult } }),
-  /** Delete my account. Nothing says WHO: the server takes the user from the session token alone. */
-  deleteAccount: async () => { await call("delete-account", { json: {} }); },
+  /** Delete my account. Nothing says WHO: the server takes the user from the session token alone. An Apple user's phone adds
+   *  Apple's fresh authorization code, so the server can revoke the Apple sign-in; without one the body stays `{}`. */
+  deleteAccount: async (body?: { appleCode: string }) => { await call("delete-account", { json: body?.appleCode ? { appleCode: body.appleCode } : {} }); },
   status: (sessionId: string) => call<PublishResult>("post-status", { json: { sessionId } }),
 };
