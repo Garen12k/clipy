@@ -18,11 +18,11 @@ const APPLE = "https://appleid.apple.com";
 export const appleRevokeOn = (env: Env): boolean => !!env.get("APPLE_REVOKE_KEY")?.trim() && !!env.get("APPLE_KEY_ID")?.trim();
 
 /**
- * The PKCS#8 bytes of a .p8: every `-----…-----` marker, literal `\n` and white space removed, then base64. So the secret may hold
+ * The PKCS#8 bytes of a .p8: every `-----…-----` marker, literal `\n` / `\r`, quotes and white space removed, then base64. So the secret may hold
  * the file as it is OR squeezed onto one line (the README's clipboard command does that: `npx.cmd` cannot pass a line break).
  */
 export function pemBody(text: string): Uint8Array<ArrayBuffer> {
-  const b64 = text.replace(/-----[^-]*-----/g, "").replace(/\\n/g, "").replace(/\s+/g, "");
+  const b64 = text.replace(/-----[^-]*-----/g, "").replace(/\\[nr]/g, "").replace(/["\s]+/g, "");
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 }
 

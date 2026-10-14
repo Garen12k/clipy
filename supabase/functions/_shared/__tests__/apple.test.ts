@@ -45,6 +45,9 @@ describe("the client secret", () => {
     expect(pemBody(pem.replace(/\n/g, "\r\n"))).toEqual(want);
     expect(pemBody(pem.replace(/\s/g, ""))).toEqual(want);           // the README's clipboard command
     expect(pemBody(pem.replace(/\n/g, "\\n"))).toEqual(want);
+    expect(pemBody(pem.replace(/\n/g, "\\r\\n"))).toEqual(want);    // an escaped CRLF, as four characters
+    expect(pemBody(`"${pem}"`)).toEqual(want);                        // pasted with its quotes
+    expect(pemBody(`"${pem.replace(/\n/g, "\\n")}"`)).toEqual(want);
     await expect(appleClientSecret(pem.replace(/\s/g, ""), "ABC123DEFG", NOW)).resolves.toMatch(/^eyJ/);
   });
 });
@@ -88,6 +91,14 @@ describe("exchange, then revoke", () => {
     expect(revokeInit.headers).toEqual({ "Content-Type": "application/x-www-form-urlencoded" });
     expect(revokeInit.body).toBe(`client_id=com.astinos.clipy&client_secret=${secret}&token=apple-refresh&token_type_hint=refresh_token`);
     expect(logs).toHaveBeenCalledWith("apple revoke: done");
+  });
+
+  test("a Key ID pasted with spaces or a line break is trimmed in the secret's header", async () => {
+    const { pem } = await appleKey();
+    const fetch = jest.fn().mockResolvedValueOnce(answer(400, { error: "invalid_grant" }));
+    const deps = fakeDeps({ env: envOf([["APPLE_REVOKE_KEY", pem], ["APPLE_KEY_ID", " ABC123DEFG\r\n"]]), fetch: fetch as unknown as typeof globalThis.fetch });
+    await revokeApple(deps, CODE);
+    expect(part(form(fetch.mock.calls[0][1]).get("client_secret")!.split(".")[0])).toEqual({ alg: "ES256", kid: "ABC123DEFG" });
   });
 
   test("only an access token came back: that is revoked, with its hint", async () => {

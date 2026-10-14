@@ -133,8 +133,8 @@ New file `supabase/functions/_shared/apple.ts` (plain TS, web-standard APIs, no 
   empty. Off ⇒ nothing is asked of Apple.
 - `revokeApple(deps, code)` → `"off" | "revoked" | "failed"`, never throws: switch off → `"off"`. Else make the secret; POST
   `/auth/token` with exactly `client_id, client_secret, code, grant_type=authorization_code` (in that order, `formBody` + `FORM`);
-  a non-2xx or unreadable answer → log `apple revoke: code not exchanged <status> <error code>` → `"failed"`. Revoke the
-  `refresh_token` (hint `refresh_token`) — or, when only an access token came back, that (hint `access_token`); neither → log, `"failed"`.
+  a non-2xx answer → log `apple revoke: code not exchanged <status> <error code>` → `"failed"`. Revoke the
+  `refresh_token` (hint `refresh_token`) — or, when only an access token came back, that (hint `access_token`); neither (or an unreadable 2xx answer) → log `apple revoke: no token in Apple's answer`, `"failed"`.
   POST `/auth/revoke` with exactly `client_id, client_secret, token, token_type_hint`; non-2xx → log `apple revoke: refused
   <status> <error code>` → `"failed"`; 2xx → log `apple revoke: done` → `"revoked"`. Any throw (a key that will not import, the
   network) → log `apple revoke: failed <error name>` → `"failed"`. Logs carry the status and Apple's error code through

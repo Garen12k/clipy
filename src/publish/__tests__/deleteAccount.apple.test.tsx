@@ -9,7 +9,7 @@ import { AFTER_SHEET_MS } from "@/src/projects/ProjectActionsSheet";
 import { useToast } from "@/src/ui/Toast";
 import { appleIdentity, confirmWithApple, deleteAccount, signOut } from "../supabase";
 import { useAccounts } from "../useAccounts";
-import { NO_APPLE_MESSAGE, NO_APPLE_TITLE } from "../useDeleteAccount";
+import { APPLE_SHEET_DEADLINE_MS, NO_APPLE_MESSAGE, NO_APPLE_TITLE } from "../useDeleteAccount";
 
 const p = (id: string) => ({ id, available: false, connected: false, name: null, avatarUrl: null, needsReconnect: false });
 const hook = () => ({ status: "ready", platforms: ["youtube", "tiktok", "instagram", "facebook", "x"].map(p), error: null, busy: null, refresh: jest.fn(), connect: jest.fn(), disconnect: jest.fn() });
@@ -126,4 +126,52 @@ test("an email or Google user: no wait, no Apple, deleteAccount() with nothing â
   await sheetTime();
   expect(confirmWithApple).not.toHaveBeenCalled();
   expect(alert).toHaveBeenCalledTimes(1);
+});
+
+test("Apple's sheet that FAILS (rejects): the second alert, the spinner gone â€” never stuck", async () => {
+  (confirmWithApple as jest.Mock).mockRejectedValue(new Error("boom"));
+  await pressDelete();
+  await sheetTime();
+  expect(deleteAccount).not.toHaveBeenCalled();
+  expect(alert).toHaveBeenCalledTimes(2);
+  expect(alert.mock.calls[1][0]).toBe(NO_APPLE_TITLE);
+  expect(screen.queryByLabelText("Deleting account")).toBeNull();
+});
+
+test("the session that cannot be read (appleIdentity rejects): deleted as before, with nothing", async () => {
+  (appleIdentity as jest.Mock).mockRejectedValue(new Error("no session"));
+  await pressDelete();
+  expect(deleteAccount).toHaveBeenCalledTimes(1);
+  expect(deleteAccount).toHaveBeenCalledWith();
+  expect(useToast.getState().message).toBe("Account deleted.");
+  expect(confirmWithApple).not.toHaveBeenCalled();
+});
+
+test("the screen left while Apple is asked: no second alert drawn over whatever is next", async () => {
+  (confirmWithApple as jest.Mock).mockResolvedValue(null);
+  await pressDelete();
+  await act(async () => { screen.unmount(); });
+  await act(async () => { await wait(AFTER_SHEET_MS + 50); });
+  expect(alert).toHaveBeenCalledTimes(1);
+  expect(deleteAccount).not.toHaveBeenCalled();
+});
+
+test("Apple's sheet that NEVER answers: after APPLE_SHEET_DEADLINE_MS the second alert, the row free again; a late code is dropped", async () => {
+  let late!: (code: string) => void;
+  (confirmWithApple as jest.Mock).mockImplementation(() => new Promise<string>((r) => { late = r; }));
+  jest.useFakeTimers();
+  try {
+    await pressDelete();
+    await act(async () => { await jest.advanceTimersByTimeAsync(AFTER_SHEET_MS + 10); });
+    expect(confirmWithApple).toHaveBeenCalledTimes(1);
+    await act(async () => { await jest.advanceTimersByTimeAsync(APPLE_SHEET_DEADLINE_MS - 100); });
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Deleting account")).toBeTruthy();
+    await act(async () => { await jest.advanceTimersByTimeAsync(200); });
+    expect(alert).toHaveBeenCalledTimes(2);
+    expect(alert.mock.calls[1][0]).toBe(NO_APPLE_TITLE);
+    expect(screen.queryByLabelText("Deleting account")).toBeNull();
+    await act(async () => { late(CODE); });
+    expect(deleteAccount).not.toHaveBeenCalled();
+  } finally { jest.useRealTimers(); }
 });
