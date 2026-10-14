@@ -13,6 +13,7 @@ import { AFTER_SHEET_MS, ProjectActionsSheet } from "@/src/projects/ProjectActio
 import { ProjectCard } from "@/src/projects/ProjectCard";
 import { QUICK, type QuickRecipeId } from "@/src/projects/quickEdit";
 import { QuickEditSheet } from "@/src/projects/QuickEditSheet";
+import { hold, sheetRun } from "@/src/projects/sheetGuard";
 import { useProjects } from "@/src/projects/useProjects";
 import { filePhone, type PickedAsset, type ProjectSummary } from "@/src/projects";
 import { TransferCard } from "@/src/projects/TransferCard";
@@ -51,13 +52,6 @@ const QUICK_BACKING = { borderRadius: theme.radius.pill } as const;
 const QUICK_SHARES = { ...QUICK_BACKING, flexShrink: 1 } as const;
 const MAKING = { project: "Creating your project", quick: "Making your quick edit" } as const;
 
-/** Takes one of Home's two refs and answers with what lets it go — ONCE: a late second call (a sheet that closes long after) cannot let go of what a newer run holds. */
-function hold(ref: { current: boolean }): () => void {
-  ref.current = true;
-  let held = true;
-  return () => { if (held) { held = false; ref.current = false; } };
-}
-
 function ProjectsScreen() {
   const { projects, loading, reload, create, createQuick, rename, duplicate, remove } = useProjects();
   const { transfer, saveCopy, openFile, cancel } = useProjectFile(reload);
@@ -89,32 +83,38 @@ function ProjectsScreen() {
   const [making, setMaking] = useState<keyof typeof MAKING | null>(null);
   const focused = useRef(true);
   // New Project's menu (Choose from Library / Take Photo or Video), where the installed app can open the camera. A wait for it is dropped when Home is left.
-  const { ask: askSource, forget: forgetSource } = useMediaSource();
+  const { ask: askMenu, forget: forgetSource } = useMediaSource();
   useFocusEffect(useCallback(() => { focused.current = true; return () => { focused.current = false; forgetSource(); }; }, [forgetSource]));
   const openEditor = (id: string | null) => { if (id && focused.current) router.push(`/editor/${id}`); };
 
   // New project: the library — or, where the camera can be opened, the menu and then the library or the camera (one item, which
   // continues exactly as one picked item does) —, then the aspect-ratio picker, then the project. Nothing exists until Create is
-  // pressed. `starting` is held from the tap to the end of the pick, the menu and its wait included, so a second tap opens nothing.
+  // pressed. `starting` is held from the tap to the end of the pick, so a second tap opens nothing — but, like every guard of
+  // Home, NEVER WHILE WAITING FOR A SYSTEM SHEET'S PROMISE (the menu, the library, the camera: see `sheetRun`): a sheet holds it
+  // only while it comes up, and an answer that arrives after that continues only if nothing else has started meanwhile (and Home
+  // is still in front) — else it is dropped as a cancel is. The menu takes it back the moment it answers, for its own close.
   // The button is held back only by the two refs — the library is up, or a project is being made (its media copied) — never by
   // `pending`: if iOS drops the sheet's presentation, `pending` stays set with nothing on screen to clear it, and the button must
   // still work. The sheet itself covers the button while it is really there. A press with media still waiting starts over: the
   // stale pick is dropped first (so the sheet is presented afresh for the new one), and the new pick replaces it.
   const starting = useRef(false);
   const creating = useRef(false);
+  /** A late sheet's answer is dropped while another run has a ref, or once Home is no longer in front. */
+  const taken = () => starting.current || creating.current || !focused.current;
   async function onNew() {
     if (starting.current || creating.current) return;
-    starting.current = true;
+    const { sheet, end } = sheetRun(taken, () => hold(starting));
+    const askSource = () => sheet(askMenu);
     try {
       setPending(null);
       setQuickOpen(false); // the other sheet's flag: it may be set with nothing on screen
       const source = sourceMenuShown() ? await askSource() : "library";
       if (!source) return;
-      const assets = source === "camera" ? await takeOne() : await pickMedia();
+      const assets = await sheet(() => (source === "camera" ? takeOne() : pickMedia()));
       if (!assets || assets.length === 0) return;
       await new Promise((r) => setTimeout(r, AFTER_PICKER_MS));
       setPending(assets);
-    } finally { starting.current = false; }
+    } finally { end(); }
   }
   async function onCreate(aspectRatio: AspectRatio) {
     if (!pending || creating.current) return;
@@ -141,14 +141,15 @@ function ProjectsScreen() {
   }
   async function onQuickChoose(recipeId: QuickRecipeId) {
     if (starting.current || creating.current) return;
-    starting.current = true;
+    const { sheet, end } = sheetRun(taken, () => hold(starting));
     let assets: PickedAsset[] | null = null;
     try {
       setQuickOpen(false);
       // The sheet is still fading out, and iOS drops a picker presented during that.
       await new Promise((r) => setTimeout(r, AFTER_SHEET_MS));
-      assets = await pickMedia({ limit: QUICK.maxItems });
-    } finally { starting.current = false; }
+      // The library holds `starting` only while it comes up, as New Project's does; a late answer is dropped if something else started.
+      assets = await sheet(() => pickMedia({ limit: QUICK.maxItems }));
+    } finally { end(); }
     if (!assets || assets.length === 0) return;
     creating.current = true;
     setMaking("quick");

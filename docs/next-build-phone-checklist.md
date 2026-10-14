@@ -296,3 +296,14 @@ Select a caption and a sticker; then open another project and select a text ther
 - **Right looks like:** no Copy style / Paste style on a caption's or a sticker's bar; in the other project Paste style is there
   and works. After closing Clipy completely and opening it again, Paste style is gone until something is copied again.
 - **Wrong looks like:** the tools on a caption or sticker, or Paste style missing in the other project.
+
+## K. New Project and Quick Edit never stay stuck
+
+### 43. Close the picker at once, then tap again
+On Home tap New Project (choose "Choose from Library" if the menu shows), and close the photo picker the moment it appears.
+Tap New Project again at once. Then do the same with Quick Edit: pick a style, close the picker as soon as it shows, and tap
+Quick Edit again.
+- **Right looks like:** each second tap opens the menu / the picker / the style sheet again, every time; nothing is created by
+  the closed picker; Open Project File and Save a Copy still work afterwards.
+- **Wrong looks like:** a button that does nothing until Clipy is closed and opened again, two pickers on top of each other,
+  or a project made from a picker that was closed.

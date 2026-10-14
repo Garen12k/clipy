@@ -29,10 +29,14 @@ type Wait = { timer: ReturnType<typeof setTimeout> | null; done: (source: MediaS
 /**
  * The two-item menu — the system's action sheet, as the editor's project menu is. `ask()` answers with the choice only
  * `AFTER_SHEET_MS` after the menu answered (iOS drops a picker or a camera presented while the menu is still closing), and with null
- * for Cancel. One menu and one wait at a time: a second `ask()` meanwhile answers null and opens nothing. `forget()` — also run
- * when the part that asked goes away — ends a wait at once with null, so nothing is presented later and no caller waits for ever.
+ * for Cancel; `answered`, if given, is called the moment the menu itself answers (the caller's guard is taken back then, for the
+ * close — `sheetRun`). One wait at a time: a second `ask()` during a wait answers null and opens nothing. A second `ask()` while a
+ * menu has not answered at all can only come once the caller's guard let go of it (`sheetRun`: a menu that is really up covers the
+ * screen) — iOS never presented it — so that menu is forgotten (its caller answered null) and the new one is shown.
+ * `forget()` — also run when the part that asked goes away — ends a wait at once with null, so nothing is presented later and no
+ * caller waits for ever.
  */
-export function useMediaSource(): { ask: () => Promise<MediaSource | null>; forget: () => void } {
+export function useMediaSource(): { ask: (answered?: () => void) => Promise<MediaSource | null>; forget: () => void } {
   const waiting = useRef<Wait | null>(null);
   const end = useCallback((answer: MediaSource | null) => {
     const w = waiting.current;
@@ -43,13 +47,17 @@ export function useMediaSource(): { ask: () => Promise<MediaSource | null>; forg
   }, []);
   const forget = useCallback(() => end(null), [end]);
   useEffect(() => forget, [forget]);
-  const ask = useCallback(() => {
-    if (waiting.current) return Promise.resolve(null);
+  const ask = useCallback((answered?: () => void) => {
+    if (waiting.current) {
+      if (waiting.current.timer !== null) return Promise.resolve(null);   // a menu that answered is closing
+      end(null);                                                          // a menu iOS never showed
+    }
     return new Promise<MediaSource | null>((done) => {
       const w: Wait = { timer: null, done };
       waiting.current = w;
       ActionSheetIOS.showActionSheetWithOptions({ options: SOURCE_MENU, cancelButtonIndex: SOURCE_MENU.length - 1 }, (index) => {
         if (waiting.current !== w || w.timer !== null) return;   // forgotten meanwhile, or answered already
+        answered?.();
         if (index !== 0 && index !== 1) { end(null); return; }
         w.timer = setTimeout(() => { w.timer = null; end(index === 0 ? "library" : "camera"); }, AFTER_SHEET_MS);
       });
