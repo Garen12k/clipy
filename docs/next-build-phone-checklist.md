@@ -257,3 +257,26 @@ Export any project. On the finished screen tap "Open Instagram".
 On a phone without Instagram (or after deleting it), export again.
 - **Right looks like:** no "Open Instagram" button; Post to… / Save to Photos / Share / Done exactly as before.
 - **Wrong looks like:** the button is there.
+
+## I. Deleting an account that signed in with Apple
+
+Only once Apple sign-in works (today Apple answers "Sign Up Not Completed"); the server part needs the two secrets of
+`supabase/README.md` §14 "Apple: revoking". Use a throw-away Apple ID.
+
+### 38. Apple asks once more, then the account is gone
+Accounts → Delete account → Delete.
+- **Right looks like:** Apple's sheet appears a moment after the alert; after Face ID, "Account deleted." and the Sign In card.
+  In iPhone Settings → your name → Sign in with Apple, Clipy is no longer listed.
+- **Wrong looks like:** no Apple sheet, the account deleted without asking, an error from Apple's sheet every time, or Clipy
+  still listed in Settings after a minute.
+
+### 39. Closing Apple's sheet
+Sign in with Apple again, Accounts → Delete account → Delete, then close Apple's sheet.
+- **Right looks like:** "Delete without Apple's confirmation?" with Cancel and Delete Anyway, a moment after the sheet closes.
+  Cancel: still signed in. Delete Anyway: "Account deleted."
+- **Wrong looks like:** the account deleted the moment the sheet closes, no second question at all (write that down: it
+  needs a short wait added), or no way to delete at all.
+
+### 40. Email accounts are unchanged
+Sign in with email, Accounts → Delete account → Delete.
+- **Right looks like:** exactly as before — no Apple sheet, "Account deleted."
