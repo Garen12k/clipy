@@ -134,7 +134,7 @@ test("flat bars have no group button: the main bar, the sections, a text, a capt
   await fireEvent.press(btn("Text"));
   flat([BACK, "Add text", "Captions"]);
   await act(() => { st().selectOverlay("t1"); });
-  flat([BACK, "Edit", "Animate", "Keyframe", "Duplicate", "Add text", "Delete"]);
+  flat([BACK, "Edit", "Animate", "Keyframe", "Copy style", "Duplicate", "Add text", "Delete"]);
   await act(() => { st().selectOverlay("c1"); });
   flat([BACK, "Edit", "Captions", "Duplicate", "Add text", "Delete"]);
   await act(() => { st().selectOverlay("s1"); });

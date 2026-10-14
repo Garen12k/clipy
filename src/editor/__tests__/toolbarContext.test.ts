@@ -50,7 +50,7 @@ test("a layer: the layer bar; a photo layer has no Speed / Volume / Reverse; a r
 });
 
 test("a text, a caption and a sticker: Add text follows Delete on a text and a caption, not on a sticker", () => {
-  expect(contextFor({ ...none, overlayId: "t" }, project)).toEqual({ bar: "text", tools: ["overlayEdit", "animate", "keyframe", "overlayDuplicate", "overlayDelete", "text"] });
+  expect(contextFor({ ...none, overlayId: "t" }, project)).toEqual({ bar: "text", tools: ["overlayEdit", "animate", "keyframe", "copyStyle", "overlayDuplicate", "overlayDelete", "text"] });
   expect(contextFor({ ...none, overlayId: "c" }, project)).toEqual({ bar: "text", tools: ["overlayEdit", "captions", "overlayDuplicate", "overlayDelete", "text"] });
   expect(contextFor({ ...none, overlayId: "s" }, project)).toEqual({ bar: "sticker", tools: ["overlayEdit", "animate", "keyframe", "overlayDuplicate", "overlayDelete"] });
 });
@@ -89,7 +89,7 @@ test("an id that no longer exists counts as no selection", () => {
 
 test("every tool id is reachable, and no bar lists a tool twice", () => {
   const sels: ToolbarSelection[] = [none, { ...none, section: "audio" }, { ...none, section: "text" }, { ...none, clipId: "a" }, { ...none, clipId: "p" }, { ...none, clipId: "L" },
-    { ...none, overlayId: "t" }, { ...none, overlayId: "c" }, { ...none, overlayId: "s" }, { ...none, audioId: "m" }, { ...none, effectId: "e" }];
+    { ...none, overlayId: "t" }, { ...none, overlayId: "t", styleCopied: true }, { ...none, overlayId: "c" }, { ...none, overlayId: "s" }, { ...none, audioId: "m" }, { ...none, effectId: "e" }];
   const seen = new Set<string>();
   for (const sel of sels) {
     const { tools } = contextFor(sel, project);
@@ -97,7 +97,7 @@ test("every tool id is reachable, and no bar lists a tool twice", () => {
     for (const t of tools) seen.add(t);
   }
   expect([...seen].sort()).toEqual([...TOOL_IDS].sort());
-  expect(TOOL_IDS).toHaveLength(56);
+  expect(TOOL_IDS).toHaveLength(58);
 });
 
 test("selectionKey names what is selected; multi-select first", () => {
@@ -171,4 +171,19 @@ test("the sound tools: on a sound's bar, and on a video's bar exactly where Volu
   expect(sound).toEqual(expect.arrayContaining(["voice", "soundQuality"]));
   expect(sound).not.toContain("extractAudio");
   expect(contextFor({ ...none, section: "audio" }, p).tools).toEqual(["addAudio", "ducking", "beats"]);   // no sound selected: no sound tools
+});
+
+test("Copy style is on a text's bar, after Keyframe; Paste style beside it only while a style is copied; neither on a caption or a sticker", () => {
+  const text = (styleCopied?: boolean) => contextFor({ ...none, overlayId: "t", ...(styleCopied === undefined ? {} : { styleCopied }) }, project).tools;
+  expect(text()).toEqual(["overlayEdit", "animate", "keyframe", "copyStyle", "overlayDuplicate", "overlayDelete", "text"]);
+  expect(text(false)).toEqual(text());
+  expect(text(true)).toEqual(["overlayEdit", "animate", "keyframe", "copyStyle", "pasteStyle", "overlayDuplicate", "overlayDelete", "text"]);
+  for (const styleCopied of [false, true]) {
+    expect(contextFor({ ...none, overlayId: "c", styleCopied }, project).tools).toEqual(["overlayEdit", "captions", "overlayDuplicate", "overlayDelete", "text"]);
+    expect(contextFor({ ...none, overlayId: "s", styleCopied }, project).tools).toEqual(["overlayEdit", "animate", "keyframe", "overlayDuplicate", "overlayDelete"]);
+    // Nowhere else either: a copied style changes no other bar.
+    for (const sel of [{}, { section: "text" as const }, { section: "audio" as const }, { clipId: "a" }, { clipId: "L" }, { audioId: "m" }, { effectId: "e" }]) {
+      expect(contextFor({ ...none, ...sel, styleCopied }, project)).toEqual(contextFor({ ...none, ...sel }, project));
+    }
+  }
 });

@@ -27,7 +27,7 @@ function contexts() {
   for (const [label, p] of [["full", project], ["one", one], ["onePhoto", onePhoto], ["empty", empty], ["blank", makeProject()]] as const) {
     for (const section of [null, "audio", "text"] as Section[]) out.push({ name: `${label} / section ${section}`, sel: { ...none, section }, p });
     for (const c of [...p.clips, ...p.layers]) out.push({ name: `${label} / clip ${c.id}`, sel: { ...none, clipId: c.id }, p });
-    for (const o of p.overlays) out.push({ name: `${label} / overlay ${o.id}`, sel: { ...none, overlayId: o.id }, p });
+    for (const o of p.overlays) out.push({ name: `${label} / overlay ${o.id}`, sel: { ...none, overlayId: o.id }, p }, { name: `${label} / overlay ${o.id}, a style copied`, sel: { ...none, overlayId: o.id, styleCopied: true }, p });
     for (const t of p.audioTracks) out.push({ name: `${label} / sound ${t.id}`, sel: { ...none, audioId: t.id }, p });
     for (const e of p.effects) out.push({ name: `${label} / effect ${e.id}`, sel: { ...none, effectId: e.id }, p });
   }
@@ -80,7 +80,10 @@ test("which bars are in groups: only a clip's and a layer's; everything else is 
   expect(layoutOf({}).rest).toHaveLength(13);
   expect(layoutOf({ audioId: "m" })).toMatchObject({ pinned: "audioDelete", groups: null });
   expect(labels(layoutOf({ audioId: "m" }).rest)).toEqual(["Split", "Volume", "Fade", "Voice", "Sound", "Duplicate", "Add audio", "Ducking", "Beats"]);
-  expect(layoutOf({ overlayId: "t" })).toMatchObject({ pinned: "overlayDelete", rest: ["overlayEdit", "animate", "keyframe", "overlayDuplicate", "text"], groups: null });
+  expect(layoutOf({ overlayId: "t" })).toMatchObject({ pinned: "overlayDelete", rest: ["overlayEdit", "animate", "keyframe", "copyStyle", "overlayDuplicate", "text"], groups: null });
+  // With a style copied a text's bar is seven tools beside its Delete: still one flat row, in the drawing's order.
+  expect(layoutOf({ overlayId: "t", styleCopied: true })).toMatchObject({ pinned: "overlayDelete", groups: null });
+  expect(labels(layoutOf({ overlayId: "t", styleCopied: true }).rest)).toEqual(["Edit", "Animate", "Keyframe", "Copy style", "Paste style", "Duplicate", "Add text"]);
   expect(layoutOf({ effectId: "e" })).toMatchObject({ pinned: "effectDelete", rest: ["effectStrength", "effectDuplicate"], groups: null });
   expect(layoutOf({ section: "audio" })).toMatchObject({ pinned: null, rest: ["addAudio", "ducking", "beats"], groups: null });
 });

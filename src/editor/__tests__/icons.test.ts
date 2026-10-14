@@ -19,7 +19,7 @@ test("the icon of each tool", () => {
     transform: "resize-outline", opacity: "contrast-outline", mask: "ellipse-outline", blend: "color-fill-outline", chroma: "leaf-outline", cutout: "body-outline", stabilize: "hand-left-outline", keyframe: "diamond-outline",
     transition: "swap-horizontal-outline", layerForward: "arrow-up-outline", layerBack: "arrow-down-outline", replace: "sync-outline", reverse: "play-back-outline", freeze: "snow-outline",
     duplicate: "copy-outline", delete: "trash-outline", select: "checkmark-done-outline",
-    overlayEdit: "create-outline", overlayDuplicate: "copy-outline", overlayDelete: "trash-outline", text: "add-circle-outline", captions: "chatbox-ellipses-outline",
+    overlayEdit: "create-outline", overlayDuplicate: "copy-outline", overlayDelete: "trash-outline", text: "add-circle-outline", captions: "chatbox-ellipses-outline", copyStyle: "eyedrop-outline", pasteStyle: "clipboard-outline",
     addAudio: "add-circle-outline", ducking: "volume-low-outline", beats: "pulse-outline", audioVolume: "volume-medium-outline", audioFade: "trending-up-outline",
     audioDuplicate: "copy-outline", audioDelete: "trash-outline", audioSplit: "cut-outline",
     extractAudio: "git-branch-outline", voice: "mic-outline", soundQuality: "stats-chart-outline",
