@@ -334,7 +334,7 @@ describe("text reveal", () => {
     expect((fill().props.children as unknown[])[0]).toBe("He");
   });
 
-  test("re-render cost: a reveal adds no render to the layer, and within one step the drawn tree does not change", async () => {
+  test("re-render cost: a reveal adds a render only when its step changes (a still text adds none), and within one step the drawn tree does not change", async () => {
     const commits = async (o: TextOverlay, times: number[]) => {
       useEditorStore.getState().reset();
       useEditorStore.getState().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [o] }));
@@ -350,7 +350,8 @@ describe("text reveal", () => {
     const ticks = [1.06, 1.07, 1.08, 1.09, 1.11];
     const revealing = await commits(typing(), ticks);
     const plain = await commits(typing({ animation: { in: null, out: null, loop: null } }), ticks);
-    expect(revealing.n).toBe(plain.n);
+    // The overlay draws again only when what it draws changes (`overlayFrameKey`): the plain text never after mounting, the reveal once more, at step 3 (1.11).
+    expect(revealing.n).toBe(plain.n + 1);
     expect(new Set(revealing.trees.slice(0, 4)).size).toBe(1);
     expect(revealing.trees[4]).not.toBe(revealing.trees[3]);
     expect(new Set(plain.trees).size).toBe(1);
