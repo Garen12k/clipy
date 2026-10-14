@@ -5,7 +5,8 @@ import { trackEnd } from "@/src/editor/model/audioSync";
 import { edgeDurations, photoMotionPins } from "@/src/editor/model/motion";
 import type { SoundChain } from "@/src/editor/model/sound";
 import { clipDuration, hasSpeedCurve, outputOffsetOf, playbackSpans } from "@/src/editor/model/timeline";
-import { clampTextStyle, DEFAULT_TEXT_STYLE, isRegionEffect, isSticker, type TextInEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type BoxCorner, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type ExportFps, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
+import { exportReveal } from "@/src/editor/model/textReveal";
+import { clampTextStyle, DEFAULT_TEXT_STYLE, isRegionEffect, isRevealId, isSticker, type TextInEdge, type Align, type AspectRatio, type AudioTrack, type BlendId, type BoxCorner, type Clip, type ClipAdjust, type ClipTransform, type CropRect, type EffectItem, type ExportFps, type Keyframe, type LayerClip, type MaskId, type Overlay, type Project, type TextStyle } from "@/src/editor/model/types";
 import type { Resolution } from "@/src/export/estimate";
 
 export type ExportEvent = { jobId: string } & (
@@ -15,6 +16,8 @@ export type ExportEvent = { jobId: string } & (
   | { type: "cancelled" });
 
 export interface ExportAnimEdge { id: string; duration: number }
+/** A text's reveal as the export draws it (`exportReveal`): step i shows the text before UTF-16 offset `cuts[i]` from `from[i]` seconds after the text's start; the last step is the whole text. */
+export interface ExportReveal { cuts: number[]; from: number[] }
 /** `duration` source seconds played at `speed`. */
 export interface ExportSpeedSpan { duration: number; speed: number }
 export interface ExportKeyframe { t: number; x: number; y: number; scale: number; rotation: number; opacity: number }
@@ -46,6 +49,7 @@ export interface ExportOverlay {
   style: ExportTextStyle;
   words: ExportCaptionWord[];      // captions only; [] otherwise
   highlightColor: string | null;   // captions only; null = no word highlight
+  reveal?: ExportReveal;    // a revealing text only; ABSENT otherwise (an older build ignores it and shows the text whole)
 }
 /** One breakpoint of a piecewise-linear gain curve (`audioMix.ts`); the native side only draws ramps between them. */
 export type ExportGainPoint = GainPoint;
@@ -143,8 +147,13 @@ export interface ExportRequest {
 }
 function overlayMotion(o: Overlay): Pick<ExportOverlay, "animIn" | "animOut" | "animLoop" | "keyframes"> {
   const edges = edgeDurations(o.animation.in?.duration ?? 0, o.animation.out?.duration ?? 0, o.end - o.start);
-  return { animIn: toEdge(o.animation.in, edges.in), animOut: toEdge(o.animation.out, edges.out), animLoop: o.animation.loop, keyframes: o.keyframes.map(copyKeyframe) };
+  // A reveal is sent as its own key (`reveal`), never as an In: an older build then draws the text whole instead of an unknown animation.
+  const inEdge = o.animation.in;
+  const animIn = inEdge && !isRevealId(inEdge.id) ? toEdge({ id: inEdge.id, duration: inEdge.duration }, edges.in) : null;
+  return { animIn, animOut: toEdge(o.animation.out, edges.out), animLoop: o.animation.loop, keyframes: o.keyframes.map(copyKeyframe) };
 }
+/** The `reveal` key only when there is a reveal: every other request is byte for byte what it was (the PROOF in useExport.test.ts). */
+const revealKey = (o: Overlay): { reveal?: ExportReveal } => { const reveal = exportReveal(o); return reveal ? { reveal } : {}; };
 export function toExportOverlay(o: Overlay): ExportOverlay {
   const shared = { x: o.x, y: o.y, scale: o.scale, rotation: o.rotation, start: o.start, end: o.end };
   // Captions never animate or carry pins.
@@ -165,6 +174,7 @@ export function toExportOverlay(o: Overlay): ExportOverlay {
     // Only captions have spoken words and a highlight.
     words: o.kind === "caption" ? o.words.map((w) => ({ text: w.text, start: w.start, end: w.end })) : [],
     highlightColor: o.kind === "caption" ? o.highlightColor : null,
+    ...revealKey(o),
   };
 }
 
@@ -278,6 +288,7 @@ type ClipyVideoNative = {
   renderSteady(req: SteadyRequest): Promise<SteadyResult>;
   cancelSteady(jobId: string): void;
   blurAndCuts(): boolean;
+  textReveal(): boolean;
   soundPeaks(req: SoundPeaksRequest): Promise<SoundPeaksResult>;
   cancelSoundPeaks(jobId: string): void;
 };
@@ -291,6 +302,8 @@ function native(): ClipyVideoNative { const m = optional(); if (!m) throw new Er
 export function isNativeAvailable(): boolean { return optional() !== null; }
 // The "background export" build: what the phone supports, the keep-alive around an export, the interruption code (background.ts).
 export * from "./background";
+// The "text reveal" build: whether the export draws a text's reveal (reveal.ts).
+export * from "./reveal";
 /** Returns a greeting from the Swift module. Phase 0 smoke test only. */
 export function hello(): string { return native().hello(); }
 export function exportTimeline(req: ExportRequest): Promise<string> { return native().exportTimeline(req); }
