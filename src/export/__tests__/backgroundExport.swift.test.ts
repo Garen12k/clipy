@@ -225,7 +225,7 @@ describe("the continued processing task (iOS 26 and later)", () => {
   });
 
   test("app.json adds that one key and nothing else: no background mode, no entitlement, the push-entitlement remover still first", () => {
-    expect(Object.keys(appJson.expo.ios.infoPlist).sort()).toEqual(["BGTaskSchedulerPermittedIdentifiers", "ITSAppUsesNonExemptEncryption", "NSMicrophoneUsageDescription", "NSSpeechRecognitionUsageDescription"]);
+    expect(Object.keys(appJson.expo.ios.infoPlist).sort()).toEqual(["BGTaskSchedulerPermittedIdentifiers", "ITSAppUsesNonExemptEncryption", "LSApplicationQueriesSchemes", "NSMicrophoneUsageDescription", "NSSpeechRecognitionUsageDescription"]);   // + the query scheme of Open Instagram (src/export/openInstagram.ts)
     expect(appJson.expo.ios.infoPlist.UIBackgroundModes).toBeUndefined();
     expect(appJson.expo.ios.entitlements).toBeUndefined();
     expect(appJson.expo.plugins[0]).toBe("./plugins/withoutPushEntitlement");

@@ -57,3 +57,9 @@ test("iPhone only, the same app as before: no Android or web block, the same ide
   expect(Object.keys(config.expo)).not.toContain("web");
   expect(config.expo.ios.bundleIdentifier).toBe("com.astinos.clipy");
 });
+
+// Open Instagram (src/export/openInstagram.ts) asks iOS whether Instagram is there: `canOpenURL("instagram://")` answers only for a
+// scheme the installed app declares here — a BUILD-TIME key, so the button appears from the build that carries it.
+test("the app may ask whether Instagram is installed", () => {
+  expect(config.expo.ios.infoPlist.LSApplicationQueriesSchemes).toEqual(["instagram"]);
+});

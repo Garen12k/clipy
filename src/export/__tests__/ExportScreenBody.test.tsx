@@ -366,3 +366,24 @@ describe("in light", () => {
     expect(screen.getByTestId("export-error-icon", all).props.color ?? screen.getByTestId("export-error-icon", all).props.style).toBeDefined();
   });
 });
+
+describe("Open Instagram", () => {
+  const done = { status: "done" as const, progress: 1, fileUri: "file:///out.mp4" };
+  test("with onInstagram, a grey Open Instagram with Instagram's mark follows the save buttons, above Share / Done; the gold stays one", async () => {
+    const onInstagram = jest.fn();
+    await render(<ExportScreenBody project={project} state={done} start={jest.fn()} cancel={jest.fn()} reset={jest.fn()} onSave={jest.fn()} onShare={jest.fn()} onDone={jest.fn()} onPost={jest.fn()} onInstagram={onInstagram} />);
+    const names = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel).filter((n) => ["Post to…", "Save to Photos", "Open Instagram", "Share", "Done"].includes(n));
+    expect(names).toEqual(["Post to…", "Save to Photos", "Open Instagram", "Share", "Done"]);
+    expect(screen.getAllByTestId("primary-button")).toHaveLength(1);
+    expect(rnWithin(screen.getByRole("button", { name: "Open Instagram" })).getByTestId("export-instagram-icon", { includeHiddenElements: true })).toBeTruthy();   // inside the button: one target (the mark is `logo-instagram`, an Ionicon: NO_SYMBOL)
+    await fireEvent.press(screen.getByRole("button", { name: "Open Instagram" }));
+    expect(onInstagram).toHaveBeenCalledTimes(1);
+  });
+  test("only in the finished state", async () => {
+    for (const status of ["idle", "exporting", "error"] as const) {
+      const view = await render(<ExportScreenBody project={project} state={{ progress: 0, status, message: "x" }} start={jest.fn()} cancel={jest.fn()} reset={jest.fn()} onSave={jest.fn()} onShare={jest.fn()} onDone={jest.fn()} onInstagram={jest.fn()} />);
+      expect(screen.queryByRole("button", { name: "Open Instagram" })).toBeNull();
+      await view.unmount();
+    }
+  });
+});

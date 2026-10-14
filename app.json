@@ -23,7 +23,10 @@
           "com.astinos.clipy.export.*"
         ],
         "NSSpeechRecognitionUsageDescription": "Clipy turns speech in your clips into captions.",
-        "NSMicrophoneUsageDescription": "Clipy uses the microphone to record voice-overs, the sound of videos you take, and to make captions from speech."
+        "NSMicrophoneUsageDescription": "Clipy uses the microphone to record voice-overs, the sound of videos you take, and to make captions from speech.",
+        "LSApplicationQueriesSchemes": [
+          "instagram"
+        ]
       }
     },
     "plugins": [

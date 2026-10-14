@@ -31,6 +31,8 @@ type Props = {
   onDone: () => void;
   /** When given, "Post to…" is the main action on the finish screen and Save to Photos steps down to secondary. */
   onPost?: () => void;
+  /** Given only while Instagram is installed: "Open Instagram", a grey button under the save buttons (src/export/openInstagram.ts). */
+  onInstagram?: () => void;
 };
 
 /** One row of the options card: its small muted label over its segments. */
@@ -51,7 +53,7 @@ function Line() {
   return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: s.separator }} />;
 }
 
-export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone, onPost }: Props) {
+export function ExportScreenBody({ project, missingSourceUris = [], state, start, cancel, reset, onSave, onShare, onDone, onPost, onInstagram }: Props) {
   const s = useSurfaces();
   // Read clamped: settings the app does not offer (a damaged file) still show a picked segment — the defaults.
   // The three controls are remembered with the project: the resolution too (absent = 1080p).
@@ -176,6 +178,8 @@ export function ExportScreenBody({ project, missingSourceUris = [], state, start
               <PrimaryButton title="Post to…" onPress={onPost} />
               <SecondaryButton title="Save to Photos" onPress={onSave} />
             </>) : <PrimaryButton title="Save to Photos" onPress={onSave} />}
+            {onInstagram ? <SecondaryButton title="Open Instagram" onPress={onInstagram}
+              icon={<Icon testID="export-instagram-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="logo-instagram" size={theme.size.icon.md} color={s.text} />} /> : null}
             <View testID="export-quiet-row" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <QuietButton title="Share" onPress={onShare}
                 icon={<Icon testID="export-share-icon" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" name="share-outline" size={theme.size.icon.md} color={s.accentInk} />} />
