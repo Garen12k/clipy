@@ -223,3 +223,12 @@ At C, look at text on the video, export, and compare with A.
 ### 35. The rest
 A long project name (dots, not tiny letters), the editor not moving, touch-and-hold large labels at C, Post and TikTok
 options, Accounts, the welcome pages, typing, and changing the size while Clipy is open — as in the text-size list.
+
+---
+
+## G. Text reveal
+
+This build also has Typewriter and Word by word, two new ways for a text to appear (a text's Animation → In, the last two
+tiles). Do the checks in `text-reveal-phone-checklist.md`, from the top: check 1 (an emoji must not show before its turn) comes
+first, then 2 (the editor and the exported file agree), 3 (outline, shadow, glow and box) and 11 (the heaviest export) are the
+ones that matter most.

@@ -128,7 +128,7 @@ The export rasterises its text layers once; time only switches layers on and off
 
 - The request carries the plan as its OWN optional key: `reveal: { cuts: number[]; from: number[] }` on a text whose plan has ≥ 2 steps
   (`exportReveal`), and `animIn: null` for it. A text without a reveal has NO `reveal` key — the PROOF JSON stays byte for byte.
-- Swift: `struct ExportReveal: Record { cuts: [Int]; from: [Double] }`, `ExportOverlay.reveal: ExportReveal?`, and a pure
+- Swift: `struct ExportReveal: Record { cuts: [Double]; from: [Double] }` (as built: Double, so a non-whole cut is refused by `TextReveal.steps` rather than failing to decode), `ExportOverlay.reveal: ExportReveal?`, and a pure
   `TextReveal.steps(cuts:from:length:life:)` (new `TextReveal.swift`, Foundation only, like `CaptionWords.swift`) that checks the numbers
   (≥ 2 steps, equal counts, cuts strictly increasing in 1 … length and ending at length, times strictly increasing from exactly 0,
   finite, below the life) and adds each step's end; anything else → `[]` → the text is drawn whole, as before.
@@ -194,3 +194,50 @@ mirrored pairs and their PROOFs, the save chain, undo history, `.clipy` files (t
 5. Preview vs export: the same step on the same frame, at 24 / 30 / 60 fps.
 6. Thai (no spaces) reveals a whole run at once; Hangul conjoining jamo (rare) are whole words — acceptable, said here.
 7. Whether `Intl.Segmenter` exists in this Hermes — irrelevant to the design, not used.
+
+## As built (2026-10-14)
+
+Commits on `text-reveal`: d2b7f99 (model), 82d92ca (preview), a86d378 (export, build row), e4c5d99 (controller fix), c83f32a (the
+tiles), 1e050c6 (the review's minor 1) and the docs commit; merged into `next-build`.
+
+- **Controller fix e4c5d99.** The Swift's step cap `TextReveal.maxSteps` is 120, a SAFETY bound above the app's own
+  `REVEAL.maxSteps` (30), not a copy of it — so tuning the steps stays a JavaScript change (pinned: `REVEAL.maxSteps` ≤ the Swift
+  cap). In `overlayLayer` the per-step layer is named `stepLayer`, so it shadows nothing declared later in the function.
+- **`ExportReveal.cuts` is `[Double]`** (§5 said `[Int]`): a non-whole number is refused by `TextReveal.steps` (the text is drawn
+  whole) instead of the record failing to decode. §5 is corrected above.
+- **The review's six minors** (task-5-review.md):
+  1. The XCTest's vector table had no parity test — FIXED: `textReveal.swift.test.ts` parses its rows and compares them with
+     `REVEAL_UNIT_VECTORS` (seen red with one Swift number changed).
+  2. The XCTest on the vectors checks only that the cuts fit — left: segmentation is TypeScript only and tested in Jest; the Swift
+     test only has to show the app's cuts are accepted.
+  3. `[Int]` vs `[Double]` — the spec sentence is corrected (above).
+  4. The emoji check — written into the phone checklist FIRST among the reveal checks (below).
+  5. Re-render per playhead tick — left: inherited, `OverlayLayer` already re-rendered every overlay per tick before this.
+  6. The AGENTS.md line — written ("Text reveal").
+
+### The emoji question (open until a phone shows it)
+
+Apple Color Emoji is a bitmap colour font (`sbix`): its glyphs are pictures, and they ignore the RGB of the text colour. Whether they
+honour the colour's ALPHA — and so whether a clear colour hides them — is not settled by anything that can be read here:
+
+- Preview: React Native turns `color: "transparent"` into a clear `NSForegroundColorAttributeName` for the span
+  (`RCTAttributedTextUtils.mm`, `RCTEffectiveForegroundColorFromTextAttributes`: alpha 0) and draws the text with TextKit,
+  `-[NSLayoutManager drawGlyphsForGlyphRange:atPoint:]` (`RCTTextLayoutManager.mm`). What TextKit does with a colour glyph under a
+  clear foreground is inside Apple's code; React Native has no emoji-specific path.
+- Export: `CATextLayer` draws through Core Text with `kCTForegroundColorAttributeName` = `UIColor.clear.cgColor`. Apple documents
+  no rule for the foreground alpha of an `sbix` glyph; a bitmap glyph is drawn as an image, and an image is not filled with the
+  fill colour.
+
+So: **UNCERTAIN.** Nothing was guessed in Swift. The phone checklist tests it FIRST among the reveal checks. **Wrong looks like:**
+an emoji visible before the letters in front of it have arrived (in the editor, in the exported file, or both — the two may differ,
+since TextKit and `CATextLayer` are different drawers). Its glow and shadow are checked in the same step.
+
+**Fallback if the phone shows it (not built):** a text whose reveal would hide a colour emoji is NOT revealed — `revealPlan`
+returns no plan (fewer than two steps) when any unit after the first holds an emoji code point (the pictographic ranges, the
+regional indicators and the keycap sequences; a test vector per kind). Then BOTH sides follow with no build: the preview draws the
+whole text and the request carries no `reveal` key, exactly as for a text without a reveal; the tile stays pickable and simply
+shows the text whole (say so in the tile's message only if the owner wants it). Considered and rejected: replacing an unrevealed
+emoji by an invisible placeholder of the same width — the width of a colour emoji in each font cannot be known in TypeScript
+without measuring, and a different width re-wraps the line and moves the letters already shown; a per-step mask over the hidden
+glyphs in the export — Swift only (the preview has no glyph rectangles), so the two would differ. If only ONE side shows the
+emoji early, the same fallback still applies (both sides must agree).
