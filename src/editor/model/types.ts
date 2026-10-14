@@ -148,10 +148,16 @@ export type AnimComboId = (typeof ANIM_COMBO_IDS)[number];
 export const ANIM_LOOP_IDS = ["wiggle", "pulse", "spin", "float", "blink", "shake"] as const;                    // text / stickers only
 export type AnimLoopId = (typeof ANIM_LOOP_IDS)[number];
 export const ANIM_LIMITS = { minDuration: 0.1, maxDuration: 2, defaultDuration: 0.5 };
+/** Text reveals: a TEXT's In may also be one of these (never an Out, a clip, a sticker or a caption). The timing is model/textReveal.ts. */
+export const ANIM_REVEAL_IDS = ["typewriter", "wordByWord"] as const;
+export type RevealId = (typeof ANIM_REVEAL_IDS)[number];
+export const isRevealId = (id: unknown): id is RevealId => (ANIM_REVEAL_IDS as readonly unknown[]).includes(id);
 
 export interface AnimEdge { id: AnimInId; duration: number }
+/** A text's / sticker's In: a whole-text animation, or (a text only — the clamp and `setOverlayAnimation` see to it) a reveal. */
+export interface TextInEdge { id: AnimInId | RevealId; duration: number }
 export interface ClipAnimation { in: AnimEdge | null; out: AnimEdge | null; combo: AnimComboId | null }      // combo set ⇒ in and out are null
-export interface OverlayAnimation { in: AnimEdge | null; out: AnimEdge | null; loop: AnimLoopId | null }
+export interface OverlayAnimation { in: TextInEdge | null; out: AnimEdge | null; loop: AnimLoopId | null }
 export const NO_CLIP_ANIMATION: ClipAnimation = { in: null, out: null, combo: null };
 export const NO_OVERLAY_ANIMATION: OverlayAnimation = { in: null, out: null, loop: null };
 
@@ -339,10 +345,17 @@ export function clampClipAnimation(a: unknown): ClipAnimation {
   if (combo) return { in: null, out: null, combo };
   return { in: clampAnimEdge(a.in), out: clampAnimEdge(a.out), combo: null };
 }
-export function clampOverlayAnimation(a: unknown): OverlayAnimation {
+/** A text's In (`reveal` true: the overlay is a `kind: "text"`) may be a reveal, its duration clamped like any edge; otherwise as `clampAnimEdge`. */
+export function clampTextInEdge(e: unknown, reveal: boolean): TextInEdge | null {
+  if (!reveal || !isRec(e) || !isRevealId(e.id)) return clampAnimEdge(e);
+  const duration = isNum(e.duration) ? clampNum(e.duration, ANIM_LIMITS.minDuration, ANIM_LIMITS.maxDuration) : ANIM_LIMITS.defaultDuration;
+  return { id: e.id, duration };
+}
+/** `reveal`: the overlay is a text, so its In may keep a reveal id. An Out never does. */
+export function clampOverlayAnimation(a: unknown, reveal = false): OverlayAnimation {
   if (!isRec(a)) return { ...NO_OVERLAY_ANIMATION };
   const loop = (ANIM_LOOP_IDS as readonly unknown[]).includes(a.loop) ? (a.loop as AnimLoopId) : null;
-  return { in: clampAnimEdge(a.in), out: clampAnimEdge(a.out), loop };
+  return { in: clampTextInEdge(a.in, reveal), out: clampAnimEdge(a.out), loop };
 }
 /** A known motion with its strength clamped to 0–1 (not a number → the default); anything else → null. Unknown keys dropped. */
 export function clampPhotoMotion(v: unknown): PhotoMotion | null {

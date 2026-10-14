@@ -27,7 +27,7 @@ const PENDING = [...PENDING_EDITOR, ...PENDING_SCREENS];
 const FIXED_KIT: Record<string, number> = { "src/ui/EmptyState.tsx": 1, "src/ui/LoadingScreen.tsx": 2, "src/ui/ProgressRing.tsx": 1 };
 const FIXED_EDITOR: Record<string, number> = { "src/editor/components/AudioBar.tsx": 2, "src/editor/components/ClipThumbStrip.tsx": 1, "src/editor/components/CoverFrame.tsx": 1,
   "src/editor/components/EffectPill.tsx": 1, "src/editor/components/FontStrip.tsx": 1, "src/editor/components/LayerBar.tsx": 1, "src/editor/components/OverlayPill.tsx": 1,
-  "src/editor/components/OverlayText.tsx": 6, "src/editor/components/StickerSheet.tsx": 2, "src/editor/components/StickerView.tsx": 2, "src/editor/components/TemplateSheet.tsx": 1,
+  "src/editor/components/OverlayText.tsx": 7, "src/editor/components/StickerSheet.tsx": 2, "src/editor/components/StickerView.tsx": 2, "src/editor/components/TemplateSheet.tsx": 1,
   "src/editor/components/TimeRuler.tsx": 1 };
 const FIXED_SCREENS: Record<string, number> = { "src/projects/ProjectCard.tsx": 2 };
 /** Files that draw content only: every text in them is fixed. */

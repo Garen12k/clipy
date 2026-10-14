@@ -26,7 +26,7 @@ function normaliseSticker(o: Record<string, unknown>): Overlay | null {
 /** Animation + keyframes repaired; captions are forced to none (they are generated, never animated). */
 function withMotion(o: Record<string, unknown>): Overlay {
   if (o.kind === "caption") return { ...o, animation: clampOverlayAnimation(undefined), keyframes: [] } as unknown as Overlay;
-  return { ...o, animation: clampOverlayAnimation(o.animation), keyframes: clampOverlayKeyframes(o.keyframes) } as unknown as Overlay;
+  return { ...o, animation: clampOverlayAnimation(o.animation, o.kind === "text"), keyframes: clampOverlayKeyframes(o.keyframes) } as unknown as Overlay;
 }
 
 /** Text style repaired for text and captions; words and highlight only survive on captions (words only while they still match the text). Stickers untouched. */

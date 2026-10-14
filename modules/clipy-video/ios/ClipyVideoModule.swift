@@ -645,5 +645,12 @@ public class ClipyVideoModule: Module {
     Function("endBackgroundExport") { (runId: String, success: Bool) in
       ExportKeepAlive.shared.end(runId: runId, success: success)
     }
+
+    // The build of 2026-10-14 ("text reveal"): the export draws a text's `reveal` (Typewriter / Word by word, see
+    // TextReveal and `ExportSession.overlayLayer`). A build without this function ignores the key and shows the text
+    // whole. The app asks whether the function is THERE.
+    Function("textReveal") { () -> Bool in
+      return true
+    }
   }
 }

@@ -91,6 +91,14 @@ struct ExportAnimEdge: Record {
   @Field var duration: Double = 0
 }
 
+/// A text's reveal (Typewriter / Word by word), worked out by the app (`exportReveal` in src/editor/model/textReveal.ts):
+/// step i shows the text before UTF-16 offset `cuts[i]` from `from[i]` seconds after the text's start; the last step is
+/// the whole text. Whole numbers travel as JS numbers, hence `[Double]`; `TextReveal.steps` checks them.
+struct ExportReveal: Record {
+  @Field var cuts: [Double] = []
+  @Field var from: [Double] = []
+}
+
 /// One pin. `t` is in seconds of OUTPUT time: clip-local for a clip (ascending; may include one pin before 0 and one
 /// after the clip's end), seconds since its start for a text / sticker.
 struct ExportKeyframe: Record {
@@ -232,6 +240,7 @@ struct ExportOverlay: Record {
   @Field var style: ExportTextStyle = ExportTextStyle()
   @Field var words: [ExportCaptionWord] = []       // captions only; start / end = seconds since the caption's start
   @Field var highlightColor: String?               // captions only; JS `null` → nil (no word highlight)
+  @Field var reveal: ExportReveal?                 // a revealing text only (Typewriter / Word by word); absent → nil
 }
 
 /// One audio track (music, voice-over or sound effect): source `[trimStart, trimEnd)` placed at `start` (composition
@@ -736,6 +745,40 @@ final class ExportSession {
       cast.shadowRadius = shadow.blur / 2
       cast.shadowOffset = CGSize(width: shadow.dx, height: -shadow.dy)
       container.insertSublayer(cast, below: textLayer)
+    }
+
+    // Reveal (Typewriter / Word by word — a text only; the app sends no In with it): every text layer above (glow,
+    // shadow, fill, bottom to top) is copied once for each step but the last, with the characters not yet revealed in
+    // a clear fill AND stroke, and the copy is shown only during its step; the layers themselves show the whole text
+    // from the last step to the end. A clear glyph draws nothing, so it casts no layer shadow either. The box is the
+    // container's: there from the first frame. Numbers that do not check out (`TextReveal.steps` empty) → the text is
+    // drawn whole, as before. The copies are direct sublayers, so `addMotion` keeps them sharp like the fill.
+    if o.kind == "text", let reveal = o.reveal {
+      let steps = TextReveal.steps(cuts: reveal.cuts, from: reveal.from, length: (o.text as NSString).length, life: o.end - o.start)
+      if steps.count >= 2 {
+        container.allowsGroupOpacity = true
+        let passes: [CATextLayer] = (container.sublayers ?? []).compactMap { (layer: CALayer) -> CATextLayer? in layer as? CATextLayer }
+        let clear = UIColor.clear.cgColor
+        for i in 0..<(steps.count - 1) {
+          let step = steps[i]
+          for pass in passes {
+            guard let full = pass.string as? NSAttributedString else { continue }
+            let part = NSMutableAttributedString(attributedString: full)
+            let rest = NSRange(location: step.cut, length: part.length - step.cut)
+            part.addAttribute(key(kCTForegroundColorAttributeName), value: clear, range: rest)
+            part.addAttribute(key(kCTStrokeColorAttributeName), value: clear, range: rest)
+            let stepLayer = textCopy(part)
+            stepLayer.shadowColor = pass.shadowColor
+            stepLayer.shadowOpacity = pass.shadowOpacity
+            stepLayer.shadowRadius = pass.shadowRadius
+            stepLayer.shadowOffset = pass.shadowOffset
+            container.addSublayer(stepLayer)
+            addVisibility(stepLayer, start: o.start + step.from, end: o.start + step.to, opacity: Double(pass.opacity))
+          }
+        }
+        let last = steps[steps.count - 1]
+        for pass in passes { addVisibility(pass, start: o.start + last.from, end: o.end, opacity: Double(pass.opacity)) }
+      }
     }
 
     // Word highlight: for each spoken word a copy of the fill text with that word in the highlight colour, above

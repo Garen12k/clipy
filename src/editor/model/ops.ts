@@ -9,7 +9,7 @@ import {
   LAYER_LIMITS, MASK_IDS, MIN_CLIP_SECONDS, minAudioDuration, newLayer, newPhotoClip, normaliseRotation, OVERLAY_LIMITS, PHOTO, SPEED_CURVE_IDS, SPEED_LIMITS, STABILIZE_IDS, TRANSITION_LIMITS,
   clampPhotoMotion, clampSound, COMBO_AS_MOTION, NO_SOUND, type PhotoMotion, type SoundSettings, type AnimEdge, type AspectRatio, type AudioTrack, type BlendId, type ChromaKey, type Clip, type ClipAdjust, type ClipAnimation, type ClipBackground, type ClipTransform, type Cover, type CropRect, type EffectId, type EffectItem,
   type EffectRect, type FilterId,
-  type Keyframe, type LayerClip, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StabilizeId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
+  type Keyframe, type LayerClip, type TextInEdge, isRevealId, type MaskId, type Overlay, type OverlayAnimation, type Project, type SpeedCurve, type SpeedCurveId, type StabilizeId, type StickerOverlay, type TextOverlay, type TextStyle, type TransitionType,
 } from "./types";
 import { totalDuration } from "./timeline";
 import type { Template } from "../templates";
@@ -75,7 +75,7 @@ function rebasePins(pins: Keyframe[], by: number, head: (before: Keyframe[]) => 
   return clampPins([{ ...head(before), t: 0 }, ...shifted.filter((k) => k.t >= 0)]);
 }
 
-const copyEdge = (e: AnimEdge | null): AnimEdge | null => (e ? { ...e } : null);
+const copyEdge = <E extends { duration: number }>(e: E | null): E | null => (e ? { ...e } : null);
 const copyPins = (k: Keyframe[]): Keyframe[] => k.map((e) => ({ ...e }));
 const copyChroma = (k: ChromaKey | null): ChromaKey | null => (k ? { ...k } : null);
 const copyCurve = (v: SpeedCurve | null): SpeedCurve | null => (v ? { id: v.id, steps: v.steps.map((s) => ({ ...s })) } : null);
@@ -1270,9 +1270,13 @@ export function duplicateEffect(p: Project, id: string): Project {
 // ---- Motion: animations and keyframes ----
 
 const EDGES = ["in", "out"] as const;
-/** A patch's edges are usable: each is absent, null, or a known id with a finite duration. */
-function edgesOk(patch: { in?: AnimEdge | null; out?: AnimEdge | null }): boolean {
-  return EDGES.every((k) => { const e = patch[k]; return e == null || (Number.isFinite(e.duration) && clampAnimEdge(e) !== null); });
+/** A patch's edges are usable: each is absent, null, or a known id with a finite duration. `reveal`: a text's In may be a reveal id. */
+function edgesOk(patch: { in?: TextInEdge | null; out?: AnimEdge | null }, reveal = false): boolean {
+  return EDGES.every((k) => {
+    const e = patch[k];
+    if (e == null) return true;
+    return Number.isFinite(e.duration) && (clampAnimEdge(e) !== null || (k === "in" && reveal && isRevealId(e.id)));
+  });
 }
 
 /**
@@ -1359,18 +1363,19 @@ export function setOverlayAnimation(p: Project, overlayId: string, patch: Partia
   const i = p.overlays.findIndex((o) => o.id === overlayId);
   if (i < 0 || p.overlays[i].kind === "caption") return p;
   const cur = p.overlays[i];
-  const animation = patchedOverlayAnimation(cur.animation, patch);
+  const animation = patchedOverlayAnimation(cur.animation, patch, cur.kind === "text");
   return animation ? replaceOverlay(p, i, { ...cur, animation }) : p;
 }
 
-/** `cur` with the patch's In / Out / Loop written (clamped); null when the patch is refused (unknown id, non-finite duration). */
-function patchedOverlayAnimation(cur: OverlayAnimation, patch: Partial<OverlayAnimation>): OverlayAnimation | null {
-  if (!edgesOk(patch)) return null;
+/** `cur` with the patch's In / Out / Loop written (clamped); null when the patch is refused (unknown id, non-finite duration). `reveal`: a text. */
+function patchedOverlayAnimation(cur: OverlayAnimation, patch: Partial<OverlayAnimation>, reveal: boolean): OverlayAnimation | null {
+  if (!edgesOk(patch, reveal)) return null;
   if (patch.loop != null && !(ANIM_LOOP_IDS as readonly string[]).includes(patch.loop)) return null;
   const next: OverlayAnimation = { ...cur };
-  for (const k of EDGES) if (patch[k] !== undefined) next[k] = patch[k] ?? null;
+  if (patch.in !== undefined) next.in = patch.in ?? null;
+  if (patch.out !== undefined) next.out = patch.out ?? null;
   if (patch.loop !== undefined) next.loop = patch.loop;
-  return clampOverlayAnimation(next);
+  return clampOverlayAnimation(next, reveal);
 }
 
 // ---- Text style, templates and caption presets ----
@@ -1396,7 +1401,7 @@ export function applyTextTemplate(p: Project, overlayId: string, templateId: Tex
   const cur = p.overlays[i];
   if (cur.kind !== "text") return p;
   const t = TEXT_TEMPLATES[templateId].patch;
-  const animation = patchedOverlayAnimation(cur.animation, { in: null, loop: null, ...t.animation });
+  const animation = patchedOverlayAnimation(cur.animation, { in: null, loop: null, ...t.animation }, true);
   if (!animation) return p;
   return replaceOverlay(p, i, { ...cur, fontId: t.fontId, color: t.color, background: t.background ? { ...t.background } : null,
     outline: t.outline, style: clampTextStyle(t.style), animation });

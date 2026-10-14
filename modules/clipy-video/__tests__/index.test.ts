@@ -634,3 +634,22 @@ describe("beats and background API (the build of 2026-10-09)", () => {
     expect(isCutoutCancelled(new Error("Cutout cancelled"))).toBe(false);
   });
 });
+
+describe("toExportOverlay: a text's reveal", () => {
+  const revealing = (id: "typewriter" | "wordByWord", text = "Hi you") =>
+    makeOverlay({ id: "o", text, start: 0, end: 3, animation: { in: { id, duration: 0.5 }, out: { id: "fade", duration: 0.5 }, loop: null } });
+  test("travels as its own key with NO In, so an older build shows the text whole", () => {
+    const e = toExportOverlay(revealing("wordByWord"));
+    expect(e.animIn).toBeNull();
+    expect(e.animOut).toEqual({ id: "fade", duration: 0.5 });
+    expect(e.reveal).toEqual({ cuts: [3, 6], from: [0, 0.25] });
+  });
+  test("every other text, a one-step reveal and a sticker have no `reveal` key at all", () => {
+    expect("reveal" in toExportOverlay(makeOverlay({ id: "p" }))).toBe(false);
+    expect("reveal" in toExportOverlay(makeOverlay({ id: "q", animation: { in: { id: "pop", duration: 0.5 }, out: null, loop: null } }))).toBe(false);
+    const one = toExportOverlay(revealing("wordByWord", "Hi"));
+    expect("reveal" in one).toBe(false);
+    expect(one.animIn).toBeNull();
+    expect("reveal" in toExportOverlay(makeSticker({ id: "s" }))).toBe(false);
+  });
+});

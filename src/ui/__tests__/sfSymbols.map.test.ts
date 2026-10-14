@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "fs";
 import { join, relative, sep } from "path";
-import { ANIM_COMBO, ANIM_IN, ANIM_LOOP, EFFECTS } from "@/src/editor/effects";
+import { ANIM_COMBO, ANIM_IN, ANIM_LOOP, ANIM_REVEAL, EFFECTS } from "@/src/editor/effects";
 import { PHOTO_MOTIONS } from "@/src/editor/photoTools";
 import { EQS, VOICES } from "@/src/editor/soundTools";
 import { BAR_GLYPH } from "@/src/editor/timelineMarks";
@@ -25,9 +25,9 @@ const USED = [
   "color-palette-outline", "color-wand-outline", "construct-outline", "contract-outline", "contrast-outline", "copy-outline", "create-outline", "crop-outline", "cut-outline",
   "diamond", "diamond-outline", "ellipse-outline", "ellipsis-horizontal-outline", "expand-outline", "eye-outline", "film-outline", "fitness-outline", "flame-outline",
   "flash-outline", "flashlight-outline", "folder-open-outline", "git-branch-outline", "git-compare-outline", "grid-outline", "hand-left-outline", "happy-outline", "hardware-chip-outline",
-  "heart-outline", "image-outline", "information-circle-outline", "layers-outline", "leaf-outline", "log-out-outline", "logo-facebook", "logo-google", "logo-instagram",
+  "heart-outline", "image-outline", "information-circle-outline", "keypad-outline", "layers-outline", "leaf-outline", "log-out-outline", "logo-facebook", "logo-google", "logo-instagram",
   "logo-tiktok", "logo-x", "logo-youtube", "mail-outline", "mic", "mic-outline", "move-outline", "musical-notes-outline", "notifications-outline", "options-outline", "paper-plane-outline", "pause",
-  "paw-outline", "person-circle-outline", "person-remove-outline", "phone-portrait-outline", "play", "play-back-outline", "play-outline", "pulse-outline", "radio-outline", "refresh-outline",
+  "paw-outline", "person-circle-outline", "person-remove-outline", "phone-portrait-outline", "play", "play-back-outline", "play-outline", "pulse-outline", "radio-outline", "reader-outline", "refresh-outline",
   "remove-circle-outline", "reorder-two-outline", "repeat-outline", "resize-outline", "scan-outline", "share-outline", "snow-outline", "sparkles-outline", "speedometer-outline",
   "square-outline", "stats-chart-outline", "stop", "stop-outline", "sunny-outline", "swap-horizontal-outline", "swap-vertical-outline", "sync-outline", "text-outline",
   "trash-outline", "trending-up-outline", "videocam-outline", "volume-high-outline", "volume-low-outline", "volume-medium-outline", "warning", "warning-outline", "water-outline",
@@ -100,11 +100,11 @@ test("USED is every icon name in the app's source, no more and no fewer", () => 
       + (gone.length > 0 ? `  No longer in the source: ${gone.join(", ")} — delete each from USED and from SF_SYMBOLS.\n` : ""));
   }
   expect(USED).toEqual([...USED].sort());
-  expect(USED).toHaveLength(125);
+  expect(USED).toHaveLength(127);
 });
 
 test("the tables that hand icons to the toolbar, the tiles, the timeline and the platform rows are all in USED", () => {
-  const tables: Record<string, { icon: string }>[] = [TOOL_META, EFFECTS, ANIM_IN, ANIM_COMBO, ANIM_LOOP, PHOTO_MOTIONS, VOICES, EQS, QUICK_RECIPES, PLATFORMS];
+  const tables: Record<string, { icon: string }>[] = [TOOL_META, EFFECTS, ANIM_IN, ANIM_COMBO, ANIM_LOOP, ANIM_REVEAL, PHOTO_MOTIONS, VOICES, EQS, QUICK_RECIPES, PLATFORMS];
   const names = [...tables.flatMap((t) => Object.values(t).map((row) => row.icon)), ...GROUPS.map((g) => g.icon), ...Object.values(BAR_GLYPH)];
   expect(names.length).toBeGreaterThan(130);
   expect([...new Set(names)].filter((n) => !USED.includes(n))).toEqual([]);
@@ -116,7 +116,7 @@ test("every icon name has a decision: an SF Symbol, or a listed reason for none 
   expect(USED.filter((n) => table[n] !== undefined && NO_SYMBOL[n] !== undefined)).toEqual([]);
   expect(Object.keys(table).filter((n) => !USED.includes(n))).toEqual([]);
   expect(Object.keys(NO_SYMBOL).filter((n) => !USED.includes(n))).toEqual([]);
-  expect(Object.keys(table)).toHaveLength(119);
+  expect(Object.keys(table)).toHaveLength(121);
   expect(Object.keys(NO_SYMBOL)).toHaveLength(6);
   for (const n of USED) if (n.startsWith("logo-")) expect(table[n]).toBeUndefined();   // a brand mark is never Apple's symbol
 });

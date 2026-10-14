@@ -1,4 +1,4 @@
-import { ANIM_LIMITS, type AnimEdge } from "@/src/editor/model/types";
+import { ANIM_LIMITS } from "@/src/editor/model/types";
 import type { IoniconName } from "@/src/editor/toolGroups";
 import { Slider } from "@/src/ui/Slider";
 import { Tile, TILE_WIDTH } from "@/src/ui/Tile";
@@ -22,10 +22,10 @@ export function AnimationTiles<T extends string>({ ids, registry, selected, onPi
 export const animationStartX = <T extends string>(ids: readonly T[], selected: T | null): number => tilesStartX(selected === null ? 0 : ids.indexOf(selected) + 1, TILE_WIDTH);
 
 /** The duration an In / Out tile is picked with: the edge's current one, or the default when the edge is empty. */
-export const edgeDuration = (edge: AnimEdge | null): number => edge?.duration ?? ANIM_LIMITS.defaultDuration;
+export const edgeDuration = (edge: { duration: number } | null): number => edge?.duration ?? ANIM_LIMITS.defaultDuration;
 
 /** The "Length" slider row under the In / Out tiles; disabled while the edge is None. The caller makes one undo step per drag. */
-export function AnimationLength({ edge, onStart, onChange }: { edge: AnimEdge | null; onStart: () => void; onChange: (duration: number) => void }) {
+export function AnimationLength({ edge, onStart, onChange }: { edge: { duration: number } | null; onStart: () => void; onChange: (duration: number) => void }) {
   return (
     <StripSlider label="Length" value={`${edgeDuration(edge).toFixed(2)} s`}>
       <Slider
