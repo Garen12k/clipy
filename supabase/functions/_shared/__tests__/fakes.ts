@@ -36,3 +36,14 @@ export function fakeDeps(over: Partial<Deps> = {}): Deps {
     ...over,
   };
 }
+
+/** A Sign in with Apple key made for the test: its `.p8` text (PKCS#8 PEM, 64-character lines, as Apple's file) and its public half. */
+export async function appleKey(): Promise<{ pem: string; publicKey: CryptoKey; spki: Buffer }> {
+  const pair = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"])) as CryptoKeyPair;
+  const der = Buffer.from(await crypto.subtle.exportKey("pkcs8", pair.privateKey)).toString("base64");
+  return {
+    pem: `-----BEGIN PRIVATE KEY-----\n${der.match(/.{1,64}/g)!.join("\n")}\n-----END PRIVATE KEY-----\n`,
+    publicKey: pair.publicKey,
+    spki: Buffer.from(await crypto.subtle.exportKey("spki", pair.publicKey)),
+  };
+}
