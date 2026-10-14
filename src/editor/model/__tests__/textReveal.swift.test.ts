@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { REVEAL } from "../textReveal";
+import { REVEAL_UNIT_VECTORS } from "./textReveal.vectors";
 
 /** The reveal in the export is never compiled here: these checks read the Swift source (spec section 5). */
 const root = join(__dirname, "../../../..");
@@ -100,4 +101,21 @@ test("the XCTests exist", () => {
   for (const name of ["testStepsEndWhereTheNextBegins", "testAnythingOddIsNoReveal", "testWithoutARevealTheLayersAreTheOldOnes", "testOneCopyPerLayerPerStepButTheLast", "testTheHiddenRangeIsClear", "testACaptionIgnoresTheKey"]) {
     expect(tests).toContain(`func ${name}()`);
   }
+});
+
+test("the XCTest's vector table is the app's, row for row (REVEAL_UNIT_VECTORS)", () => {
+  // Swift string escapes used in the table: \u{…}, \n, \\ and \".
+  const unescape = (s: string) =>
+    s.replace(/\\u\{([0-9A-Fa-f]+)\}|\\(.)/g, (_, hex: string | undefined, c: string | undefined) =>
+      hex !== undefined ? String.fromCodePoint(parseInt(hex, 16)) : c === "n" ? "\n" : (c as string));
+  const list = (s: string) => (s.trim() === "" ? [] : s.split(",").map((n) => Number(n.trim())));
+  const table = between(read("Tests/TextRevealTests.swift"), "private let vectors:", "\n  ]\n");
+  const row = /^\s*\(name: "((?:[^"\\]|\\.)*)", text: "((?:[^"\\]|\\.)*)", typewriter: \[([^\]]*)\], wordByWord: \[([^\]]*)\]\),$/;
+  const lines = table.split("\n").filter((l) => l.trim().startsWith("(name:"));
+  const rows = lines.map((l) => {
+    const m = row.exec(l);
+    if (!m) throw new Error(`not a vector row: ${l}`);
+    return { name: unescape(m[1]), text: unescape(m[2]), typewriter: list(m[3]), wordByWord: list(m[4]) };
+  });
+  expect(rows).toEqual(REVEAL_UNIT_VECTORS);
 });
