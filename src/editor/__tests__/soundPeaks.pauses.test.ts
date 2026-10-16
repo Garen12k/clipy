@@ -16,6 +16,7 @@ jest.mock("@/modules/clipy-video", () => ({
   PEAKS_CANCELLED: "E_PEAKS_CANCELLED",
   isPeaksCancelled: (e: unknown) => typeof e === "object" && e !== null && (e as { code?: string }).code === "E_PEAKS_CANCELLED",
 }));
+import { AppState, type AppStateStatus } from "react-native";
 import { cancelSoundPeaks, isPeaksAvailable, soundPeaks, type SoundPeaksRequest, type SoundPeaksResult } from "@/modules/clipy-video";
 import { makeAudioTrack, makeClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -133,4 +134,38 @@ test("failures: no sound, anything else, a deadline — none remembered; no func
   jest.mocked(isPeaksAvailable).mockReturnValue(false);
   expect(await listenForPauses({ uri: CLIP, from: 0, to: 3 })).toEqual({ status: "failed", reason: "build" });
   expect(calls).toHaveLength(3);
+});
+
+test("a listening of several calls keeps the turn: no waveform call runs between two of its calls", async () => {
+  syncPeaks("p1", peaksSources(useEditorStore.getState().project!, []));
+  await settle();
+  expect(calls).toHaveLength(1);                                  // the song's first call runs
+  const done = listenForPauses({ uri: CLIP, from: 0, to: 30 }); await flush();
+  answer(calls[0]); await settle();                               // the song's next call now waits
+  expect(calls[1].req).toMatchObject({ uri: CLIP, from: 0, to: 15 });
+  answer(calls[1]); await settle();
+  expect(calls[2].req).toMatchObject({ uri: CLIP, from: 15, to: 30 });
+  answer(calls[2]); expect((await done).status).toBe("ready"); await settle();
+  expect(calls[3].req.uri).toBe(SONG);                             // then the waveforms go on
+});
+
+test("a deadline counts only time in front: Clipy left during a long listening does not fail it", async () => {
+  const app = (now: AppStateStatus) => { Object.defineProperty(AppState, "currentState", { configurable: true, get: () => now }); };
+  try {
+    const done = listenForPauses({ uri: CLIP, from: 0, to: 3 }); await flush();
+    app("background");
+    await jest.advanceTimersByTimeAsync(PEAKS_DEADLINE_MS * 2);
+    app("active");
+    answer(calls[0]);
+    expect((await done).status).toBe("ready");
+  } finally { app("active"); }
+});
+
+test("what was heard is kept by last use: an outline read again outlives the ones not read since", async () => {
+  const hear = async (to: number) => { const d = listenForPauses({ uri: CLIP, from: 0, to }); await flush(); answer(calls[calls.length - 1]); await d; };
+  for (let i = 1; i <= 8; i++) await hear(i);
+  expect(heardPauses({ uri: CLIP, from: 0, to: 1 })).not.toBeNull();   // read: the newest now
+  await hear(9);
+  expect(heardPauses({ uri: CLIP, from: 0, to: 1 })).not.toBeNull();
+  expect(heardPauses({ uri: CLIP, from: 0, to: 2 })).toBeNull();
 });

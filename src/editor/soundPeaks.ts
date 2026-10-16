@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { cancelSoundPeaks, isPeaksAvailable, isPeaksCancelled, PEAKS_CANCELLED, soundPeaks, type SoundPeaksResult } from "@/modules/clipy-video";
+import { activeTimeout } from "@/src/lib/activeTime";
 import { newId } from "@/src/lib/id";
 import { storage } from "@/src/projects";
 import { expoFs } from "@/src/projects/expoFs";
@@ -109,12 +110,13 @@ function answered(uri: string, call: PeaksCall, kind: CallKind): Promise<SoundPe
     const settle = (end: () => void): void => {
       if (!open) return;
       open = false;
-      clearTimeout(deadline);
+      stopDeadline();
       if (grace !== null) clearTimeout(grace);
       if (running !== null && running.jobId === jobId) running = null;
       end();
     };
-    const deadline = setTimeout(() => settle(() => {
+    // Counted only while Clipy is in front (activeTime.ts): a listening left for another app is not failed on the way back.
+    const stopDeadline = activeTimeout(() => settle(() => {
       stopNative(jobId);
       reject(new Error(`peaks: no answer after ${PEAKS_DEADLINE_MS / 1000} s`));
     }), PEAKS_DEADLINE_MS);
@@ -132,8 +134,9 @@ function cancelRunning(): void {
 }
 
 /**
- * Every native call — a waveform's or a pause's — holds ONE turn while it runs, so the phone never reads two at once. A pauses call
- * (asked by the owner's tap) goes before every WAITING waveform call; nothing interrupts a call that runs.
+ * Every native call — a waveform's or a pause's — holds ONE turn while it runs, so the phone never reads two at once. A listening for
+ * pauses (asked by the owner's tap) goes before every WAITING waveform call and keeps the turn for ALL its calls; nothing interrupts a
+ * call that runs.
  */
 let turnHeld = false;
 const turnQueue: { urgent: boolean; go: () => void }[] = [];
@@ -249,7 +252,13 @@ export type PauseListening = { status: "ready"; outline: PauseOutline } | { stat
 /** The outlines heard this session — floats, by file, range and density. In memory only (spec §2.3): never on disk, never in the project or undo. */
 const heard = new Map<string, PauseOutline>();
 export const pauseKey = (s: PauseSource): string => `${s.uri}|${s.from}|${s.to}|${PAUSES.perSecond}`;
-export const heardPauses = (s: PauseSource): PauseOutline | null => heard.get(pauseKey(s)) ?? null;
+/** Reading an outline makes it the newest: the session keeps the ones used last. */
+export function heardPauses(s: PauseSource): PauseOutline | null {
+  const key = pauseKey(s), o = heard.get(key);
+  if (!o) return null;
+  heard.delete(key); heard.set(key, o);
+  return o;
+}
 /** The listening that runs (one at a time), and the count that `stopPauses` raises: an answer from before belongs to nobody. */
 let listening: { key: string; run: number; done: Promise<PauseListening> } | null = null;
 let pausesRun = 0;
@@ -270,12 +279,14 @@ export function listenForPauses(s: PauseSource): Promise<PauseListening> {
   if (!plan) return Promise.resolve({ status: "failed", reason: "tooLong" });
   const run = pausesRun;
   const still = (): boolean => run === pausesRun;
+  // The listening holds ONE turn for all its calls, so no waiting waveform call runs between two of them.
   const done = (async (): Promise<PauseListening> => {
+    await takeTurn(true);
     try {
       const answers: SoundPeaksResult[] = [];
       for (const call of plan) {
         if (!still()) return { status: "stopped" };
-        answers.push(await asked(s.uri, call, "pauses", still));
+        answers.push(await answered(s.uri, call, "pauses"));
       }
       if (!still()) return { status: "stopped" };
       const outline = assemblePauseOutline(plan, answers);
@@ -289,6 +300,7 @@ export function listenForPauses(s: PauseSource): Promise<PauseListening> {
       console.warn("pauses failed", text);
       return { status: "failed", reason: text.includes("has no sound") ? "noSound" : "failed" };
     } finally {
+      giveTurn();
       if (listening !== null && listening.run === run) listening = null;
     }
   })();
