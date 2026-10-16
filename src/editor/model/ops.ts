@@ -2,6 +2,7 @@ import { nowIso } from "@/src/lib/clock";
 import { newId } from "@/src/lib/id";
 import { clipAt, clipDuration, clipStartTimes, curveSteps, findItem, hasSpeedCurve, isSlowed, isSmoothCurve, layerEnd, smoothCurveSteps, sourceAfter, sourceTimeAt, spanTooShort, splitSourceRanges } from "./timeline";
 import { fitScale } from "./clipLayout";
+import { PAUSES, type PauseCut } from "./pauses";
 import { clipBaseAt, overlayBaseAt, sampleKeyframes } from "./motion";
 import {
   ANIM_COMBO_IDS, ANIM_LOOP_IDS, AUDIO_KINDS, AUDIO_LIMITS, BEAT_LIMITS, BLEND_IDS, captionLength, clampAdjust, clampAnimEdge, clampCaptionWords, clampChroma, clampClipAnimation, clampClipKeyframes, clampCover, clampCrop, clampFade, clampOverlayAnimation, clampOverlayKeyframes, clampSpeedCurve, clampTextStyle, clampTransform,
@@ -62,6 +63,42 @@ export function splitClipAt(p: Project, outputTime: number): Project {
   const left: Clip = { ...clip, trimStart: l[0], trimEnd: l[1], transitionOut: NO_TRANSITION, ...leftMotion, speedCurve: copyCurve(clip.speedCurve) };
   const right: Clip = { ...clip, id: newId(), trimStart: r[0], trimEnd: r[1], adjust: { ...clip.adjust }, chroma: copyChroma(clip.chroma), ...rightMotion, speedCurve: copyCurve(clip.speedCurve) };
   return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), left, right, ...p.clips.slice(index + 1)]) });
+}
+
+/**
+ * Remove pauses: the main video clip `clipId` replaced, in place, by the pieces of its trim that lie BETWEEN `cuts` (source seconds,
+ * in order, inside the trim — `findPauses`). The split rules (`splitClipAt`): the first piece keeps the id, the In and the fade in; the
+ * last gets the Out, the fade out and the clip's transition; no transition between pieces; a Combo and every pin on each piece; own
+ * copies of what a piece may change alone. One piece (only the edges cut) is the clip trimmed. Text, stickers, sounds, layers and
+ * markers do not move. Same project when refused: not a main clip, a photo, reversed or ramped, no cut or more than `PAUSES.maxCuts`,
+ * a cut out of order / empty / outside the trim, no piece left, or a piece under MIN_CLIP_SECONDS.
+ */
+export function removePauses(p: Project, clipId: string, cuts: readonly PauseCut[]): Project {
+  const index = p.clips.findIndex((c) => c.id === clipId);
+  if (index < 0 || cuts.length === 0 || cuts.length > PAUSES.maxCuts) return p;
+  const clip = p.clips[index];
+  if (isPhoto(clip) || clip.reversed || hasSpeedCurve(clip)) return p;
+  const E = 1e-6;
+  const ranges: [number, number][] = [];
+  let at = clip.trimStart;
+  for (const [a, b] of cuts) {
+    if (!Number.isFinite(a) || !Number.isFinite(b) || !(b > a) || a < at - E || b > clip.trimEnd + E) return p;
+    if (a - at > E) ranges.push([at, a]);
+    at = Math.min(b, clip.trimEnd);
+  }
+  if (clip.trimEnd - at > E) ranges.push([at, clip.trimEnd]);
+  if (ranges.length === 0 || ranges.some(([a, b]) => spanTooShort(clip, a, b, MIN_CLIP_SECONDS))) return p;
+  const last = ranges.length - 1, a = clip.animation;
+  const pieces = ranges.map(([from, to], i): Clip => {
+    const first = i === 0, end = i === last;
+    return { ...clip, id: first ? clip.id : newId(), trimStart: from, trimEnd: to,
+      transitionOut: end ? clip.transitionOut : NO_TRANSITION,
+      animation: { in: first ? copyEdge(a.in) : null, out: end ? copyEdge(a.out) : null, combo: a.combo },
+      fadeIn: first ? clip.fadeIn : 0, fadeOut: end ? clip.fadeOut : 0,
+      keyframes: copyPins(clip.keyframes), adjust: { ...clip.adjust }, chroma: copyChroma(clip.chroma),
+      transform: { ...clip.transform }, crop: { ...clip.crop }, background: { ...clip.background } };
+  });
+  return touch(p, { clips: normaliseTransitions([...p.clips.slice(0, index), ...pieces, ...p.clips.slice(index + 1)]) });
 }
 
 /**
