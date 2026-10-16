@@ -13,7 +13,7 @@ const project = makeProject({
 });
 
 const MAIN = ["edit", "audioMenu", "textMenu", "sticker", "overlay", "collage", "effect", "filter", "adjust", "ratio", "background", "cover", "templates"];
-const CLIP = ["split", "trim", "select", "speed", "volume", "extractAudio", "voice", "soundQuality", "animate", "filter", "adjust", "background", "templates", "crop", "transform", "opacity", "mask", "chroma", "cutout", "stabilize", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete"];
+const CLIP = ["split", "trim", "select", "speed", "volume", "extractAudio", "voice", "soundQuality", "animate", "filter", "adjust", "background", "templates", "crop", "transform", "opacity", "mask", "chroma", "cutout", "stabilize", "pauses", "keyframe", "transition", "replace", "reverse", "freeze", "duplicate", "delete"];
 const SOUND = ["audioSplit", "audioVolume", "audioFade", "voice", "soundQuality", "audioDuplicate", "audioDelete", "addAudio", "ducking", "beats"];
 const LAYER = ["trim", "speed", "volume", "extractAudio", "voice", "soundQuality", "animate", "filter", "adjust", "crop", "transform", "opacity", "mask", "blend", "chroma", "cutout", "stabilize", "keyframe", "layerForward", "layerBack", "replace", "reverse", "duplicate", "delete"];
 const without = (list: string[], ...gone: string[]) => list.filter((t) => !gone.includes(t));
@@ -35,8 +35,8 @@ test("a main clip: Select is third, Background and Templates follow Adjust", () 
 });
 
 test("clip rules: a photo has no Speed / Volume / Reverse / Freeze; a reversed clip no Volume; the last clip no Transition; one clip no Select", () => {
-  expect(contextFor({ ...none, clipId: "p" }, project).tools).toEqual(withMotion(without(CLIP, "speed", "volume", "extractAudio", "voice", "soundQuality", "stabilize", "reverse", "freeze")));
-  expect(contextFor({ ...none, clipId: "r" }, project).tools).toEqual(without(CLIP, "volume", "extractAudio", "voice", "soundQuality", "cutout", "stabilize"));
+  expect(contextFor({ ...none, clipId: "p" }, project).tools).toEqual(withMotion(without(CLIP, "speed", "volume", "extractAudio", "voice", "soundQuality", "stabilize", "pauses", "reverse", "freeze")));
+  expect(contextFor({ ...none, clipId: "r" }, project).tools).toEqual(without(CLIP, "volume", "extractAudio", "voice", "soundQuality", "cutout", "stabilize", "pauses"));
   expect(contextFor({ ...none, clipId: "z" }, project).tools).toEqual(without(CLIP, "transition"));
   const one = makeProject({ clips: [makeClip({ id: "a", sourceDuration: 4 })] });
   expect(contextFor({ ...none, clipId: "a" }, one).tools).toEqual(without(CLIP, "transition", "select"));
@@ -97,7 +97,7 @@ test("every tool id is reachable, and no bar lists a tool twice", () => {
     for (const t of tools) seen.add(t);
   }
   expect([...seen].sort()).toEqual([...TOOL_IDS].sort());
-  expect(TOOL_IDS).toHaveLength(58);
+  expect(TOOL_IDS).toHaveLength(59);
 });
 
 test("selectionKey names what is selected; multi-select first", () => {

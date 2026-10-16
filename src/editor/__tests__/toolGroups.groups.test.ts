@@ -91,7 +91,7 @@ test("which bars are in groups: only a clip's and a layer's; everything else is 
 test("a video clip: the five groups; the most used tools are in the first one, Select third as it is today", () => {
   expect(grouped({ clipId: "a" })).toEqual({
     Basics: ["Split", "Trim", "Select", "Speed", "Volume", "Filter", "Cut out", "Stabilize"],
-    Edit: ["Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate"],
+    Edit: ["Remove pauses", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate"],
     Audio: ["Extract audio", "Voice", "Sound"],
     Look: ["Animate", "Adjust", "Templates"],
     Frame: ["Background", "Crop", "Transform", "Opacity", "Mask", "Green screen"],
