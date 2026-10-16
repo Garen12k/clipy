@@ -1,7 +1,7 @@
 import { cutToBeats, placeBeats } from "@/src/editor/model/beats";
-import { addAudioTrack, addTextOverlay, applyTextTemplate, setFilterForAllClips, setPhotoMotion, setTransition, trimClip, updateAudioTrackById } from "@/src/editor/model/ops";
+import { addAudioTrack, addTextOverlay, applyTextTemplate, pasteTextLook, setFilterForAllClips, setPhotoMotion, setTransition, trimClip, updateAudioTrackById, type TextLook } from "@/src/editor/model/ops";
 import { clipDuration, sourceAfter, totalDuration } from "@/src/editor/model/timeline";
-import { isPhoto, makeOverlay, type AudioTrack, type FilterId, type PhotoMotionId, type Project, type TransitionType } from "@/src/editor/model/types";
+import { isPhoto, makeOverlay, type Align, type AudioTrack, type FilterId, type PhotoMotionId, type Project, type TransitionType } from "@/src/editor/model/types";
 import type { TextTemplateId } from "@/src/editor/textTemplates";
 import type { IoniconName } from "@/src/editor/toolGroups";
 
@@ -48,6 +48,26 @@ export const QUICK_RECIPES: Record<QuickRecipeId, QuickRecipe> = {
     title: "My day", textTemplate: "headline", titleY: 0.15, titleScale: 0.07, motions: ["zoomIn", "zoomOut"], motionStrength: 0.4 },
 };
 
+export interface StyleTitle { text: string; look: TextLook; x: number; y: number; scale: number; rotation: number; align: Align }
+/** A plan's title: a built-in recipe's (its words through a text template) or a user style's (its words with a whole look, place and turn). */
+export type QuickTitle =
+  | { from: "template"; text: string; templateId: TextTemplateId; y: number; fontScale: number }
+  | ({ from: "look" } & StyleTitle);
+/** What `buildQuickEdit` reads: a built-in recipe (`planOfRecipe`) or a user style (`planOfStyle`, userStyles.ts). */
+export interface QuickPlan {
+  every: 1 | 2 | 4; hold: number; videoHold: number;
+  transition: { type: TransitionType; duration: number };
+  filter: FilterId | null; filterIntensity: number;
+  title: QuickTitle | null;
+  motions: readonly PhotoMotionId[]; motionStrength: number;
+}
+
+/** A built-in recipe as the plan `buildQuickEdit` reads: field for field, so a recipe builds exactly what it built before plans existed (the PROOF). */
+export function planOfRecipe(r: QuickRecipe): QuickPlan {
+  return { every: r.every, hold: r.hold, videoHold: r.videoHold, transition: r.transition, filter: r.filter, filterIntensity: r.filterIntensity,
+    title: { from: "template", text: r.title, templateId: r.textTemplate, y: r.titleY, fontScale: r.titleScale }, motions: r.motions, motionStrength: r.motionStrength };
+}
+
 /**
  * `slack`: a clip is first given its target length plus this, then Cut to beats pulls it back onto the beat (so a rounding hair never
  * loses it a whole step). `fadeOut`: the music's fade at the video's end. `titleSeconds`: how long the title shows. `maxItems`: the
@@ -73,52 +93,63 @@ export function markerStep(beats: readonly number[], every: number): number {
  * 4. the music is trimmed to the video's end with a fade-out; markers past the end are dropped;
  * 5. the transition on every cut, the filter on every clip, a Motion on every photo in turn, the title over the first seconds.
  * A project without clips is returned as it is.
+ * `recipe` is a built-in recipe or a style's plan (`planOfStyle`); `music` null = no sound: nothing is cut and no marker is placed; a null filter or title is left out.
  */
-export function buildQuickEdit(a: { recipe: QuickRecipe; project: Project; music: AudioTrack; beats: readonly number[]; titleId: string }): Project {
-  const { recipe, project, music, beats, titleId } = a;
+export function buildQuickEdit(a: { recipe: QuickRecipe | QuickPlan; project: Project; music: AudioTrack | null; beats: readonly number[]; titleId: string }): Project {
+  const { project, music, beats, titleId } = a;
+  const plan = "textTemplate" in a.recipe ? planOfRecipe(a.recipe) : a.recipe;
   if (project.clips.length === 0) return project;
   let p = project;
-  const step = markerStep(beats, recipe.every);
+  const step = music ? markerStep(beats, plan.every) : 0;
   /** The clips that were given slack: id -> the source end of the target length WITHOUT it. */
   const exact = new Map<string, number>();
   if (step > 0) for (const c of project.clips) {
     if (isPhoto(c)) {
-      p = trimClip(p, c.id, 0, r3(recipe.hold * step + QUICK.slack));
-      exact.set(c.id, r3(recipe.hold * step));
+      p = trimClip(p, c.id, 0, r3(plan.hold * step + QUICK.slack));
+      exact.set(c.id, r3(plan.hold * step));
     } else {
-      const most = recipe.videoHold * step;
+      const most = plan.videoHold * step;
       if (clipDuration(c) > most + QUICK.slack) {
         p = trimClip(p, c.id, c.trimStart, sourceAfter(c, c.trimStart, most + QUICK.slack));
         exact.set(c.id, sourceAfter(c, c.trimStart, most));
       }
     }
   }
-  const first = beats.length > 0 ? Math.max(0, beats[0]) : 0;
-  p = addAudioTrack(p, { ...music, start: 0, trimStart: first, trimEnd: music.sourceDuration, fadeIn: 0, fadeOut: 0 });
-  const slacked = p.clips;
-  p = cutToBeats(placeBeats(p, music.id, beats, recipe.every), true);
-  // The slack was only there for the cut: the clips after the last one a beat reached still carry it, so each goes back to its
-  // exact target length. Only that trailing run — nothing that was cut onto a beat is touched, and no cut just made can move.
-  const same = (i: number) => p.clips[i].trimStart === slacked[i].trimStart && p.clips[i].trimEnd === slacked[i].trimEnd;
-  let tail = slacked.length;
-  while (tail > 0 && same(tail - 1)) tail--;
-  for (const before of slacked.slice(tail)) {
-    const end = exact.get(before.id);
-    if (end !== undefined) p = trimClip(p, before.id, before.trimStart, end);
+  let total = totalDuration(p);
+  if (music) {
+    const first = beats.length > 0 ? Math.max(0, beats[0]) : 0;
+    p = addAudioTrack(p, { ...music, start: 0, trimStart: first, trimEnd: music.sourceDuration, fadeIn: 0, fadeOut: 0 });
+    const slacked = p.clips;
+    p = cutToBeats(placeBeats(p, music.id, beats, plan.every), true);
+    // The slack was only there for the cut: the clips after the last one a beat reached still carry it, so each goes back to its
+    // exact target length. Only that trailing run — nothing that was cut onto a beat is touched, and no cut just made can move.
+    const same = (i: number) => p.clips[i].trimStart === slacked[i].trimStart && p.clips[i].trimEnd === slacked[i].trimEnd;
+    let tail = slacked.length;
+    while (tail > 0 && same(tail - 1)) tail--;
+    for (const before of slacked.slice(tail)) {
+      const end = exact.get(before.id);
+      if (end !== undefined) p = trimClip(p, before.id, before.trimStart, end);
+    }
+    total = totalDuration(p);
+    p = updateAudioTrackById(p, music.id, { trimEnd: Math.min(music.sourceDuration, first + total), fadeOut: QUICK.fadeOut });
   }
-  const total = totalDuration(p);
-  p = updateAudioTrackById(p, music.id, { trimEnd: Math.min(music.sourceDuration, first + total), fadeOut: QUICK.fadeOut });
   if (p.beatMarkers.some((m) => m > total + 1e-9)) p = { ...p, beatMarkers: p.beatMarkers.filter((m) => m <= total + 1e-9) };
-  if (recipe.transition.type !== "none") for (const c of p.clips.slice(0, -1)) p = setTransition(p, c.id, recipe.transition);
-  p = setFilterForAllClips(p, recipe.filter, recipe.filterIntensity);
-  if (recipe.motions.length > 0) {
+  if (plan.transition.type !== "none") for (const c of p.clips.slice(0, -1)) p = setTransition(p, c.id, plan.transition);
+  if (plan.filter !== null) p = setFilterForAllClips(p, plan.filter, plan.filterIntensity);
+  if (plan.motions.length > 0) {
     let n = 0;
-    for (const c of p.clips) if (isPhoto(c)) p = setPhotoMotion(p, c.id, { id: recipe.motions[n++ % recipe.motions.length], strength: recipe.motionStrength });
+    for (const c of p.clips) if (isPhoto(c)) p = setPhotoMotion(p, c.id, { id: plan.motions[n++ % plan.motions.length], strength: plan.motionStrength });
   }
   const end = Math.min(QUICK.titleSeconds, total);
-  if (end > 0) {
-    p = addTextOverlay(p, makeOverlay({ id: titleId, text: recipe.title, x: 0.5, y: recipe.titleY, fontScale: recipe.titleScale, start: 0, end }));
-    p = applyTextTemplate(p, titleId, recipe.textTemplate);
+  const t = plan.title;
+  if (end > 0 && t) {
+    if (t.from === "template") {
+      p = addTextOverlay(p, makeOverlay({ id: titleId, text: t.text, x: 0.5, y: t.y, fontScale: t.fontScale, start: 0, end }));
+      p = applyTextTemplate(p, titleId, t.templateId);
+    } else {
+      p = addTextOverlay(p, makeOverlay({ id: titleId, text: t.text, x: t.x, y: t.y, scale: t.scale, rotation: t.rotation, align: t.align, start: 0, end }));
+      p = pasteTextLook(p, titleId, t.look);
+    }
   }
   return p;
 }
