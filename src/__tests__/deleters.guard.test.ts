@@ -31,5 +31,6 @@ test("the files that delete anything are exactly these", () => {
     "src/projects/expoFs.ts",          // the adapter
     "src/projects/filePhone.ts",       // the picker's temporary copy
     "src/projects/storage.ts",         // covers, failed imports, temporaries, the history file, a deleted project's folder
+    "src/projects/styleStore.ts",      // a style's own music copy in <documents>/styles/media, and one no style names; never a project's file
   ]);
 });

@@ -7,7 +7,10 @@ import { newId } from "@/src/lib/id";
 import { storage, type PickedAsset, type ProjectSummary } from "@/src/projects";
 import { useToast } from "@/src/ui/Toast";
 import type { QuickRecipeId } from "./quickEdit";
-import { makeQuickEdit, type QuickEditDeps } from "./quickEditFlow";
+import { myStyles } from "./myStyles";
+import { makeQuickEdit, STYLE_MUSIC_MISSING, type QuickChoice, type QuickEditDeps } from "./quickEditFlow";
+import { STYLE_WORDS } from "./useUserStyles";
+import type { UserStyle } from "./userStyles";
 
 /** A bundled file as a uri that can be copied (downloaded from the dev server in Expo Go; already on disk in a build). */
 async function assetUri(file: number): Promise<string> {
@@ -60,14 +63,22 @@ export function useProjects() {
    * project is left behind then. Once the draft exists its id is returned even if the list cannot be re-read: the owner lands in
    * the draft, and the list is read again when the home screen is next in front.
    */
-  async function createQuick(assets: PickedAsset[], recipeId: QuickRecipeId): Promise<string | null> {
+  async function createQuick(assets: PickedAsset[], choice: QuickRecipeId | UserStyle): Promise<string | null> {
     if (assets.length === 0) return null;
     const deps: QuickEditDeps = { storage, assetUri, newId };
     let made: Awaited<ReturnType<typeof makeQuickEdit>>;
-    try { made = await makeQuickEdit(deps, nextName(), assets, recipeId); }
-    catch (e) {
+    try {
+      let pick: QuickChoice = choice as QuickRecipeId;
+      if (typeof choice !== "string") {
+        // Own music is asked for FIRST: a file that is gone makes nothing (the all-or-nothing rule of makeQuickEdit).
+        const musicUri = choice.music?.kind === "own" ? await myStyles.musicUri(choice) : null;
+        if (choice.music?.kind === "own" && !musicUri) throw new Error(STYLE_MUSIC_MISSING);
+        pick = { style: choice, musicUri };
+      }
+      made = await makeQuickEdit(deps, nextName(), assets, pick);
+    } catch (e) {
       console.warn("quick edit failed", e);
-      useToast.getState().show(e instanceof Error && IMPORT_NONE.test(e.message) ? e.message : "Couldn't make the quick edit");
+      useToast.getState().show(e instanceof Error && IMPORT_NONE.test(e.message) ? e.message : e instanceof Error && e.message === STYLE_MUSIC_MISSING ? STYLE_WORDS.musicGone : "Couldn't make the quick edit");
       return null;
     }
     partly(assets.length, made.failed);

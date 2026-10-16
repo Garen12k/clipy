@@ -307,3 +307,43 @@ Quick Edit again.
   the closed picker; Open Project File and Save a Copy still work afterwards.
 - **Wrong looks like:** a button that does nothing until Clipy is closed and opened again, two pickers on top of each other,
   or a project made from a picker that was closed.
+
+## L. Your own Quick Edit styles (Save As Style)
+
+### 44. Save a project as a style
+Home → a project's More (or touch and hold its picture) → **Save As Style**. The name box shows the project's name; change it
+and tap OK.
+- **Right looks like:** Save As Style sits between Duplicate and Save a Copy; for a moment "Saving your style" shows where the two
+  bottom buttons are, then "Style saved. You'll find it in Quick edit."
+- **Wrong looks like:** no name box, the project itself changed, or the home screen stuck after saving.
+
+### 45. The style in Quick Edit
+Tap **Quick Edit**. Then tap your style, Choose Photos and Videos, and pick 5 photos.
+- **Right looks like:** "Your styles" above "Styles", with your style's star tile; a long name ends in dots and never gets
+  smaller. The draft has the same song, the same filter, the same transition between photos, your title with its look in its
+  place, and the photos moving as in the project. The note under the tiles says "Music: <the song>." (or "No music.").
+- **Wrong looks like:** "Music: ." with nothing after it, a different song, or the title in another place.
+
+### 46. Your own song, then delete the project
+A project with a song of your own (not one of Clipy's) and beats placed: Save As Style, then DELETE that project. Make a Quick
+Edit with the style.
+- **Right looks like:** the draft still has the song, and the photos change on the beat, each about 2–3 seconds — even if two
+  of your beat marks were close together.
+- **Wrong looks like:** "This style's music is missing.", or every photo very short.
+
+### 47. Your own song with no beats placed
+- **Right looks like:** the draft has the song, photos of about 3 seconds, no beat marks.
+
+### 48. Rename and delete
+In Quick Edit, touch and hold your style.
+- **Right looks like:** Rename / Delete / Cancel appears ON TOP of the Quick Edit panel. Rename shows the new name at once.
+  Delete → "Delete style?" → Delete: the tile goes, and all your projects are still there.
+- **Wrong looks like:** the menu hidden behind the panel, or a project gone.
+
+### 49. VoiceOver
+- **Right looks like:** "Your styles" and "Styles" are read as headings; your tile says its name and "Touch and hold to rename
+  or delete."; a double tap and hold opens the menu.
+
+### 50. A style from an empty project
+Save As Style on a project with no song, no filter and no text, then make a Quick Edit with it.
+- **Right looks like:** the draft is just your photos, each as long as it would be in a new project.

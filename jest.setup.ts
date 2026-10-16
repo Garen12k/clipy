@@ -9,6 +9,11 @@ jest.mock("expo-glass-effect", () => ({ GlassView: require("react-native").View,
 // the editor's "+" go straight to the library, with no menu. The suites about the camera say otherwise themselves
 // (camera.test.ts unmocks this; homeCamera / AddClipTile.camera mock the module).
 jest.mock("@/src/projects/camera", () => ({ ...jest.requireActual("@/src/projects/camera"), canUseCamera: () => false }));
+// The owner's styles: a store on its own in-memory files per test file — the test phone starts with no styles (src/projects/myStyles.ts).
+jest.mock("@/src/projects/myStyles", () => {
+  let n = 0;
+  return { myStyles: require("@/src/projects/styleStore").makeStyleStore(require("@/src/projects/fs").memoryFs(), { newId: () => `style${++n}`, nowIso: () => "2026-10-16T12:00:00.000Z" }) };
+});
 // The test phone has no notifications either: the Export screen offers nothing and an export's end shows nothing, and the real
 // package is never loaded. The suites about them say otherwise themselves (notify.test.ts unmocks this; notifyOffer / exportNotice /
 // the permission suites mock the module).

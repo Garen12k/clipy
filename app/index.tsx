@@ -11,13 +11,15 @@ import { sourceMenuShown, takeOne, useMediaSource } from "@/src/projects/mediaSo
 import { pickMedia } from "@/src/projects/pickMedia";
 import { AFTER_SHEET_MS, ProjectActionsSheet } from "@/src/projects/ProjectActionsSheet";
 import { ProjectCard } from "@/src/projects/ProjectCard";
-import { QUICK, type QuickRecipeId } from "@/src/projects/quickEdit";
-import { QuickEditSheet } from "@/src/projects/QuickEditSheet";
+import { QUICK } from "@/src/projects/quickEdit";
+import { QuickEditSheet, type QuickPick } from "@/src/projects/QuickEditSheet";
 import { hold, sheetRun } from "@/src/projects/sheetGuard";
+import { openStyleMenu } from "@/src/projects/styleMenu";
 import { useProjects } from "@/src/projects/useProjects";
 import { filePhone, type PickedAsset, type ProjectSummary } from "@/src/projects";
 import { TransferCard } from "@/src/projects/TransferCard";
 import { useProjectFile } from "@/src/projects/useProjectFile";
+import { useUserStyles } from "@/src/projects/useUserStyles";
 import { pickVideoForPost } from "@/src/publish/pickVideo";
 import { glassTint, theme } from "@/src/theme/theme";
 import { useSurfaces } from "@/src/ui/tone";
@@ -50,11 +52,12 @@ export default function Home() {
 /** The pill behind Quick Edit; and the same pill while the row is shared at a larger text size (the button in it is as wide as the pill). */
 const QUICK_BACKING = { borderRadius: theme.radius.pill } as const;
 const QUICK_SHARES = { ...QUICK_BACKING, flexShrink: 1 } as const;
-const MAKING = { project: "Creating your project", quick: "Making your quick edit" } as const;
+const MAKING = { project: "Creating your project", quick: "Making your quick edit", style: "Saving your style" } as const;
 
 function ProjectsScreen() {
   const { projects, loading, reload, create, createQuick, rename, duplicate, remove } = useProjects();
   const { transfer, saveCopy, openFile, cancel } = useProjectFile(reload);
+  const styles = useUserStyles();
   const [actionsFor, setActionsFor] = useState<ProjectSummary | null>(null);
   /** Media picked for a new project that is waiting for its aspect ratio. */
   const [pending, setPending] = useState<PickedAsset[] | null>(null);
@@ -64,6 +67,8 @@ function ProjectsScreen() {
   const confirmDelete = (p: ProjectSummary) => Alert.alert("Delete project?", "This can't be undone.", [
     { text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => { haptic("medium"); remove(p.id); } }]);
   const promptRename = (p: ProjectSummary) => Alert.prompt("Rename project", undefined, (name) => name && rename(p.id, name), "plain-text", p.name);
+  // A Cancel never answers here; an empty OK keeps the project's name (the store's fallback).
+  const promptSaveStyle = (p: ProjectSummary) => Alert.prompt("Save as style", "You'll find it in Quick edit.", (name) => { void onSaveStyle(p, name ?? ""); }, "plain-text", p.name);
 
   const picking = useRef(false);
   async function onPostVideo() {
@@ -137,10 +142,14 @@ function ProjectsScreen() {
     setPending(null);
     setQuickOpen(false);
     await new Promise((r) => setTimeout(r, 0));
+    if (starting.current || creating.current) return;
+    await styles.reload(); // the row "Your styles" is read afresh on every opening
     if (!starting.current && !creating.current) setQuickOpen(true);
   }
-  async function onQuickChoose(recipeId: QuickRecipeId) {
+  async function onQuickChoose(pick: QuickPick) {
     if (starting.current || creating.current) return;
+    const choice = typeof pick === "string" ? pick : styles.mine.find((s) => s.id === pick.mine);
+    if (!choice) return;
     const { sheet, end } = sheetRun(taken, () => hold(starting));
     let assets: PickedAsset[] | null = null;
     try {
@@ -154,7 +163,7 @@ function ProjectsScreen() {
     creating.current = true;
     setMaking("quick");
     setBusy(true);
-    try { openEditor(await createQuick(assets, recipeId)); }
+    try { openEditor(await createQuick(assets, choice)); }
     finally { creating.current = false; setMaking(null); setBusy(false); }
   }
 
@@ -170,6 +179,16 @@ function ProjectsScreen() {
     let up: ReturnType<typeof setTimeout> | null = null;
     try { await saveCopy(p, () => { up = setTimeout(release, AFTER_PICKER_MS); }); }
     finally { if (up) clearTimeout(up); release(); }
+  }
+  // Save as Style: our own work (the project read, its own music copied, the styles file written) under `creating`, so it never
+  // runs with the other four, and Home inert with the making capsule saying so (a large own song takes a moment to copy). The
+  // prompt is answered BEFORE the ref is taken: no ref waits for a system sheet.
+  async function onSaveStyle(p: ProjectSummary, name: string) {
+    if (starting.current || creating.current) return;
+    const release = hold(creating);
+    setMaking("style");
+    setBusy(true);
+    try { await styles.save(p.id, name); } finally { release(); setMaking(null); setBusy(false); }
   }
   async function onOpenFile() {
     if (starting.current || creating.current) return;
@@ -257,9 +276,9 @@ function ProjectsScreen() {
           </>
         )}
       </View>
-      <QuickEditSheet visible={quickOpen} onClose={() => setQuickOpen(false)} onChoose={onQuickChoose} />
+      <QuickEditSheet visible={quickOpen} onClose={() => setQuickOpen(false)} onChoose={onQuickChoose} mine={styles.mine} onStyleMenu={(st) => openStyleMenu(st, { rename: styles.rename, remove: styles.remove })} />
       <AspectRatioSheet assets={pending} onCancel={() => setPending(null)} onCreate={onCreate} />
-      <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onSaveCopy={onSaveCopy} onDelete={confirmDelete} />
+      <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onSaveCopy={onSaveCopy} onSaveStyle={promptSaveStyle} onDelete={confirmDelete} />
       <ToastHost />
     </Screen>
   );

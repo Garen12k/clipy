@@ -71,7 +71,7 @@ describe("the header's folder button and the sheet's button", () => {
     for (const name of ["Rename", "Duplicate", "Delete"]) expect(btn(name)).toBeTruthy();
   });
   test("the sheet of a project that cannot be opened has Delete only", async () => {
-    await render(<ProjectActionsSheet project={BROKEN} onClose={jest.fn()} onRename={jest.fn()} onDuplicate={jest.fn()} onSaveCopy={jest.fn()} onDelete={jest.fn()} />);
+    await render(<ProjectActionsSheet project={BROKEN} onClose={jest.fn()} onRename={jest.fn()} onDuplicate={jest.fn()} onSaveCopy={jest.fn()} onSaveStyle={jest.fn()} onDelete={jest.fn()} />);
     for (const name of ["Rename", "Duplicate", "Save a Copy"]) expect(screen.queryByRole("button", { name })).toBeNull();
     expect(btn("Delete")).toBeTruthy();
   });
