@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { cancelSoundPeaks, isPeaksAvailable, PEAKS_CANCELLED, soundPeaks, type SoundPeaksResult } from "@/modules/clipy-video";
+import { cancelSoundPeaks, isPeaksAvailable, isPeaksCancelled, PEAKS_CANCELLED, soundPeaks, type SoundPeaksResult } from "@/modules/clipy-video";
 import { newId } from "@/src/lib/id";
 import { storage } from "@/src/projects";
 import { expoFs } from "@/src/projects/expoFs";
 import { assemblePeaks, decodePeaks, encodePeaks, peaksFileName, peaksPlan, type Peaks, type PeaksCall } from "./model/peaks";
+import { assemblePauseOutline, PAUSES, pausePlan, type PauseOutline } from "./model/pauses";
 import type { Project } from "./model/types";
 import { usePeaksFiles, type PeaksFile } from "./peaksFiles";
 import { useEditorStore } from "./store";
@@ -22,6 +23,8 @@ import { useVoiceLive } from "./voiceLive";
  * This file is the only caller of `soundPeaks` / `cancelSoundPeaks`. One native call at a time (the loop below), and only while
  * the editor stands still (`idle`). Without the function (Expo Go, an older build) nothing here does anything: no call, no file
  * read, no message — the bars are as they were.
+ *
+ * Remove pauses listens here too (`listenForPauses`): one native call at a time for both — the turn below.
  */
 /** Where a project's outlines are cached. Deleted with the project; swept when it is opened (`sweepPeaks`). */
 export const peaksDir = (projectId: string): string => `${storage.projectDir(projectId)}/peaks`;
@@ -57,8 +60,10 @@ let wanted: { projectId: string; sources: PeaksSource[] } | null = null;
 let pumping = false;
 /** Counts the times the editor was left or another project opened: an answer from before belongs to nobody. */
 let epoch = 0;
+/** Who asked a native call: the waveforms' loop, or Remove pauses. */
+type CallKind = "wave" | "pauses";
 /** The native call that has not answered yet. */
-let running: { jobId: string; uri: string; giveUp: () => void } | null = null;
+let running: { jobId: string; uri: string; kind: CallKind; giveUp: () => void } | null = null;
 
 type Look = { project: unknown; playhead: number; pps: number; busy: boolean };
 // A voice-over's countdown (the Record tab's 3 … 1) is busy as well: the recording it leads to must not find a render under way.
@@ -96,7 +101,7 @@ function stopNative(jobId: string): void {
  * Waits for one native call — but never for ever: it ends with the answer, or `PEAKS_CANCEL_GRACE_MS` after it was cancelled (as a
  * cancelled call), or at `PEAKS_DEADLINE_MS` (as a failed one, and the phone is told to stop). A later answer is dropped.
  */
-function answered(uri: string, call: PeaksCall): Promise<SoundPeaksResult> {
+function answered(uri: string, call: PeaksCall, kind: CallKind): Promise<SoundPeaksResult> {
   return new Promise<SoundPeaksResult>((resolve, reject) => {
     const jobId = newId();
     let open = true;
@@ -113,7 +118,7 @@ function answered(uri: string, call: PeaksCall): Promise<SoundPeaksResult> {
       stopNative(jobId);
       reject(new Error(`peaks: no answer after ${PEAKS_DEADLINE_MS / 1000} s`));
     }), PEAKS_DEADLINE_MS);
-    running = { jobId, uri, giveUp: () => { if (grace === null) grace = setTimeout(() => settle(() => reject(cancelledError())), PEAKS_CANCEL_GRACE_MS); } };
+    running = { jobId, uri, kind, giveUp: () => { if (grace === null) grace = setTimeout(() => settle(() => reject(cancelledError())), PEAKS_CANCEL_GRACE_MS); } };
     let native: Promise<SoundPeaksResult>;
     try { native = soundPeaks({ jobId, uri, from: call.from, to: call.to, count: call.count }); } catch (e) { settle(() => reject(e)); return; }
     native.then((r) => settle(() => resolve(r)), (e: unknown) => settle(() => reject(e)));
@@ -124,6 +129,30 @@ function cancelRunning(): void {
   if (!r) return;
   stopNative(r.jobId);
   r.giveUp();
+}
+
+/**
+ * Every native call — a waveform's or a pause's — holds ONE turn while it runs, so the phone never reads two at once. A pauses call
+ * (asked by the owner's tap) goes before every WAITING waveform call; nothing interrupts a call that runs.
+ */
+let turnHeld = false;
+const turnQueue: { urgent: boolean; go: () => void }[] = [];
+function takeTurn(urgent: boolean): Promise<void> {
+  if (!turnHeld) { turnHeld = true; return Promise.resolve(); }
+  return new Promise<void>((go) => { turnQueue.push({ urgent, go }); });
+}
+function giveTurn(): void {
+  const i = turnQueue.findIndex((w) => w.urgent);
+  const next = i >= 0 ? turnQueue.splice(i, 1)[0] : turnQueue.shift();
+  if (next) next.go(); else turnHeld = false;
+}
+/** One native call in its turn; `still` is asked again once the turn comes (the caller may have been left meanwhile). */
+async function asked(uri: string, call: PeaksCall, kind: CallKind, still: () => boolean): Promise<SoundPeaksResult> {
+  await takeTurn(kind === "pauses");
+  try {
+    if (!still()) throw cancelledError();
+    return await answered(uri, call, kind);
+  } finally { giveTurn(); }
 }
 
 /** The outline in the project's cache file for this source, or null (no file, not readable, not this file's: `decodePeaks`). */
@@ -156,7 +185,7 @@ async function pump(): Promise<void> {
         const answers: SoundPeaksResult[] = [];
         for (const call of plan) {
           if (!(await idle(run)) || !stillWanted()) throw cancelledError();
-          answers.push(await answered(next.uri, call));
+          answers.push(await asked(next.uri, call, "wave", stillWanted));
         }
         if (!stillWanted()) continue;
         const peaks = assemblePeaks(plan, answers);
@@ -179,7 +208,7 @@ async function pump(): Promise<void> {
  */
 export function syncPeaks(projectId: string, sources: PeaksSource[]): void {
   wanted = { projectId, sources };
-  if (running !== null && !sources.some((s) => s.uri === running?.uri)) cancelRunning();
+  if (running !== null && running.kind === "wave" && !sources.some((s) => s.uri === running?.uri)) cancelRunning();
   void pump();
 }
 
@@ -188,6 +217,7 @@ export function syncPeaks(projectId: string, sources: PeaksSource[]): void {
  * for the session — the outlines, and the files that failed.
  */
 export function resetPeaks(): void {
+  stopPauses();
   wanted = null;
   epoch += 1;
   stood = null;
@@ -210,6 +240,67 @@ export async function sweepPeaks(projectId: string): Promise<void> {
   try {
     for (const name of await expoFs.list(dir)) if (!neededNow(name)) await expoFs.remove(`${dir}/${name}`);
   } catch (e) { console.warn("peaks sweep failed", e); }
+}
+
+/** Remove pauses: one clip's sound over its trim. */
+export type PauseSource = { uri: string; from: number; to: number };
+export type PauseFailure = "build" | "tooLong" | "noSound" | "failed";
+export type PauseListening = { status: "ready"; outline: PauseOutline } | { status: "failed"; reason: PauseFailure } | { status: "stopped" };
+/** The outlines heard this session — floats, by file, range and density. In memory only (spec §2.3): never on disk, never in the project or undo. */
+const heard = new Map<string, PauseOutline>();
+export const pauseKey = (s: PauseSource): string => `${s.uri}|${s.from}|${s.to}|${PAUSES.perSecond}`;
+export const heardPauses = (s: PauseSource): PauseOutline | null => heard.get(pauseKey(s)) ?? null;
+/** The listening that runs (one at a time), and the count that `stopPauses` raises: an answer from before belongs to nobody. */
+let listening: { key: string; run: number; done: Promise<PauseListening> } | null = null;
+let pausesRun = 0;
+
+/**
+ * Listens to a clip's ORIGINAL file over its trim (`pausePlan`: calls of 20 s), one native call at a time and ahead of the waiting
+ * waveform calls — not waiting for the editor to stand still: the owner asked. A second ask for the same source joins the first; another
+ * source stops it. Each call has PEAKS_DEADLINE_MS. Only a ready outline is remembered.
+ */
+export function listenForPauses(s: PauseSource): Promise<PauseListening> {
+  if (!isPeaksAvailable()) return Promise.resolve({ status: "failed", reason: "build" });
+  const key = pauseKey(s);
+  const known = heard.get(key);
+  if (known) return Promise.resolve({ status: "ready", outline: known });
+  if (listening !== null && listening.key === key && listening.run === pausesRun) return listening.done;
+  stopPauses();
+  const plan = pausePlan(s.from, s.to);
+  if (!plan) return Promise.resolve({ status: "failed", reason: "tooLong" });
+  const run = pausesRun;
+  const still = (): boolean => run === pausesRun;
+  const done = (async (): Promise<PauseListening> => {
+    try {
+      const answers: SoundPeaksResult[] = [];
+      for (const call of plan) {
+        if (!still()) return { status: "stopped" };
+        answers.push(await asked(s.uri, call, "pauses", still));
+      }
+      if (!still()) return { status: "stopped" };
+      const outline = assemblePauseOutline(plan, answers);
+      if (!outline) throw new Error("pauses: the answers do not fit the clip");
+      heard.set(key, outline);
+      while (heard.size > PAUSES.remember) heard.delete(heard.keys().next().value as string);
+      return { status: "ready", outline };
+    } catch (e) {
+      if (!still() || isPeaksCancelled(e)) return { status: "stopped" };
+      const text = e instanceof Error ? e.message : String(e);
+      console.warn("pauses failed", text);
+      return { status: "failed", reason: text.includes("has no sound") ? "noSound" : "failed" };
+    } finally {
+      if (listening !== null && listening.run === run) listening = null;
+    }
+  })();
+  listening = { key, run, done };
+  return done;
+}
+
+/** Stops the listening (the strip closed, another clip, the editor left): its call is cancelled, a late answer dropped. */
+export function stopPauses(): void {
+  pausesRun += 1;
+  listening = null;
+  if (running !== null && running.kind === "pauses") cancelRunning();
 }
 
 const keyOf = (sources: readonly PeaksSource[]): string => sources.map((s) => `${s.uri}|${s.duration}`).join("\n");
