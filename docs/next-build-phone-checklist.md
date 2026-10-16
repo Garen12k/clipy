@@ -347,3 +347,57 @@ In Quick Edit, touch and hold your style.
 ### 50. A style from an empty project
 Save As Style on a project with no song, no filter and no text, then make a Quick Edit with it.
 - **Right looks like:** the draft is just your photos, each as long as it would be in a new project.
+
+## M. Remove pauses
+
+Use a video of yourself talking, with a few pauses of about a second (film one: "One … two … three", waiting between words).
+
+### 51. The strip
+Select the clip → Edit → Remove pauses.
+- **Right looks like:** "Listening…" for a moment, then for example "3 pauses found · 2.4 s shorter" and a white "Remove 3 Pauses".
+  On the clip in the timeline the pauses are darker stripes.
+- **Wrong looks like:** "Listening…" that never ends, stripes on another clip, or stripes over the words.
+
+### 52. The chips
+Tap 0.3 s, then 1 s; then Silent, then Noisy Room.
+- **Right looks like:** the number and the stripes change AT ONCE (no "Listening…" again); 0.3 s finds more, 1 s fewer.
+
+### 53. Remove and Undo
+Tap Remove. Play the clip.
+- **Right looks like:** the strip closes, "3 pauses removed" with Undo; the clip is now several clips that play without the
+  pauses; no word is cut off at its start or end. Undo brings the one clip back.
+- **Wrong looks like:** a clipped word ("…ree" for "three"), a click at a join, text that moved, or Undo needing several taps.
+  Write down which.
+
+### 54. Text stays
+With a text over the talking clip, Remove pauses.
+- **Right looks like:** the text stays where it was in time (it now sits over later words — that is expected, as Cut to beats).
+
+### 55. A clip with music only
+A clip whose sound is a song with no gaps.
+- **Right looks like:** "No pauses found" at Quiet. At Noisy Room perhaps a few — write down what you see.
+
+### 56. A long clip
+A talking clip of several minutes.
+- **Right looks like:** "Listening…" for a few seconds (write down about how long), then the line. Over 10 minutes: "Remove
+  pauses works on clips up to 10 minutes. Trim or split this clip first."
+- Also: while it listens, switch to another app for a few seconds and come back.
+  **Right looks like:** it goes on listening and ends with the line — never "Could not listen to this clip".
+
+### 57. Close while listening
+Open Remove pauses on a long clip and tap the tick at once; open it on another clip.
+- **Right looks like:** nothing stuck; the second clip is listened to; no stripes left on the first.
+
+### 58. A quiet clip with one bump
+A clip of a quiet room (no talking) where you tap the phone once.
+- **Right looks like:** "This clip is silent." and no Remove button.
+- **Wrong looks like:** "1 pause found" with the whole clip striped.
+
+### 59. Trim with the strip open
+With Remove pauses open, drag the clip's trim handle and let go.
+- **Right looks like:** "Listening…" briefly after you let go, then the line for the new length; the stripes stay inside the clip.
+
+### 60. A slowed clip
+Set the talking clip's speed to 0.5×, then open Remove pauses at 0.3 s.
+- **Right looks like:** fewer pauses than at 1× — a short pause must be a little longer when slowed. Write down whether that
+  feels right.

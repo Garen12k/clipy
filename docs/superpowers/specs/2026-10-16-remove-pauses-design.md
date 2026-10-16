@@ -138,3 +138,12 @@ Outlines at 100 a second built from `[seconds, level]` segments; options `{ minG
 - 70 pauses (10 of 0.7 s, 60 of 1.0 s, between 0.5-s speech) → 60 cuts, each 0.8 s, in time order.
 - bad options (a NaN) or an empty outline → `{ cuts: [], silent: false }`.
 - `pausePlan(0, 3)` → one call of 300; `(10, 40)` → `[10, 25] 1500`, `[25, 40] 1500`; `(0, 0.1)` → one call of 16; `(0, 600)` → 30 calls of 2000; `(0, 600.5)`, `(3, 3)`, `(NaN, 1)` → null.
+
+## 8. As built (after the review, 2026-10-16)
+- **Only clicks were loud → silent.** After the clicks are bridged, a clip with nothing left but quiet is `{ cuts: [], silent: true }` ("This clip is silent.", no button) — the review's MAJOR-1 (a near-silent clip with one mic tap was offered one cut over the whole clip). Pinned beside §7's vectors.
+- **Asked again at the tap.** `removePauses` also refuses a clip whose sound is on its own bar (`extractedTrackOf`). The strip, at Remove, re-checks `contextFor` on the store's project and that the clip still has the trim and speed the cuts were found for; if not, it closes and says "This clip has changed. Nothing was removed." (`PAUSE_CHANGED`, a problem, no Undo) and changes nothing — Undo / Redo under an open strip keeps its selection key, so the strip could outlive the clip's eligibility.
+- **One turn for the whole listening.** A listening takes the shared turn once and keeps it for all its calls, so a waiting waveform call never runs between two of them (§2.2's "pauses first" on a long clip). The waveforms wait for the whole listening — at most 30 calls, owner-asked.
+- **Deadline in front only.** Each native call's `PEAKS_DEADLINE_MS` is an `activeTimeout` (waveform calls too): leaving Clipy mid-listen no longer fails it on the way back.
+- **A trim dragged under the open strip** is listened to once it has stood still `PAUSE_SETTLE_MS` (300 ms); opening the strip still listens at once.
+- **Memory by last use.** `heardPauses` makes an outline read the newest, so the eight kept are the eight used last.
+- **Left as designed:** the pad is 0.1 s of the FILE (§2.5), not scaled by a slowed clip's speed — at 0.25× the 0.3-s chip asks for about 1 s heard (checklist item 60); the "s shorter" figure ignores a transition into the clip that `normaliseTransitions` drops (cosmetic); `usePauseListening` builds its interim state object on the render where its key changes (transient, no loop).
