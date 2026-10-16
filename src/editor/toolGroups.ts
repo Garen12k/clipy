@@ -38,6 +38,7 @@ export const TOOL_META: Record<ToolId, { label: string; icon: IoniconName }> = {
   chroma: { label: "Green screen", icon: "leaf-outline" },
   cutout: { label: "Cut out", icon: "body-outline" },
   stabilize: { label: "Stabilize", icon: "hand-left-outline" },
+  pauses: { label: "Remove pauses", icon: "pause-circle-outline" },
   keyframe: { label: "Keyframe", icon: "diamond-outline" },
   transition: { label: "Transition", icon: "swap-horizontal-outline" },
   layerForward: { label: "Forward", icon: "arrow-up-outline" },
@@ -91,7 +92,7 @@ export type ToolGroup<T extends string = ToolId> = { id: GroupId; label: string;
  */
 const GROUP_OF: Partial<Record<ToolId, GroupId>> = {
   collage: "basics", split: "basics", trim: "basics", speed: "basics", volume: "basics", filter: "basics", cutout: "basics", stabilize: "basics", select: "basics",
-  transition: "edit", keyframe: "edit", duplicate: "edit", replace: "edit", reverse: "edit", freeze: "edit", layerForward: "edit", layerBack: "edit",
+  pauses: "edit", transition: "edit", keyframe: "edit", duplicate: "edit", replace: "edit", reverse: "edit", freeze: "edit", layerForward: "edit", layerBack: "edit",
   extractAudio: "audio", voice: "audio", soundQuality: "audio",
   adjust: "look", templates: "look", animate: "look", motion: "look",
   crop: "frame", transform: "frame", opacity: "frame", mask: "frame", blend: "frame", background: "frame", chroma: "frame",

@@ -7,13 +7,17 @@ import { useEditorStore } from "@/src/editor/store";
 import { theme } from "@/src/theme/theme";
 import { KitText } from "@/src/ui/Text";
 import { STRIP_HEIGHT, stripWidth, thumbInterval, thumbTimes } from "../timelineLayout";
-import { BADGE, clipBadges } from "../timelineMarks";
+import { usePauses } from "../pausesState";
+import { BADGE, clipBadges, pauseShades } from "../timelineMarks";
 import { KeyframeDots } from "./KeyframeDots";
 import { getThumb } from "./thumbnails";
 
 /** A badge is one line of the smallest text on its scrim. */
 const BADGE_H = 16;
 const thumbKey = (uri: string, t: number) => `${uri}@${t}`;
+const NO_SHADES: { x: number; width: number }[] = [];
+/** The clip box's border: an absolute child is placed inside it. */
+const CLIP_BORDER = 2;
 
 type Props = { clip: Clip; pixelsPerSecond: number; selected: boolean; missing: boolean; onPress: () => void; children?: React.ReactNode };
 
@@ -24,6 +28,9 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const photo = isPhoto(clip);
   const badges = clipBadges(clip, width, selected);
+  // The open Remove pauses strip's cuts on THIS clip (a stored array, or null: every other clip renders nothing new).
+  const cuts = usePauses((s) => (s.shades !== null && s.shades.clipId === clip.id ? s.shades.cuts : null));
+  const shades = cuts === null ? NO_SHADES : pauseShades(clip, cuts, pixelsPerSecond);
   // No dots in multi-select mode: a tap on a dot would seek instead of toggling the clip.
   const selecting = useEditorStore((s) => s.multiSelect !== null);
   const showDots = selected && !selecting && clip.keyframes.length > 0;
@@ -59,6 +66,11 @@ export function ClipThumbStrip({ clip, pixelsPerSecond, selected, missing, onPre
           </View>
         );
       })}
+      {/* Remove pauses: what would be cut, shaded. Plain views, no touches, nothing animated. */}
+      {shades.map((s, i) => (
+        <View key={i} testID="pause-shade" pointerEvents="none"
+          style={{ position: "absolute", top: 0, bottom: 0, left: Math.max(0, s.x - CLIP_BORDER), width: s.width, backgroundColor: theme.colors.scrimStrong }} />
+      ))}
       {/* The file is gone: the same warning as before, clear of the trim handle on a selected clip. */}
       {missing && (
         <View testID="clip-missing" accessibilityLabel="File missing" pointerEvents="none" style={{ position: "absolute", top: 4, left: selected ? BADGE.selectedInset : BADGE.inset, width: BADGE_H, height: BADGE_H, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.danger, borderRadius: theme.radius.pill }}>

@@ -1,5 +1,5 @@
 import { FILTERS, SPEED_CURVES } from "@/src/editor/effects";
-import { clipDuration, clipStartTimes, timeToX } from "@/src/editor/model/timeline";
+import { clipDuration, clipStartTimes, sourceToOutput, timeToX } from "@/src/editor/model/timeline";
 import { isPhoto, type Clip, type Project } from "@/src/editor/model/types";
 import { formatDuration, formatSpeed } from "@/src/lib/format";
 import { CLIP_AREA_HEIGHT, STRIP_HEIGHT } from "./timelineLayout";
@@ -181,3 +181,21 @@ export const BAR_GLYPH = {
   layer: "layers-outline", effect: "flash-outline",
 } as const;
 export type BarKind = keyof typeof BAR_GLYPH;
+
+/** The stretches the open Remove pauses strip would cut, shaded on its clip: never thinner than `thinnest`, never more than `most` (= PAUSES.maxCuts). */
+export const PAUSE_SHADE = { most: 60, thinnest: 2 } as const;
+/** Each cut (source seconds) as x … x + width in points from the clip's left edge, through timeline.ts's mapping; clipped to the clip. */
+export function pauseShades(clip: Clip, cuts: readonly (readonly [number, number])[], pps: number): { x: number; width: number }[] {
+  if (!(Number.isFinite(pps) && pps > 0)) return [];
+  const whole = timeToX(clipDuration(clip), pps);
+  const out: { x: number; width: number }[] = [];
+  for (const [a, b] of cuts) {
+    if (out.length >= PAUSE_SHADE.most) break;
+    if (!(Number.isFinite(a) && Number.isFinite(b) && b > a)) continue;
+    const x0 = Math.max(0, timeToX(sourceToOutput(clip, a), pps)), x1 = Math.min(whole, timeToX(sourceToOutput(clip, b), pps));
+    if (!(x1 > x0)) continue;
+    const width = Math.max(PAUSE_SHADE.thinnest, x1 - x0);
+    out.push({ x: Math.max(0, Math.min(x0, whole - width)), width });
+  }
+  return out;
+}

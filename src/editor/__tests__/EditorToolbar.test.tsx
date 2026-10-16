@@ -33,7 +33,7 @@ const MAIN = ["Edit", "Audio", "Text", "Stickers", "Overlay", "Collage", "Effect
 /** A video clip's bar: its tools by group, each in `contextFor`'s order. A fresh selection shows the first group. */
 const GROUPS = {
   Basics: ["Split", "Trim", "Select", "Speed", "Volume", "Filter", "Cut out", "Stabilize"],
-  Edit: ["Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate"],
+  Edit: ["Remove pauses", "Keyframe", "Transition", "Replace", "Reverse", "Freeze", "Duplicate"],
   Audio: ["Extract audio", "Voice", "Sound"],
   Look: ["Animate", "Adjust", "Templates"],
   Frame: ["Background", "Crop", "Transform", "Opacity", "Mask", "Green screen"],

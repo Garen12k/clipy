@@ -45,6 +45,8 @@ export const BEATS_BACKGROUND_TOOLS = NEEDS_LATEST_BUILD("Beats in your own musi
 
 /** Said where Stabilize or Smooth slow motion is tapped in Expo Go or in a build from before them. */
 export const STEADY_TOOLS = NEEDS_LATEST_BUILD("Stabilize and Smooth slow motion");
+/** Said in the Remove pauses strip in Expo Go or in a build from before `soundPeaks` (the "icons and light" build). */
+export const PAUSES_TOOLS = NEEDS_LATEST_BUILD("Remove pauses and sound outlines");
 
 /** Said where Typewriter or Word by word is picked in a build from before them (`revealNeedsBuild`); Expo Go shows them in the preview. */
 export const REVEAL_TOOLS = NEEDS_LATEST_BUILD("Typewriter and Word by word");

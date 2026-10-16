@@ -131,6 +131,7 @@ export const SF_SYMBOLS: Readonly<Partial<Record<IoniconName, SymbolName>>> = {
   "pulse-outline": "waveform.path.ecg",
   "trending-up-outline": "chart.line.uptrend.xyaxis",
   "git-branch-outline": "waveform.badge.plus",
+  "pause-circle-outline": "waveform.badge.minus",   // Remove pauses: the mirror of Extract audio's waveform.badge.plus
   "mic-outline": "mic",
   "stats-chart-outline": "waveform",
   "paw-outline": "pawprint",
