@@ -82,6 +82,15 @@ describe("findPauses — the vectors", () => {
     expect(findPauses(outline(0, [[3, NaN]]), OPT)).toEqual({ cuts: [], silent: true });
     expect(cuts(outline(0, [[1, 0.5], [0.5, 0.001], [0.5, NaN], [1, 0.5]]))).toEqual([[1.1, 1.9]]);
   });
+  test("a clip that is quiet but for clicks is silent: never one cut over the whole clip (the review's MAJOR-1)", () => {
+    // B-roll with one mic tap: the tap is the loudest slice, then bridged as a click — nothing of the clip is sound.
+    expect(findPauses(outline(0, [[2, 0.002], [0.02, 0.5], [2, 0.002]]), OPT)).toEqual({ cuts: [], silent: true });
+    expect(findPauses(outline(3, [[1, 0.002], [0.02, 0.5], [1, 0.002], [0.01, 0.4], [1, 0.002]]), { ...OPT, quietDb: -25 })).toEqual({ cuts: [], silent: true });
+    for (const q of PAUSE_QUIET) for (const g of PAUSE_GAPS) {
+      const found = findPauses(outline(0, [[2, 0.002], [0.02, 0.5], [2, 0.002]]), { ...OPT, quietDb: q.db, minGap: g.seconds });
+      expect(found.cuts.some(([a, b]) => a <= 0 && b >= 4.02 - 1e-6)).toBe(false);
+    }
+  });
   test("no piece shorter than minPiece: a cut is dropped, never sound", () => {
     expect(cuts(outline(0, [[1, 0.5], [1, 0.001], [0.05, 0.5], [1, 0.001], [1, 0.5]]))).toEqual([[1.1, 1.9]]);
     expect(cuts(outline(0, [[1, 0.5], [1, 0.001], [0.15, 0.5]]))).toEqual([]);

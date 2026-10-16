@@ -104,6 +104,8 @@ export function findPauses(o: PauseOutline, opt: PauseOptions): PauseFind {
     if (i > 0 && j < n && j - i <= blip) quiet.fill(1, i, j);
     i = j;
   }
+  // Nothing left but quiet (the loudest moments were clicks): the clip is silent — never one cut over the whole clip.
+  if (quiet.every((q) => q === 1)) return { cuts: [], silent: true };
   // Quiet runs → cuts: less `pad` where they touch sound, to the clip's exact edge where they reach it.
   const at = (k: number): number => o.from + (k / n) * span;
   const found: [number, number][] = [];
