@@ -3,12 +3,12 @@ jest.mock("@/modules/clipy-video", () => ({ ...jest.requireActual("@/modules/cli
 jest.mock("@/src/editor/soundPeaks", () => ({ listenForPauses: jest.fn(), stopPauses: jest.fn(), heardPauses: jest.fn(() => null) }));
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { isPeaksAvailable } from "@/modules/clipy-video";
-import { makeClip, makeLayer, makeProject } from "@/src/editor/model/types";
+import { makeAudioTrack, makeClip, makeLayer, makeProject, type Clip } from "@/src/editor/model/types";
 import { listenForPauses, type PauseListening } from "@/src/editor/soundPeaks";
 import { useEditorStore } from "@/src/editor/store";
 import { PAUSES_TOOLS } from "@/src/lib/buildInfo";
 import { useToast } from "@/src/ui/Toast";
-import { PAUSE_WORDS, pauseStatus, RemovePausesSheet } from "../components/RemovePausesSheet";
+import { PAUSE_CHANGED, PAUSE_WORDS, pauseStatus, RemovePausesSheet } from "../components/RemovePausesSheet";
 import { usePauses } from "../pausesState";
 import { DEFAULT_PAUSE_CHOICE, PAUSES } from "../model/pauses";
 
@@ -106,4 +106,39 @@ test("pauseStatus: every line", () => {
   expect(pauseStatus({ ...base, state: ready, found: { cuts: [], silent: false } })).toBe("No pauses found");
   expect(pauseStatus({ ...base, state: ready, found: { cuts: Array(6).fill([0, 1]), silent: false }, saving: 8.44 })).toBe("6 pauses found · 8.4 s shorter");
   expect(PAUSES.maxCuts).toBe(60);
+});
+
+const NO_LONGER: [string, (c: Clip) => Partial<Clip>][] = [
+  ["reversed", () => ({ reversed: true })],
+  ["a speed curve", (c) => ({ speedCurve: { id: "montage", steps: [{ from: 0, to: c.trimEnd, speed: 1 }] } as never })],
+  ["its sound on its own bar", () => ({ muted: true })],
+];
+test.each(NO_LONGER)("Remove asks again what showed the tool — %s since (Undo / Redo under the open strip): the strip closes, says so, nothing changes", async (_, change) => {
+  await open(); await heard();
+  const button = screen.getByRole("button", { name: "Remove 1 Pause" });
+  const p = st().project!;
+  const a = { ...p.clips[0], ...change(p.clips[0]) };
+  const audioTracks = a.muted ? [makeAudioTrack({ id: "x", sourceUri: a.sourceUri, sourceDuration: 4.5, start: 0, trimStart: 0, trimEnd: 4.5 })] : p.audioTracks;
+  const changed = { ...p, clips: [a, p.clips[1]], audioTracks };
+  useEditorStore.setState({ project: changed });   // the press lands before the strip draws again
+  await fireEvent.press(button);
+  expect(st().project).toBe(changed);
+  expect(st().past).toHaveLength(0);
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(useToast.getState()).toMatchObject({ message: PAUSE_CHANGED, kind: "problem" });
+  expect(useToast.getState().undo).toBeFalsy();
+  expect(PAUSE_CHANGED).toBe("This clip has changed. Nothing was removed.");
+});
+
+test("Remove asks again: a trim changed since listening (the cuts belong to the old one) closes the strip, changes nothing", async () => {
+  await open(); await heard();
+  const button = screen.getByRole("button", { name: "Remove 1 Pause" });
+  const p = st().project!;
+  // The store moves on before the strip has drawn again (the press lands first).
+  useEditorStore.setState({ project: { ...p, clips: [{ ...p.clips[0], trimStart: 0.2 }, p.clips[1]] } });
+  const before = st().project;
+  await fireEvent.press(button);
+  expect(st().project).toBe(before);
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(useToast.getState()).toMatchObject({ message: PAUSE_CHANGED, kind: "problem" });
 });

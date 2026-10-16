@@ -6,6 +6,7 @@ import { findPauses, PAUSE_GAPS, PAUSE_QUIET, type PauseChoice, type PauseCut, t
 import { pauseOptions, pauseSaving, usePauseListening, type PauseState } from "@/src/editor/pauseFind";
 import { usePauses } from "@/src/editor/pausesState";
 import { useEditorStore } from "@/src/editor/store";
+import { contextFor } from "@/src/editor/toolbarContext";
 import { useItemClip } from "@/src/editor/useItem";
 import { PAUSES_TOOLS } from "@/src/lib/buildInfo";
 import { theme } from "@/src/theme/theme";
@@ -27,6 +28,8 @@ export const PAUSE_WORDS = {
   none: "No pauses found",
   notRemoved: "Nothing was removed.",
 } as const;
+/** Said when Remove is tapped on a clip that no longer fits the tool, or no longer has the trim it was listened to over. */
+export const PAUSE_CHANGED = "This clip has changed. Nothing was removed.";
 export const foundLine = (n: number, seconds: number): string => `${n === 1 ? "1 pause" : `${n} pauses`} found · ${seconds.toFixed(1)} s shorter`;
 export const removeTitle = (n: number): string => (n === 1 ? "Remove 1 Pause" : `Remove ${n} Pauses`);
 export const removedMessage = (n: number): string => (n === 1 ? "1 pause removed" : `${n} pauses removed`);
@@ -90,6 +93,16 @@ export function RemovePausesSheet({ clipId, visible, onClose }: { clipId: string
   const remove = () => {
     const { project, apply } = useEditorStore.getState();
     if (!project || n === 0) return;
+    // Asked again at the tap: what made the bar offer the tool (contextFor), and the very trim and speed the cuts were found for.
+    const now = project.clips.find((c) => c.id === clip.id);
+    const same = !!now && state?.status === "ready" && now.trimStart === state.outline.from && now.trimEnd === state.outline.to
+      && now.trimStart === clip.trimStart && now.trimEnd === clip.trimEnd && now.speed === clip.speed
+      && contextFor({ clipId: clip.id, overlayId: null, effectId: null, audioId: null, section: null }, project).tools.includes("pauses");
+    if (!same) {
+      onClose();                                                                     // close first …
+      useToast.getState().show(PAUSE_CHANGED, { kind: "problem" });                  // … say second
+      return;
+    }
     const next = removePauses(project, clip.id, cuts);
     if (next === project) { useToast.getState().show(PAUSE_WORDS.notRemoved, { kind: "problem" }); return; }
     haptic("medium");

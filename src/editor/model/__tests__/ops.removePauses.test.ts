@@ -65,3 +65,9 @@ test("refused (the same project): not a main clip, a photo, reversed, ramped, ba
     expect(removePauses(q, "t", [[4, 5]])).toBe(q);
   }
 });
+
+test("refused when the clip's sound is on its own bar (Extract audio, Voice / Sound): the bar would play on uncut", () => {
+  const c = talk({ muted: true });
+  const q = { ...project(c), audioTracks: [makeAudioTrack({ id: "x", sourceUri: c.sourceUri, sourceDuration: 20, start: 4, trimStart: 2, trimEnd: 12 })] };
+  expect(removePauses(q, "t", [[4, 5]])).toBe(q);
+});

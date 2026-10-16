@@ -77,7 +77,7 @@ export function removePauses(p: Project, clipId: string, cuts: readonly PauseCut
   const index = p.clips.findIndex((c) => c.id === clipId);
   if (index < 0 || cuts.length === 0 || cuts.length > PAUSES.maxCuts) return p;
   const clip = p.clips[index];
-  if (isPhoto(clip) || clip.reversed || hasSpeedCurve(clip)) return p;
+  if (isPhoto(clip) || clip.reversed || hasSpeedCurve(clip) || extractedTrackOf(p, clipId) !== null) return p;
   const E = 1e-6;
   const ranges: [number, number][] = [];
   let at = clip.trimStart;
