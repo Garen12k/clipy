@@ -2,7 +2,7 @@ jest.mock("@/src/editor/soundPeaks", () => ({ listenForPauses: jest.fn(), stopPa
 import { act, renderHook } from "@testing-library/react-native";
 import { heardPauses, listenForPauses, stopPauses, type PauseListening } from "@/src/editor/soundPeaks";
 import { makeClip } from "@/src/editor/model/types";
-import { pauseOptions, pauseSaving, usePauseListening } from "../pauseFind";
+import { PAUSE_SETTLE_MS, pauseOptions, pauseSaving, usePauseListening } from "../pauseFind";
 import { usePauses } from "../pausesState";
 
 const outline = { from: 0, to: 3, levels: new Float32Array(300) };
@@ -37,4 +37,22 @@ test("an outline already heard is ready at once; a stop while still shown reads 
   const other = await renderHook(() => usePauseListening({ uri: "v", from: 0, to: 3 }));
   await act(async () => { finish({ status: "stopped" }); });
   expect(other.result.current).toEqual({ status: "failed", reason: "failed" });
+});
+
+test("a trim dragged under the open strip: no listening per frame — once, when the trim has stood still PAUSE_SETTLE_MS", async () => {
+  jest.useFakeTimers();
+  try {
+    type S = { uri: string; from: number; to: number } | null;
+    const { result, rerender } = await renderHook(({ s }: { s: S }) => usePauseListening(s), { initialProps: { s: { uri: "w", from: 0, to: 3 } as S } });
+    expect(listenForPauses).toHaveBeenCalledTimes(1);                 // opening listens at once
+    for (const to of [2.9, 2.8, 2.7]) {
+      await rerender({ s: { uri: "w", from: 0, to } });
+      await act(async () => { await jest.advanceTimersByTimeAsync(PAUSE_SETTLE_MS / 2); });
+    }
+    expect(listenForPauses).toHaveBeenCalledTimes(1);
+    expect(result.current).toEqual({ status: "listening" });
+    await act(async () => { await jest.advanceTimersByTimeAsync(PAUSE_SETTLE_MS); });
+    expect(jest.mocked(listenForPauses).mock.calls.map(([x]) => x.to)).toEqual([3, 2.7]);
+    expect(PAUSE_SETTLE_MS).toBe(300);
+  } finally { jest.useRealTimers(); }
 });

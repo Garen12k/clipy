@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PAUSE_GAPS, PAUSE_QUIET, PAUSES, type PauseChoice, type PauseCut, type PauseOptions, type PauseOutline } from "./model/pauses";
 import { sourceAfter, sourceToOutput } from "./model/timeline";
 import type { Clip } from "./model/types";
@@ -17,21 +17,35 @@ export function pauseOptions(clip: Clip, choice: PauseChoice): PauseOptions {
 /** How much shorter the clip plays without `cuts`, in output seconds (timeline.ts's mapping). */
 export const pauseSaving = (clip: Clip, cuts: readonly PauseCut[]): number => cuts.reduce((s, [a, b]) => s + sourceToOutput(clip, b) - sourceToOutput(clip, a), 0);
 
+/**
+ * A trim changed under the open strip (a handle dragged: one change per frame) is listened to only once it has stood still this long,
+ * so a drag never starts and cancels a native read per frame. Opening the strip listens at once.
+ */
+export const PAUSE_SETTLE_MS = 300;
+
 /** Listens to `source` while it is given (the open strip's clip); null without one. Stops on a change and on unmount. */
 export function usePauseListening(source: PauseSource | null): PauseState | null {
   const key = source === null ? null : `${source.uri}|${source.from}|${source.to}`;
   const [state, setState] = useState<{ key: string; value: PauseState } | null>(null);
+  /** The source listened to before in this showing: a change from one source to another (a trim) waits PAUSE_SETTLE_MS. */
+  const before = useRef<string | null>(null);
   useEffect(() => {
-    if (source === null || key === null) return;
+    if (source === null || key === null) { before.current = null; return; }
+    const changed = before.current !== null && before.current !== key;
+    before.current = key;
     const known = heardPauses(source);
     if (known) { setState({ key, value: { status: "ready", outline: known } }); return; }
     let alive = true;
     setState({ key, value: { status: "listening" } });
-    void listenForPauses(source).then((r) => {
-      if (!alive) return;
-      setState({ key, value: r.status === "stopped" ? { status: "failed", reason: "failed" } : r });
-    });
-    return () => { alive = false; stopPauses(); };
+    const listen = (): void => {
+      void listenForPauses(source).then((r) => {
+        if (!alive) return;
+        setState({ key, value: r.status === "stopped" ? { status: "failed", reason: "failed" } : r });
+      });
+    };
+    const timer = changed ? setTimeout(listen, PAUSE_SETTLE_MS) : null;
+    if (timer === null) listen();
+    return () => { alive = false; if (timer !== null) clearTimeout(timer); stopPauses(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   if (key === null) return null;
