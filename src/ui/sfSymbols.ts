@@ -62,6 +62,7 @@ export const SF_SYMBOLS: Readonly<Partial<Record<IoniconName, SymbolName>>> = {
   "balloon-outline": "balloon",
   "radio-outline": "radio",
   "videocam-outline": "video",
+  "star-outline": "star",
   // The main bar.
   "film-outline": "film",
   "musical-notes-outline": "music.note",
