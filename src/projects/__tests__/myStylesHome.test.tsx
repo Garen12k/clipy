@@ -19,7 +19,10 @@ import { myStyles } from "@/src/projects/myStyles";
 import { pickMedia } from "@/src/projects/pickMedia";
 import { AFTER_SHEET_MS } from "@/src/projects/ProjectActionsSheet";
 import { makeQuickEdit } from "@/src/projects/quickEditFlow";
+import { StyleStoreError } from "@/src/projects/styleStore";
 import { STYLE_WORDS } from "@/src/projects/useUserStyles";
+import { styleFromProject } from "@/src/projects/userStyles";
+import { shrinks, textSize } from "@/src/ui/testing/textSize";
 import { useToast } from "@/src/ui/Toast";
 
 const CARD = { id: "p1", name: "Beach day", durationSec: 10, updatedAt: "2026-10-16T00:00:00.000Z", thumbUri: null, broken: false, postedTo: [], coverTitle: "" };
@@ -39,7 +42,7 @@ beforeEach(() => {
   warn = jest.spyOn(console, "warn").mockImplementation(() => {});
   prompt = jest.spyOn(Alert, "prompt").mockImplementation(() => {});
 });
-afterEach(async () => { warn.mockRestore(); prompt.mockRestore(); const r = await myStyles.list(); if (r.status === "ok") for (const s of r.styles) await myStyles.remove(s.id); });
+afterEach(async () => { await textSize(1); warn.mockRestore(); prompt.mockRestore(); const r = await myStyles.list(); if (r.status === "ok") for (const s of r.styles) await myStyles.remove(s.id); });
 
 const openActions = async () => {
   await render(<ProjectsScreen />);
@@ -77,11 +80,15 @@ test("Your styles above Styles; a name ends in dots and never shrinks; picking o
   await fireEvent.press(btn("Quick Edit"));
   await screen.findByRole("header", { name: "Quick edit" });
   const row = screen.getByTestId("my-styles");
-  expect(screen.getByText("Your styles")).toBeTruthy();
-  expect(screen.getByText("Styles")).toBeTruthy();
+  expect(screen.getByRole("header", { name: "Your styles" })).toBeTruthy();   // VoiceOver's headings rotor finds both rows
+  expect(screen.getByRole("header", { name: "Styles" })).toBeTruthy();
   const label = within(row).getByText("A very long name for a style of mine");
   expect(label.props.numberOfLines).toBe(1);
   expect(label.props.adjustsFontSizeToFit).toBeFalsy();
+  await textSize(1.3);                                                          // above the default, where `fit` would shrink it
+  expect(shrinks().filter((t) => t.includes("A very long name"))).toEqual([]);
+  expect(within(screen.getByTestId("my-styles")).getByText("A very long name for a style of mine").props.numberOfLines).toBe(1);
+  await textSize(1);
   await fireEvent.press(within(row).getByRole("button"));
   expect(screen.getByText(/^Music: Party Sector\. /)).toBeTruthy();
   pick.mockResolvedValueOnce([{ uri: "file:///a.jpg", kind: "photo", durationSec: 0, width: 3, height: 4 }]);
@@ -126,12 +133,44 @@ test("while a style is being saved (our own work, under `creating`), Quick Edit 
   await fireEvent.press(btn("Save As Style"));
   await settle();
   await act(async () => { (prompt.mock.calls[0][2] as (n: string) => void)("Later"); });
-  await fireEvent.press(btn("Quick Edit"));
+  expect(screen.queryByRole("button", { name: "Quick Edit" })).toBeNull();   // the making capsule stands in its place
   await settle();
   expect(screen.queryByRole("header", { name: "Quick edit" })).toBeNull();
   await act(async () => { done({ project: PROJECT, missingSourceUris: [], stamp: "x" }); });
   await waitFor(() => expect(useToast.getState().message).toBe(STYLE_WORDS.saved));
-  await fireEvent.press(btn("Quick Edit"));
+  await fireEvent.press(await screen.findByRole("button", { name: "Quick Edit" }));
   expect(await screen.findByRole("header", { name: "Quick edit" })).toBeTruthy();
   expect(within(screen.getByTestId("my-styles")).getByText("Later")).toBeTruthy();
+});
+test("while a style is saved (a large own song is copied) Home says so in the making capsule, and is itself again after", async () => {
+  let done: (v: unknown) => void = () => {};
+  load.mockReturnValueOnce(new Promise((r) => { done = r; }));
+  await openActions();
+  await fireEvent.press(btn("Save As Style"));
+  await settle();
+  await act(async () => { (prompt.mock.calls[0][2] as (n: string) => void)("Summer"); });
+  const capsule = await screen.findByTestId("home-making");
+  expect(capsule.props.accessibilityLabel).toBe("Saving your style");
+  expect(screen.queryByRole("button", { name: "Quick Edit" })).toBeNull();
+  await act(async () => { done({ project: PROJECT, missingSourceUris: [], stamp: "x" }); });
+  await waitFor(() => expect(useToast.getState().message).toBe(STYLE_WORDS.saved));
+  await waitFor(() => expect(screen.queryByTestId("home-making")).toBeNull());
+  expect(btn("Quick Edit")).toBeTruthy();
+});
+test("Home's sentences: twenty styles already → \"full\"; a newer Clipy's file → \"newer\"; nothing more is stored", async () => {
+  for (let i = 0; i < 20; i++) await myStyles.add(styleFromProject(PROJECT), `S${i}`, "P");
+  await openActions();
+  await fireEvent.press(btn("Save As Style"));
+  await settle();
+  await act(async () => { (prompt.mock.calls[0][2] as (n: string) => void)("One more"); });
+  await waitFor(() => expect(useToast.getState().message).toBe(STYLE_WORDS.full));
+  const read = await myStyles.list();
+  expect(read.status === "ok" && read.styles.length).toBe(20);
+  const newer = jest.spyOn(myStyles, "add").mockRejectedValueOnce(new StyleStoreError("newer"));
+  await fireEvent(await screen.findByRole("button", { name: "Beach day" }), "longPress");
+  await fireEvent.press(btn("Save As Style"));
+  await settle();
+  await act(async () => { (prompt.mock.calls[1][2] as (n: string) => void)("Newer"); });
+  await waitFor(() => expect(useToast.getState().message).toBe(STYLE_WORDS.newer));
+  newer.mockRestore();
 });

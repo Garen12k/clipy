@@ -56,6 +56,8 @@ export type QuickTitle =
 /** What `buildQuickEdit` reads: a built-in recipe (`planOfRecipe`) or a user style (`planOfStyle`, userStyles.ts). */
 export interface QuickPlan {
   every: 1 | 2 | 4; hold: number; videoHold: number;
+  /** Seconds of one marker step (a user style's median gap, `paceFor`); left out = the first gap, `markerStep` (every built-in recipe). */
+  step?: number;
   transition: { type: TransitionType; duration: number };
   filter: FilterId | null; filterIntensity: number;
   title: QuickTitle | null;
@@ -100,7 +102,7 @@ export function buildQuickEdit(a: { recipe: QuickRecipe | QuickPlan; project: Pr
   const plan = "textTemplate" in a.recipe ? planOfRecipe(a.recipe) : a.recipe;
   if (project.clips.length === 0) return project;
   let p = project;
-  const step = music ? markerStep(beats, plan.every) : 0;
+  const step = music ? (plan.step ?? markerStep(beats, plan.every)) : 0;
   /** The clips that were given slack: id -> the source end of the target length WITHOUT it. */
   const exact = new Map<string, number>();
   if (step > 0) for (const c of project.clips) {

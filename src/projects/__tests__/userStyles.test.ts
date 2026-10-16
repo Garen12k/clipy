@@ -90,17 +90,25 @@ describe("styleFromProject", () => {
 describe("planOfStyle and the pace", () => {
   test("paceFor: a photo about 2.5 s, a video at most about 5 s, whatever the tempo", () => {
     const every500 = Array.from({ length: 40 }, (_, i) => i * 0.5);
-    expect(paceFor(every500, 1)).toEqual({ hold: 5, videoHold: 10 });
-    expect(paceFor(every500, 2)).toEqual({ hold: 3, videoHold: 5 });
-    expect(paceFor([0, 0.1, 0.2, 0.3, 0.4], 1)).toEqual({ hold: 16, videoHold: 16 });
-    expect(paceFor([], 2)).toEqual({ hold: 1, videoHold: 1 });
+    expect(paceFor(every500, 1)).toEqual({ hold: 5, videoHold: 10, step: 0.5 });
+    expect(paceFor(every500, 2)).toEqual({ hold: 3, videoHold: 5, step: 1 });
+    expect(paceFor([0, 0.1, 0.2, 0.3, 0.4], 1)).toEqual({ hold: 16, videoHold: 16, step: 0.1 });
+    expect(paceFor([], 2)).toEqual({ hold: 1, videoHold: 1, step: 0 });
+  });
+  test("paceFor: the MEDIAN gap between markers, not the first — two hand-placed markers close together do not make every photo short", () => {
+    const uneven = [1, 1.1, 2, 3, 4, 5, 6, 7];                                     // gaps 0.1, then 1 s
+    expect(paceFor(uneven, 1)).toEqual({ hold: 3, videoHold: 5, step: 1 });
+    expect(paceFor([0, 1, 2, 4], 1)).toEqual({ hold: 3, videoHold: 5, step: 1 }); // gaps 1, 1, 2
+    expect(paceFor([0, 1, 3, 5, 6], 1).step).toBe(1.5);                         // gaps 1, 2, 2, 1: the two middle ones' mean
+    expect(paceFor([0, 0.5, 1, 1.5, 2, 2.5, 3], 2).step).toBe(1);               // markers every 2nd beat: 0, 1, 2, 3
+    expect(paceFor([2, 2, 2, 2], 1)).toEqual({ hold: 1, videoHold: 1, step: 0 }); // no gap at all: nothing to pace by
     expect(USER_PACE).toEqual({ photoSeconds: 2.5, videoSeconds: 5, most: 16 });
   });
   test("bundled: every 2nd of the shipped beats; own: every one of its own beats (the owner's markers); none: no beats", () => {
     const bundled = planOfStyle(style({ music: { kind: "bundled", trackId: "party-sector" } }));
     expect(bundled.beats).toBe(BUNDLED_BEATS["party-sector"]!.beats);
     expect(bundled.plan.every).toBe(2);
-    expect({ hold: bundled.plan.hold, videoHold: bundled.plan.videoHold }).toEqual(paceFor(bundled.beats, 2));
+    expect({ hold: bundled.plan.hold, videoHold: bundled.plan.videoHold, step: bundled.plan.step }).toEqual(paceFor(bundled.beats, 2));
     const own = planOfStyle(style({ music: { kind: "own", file: "s1.mp3", title: "mine.mp3", durationSec: 60, beats: [1, 2, 3, 4, 5] } }));
     expect(own.beats).toEqual([1, 2, 3, 4, 5]);
     expect(own.plan.every).toBe(1);
@@ -131,6 +139,15 @@ describe("buildQuickEdit with a style's plan", () => {
     expect(d.audioTracks[0]).toMatchObject({ trimStart: 1, trimEnd: 6, fadeOut: 1 });
     expect(d.overlays).toEqual([]);
   });
+  test("own markers placed unevenly: every photo is about 2.5 s by the median gap — not 16 × a tiny first gap", () => {
+    const beats = [1, 1.1, ...Array.from({ length: 30 }, (_, i) => 2 + i)];      // a hand-placed pair, then one a second
+    const music = makeAudioTrack({ id: "m", sourceDuration: 40, title: "mine.mp3" });
+    const { plan } = planOfStyle(style({ music: { kind: "own", file: "s1.mp3", title: "mine.mp3", durationSec: 40, beats } }));
+    const d = buildQuickEdit({ recipe: plan, project: makeProject({ clips: [makePhotoClip({ id: "a" }), makePhotoClip({ id: "b" }), makePhotoClip({ id: "c" })] }), music, beats, titleId: "t" });
+    const lengths = d.clips.map((c) => c.trimEnd - c.trimStart);
+    expect(lengths.every((l) => l >= 2.5)).toBe(true);
+    expect(totalDuration(d)).toBeGreaterThan(7);
+  });
 });
 
 describe("the file's text", () => {
@@ -144,6 +161,12 @@ describe("the file's text", () => {
     expect(parseStyles("{}")).toEqual({ status: "damaged" });
     expect(parseStyles(JSON.stringify({ version: 1 }))).toEqual({ status: "damaged" });
     expect(parseStyles(JSON.stringify({ version: 2, styles: [] }))).toEqual({ status: "newer" });
+  });
+  test("the VERSION is read before the shape: a newer Clipy's file of another shape is newer, never damaged", () => {
+    expect(parseStyles(JSON.stringify({ version: 2, styles: { a: 1 } }))).toEqual({ status: "newer" });
+    expect(parseStyles(JSON.stringify({ version: 3 }))).toEqual({ status: "newer" });
+    expect(parseStyles(JSON.stringify({ version: 0, styles: [] }))).toEqual({ status: "damaged" });
+    expect(parseStyles(JSON.stringify({ version: 1.5, styles: [] }))).toEqual({ status: "damaged" });
   });
   test("cleanStyle: a style without id or name is dropped; anything else out of range is clamped", () => {
     expect(cleanStyle({ name: "x" })).toBeNull();

@@ -43,9 +43,17 @@ test("no music: a draft without sound", async () => {
   expect((await storage.loadProject(made.id)).project.audioTracks).toEqual([]);
   expect(deps.assetUri).not.toHaveBeenCalled();
 });
-test("own music without its uri, or a bundled id that is gone: it throws and nothing is created", async () => {
+test("own music without its uri: it throws and nothing is created", async () => {
   const { fs, deps } = setup();
   await expect(makeQuickEdit(deps, "P", [photo("file:///picked/a.jpg")], { style: style({ music: { kind: "own", file: "s1.mp3", title: "m", durationSec: 3, beats: [] } }), musicUri: null })).rejects.toThrow("style music missing");
-  await expect(makeQuickEdit(deps, "P", [photo("file:///picked/a.jpg")], { style: style({ music: { kind: "bundled", trackId: "gone" } }), musicUri: null })).rejects.toThrow("style music missing");
   expect(await fs.list("file:///doc/projects")).toEqual([]);
+});
+test("a bundled song that is no longer shipped: built as a style without music (the sheet said \"No music.\")", async () => {
+  const { storage, deps } = setup();
+  const made = await makeQuickEdit(deps, "P", [photo("file:///picked/a.jpg")], { style: style({ music: { kind: "bundled", trackId: "gone" } }), musicUri: null });
+  const { project } = await storage.loadProject(made.id);
+  expect(project.audioTracks).toEqual([]);
+  expect(project.beatMarkers).toEqual([]);
+  expect(project.clips[0]).toMatchObject({ filter: "vivid" });
+  expect(deps.assetUri).not.toHaveBeenCalled();
 });

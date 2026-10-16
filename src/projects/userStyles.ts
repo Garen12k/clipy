@@ -1,9 +1,10 @@
 import { textLookOf, type TextLook } from "@/src/editor/model/ops";
 import { activePhotoMotion, clampTextStyle, FILTER_IDS, FONT_IDS, isHexColor, isPhoto, makeOverlay, OVERLAY_LIMITS, PHOTO_MOTION_IDS, TRANSITION_LIMITS, TRANSITION_TYPES,
   type Align, type FilterId, type FontId, type PhotoMotionId, type Project, type TransitionType } from "@/src/editor/model/types";
+import { BUNDLED_TRACKS } from "@/src/editor/music";
 import { BUNDLED_BEATS, bundledTrackOf } from "@/src/editor/musicBeats";
 import { isSafeName } from "./projectFile";
-import { markerStep, type QuickPlan, type StyleTitle } from "./quickEdit";
+import { type QuickPlan, type StyleTitle } from "./quickEdit";
 
 // The owner's own Quick Edit styles (docs/superpowers/specs/2026-10-16-my-styles-design.md). Pure: what a style is, how one is read
 // from a project, how it becomes the plan `buildQuickEdit` reads, and the file's text. Storage is styleStore.ts.
@@ -71,20 +72,38 @@ export function styleFromProject(p: Project): StyleDraft {
   return { music, filter, filterIntensity, transition, title, motions, motionStrength: played[0]?.strength ?? 0.5 };
 }
 
-/** Marker steps for a style: a photo about `photoSeconds`, a video at most about `videoSeconds`, whatever the tempo. Without a step the values are unused (nothing is cut). */
-export function paceFor(beats: readonly number[], every: 1 | 2 | 4): { hold: number; videoHold: number } {
-  const step = markerStep(beats, every);
-  if (step <= 0) return { hold: 1, videoHold: 1 };
+/**
+ * Seconds of one marker step for a style: the MEDIAN gap between its markers (every `every`-th beat), so two markers the owner
+ * placed close together do not set the pace of every photo (the six built-in styles keep their first gap, `markerStep`). 0 = no gap.
+ */
+export function medianStep(beats: readonly number[], every: number): number {
+  const marks = beats.filter((_, i) => i % every === 0);
+  const gaps = marks.slice(1).map((m, i) => m - marks[i]).filter((g) => g > 1e-9).sort((a, b) => a - b);
+  if (gaps.length === 0) return 0;
+  const mid = gaps.length >> 1;
+  return r3(gaps.length % 2 === 1 ? gaps[mid] : (gaps[mid - 1] + gaps[mid]) / 2);
+}
+/** Marker steps for a style: a photo about `photoSeconds`, a video at most about `videoSeconds`, whatever the tempo, by `medianStep`. Without a step the values are unused (nothing is cut). */
+export function paceFor(beats: readonly number[], every: 1 | 2 | 4): { hold: number; videoHold: number; step: number } {
+  const step = medianStep(beats, every);
+  if (step <= 0) return { hold: 1, videoHold: 1, step: 0 };
   const hold = Math.min(USER_PACE.most, Math.max(1, Math.round(USER_PACE.photoSeconds / step)));
-  return { hold, videoHold: Math.min(USER_PACE.most, Math.max(hold, Math.round(USER_PACE.videoSeconds / step))) };
+  return { hold, videoHold: Math.min(USER_PACE.most, Math.max(hold, Math.round(USER_PACE.videoSeconds / step))), step };
+}
+
+/** The music a style has today: a bundled song that is no longer shipped counts as none (the sheet says "No music.", the draft has no sound). */
+export function styleMusic(s: UserStyle): StyleMusic | null {
+  const m = s.music;
+  return m?.kind === "bundled" && !BUNDLED_TRACKS.some((t) => t.id === m.trackId) ? null : m;
 }
 
 /** What `buildQuickEdit` reads for a style, and the beats (FILE seconds) it cuts to. A bundled song: every 2nd shipped beat; own music: every one of its stored beats (the owner's markers). */
 export function planOfStyle(s: UserStyle): { plan: QuickPlan; beats: readonly number[] } {
-  const beats = s.music === null ? [] : s.music.kind === "own" ? s.music.beats : (BUNDLED_BEATS[s.music.trackId]?.beats ?? []);
-  const every = s.music?.kind === "own" ? 1 : 2;
-  const { hold, videoHold } = paceFor(beats, every);
-  return { beats, plan: { every, hold, videoHold, transition: s.transition, filter: s.filter, filterIntensity: s.filterIntensity,
+  const m = styleMusic(s);
+  const beats = m === null ? [] : m.kind === "own" ? m.beats : (BUNDLED_BEATS[m.trackId]?.beats ?? []);
+  const every = m?.kind === "own" ? 1 : 2;
+  const { hold, videoHold, step } = paceFor(beats, every);
+  return { beats, plan: { every, hold, videoHold, step, transition: s.transition, filter: s.filter, filterIntensity: s.filterIntensity,
     title: s.title ? { from: "look", ...s.title } : null, motions: s.motions, motionStrength: s.motionStrength } };
 }
 
@@ -93,8 +112,10 @@ export function stylesText(styles: readonly UserStyle[]): string { return JSON.s
 export function parseStyles(text: string): ParsedStyles {
   let v: unknown;
   try { v = JSON.parse(text); } catch { return { status: "damaged" }; }
-  if (!isRec(v) || !Number.isInteger(v.version) || (v.version as number) < 1 || !Array.isArray(v.styles)) return { status: "damaged" };
+  // The version first: a later Clipy's file may have another shape, and it is "newer" (kept as it is, never moved aside as damaged).
+  if (!isRec(v) || !Number.isInteger(v.version) || (v.version as number) < 1) return { status: "damaged" };
   if ((v.version as number) > STYLES.version) return { status: "newer" };
+  if (!Array.isArray(v.styles)) return { status: "damaged" };
   return { status: "ok", styles: v.styles.map(cleanStyle).filter((s): s is UserStyle => s !== null) };
 }
 

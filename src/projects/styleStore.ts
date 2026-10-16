@@ -56,6 +56,7 @@ export function makeStyleStore(fs: FsAdapter, deps: StyleStoreDeps) {
       const read = parseStyles(await fs.readText(tmp));
       if (read.status === "ok") { await fs.move(tmp, file); return sweep(read.styles); }
       swept = true;
+      if (read.status === "newer") return read;   // a later Clipy's cut-off write: kept as it is, and nothing written over it
       return { status: "ok", styles: [] };   // a cut-off write: left where it is, the next write replaces it
     }
     return sweep([]);

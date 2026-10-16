@@ -2,7 +2,7 @@ import { BUNDLED_TRACKS } from "@/src/editor/music";
 import { BUNDLED_BEATS } from "@/src/editor/musicBeats";
 import { QUICK_RECIPES, buildQuickEdit, type QuickPlan, type QuickRecipe, type QuickRecipeId } from "./quickEdit";
 import type { PickedAsset, Storage } from "./storage";
-import { planOfStyle, type UserStyle } from "./userStyles";
+import { planOfStyle, styleMusic, type UserStyle } from "./userStyles";
 
 /** What making a draft needs from outside: the project store, a bundled file as a readable uri, a new id. */
 export interface QuickEditDeps {
@@ -30,8 +30,8 @@ async function sourceOf(deps: QuickEditDeps, choice: QuickChoice): Promise<Sourc
     return { plan: recipe, music: { uri, title: song.title, durationSec: song.durationSec }, beats: BUNDLED_BEATS[song.id]?.beats ?? [] };
   }
   const { plan, beats } = planOfStyle(choice.style);
-  const m = choice.style.music;
-  if (m === null) return { plan, music: null, beats: [] };
+  const m = styleMusic(choice.style);
+  if (m === null) return { plan, music: null, beats: [] };   // none, or a bundled song no longer shipped
   if (m.kind === "bundled") {
     const { song, uri } = await bundledSong(deps, m.trackId, () => new Error(STYLE_MUSIC_MISSING));
     return { plan, music: { uri, title: song.title, durationSec: song.durationSec }, beats };

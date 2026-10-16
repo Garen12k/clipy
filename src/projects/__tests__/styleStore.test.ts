@@ -188,3 +188,62 @@ test("nothing a style does is under projects/ or the cache; the project sweeps n
   await makeStorage(fs, { thumbnail: async () => "", newId: () => "n", nowIso: () => "2026-10-16T12:00:00.000Z" }).sweepProjectFiles();
   expect(made.every((k) => fs.files.has(k))).toBe(true);
 });
+test("a newer Clipy's file of ANOTHER shape is newer: no styles shown, writes refused, the file kept exactly, nothing moved aside", async () => {
+  const { fs, store } = setup();
+  const text = JSON.stringify({ version: 2, styles: { byId: {} } });
+  fs.files.set(FILE, text);
+  expect(await store.list()).toEqual({ status: "newer" });
+  await expect(store.add(draft(), "A", "P")).rejects.toEqual(new StyleStoreError("newer"));
+  expect(fs.files.get(FILE)).toBe(text);
+  expect([...fs.files.keys()].filter((k) => k.includes("damaged"))).toEqual([]);
+});
+test("only a newer Clipy's tmp (cut off between its remove and its rename): newer, the tmp kept, writes refused", async () => {
+  const { fs, store } = setup();
+  const text = JSON.stringify({ version: 2, styles: [] });
+  fs.files.set(`${FILE}.tmp`, text);
+  expect(await store.list()).toEqual({ status: "newer" });
+  await expect(store.add(draft(), "A", "P")).rejects.toEqual(new StyleStoreError("newer"));
+  expect(fs.files.get(`${FILE}.tmp`)).toBe(text);
+  expect(fs.files.has(FILE)).toBe(false);
+});
+describe("the realistic failed write: the phone's move removes styles.json, THEN fails", () => {
+  /** The fake's own queued move, failing after it removed the destination (the source, the tmp, stays). */
+  const failAfterRemove = (fs: ReturnType<typeof memoryFs>) => {
+    const real = fs.move.bind(fs);
+    return jest.spyOn(fs, "move").mockImplementationOnce((from, to) => real(to, `${to}.gone`).catch(() => {}).then(() => { fs.files.delete(`${to}.gone`); throw new Error("disk"); }));
+  };
+  test("an add: no style is lost — the tmp (old + new) is the only copy, with its song, and is read back next time", async () => {
+    const { fs, store } = setup();
+    await store.add(draft(), "A", "P");
+    const move = failAfterRemove(fs);
+    await expect(store.add(draft({ music: own }), "B", "P")).rejects.toThrow("disk");
+    move.mockRestore();
+    expect(fs.files.has(FILE)).toBe(false);
+    expect(fs.files.has(`${FILE}.tmp`)).toBe(true);
+    expect(fs.files.get("file:///doc/styles/media/s2.mp3")).toBe("SONG");
+    const next = makeStyleStore(fs, { newId: () => "z", nowIso: () => "2026-10-16T12:00:00.000Z" });   // the next launch
+    const read = await next.list();
+    expect(read.status === "ok" && read.styles.map((s) => s.name)).toEqual(["B", "A"]);
+    expect(fs.files.has(FILE)).toBe(true);
+    expect(fs.files.has(`${FILE}.tmp`)).toBe(false);
+    expect(fs.files.get("file:///doc/styles/media/s2.mp3")).toBe("SONG");
+  });
+  test("a rename: the styles are not lost; the same store reads the tmp back", async () => {
+    const { fs, store } = setup();
+    await store.add(draft(), "A", "P");
+    await store.add(draft(), "B", "P");
+    const move = failAfterRemove(fs);
+    await expect(store.rename("s1", "A2")).rejects.toThrow("disk");
+    move.mockRestore();
+    const read = await store.list();
+    expect(read.status === "ok" && read.styles.map((s) => s.name)).toEqual(["B", "A2"]);
+  });
+  test("the first add (nothing before): both the tmp and the copy go — exactly the old state", async () => {
+    const { fs, store } = setup();
+    const move = failAfterRemove(fs);
+    await expect(store.add(draft({ music: own }), "A", "P")).rejects.toThrow("disk");
+    move.mockRestore();
+    expect([...fs.files.keys()].filter((k) => k.includes("/styles"))).toEqual([]);
+    expect(await store.list()).toEqual({ status: "ok", styles: [] });
+  });
+});

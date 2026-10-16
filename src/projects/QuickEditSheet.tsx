@@ -8,7 +8,7 @@ import { Body } from "@/src/ui/Text";
 import { Tile } from "@/src/ui/Tile";
 import { QUICK_RECIPE_IDS, QUICK_RECIPES, type QuickRecipeId } from "./quickEdit";
 import { StyleTile } from "./StyleTile";
-import type { UserStyle } from "./userStyles";
+import { styleMusic, type UserStyle } from "./userStyles";
 
 const PER_ROW = 3;
 const ROWS = Array.from({ length: Math.ceil(QUICK_RECIPE_IDS.length / PER_ROW) }, (_, i) => QUICK_RECIPE_IDS.slice(i * PER_ROW, (i + 1) * PER_ROW));
@@ -28,7 +28,7 @@ type Props = {
 const mineKey = (id: string) => `mine:${id}`;
 /** The note's music line for a style of the owner's: its song, or none. */
 const musicOf = (s: UserStyle): string => {
-  const m = s.music;
+  const m = styleMusic(s);   // a bundled song no longer shipped is none: never "Music: ."
   if (m === null) return "No music.";
   const title = m.kind === "own" ? m.title : BUNDLED_TRACKS.find((t) => t.id === m.trackId)?.title ?? "";
   return `Music: ${title}.`;
@@ -55,11 +55,11 @@ export function QuickEditSheet({ visible, onClose, onChoose, mine = [], onStyleM
     <Sheet visible={visible} onClose={onClose} title="Quick edit">
       {mine.length > 0 ? (
         <View style={{ gap: theme.space.xs }}>
-          <Body muted style={{ fontSize: theme.type.small }}>Your styles</Body>
+          <Body accessibilityRole="header" muted style={{ fontSize: theme.type.small }}>Your styles</Body>
           <ScrollView testID="my-styles" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.sm }}>
             {mine.map((s) => <StyleTile key={s.id} name={s.name} selected={own?.id === s.id} onPress={() => setKey(mineKey(s.id))} onLongPress={() => onStyleMenu?.(s)} />)}
           </ScrollView>
-          <Body muted style={{ fontSize: theme.type.small }}>Styles</Body>
+          <Body accessibilityRole="header" muted style={{ fontSize: theme.type.small }}>Styles</Body>
         </View>
       ) : null}
       <View testID="quick-styles" style={{ gap: theme.space.sm }}>

@@ -34,3 +34,12 @@ test("the style chosen is the one handed on", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "Choose Photos and Videos" }));
   expect(onChoose).toHaveBeenCalledWith("calm");
 });
+
+test("a style of the owner's whose bundled song is no longer shipped says \"No music.\", never \"Music: .\"", async () => {
+  const gone = { id: "s1", name: "Old", createdAt: "", music: { kind: "bundled" as const, trackId: "no-longer-shipped" }, filter: null, filterIntensity: 1,
+    transition: { type: "none" as const, duration: 0 }, title: null, motions: [], motionStrength: 0.5 };
+  await render(<QuickEditSheet visible onClose={() => {}} onChoose={() => {}} mine={[gone]} />);
+  await fireEvent.press(screen.getByRole("button", { name: "Old" }));
+  expect(screen.getByText(/^No music\. Pick a style/)).toBeTruthy();
+  expect(screen.queryByText(/Music: \./)).toBeNull();
+});

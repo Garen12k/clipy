@@ -52,7 +52,7 @@ export default function Home() {
 /** The pill behind Quick Edit; and the same pill while the row is shared at a larger text size (the button in it is as wide as the pill). */
 const QUICK_BACKING = { borderRadius: theme.radius.pill } as const;
 const QUICK_SHARES = { ...QUICK_BACKING, flexShrink: 1 } as const;
-const MAKING = { project: "Creating your project", quick: "Making your quick edit" } as const;
+const MAKING = { project: "Creating your project", quick: "Making your quick edit", style: "Saving your style" } as const;
 
 function ProjectsScreen() {
   const { projects, loading, reload, create, createQuick, rename, duplicate, remove } = useProjects();
@@ -181,11 +181,14 @@ function ProjectsScreen() {
     finally { if (up) clearTimeout(up); release(); }
   }
   // Save as Style: our own work (the project read, its own music copied, the styles file written) under `creating`, so it never
-  // runs with the other four. The prompt is answered BEFORE the ref is taken: no ref waits for a system sheet.
+  // runs with the other four, and Home inert with the making capsule saying so (a large own song takes a moment to copy). The
+  // prompt is answered BEFORE the ref is taken: no ref waits for a system sheet.
   async function onSaveStyle(p: ProjectSummary, name: string) {
     if (starting.current || creating.current) return;
     const release = hold(creating);
-    try { await styles.save(p.id, name); } finally { release(); }
+    setMaking("style");
+    setBusy(true);
+    try { await styles.save(p.id, name); } finally { release(); setMaking(null); setBusy(false); }
   }
   async function onOpenFile() {
     if (starting.current || creating.current) return;
