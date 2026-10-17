@@ -88,5 +88,7 @@ export function fillerPlan(p: Project): FillerPlan {
     removable += long.reduce((n, e) => n + (keep.has(e.cut) ? e.words : 0), 0);
     cuts.push({ clipId: clip.id, cuts: kept });
   }
+  // … and so is the whole: clips each accepted alone can still be refused together (two maps pull a later layer onto earlier ones).
+  if (cuts.length > 1 && removeCuts(p, cuts) === p) return { found, removable: 0, cannot: found, cuts: [] };
   return { found, removable, cannot: found - removable, cuts };
 }

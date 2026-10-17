@@ -1,7 +1,7 @@
 jest.mock("@/src/lib/clock", () => ({ nowIso: () => "2026-10-17T10:00:00.000Z" }));
 import { extractClipAudio, removeCuts } from "../ops";
 import { FILLER, fillerPlan, isFiller } from "../fillers";
-import { makeClip, makeOverlay, makePhotoClip, makeProject, type CaptionWord, type Clip, type Project, type TextOverlay } from "../types";
+import { makeClip, makeLayer, makeOverlay, makePhotoClip, makeProject, type CaptionWord, type Clip, type Project, type TextOverlay } from "../types";
 
 const cap = (id: string, start: number, end: number, words: CaptionWord[]): TextOverlay =>
   makeOverlay({ id, kind: "caption", start, end, text: words.map((w) => w.text).join(" "), words });
@@ -87,4 +87,19 @@ test("several clips: one ClipCuts per clip, in clip order, and removeCuts applie
   const q = removeCuts(p, plan.cuts);
   expect(q.overlays.map((o) => (o as TextOverlay).text)).toEqual(["so go", "so go"]);
   expect(q.overlays[1].start).toBeCloseTo(4.5 - 0.38, 9);   // b's caption moved left by a's cut (1.46 … 1.84)
+});
+
+test("the whole operation is the oracle: two clips each cuttable alone, refused together (the layers' limit), offer nothing", () => {
+  // Two 1-s cuts' worth: um 2.0–2.46 in a (cut 1.96–2.5) and um 10.5–10.96 in b (cut 10.46–11.0). Two video layers 0–12; a third at
+  // 12.75 is pulled to 12.21 by either cut alone (after 12: two at once, allowed) but to 11.67 by both (three at once: refused).
+  const p = makeProject({
+    clips: [makeClip({ id: "a", sourceDuration: 10 }), makeClip({ id: "b", sourceDuration: 10 })],
+    overlays: [cap("c1", 1.5, 3, [W("so", 0, 0.3), W("um", 0.5, 0.96), W("go", 1.2, 1.4)]), cap("c2", 10, 12, [W("um", 0.5, 0.96), W("ok", 1.2, 1.5)])],
+    layers: [makeLayer({ id: "x1", sourceDuration: 12 }), makeLayer({ id: "x2", sourceDuration: 12 }), makeLayer({ id: "y", sourceDuration: 1, start: 12.75 })],
+  });
+  for (const id of ["a", "b"]) {
+    const alone = { clipId: id, cuts: id === "a" ? [[1.96, 2.5] as const] : [[0.46, 1] as const] };
+    expect(removeCuts(p, [alone])).not.toBe(p);   // each alone is accepted …
+  }
+  expect(fillerPlan(p)).toEqual({ found: 2, removable: 0, cannot: 2, cuts: [] });   // … together they are not: nothing offered
 });
