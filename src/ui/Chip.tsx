@@ -1,4 +1,6 @@
+import { View } from "react-native";
 import { KitText } from "./Text";
+import { Icon, type IconName } from "./Icon";
 import { largeContent } from "./textScale";
 import { theme } from "@/src/theme/theme";
 import { ringOf, useSurfaces } from "./tone";
@@ -11,11 +13,14 @@ type Props = { label: string; selected: boolean; onPress: () => void; disabled?:
   still?: boolean;
   /** `false` where the label is not the app's own word (a language's or a voice's name, which the phone supplies): it is then never shrunk to fit. */
   fit?: boolean;
+  /** An icon before the label (the Adjust strip's Auto): the kit Icon in the label's colour. Without it the chip is drawn exactly as before. */
+  icon?: IconName;
 };
 
 /** A chip. Picked = the tile's rule: the 2-pt gold ring on the soft gold tint (`picked`), the label in the text colour (a chip's label is always semibold). */
-export function Chip({ label, selected, onPress, disabled, accessibilityLabel, compact, still, fit = true }: Props) {
+export function Chip({ label, selected, onPress, disabled, accessibilityLabel, compact, still, fit = true, icon }: Props) {
   const s = useSurfaces();
+  const text = <KitText fit={fit} style={{ fontWeight: theme.weight.semi, color: s.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</KitText>;
   return (
     <PressableScale lifted={selected} still={still}
       accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label}
@@ -23,7 +28,12 @@ export function Chip({ label, selected, onPress, disabled, accessibilityLabel, c
       disabled={disabled} onPress={onPress} {...largeContent(label)} hitSlop={compact ? { top: 10, bottom: 10, left: 4, right: 4 } : { top: 4, bottom: 4 }}
       style={[{ height: compact ? theme.size.chipCompact : theme.size.chip, justifyContent: "center", paddingHorizontal: compact ? theme.space.md : theme.space.lg, borderRadius: theme.radius.pill,
         backgroundColor: selected ? s.picked : s.tile, opacity: disabled ? 0.4 : 1 }, selected ? ringOf(s) : theme.ringClear]}>
-      <KitText fit={fit} style={{ fontWeight: theme.weight.semi, color: s.text, fontSize: compact ? theme.type.small : theme.type.body }}>{label}</KitText>
+      {icon ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.xs }}>
+          <Icon name={icon} size={theme.size.icon.sm} color={s.text} />
+          {text}
+        </View>
+      ) : text}
     </PressableScale>
   );
 }
