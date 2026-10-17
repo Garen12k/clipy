@@ -1,4 +1,5 @@
 import { textLookOf, type TextLook } from "@/src/editor/model/ops";
+import { clipDuration } from "@/src/editor/model/timeline";
 import { activePhotoMotion, clampTextStyle, FILTER_IDS, FONT_IDS, isHexColor, isPhoto, makeOverlay, OVERLAY_LIMITS, PHOTO_MOTION_IDS, TRANSITION_LIMITS, TRANSITION_TYPES,
   type Align, type FilterId, type FontId, type PhotoMotionId, type Project, type TransitionType } from "@/src/editor/model/types";
 import { BUNDLED_TRACKS } from "@/src/editor/music";
@@ -31,10 +32,10 @@ const isRec = (v: unknown): v is Record<string, unknown> => typeof v === "object
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const num = (v: unknown, d: number, lo: number, hi: number) => (isNum(v) ? Math.min(hi, Math.max(lo, v)) : d);
 const cut = (s: string, n: number) => Array.from(s).slice(0, n).join("");
-/** The most common key, a tie going to the one met first; null for none. */
-function mostCommon<T>(keys: readonly T[]): T | null {
+/** The most common key — each counted `weight` times (1 when left out) — a tie going to the one met first; null for none. */
+function mostCommon<T>(keys: readonly T[], weights?: readonly number[]): T | null {
   const count = new Map<T, number>();
-  for (const k of keys) count.set(k, (count.get(k) ?? 0) + 1);
+  keys.forEach((k, i) => count.set(k, (count.get(k) ?? 0) + (weights?.[i] ?? 1)));
   let best: T | null = null, most = 0;
   for (const [k, n] of count) if (n > most) { best = k; most = n; }   // Map keeps first-met order, so `>` keeps the first of a tie
   return best;
@@ -55,7 +56,8 @@ export function styleFromProject(p: Project): StyleDraft {
       music = { kind: "own", sourceUri: song.sourceUri, title: song.title, durationSec: song.sourceDuration, beats: inside.length >= STYLES.minBeats ? inside : [] };
     }
   }
-  const filterKey = mostCommon(p.clips.map((c) => c.filter ?? "none"));
+  // By the seconds each clip is ON SCREEN (`clipDuration`), not by clip count: a clip Remove pauses cut into 12 pieces is one clip's time.
+  const filterKey = mostCommon(p.clips.map((c) => c.filter ?? "none"), p.clips.map(clipDuration));
   const filter = filterKey === null || filterKey === "none" ? null : filterKey;
   const filterIntensity = filter === null ? 1 : p.clips.find((c) => c.filter === filter)!.filterIntensity;
   const cuts = p.clips.slice(0, -1).map((c) => c.transitionOut).filter((t) => t.type !== "none");

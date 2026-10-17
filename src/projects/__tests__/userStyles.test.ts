@@ -36,6 +36,13 @@ describe("styleFromProject", () => {
     expect(styleFromProject(makeProject({ clips: [at(null), at(null), at("vivid")] }))).toMatchObject({ filter: null, filterIntensity: 1 });
     expect(styleFromProject(makeProject())).toMatchObject({ filter: null, filterIntensity: 1 });
   });
+  test("filter: weighed by how long each clip is on screen, not by how many clips — a clip cut into pieces counts once over", () => {
+    const at = (filter: "vivid" | "golden", id: string, trimStart: number, trimEnd: number, speed = 1) => makeClip({ id, sourceDuration: 20, trimStart, trimEnd, speed, filter, filterIntensity: filter === "vivid" ? 0.7 : 0.4 });
+    const pieces = Array.from({ length: 12 }, (_, i) => at("golden", `g${i}`, i, i + 0.5));   // 6 s in 12 pieces
+    expect(styleFromProject(makeProject({ clips: [at("vivid", "v1", 0, 5), ...pieces, at("vivid", "v2", 0, 5)] }))).toMatchObject({ filter: "vivid", filterIntensity: 0.7 });
+    // Output seconds, not source seconds: 8 s of source at 2× is on screen for 4 s.
+    expect(styleFromProject(makeProject({ clips: [at("vivid", "v", 0, 8, 2), at("golden", "g", 0, 5)] }))).toMatchObject({ filter: "golden" });
+  });
   test("transition: the most common type that is not none, the last clip left out; its duration from the first such clip", () => {
     const t = (type: "fade" | "slide" | "none", duration: number, id: string) => makeClip({ id, sourceDuration: 5, transitionOut: { type, duration } });
     expect(styleFromProject(makeProject({ clips: [t("fade", 0.5, "a"), t("slide", 0.4, "b"), t("slide", 0.6, "c"), t("fade", 0.3, "d"), t("fade", 0.3, "e")] })).transition)
