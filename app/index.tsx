@@ -80,6 +80,7 @@ function ProjectsScreen() {
   async function onPostVideo() {
     if (picking.current) return; // the picker is already up
     picking.current = true;
+    setSortOpen(false); // the sort sheet's flag: it may be set with nothing on screen
     try {
       const v = await pickVideoForPost();
       if (v) router.push({ pathname: "/post", params: { fileUri: v.fileUri, durationSec: String(v.durationSec), mimeType: v.mimeType } }); // size is re-read from disk
@@ -118,7 +119,8 @@ function ProjectsScreen() {
     const askSource = () => sheet(askMenu);
     try {
       setPending(null);
-      setQuickOpen(false); // the other sheet's flag: it may be set with nothing on screen
+      setQuickOpen(false); // the other sheets' flags: they may be set with nothing on screen
+      setSortOpen(false);
       const source = sourceMenuShown() ? await askSource() : "library";
       if (!source) return;
       const assets = await sheet(() => (source === "camera" ? takeOne() : pickMedia()));
@@ -146,6 +148,7 @@ function ProjectsScreen() {
   async function onQuick() {
     if (starting.current || creating.current) return;
     setPending(null);
+    setSortOpen(false);
     setQuickOpen(false);
     await new Promise((r) => setTimeout(r, 0));
     if (starting.current || creating.current) return;
@@ -204,6 +207,7 @@ function ProjectsScreen() {
     try {
       setPending(null);
       setQuickOpen(false);
+      setSortOpen(false);
       uri = await filePhone.pick();
     } catch (e) { console.warn("pick failed", e); } finally { clearTimeout(up); release(); }
     if (!uri) return;
@@ -227,10 +231,19 @@ function ProjectsScreen() {
   // At the default text size the two bottom actions are their natural widths, as ever (a 375-pt phone holds them with nothing to spare).
   // Larger, they would not fit side by side — so above the default, and only there, both may give way and each label fits what it gets.
   const share = useTextScale() > 1;
-  const openActions = (p: ProjectSummary) => { Keyboard.dismiss(); haptic("light"); setActionsFor(p); };
-  const openProject = (p: ProjectSummary) => { Keyboard.dismiss(); if (p.broken) setActionsFor(p); else router.push(`/editor/${p.id}`); };
-  // The sort sheet: the keyboard goes first, and the other sheets' flags that may be set with nothing on screen are cleared, as onOpenFile does.
-  const onSort = () => { Keyboard.dismiss(); setPending(null); setQuickOpen(false); setSortOpen(true); };
+  const openActions = (p: ProjectSummary) => { Keyboard.dismiss(); haptic("light"); setSortOpen(false); setActionsFor(p); };
+  const openProject = (p: ProjectSummary) => { Keyboard.dismiss(); if (p.broken) { setSortOpen(false); setActionsFor(p); } else router.push(`/editor/${p.id}`); };
+  // The sort sheet, like Quick Edit's: never held back by its own flag. If iOS drops the sheet's presentation (another sheet still
+  // fading out, the keyboard going down), `sortOpen` stays true with nothing on screen — so a press closes it first and opens it on
+  // the next tick, presented afresh. The keyboard goes first, and the other sheets' flags are cleared.
+  async function onSort() {
+    Keyboard.dismiss();
+    setPending(null);
+    setQuickOpen(false);
+    setSortOpen(false);
+    await new Promise((r) => setTimeout(r, 0));
+    if (!starting.current && !creating.current) setSortOpen(true);
+  }
   const card = (item: ProjectSummary) => (
     <ProjectCard key={item.id} summary={item} pinned={!item.broken && find.isPinned(item.id)} onPress={() => openProject(item)} onLongPress={() => openActions(item)} onMore={() => openActions(item)} />
   );

@@ -10,6 +10,14 @@ jest.mock("@/src/projects", () => ({
   storage: { listProjects: jest.fn(), createProject: jest.fn(), renameProject: jest.fn(), duplicateProject: jest.fn(), deleteProject: jest.fn(), importAudio: jest.fn(), saveProject: jest.fn(), updateProject: jest.fn() },
 }));
 jest.mock("@/src/projects/quickEditFlow", () => ({ makeQuickEdit: jest.fn() }));
+// The real sort sheet, with every `visible` it is drawn with written down: so a test can see it closed first and opened again.
+jest.mock("@/src/projects/SortSheet", () => {
+  const React = require("react");
+  const real = jest.requireActual("@/src/projects/SortSheet");
+  const g = globalThis as unknown as { __sortSeen: boolean[] };
+  g.__sortSeen = [];
+  return { SortSheet: (props: { visible: boolean }) => { g.__sortSeen.push(props.visible); return React.createElement(real.SortSheet, props); } };
+});
 
 import { router } from "expo-router";
 import ProjectsScreen from "@/app/index";
@@ -17,6 +25,7 @@ import { storage } from "@/src/projects";
 import { HOME_PREFS_KEY } from "@/src/projects/homePrefs";
 import { AFTER_SHEET_MS } from "@/src/projects/ProjectActionsSheet";
 import { leftovers, wear } from "@/src/ui/testing/appearance";
+import { pickMedia } from "@/src/projects/pickMedia";
 
 /** The pin mark is hidden from VoiceOver (accessibilityElementsHidden), so RNTL finds it only with hidden elements included. */
 const HIDDEN = { includeHiddenElements: true } as const;
@@ -114,6 +123,37 @@ describe("the sort", () => {
     await fireEvent.press(btn("Sort projects"));
     await fireEvent.press(await screen.findByTestId(row));
     await waitFor(() => expect(order()).toEqual(expected));
+  });
+});
+
+describe("the Sort button cannot stick", () => {
+  const G = globalThis as unknown as { __sortSeen: boolean[] };
+  const sortHeader = () => screen.queryByRole("header", { name: "Sort by" });
+  test("a sheet iOS never presented cannot block Sort: the next press closes it first and opens it afresh", async () => {
+    await home();
+    await fireEvent.press(btn("Sort projects")); // on the phone the sheet may never have appeared; `sortOpen` is set all the same
+    await waitFor(() => expect(sortHeader()).toBeTruthy());
+    G.__sortSeen.length = 0;
+    await fireEvent.press(btn("Sort projects"));
+    await waitFor(() => expect(sortHeader()).toBeTruthy());
+    const closedAt = G.__sortSeen.indexOf(false);
+    expect(closedAt).toBeGreaterThanOrEqual(0);                         // it was closed …
+    expect(G.__sortSeen.lastIndexOf(true)).toBeGreaterThan(closedAt);   // … and then opened again
+  });
+
+  test.each([
+    ["New Project", () => btn("New Project")],
+    ["Quick Edit", () => btn("Quick Edit")],
+    ["Open Project File", () => btn("Open Project File")],
+    ["a project's sheet", () => btn("More for Hills")],
+    ["Post a video", () => btn("Post a video")],
+  ])("%s clears a Sort sheet that is (or is thought to be) open", async (_name, target) => {
+    (pickMedia as jest.Mock).mockResolvedValue(null);
+    await home();
+    await fireEvent.press(btn("Sort projects"));
+    await waitFor(() => expect(sortHeader()).toBeTruthy());
+    await fireEvent.press(target());
+    await waitFor(() => expect(sortHeader()).toBeNull());
   });
 });
 
