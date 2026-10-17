@@ -108,3 +108,12 @@ test("keepListed drops pins whose project is not listed, and is the same array w
   expect(keepListed(pins, ["b"])).toEqual(["b"]);
   expect(keepListed(pins, [])).toEqual([]);
 });
+
+test("each name is folded once per ordering, and the query once — never inside the comparator", () => {
+  const many = Array.from({ length: 200 }, (_, i) => ({ id: `p${i}`, name: `Project ${(i * 37) % 200}`, durationSec: i, updatedAt: "", createdAt: "", broken: false }));
+  const normalize = jest.spyOn(String.prototype, "normalize");
+  const { rest } = orderProjects(many, { sort: "name", pins: [], query: "proj" });
+  expect(normalize.mock.calls.length).toBeLessThanOrEqual(many.length + 1);
+  normalize.mockRestore();
+  expect(rest.map((p) => p.name).slice(0, 3)).toEqual(["Project 0", "Project 1", "Project 2"]);
+});

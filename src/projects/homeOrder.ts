@@ -45,6 +45,8 @@ export function matchesQuery(name: string, query: string): boolean {
   const q = foldName(query.trim());
   return q === "" || foldName(name).includes(q);
 }
+/** `matchesQuery` on what is already folded (the query trimmed first). */
+const matchesFolded = (name: string, q: string) => q === "" || name.includes(q);
 
 const DIGITS = /([0-9]+)/;
 function compareDigits(a: string, b: string): number {
@@ -54,7 +56,11 @@ function compareDigits(a: string, b: string): number {
 }
 /** A → Z on folded names: runs of ASCII digits by their value ("2" before "10", digits before letters), the rest by code unit; a prefix first. 0 = the same to the eye. */
 export function compareNames(a: string, b: string): number {
-  const xs = foldName(a).split(DIGITS), ys = foldName(b).split(DIGITS);
+  return compareFolded(foldName(a), foldName(b));
+}
+/** `compareNames` on names already folded: the list folds each name once per ordering, never inside its comparator. */
+function compareFolded(a: string, b: string): number {
+  const xs = a.split(DIGITS), ys = b.split(DIGITS);
   const n = Math.min(xs.length, ys.length);
   for (let i = 0; i < n; i++) {
     const p = xs[i] as string, q = ys[i] as string;
@@ -77,14 +83,22 @@ const BY: Record<HomeSort, (a: Orderable, b: Orderable) => number> = {
 };
 /** Broken last (as the listing always had it), then the sort, then the folded name, the raw name, the id: one order whatever the listing's order. */
 export function compareProjects(sort: HomeSort, a: Orderable, b: Orderable): number {
-  return Number(a.broken) - Number(b.broken) || BY[sort](a, b) || compareNames(a.name, b.name) || raw(a.name, b.name) || raw(a.id, b.id);
+  return compareWith(sort, a, b, foldName(a.name), foldName(b.name));
+}
+function compareWith(sort: HomeSort, a: Orderable, b: Orderable, fa: string, fb: string): number {
+  return Number(a.broken) - Number(b.broken) || BY[sort](a, b) || compareFolded(fa, fb) || raw(a.name, b.name) || raw(a.id, b.id);
 }
 
 export interface HomeOptions { sort: HomeSort; pins: readonly string[]; query: string }
 /** The projects that match, in the sort's order, split: pinned (and not broken) first, all the others after. */
 export function orderProjects<T extends Orderable>(list: readonly T[], o: HomeOptions): { pinned: T[]; rest: T[] } {
   const pins = new Set(o.pins);
-  const shown = list.filter((p) => matchesQuery(p.name, o.query)).sort((a, b) => compareProjects(o.sort, a, b));
+  // Each name folded once, and the query once (with many projects the comparator runs thousands of times a keystroke).
+  const q = foldName(o.query.trim());
+  const folded = new Map<T, string>();
+  for (const p of list) folded.set(p, foldName(p.name));
+  const f = (p: T) => folded.get(p) as string;
+  const shown = list.filter((p) => matchesFolded(f(p), q)).sort((a, b) => compareWith(o.sort, a, b, f(a), f(b)));
   return { pinned: shown.filter((p) => !p.broken && pins.has(p.id)), rest: shown.filter((p) => p.broken || !pins.has(p.id)) };
 }
 
