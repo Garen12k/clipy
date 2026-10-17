@@ -169,3 +169,19 @@ test("what was heard is kept by last use: an outline read again outlives the one
   expect(heardPauses({ uri: CLIP, from: 0, to: 1 })).not.toBeNull();
   expect(heardPauses({ uri: CLIP, from: 0, to: 2 })).toBeNull();
 });
+
+test("a waveform call that waited for a listening's turn asks again whether the editor stands still: never started while playing", async () => {
+  syncPeaks("p1", peaksSources(useEditorStore.getState().project!, []));
+  await settle();
+  expect(calls).toHaveLength(1);                                  // the song's first call runs
+  const done = listenForPauses({ uri: CLIP, from: 0, to: 3 }); await flush();
+  answer(calls[0]); await flush();                                // the song's next call now waits for the turn
+  expect(calls[1].req.uri).toBe(CLIP);
+  useEditorStore.getState().setPlaying(true);                     // the strip closed, Play pressed
+  answer(calls[1]); expect((await done).status).toBe("ready");
+  await settle(); await settle();
+  expect(calls).toHaveLength(2);                                  // nothing started during playback
+  useEditorStore.getState().setPlaying(false);
+  await settle(); await settle();
+  expect(calls[2].req.uri).toBe(SONG);                            // standing still again: the waveform goes on
+});
