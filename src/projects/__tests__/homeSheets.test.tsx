@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 // New Project and Quick Edit never wait for a system sheet's promise (AGENTS.md, Quick edit / Home): the photo picker, the source
-// menu and the camera hold Home's guard only while they come up. Real time, as the other Home suites wait.
+// menu and the camera hold Home's guard only while they come up. Jest's FAKE clock: every wait below is an exact step of it, so the
+// windows (AFTER_PICKER_MS, AFTER_SHEET_MS) are measured from the moment the app asked, never stretched by a slow machine — on the
+// real clock a busy run let the window close between two taps and the sheet arrived before the test looked.
 jest.mock("expo-router", () => {
   const g = globalThis as unknown as { __homeBlur: (() => void)[] };
   g.__homeBlur = [];
@@ -47,14 +49,19 @@ const LATE = [{ uri: "file:///late.mov", kind: "video", durationSec: 3, width: 1
 const TAKEN = { uri: "file:///cache/ImagePicker/v.mov", kind: "video", durationSec: 4.2, width: 1080, height: 1920, fileName: undefined };
 const BEACH = { id: "a", name: "Beach", durationSec: 65, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [], coverTitle: "" };
 const btn = (name: string) => screen.getByRole("button", { name });
-const wait = (ms: number) => act(async () => { await new Promise((r) => setTimeout(r, ms + 50)); });
+/** The fake clock moved by exactly `ms` (every timer due by then has run, with its promises). */
+const step = (ms: number) => act(async () => { await jest.advanceTimersByTimeAsync(ms); });
+const wait = (ms: number) => step(ms + 50);
 const afterSheet = () => wait(AFTER_PICKER_MS);
 const presses: Promise<unknown>[] = [];
+/** One turn of the REAL event loop, the fake clock left where it is. */
+const realTick = () => new Promise<void>((r) => { jest.requireActual<typeof import("timers")>("timers").setTimeout(r, 0); });
 /**
- * A press whose handler may stay pending for ever (a sheet that never answers): not awaited, but given one tick — so its act scope
- * has ended before the next one opens (overlapping act scopes leave React unable to draw the next test's screen).
+ * A press whose handler may stay pending for ever (a sheet that never answers — the press settles only with its handler): not
+ * awaited, but given one real tick — so its act scope has ended before the next one opens (overlapping act scopes leave React unable
+ * to draw the next test's screen). The fake clock does not move.
  */
-const press = async (el: Parameters<typeof fireEvent.press>[0]) => { presses.push(Promise.resolve(fireEvent.press(el))); await new Promise((r) => setTimeout(r, 0)); };
+const press = async (el: Parameters<typeof fireEvent.press>[0]) => { presses.push(Promise.resolve(fireEvent.press(el))); await realTick(); };
 const tap = (name: string) => press(btn(name));
 const aspectSheet = () => screen.queryByRole("header", { name: "Aspect ratio" });
 const quickHeader = () => screen.queryByRole("header", { name: "Quick edit" });
@@ -69,12 +76,13 @@ const cameraHanging = () => new Promise<unknown>((r) => { open.push(() => r({ st
 function later<T>(mock: jest.Mock) {
   let answer: (v: T) => void = () => {};
   mock.mockImplementationOnce(() => new Promise<T>((r) => { answer = r; open.push(() => (r as (v: unknown) => void)(mock === take ? { status: "cancelled" } : null)); }));
-  return (v: T) => act(async () => { answer(v); await new Promise((r) => setTimeout(r, 0)); });
+  return (v: T) => act(async () => { answer(v); await jest.advanceTimersByTimeAsync(0); });
 }
 let menu: jest.SpyInstance, warn: jest.SpyInstance, alert: jest.SpyInstance;
 const answerMenu = (index: number) => act(async () => { (menu.mock.calls[menu.mock.calls.length - 1][1] as (i: number) => void)(index); });
 
 beforeEach(() => {
+  jest.useFakeTimers();
   jest.clearAllMocks(); pick.mockReset(); take.mockReset(); make.mockReset(); createProject.mockReset(); packProject.mockReset(); filePick.mockReset();
   list.mockReset(); list.mockResolvedValue([BEACH]); camera.mockReturnValue(false);
   G.__homeBlur.length = 0; useToast.getState().clear(); presses.length = 0;
@@ -83,7 +91,8 @@ beforeEach(() => {
   alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
 });
 afterEach(async () => {
-  await act(async () => { open.splice(0).forEach((r) => r()); menu.mock.calls.forEach((c) => (c[1] as (i: number) => void)(2)); await Promise.all(presses.splice(0)); await new Promise((r) => setTimeout(r, AFTER_SHEET_MS + AFTER_PICKER_MS + 50)); });
+  await act(async () => { open.splice(0).forEach((r) => r()); menu.mock.calls.forEach((c) => (c[1] as (i: number) => void)(2)); await jest.advanceTimersByTimeAsync(AFTER_SHEET_MS + AFTER_PICKER_MS + 50); await Promise.all(presses.splice(0)); await jest.runOnlyPendingTimersAsync(); });
+  jest.useRealTimers();
   menu.mockRestore(); warn.mockRestore(); alert.mockRestore();
 });
 const home = async () => { await render(<ProjectsScreen />); await screen.findByText("Beach"); };
@@ -95,7 +104,7 @@ const startSave = async () => {
   await press(await screen.findByRole("button", { name: "Save a Copy" }));
   await wait(AFTER_SHEET_MS);
   await screen.findByTestId("home-transfer");
-  return () => act(async () => { finish(null); await new Promise((r) => setTimeout(r, 0)); });
+  return () => act(async () => { finish(null); await jest.advanceTimersByTimeAsync(0); });
 };
 
 describe("New Project: a photo picker that never answers", () => {
@@ -214,15 +223,17 @@ describe("New Project: the happy path is today's", () => {
     await home();
     await tap("New Project");
     expect(order).toEqual(["pick"]);
-    await wait(200);
+    await step(199);
+    expect(order).toEqual(["pick"]);
+    await step(1);
     expect(order).toEqual(["pick", "picked"]);
     await tap("New Project");                           // the picker has answered; the guard is still held while it slides away
     await tap("Open Project File");
     expect(pick).toHaveBeenCalledTimes(1);
     expect(filePick).not.toHaveBeenCalled();
-    await wait(AFTER_PICKER_MS - 150);
+    await step(AFTER_PICKER_MS - 1);                    // to the millisecond: the clock is Jest's, so no slow run can stretch it
     expect(aspectSheet()).toBeNull();
-    await wait(150);
+    await step(1);
     expect(aspectSheet()).toBeTruthy();
     await fireEvent.press(btn("Create"));
     await wait(0);
@@ -233,7 +244,7 @@ describe("New Project: the happy path is today's", () => {
 
 describe("Quick Edit: a photo picker that never answers", () => {
   const choose = async () => {
-    await fireEvent.press(btn("Quick Edit"));
+    await tap("Quick Edit");                            // its sheet opens on the next tick of the clock
     await press(await screen.findByRole("button", { name: "Choose Photos and Videos" }));
     await wait(AFTER_SHEET_MS);                         // the sheet fades out, then the library is asked for
     expect(pick).toHaveBeenCalledWith({ limit: 30 });
