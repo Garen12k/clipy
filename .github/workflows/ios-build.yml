@@ -12,6 +12,10 @@ on:
         description: Branch to build
         default: next-build
         required: true
+      submit:
+        description: Send to TestFlight (off = only check that it builds)
+        type: boolean
+        default: true
 
 jobs:
   build:
@@ -54,4 +58,5 @@ jobs:
         run: eas build --platform ios --profile production --local --non-interactive --output "$RUNNER_TEMP/clipy.ipa"
 
       - name: Send to TestFlight
+        if: ${{ inputs.submit }}
         run: eas submit --platform ios --profile production --path "$RUNNER_TEMP/clipy.ipa" --non-interactive
