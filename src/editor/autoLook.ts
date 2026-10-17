@@ -33,6 +33,8 @@ function capped<T>(map: Record<string, T>, key: string, value: T): Record<string
   for (let i = 0; i < keys.length - AUTO_MEMORY; i++) delete next[keys[i]];
   return next;
 }
+/** A target found by a look over a wider stretch of the same file (Apply to All's pieces), remembered under one clip's own key. */
+export function rememberTarget(key: string, target: AutoTarget): void { useAutoLooks.setState((s) => ({ targets: capped(s.targets, key, target) })); }
 export function rememberApplied(key: string, applied: Applied): void { useAutoLooks.setState((s) => ({ applied: capped(s.applied, key, applied) })); }
 export function setStrength(key: string, strength: number): void {
   useAutoLooks.setState((s) => {
