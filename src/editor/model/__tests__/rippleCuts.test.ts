@@ -95,3 +95,10 @@ test("nothing after the first range: the same arrays and the same cover", () => 
   expect(r.overlays).toBe(p.overlays); expect(r.effects).toBe(p.effects); expect(r.layers).toBe(p.layers); expect(r.cover).toBe(p.cover);
   expect(rippleTimed(p, [], 20).overlays).toBe(p.overlays);
 });
+
+test("nothing after the first range keeps its object even with times of more than 3 decimals (a drag's), not rounded or judged", () => {
+  const p = makeProject({ overlays: [makeOverlay({ id: "o", start: 0.12345, end: 1.23456 })], effects: [makeEffect({ id: "e", start: 0.0001, end: 0.10004 })],
+    layers: [makeLayer({ id: "L", sourceDuration: 1, start: 0.33333 })], cover: { time: 1.00049, title: "x" } });
+  const r = rippleTimed(p, [[5, 6]], 20);
+  expect(r.overlays).toBe(p.overlays); expect(r.effects).toBe(p.effects); expect(r.layers).toBe(p.layers); expect(r.cover).toBe(p.cover);
+});

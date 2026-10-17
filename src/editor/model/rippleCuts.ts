@@ -12,6 +12,8 @@ export type Removed = readonly [number, number];
 
 const EPS = 1e-9;
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
+/** `t` mapped and capped at `total`, to 3 decimals — or `t` itself, unrounded, when the map leaves it where it was (so an untouched item stays the same object). */
+const moved = (rs: readonly Removed[], t: number, total = Infinity): number => { const m = Math.min(mapTime(rs, t), total); return m === t ? t : r3(m); };
 
 /** A main clip's cuts (source seconds) as the project time they take away, each clamped to the trim; [] for an id that is not a main clip. */
 export function removedOf(p: Project, clipId: string, cuts: readonly PauseCut[]): Removed[] {
@@ -62,7 +64,7 @@ function each<T>(list: readonly T[], f: (x: T) => T | null): T[] {
 }
 
 function rippleOverlay(o: Overlay, rs: readonly Removed[], total: number): Overlay | null {
-  const start = r3(Math.min(mapTime(rs, o.start), total)), end = r3(Math.min(mapTime(rs, o.end), total));
+  const start = moved(rs, o.start, total), end = moved(rs, o.end, total);
   if (start === o.start && end === o.end) return o;
   if (end - start < OVERLAY_LIMITS.minDuration - EPS) return null;
   const at = (rel: number): number => r3(mapTime(rs, o.start + rel) - start);
@@ -77,19 +79,19 @@ function rippleOverlay(o: Overlay, rs: readonly Removed[], total: number): Overl
 }
 
 function rippleEffect(e: EffectItem, rs: readonly Removed[], total: number): EffectItem | null {
-  const start = r3(Math.min(mapTime(rs, e.start), total)), end = r3(Math.min(mapTime(rs, e.end), total));
+  const start = moved(rs, e.start, total), end = moved(rs, e.end, total);
   if (start === e.start && end === e.end) return e;
   return end - start < EFFECT_LIMITS.minDuration - EPS ? null : { ...e, start, end, rect: e.rect ? { ...e.rect } : null };
 }
 
 function rippleLayer(l: LayerClip, rs: readonly Removed[]): LayerClip {
-  const start = r3(mapTime(rs, l.start));
+  const start = moved(rs, l.start);
   return start === l.start ? l : { ...l, start };
 }
 
 function rippleCover(c: Cover | null, rs: readonly Removed[], total: number): Cover | null {
   if (c === null || !Number.isFinite(c.time)) return c;
-  const time = r3(Math.max(0, Math.min(mapTime(rs, c.time), total)));
+  const time = Math.max(0, moved(rs, c.time, total));
   return time === c.time ? c : { ...c, time };
 }
 
