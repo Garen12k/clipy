@@ -17,7 +17,7 @@ const plan = fillerPlan as jest.Mock;
 const W = (text: string, start: number, end: number): CaptionWord => ({ text, start, end });
 const WORDS = [W("so", 0, 0.3), W("um", 0.5, 0.8), W("we", 1, 1.3)];
 const cap = (start: number): TextOverlay => makeOverlay({ id: "c", kind: "caption", start, end: start + 3, text: "so um we", words: WORDS });
-const sticker = (start: number) => makeOverlay({ id: "s", kind: "sticker", start, end: start + 1 });
+const sticker = (start: number) => makeOverlay({ id: "s", kind: "text", text: "Hi", start, end: start + 1 });
 const load = () => { st().reset(); st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10 })], overlays: [cap(1), sticker(5)] })); };
 /** A drag: one transient project per frame, as `applyTransient` writes them. */
 const drag = async () => {
