@@ -10,7 +10,7 @@ export const FILLER_WORDS = {
   none: "None found",
   note: "um, uh, erm, hmm — cut from the video and the captions",
   englishOnly: "Filler words are found in English captions only.",
-  /** The same sentence as Remove pauses' `PAUSE_WORDS.notRemoved` (not imported: the strip's module pulls in the native wrappers). */
+  /** The same sentence as Remove pauses' `PAUSE_WORDS.notRemoved` (not imported: the strip's module pulls in the native wrappers; pinned equal in fillerWords.pauseWords.test.ts). */
   notRemoved: "Nothing was removed.",
 } as const;
 /** Said when Remove is tapped on a plan the project no longer gives. */
