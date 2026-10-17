@@ -2,7 +2,8 @@
 # Started by hand: GitHub → Actions → "iOS build" → Run workflow. Needs the repository secret EXPO_TOKEN
 # (an Expo access token of the account that owns the project). The build runs with `--local`, so it uses
 # no EAS cloud build; signing comes from the credentials stored on EAS, the app's settings from the EAS
-# "production" environment. Nothing built is uploaded as an artifact (this repository is public).
+# "production" environment. Nothing built is uploaded as an artifact (this repository is public, and so are
+# its logs: never print an email or a secret). The token is given only to the steps that need it.
 name: iOS build
 
 on:
@@ -17,12 +18,18 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: macos-26
     timeout-minutes: 120
     env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_NO_CAPABILITY_SYNC: "1"
     steps:
       - uses: actions/checkout@v4
@@ -40,12 +47,23 @@ jobs:
       - name: Build tools
         run: |
           xcodebuild -version
+          # The background-export code is compiled only with Swift 6.2+ (Xcode 26): never build with an older Xcode.
+          major=$(xcodebuild -version | head -1 | awk '{print $2}' | cut -d. -f1)
+          if [ "$major" -lt 26 ]; then echo "Xcode 26 or newer is needed"; exit 1; fi
           command -v pod || sudo gem install cocoapods
           command -v fastlane || brew install fastlane
-          npm install -g eas-cli
-          eas whoami | head -1
+          npm install -g eas-cli@25.1.1
+
+      - name: Expo account
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas whoami > "$RUNNER_TEMP/who"
+          head -1 "$RUNNER_TEMP/who"
 
       - name: Entitlements must be Sign in with Apple only
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           npx expo config --type introspect --json | node -e "
             let s=''; process.stdin.on('data', d => s += d).on('end', () => {
@@ -55,8 +73,12 @@ jobs:
             });"
 
       - name: Build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas build --platform ios --profile production --local --non-interactive --output "$RUNNER_TEMP/clipy.ipa"
 
       - name: Send to TestFlight
         if: ${{ inputs.submit }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas submit --platform ios --profile production --path "$RUNNER_TEMP/clipy.ipa" --non-interactive
