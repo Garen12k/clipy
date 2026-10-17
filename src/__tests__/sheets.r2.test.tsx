@@ -3,7 +3,7 @@ import { ProjectActionsSheet } from "@/src/projects/ProjectActionsSheet";
 import { PostOptionsSheet } from "@/src/publish/components/PostOptionsSheet";
 import { theme } from "@/src/theme/theme";
 
-const project = { id: "a", name: "Beach", durationSec: 65, updatedAt: "", thumbUri: null, broken: false, postedTo: [], coverTitle: "" };
+const project = { id: "a", name: "Beach", durationSec: 65, updatedAt: "", createdAt: "", thumbUri: null, broken: false, postedTo: [], coverTitle: "" };
 
 test("project actions: Rename and Duplicate are the grey secondary buttons, Delete is text only and red; no gold button", async () => {
   await render(<ProjectActionsSheet project={project} onClose={jest.fn()} onRename={jest.fn()} onDuplicate={jest.fn()} onSaveCopy={jest.fn()} onSaveStyle={jest.fn()} onDelete={jest.fn()} />);

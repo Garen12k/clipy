@@ -7,7 +7,7 @@ import { PROJECT_FILE, ProjectFileError, baseName, encodeHeader, extractFiles, f
 import { rebaseProject } from "./rebase";
 
 export interface PickedAsset { uri: string; kind: "video" | "photo"; durationSec: number; width: number; height: number; fileName?: string }
-export interface ProjectSummary { id: string; name: string; durationSec: number; updatedAt: string; thumbUri: string | null; broken: boolean; postedTo: PostPlatform[]; coverTitle: string }
+export interface ProjectSummary { id: string; name: string; durationSec: number; updatedAt: string; createdAt: string; thumbUri: string | null; broken: boolean; postedTo: PostPlatform[]; coverTitle: string }
 export interface StorageDeps { thumbnail(uri: string, timeMs: number): Promise<string>; newId(): string; nowIso(): string }
 
 const extOf = (s?: string) => /\.([A-Za-z0-9]+)$/.exec(s ?? "")?.[1]?.toLowerCase();
@@ -244,10 +244,10 @@ export function makeStorage(fs: FsAdapter, deps: StorageDeps) {
       try {
         const { project: p } = await readProject(id);
         const cover = coverFrame(p)?.path ?? null;
-        out.push({ id: p.id, name: p.name, durationSec: totalDuration(p), updatedAt: p.updatedAt,
+        out.push({ id: p.id, name: p.name, durationSec: totalDuration(p), updatedAt: p.updatedAt, createdAt: p.createdAt,
           thumbUri: cover && (await fs.exists(cover)) ? cover : (await fs.exists(thumbPath(id))) ? thumbPath(id) : null, broken: false,
           postedTo: POST_PLATFORMS.filter((pl) => p.posts.some((r) => r.platform === pl)), coverTitle: p.cover?.title ?? "" });
-      } catch { out.push({ id, name: "Can't open", durationSec: 0, updatedAt: "", thumbUri: null, broken: true, postedTo: [], coverTitle: "" }); }
+      } catch { out.push({ id, name: "Can't open", durationSec: 0, updatedAt: "", createdAt: "", thumbUri: null, broken: true, postedTo: [], coverTitle: "" }); }
     }
     return out.sort((a, b) => Number(a.broken) - Number(b.broken) || b.updatedAt.localeCompare(a.updatedAt));
   }

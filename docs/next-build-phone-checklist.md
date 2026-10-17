@@ -438,3 +438,49 @@ Make captions, then trim half a second off the START of the first clip, and open
 - **Right looks like (as built):** the captions now run late, and Remove Filler Words would cut next to the hesitations, not on
   them — this is known. Undo the trim (or make the captions again) before removing filler words. Write down whether this happens
   to you in real use.
+
+## O. Search, sort and pin on Home
+
+### 67. The search box
+With 6 or more projects, look at the top of the list on Home.
+- **Right looks like:** a box "Search projects" with a magnifier, and a sort button beside it; both move up with the cards when
+  you scroll. The round buttons at the top right and the two buttons at the bottom are exactly where they were. With 5 or fewer
+  projects there is no box.
+- **Wrong looks like:** the box stays put over the cards, or covers the title "Projects".
+
+### 68. Typing
+Tap the box and type part of a name, without its accents or capitals (for "Été à Nice", type "ete").
+- **Right looks like:** the cards narrow down with every letter, and the keyboard stays up while you type. Type something no
+  project has: "No projects match" and Clear Search, which brings everything back. Scroll the list: the keyboard goes down.
+  With the keyboard up, tap a card once: the project opens.
+- **Wrong looks like:** the keyboard closing after each letter, or needing two taps on a card.
+
+### 69. Arabic names
+Rename a project to an Arabic name with vowel marks or a hamza (for example "أَحْمَد"), then search for it typed plainly ("احمد").
+- **Right looks like:** it is found. Write down any name you expected to find and did not.
+
+### 70. Sort by
+Tap the sort button.
+- **Right looks like:** "Sort by" with Last edited ticked; tap Name — the sheet closes and the cards are A to Z, with "Project 2"
+  before "Project 10". Close Clipy completely and open it again: still by name. Try Date created and Length too.
+
+### 71. Pin
+Touch and hold a project → **Pin** (the first button).
+- **Right looks like:** the project moves to the top under a small heading "Pinned", with a small pin on its picture; the others
+  are under "Last edited" (or the sort you chose). Its "Edited" line does NOT change. Open it, press Undo — your old steps are
+  still there (pinning did not touch the project). Hold it again → **Unpin**: the headings go.
+- **Wrong looks like:** the project's edited time changes, or Undo has nothing after pinning.
+
+### 72. Pinned and deleted, duplicated
+Pin a project, Duplicate it, then delete the original.
+- **Right looks like:** the copy is not pinned; after the delete there is no "Pinned" heading left.
+
+### 73. Light and large text
+Set the iPhone to Light (Settings → Display & Brightness), then Larger Text at the largest standard size.
+- **Right looks like:** the box, the headings and the Sort by sheet are cream with dark words; the typed text gets bigger but
+  stays inside the box; a long project name still ends in dots.
+
+### 74. Sort right after Pin
+Touch and hold a project, tap **Pin**, and at once (before the sheet has gone) tap the sort button. If no sheet comes, tap it again.
+- **Right looks like:** "Sort by" comes up — at the latest on the second tap. Each later tap on the sort button still opens it.
+- **Wrong looks like:** the sort button doing nothing, tap after tap, until Clipy is closed.

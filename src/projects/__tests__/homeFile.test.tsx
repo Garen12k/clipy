@@ -25,7 +25,7 @@ import { useToast } from "@/src/ui/Toast";
 const list = storage.listProjects as jest.Mock, packProject = storage.packProject as jest.Mock, restoreProject = storage.restoreProject as jest.Mock, sweep = storage.sweepProjectFiles as jest.Mock;
 const pick = filePhone.pick as jest.Mock, share = filePhone.share as jest.Mock, forget = filePhone.forget as jest.Mock;
 const BEACH = { id: "a", name: "Beach", durationSec: 65, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [], coverTitle: "" };
-const BROKEN = { id: "z", name: "Can't open", durationSec: 0, updatedAt: "", thumbUri: null, broken: true, postedTo: [], coverTitle: "" };
+const BROKEN = { id: "z", name: "Can't open", durationSec: 0, updatedAt: "", createdAt: "", thumbUri: null, broken: true, postedTo: [], coverTitle: "" };
 const btn = (name: string) => screen.getByRole("button", { name });
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, AFTER_SHEET_MS + 50)); });
 let warn: jest.SpyInstance, alert: jest.SpyInstance;

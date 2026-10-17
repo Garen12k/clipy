@@ -4,13 +4,15 @@ import { withDelay, withSpring, withTiming } from "react-native-reanimated";
 import { COVER_FONT } from "@/src/editor/coverFont";
 import { theme } from "@/src/theme/theme";
 import { ProjectCard } from "../ProjectCard";
+/** The pin mark is hidden from VoiceOver (accessibilityElementsHidden), so RNTL finds it only with hidden elements included. */
+const HIDDEN = { includeHiddenElements: true } as const;
 
 jest.mock("react-native-reanimated", () => {
   const m = require("react-native-reanimated/mock");
   return { ...m, withSpring: jest.fn(m.withSpring), withTiming: jest.fn(m.withTiming), withDelay: jest.fn(m.withDelay) };
 });
 
-const summary = { id: "p1", name: "Beach day", durationSec: 21, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] as ("youtube" | "tiktok")[], coverTitle: "" };
+const summary = { id: "p1", name: "Beach day", durationSec: 21, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] as ("youtube" | "tiktok")[], coverTitle: "" };
 const card = (over: Partial<typeof summary> = {}, on: { onPress?: () => void; onLongPress?: () => void; onMore?: () => void } = {}) =>
   <ProjectCard summary={{ ...summary, ...over }} onPress={on.onPress ?? jest.fn()} onLongPress={on.onLongPress ?? jest.fn()} onMore={on.onMore ?? jest.fn()} />;
 const damaged = { durationSec: 0, updatedAt: "", broken: true };
@@ -128,4 +130,23 @@ test("a damaged project has a red border and a red name", async () => {
   await render(card(damaged));
   expect(picture()).toHaveStyle({ borderWidth: 2, borderColor: theme.colors.danger });
   expect(within(screen.getByTestId("project-card-caption")).getByText("Beach day")).toHaveStyle({ color: theme.screen.dangerText });
+});
+
+test("a pinned card: a small pin mark at the picture's top leading corner, on the scrim, no target; VoiceOver hears Pinned after the name", async () => {
+  await render(<ProjectCard summary={summary} pinned onPress={jest.fn()} onLongPress={jest.fn()} onMore={jest.fn()} />);
+  const mark = screen.getByTestId("project-pin", HIDDEN);
+  expect(within(picture()).getByTestId("project-pin", HIDDEN)).toBeTruthy();
+  expect(mark).toHaveStyle({ position: "absolute", top: theme.space.sm, left: theme.space.sm, width: theme.size.badge, height: theme.size.badge, borderRadius: theme.radius.pill, backgroundColor: theme.colors.scrimStrong });
+  expect(mark.props.pointerEvents).toBe("none");
+  expect(mark.props.accessibilityElementsHidden).toBe(true);
+  expect(picture().props.accessibilityValue).toEqual({ text: "Pinned" });
+  expect(picture()).toHaveAccessibleName("Beach day");
+});
+
+test("not pinned, or damaged: no mark and no value", async () => {
+  await render(card());
+  expect(screen.queryByTestId("project-pin", HIDDEN)).toBeNull();
+  expect(picture().props.accessibilityValue?.text).toBeUndefined();   // Pressable always hands its host an accessibilityValue object
+  await render(<ProjectCard summary={{ ...summary, ...damaged }} pinned onPress={jest.fn()} onLongPress={jest.fn()} onMore={jest.fn()} />);
+  expect(screen.queryByTestId("project-pin", HIDDEN)).toBeNull();
 });

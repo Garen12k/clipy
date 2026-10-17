@@ -1,7 +1,7 @@
 import { Icon } from "@/src/ui/Icon";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useRef, useState } from "react";
-import { Alert, FlatList, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, FlatList, Keyboard, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { hasSeenWelcome } from "@/src/auth/welcomeSeen";
 import { WelcomeWizard } from "@/src/auth/WelcomeWizard";
@@ -14,6 +14,9 @@ import { ProjectCard } from "@/src/projects/ProjectCard";
 import { QUICK } from "@/src/projects/quickEdit";
 import { QuickEditSheet, type QuickPick } from "@/src/projects/QuickEditSheet";
 import { hold, sheetRun } from "@/src/projects/sheetGuard";
+import { HomeFind, HomeHeading, HomeNoMatch } from "@/src/projects/HomeFind";
+import { SortSheet } from "@/src/projects/SortSheet";
+import { useHomeFind } from "@/src/projects/useHomeFind";
 import { openStyleMenu } from "@/src/projects/styleMenu";
 import { useProjects } from "@/src/projects/useProjects";
 import { filePhone, type PickedAsset, type ProjectSummary } from "@/src/projects";
@@ -55,7 +58,10 @@ const QUICK_SHARES = { ...QUICK_BACKING, flexShrink: 1 } as const;
 const MAKING = { project: "Creating your project", quick: "Making your quick edit", style: "Saving your style" } as const;
 
 function ProjectsScreen() {
-  const { projects, loading, reload, create, createQuick, rename, duplicate, remove } = useProjects();
+  const { projects, loading, listed, reload, create, createQuick, rename, duplicate, remove } = useProjects();
+  // Search, sort and pins: a phone preference and Home's own memory — never a project's data (src/projects/homePrefs.ts).
+  const find = useHomeFind(projects, listed);
+  const [sortOpen, setSortOpen] = useState(false);
   const { transfer, saveCopy, openFile, cancel } = useProjectFile(reload);
   const styles = useUserStyles();
   const [actionsFor, setActionsFor] = useState<ProjectSummary | null>(null);
@@ -65,7 +71,7 @@ function ProjectsScreen() {
   const s = useSurfaces();
 
   const confirmDelete = (p: ProjectSummary) => Alert.alert("Delete project?", "This can't be undone.", [
-    { text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => { haptic("medium"); remove(p.id); } }]);
+    { text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => { haptic("medium"); void remove(p.id).then((gone) => { if (gone) find.unpin(p.id); }); } }]);
   const promptRename = (p: ProjectSummary) => Alert.prompt("Rename project", undefined, (name) => name && rename(p.id, name), "plain-text", p.name);
   // A Cancel never answers here; an empty OK keeps the project's name (the store's fallback).
   const promptSaveStyle = (p: ProjectSummary) => Alert.prompt("Save as style", "You'll find it in Quick edit.", (name) => { void onSaveStyle(p, name ?? ""); }, "plain-text", p.name);
@@ -74,6 +80,7 @@ function ProjectsScreen() {
   async function onPostVideo() {
     if (picking.current) return; // the picker is already up
     picking.current = true;
+    setSortOpen(false); // the sort sheet's flag: it may be set with nothing on screen
     try {
       const v = await pickVideoForPost();
       if (v) router.push({ pathname: "/post", params: { fileUri: v.fileUri, durationSec: String(v.durationSec), mimeType: v.mimeType } }); // size is re-read from disk
@@ -112,7 +119,8 @@ function ProjectsScreen() {
     const askSource = () => sheet(askMenu);
     try {
       setPending(null);
-      setQuickOpen(false); // the other sheet's flag: it may be set with nothing on screen
+      setQuickOpen(false); // the other sheets' flags: they may be set with nothing on screen
+      setSortOpen(false);
       const source = sourceMenuShown() ? await askSource() : "library";
       if (!source) return;
       const assets = await sheet(() => (source === "camera" ? takeOne() : pickMedia()));
@@ -140,6 +148,7 @@ function ProjectsScreen() {
   async function onQuick() {
     if (starting.current || creating.current) return;
     setPending(null);
+    setSortOpen(false);
     setQuickOpen(false);
     await new Promise((r) => setTimeout(r, 0));
     if (starting.current || creating.current) return;
@@ -198,6 +207,7 @@ function ProjectsScreen() {
     try {
       setPending(null);
       setQuickOpen(false);
+      setSortOpen(false);
       uri = await filePhone.pick();
     } catch (e) { console.warn("pick failed", e); } finally { clearTimeout(up); release(); }
     if (!uri) return;
@@ -212,6 +222,7 @@ function ProjectsScreen() {
   }
 
   const inert = busy || transfer !== null;
+  useEffect(() => { if (inert) Keyboard.dismiss(); }, [inert]);
   const touch = inert ? "none" : "auto";
   // What is inert while a project is made, or a project file is saved or opened, is also dimmed. A plain style value: it lands at once, nothing is animated.
   const dim = inert ? DISABLED_OPACITY : 1;
@@ -220,7 +231,22 @@ function ProjectsScreen() {
   // At the default text size the two bottom actions are their natural widths, as ever (a 375-pt phone holds them with nothing to spare).
   // Larger, they would not fit side by side — so above the default, and only there, both may give way and each label fits what it gets.
   const share = useTextScale() > 1;
-  const openActions = (p: ProjectSummary) => { haptic("light"); setActionsFor(p); };
+  const openActions = (p: ProjectSummary) => { Keyboard.dismiss(); haptic("light"); setSortOpen(false); setActionsFor(p); };
+  const openProject = (p: ProjectSummary) => { Keyboard.dismiss(); if (p.broken) { setSortOpen(false); setActionsFor(p); } else router.push(`/editor/${p.id}`); };
+  // The sort sheet, like Quick Edit's: never held back by its own flag. If iOS drops the sheet's presentation (another sheet still
+  // fading out, the keyboard going down), `sortOpen` stays true with nothing on screen — so a press closes it first and opens it on
+  // the next tick, presented afresh. The keyboard goes first, and the other sheets' flags are cleared.
+  async function onSort() {
+    Keyboard.dismiss();
+    setPending(null);
+    setQuickOpen(false);
+    setSortOpen(false);
+    await new Promise((r) => setTimeout(r, 0));
+    if (!starting.current && !creating.current) setSortOpen(true);
+  }
+  const card = (item: ProjectSummary) => (
+    <ProjectCard key={item.id} summary={item} pinned={!item.broken && find.isPinned(item.id)} onPress={() => openProject(item)} onLongPress={() => openActions(item)} onMore={() => openActions(item)} />
+  );
   return (
     <Screen>
       {/* The three header actions share one pill, top right; the title has its own line under them. It stays put: the list scrolls below it. */}
@@ -250,10 +276,15 @@ function ProjectsScreen() {
         // The LIST eases in, once, when it first appears: EnterView animates on mount only, so a refresh, a rename, a duplicate or a
         // delete never replays it, and no card animates on its own. Cards sit on the 16-pt gutter: 8 from the list + 8 from the cell.
         // The last row clears the actions that float over the list.
+        // Rows: `homeRows` — a heading, or two 50 % cells, so the grid is as it was; the find row is the list's header, passed as an ELEMENT (an inline component type would remount the field and drop the keyboard).
         <EnterView style={{ flex: 1 }}>
-          <FlatList testID="home-grid" data={projects} numColumns={2} keyExtractor={(p) => p.id}
+          <FlatList testID="home-grid" data={find.rows} keyExtractor={(r) => r.key}
+            keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingHorizontal: theme.space.sm, paddingBottom: actionsBottom + theme.size.control + theme.space.lg }}
-            renderItem={({ item }) => <ProjectCard summary={item} onPress={() => (item.broken ? setActionsFor(item) : router.push(`/editor/${item.id}`))} onLongPress={() => openActions(item)} onMore={() => openActions(item)} />} />
+            ListHeaderComponent={find.showFind ? <HomeFind query={find.query} onQuery={find.setQuery} onSort={onSort} onFocused={find.setFocused} /> : null}
+            ListEmptyComponent={find.noMatch ? <HomeNoMatch onClear={find.clearQuery} /> : null}
+            renderItem={({ item: row }) => (row.kind === "heading" ? <HomeHeading title={row.title} />
+              : <View testID="home-row" style={{ flexDirection: "row" }}>{row.items.map(card)}</View>)} />
         </EnterView>
       )}
       </View>
@@ -277,8 +308,9 @@ function ProjectsScreen() {
         )}
       </View>
       <QuickEditSheet visible={quickOpen} onClose={() => setQuickOpen(false)} onChoose={onQuickChoose} mine={styles.mine} onStyleMenu={(st) => openStyleMenu(st, { rename: styles.rename, remove: styles.remove })} />
+      <SortSheet visible={sortOpen} sort={find.sort} onPick={(k) => { find.setSort(k); setSortOpen(false); }} onClose={() => setSortOpen(false)} />
       <AspectRatioSheet assets={pending} onCancel={() => setPending(null)} onCreate={onCreate} />
-      <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onSaveCopy={onSaveCopy} onSaveStyle={promptSaveStyle} onDelete={confirmDelete} />
+      <ProjectActionsSheet project={actionsFor} onClose={() => setActionsFor(null)} onRename={promptRename} onDuplicate={(p) => duplicate(p.id)} onSaveCopy={onSaveCopy} onSaveStyle={promptSaveStyle} onDelete={confirmDelete} isPinned={find.isPinned} onPin={(p) => find.togglePin(p.id)} />
       <ToastHost />
     </Screen>
   );

@@ -23,11 +23,14 @@ const IMPORT_NONE = /^Couldn't import any/;
 export function useProjects() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  /** True from the first listing that came back: Home prunes its pins only against a real listing, never against the empty list before it. */
+  const [listed, setListed] = useState(false);
 
   const reload = useCallback(async () => {
     try {
       await lastFlush; // the editor's save-on-leave, so the list shows the latest edits
       setProjects(await storage.listProjects());
+      setListed(true);
     } finally { setLoading(false); }
   }, []);
   useFocusEffect(useCallback(() => { reload(); }, [reload]));
@@ -93,10 +96,13 @@ export function useProjects() {
     try { await storage.duplicateProject(id); await reload(); }
     catch (e) { console.warn("duplicate failed", e); useToast.getState().show("Couldn't duplicate project"); }
   }
-  async function remove(id: string) {
-    try { await storage.deleteProject(id); await reload(); }
-    catch (e) { console.warn("delete failed", e); useToast.getState().show("Couldn't delete project"); }
+  /** True when the project was deleted (Home then drops its pin); false, with a toast, when it could not be. */
+  async function remove(id: string): Promise<boolean> {
+    try { await storage.deleteProject(id); }
+    catch (e) { console.warn("delete failed", e); useToast.getState().show("Couldn't delete project"); return false; }
+    try { await reload(); } catch (e) { console.warn("reload after delete failed", e); }
+    return true;
   }
 
-  return { projects, loading, reload, create, createQuick, rename, duplicate, remove };
+  return { projects, loading, listed, reload, create, createQuick, rename, duplicate, remove };
 }

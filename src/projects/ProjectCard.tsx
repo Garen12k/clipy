@@ -8,9 +8,11 @@ import { theme } from "@/src/theme/theme";
 import { useSurfaces } from "@/src/ui/tone";
 import { PressableScale } from "@/src/ui/PressableScale";
 import { Body, KitText } from "@/src/ui/Text";
+import { FIND_WORDS } from "./homeFindWords";
 import type { ProjectSummary } from "./storage";
 
-type Props = { summary: ProjectSummary; /** A tap on the picture or on the words under it. */ onPress: () => void; onLongPress: () => void; /** The "…" button. */ onMore: () => void };
+type Props = { summary: ProjectSummary; /** A tap on the picture or on the words under it. */ onPress: () => void; onLongPress: () => void; /** The "…" button. */ onMore: () => void;
+  /** Pinned on Home: a small mark on the picture (decoration, not a target) and "Pinned" for VoiceOver. */ pinned?: boolean };
 
 const LONG_PRESS_MS = 350;
 /** The words under the picture: the name's line and room for a status of two lines ("Posted · YouTube, TikTok" wraps beside the More button), so every row is the same height whatever its cards say. */
@@ -28,13 +30,14 @@ const CAPTION_MIN = theme.space.sm + WORDS.name + 2 * WORDS.status;
  * It has no animation of its own: the LIST eases in once (app/index.tsx), so a card that scrolls back into view or a refreshed list
  * never replays anything. Depth is colour and the fade — no shadow.
  */
-export function ProjectCard({ summary, onPress, onLongPress, onMore }: Props) {
+export function ProjectCard({ summary, pinned, onPress, onLongPress, onMore }: Props) {
   const s = useSurfaces();
   const edited = summary.updatedAt ? editedLabel(summary.updatedAt) : "";
   const status = summary.postedTo.length ? `Posted · ${summary.postedTo.map((id) => PLATFORM_LABELS[id]).join(", ")}` : edited;
+  const pin = !!pinned && !summary.broken;
   return (
     <View testID="project-card-cell" style={{ width: "50%", padding: theme.space.sm }}>
-      <PressableScale accessibilityRole="button" accessibilityLabel={summary.name} onPress={onPress} onLongPress={onLongPress} delayLongPress={LONG_PRESS_MS}
+      <PressableScale accessibilityRole="button" accessibilityLabel={summary.name} accessibilityValue={pin ? { text: FIND_WORDS.pinned } : undefined} onPress={onPress} onLongPress={onLongPress} delayLongPress={LONG_PRESS_MS}
         style={{ aspectRatio: 3 / 4, borderRadius: theme.radius.cover, overflow: "hidden", backgroundColor: s.tile,
           borderWidth: summary.broken ? 2 : 0, borderColor: summary.broken ? s.danger : "transparent" }}>
         {summary.broken ? (
@@ -49,6 +52,13 @@ export function ProjectCard({ summary, onPress, onLongPress, onMore }: Props) {
             <Body scale="fixed" weight="semi" style={{ fontSize: theme.type.small, fontVariant: ["tabular-nums"], color: theme.colors.onScrim }}>{formatDuration(summary.durationSec)}</Body>
           </View>
         )}
+        {pin ? (
+          // The pin mark: top LEADING corner (the length is top trailing), on the scrim like the length. Decoration: no touches, not read.
+          <View testID="project-pin" pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+            style={{ position: "absolute", top: theme.space.sm, left: theme.space.sm, width: theme.size.badge, height: theme.size.badge, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.scrimStrong }}>
+            <Icon plain name="pin-outline" size={theme.size.icon.sm} color={theme.colors.onScrim} />
+          </View>
+        ) : null}
         {summary.coverTitle && !summary.broken ? (
           <LinearGradient testID="project-card-fade" colors={["transparent", theme.colors.scrimStrong]} style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.md, paddingTop: theme.space.xxl }}>
             {/* The cover's own font, as typed. Content, not interface text. */}
