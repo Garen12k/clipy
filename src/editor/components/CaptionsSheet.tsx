@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Linking, View } from "react-native";
 import { theme } from "@/src/theme/theme";
 import { useEditorStore } from "@/src/editor/store";
@@ -10,6 +10,12 @@ import { Body } from "@/src/ui/Text";
 import { ToolPanel } from "@/src/ui/ToolPanel";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { CaptionStyleSheet } from "./CaptionStyleSheet";
+import { fillersSpoken } from "@/src/editor/captionLanguage";
+import { fillerPlan, NO_FILLERS } from "@/src/editor/model/fillers";
+import { removeCuts } from "@/src/editor/model/ops";
+import { haptic } from "@/src/ui/haptics";
+import { useToast } from "@/src/ui/Toast";
+import { FILLER_CHANGED, FILLER_WORDS, FillerWordsRow, fillersRemoved } from "./FillerWordsRow";
 
 type Props = { visible: boolean; onClose: () => void };
 
@@ -37,9 +43,34 @@ export function CaptionsSheet({ visible, onClose }: Props) {
     return run();
   };
 
+  // Filler words: only over captions that carry word timings (without them nothing can be found), never while transcribing or after a failure.
+  const timed = useEditorStore((s) => s.project?.overlays.some((o) => o.kind === "caption" && o.words.length > 0) ?? false);
+  const english = useMemo(() => fillersSpoken(), []);
+  const plan = useMemo(() => (project && timed && english ? fillerPlan(project) : NO_FILLERS), [project, timed, english]);
+  const showFillers = timed && state.status !== "running" && state.status !== "error";
+  const offering = showFillers && english && plan.removable > 0;   // its button is the white one; Replace is then grey
+  const removeFillers = () => {
+    const { project: now, apply } = useEditorStore.getState();
+    if (!now) return;
+    const again = fillerPlan(now);   // asked again at the tap: the cuts shown must be the cuts the project gives
+    if (again.removable === 0 || JSON.stringify(again.cuts) !== JSON.stringify(plan.cuts)) {
+      close();                                                                         // close first …
+      useToast.getState().show(FILLER_CHANGED, { kind: "problem" });                   // … say second
+      return;
+    }
+    const next = removeCuts(now, again.cuts);
+    if (next === now) { useToast.getState().show(FILLER_WORDS.notRemoved, { kind: "problem" }); return; }
+    haptic("medium");
+    apply(() => next);
+    close();                                                                           // close first …
+    useToast.getState().show(fillersRemoved(again.removable), { kind: "done", undo: true });   // … say second
+  };
+
   return (
     <>
       <ToolPanel visible={visible && !styling} onClose={close} title="Captions" size="compact">
+        {showFillers ? <FillerWordsRow plan={plan} english={english} onRemove={removeFillers} /> : null}
+
         {state.status === "unavailable" && (
           <View style={{ gap: theme.space.sm }}>
             <Body>Captions need the native build</Body>
@@ -54,7 +85,9 @@ export function CaptionsSheet({ visible, onClose }: Props) {
             <Body>Replace existing captions?</Body>
             {/* Stacked like the "done" branch: three title-style buttons don't fit one row in a panel. All three compact (36): the card
                 is then 166 pt (a line of text + 3 gaps of 12 + 3 × 36 + 4 under Cancel for its hit slop) in a body that shows 171, so nothing scrolls; at 48 it would be 198. */}
-            <PrimaryButton tone="plain" compact title="Replace" onPress={start} />
+            {offering
+              ? <SecondaryButton compact title="Replace" onPress={start} />
+              : <PrimaryButton tone="plain" compact title="Replace" onPress={start} />}
             <SecondaryButton compact title="Style Captions" onPress={() => setStyling(true)} />
             <QuietButton compact title="Cancel" onPress={close} />
           </View>
