@@ -120,22 +120,30 @@ export function findPauses(o: PauseOutline, opt: PauseOptions): PauseFind {
     }
     i = j;
   }
-  // No piece of sound under `minPiece`: drop the cut after a short piece (it joins the next), then the last cut while the tail is short.
-  const kept: [number, number][] = [];
-  let start = o.from;
+  return { cuts: fitCuts(found, o.from, o.to, opt.minPiece), silent: false };
+}
+
+/**
+ * The piece rules, shared by Remove pauses and Remove filler words: no piece of sound under `minPiece` (source seconds) — the cut
+ * after a short piece is dropped (it joins the next), then the last cut while the tail is short — and at most `PAUSES.maxCuts` (the
+ * longest kept, in order). Answers the SAME cut objects, in order, between `from` and `to`.
+ */
+export function fitCuts<C extends readonly [number, number]>(found: readonly C[], from: number, to: number, minPiece: number): C[] {
+  const kept: C[] = [];
+  let start = from;
   for (const c of found) {
     const piece = c[0] - start;
-    if (piece <= EPS || piece >= opt.minPiece - EPS) { kept.push(c); start = c[1]; }
+    if (piece <= EPS || piece >= minPiece - EPS) { kept.push(c); start = c[1]; }
   }
   while (kept.length > 0) {
-    const tail = o.to - kept[kept.length - 1][1];
-    if (tail <= EPS || tail >= opt.minPiece - EPS) break;
+    const tail = to - kept[kept.length - 1][1];
+    if (tail <= EPS || tail >= minPiece - EPS) break;
     kept.pop();
   }
-  if (kept.length <= PAUSES.maxCuts) return { cuts: kept, silent: false };
-  const longest = kept.map((c, i) => ({ c, i }))
+  if (kept.length <= PAUSES.maxCuts) return kept;
+  return kept.map((c, i) => ({ c, i }))
     .sort((x, y) => (y.c[1] - y.c[0]) - (x.c[1] - x.c[0]) || x.i - y.i)
     .slice(0, PAUSES.maxCuts)
-    .sort((x, y) => x.i - y.i);
-  return { cuts: longest.map((x) => x.c), silent: false };
+    .sort((x, y) => x.i - y.i)
+    .map((x) => x.c);
 }
