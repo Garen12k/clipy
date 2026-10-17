@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { isFrameStatsAvailable } from "@/modules/clipy-video/frameStats";
 import { lookKey, setStrength, useAutoLooks } from "@/src/editor/autoLook";
-import { autoState, autoValues, valuesOf } from "@/src/editor/model/autoEnhance";
+import { autoState, autoValues, targetOn, valuesOf } from "@/src/editor/model/autoEnhance";
 import { resetClipAdjust, setAdjustForAllClips, setClipAdjust } from "@/src/editor/model/ops";
 import { ADJUST_KEYS, ADJUST_RANGE, isNeutralAdjust, type AdjustKey } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
@@ -37,11 +37,14 @@ export function AdjustSheet({ clipId, visible, onClose }: { clipId: string | nul
   const { apply, beginTransaction, applyTransient } = useEditorStore.getState();
   const [key, setKey] = useState<AdjustKey | "auto">("brightness");
   const auto = useAutoEnhance(clip?.id ?? null, visible);
+  // Auto is not left picked: the strip always opens on Brightness (its header's Apply to All copies the sliders, as ever).
+  useEffect(() => { if (!visible) setKey((k) => (k === "auto" ? "brightness" : k)); }, [visible]);
   const look = clip ? lookKey(sourceOf(clip)) : "";
   const target = useAutoLooks((s) => s.targets[look]);
   const applied = useAutoLooks((s) => s.applied[look]);
   if (!clip) return null;
-  const state = target && applied ? autoState(valuesOf(clip.adjust), target, applied.base, applied.strength) : null;
+  const goal = target && applied ? targetOn(target, applied.base) : null;
+  const state = goal && applied ? autoState(valuesOf(clip.adjust), goal, applied.base, applied.strength) : null;
   const picked = key === "auto";
 
   const pickAuto = () => {
@@ -68,11 +71,11 @@ export function AdjustSheet({ clipId, visible, onClose }: { clipId: string | nul
         </View>
       );
     }
-    if (state?.kind === "set" && target && applied) {
+    if (state?.kind === "set" && goal && applied) {
       const set = (v: number) => {
         const at = step(v);
         setStrength(look, at);
-        applyTransient((p) => setClipAdjust(p, clip.id, autoValues(target, applied.base, at)));
+        applyTransient((p) => setClipAdjust(p, clip.id, autoValues(goal, applied.base, at)));
       };
       return (
         <StripSlider label={AUTO_WORDS.strength} value={`${Math.round(state.strength * 100)}%`} trailing={autoAll}>

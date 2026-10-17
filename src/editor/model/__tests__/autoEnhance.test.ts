@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { ADJUST_LABELS } from "@/src/editor/components/AdjustSheet";
 import { ADJUST_RANGE, DEFAULT_ADJUST } from "../types";
-import { AUTO, AUTO_KEYS, AUTO_NAMES, autoLine, autoState, autoStrengthOf, autoTargets, autoTimes, autoValues, percentile, summarize, valuesOf, type AutoValues } from "../autoEnhance";
+import { AUTO, AUTO_KEYS, AUTO_NAMES, autoLine, autoState, autoStrengthOf, autoTarget, autoTargets, targetOn, autoTimes, autoValues, percentile, summarize, valuesOf, type AutoValues } from "../autoEnhance";
 import { frame, flat, VECTORS } from "./autoEnhance.vectors";
 
 const zero: AutoValues = { exposure: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0 };
@@ -60,7 +60,7 @@ test("the strength blends from the base, on the slider's step", () => {
 test("which strength the clip shows: the hint first, else the highest that matches; never 0 inferred, never when nothing differs", () => {
   const half = autoValues(dark, zero, 0.5);
   expect(autoStrengthOf(half, dark, zero, 0.5)).toBe(0.5);
-  expect(autoStrengthOf(half, dark, zero, 1)).toBe(0.51);           // 51 % rounds to the same values
+  expect(autoStrengthOf(half, dark, zero, 1)).toBe(0.5);            // 49 … 51 % round to the same values: the middle
   expect(autoStrengthOf(dark, dark, zero, 0.5)).toBe(1);             // Undo of a drag: the values say 100 %
   expect(autoStrengthOf(zero, dark, zero, 1)).toBeNull();            // Undo of the tap: the base, not "1 %"
   expect(autoStrengthOf(zero, dark, zero, 0)).toBe(0);               // dragged to 0 %: still Auto's
@@ -87,4 +87,15 @@ test("the phone's 64 bins are the model's", () => {
   const swift = readFileSync(join(__dirname, "../../../../modules/clipy-video/ios/FrameStats.swift"), "utf8");
   expect(swift).toContain(`static let bins: Int = ${AUTO.bins}`);
   expect(swift).toContain(`static let defaultSide: Int = ${AUTO.maxSide}`);
+});
+
+test("a blank picture's target is the clip's own values; any other is the vector's", () => {
+  const mine: AutoValues = { ...zero, saturation: 0.4 };
+  const black = autoTarget(summarize([VECTORS[10].f])!);
+  expect(black.blank).toBe(true);
+  expect(targetOn(black, mine)).toEqual(mine);
+  const darkTarget = autoTarget(summarize([VECTORS[1].f])!);
+  expect(darkTarget).toEqual(VECTORS[1].want);
+  expect(targetOn(darkTarget, mine)).toEqual(VECTORS[1].want);
+  expect(autoStrengthOf(dark, dark, zero, 0.5)).toBe(1);   // 99 … 100 %: a tie goes up
 });

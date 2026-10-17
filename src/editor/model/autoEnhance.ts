@@ -80,10 +80,19 @@ export function summarize(frames: readonly FrameStat[]): LookSummary | null {
   return { p2: percentile(hist, 0.02), p50: percentile(hist, 0.5), p98: percentile(hist, 0.98), r: r / used, g: g / used, b: b / used, chroma: chroma / used };
 }
 
+/** A picture with nothing to see: (nearly) all black or all white. */
+export const isBlank = (s: LookSummary): boolean => s.p98 < AUTO.blank || s.p2 > 1 - AUTO.blank;
+
+/** What a look found: the five values, and `blank` for a picture Auto leaves ALONE (the clip keeps the values it has). */
+export type AutoTarget = AutoValues & { blank?: true };
+export const autoTarget = (s: LookSummary): AutoTarget => (isBlank(s) ? { ...autoTargets(s), blank: true } : autoTargets(s));
+/** The values a target asks for on a clip whose values (before Auto) are `base`: a blank picture's are the base itself. */
+export const targetOn = (t: AutoTarget, base: AutoValues): AutoValues => (t.blank ? base : t);
+
 /** The five values Auto sets at 100 %, ABSOLUTE (the source picture is what the clip shows with a neutral adjust). */
 export function autoTargets(s: LookSummary): AutoValues {
   const L = AUTO.limits;
-  if (s.p98 < AUTO.blank || s.p2 > 1 - AUTO.blank) return { ...ZERO };
+  if (isBlank(s)) return { ...ZERO };
   const ev = Math.abs(s.p50 - AUTO.mid) <= AUTO.midSlack ? 0 : AUTO.gamma * Math.log2(AUTO.mid / Math.max(s.p50, AUTO.darkest)) * AUTO.exposureShare;
   const exposure = r2(within(ev / ADJUST.exposureEV, L.exposure));
   const gain = 2 ** ((ADJUST.exposureEV * exposure) / AUTO.gamma);
@@ -115,15 +124,23 @@ export function autoValues(target: AutoValues, base: AutoValues, strength: numbe
 const same = (a: AutoValues, b: AutoValues): boolean => AUTO_KEYS.every((k) => a[k] === b[k]);
 
 /**
- * The strength at which `now` is exactly what Auto set: `hint` if it matches, else the highest of 100 % … 1 % that matches and is
- * not the base itself (so Undo of the tap is never read as "1 %"), else null — null too when the target IS the base.
+ * The strength at which `now` is exactly what Auto set: `hint` if it matches, else — from the highest of 100 % … 1 % that matches
+ * and is not the base itself (so Undo of the tap is never read as "1 %") — the MIDDLE of that run of matching strengths (several
+ * round to the same values: a 50 % drag is 49 … 51 %, and is read as 50 %; a tie goes up), else null — null too when the target
+ * IS the base.
  */
 export function autoStrengthOf(now: AutoValues, target: AutoValues, base: AutoValues, hint: number): number | null {
   if (same(target, base)) return null;
   if (same(now, autoValues(target, base, hint))) return hint;
-  for (let pct = 100; pct >= 1; pct--) {
+  const matches = (pct: number): boolean => {
     const at = autoValues(target, base, pct / 100);
-    if (same(now, at) && !same(at, base)) return pct / 100;
+    return same(now, at) && !same(at, base);
+  };
+  for (let pct = 100; pct >= 1; pct--) {
+    if (!matches(pct)) continue;
+    let low = pct;
+    while (low > 1 && matches(low - 1)) low--;
+    return Math.ceil((pct + low) / 2) / 100;
   }
   return null;
 }

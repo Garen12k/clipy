@@ -4,7 +4,7 @@ import { AUTO_TOOLS } from "@/src/lib/buildInfo";
 import { haptic } from "@/src/ui/haptics";
 import { useToast, type MessageOptions } from "@/src/ui/Toast";
 import { lookAt, lookKey, rememberApplied, stopLooking, useAutoLooks, type Applied, type LookSource } from "./autoLook";
-import { autoStrengthOf, autoValues, valuesOf, type AutoValues } from "./model/autoEnhance";
+import { autoStrengthOf, autoValues, targetOn, valuesOf, type AutoTarget, type AutoValues } from "./model/autoEnhance";
 import { setClipAdjust } from "./model/ops";
 import { findItem } from "./model/timeline";
 import type { Clip } from "./model/types";
@@ -31,9 +31,13 @@ export const AUTO_WORDS = {
 
 export type AutoBusy = null | { all: false } | { all: true; at: number; of: number };
 export const sourceOf = (c: Clip): LookSource => ({ clipId: c.id, uri: c.sourceUri, kind: c.kind, from: c.trimStart, to: c.trimEnd });
-/** The values Auto blends FROM: the remembered base while Auto's own values are on the clip (a second tap brings 100 % back), else today's. */
-export function baseFor(c: Clip, target: AutoValues, applied: Applied | undefined): AutoValues {
+/**
+ * The values Auto blends FROM: the remembered base while Auto's own values are on the clip (a second tap brings 100 % back), else
+ * today's — always today's for a blank picture, which Auto leaves as it is.
+ */
+export function baseFor(c: Clip, target: AutoTarget, applied: Applied | undefined): AutoValues {
   const now = valuesOf(c.adjust);
+  if (target.blank) return now;
   return applied && autoStrengthOf(now, target, applied.base, applied.strength) !== null ? applied.base : now;
 }
 const say = (message: string, options?: MessageOptions) => useToast.getState().show(message, options);
@@ -84,7 +88,7 @@ export function useAutoEnhance(clipId: string | null, visible: boolean): { busy:
       if (!now || !here || lookKey(sourceOf(here)) !== key) return;   // the clip changed meanwhile: dropped
       const base = baseFor(here, answer.target, useAutoLooks.getState().applied[key]);
       rememberApplied(key, { base, strength: 1 });
-      const next = setClipAdjust(now, id, autoValues(answer.target, base, 1));
+      const next = setClipAdjust(now, id, autoValues(targetOn(answer.target, base), base, 1));
       if (next === now) return;   // already there (or nothing to change: the line says "already looks good")
       haptic("light");
       useEditorStore.getState().apply(() => next);
@@ -103,7 +107,7 @@ export function useAutoEnhance(clipId: string | null, visible: boolean): { busy:
     st.setPlaying(false);
     const mine = {};
     current.current = mine;
-    const found: { id: string; key: string; target: AutoValues }[] = [];
+    const found: { id: string; key: string; target: AutoTarget }[] = [];
     let skipped = 0;
     try {
       for (let i = 0; i < p.clips.length; i++) {
@@ -127,10 +131,11 @@ export function useAutoEnhance(clipId: string | null, visible: boolean): { busy:
         if (!here || lookKey(sourceOf(here)) !== f.key) { skipped++; continue; }   // changed meanwhile: not touched
         const base = baseFor(here, f.target, useAutoLooks.getState().applied[f.key]);
         rememberApplied(f.key, { base, strength: 1 });
-        next = setClipAdjust(next, f.id, autoValues(f.target, base, 1));
+        next = setClipAdjust(next, f.id, autoValues(targetOn(f.target, base), base, 1));
         done++;
       }
-      if (done === 0) { say(AUTO_WORDS.allFailed, { kind: "problem" }); return; }
+      // None given its values: blamed on the reading only when none could be read — clips that changed meanwhile say nothing.
+      if (done === 0) { if (found.length === 0) say(AUTO_WORDS.allFailed, { kind: "problem" }); return; }
       if (next === now) { say(AUTO_WORDS.nothing(skipped)); return; }
       haptic("light");
       useEditorStore.getState().apply(() => next);

@@ -12,7 +12,7 @@ jest.mock("@react-native-community/slider", () => {
 });
 import { cancelFrameStats, frameStats, isFrameStatsAvailable } from "@/modules/clipy-video/frameStats";
 import { resetAutoLooks } from "@/src/editor/autoLook";
-import { makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
+import { DEFAULT_ADJUST, makeClip, makeLayer, makePhotoClip, makeProject } from "@/src/editor/model/types";
 import { useEditorStore } from "@/src/editor/store";
 import { AUTO_TOOLS } from "@/src/lib/buildInfo";
 import { useToast } from "@/src/ui/Toast";
@@ -173,4 +173,47 @@ test("a layer: Auto works on the layer, with no Apply to All", async () => {
   await screen.findByTestId("auto-strength");
   expect(st().project!.layers[0].adjust.exposure).toBe(0.3);
   expect(screen.queryByRole("button", { name: "Apply to All" })).toBeNull();
+});
+
+test("Auto is not left picked: the strip opened again shows Brightness and the header's own Apply to All", async () => {
+  fs.mockResolvedValue(answer(1));
+  const view = await render(<AdjustSheet clipId="a" visible onClose={() => {}} />);
+  await fireEvent.press(btn("Auto"));
+  await screen.findByTestId("auto-strength");
+  await view.rerender(<AdjustSheet clipId="a" visible={false} onClose={() => {}} />);
+  await view.rerender(<AdjustSheet clipId="b" visible onClose={() => {}} />);
+  expect(btn("Brightness")).toBeSelected();
+  expect(btn("Auto")).not.toBeSelected();
+  expect(screen.getByTestId("adjust-slider")).toBeTruthy();
+});
+
+test("a blank picture is left alone: values set by hand stay, no step, the line says it looks good", async () => {
+  st().setProject(makeProject({ clips: [makeClip({ id: "a", sourceDuration: 10, trimEnd: 10, adjust: { ...DEFAULT_ADJUST, saturation: 0.4, exposure: 0.1 } }), makePhotoClip({ id: "b" })] }));
+  fs.mockResolvedValueOnce(answer(10)).mockResolvedValueOnce(answer(1));
+  await render(<AdjustSheet clipId="a" visible onClose={() => {}} />);
+  await fireEvent.press(btn("Auto"));
+  expect(await screen.findByText(AUTO_WORDS.good)).toBeTruthy();
+  expect(clip("a").adjust).toMatchObject({ saturation: 0.4, exposure: 0.1 });
+  expect(st().past).toHaveLength(0);
+  await fireEvent.press(btn("Apply to All"));
+  await waitFor(() => expect(useToast.getState().message).toBe(AUTO_WORDS.allDone(2, 0)));
+  expect(clip("a").adjust).toMatchObject({ saturation: 0.4, exposure: 0.1 });
+  expect(clip("b").adjust.exposure).toBe(0.3);
+});
+
+test("Apply to All when every clip looked at changed meanwhile: nothing applied and nothing said", async () => {
+  const d = deferred<ReturnType<typeof answer>>();
+  fs.mockResolvedValueOnce(answer(0)).mockReturnValueOnce(d.promise);
+  await render(<AdjustSheet clipId="a" visible onClose={() => {}} />);
+  await fireEvent.press(btn("Auto"));
+  await screen.findByText(AUTO_WORDS.good);
+  await fireEvent.press(btn("Apply to All"));
+  await waitFor(() => expect(fs).toHaveBeenCalledTimes(2));
+  st().apply((p) => ({ ...p, clips: p.clips.map((c) => ({ ...c, trimStart: c.trimStart + 0.25 })) }));
+  const steps = st().past.length;
+  d.resolve(answer(1));
+  await new Promise((r) => setImmediate(r));
+  await waitFor(() => expect(screen.queryByText("Cancel")).toBeNull());
+  expect(st().past.length).toBe(steps);
+  expect(useToast.getState().message).toBeNull();
 });
