@@ -11,6 +11,8 @@ import type { ProjectSummary } from "./storage";
 export function useHomeFind(projects: readonly ProjectSummary[], listed: boolean) {
   const [prefs, setPrefs] = useState<HomePrefs>(loadHomePrefs);
   const [query, setQuery] = useState("");
+  /** The field has the keyboard: it is kept while focused, so emptying it under six projects never pulls it from under the finger. */
+  const [focused, setFocused] = useState(false);
   const now = useRef(prefs);   // the latest value, for two changes in one tap
   const change = (next: HomePrefs) => { now.current = next; setPrefs(next); saveHomePrefs(next); };
 
@@ -19,6 +21,9 @@ export function useHomeFind(projects: readonly ProjectSummary[], listed: boolean
     const kept = keepListed(now.current.pins, projects.map((p) => p.id));
     if (kept !== now.current.pins) change({ ...now.current, pins: kept });
   }, [projects, listed]);
+  // The last project went with a query typed: clear it, or it would hide the next project made. The field went with the list
+  // (Home's empty state), so it has no keyboard any more either — and an unmounted field sends no blur.
+  useEffect(() => { if (listed && projects.length === 0) { setQuery(""); setFocused(false); } }, [projects, listed]);
 
   const order = useMemo(() => orderProjects(projects, { sort: prefs.sort, pins: prefs.pins, query }), [projects, prefs, query]);
   const rows = useMemo(() => homeRows(order, prefs.sort), [order, prefs.sort]);
@@ -26,7 +31,7 @@ export function useHomeFind(projects: readonly ProjectSummary[], listed: boolean
   const shownCount = order.pinned.length + order.rest.length;
 
   return {
-    query, setQuery, clearQuery: () => setQuery(""),
+    query, setQuery, clearQuery: () => setQuery(""), setFocused,
     sort: prefs.sort,
     setSort: (sort: HomeSort) => { if (sort !== now.current.sort) change({ ...now.current, sort }); },
     isPinned: (id: string) => pinned.has(id),
@@ -36,7 +41,7 @@ export function useHomeFind(projects: readonly ProjectSummary[], listed: boolean
     },
     unpin: (id: string) => { if (now.current.pins.includes(id)) change({ ...now.current, pins: now.current.pins.filter((x) => x !== id) }); },
     rows,
-    showFind: showFind(projects.length, query),
+    showFind: showFind(projects.length, query) || focused,
     /** A query is typed and nothing matches (there ARE projects: no projects at all is Home's own empty state). */
     noMatch: projects.length > 0 && shownCount === 0,
   };

@@ -208,6 +208,22 @@ describe("pins", () => {
     alert.mockRestore();
   });
 
+  test("a field with the keyboard stays when a delete brings the list under six; it goes when it loses the keyboard", async () => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => { buttons?.find((b) => b.style === "destructive")?.onPress?.(); });
+    (storage.deleteProject as jest.Mock).mockResolvedValue(undefined);
+    await home();
+    await fireEvent(screen.getByTestId("home-search"), "focus");
+    list.mockResolvedValue(FIVE);
+    await fireEvent.press(btn("More for Zoo"));
+    await fireEvent.press(await screen.findByRole("button", { name: "Delete" }));
+    await settle();
+    await waitFor(() => expect(order()).toHaveLength(5));
+    expect(screen.getByTestId("home-search")).toBeTruthy();
+    await fireEvent(screen.getByTestId("home-search"), "blur");
+    expect(screen.queryByTestId("home-search")).toBeNull();
+    alert.mockRestore();
+  });
+
   test("a delete that fails keeps the pin", async () => {
     put({ version: 1, sort: "edited", pins: ["f"] });
     const alert = jest.spyOn(Alert, "alert").mockImplementation((_t, _m, buttons) => { buttons?.find((b) => b.style === "destructive")?.onPress?.(); });

@@ -281,7 +281,7 @@ function ProjectsScreen() {
           <FlatList testID="home-grid" data={find.rows} keyExtractor={(r) => r.key}
             keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingHorizontal: theme.space.sm, paddingBottom: actionsBottom + theme.size.control + theme.space.lg }}
-            ListHeaderComponent={find.showFind ? <HomeFind query={find.query} onQuery={find.setQuery} onSort={onSort} /> : null}
+            ListHeaderComponent={find.showFind ? <HomeFind query={find.query} onQuery={find.setQuery} onSort={onSort} onFocused={find.setFocused} /> : null}
             ListEmptyComponent={find.noMatch ? <HomeNoMatch onClear={find.clearQuery} /> : null}
             renderItem={({ item: row }) => (row.kind === "heading" ? <HomeHeading title={row.title} />
               : <View testID="home-row" style={{ flexDirection: "row" }}>{row.items.map(card)}</View>)} />

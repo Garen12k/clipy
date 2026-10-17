@@ -15,12 +15,12 @@ const SEARCH_INSET = theme.space.md + theme.size.icon.md + theme.space.sm;
  * The top of Home's list (its ListHeaderComponent — so it scrolls with the cards and sits inside the inert wrapper): the search
  * field and the sort button. On the 16-pt gutter like the cards (8 here + the list's 8). The typed text is user input: no `fit`.
  */
-export function HomeFind({ query, onQuery, onSort }: { query: string; onQuery: (q: string) => void; onSort: () => void }) {
+export function HomeFind({ query, onQuery, onSort, onFocused }: { query: string; onQuery: (q: string) => void; onSort: () => void; onFocused?: (f: boolean) => void }) {
   const s = useSurfaces();
   return (
     <View testID="home-find" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.sm, paddingBottom: theme.space.sm }}>
       <View style={{ flex: 1, justifyContent: "center" }}>
-        <Field testID="home-search" value={query} onChangeText={onQuery} placeholder={FIND_WORDS.search} accessibilityLabel={FIND_WORDS.search}
+        <Field testID="home-search" value={query} onChangeText={onQuery} onFocus={() => onFocused?.(true)} onBlur={() => onFocused?.(false)} placeholder={FIND_WORDS.search} accessibilityLabel={FIND_WORDS.search}
           returnKeyType="search" autoCorrect={false} autoCapitalize="none" clearButtonMode="while-editing" style={{ paddingLeft: SEARCH_INSET }} />
         <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: "absolute", left: theme.space.md }}>
           <Icon name="search-outline" size={theme.size.icon.md} color={s.muted} />

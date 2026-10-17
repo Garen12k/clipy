@@ -66,3 +66,23 @@ test("a value written by a newer Clipy stays as it is; this session's pins live 
   expect(result.current.isPinned("a")).toBe(true);
   expect(localStorage.getItem(HOME_PREFS_KEY)).toBe(newer);
 });
+
+test("under six projects a FOCUSED field stays while its text is emptied (the keyboard does not drop mid-edit); it goes on blur", async () => {
+  const five = ["a", "b", "c", "d", "e"].map((id) => p(id, id));
+  const { result } = await renderHook(() => useHomeFind(five, true));
+  await act(async () => { result.current.setQuery("x"); result.current.setFocused(true); });
+  await act(async () => { result.current.setQuery(""); });
+  expect(result.current.showFind).toBe(true);
+  await act(async () => { result.current.setFocused(false); });
+  expect(result.current.showFind).toBe(false);
+});
+
+test("a query left when the last project went is cleared, so the next project is not hidden by it", async () => {
+  const { result, rerender } = await renderHook(({ list }: { list: ProjectSummary[] }) => useHomeFind(list, true), { initialProps: { list: [p("a", "Beach")] } });
+  await act(async () => { result.current.setQuery("beach"); result.current.setFocused(true); });
+  await rerender({ list: [] });
+  expect(result.current.query).toBe("");
+  await rerender({ list: [p("n", "New")] });
+  expect(result.current.noMatch).toBe(false);
+  expect(result.current.showFind).toBe(false);   // the field went with the list: it holds no keyboard
+});
