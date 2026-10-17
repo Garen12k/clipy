@@ -1,5 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { theme } from "@/src/theme/theme";
+
+// The phone's Modal keeps drawing while it fades out; Jest's draws nothing once `visible` is false. This Sheet always draws its
+// rows, so a test can see what the fade shows.
+jest.mock("@/src/ui/Sheet", () => ({ Sheet: ({ children }: { children: unknown }) => children }));
 import { ProjectActionsSheet } from "../ProjectActionsSheet";
 import type { ProjectSummary } from "../storage";
 
@@ -33,4 +37,15 @@ test("a pinned project says Unpin", async () => {
 test("a damaged project offers no Pin", async () => {
   await render(sheet({ project: { ...project, broken: true }, onPin: jest.fn(), isPinned: () => false }));
   expect(names()).toEqual(["Delete"]);
+});
+
+test("the label stays as the sheet opened with while it fades out after Pin (the pin has already flipped)", async () => {
+  let pinned = false;
+  const onPin = jest.fn(() => { pinned = true; });
+  await render(sheet({ onPin, isPinned: () => pinned }));
+  await fireEvent.press(btn("Pin"));
+  await screen.rerender(sheet({ project: null, onPin, isPinned: () => pinned }));   // fading out: the last project is still drawn
+  expect(names()[0]).toBe("Pin");
+  await screen.rerender(sheet({ onPin, isPinned: () => pinned }));                  // opened again: the label is read afresh
+  expect(names()[0]).toBe("Unpin");
 });

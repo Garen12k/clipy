@@ -18,6 +18,11 @@ export function ProjectActionsSheet({ project, onClose, onRename, onDuplicate, o
   const last = useRef<ProjectSummary | null>(project);
   if (project) last.current = project;
   const shown = project ?? last.current;
+  // Pin / Unpin as it was when this project's sheet opened: Pin runs at once, so during the fade the pin has already flipped and
+  // the button the user just tapped would change its word as it leaves.
+  const pinLabel = useRef<{ for: ProjectSummary | null; pinned: boolean }>({ for: null, pinned: false });
+  if (!project) pinLabel.current.for = null; // closed: the next opening reads it afresh, even for the same project
+  else if (pinLabel.current.for !== project) pinLabel.current = { for: project, pinned: !!isPinned?.(project.id) };
 
   const run = (fn: (p: ProjectSummary) => void, needsAlert: boolean) => () => {
     if (!project) return;
@@ -28,7 +33,7 @@ export function ProjectActionsSheet({ project, onClose, onRename, onDuplicate, o
   return (
     <Sheet visible={!!project} onClose={onClose} title={shown?.name ?? ""}>
       <View style={{ gap: theme.space.md }}>
-        {shown && !shown.broken && onPin ? <SecondaryButton title={isPinned?.(shown.id) ? FIND_WORDS.unpin : FIND_WORDS.pin} onPress={run(onPin, false)} /> : null}
+        {shown && !shown.broken && onPin ? <SecondaryButton title={pinLabel.current.pinned ? FIND_WORDS.unpin : FIND_WORDS.pin} onPress={run(onPin, false)} /> : null}
         {shown?.broken ? null : <SecondaryButton title="Rename" onPress={run(onRename, true)} />}
         {shown?.broken ? null : <SecondaryButton title="Duplicate" onPress={run(onDuplicate, false)} />}
         {/* A prompt for the name: after the sheet is gone, like Rename. */}
