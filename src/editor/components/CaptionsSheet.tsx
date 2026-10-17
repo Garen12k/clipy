@@ -46,8 +46,10 @@ export function CaptionsSheet({ visible, onClose }: Props) {
   // Filler words: only over captions that carry word timings (without them nothing can be found), never while transcribing or after a failure.
   const timed = useEditorStore((s) => s.project?.overlays.some((o) => o.kind === "caption" && o.words.length > 0) ?? false);
   const english = useMemo(() => fillersSpoken(), []);
-  const plan = useMemo(() => (project && timed && english ? fillerPlan(project) : NO_FILLERS), [project, timed, english]);
   const showFillers = timed && state.status !== "running" && state.status !== "error";
+  // Planned only while the row is on screen: the panel is always mounted, and a hidden one must cost nothing per drag frame.
+  const planning = visible && !styling && showFillers && english;
+  const plan = useMemo(() => (planning && project ? fillerPlan(project) : NO_FILLERS), [planning, project]);
   const offering = showFillers && english && plan.removable > 0;   // its button is the white one; Replace is then grey
   const removeFillers = () => {
     const { project: now, apply } = useEditorStore.getState();
