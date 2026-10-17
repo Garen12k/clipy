@@ -219,6 +219,11 @@ how accurate its word edges are (the 0.04-s pad); clicks at the joins; that a re
 - A voice-over or a Read aloud bar recorded over the clip stays where it was while the picture and its text move (sound does not
   move — the drawing). Read aloud again re-places a speech bar.
 - `Intl` locale in Hermes is the phone's language on a phone; Jest reads the computer's — tests mock `captionLanguage`.
+- Captions store project times and are tied to no clip. A trim, a move or a delete made AFTER transcribing leaves them out of
+  step with the voice; a filler cut then lands beside the hesitation, on real speech (and the "um" still leaves its caption). Not
+  guarded in this build (nothing records which clip a caption was heard in); listed in checklist part N (item 66); Undo restores it.
+- Remove pauses now also removes a text / sticker wholly inside a removed pause (the §2.2 rule); "N pauses removed" does not say
+  so. Undo brings it back; checklist item 54.
 
 ## 7. Vectors (pinned in `rippleCuts.test.ts` / `fillers.test.ts`)
 
@@ -230,3 +235,21 @@ how accurate its word edges are (the 0.04-s pad); clicks at the joins; that a re
 - Fillers, one 10-s clip, caption 1 … 4 "so um we uh go" (so 0–0.3, um 0.5–0.8, we 1.0–1.3, uh 1.4–1.6, go 2.0–2.4): cuts
   `[[1.46,1.84],[2.36,2.64]]`, found 2, removable 2; after `removeCuts` the caption is 1 … 3.34 "so we go", words so 0–0.3,
   we 0.62–0.92, go 1.34–1.74.
+
+## 8. As built (2026-10-17)
+
+- Tasks 1–4 as the plan: `rippleCuts.ts`, `removeCuts` / `canCutClip` / `piecesOf` in ops.ts (`removePauses` on top), `fitCuts`
+  extracted from `findPauses`, `fillers.ts`, `captionLanguage.ts`, `FillerWordsRow.tsx`, the row in `CaptionsSheet.tsx`.
+- After review:
+  - The plan is computed ONLY while the row is on screen (the panel visible, not styling, not running or failed, English).
+    `CaptionsSheet` is always mounted, and the first version planned on every project change — every frame of a drag — with the
+    panel closed. Pinned by call count (`CaptionsSheet.fillers.work.test.tsx`).
+  - The oracle is asked for the whole operation too: clips each accepted alone but refused together (the layers' limit) offer
+    nothing (every filler "can't be cut", no button) — so a tap can never end in "Nothing was removed." again and again.
+  - `mapTime`'s result is rounded to 3 decimals only when it moved: an item before the first cut keeps its object (and is not
+    judged by the 0.2-s rule), as §2.2 says, even with a drag's many-decimal times.
+  - `FILLER_WORDS.notRemoved` stays a copy (importing the strip pulls in the native wrappers) and is pinned equal to
+    `PAUSE_WORDS.notRemoved`.
+  - The Captions panel's body scrolls when the row is shown (the idle card was 166 pt in a 171-pt body without it); the comment
+    says so, AGENTS allows it, and checklist item 65 checks it.
+- Not built: a guard against captions out of step with the picture (§6).

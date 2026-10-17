@@ -369,9 +369,12 @@ Tap Remove. Play the clip.
 - **Wrong looks like:** a clipped word ("…ree" for "three"), a click at a join, text that moved, or Undo needing several taps.
   Write down which.
 
-### 54. Text stays
-With a text over the talking clip, Remove pauses.
-- **Right looks like:** the text stays where it was in time (it now sits over later words — that is expected, as Cut to beats).
+### 54. Text follows
+With a text over the talking clip (after the first pause), and captions made, Remove pauses.
+- **Right looks like:** the text and the captions still appear with the same words as before; a later clip's text stays on its
+  picture; the music has NOT moved.
+- **Wrong looks like:** captions that run ahead of the words, a caption missing a word that is still heard.
+- Also: a short text placed wholly inside a pause is removed with it (Undo brings it back) — write down whether that surprises you.
 
 ### 55. A clip with music only
 A clip whose sound is a song with no gaps.
@@ -401,3 +404,37 @@ With Remove pauses open, drag the clip's trim handle and let go.
 Set the talking clip's speed to 0.5×, then open Remove pauses at 0.3 s.
 - **Right looks like:** fewer pauses than at 1× — a short pause must be a little longer when slowed. Write down whether that
   feels right.
+
+## N. Filler words
+
+Film yourself saying, with a few hesitations: "So, um, today we, uh, make pancakes. Hmm, first the eggs." Make captions.
+
+### 61. Does the phone write them?
+Open Captions.
+- **Right looks like:** "Filler words · 3 found", the note, and a white "Remove 3 Filler Words"; Replace is now grey.
+- **Wrong looks like:** "None found" although you said "um" — Apple's recogniser may leave hesitations out. Write down which of
+  um / uh / hmm appear in the captions at all.
+
+### 62. Remove and Undo
+Tap Remove 3 Filler Words. Play it.
+- **Right looks like:** the panel closes, "3 filler words removed" with Undo; the hesitations are gone from the video AND the
+  captions; the words around them are whole; the captions still match the voice. Undo brings everything back in one tap.
+- **Wrong looks like:** a clipped neighbour word ("…oday"), a click at a join, a caption still showing "um". Write down which.
+
+### 63. A filler that can't be cut
+Reverse one clip (or put a photo between), with a filler over it.
+- **Right looks like:** "1 is over a part that can't be cut." and that one is not counted on the button.
+
+### 64. Another language
+Set the iPhone to German (Settings → General → Language & Region), open the project.
+- **Right looks like:** "Filler words are found in English captions only." and no button. Set it back.
+
+### 65. Large text
+Settings → Accessibility → Larger Text at the largest standard size; open Captions on a 375-pt phone (SE / mini).
+- **Right looks like:** the row and the button read fully; the panel scrolls to Replace, Style Captions and Cancel.
+
+### 66. Captions out of step
+Make captions, then trim half a second off the START of the first clip, and open Captions.
+- **Right looks like (as built):** the captions now run late, and Remove Filler Words would cut next to the hesitations, not on
+  them — this is known. Undo the trim (or make the captions again) before removing filler words. Write down whether this happens
+  to you in real use.

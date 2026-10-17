@@ -86,7 +86,7 @@ export function CaptionsSheet({ visible, onClose }: Props) {
           <View style={{ gap: theme.space.md, paddingBottom: theme.space.xs }}>
             <Body>Replace existing captions?</Body>
             {/* Stacked like the "done" branch: three title-style buttons don't fit one row in a panel. All three compact (36): the card
-                is then 166 pt (a line of text + 3 gaps of 12 + 3 × 36 + 4 under Cancel for its hit slop) in a body that shows 171, so nothing scrolls; at 48 it would be 198. */}
+                is then 166 pt (a line of text + 3 gaps of 12 + 3 × 36 + 4 under Cancel for its hit slop) in a body that shows 171, so nothing scrolls WITHOUT the Filler words row; with it above, the body scrolls (allowed). At 48 it would be 198. */}
             {offering
               ? <SecondaryButton compact title="Replace" onPress={start} />
               : <PrimaryButton tone="plain" compact title="Replace" onPress={start} />}
