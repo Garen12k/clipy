@@ -4,14 +4,16 @@ import { theme } from "@/src/theme/theme";
 import { QuietButton } from "@/src/ui/QuietButton";
 import { SecondaryButton } from "@/src/ui/SecondaryButton";
 import { Sheet } from "@/src/ui/Sheet";
+import { FIND_WORDS } from "./homeFindWords";
 import type { ProjectSummary } from "./storage";
 
-type Props = { project: ProjectSummary | null; onClose: () => void; onRename: (p: ProjectSummary) => void; onDuplicate: (p: ProjectSummary) => void; onSaveCopy: (p: ProjectSummary) => void; onSaveStyle: (p: ProjectSummary) => void; onDelete: (p: ProjectSummary) => void };
+type Props = { project: ProjectSummary | null; onClose: () => void; onRename: (p: ProjectSummary) => void; onDuplicate: (p: ProjectSummary) => void; onSaveCopy: (p: ProjectSummary) => void; onSaveStyle: (p: ProjectSummary) => void; onDelete: (p: ProjectSummary) => void;
+  /** Home's pins (a phone preference — never the project). Optional: without `onPin` the sheet has no Pin. */ isPinned?: (id: string) => boolean; onPin?: (p: ProjectSummary) => void };
 
 /** iOS silently drops an Alert presented while a Modal is still dismissing, so alert-based actions wait for the sheet to be gone. */
 export const AFTER_SHEET_MS = 350;
 
-export function ProjectActionsSheet({ project, onClose, onRename, onDuplicate, onSaveCopy, onSaveStyle, onDelete }: Props) {
+export function ProjectActionsSheet({ project, onClose, onRename, onDuplicate, onSaveCopy, onSaveStyle, onDelete, isPinned, onPin }: Props) {
   // Keep rendering the last project while the sheet fades out so the title/buttons don't blank.
   const last = useRef<ProjectSummary | null>(project);
   if (project) last.current = project;
@@ -26,6 +28,7 @@ export function ProjectActionsSheet({ project, onClose, onRename, onDuplicate, o
   return (
     <Sheet visible={!!project} onClose={onClose} title={shown?.name ?? ""}>
       <View style={{ gap: theme.space.md }}>
+        {shown && !shown.broken && onPin ? <SecondaryButton title={isPinned?.(shown.id) ? FIND_WORDS.unpin : FIND_WORDS.pin} onPress={run(onPin, false)} /> : null}
         {shown?.broken ? null : <SecondaryButton title="Rename" onPress={run(onRename, true)} />}
         {shown?.broken ? null : <SecondaryButton title="Duplicate" onPress={run(onDuplicate, false)} />}
         {/* A prompt for the name: after the sheet is gone, like Rename. */}

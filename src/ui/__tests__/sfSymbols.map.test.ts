@@ -14,7 +14,7 @@ const GLYPHS: Record<string, number> = require("@expo/vector-icons/build/vendor/
 
 /**
  * EVERY icon name the app draws, found by the scan below and written out here: a new name in the source fails this suite until it
- * is added to this list AND given a symbol in `SF_SYMBOLS` (or a line in `NO_SYMBOL`, with its reason). 131 names.
+ * is added to this list AND given a symbol in `SF_SYMBOLS` (or a line in `NO_SYMBOL`, with its reason). 133 names.
  */
 const USED = [
   "add-circle-outline", "add-outline", "airplane-outline", "albums-outline", "alert-circle-outline", "aperture-outline", "apps-outline", "arrow-back-circle-outline",
@@ -27,8 +27,8 @@ const USED = [
   "flash-outline", "flashlight-outline", "folder-open-outline", "git-branch-outline", "git-compare-outline", "grid-outline", "hand-left-outline", "happy-outline", "hardware-chip-outline",
   "heart-outline", "image-outline", "information-circle-outline", "keypad-outline", "layers-outline", "leaf-outline", "log-out-outline", "logo-facebook", "logo-google", "logo-instagram",
   "logo-tiktok", "logo-x", "logo-youtube", "mail-outline", "mic", "mic-outline", "move-outline", "musical-notes-outline", "notifications-outline", "options-outline", "paper-plane-outline", "pause",
-  "pause-circle-outline", "paw-outline", "person-circle-outline", "person-remove-outline", "phone-portrait-outline", "play", "play-back-outline", "play-outline", "pulse-outline", "radio-outline", "reader-outline", "refresh-outline",
-  "remove-circle-outline", "reorder-two-outline", "repeat-outline", "resize-outline", "scan-outline", "share-outline", "snow-outline", "sparkles-outline", "speedometer-outline",
+  "pause-circle-outline", "paw-outline", "person-circle-outline", "person-remove-outline", "phone-portrait-outline", "pin-outline", "play", "play-back-outline", "play-outline", "pulse-outline", "radio-outline", "reader-outline", "refresh-outline",
+  "remove-circle-outline", "reorder-two-outline", "repeat-outline", "resize-outline", "scan-outline", "search-outline", "share-outline", "snow-outline", "sparkles-outline", "speedometer-outline",
   "square-outline", "star-outline", "stats-chart-outline", "stop", "stop-outline", "sunny-outline", "swap-horizontal-outline", "swap-vertical-outline", "sync-outline", "text-outline",
   "trash-outline", "trending-up-outline", "videocam-outline", "volume-high-outline", "volume-low-outline", "volume-medium-outline", "warning", "warning-outline", "water-outline",
 ];
@@ -100,7 +100,7 @@ test("USED is every icon name in the app's source, no more and no fewer", () => 
       + (gone.length > 0 ? `  No longer in the source: ${gone.join(", ")} — delete each from USED and from SF_SYMBOLS.\n` : ""));
   }
   expect(USED).toEqual([...USED].sort());
-  expect(USED).toHaveLength(131);
+  expect(USED).toHaveLength(133);
 });
 
 test("the tables that hand icons to the toolbar, the tiles, the timeline and the platform rows are all in USED", () => {
@@ -116,7 +116,7 @@ test("every icon name has a decision: an SF Symbol, or a listed reason for none 
   expect(USED.filter((n) => table[n] !== undefined && NO_SYMBOL[n] !== undefined)).toEqual([]);
   expect(Object.keys(table).filter((n) => !USED.includes(n))).toEqual([]);
   expect(Object.keys(NO_SYMBOL).filter((n) => !USED.includes(n))).toEqual([]);
-  expect(Object.keys(table)).toHaveLength(125);
+  expect(Object.keys(table)).toHaveLength(127);
   expect(Object.keys(NO_SYMBOL)).toHaveLength(6);
   for (const n of USED) if (n.startsWith("logo-")) expect(table[n]).toBeUndefined();   // a brand mark is never Apple's symbol
 });
@@ -176,7 +176,7 @@ test("icons are drawn only through the kit Icon: no other file loads the icon fo
     "src/editor/components/LayerBar.tsx": 2,          // a layer bar's glyph and its missing-file badge
     "src/editor/components/OverlayPill.tsx": 1,       // a text / caption / sticker bar's glyph
     "src/editor/components/ReorderHandle.tsx": 1,     // the grip on the selected clip
-    "src/projects/ProjectCard.tsx": 2,                // every card of the projects list: More, and the missing-project mark
+    "src/projects/ProjectCard.tsx": 3,                // every card of the projects list: More, the missing-project mark and the pin mark
   };
   const loads: string[] = [];
   const plain: Record<string, number> = {};

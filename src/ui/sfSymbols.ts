@@ -74,6 +74,7 @@ export const SF_SYMBOLS: Readonly<Partial<Record<IoniconName, SymbolName>>> = {
   "color-filter-outline": "camera.filters",
   "options-outline": "slider.horizontal.3",
   "phone-portrait-outline": "iphone",
+  "pin-outline": "pin",
   "color-palette-outline": "paintpalette",
   "image-outline": "photo",
   "color-wand-outline": "wand.and.stars",
@@ -113,6 +114,7 @@ export const SF_SYMBOLS: Readonly<Partial<Record<IoniconName, SymbolName>>> = {
   "expand-outline": "arrow.up.left.and.arrow.down.right",
   "contract-outline": "arrow.down.right.and.arrow.up.left",
   "scan-outline": "viewfinder",
+  "search-outline": "magnifyingglass",
   "reorder-two-outline": "line.3.horizontal",
   // The groups of a long bar.
   "apps-outline": "square.grid.2x2",
