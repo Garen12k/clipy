@@ -39,7 +39,7 @@ jobs:
           command -v pod || sudo gem install cocoapods
           command -v fastlane || brew install fastlane
           npm install -g eas-cli
-          eas whoami
+          eas whoami | head -1
 
       - name: Entitlements must be Sign in with Apple only
         run: |
