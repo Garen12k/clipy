@@ -304,6 +304,8 @@ export function isNativeAvailable(): boolean { return optional() !== null; }
 export * from "./background";
 // The "text reveal" build: whether the export draws a text's reveal (reveal.ts).
 export * from "./reveal";
+// The "auto enhance" build: a few frames of a clip as plain numbers (frameStats.ts).
+export * from "./frameStats";
 /** Returns a greeting from the Swift module. Phase 0 smoke test only. */
 export function hello(): string { return native().hello(); }
 export function exportTimeline(req: ExportRequest): Promise<string> { return native().exportTimeline(req); }

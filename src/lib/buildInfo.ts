@@ -1,6 +1,7 @@
 import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isPeaksAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
 import { isBackgroundExportBuild } from "@/modules/clipy-video/background";
 import { isTextRevealBuild } from "@/modules/clipy-video/reveal";
+import { isFrameStatsAvailable } from "@/modules/clipy-video/frameStats";
 
 /**
  * What the INSTALLED app can do, newest ability first. Buttons and screens arrive from the dev server at once, but an ability that
@@ -9,6 +10,7 @@ import { isTextRevealBuild } from "@/modules/clipy-video/reveal";
  */
 /** `name` is how `buildLabel` words it in its sentence; `title` is the same name standing alone (the Build row's value). */
 const LEVELS: { name: string; title: string; has: () => boolean }[] = [
+  { name: "auto enhance", title: "Auto enhance", has: isFrameStatsAvailable },
   { name: "text reveal", title: "Text reveal", has: isTextRevealBuild },
   { name: "background export", title: "Background export", has: isBackgroundExportBuild },
   { name: "icons and light", title: "Icons and light", has: isPeaksAvailable },
@@ -53,3 +55,6 @@ export const REVEAL_TOOLS = NEEDS_LATEST_BUILD("Typewriter and Word by word");
 
 /** Said where taking a photo or a video is tapped in a build from before the camera's usage text (`canUseCamera` in src/projects/camera.ts). */
 export const CAMERA_NEEDS_BUILD = NEEDS_LATEST_BUILD("Photos and videos from the camera");
+
+/** Said where Auto (the Adjust strip's first chip) is tapped in Expo Go or in a build from before `frameStats` (the "auto enhance" build). */
+export const AUTO_TOOLS = NEEDS_LATEST_BUILD("Automatic adjustments");

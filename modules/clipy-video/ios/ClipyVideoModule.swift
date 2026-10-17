@@ -110,6 +110,27 @@ public class ClipyVideoModule: Module {
     return peaksJobs[id]
   }
 
+  private let statsLock = NSLock()
+  private var statsJobs: [String: StatsJob] = [:]   // guarded by `statsLock`; one entry per look that has not answered yet
+
+  private func storeStatsJob(_ id: String, _ job: StatsJob) {
+    statsLock.lock(); defer { statsLock.unlock() }
+    statsJobs[id] = job
+  }
+
+  private func dropStatsJob(_ id: String) {
+    statsLock.lock(); defer { statsLock.unlock() }
+    statsJobs[id] = nil
+  }
+
+  private func lookupStatsJob(_ id: String) -> StatsJob? {
+    statsLock.lock(); defer { statsLock.unlock() }
+    return statsJobs[id]
+  }
+
+  /// What a look says when it was not made, or cannot be trusted, because the app was in the background during it.
+  private static let statsInterrupted = "stats interrupted: Clipy was in the background while the picture was read"
+
   private let cutoutLock = NSLock()
   private var cutoutJobs: [String: CutoutJob] = [:]   // guarded by `cutoutLock`; one entry per render that has not answered yet
 
@@ -651,6 +672,47 @@ public class ClipyVideoModule: Module {
     // whole. The app asks whether the function is THERE.
     Function("textReveal") { () -> Bool in
       return true
+    }
+
+    // The build of 2026-10-17 ("auto enhance"): plain numbers about a few frames of a clip (see FrameStats) — resolves
+    // `{ frames: [{ time, histogram, r, g, b, saturation, pixels }], failed }`. Rejects "E_STATS_CANCELLED" after
+    // `cancelFrameStats(jobId)`, "E_STATS_INTERRUPTED" when asked in the background or when the app was away during it (a
+    // decoded frame is not trusted then; the app asks again in front), else "E_STATS" with a staged message. The job is
+    // stored before the work starts, and every way out answers the promise exactly once. The app asks whether this
+    // function is THERE to know the build.
+    AsyncFunction("frameStats") { (request: FrameStatsRequest, promise: Promise) in
+      let job = StatsJob()
+      let jobId = request.jobId
+      self.storeStatsJob(jobId, job)
+      Task { [weak self] in
+        defer { self?.dropStatsJob(jobId) }
+        let leaves = ExportPause.shared.leaveCount
+        if ExportPause.shared.isBackground {
+          promise.reject("E_STATS_INTERRUPTED", ClipyVideoModule.statsInterrupted)
+          return
+        }
+        do {
+          let answer: [String: Any] = try await FrameStats.run(request, job: job)
+          if ExportPause.shared.hasLeft(since: leaves) {
+            promise.reject("E_STATS_INTERRUPTED", ClipyVideoModule.statsInterrupted)
+            return
+          }
+          promise.resolve(answer)
+        } catch StatsError.cancelled {
+          promise.reject("E_STATS_CANCELLED", "Stats cancelled")
+        } catch {
+          if ExportPause.shared.hasLeft(since: leaves) {
+            promise.reject("E_STATS_INTERRUPTED", ClipyVideoModule.statsInterrupted + " (" + FrameStats.message(error) + ")")
+          } else {
+            promise.reject("E_STATS", FrameStats.message(error))
+          }
+        }
+      }
+    }
+
+    // Stops that look at its next frame (it then rejects "E_STATS_CANCELLED"). An unknown or finished job: nothing.
+    Function("cancelFrameStats") { (jobId: String) in
+      self.lookupStatsJob(jobId)?.cancel()
     }
   }
 }

@@ -1,12 +1,15 @@
 jest.mock("@/modules/clipy-video", () => ({ isNativeAvailable: jest.fn(), isSoundAvailable: jest.fn(), isSpeechAvailable: jest.fn(), isCutoutAvailable: jest.fn(), isSteadyAvailable: jest.fn(), isBlurAndCutsBuild: jest.fn(), isPeaksAvailable: jest.fn() }));
 jest.mock("@/modules/clipy-video/background", () => ({ isBackgroundExportBuild: jest.fn() }));
 jest.mock("@/modules/clipy-video/reveal", () => ({ isTextRevealBuild: jest.fn() }));
+jest.mock("@/modules/clipy-video/frameStats", () => ({ isFrameStatsAvailable: jest.fn() }));
 import { isBlurAndCutsBuild, isCutoutAvailable, isNativeAvailable, isPeaksAvailable, isSoundAvailable, isSpeechAvailable, isSteadyAvailable } from "@/modules/clipy-video";
 import { isBackgroundExportBuild } from "@/modules/clipy-video/background";
 import { isTextRevealBuild } from "@/modules/clipy-video/reveal";
-import { BEATS_BACKGROUND_TOOLS, buildLabel, buildName, LATEST_TOOLS, NEEDS_LATEST_BUILD, REVEAL_TOOLS, STEADY_TOOLS } from "../buildInfo";
+import { isFrameStatsAvailable } from "@/modules/clipy-video/frameStats";
+import { AUTO_TOOLS, BEATS_BACKGROUND_TOOLS, buildLabel, buildName, LATEST_TOOLS, NEEDS_LATEST_BUILD, REVEAL_TOOLS, STEADY_TOOLS } from "../buildInfo";
 
-const set = (native: boolean, sound: boolean, speech: boolean, cutout: boolean, steady: boolean, blurAndCuts = false, peaks = false, background = false, reveal = false) => {
+const set = (native: boolean, sound: boolean, speech: boolean, cutout: boolean, steady: boolean, blurAndCuts = false, peaks = false, background = false, reveal = false, auto = false) => {
+  (isFrameStatsAvailable as jest.Mock).mockReturnValue(auto);
   (isTextRevealBuild as jest.Mock).mockReturnValue(reveal);
   (isBackgroundExportBuild as jest.Mock).mockReturnValue(background);
   (isPeaksAvailable as jest.Mock).mockReturnValue(peaks);
@@ -17,6 +20,8 @@ const set = (native: boolean, sound: boolean, speech: boolean, cutout: boolean, 
 };
 
 test("the label names what the installed app can do, newest ability first", () => {
+  set(true, true, true, true, true, true, true, true, true, true);
+  expect(buildLabel()).toBe("App build: auto enhance");
   set(true, true, true, true, true, true, true, true, true);
   expect(buildLabel()).toBe("App build: text reveal");
   set(true, true, true, true, true, true, true, true);
@@ -40,6 +45,8 @@ test("the label names what the installed app can do, newest ability first", () =
 });
 
 test("the name alone (the Accounts screen's Build row) is the label's name, word for word", () => {
+  set(true, true, true, true, true, true, true, true, true, true);
+  expect(buildName()).toBe("Auto enhance");
   set(true, true, true, true, true, true, true, true, true);
   expect(buildName()).toBe("Text reveal");
   set(true, true, true, true, true, true, true, true);
@@ -70,6 +77,7 @@ test("the top row is the text-reveal build, known by its own function, with ever
   const src = require("fs").readFileSync(require("path").join(__dirname, "..", "buildInfo.ts"), "utf8") as string;
   const rows = [...src.matchAll(/\{ name: "([^"]+)", title: "([^"]+)", has: (\w+) \}/g)].map((m) => [m[1], m[2], m[3]]);
   expect(rows).toEqual([
+    ["auto enhance", "Auto enhance", "isFrameStatsAvailable"],
     ["text reveal", "Text reveal", "isTextRevealBuild"],
     ["background export", "Background export", "isBackgroundExportBuild"],
     ["icons and light", "Icons and light", "isPeaksAvailable"],
@@ -82,4 +90,8 @@ test("the top row is the text-reveal build, known by its own function, with ever
   ]);
   const real = jest.requireActual("@/modules/clipy-video/background") as { isBackgroundExportBuild: () => boolean };
   expect(real.isBackgroundExportBuild.toString()).toContain("backgroundExportSupport");
+});
+
+test("Auto enhance's sentence", () => {
+  expect(AUTO_TOOLS).toBe("Automatic adjustments need the latest Clipy build. Install it from the newest build link.");
 });
