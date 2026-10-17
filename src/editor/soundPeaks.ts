@@ -149,12 +149,19 @@ function giveTurn(): void {
   const next = i >= 0 ? turnQueue.splice(i, 1)[0] : turnQueue.shift();
   if (next) next.go(); else turnHeld = false;
 }
-/** One native call in its turn; `still` is asked again once the turn comes (the caller may have been left meanwhile). */
-async function asked(uri: string, call: PeaksCall, kind: CallKind, still: () => boolean): Promise<SoundPeaksResult> {
-  await takeTurn(kind === "pauses");
+/** Whether the editor still stands as `idle` last saw it — asked without waiting. */
+const standing = (): boolean => { const now = look(); return stood !== null && !now.busy && same(stood, now); };
+/**
+ * One waveform call in its turn; `still` is asked again once the turn comes (the caller may have been left meanwhile). The turn may
+ * have come only after a listening for pauses, and the editor may have moved or started playing meanwhile: then the turn is given
+ * back and null answered — the loop waits for `idle` again and asks once more.
+ */
+async function asked(uri: string, call: PeaksCall, still: () => boolean): Promise<SoundPeaksResult | null> {
+  await takeTurn(false);
   try {
     if (!still()) throw cancelledError();
-    return await answered(uri, call, kind);
+    if (!standing()) return null;
+    return await answered(uri, call, "wave");
   } finally { giveTurn(); }
 }
 
@@ -187,8 +194,11 @@ async function pump(): Promise<void> {
         const plan = peaksPlan(next.duration);
         const answers: SoundPeaksResult[] = [];
         for (const call of plan) {
-          if (!(await idle(run)) || !stillWanted()) throw cancelledError();
-          answers.push(await asked(next.uri, call, "wave", stillWanted));
+          for (;;) {
+            if (!(await idle(run)) || !stillWanted()) throw cancelledError();
+            const r = await asked(next.uri, call, stillWanted);
+            if (r !== null) { answers.push(r); break; }
+          }
         }
         if (!stillWanted()) continue;
         const peaks = assemblePeaks(plan, answers);

@@ -103,7 +103,7 @@ export function AdjustSheet({ clipId, visible, onClose }: { clipId: string | nul
       // "Apply to all" writes the main clips: it is not offered for a layer. While Auto is picked it is Auto's, in the row below.
       action={layer || picked ? undefined : { label: "Apply to All", onPress: () => { haptic("light"); apply((p) => setAdjustForAllClips(p, clip.adjust)); } }}>
       <StripTiles>
-        <Chip key="auto" label="Auto" icon="color-wand-outline" selected={picked} onPress={pickAuto} />
+        <Chip key="auto" label="Auto" icon="prism-outline" selected={picked} onPress={pickAuto} />
         {ADJUST_KEYS.map((k) => (
           <Chip key={k} label={clip.adjust[k] !== 0 ? `${ADJUST_LABELS[k]} •` : ADJUST_LABELS[k]} accessibilityLabel={ADJUST_LABELS[k]} selected={key === k} onPress={() => setKey(k)} />
         ))}

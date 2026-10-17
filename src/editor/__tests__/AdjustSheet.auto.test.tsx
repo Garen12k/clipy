@@ -217,3 +217,30 @@ test("Apply to All when every clip looked at changed meanwhile: nothing applied 
   expect(st().past.length).toBe(steps);
   expect(useToast.getState().message).toBeNull();
 });
+
+test("Apply to All: the pieces of one file (Remove pauses) share ONE look over their whole stretch; each piece keeps its own strength", async () => {
+  const X = "file:///doc/projects/p/media/talk.mov";
+  st().setProject(makeProject({ clips: [
+    makePhotoClip({ id: "b" }),
+    makeClip({ id: "p1", sourceUri: X, sourceDuration: 20, trimStart: 0, trimEnd: 3 }),
+    makeClip({ id: "p2", sourceUri: X, sourceDuration: 20, trimStart: 4, trimEnd: 7 }),
+    makeClip({ id: "p3", sourceUri: X, sourceDuration: 20, trimStart: 8, trimEnd: 10 }),
+  ] }));
+  fs.mockResolvedValueOnce(answer(5)).mockResolvedValueOnce(answer(1));
+  const view = await render(<AdjustSheet clipId="b" visible onClose={() => {}} />);
+  await fireEvent.press(btn("Auto"));
+  await screen.findByTestId("auto-strength");
+  await fireEvent.press(btn("Apply to All"));
+  await waitFor(() => expect(useToast.getState().message).toBe(AUTO_WORDS.allDone(4, 0)));
+  expect(fs).toHaveBeenCalledTimes(2);                                   // the photo, then the file once
+  expect(fs.mock.calls[1][0]).toMatchObject({ uri: X, kind: "video" });
+  const times = fs.mock.calls[1][0].times as number[];
+  expect(Math.min(...times)).toBeGreaterThanOrEqual(0); expect(Math.max(...times)).toBeLessThanOrEqual(10);
+  for (const id of ["p1", "p2", "p3"]) expect(clip(id).adjust).toMatchObject({ exposure: 0.3, contrast: 0.2, saturation: 0.2 });
+  // Each piece is "still what Auto set" on its own: its strength shows without a new look.
+  await view.rerender(<AdjustSheet clipId="b" visible={false} onClose={() => {}} />);
+  await view.rerender(<AdjustSheet clipId="p2" visible onClose={() => {}} />);
+  await fireEvent.press(btn("Auto"));
+  expect(await screen.findByText(`${AUTO_WORDS.strength} 100%`)).toBeTruthy();
+  expect(fs).toHaveBeenCalledTimes(2);
+});

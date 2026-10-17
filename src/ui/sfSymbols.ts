@@ -78,6 +78,8 @@ export const SF_SYMBOLS: Readonly<Partial<Record<IoniconName, SymbolName>>> = {
   "color-palette-outline": "paintpalette",
   "image-outline": "photo",
   "color-wand-outline": "wand.and.stars",
+  // Adjust's Auto chip: its own name, so it never shows the Templates tool's wand — Photos' auto-enhance wand (the closest match).
+  "prism-outline": "wand.and.rays",
   // A clip or a layer.
   "cut-outline": "scissors",
   "code-outline": "timeline.selection",

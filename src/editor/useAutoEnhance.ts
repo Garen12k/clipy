@@ -3,7 +3,7 @@ import { isFrameStatsAvailable } from "@/modules/clipy-video/frameStats";
 import { AUTO_TOOLS } from "@/src/lib/buildInfo";
 import { haptic } from "@/src/ui/haptics";
 import { useToast, type MessageOptions } from "@/src/ui/Toast";
-import { lookAt, lookKey, rememberApplied, stopLooking, useAutoLooks, type Applied, type LookSource } from "./autoLook";
+import { lookAt, lookKey, rememberApplied, rememberTarget, stopLooking, useAutoLooks, type Applied, type LookSource } from "./autoLook";
 import { autoStrengthOf, autoValues, targetOn, valuesOf, type AutoTarget, type AutoValues } from "./model/autoEnhance";
 import { setClipAdjust } from "./model/ops";
 import { findItem } from "./model/timeline";
@@ -32,6 +32,22 @@ export const AUTO_WORDS = {
 export type AutoBusy = null | { all: false } | { all: true; at: number; of: number };
 export const sourceOf = (c: Clip): LookSource => ({ clipId: c.id, uri: c.sourceUri, kind: c.kind, from: c.trimStart, to: c.trimEnd });
 /**
+ * Apply to All's looks: ONE per file (and kind), in the order the clips first use it — the pieces Remove pauses or Remove filler
+ * words cut from one clip share one look over the whole stretch they cover (from the first piece's start to the last one's end). A
+ * file used once is looked at exactly as Auto on that clip alone (`sourceOf`), so a look remembered for it is used again.
+ */
+export function filesOf(clips: readonly Clip[]): { source: LookSource; clips: Clip[] }[] {
+  const out: { source: LookSource; clips: Clip[] }[] = [];
+  for (const c of clips) {
+    const g = out.find((o) => o.source.uri === c.sourceUri && o.source.kind === c.kind);
+    if (!g) { out.push({ source: sourceOf(c), clips: [c] }); continue; }
+    g.clips.push(c);
+    const first = g.clips[0];
+    g.source = { clipId: first.id, uri: c.sourceUri, kind: c.kind, from: Math.min(g.source.from, c.trimStart), to: Math.max(g.source.to, c.trimEnd) };
+  }
+  return out;
+}
+/**
  * The values Auto blends FROM: the remembered base while Auto's own values are on the clip (a second tap brings 100 % back), else
  * today's — always today's for a blank picture, which Auto leaves as it is.
  */
@@ -44,7 +60,7 @@ const say = (message: string, options?: MessageOptions) => useToast.getState().s
 
 /**
  * The Adjust strip's Auto. `run(clipId)`: the preview paused, ONE look (`lookAt`), then ONE `apply` that sets the five sliders,
- * said with Undo. `runAll()`: every MAIN clip in turn, one look at a time, then ONE `apply` for all. Only from a tap; stopped at
+ * said with Undo. `runAll()`: every MAIN clip, one look per file (`filesOf`) at a time, then ONE `apply` for all. Only from a tap; stopped at
  * once (`stop`, closing the strip, another `clipId`, leaving) — a late answer is dropped, and so is one for a clip that changed.
  */
 export function useAutoEnhance(clipId: string | null, visible: boolean): { busy: AutoBusy; run: (id: string) => Promise<void>; runAll: () => Promise<void>; stop: () => void } {
@@ -109,18 +125,19 @@ export function useAutoEnhance(clipId: string | null, visible: boolean): { busy:
     current.current = mine;
     const found: { id: string; key: string; target: AutoTarget }[] = [];
     let skipped = 0;
+    const groups = filesOf(p.clips);
     try {
-      for (let i = 0; i < p.clips.length; i++) {
+      for (let i = 0; i < groups.length; i++) {
         if (current.current !== mine || !mounted.current) return;
-        setBusy({ all: true, at: i + 1, of: p.clips.length });
-        const c = p.clips[i];
-        if (useEditorStore.getState().missingSourceUris.includes(c.sourceUri)) { skipped++; continue; }
-        const answer = await lookAt(sourceOf(c));
+        setBusy({ all: true, at: i + 1, of: groups.length });
+        const g = groups[i];
+        if (useEditorStore.getState().missingSourceUris.includes(g.source.uri)) { skipped += g.clips.length; continue; }
+        const answer = await lookAt(g.source);
         if (current.current !== mine || !mounted.current) return;
         if (answer.status === "cancelled" || answer.status === "busy") return;
         if (answer.status === "unavailable") { say(AUTO_TOOLS); return; }
-        if (answer.status !== "ready") { skipped++; continue; }   // failed
-        found.push({ id: c.id, key: lookKey(sourceOf(c)), target: answer.target });
+        if (answer.status !== "ready") { skipped += g.clips.length; continue; }   // failed
+        for (const c of g.clips) found.push({ id: c.id, key: lookKey(sourceOf(c)), target: answer.target });
       }
       const now = useEditorStore.getState().project;
       if (!now || now.id !== p.id) return;
@@ -130,6 +147,7 @@ export function useAutoEnhance(clipId: string | null, visible: boolean): { busy:
         const here = now.clips.find((c) => c.id === f.id);
         if (!here || lookKey(sourceOf(here)) !== f.key) { skipped++; continue; }   // changed meanwhile: not touched
         const base = baseFor(here, f.target, useAutoLooks.getState().applied[f.key]);
+        rememberTarget(f.key, f.target);
         rememberApplied(f.key, { base, strength: 1 });
         next = setClipAdjust(next, f.id, autoValues(targetOn(f.target, base), base, 1));
         done++;
