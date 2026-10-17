@@ -223,4 +223,35 @@ picture drawn into 8-bit sRGB gives sensible numbers; how long one look takes; l
 
 ## As built
 
-(Filled in after the build.)
+Built on the branch `auto-enhance` (3d3f437 native, 94222d0 model, b99d194 look, 1810a77 strip; the review's fixes in
+12b8706) and merged into `next-build`. §1–§8 hold as written, with these differences and additions:
+
+- **Files.** Native: `modules/clipy-video/ios/FrameStats.swift` (`FrameStatsRequest`, `StatsError`, `StatsJob`, `FrameStats`;
+  `bins` 64, `defaultSide` 256), two insertions in `ClipyVideoModule.swift` (`frameStats`, `cancelFrameStats`),
+  `ios/Tests/FrameStatsTests.swift`. Wrapper `modules/clipy-video/frameStats.ts` (re-exported by `index.ts`, imported by its own
+  path). `LEVELS` top row `"auto enhance"` / "Auto enhance" (`isFrameStatsAvailable`), `AUTO_TOOLS` = `NEEDS_LATEST_BUILD
+  ("Automatic adjustments")`. Model `src/editor/model/autoEnhance.ts` (+ `__tests__/autoEnhance.vectors.ts`), look
+  `src/editor/autoLook.ts`, hook `src/editor/useAutoEnhance.ts` (`AUTO_WORDS`), strip `AdjustSheet.tsx`, the kit `Chip`'s `icon`.
+- **Compiled.** The Swift was compiled by the GitHub Actions build (`.github/workflows/ios-build.yml`, run 39035642231,
+  Xcode 26.6, "submit" off). No Swift changed after it.
+- **Departures accepted at the ledger.** Exposure (not Brightness) carries the light; the histogram is counted by a plain Swift
+  loop over a Core Graphics bitmap, not `CIAreaHistogram`; a video frame may be up to ±0.25 s from the time asked; an interrupted
+  look is asked again in front (`AUTO_RETRIES` 2); the chip reuses `color-wand-outline`; Apply to All covers main clips only.
+- **A blank picture is left alone** (review MINOR 2). `autoTargets` still answers zeros for it (the vectors are unchanged), but a
+  look's target is `autoTarget(summary)`, which marks a blank picture `blank`, and `targetOn` makes its target the clip's own
+  values: a value set by hand stays, the line says "This clip already looks good.", nothing is applied (Apply to All counts it as
+  done, untouched).
+- **The strip opens on Brightness** (MINOR 1): Auto is unpicked when the strip closes (the strip stays mounted), so the header's
+  Apply to All never silently means Auto's.
+- **Reading a strength** (MINOR 6): when several strengths round to the same values (a 50 % drag is 49 … 51 %), `autoStrengthOf`
+  answers the middle of that run, a tie going up — so Redo of a 50 % drag shows 50 %, not 51 %.
+- **Apply to All whose looked-at clips all changed meanwhile** (MINOR 7) says nothing; "Could not look at these clips." only when
+  none could be read.
+- **Left as they are.** 0 % equals the base on the slider's 0.01 step only (`setClipAdjust` rounds every value it writes, as every
+  slider does; values the app writes are on that step). Cancel does not stop the one frame being decoded, and a photo is decoded
+  synchronously (both Swift; at most a fraction of a second; the checklist asks how long a big photo takes). The hint row's two
+  lines at the editor's text cap are a phone check (part P, 83), not a height change.
+- **Tests.** App 483 suites / 6970 tests, server 22 / 615. New: `frameStats.test.ts`, `frameStats.swift.test.ts`,
+  `autoEnhance.test.ts`, `autoLook.test.ts`, `AdjustSheet.auto.test.tsx`, `Chip.icon.test.tsx`; `buildInfo.test.ts` gained the
+  row. `defaultTree.proof.test.tsx`, `looks.frozen.test.ts`, `backgroundExport.swift.test.ts` unchanged.
+- **Phone checklist:** `docs/next-build-phone-checklist.md` part P, checks 75–83 (part O ends at 74).

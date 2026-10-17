@@ -484,3 +484,54 @@ Set the iPhone to Light (Settings → Display & Brightness), then Larger Text at
 Touch and hold a project, tap **Pin**, and at once (before the sheet has gone) tap the sort button. If no sheet comes, tap it again.
 - **Right looks like:** "Sort by" comes up — at the latest on the second tap. Each later tap on the sort button still opens it.
 - **Wrong looks like:** the sort button doing nothing, tap after tap, until Clipy is closed.
+
+## P. Auto enhance
+
+### 75. A dark clip
+Select a dark video clip (filmed indoors at night) → **Adjust** → **Auto** (the first chip, with a wand).
+- **Right looks like:** a moment of "Looking at this clip…", then the picture is brighter and a little punchier; the top of the
+  strip says what was set ("Set exposure +…, contrast +…"); the message bar says "Auto enhance applied" with **Undo**; the chips
+  that changed have a dot. Tap Exposure: its slider shows the same number as the line.
+- **Wrong looks like:** the picture much too bright or grey, numbers above +30, or nothing happening.
+
+### 76. Bright, flat and colour-cast clips
+Try Auto on an over-bright clip, a misty / flat one, one filmed under blue light (or in shade), one under orange lamps.
+- **Right looks like:** bright gets a little darker, flat gets more contrast and colour, blue gets warmer, orange a little cooler.
+  Write down any clip where Auto made it WORSE, with what the line said.
+
+### 77. A good clip, a black card and a photo
+Auto on a clip that already looks fine; then on a clip that is all black (a fade or a black card) whose Saturation you first set
+to +40 by hand; then on a photo — try a big one straight from the iPhone camera.
+- **Right looks like:** the fine clip and the black one: "This clip already looks good." and nothing changes (no Undo offered;
+  the black clip keeps its +40). The photo: the same as a video. Write down roughly how long the big photo took (it should be
+  well under a second).
+
+### 78. Strength
+After Auto, drag **Auto · strength** to 50 %, then to 0 %.
+- **Right looks like:** the picture moves back towards how it was; at 0 % it is as before Auto. Undo once: back to the strength
+  before the drag. Undo again: Auto is gone and so is the strength slider. Redo twice: the slider says 50 % again. Move Contrast
+  by hand: the strength slider goes (it never shows stale numbers).
+
+### 79. Apply to All
+With several clips (videos and photos), Auto on one, then **Apply to All**.
+- **Right looks like:** "Looking at 2 of 5…" counting up, then each clip gets its own numbers (a dark one more light than a
+  bright one), and ONE Undo takes all of them back. Start it again and tap **Cancel**: nothing changes. Close the strip, select
+  another clip, open Adjust: **Brightness** is picked, and the header's **Apply to All** copies the sliders as before.
+
+### 80. The old build and Expo Go
+In Expo Go (or a build from before this one) tap Auto.
+- **Right looks like:** "Automatic adjustments need the latest Clipy build. Install it from the newest build link." and nothing
+  changes. Accounts → Build says "Auto enhance" on the new build.
+
+### 81. Leaving the app mid-look
+Tap Apply to All on many clips and press the Home button at once; come back after a few seconds.
+- **Right looks like:** it carries on (or finishes) once you are back, with no error; the result is the same as without leaving.
+
+### 82. HDR video
+Auto on a video filmed in HDR (the iPhone's default since the 12).
+- **Right looks like:** sensible numbers, like an ordinary clip. Write down the line if it looks far off.
+
+### 83. Large text
+Set Larger Text to the largest standard size, then Auto on a clip, on a 375-pt-wide iPhone if you have one (SE, mini).
+- **Right looks like:** the line at the top of the strip and the hint row ("Auto sets the sliders from this clip's picture." beside
+  **Apply to All**) fit in their rows, ending in dots if they must; nothing is cut off at the top or bottom.
