@@ -9,7 +9,7 @@ import { PlatformIdentity } from "@/src/publish/components/PlatformIdentity";
 import { shrinks, textSize, unruled } from "@/src/ui/testing/textSize";
 
 const AX5 = 3.571, S = theme.textScale.screen, R = theme.textScale.reading;
-const summary = { id: "p1", name: "Beach day", durationSec: 21, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] as ("youtube" | "tiktok")[], coverTitle: "Summer" };
+const summary = { id: "p1", name: "Beach day", durationSec: 21, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] as ("youtube" | "tiktok")[], coverTitle: "Summer" };
 afterEach(() => textSize(1));
 
 test("a project card: what is on the picture never scales; the name the user typed is capped and keeps its one line and its dots", async () => {

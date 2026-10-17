@@ -89,6 +89,15 @@ test("listProjects summarises, newest first, and flags broken files", async () =
   expect(list[0]).toMatchObject({ name: "First", durationSec: 3, thumbUri: `${fs.documentDir}projects/id1/thumb.jpg` });
 });
 
+test("listProjects carries each project's createdAt; a broken one's is empty", async () => {
+  const { fs, storage } = setup();
+  fs.files.set("file:///picked/a.mov", "A");
+  await storage.createProject("First", [asset("file:///picked/a.mov", 3)]);
+  await fs.mkdir(`${fs.documentDir}projects/bad`);
+  await fs.writeText(`${fs.documentDir}projects/bad/project.json`, "{not json");
+  expect((await storage.listProjects()).map((s) => [s.id, s.createdAt])).toEqual([["id1", "2026-10-01T10:00:00.000Z"], ["bad", ""]]);
+});
+
 test("deleteProject, duplicateProject, renameProject", async () => {
   const { fs, storage } = setup();
   fs.files.set("file:///picked/a.mov", "A");

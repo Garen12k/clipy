@@ -10,7 +10,7 @@ jest.mock("react-native-reanimated", () => {
   return { ...m, withSpring: jest.fn(m.withSpring), withTiming: jest.fn(m.withTiming), withDelay: jest.fn(m.withDelay) };
 });
 
-const summary = { id: "p1", name: "Beach day", durationSec: 21, updatedAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] as ("youtube" | "tiktok")[], coverTitle: "" };
+const summary = { id: "p1", name: "Beach day", durationSec: 21, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), thumbUri: null, broken: false, postedTo: [] as ("youtube" | "tiktok")[], coverTitle: "" };
 const card = (over: Partial<typeof summary> = {}, on: { onPress?: () => void; onLongPress?: () => void; onMore?: () => void } = {}) =>
   <ProjectCard summary={{ ...summary, ...over }} onPress={on.onPress ?? jest.fn()} onLongPress={on.onLongPress ?? jest.fn()} onMore={on.onMore ?? jest.fn()} />;
 const damaged = { durationSec: 0, updatedAt: "", broken: true };
