@@ -34,12 +34,13 @@ test("the split rules: In and fade in on the first, Out, fade out and transition
   expect(mid.adjust).not.toBe(first.adjust);
 });
 
-test("the transition into the clip stays, re-capped against the first piece — dropped under TRANSITION_LIMITS.min; nothing else moves", () => {
+test("the transition into the clip stays, re-capped against the first piece — dropped under TRANSITION_LIMITS.min; sounds and markers do not move", () => {
   const p = project();
   const q = removePauses(p, "t", [[2.8, 11.5]]);
   expect(q.clips[0].transitionOut).toEqual({ type: "fade", duration: 0.4 });    // capped by the 0.8-s first piece
   expect(removePauses(p, "t", [[2.5, 11.5]]).clips[0].transitionOut.type).toBe("none");   // 0.25 s would be under the 0.3-s minimum
-  expect(q.overlays).toBe(p.overlays); expect(q.layers).toBe(p.layers); expect(q.audioTracks).toBe(p.audioTracks); expect(q.beatMarkers).toBe(p.beatMarkers);
+  expect(q.overlays).toEqual([]); expect(q.layers.map((l) => l.start)).toEqual([4.8]); expect(q.effects).toBe(p.effects);
+  expect(q.audioTracks).toBe(p.audioTracks); expect(q.beatMarkers).toBe(p.beatMarkers);
 });
 
 test("leading and trailing cuts: one piece = the clip trimmed, keeping everything", () => {
