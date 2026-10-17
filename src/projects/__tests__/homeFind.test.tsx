@@ -87,6 +87,27 @@ describe("the find row", () => {
     expect(screen.queryByTestId("home-no-match")).toBeNull();
   });
 
+  test("the field is the SAME element across keystrokes and a refresh of the list (it never remounts, so the keyboard stays)", async () => {
+    (storage.duplicateProject as jest.Mock).mockResolvedValue({ id: "a2" });
+    await home();
+    const field = screen.getByTestId("home-search");
+    for (const q of ["b", "be", "bea"]) await fireEvent.changeText(screen.getByTestId("home-search"), q);
+    expect(screen.getByTestId("home-search")).toBe(field);
+    list.mockResolvedValue([...SIX, p("a2", "Beach copy", 7, 7, 30)]);
+    await fireEvent.press(btn("More for Beach"));
+    await fireEvent.press(await screen.findByRole("button", { name: "Duplicate" }));
+    await screen.findByText("Beach copy");
+    expect(screen.getByTestId("home-search")).toBe(field);
+    expect(field.props.value).toBe("bea");
+  });
+
+  test("the magnifier sits at the field's LEADING edge (start, not left)", async () => {
+    await home();
+    const style = screen.getByTestId("home-search-icon", HIDDEN).props.style;
+    expect(style).toMatchObject({ position: "absolute", start: expect.any(Number) });
+    expect(style.left).toBeUndefined();
+  });
+
   test("the keyboard goes when the list is dragged and when a project is opened; a tap on a card opens it with the keyboard up", async () => {
     const dismiss = jest.spyOn(Keyboard, "dismiss");
     await home();

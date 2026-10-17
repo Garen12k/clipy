@@ -21,8 +21,8 @@ export function HomeFind({ query, onQuery, onSort, onFocused }: { query: string;
     <View testID="home-find" style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.sm, paddingBottom: theme.space.sm }}>
       <View style={{ flex: 1, justifyContent: "center" }}>
         <Field testID="home-search" value={query} onChangeText={onQuery} onFocus={() => onFocused?.(true)} onBlur={() => onFocused?.(false)} placeholder={FIND_WORDS.search} accessibilityLabel={FIND_WORDS.search}
-          returnKeyType="search" autoCorrect={false} autoCapitalize="none" clearButtonMode="while-editing" style={{ paddingLeft: SEARCH_INSET }} />
-        <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: "absolute", left: theme.space.md }}>
+          returnKeyType="search" autoCorrect={false} autoCapitalize="none" clearButtonMode="while-editing" style={{ paddingStart: SEARCH_INSET }} />
+        <View testID="home-search-icon" pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: "absolute", start: theme.space.md }}>
           <Icon name="search-outline" size={theme.size.icon.md} color={s.muted} />
         </View>
       </View>
