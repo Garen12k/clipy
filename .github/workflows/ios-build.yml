@@ -1,0 +1,57 @@
+# Builds the iPhone app on GitHub's Mac and sends it to TestFlight.
+# Started by hand: GitHub → Actions → "iOS build" → Run workflow. Needs the repository secret EXPO_TOKEN
+# (an Expo access token of the account that owns the project). The build runs with `--local`, so it uses
+# no EAS cloud build; signing comes from the credentials stored on EAS, the app's settings from the EAS
+# "production" environment. Nothing built is uploaded as an artifact (this repository is public).
+name: iOS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to build
+        default: next-build
+        required: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_NO_CAPABILITY_SYNC: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build tools
+        run: |
+          xcodebuild -version
+          command -v pod || sudo gem install cocoapods
+          command -v fastlane || brew install fastlane
+          npm install -g eas-cli
+          eas whoami
+
+      - name: Entitlements must be Sign in with Apple only
+        run: |
+          npx expo config --type introspect --json | node -e "
+            let s=''; process.stdin.on('data', d => s += d).on('end', () => {
+              const keys = Object.keys(JSON.parse(s).ios.entitlements || {});
+              console.log('entitlements:', keys);
+              if (keys.length !== 1 || keys[0] !== 'com.apple.developer.applesignin') process.exit(1);
+            });"
+
+      - name: Build
+        run: eas build --platform ios --profile production --local --non-interactive --output "$RUNNER_TEMP/clipy.ipa"
+
+      - name: Send to TestFlight
+        run: eas submit --platform ios --profile production --path "$RUNNER_TEMP/clipy.ipa" --non-interactive
