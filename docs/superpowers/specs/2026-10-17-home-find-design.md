@@ -153,3 +153,23 @@ Not touched: `project.json`'s shape (no schema bump), `saveProject` / `updatePro
 4. Whether a VoiceOver user hears "Pinned" after a card's name (the `accessibilityValue`).
 5. The name order is code-point order of folded text, not a language's dictionary order (§2.2) — the owner should look at a list with mixed scripts.
 6. A preference of the phone: a reinstall loses pins and the sort (like every other phone preference).
+
+## 6. As built
+
+Built on `home-find` (7a4ce4e, 03976c8, 26d2be6), reviewed, then fixed (the `fix(home)` commits after 26d2be6) and merged into `next-build`. As designed in §2, with these differences and additions:
+
+- **The Sort sheet never sticks.** The review found that `onSort` only set its flag: if iOS declined to present the sheet (the actions sheet still fading out after Pin, the keyboard going down), `sortOpen` stayed true with nothing on screen and every later tap changed nothing. `onSort` now follows Quick Edit's rule — close first, open on the next tick — and New Project, Quick Edit, Open Project File, Post a video and a project's sheet each clear `sortOpen`. Pinned in `homeFind.test.tsx` ("the Sort button cannot stick"); phone checklist part O, item 74.
+- **Pin / Unpin keeps its word during the fade.** The label is read when the sheet opens (a ref in `ProjectActionsSheet`), so the button just tapped does not flip as the sheet leaves.
+- **A focused field stays.** The row also shows while the field has the keyboard (`useHomeFind().setFocused`), so emptying the field with five projects or fewer no longer unmounts it under the finger; it goes on blur.
+- **A query is cleared when the last project goes**, so it can never hide the next project made.
+- **Folding once.** `orderProjects` folds each name once per ordering and the query once; the comparator compares folded strings (`compareNames` itself is unchanged for its callers).
+- **The magnifier and its inset are on the leading edge** (`start` / `paddingStart`); the same in left-to-right, right in case RTL is ever switched on.
+- **§5.1 is now really pinned in Jest:** the `home-search` element is the same instance across keystrokes and a refresh of the list.
+- Tests also needed: the table-key count in `sfSymbols.map.test.ts` (125 → 127) besides `USED` / `PLAIN`; the pin mark is hidden from VoiceOver, so tests find it with `includeHiddenElements`.
+
+Left as it is (the review's minors, on purpose):
+
+- **Rows re-keyed when the shown set changes** (m4): a row's key is its cards' ids, so a keystroke or a pin that shifts the pairs remounts the cards after it. Keying by the first card alone would not help in the common case (one card fewer shifts every pair after it). Watch for a flicker of the thumbnails on the phone while typing with many projects (§5, new point 7).
+- **Persian / Arabic yeh and kaf, and Eastern Arabic digits** (m6): ی (U+06CC) and ي (U+064A), ک (U+06A9) and ك (U+0643) are not folded together, and ٠–٩ / ۰–۹ are not digit runs. The owner's call — the same letter typed on two keyboards; checklist item 69 asks for any name not found.
+
+7. (added) With many projects, whether the thumbnails flicker while typing (rows re-keyed, above).
