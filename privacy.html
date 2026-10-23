@@ -9,7 +9,7 @@
 <body>
 <main>
 <h1>Privacy Policy</h1>
-<p class="muted">Clipy - last updated 11 October 2026</p>
+<p class="muted">Clipy - last updated 23 October 2026</p>
 <nav><a href="index.html">Home</a><a href="terms.html">Terms of Service</a></nav>
 
 <div class="card">
@@ -17,33 +17,46 @@
 </div>
 
 <h2>What stays on your phone</h2>
-<p>Your projects, the photos and videos you add, your music, recordings, captions and exported videos are stored on your iPhone. Clipy does not upload them to its server. Automatic captions, where available, are made on the phone by Apple's speech recognition.</p>
+<p>Your projects, the photos and videos you add, your music, recordings, captions, fonts and colour looks you add, saved styles, undo history and exported videos are stored on your iPhone. Clipy does not upload them to its server.</p>
+
+<h2>Features that run on your iPhone</h2>
+<p>Several features use Apple's frameworks on the phone itself. Nothing they see or produce is sent to Clipy's server:</p>
+<ul>
+<li><strong>Face retouch, Auto reframe and Motion tracking</strong> use Apple's Vision framework to find faces, people or a chosen object in your clips. The positions found are kept in memory only while the app is open; they are not stored or uploaded.</li>
+<li><strong>AI Picks in AutoCut</strong> uses Apple's on-device language model (Apple Intelligence, where your iPhone has it). It is offered only when speech can also be recognised on the phone, so nothing about your clips leaves your iPhone.</li>
+<li><strong>Translate captions</strong> uses Apple's on-device translation. The first time you translate into a language, iOS may ask to download that language from Apple.</li>
+<li><strong>Read aloud</strong> uses the voices built into iOS.</li>
+</ul>
+
+<h2>Automatic captions</h2>
+<p>Captions are made with Apple's speech recognition. Clipy asks for recognition on the phone whenever your iPhone supports it for your language. Where it does not, Apple's own speech service may process the audio, under <a href="https://www.apple.com/legal/privacy/">Apple's privacy policy</a>. Clipy's server never receives the sound or the words.</p>
 
 <h2>If you sign in</h2>
-<p>You can use the editor without an account. If you sign in (with email, Apple or Google), Clipy's server stores your email address and a user ID so it can recognise you. Sign-in is handled by Supabase, the service that runs Clipy's server, and sign-in emails are sent through an email delivery service.</p>
+<p>You can use the editor without an account. If you sign in (with email, Apple or Google), Clipy's server stores your email address, a user ID and, if Google or Apple shares them, your name and picture, so it can recognise you. Sign-in is handled by Supabase, the service that runs Clipy's server, and sign-in emails are sent through an email delivery service.</p>
 
 <h2>If you connect a social account</h2>
-<p>When you connect YouTube, TikTok, Instagram, Facebook or X, you sign in on that platform's own page; Clipy never sees your password for it. The platform gives Clipy access tokens limited to what posting needs. Clipy stores these tokens encrypted on its server, together with the account's public name and ID, so that it can send videos when you ask.</p>
+<p>When you connect YouTube, TikTok or X, you sign in on that platform's own page; Clipy never sees your password for it. The platform gives Clipy access tokens limited to what posting needs. Clipy stores these tokens encrypted on its server, together with the account's public name and ID, so that it can send videos when you ask. For each post it also keeps the platform, the title, caption and options you entered, and the post's status and link - not the video.</p>
 <ul>
-<li><strong>What Clipy does with the access:</strong> it sends the video you chose, with the title, caption and options you entered, to the account you chose - only when you press Post. For TikTok, the video is sent to your TikTok inbox as a draft, and you finish the post in the TikTok app.</li>
+<li><strong>What Clipy does with the access:</strong> it sends the video you chose, with the title, caption and options you entered, to the account you chose - only when you press Post. For TikTok, you choose in the post options: Send as draft (the video goes to your TikTok inbox and you finish the post in the TikTok app) or, where available, Post now (the video is posted with the settings you picked).</li>
 <li><strong>What Clipy does not do:</strong> it does not read your messages, followers, or other posts, and it does not post, like, follow or comment on its own.</li>
-<li><strong>Where the video goes:</strong> your phone sends the video to the platform. For some platforms it passes through Clipy's server on the way; it is not kept there after the upload.</li>
+<li><strong>Where the video goes:</strong> for YouTube and TikTok your phone sends the video straight to the platform. For X it passes through Clipy's server in pieces on the way; they are not kept there.</li>
 </ul>
+<p>Clipy does not post to Instagram. On the Export screen, "Open Instagram" only saves the video to your Photos and opens the Instagram app; you post it there yourself.</p>
 <p>Use of YouTube features is also subject to the <a href="https://www.youtube.com/t/terms">YouTube Terms of Service</a> and the <a href="https://policies.google.com/privacy">Google Privacy Policy</a>. Each other platform's own terms and privacy policy apply to what you post there. Clipy's use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
 
 <h2>Removing your data</h2>
 <ul>
 <li><strong>Disconnect an account:</strong> in Clipy, open Accounts and disconnect it. Clipy deletes the stored tokens for that account. You can also remove Clipy's access in that platform's own settings (for Google: <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>).</li>
 <li><strong>Sign out:</strong> in Clipy, open Accounts and sign out.</li>
-<li><strong>Delete everything on the server:</strong> in Clipy, open Accounts and tap Delete account. Your sign-in and your connected accounts are removed from Clipy's server at once, and this can't be undone. Projects on your phone stay, and videos you already posted stay on the platforms you posted them to.</li>
+<li><strong>Delete everything on the server:</strong> in Clipy, open Accounts and tap Delete account. Your sign-in, your connected accounts and your post records are removed from Clipy's server at once, Clipy asks each connected platform to forget the connection, and this can't be undone. If you signed in with Apple, Clipy may ask you to confirm with Apple so Apple can stop listing Clipy too; you can always remove it yourself in the iPhone's Settings, under your name, then Sign in with Apple. Projects on your phone stay, and videos you already posted stay on the platforms you posted them to.</li>
 <li><strong>Delete what is on your phone:</strong> delete projects in Clipy, or delete the app.</li>
 </ul>
 
 <h2>Permissions on your phone</h2>
-<p>Clipy asks for access to your photo library to add photos and videos and to save exports, to the camera to take a photo or video for a project, to the microphone to record a voice-over or the sound of a video you take, to speech recognition to make captions, and to notifications to tell you when an export has finished. You can change these in the iPhone's Settings at any time.</p>
+<p>Clipy asks for access to your photo library to add photos and videos and to save exports, to the camera to take a photo or video for a project, to the microphone to record a voice-over or the sound of a video you take, to speech recognition to make captions (and, with AI Picks, to find the moments worth keeping), and to notifications to tell you when an export has finished. Notifications are made on the phone; Clipy never registers for push messages. You can change these in the iPhone's Settings at any time.</p>
 
 <h2>Analytics, ads and sharing</h2>
-<p>Clipy has no advertising and no third-party analytics or tracking. It does not sell or rent your data. Data is shared only with the services needed to do what you ask: the server provider, the email delivery service for sign-in codes, and the social platform you choose to post to.</p>
+<p>Clipy has no advertising and no third-party analytics or tracking. It does not sell or rent your data. Data is shared only with the services needed to do what you ask: the server provider, the email delivery service for sign-in codes, Google or Apple if you sign in with them, and the social platform you choose to post to.</p>
 
 <h2>Children</h2>
 <p>Clipy is not directed at children under 13, and the social platforms have their own age rules.</p>
